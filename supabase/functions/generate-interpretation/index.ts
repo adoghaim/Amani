@@ -102,17 +102,19 @@ Deno.serve(async (req: Request) => {
       interpretationSource = "demo";
     }
 
-    // Insert interpretation into interpretations table
-    const { error: insertError } = await supabase
+    // Upsert interpretation into interpretations table (insert or update if exists)
+    const { error: upsertError } = await supabase
       .from("interpretations")
-      .insert({
+      .upsert({
         lab_report_id: reportId,
         json_output: interpretationJson,
         interpretation_source: interpretationSource,
+      }, {
+        onConflict: 'lab_report_id'
       });
 
-    if (insertError) {
-      throw new Error("Failed to insert interpretation");
+    if (upsertError) {
+      throw new Error("Failed to save interpretation");
     }
 
     // Update report status to ready
