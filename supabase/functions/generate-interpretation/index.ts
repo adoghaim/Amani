@@ -170,13 +170,30 @@ async function callOpenAIWithRetry(
 ): Promise<any> {
   const systemPrompt = `You are Amani, a supportive women's health AI assistant. You provide calm, educational interpretations of lab results with cycle awareness. You NEVER diagnose, alarm, or replace medical advice.
 
+CRITICAL CONTEXT RULES:
+- Do NOT assume pregnancy, postpartum status, or birth control use
+- ONLY reference pregnancy or postpartum if explicitly provided in the input context
+- If a context field is unknown, do NOT infer it
+- Only discuss what is explicitly provided
+
+LANGUAGE RULES:
+- AVOID words like "healthy", "normal", or "recovery"
+- USE "often consistent with", "commonly seen", "may align with", "typically indicates"
+- Use uncertainty language (may, can, could, often, sometimes)
+- Never use alarmist language like "concerning," "worrying," or "abnormal"
+- Instead use "outside typical range" or "may benefit from discussion with your provider"
+
 Your communication style:
 - Calm, educational, non-alarming
-- Use uncertainty language (may, can, could, often, sometimes)
 - Acknowledge cycle context and hormonal variation
 - Emphasize that results are snapshots, not diagnoses
 - Always include disclaimers about consulting healthcare providers
 - Be warm and supportive while remaining educational
+
+DATA RULES:
+- user_value must NEVER include units (e.g., "45.2" not "45.2 ng/mL")
+- Units must be provided ONLY in the separate unit field
+- Ensure user_value is always a string containing only the numeric value
 
 You must respond with ONLY a valid JSON object matching this exact structure:
 {
@@ -273,16 +290,16 @@ function generatePrompt(report: LabReportData, biomarkers: BiomarkerData[]): str
 
   const contextInfo = [];
   if (report.context.birth_control === "yes") {
-    contextInfo.push("Currently using birth control");
+    contextInfo.push("User is currently using birth control");
   }
   if (report.context.pregnant === "yes") {
-    contextInfo.push("Currently pregnant");
+    contextInfo.push("User is currently pregnant");
   }
   if (report.context.postpartum === "yes") {
-    contextInfo.push("Postpartum");
+    contextInfo.push("User is postpartum");
   }
   if (report.context.top_symptoms && report.context.top_symptoms.length > 0) {
-    contextInfo.push(`Experiencing: ${report.context.top_symptoms.join(", ")}`);
+    contextInfo.push(`Top symptoms: ${report.context.top_symptoms.join(", ")}`);
   }
 
   const biomarkersText = biomarkers
@@ -318,21 +335,21 @@ function generateDemoInterpretation(report: LabReportData, biomarkers: Biomarker
 
   const biomarkerInterpretations = biomarkers.map((b) => {
     let status: "in_range" | "borderline" | "out_of_range" | "unknown" = "unknown";
-    let meaning = `${b.name} is a hormone that helps regulate your menstrual cycle and overall health.`;
+    let meaning = `${b.name} is a hormone that may play a role in regulating your menstrual cycle and overall health.`;
     let timingNotes = "Hormone levels naturally fluctuate throughout your cycle.";
     let commonReasons = ["Natural cycle variation", "Time of day", "Recent diet or exercise"];
-    let followUp = ["If you have concerning symptoms", "If values are significantly outside your normal range"];
+    let followUp = ["If you have symptoms that interfere with daily life", "If values are significantly outside your typical range"];
 
     if (b.reference_min !== null && b.reference_max !== null) {
       if (b.value >= b.reference_min && b.value <= b.reference_max) {
         status = "in_range";
-        meaning = `Your ${b.name} level is within the typical reference range for this test.`;
+        meaning = `Your ${b.name} level is often consistent with the typical reference range for this test.`;
       } else if (b.value < b.reference_min * 0.8 || b.value > b.reference_max * 1.2) {
         status = "out_of_range";
-        meaning = `Your ${b.name} level is outside the typical reference range. This may warrant a conversation with your healthcare provider.`;
+        meaning = `Your ${b.name} level is outside the typical reference range. This may benefit from discussion with your healthcare provider.`;
       } else {
         status = "borderline";
-        meaning = `Your ${b.name} level is slightly outside the typical reference range but may still be within normal variation.`;
+        meaning = `Your ${b.name} level is slightly outside the typical reference range but may align with individual variation.`;
       }
     }
 
@@ -341,7 +358,7 @@ function generateDemoInterpretation(report: LabReportData, biomarkers: Biomarker
       user_value: b.value.toString(),
       unit: b.unit,
       reference_range: b.reference_min !== null && b.reference_max !== null
-        ? `${b.reference_min}-${b.reference_max} ${b.unit}`
+        ? `${b.reference_min}-${b.reference_max}`
         : "Reference range not provided",
       status_label: status,
       plain_english_meaning: meaning,
@@ -354,7 +371,7 @@ function generateDemoInterpretation(report: LabReportData, biomarkers: Biomarker
   const summaryBullets = [
     `Your lab results show ${biomarkers.length} biomarker${biomarkers.length > 1 ? 's' : ''} tested`,
     cycleDay ? `Results collected on cycle day ${cycleDay} (${cyclePhase} phase)` : "Cycle timing information helps contextualize hormone levels",
-    "Remember that hormone levels naturally fluctuate throughout your cycle",
+    "Hormone levels naturally fluctuate throughout your cycle",
   ];
 
   return {
@@ -364,8 +381,8 @@ function generateDemoInterpretation(report: LabReportData, biomarkers: Biomarker
       estimated_cycle_phase: cyclePhase,
       confidence: cycleDay ? "medium" : "low",
       explanation: cycleDay
-        ? `Based on your cycle information, you appear to be in the ${cyclePhase} phase. Hormone levels can vary significantly depending on where you are in your cycle, so it's important to interpret these results in that context.`
-        : "Without cycle timing information, it's more difficult to interpret hormone levels accurately. Consider tracking your cycle to provide more context for future lab work.",
+        ? `Based on your cycle information, you may be in the ${cyclePhase} phase. Hormone levels can vary significantly depending on where you are in your cycle, which is important context for interpreting these results.`
+        : "Without cycle timing information, hormone level interpretation may be limited. Consider tracking your cycle to provide more context for future lab work.",
     },
     biomarkers: biomarkerInterpretations,
     supportive_considerations: {
