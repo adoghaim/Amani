@@ -82,92 +82,24 @@ Deno.serve(async (req: Request) => {
     const biomarkersList = biomarkers as BiomarkerData[];
 
     let interpretationJson;
+    let interpretationSource = "demo";
 
     // Try OpenAI if API key is available
     if (openaiApiKey) {
       try {
         const prompt = generatePrompt(labReport, biomarkersList);
 
-        const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${openaiApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "gpt-3.5-turbo",
-            messages: [
-              {
-                role: "system",
-                content: `You are Amani, a supportive women's health AI assistant. You provide calm, educational interpretations of lab results with cycle awareness. You NEVER diagnose, alarm, or replace medical advice.
-
-Your communication style:
-- Calm, educational, non-alarming
-- Use uncertainty language (may, can, could, often, sometimes)
-- Acknowledge cycle context and hormonal variation
-- Emphasize that results are snapshots, not diagnoses
-- Always include disclaimers about consulting healthcare providers
-- Be warm and supportive while remaining educational
-
-You must respond with a valid JSON object matching this exact structure:
-{
-  "summary_bullets": ["string", "string", "string"],
-  "cycle_context": {
-    "estimated_cycle_day": number | null,
-    "estimated_cycle_phase": "menstrual" | "follicular" | "ovulatory" | "luteal" | "unknown",
-    "confidence": "low" | "medium" | "high",
-    "explanation": "string"
-  },
-  "biomarkers": [{
-    "name": "string",
-    "user_value": "string",
-    "unit": "string",
-    "reference_range": "string",
-    "status_label": "in_range" | "borderline" | "out_of_range" | "unknown",
-    "plain_english_meaning": "string",
-    "timing_notes": "string",
-    "common_non_alarm_reasons": ["string"],
-    "when_clinicians_follow_up": ["string"]
-  }],
-  "supportive_considerations": {
-    "nutrition": ["string"],
-    "sleep_stress": ["string"],
-    "lifestyle": ["string"]
-  },
-  "questions_for_doctor": ["string"],
-  "suggested_followups_to_discuss": ["string"],
-  "safety_notes": ["string"],
-  "disclaimer": "string"
-}
-
-Keep language accessible but scientifically accurate. Never use alarmist language like "concerning," "worrying," or "abnormal." Instead use "outside typical range" or "may benefit from discussion with your provider."`
-              },
-              {
-                role: "user",
-                content: prompt
-              }
-            ],
-            temperature: 0.7,
-            max_tokens: 2000,
-            response_format: { type: "json_object" }
-          }),
-        });
-
-        if (!openaiResponse.ok) {
-          const errorData = await openaiResponse.text();
-          console.error("OpenAI API error, falling back to demo mode:", errorData);
-          interpretationJson = generateDemoInterpretation(labReport, biomarkersList);
-        } else {
-          const openaiData = await openaiResponse.json();
-          interpretationJson = JSON.parse(openaiData.choices[0].message.content);
-        }
+        interpretationJson = await callOpenAIWithRetry(openaiApiKey, prompt, labReport, biomarkersList);
+        interpretationSource = "ai";
       } catch (openaiError) {
         console.error("OpenAI request failed, using demo mode:", openaiError);
         interpretationJson = generateDemoInterpretation(labReport, biomarkersList);
+        interpretationSource = "demo";
       }
     } else {
       // No API key, use demo mode
       interpretationJson = generateDemoInterpretation(labReport, biomarkersList);
+      interpretationSource = "demo";
     }
 
     // Insert interpretation into interpretations table
@@ -176,6 +108,7 @@ Keep language accessible but scientifically accurate. Never use alarmist languag
       .insert({
         lab_report_id: reportId,
         json_output: interpretationJson,
+        interpretation_source: interpretationSource,
       });
 
     if (insertError) {
@@ -227,6 +160,111 @@ Keep language accessible but scientifically accurate. Never use alarmist languag
     );
   }
 });
+
+async function callOpenAIWithRetry(
+  apiKey: string,
+  prompt: string,
+  report: LabReportData,
+  biomarkers: BiomarkerData[],
+  maxOutputTokens = 1800
+): Promise<any> {
+  const systemPrompt = `You are Amani, a supportive women's health AI assistant. You provide calm, educational interpretations of lab results with cycle awareness. You NEVER diagnose, alarm, or replace medical advice.
+
+Your communication style:
+- Calm, educational, non-alarming
+- Use uncertainty language (may, can, could, often, sometimes)
+- Acknowledge cycle context and hormonal variation
+- Emphasize that results are snapshots, not diagnoses
+- Always include disclaimers about consulting healthcare providers
+- Be warm and supportive while remaining educational
+
+You must respond with ONLY a valid JSON object matching this exact structure:
+{
+  "summary_bullets": ["string", "string", "string"],
+  "cycle_context": {
+    "estimated_cycle_day": number | null,
+    "estimated_cycle_phase": "menstrual" | "follicular" | "ovulatory" | "luteal" | "unknown",
+    "confidence": "low" | "medium" | "high",
+    "explanation": "string"
+  },
+  "biomarkers": [{
+    "name": "string",
+    "user_value": "string",
+    "unit": "string",
+    "reference_range": "string",
+    "status_label": "in_range" | "borderline" | "out_of_range" | "unknown",
+    "plain_english_meaning": "string",
+    "timing_notes": "string",
+    "common_non_alarm_reasons": ["string"],
+    "when_clinicians_follow_up": ["string"]
+  }],
+  "supportive_considerations": {
+    "nutrition": ["string"],
+    "sleep_stress": ["string"],
+    "lifestyle": ["string"]
+  },
+  "questions_for_doctor": ["string"],
+  "suggested_followups_to_discuss": ["string"],
+  "safety_notes": ["string"],
+  "disclaimer": "string"
+}
+
+Keep language accessible but scientifically accurate. Never use alarmist language like "concerning," "worrying," or "abnormal." Instead use "outside typical range" or "may benefit from discussion with your provider."`;
+
+  try {
+    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: maxOutputTokens,
+        temperature: 0.7,
+        response_format: { type: "json_object" }
+      }),
+    });
+
+    if (!openaiResponse.ok) {
+      const errorData = await openaiResponse.text();
+      console.error("OpenAI API error:", errorData);
+      throw new Error(`OpenAI API error: ${errorData}`);
+    }
+
+    const openaiData = await openaiResponse.json();
+    const content = openaiData.choices[0].message.content;
+
+    try {
+      const parsedJson = JSON.parse(content);
+      return parsedJson;
+    } catch (parseError) {
+      console.error("Failed to parse JSON response, content:", content);
+
+      if (maxOutputTokens > 1500) {
+        console.log("Retrying with lower token limit (1500)...");
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500);
+      }
+
+      throw new Error("Invalid JSON response from OpenAI");
+    }
+  } catch (error) {
+    if (maxOutputTokens > 1500) {
+      console.log("OpenAI call failed, retrying with lower token limit...");
+      try {
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500);
+      } catch (retryError) {
+        console.error("Retry also failed:", retryError);
+        throw retryError;
+      }
+    }
+    throw error;
+  }
+}
 
 function generatePrompt(report: LabReportData, biomarkers: BiomarkerData[]): string {
   const cycleInfo = report.estimated_cycle_day && report.estimated_cycle_phase
