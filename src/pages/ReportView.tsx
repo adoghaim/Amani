@@ -346,19 +346,21 @@ export function ReportView({ reportId }: ReportViewProps) {
                 Conversation starters only — your clinician can advise what's appropriate for you.
               </p>
               <div className="space-y-4">
-                {interpretation.nutrient_topics_to_discuss.map((topic, index) => (
-                  <div key={index} className="border-l-4 border-teal-500 pl-4 py-2">
-                    <h3 className="font-medium text-gray-900 mb-2 capitalize">
-                      {topic.nutrient.replace('_', ' ')}
-                    </h3>
-                    <p className="text-sm text-gray-700 mb-2">
-                      <span className="font-medium">Why this came up:</span> {topic.why_it_came_up}
-                    </p>
-                    <p className="text-gray-700">
-                      {topic.discussion_prompt}
-                    </p>
-                  </div>
-                ))}
+                {interpretation.nutrient_topics_to_discuss
+                  .filter(topic => topic.nutrient)
+                  .map((topic, index) => (
+                    <div key={index} className="border-l-4 border-teal-500 pl-4 py-2">
+                      <h3 className="font-medium text-gray-900 mb-2 capitalize">
+                        {topic.nutrient.replace(/_/g, ' ')}
+                      </h3>
+                      <p className="text-sm text-gray-700 mb-2">
+                        <span className="font-medium">Why this came up:</span> {topic.why_it_came_up}
+                      </p>
+                      <p className="text-gray-700">
+                        {topic.discussion_prompt}
+                      </p>
+                    </div>
+                  ))}
               </div>
             </Card>
           )}
