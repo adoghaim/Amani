@@ -14,48 +14,48 @@ interface BiomarkerPattern {
 const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   {
     canonical: 'estradiol',
-    patterns: ['estradiol', 'e2', 'estrogen'],
-    commonUnits: ['pg/mL', 'pmol/L', 'pg/ml'],
+    patterns: ['estradiol', 'e2', 'estrogen', 'e 2', 'oestradiol'],
+    commonUnits: ['pg/mL', 'pmol/L', 'pg/ml', 'pg/dl'],
   },
   {
     canonical: 'progesterone',
-    patterns: ['progesterone', 'prog'],
-    commonUnits: ['ng/mL', 'nmol/L', 'ng/ml'],
+    patterns: ['progesterone', 'prog', 'progest'],
+    commonUnits: ['ng/mL', 'nmol/L', 'ng/ml', 'ng/dl'],
   },
   {
     canonical: 'lh',
-    patterns: ['lh', 'luteinizing hormone', 'luteinizing'],
-    commonUnits: ['mIU/mL', 'IU/L', 'miu/ml'],
+    patterns: ['lh', 'luteinizing hormone', 'luteinizing', 'lutropin'],
+    commonUnits: ['mIU/mL', 'IU/L', 'miu/ml', 'iu/l', 'mIU/L'],
   },
   {
     canonical: 'fsh',
-    patterns: ['fsh', 'follicle stimulating hormone', 'follicle-stimulating'],
-    commonUnits: ['mIU/mL', 'IU/L', 'miu/ml'],
+    patterns: ['fsh', 'follicle stimulating hormone', 'follicle-stimulating', 'follitropin'],
+    commonUnits: ['mIU/mL', 'IU/L', 'miu/ml', 'iu/l', 'mIU/L'],
   },
   {
     canonical: 'amh',
-    patterns: ['amh', 'anti-mullerian hormone', 'anti mullerian'],
-    commonUnits: ['ng/mL', 'pmol/L', 'ng/ml'],
+    patterns: ['amh', 'anti-mullerian hormone', 'anti mullerian', 'antimullerian', 'anti-müllerian'],
+    commonUnits: ['ng/mL', 'pmol/L', 'ng/ml', 'ng/dl'],
   },
   {
     canonical: 'tsh',
-    patterns: ['tsh', 'thyroid stimulating hormone', 'thyroid-stimulating'],
-    commonUnits: ['mIU/L', 'μIU/mL', 'uiu/ml', 'miu/l'],
+    patterns: ['tsh', 'thyroid stimulating hormone', 'thyroid-stimulating', 'thyrotropin'],
+    commonUnits: ['mIU/L', 'μIU/mL', 'uiu/ml', 'miu/l', 'uIU/ml', 'IU/L'],
   },
   {
     canonical: 'free_t4',
-    patterns: ['free t4', 'free thyroxine', 't4 free', 'ft4'],
-    commonUnits: ['ng/dL', 'pmol/L', 'ng/dl'],
+    patterns: ['free t4', 'free thyroxine', 't4 free', 'ft4', 'free t 4', 't4, free'],
+    commonUnits: ['ng/dL', 'pmol/L', 'ng/dl', 'ug/dl', 'μg/dL'],
   },
   {
     canonical: 'ferritin',
-    patterns: ['ferritin'],
-    commonUnits: ['ng/mL', 'μg/L', 'ng/ml', 'ug/l'],
+    patterns: ['ferritin', 'serum ferritin'],
+    commonUnits: ['ng/mL', 'μg/L', 'ng/ml', 'ug/l', 'ng/dL'],
   },
   {
     canonical: 'vitamin_d',
-    patterns: ['vitamin d', '25-hydroxy vitamin d', '25-oh vitamin d', 'vit d', '25(oh)d'],
-    commonUnits: ['ng/mL', 'nmol/L', 'ng/ml'],
+    patterns: ['vitamin d', '25-hydroxy vitamin d', '25-oh vitamin d', 'vit d', '25(oh)d', '25 hydroxy', 'cholecalciferol'],
+    commonUnits: ['ng/mL', 'nmol/L', 'ng/ml', 'ng/dl'],
   },
 ];
 
@@ -64,18 +64,29 @@ export function parseBiomarkersFromText(text: string): ExtractedBiomarker[] {
   const lines = text.split('\n');
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].toLowerCase().trim();
-    if (!line) continue;
+    const line = lines[i].trim();
+    if (!line || line.length < 3) continue;
+
+    const lineLower = line.toLowerCase();
 
     for (const pattern of BIOMARKER_PATTERNS) {
       const matchedPattern = pattern.patterns.find((p) =>
-        line.includes(p.toLowerCase())
+        lineLower.includes(p.toLowerCase())
       );
 
       if (matchedPattern) {
+        let contextLines = [line];
+
+        if (i + 1 < lines.length && lines[i + 1].trim()) {
+          contextLines.push(lines[i + 1]);
+        }
+        if (i - 1 >= 0 && lines[i - 1].trim()) {
+          contextLines.unshift(lines[i - 1]);
+        }
+
         const extracted = extractBiomarkerFromLine(
-          line,
-          lines[i],
+          lineLower,
+          contextLines.join(' '),
           pattern.canonical,
           pattern.commonUnits
         );
@@ -93,6 +104,8 @@ export function parseBiomarkersFromText(text: string): ExtractedBiomarker[] {
             extractedBiomarkers.push(extracted);
           }
         }
+
+        break;
       }
     }
   }
@@ -106,8 +119,8 @@ function extractBiomarkerFromLine(
   name: BiomarkerName,
   commonUnits: string[]
 ): ExtractedBiomarker | null {
-  const numberPattern = /\b(\d+\.?\d*)\b/g;
-  const numbers = [...lineLower.matchAll(numberPattern)].map((m) => parseFloat(m[1]));
+  const numberPattern = /(\d+\.?\d*)/g;
+  const numbers = [...lineOriginal.matchAll(numberPattern)].map((m) => parseFloat(m[1]));
 
   if (numbers.length === 0) return null;
 
@@ -117,7 +130,13 @@ function extractBiomarkerFromLine(
   let referenceMax: number | undefined;
   let confidence: 'high' | 'medium' | 'low' = 'low';
 
-  const unitMatch = commonUnits.find((u) => lineLower.includes(u.toLowerCase()));
+  const unitMatch = commonUnits.find((u) => {
+    const unitLower = u.toLowerCase();
+    const escapedUnit = unitLower.replace(/[/()]/g, '\\$&');
+    const unitRegex = new RegExp(escapedUnit, 'i');
+    return unitRegex.test(lineOriginal);
+  });
+
   if (unitMatch) {
     unit = unitMatch;
     confidence = 'medium';
@@ -125,8 +144,18 @@ function extractBiomarkerFromLine(
     unit = commonUnits[0];
   }
 
-  const rangePattern = /(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/g;
-  const rangeMatches = [...lineLower.matchAll(rangePattern)];
+  const rangePatterns = [
+    /(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/g,
+    /(\d+\.?\d*)\s+to\s+(\d+\.?\d*)/gi,
+    /range[:\s]+(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/gi,
+    /ref[:\s]+(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/gi,
+  ];
+
+  let rangeMatches: RegExpMatchArray[] = [];
+  for (const pattern of rangePatterns) {
+    rangeMatches = [...lineOriginal.matchAll(pattern)];
+    if (rangeMatches.length > 0) break;
+  }
 
   if (rangeMatches.length > 0) {
     const lastRange = rangeMatches[rangeMatches.length - 1];
@@ -135,15 +164,29 @@ function extractBiomarkerFromLine(
     confidence = 'high';
 
     const numbersBeforeRange = numbers.filter(
-      (n) => n !== referenceMin && n !== referenceMax
+      (n) => Math.abs(n - referenceMin) > 0.01 && Math.abs(n - referenceMax) > 0.01
     );
+
     if (numbersBeforeRange.length > 0) {
       value = numbersBeforeRange[0];
     } else if (numbers.length > 2) {
       value = numbers[0];
     }
-  } else {
+  } else if (numbers.length === 1) {
     value = numbers[0];
+  } else if (numbers.length >= 2) {
+    const sortedNumbers = [...numbers].sort((a, b) => a - b);
+
+    if (numbers.length === 3) {
+      value = numbers[0];
+      referenceMin = sortedNumbers[0] === value ? sortedNumbers[1] : sortedNumbers[0];
+      referenceMax = sortedNumbers[2];
+      if (referenceMin < referenceMax && referenceMin !== value && referenceMax !== value) {
+        confidence = 'medium';
+      }
+    } else {
+      value = numbers[0];
+    }
   }
 
   if (value === null) {

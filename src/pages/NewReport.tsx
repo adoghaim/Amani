@@ -77,11 +77,19 @@ export function NewReport() {
 
       try {
         const text = await extractTextFromPDF(file);
+        console.log('Extracted text from PDF:', text.substring(0, 500));
+        console.log('Total text length:', text.length);
+
         const parsed = parseBiomarkersFromText(text);
+        console.log('Parsed biomarkers:', parsed);
+
         const validated = validateExtractedBiomarkers(parsed);
+        console.log('Validated biomarkers:', validated);
 
         if (validated.length > 0) {
           setExtractedBiomarkers(validated);
+        } else {
+          console.warn('No biomarkers found in PDF text');
         }
       } catch (err) {
         console.error('PDF extraction failed:', err);
