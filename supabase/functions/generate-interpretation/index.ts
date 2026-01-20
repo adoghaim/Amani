@@ -163,12 +163,92 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+// Validation functions for nutrient safety
+function validateNutrientContent(jsonOutput: any): { valid: boolean; violations: string[] } {
+  const violations: string[] = [];
+
+  // Banned dosage-related keywords
+  const bannedDosageKeywords = [
+    /\b\d+\s*(mg|mcg|iu|g|ml)\b/gi,  // Dosage units with numbers
+    /\bdaily\b/gi,
+    /\bweekly\b/gi,
+    /\btwice\b/gi,
+    /\bper day\b/gi,
+    /\bevery day\b/gi,
+    /\bonce\b/gi,
+  ];
+
+  // Banned prescriptive language
+  const bannedPrescriptiveWords = [
+    /\btake\b/gi,
+    /\byou should\b/gi,
+    /\bconsider taking\b/gi,
+    /\bsupplement with\b/gi,
+    /\brecommend taking\b/gi,
+    /\bstart taking\b/gi,
+  ];
+
+  // Banned herbal/alternative supplements
+  const bannedSupplements = [
+    /\bashwagandha\b/gi,
+    /\bmaca\b/gi,
+    /\bvitex\b/gi,
+    /\bDIM\b/gi,
+    /\bevening primrose\b/gi,
+    /\bblack cohosh\b/gi,
+    /\badaptogen/gi,
+    /\bherbal/gi,
+  ];
+
+  const jsonString = JSON.stringify(jsonOutput);
+
+  // Check for banned dosage keywords
+  bannedDosageKeywords.forEach(pattern => {
+    const matches = jsonString.match(pattern);
+    if (matches) {
+      violations.push(`Contains banned dosage language: ${matches.join(', ')}`);
+    }
+  });
+
+  // Check for banned prescriptive words
+  bannedPrescriptiveWords.forEach(pattern => {
+    const matches = jsonString.match(pattern);
+    if (matches) {
+      violations.push(`Contains banned prescriptive language: ${matches.join(', ')}`);
+    }
+  });
+
+  // Check for banned supplements
+  bannedSupplements.forEach(pattern => {
+    const matches = jsonString.match(pattern);
+    if (matches) {
+      violations.push(`Contains banned supplement: ${matches.join(', ')}`);
+    }
+  });
+
+  return {
+    valid: violations.length === 0,
+    violations
+  };
+}
+
+function sanitizeNutrientSection(jsonOutput: any): any {
+  // Remove the nutrient_topics_to_discuss section if it exists
+  const sanitized = { ...jsonOutput };
+  if (sanitized.nutrient_topics_to_discuss) {
+    console.log("Removing nutrient_topics_to_discuss section due to validation failures");
+    delete sanitized.nutrient_topics_to_discuss;
+  }
+  return sanitized;
+}
+
 async function callOpenAIWithRetry(
   apiKey: string,
   prompt: string,
   report: LabReportData,
   biomarkers: BiomarkerData[],
-  maxOutputTokens = 1800
+  maxOutputTokens = 1800,
+  attemptNumber = 1
 ): Promise<any> {
   const systemPrompt = `You are Amani, a supportive women's health AI assistant. You provide calm, educational interpretations of lab results with cycle awareness. You NEVER diagnose, alarm, or replace medical advice.
 
@@ -185,11 +265,16 @@ CRITICAL CONTEXT GATING RULES:
 - Do NOT assume or infer pregnancy or postpartum status from symptoms or biomarker values
 - If a context field is unknown, do NOT reference it at all
 
-SUPPLEMENT & TREATMENT RULES:
-- NEVER recommend specific supplements, medications, or dosages
-- NEVER say things like "Consider taking vitamin D" or "You may need iron supplements"
-- YOU MAY say: "Discuss options (including diet and supplements) with your clinician"
-- YOU MAY suggest general lifestyle topics to discuss with provider
+CRITICAL NUTRIENT & SUPPLEMENT RULES (HARD CONSTRAINTS):
+- ONLY include nutrients if DIRECTLY tied to a specific lab value or reported symptom
+- NEVER include nutrients as general wellness advice
+- NEVER recommend, prescribe, or suggest taking anything
+- NEVER include dosages, frequencies, timing, or brands (BANNED: IU, mg, mcg, daily, weekly, twice, etc.)
+- NEVER use prescriptive language (BANNED: "take", "you should", "consider taking", "supplement with")
+- ONLY use consultative phrasing: "Some clinicians may discuss...", "You may want to ask your provider about..."
+- NEVER include alternative, herbal, adaptogen, or hormone-modulating supplements (BANNED: ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
+- ALLOWED nutrients (ONLY if tied to lab/symptom): vitamin D, vitamin B12, folate, iron, magnesium, omega-3, zinc
+- Each nutrient must include clear reasoning for why it came up based on specific data
 
 RANGE INTERPRETATION RULES:
 - If a value is in range but near the low/high end, you may say "within range, though near the lower/higher end" and suggest discussing in context of symptoms
@@ -234,6 +319,11 @@ You must respond with ONLY a valid JSON object matching this exact structure:
     "common_non_alarm_reasons": ["string"],
     "when_clinicians_follow_up": ["string"]
   }],
+  "nutrient_topics_to_discuss": [{
+    "name": "vitamin_d" | "vitamin_b12" | "folate" | "iron" | "magnesium" | "omega_3" | "zinc",
+    "why_it_came_up": "string explaining which specific lab value or symptom triggered this",
+    "discussion_prompt": "string using ONLY consultative language like 'Some clinicians may discuss...' or 'You may want to ask your provider about...'"
+  }],
   "supportive_considerations": {
     "nutrition": ["string"],
     "sleep_stress": ["string"],
@@ -274,13 +364,31 @@ You must respond with ONLY a valid JSON object matching this exact structure:
 
     try {
       const parsedJson = JSON.parse(content);
+
+      // Validate nutrient content
+      const validation = validateNutrientContent(parsedJson);
+
+      if (!validation.valid) {
+        console.warn("Nutrient content validation failed:", validation.violations);
+
+        // Allow one retry on first attempt
+        if (attemptNumber === 1) {
+          console.log("Attempting regeneration with stricter prompt...");
+          return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, maxOutputTokens, 2);
+        } else {
+          // Second attempt failed, sanitize by removing nutrient section
+          console.log("Second attempt also failed validation, removing nutrient section");
+          return sanitizeNutrientSection(parsedJson);
+        }
+      }
+
       return parsedJson;
     } catch (parseError) {
       console.error("Failed to parse JSON response, content:", content);
 
       if (maxOutputTokens > 1500) {
         console.log("Retrying with lower token limit (1500)...");
-        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500);
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500, attemptNumber);
       }
 
       throw new Error("Invalid JSON response from OpenAI");
@@ -289,7 +397,7 @@ You must respond with ONLY a valid JSON object matching this exact structure:
     if (maxOutputTokens > 1500) {
       console.log("OpenAI call failed, retrying with lower token limit...");
       try {
-        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500);
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500, attemptNumber);
       } catch (retryError) {
         console.error("Retry also failed:", retryError);
         throw retryError;
@@ -401,6 +509,7 @@ function generateDemoInterpretation(report: LabReportData, biomarkers: Biomarker
         : "Without cycle timing information, hormone level interpretation may be limited. Consider tracking your cycle to provide more context for future lab work.",
     },
     biomarkers: biomarkerInterpretations,
+    nutrient_topics_to_discuss: [],
     supportive_considerations: {
       nutrition: [
         "Maintain a balanced diet with adequate protein, healthy fats, and complex carbohydrates",
