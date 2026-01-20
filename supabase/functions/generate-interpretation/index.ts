@@ -237,10 +237,73 @@ function validateNutrientContent(jsonOutput: any): { valid: boolean; violations:
 }
 
 function sanitizeNutrientSection(jsonOutput: any): any {
-  // Set nutrient_topics_to_discuss to empty array due to validation failures
   const sanitized = { ...jsonOutput };
-  console.log("Setting nutrient_topics_to_discuss to empty array due to validation failures");
-  sanitized.nutrient_topics_to_discuss = [];
+
+  if (!jsonOutput.nutrient_topics_to_discuss || !Array.isArray(jsonOutput.nutrient_topics_to_discuss)) {
+    return sanitized;
+  }
+
+  const safeFallback = "Some clinicians may discuss options. Ask your provider what's appropriate for you.";
+
+  // Banned patterns
+  const bannedDosageUnits = [
+    /\bIU\b/gi,
+    /\bmg\b/gi,
+    /\bmcg\b/gi,
+    /\b\d+\s*g\b/gi,
+    /\bmL\b/gi,
+  ];
+
+  const bannedDirectiveVerbs = [
+    /\btake\b/gi,
+    /\bstart\b/gi,
+    /\bincrease\b/gi,
+    /\bdecrease\b/gi,
+    /\brecommended\b/gi,
+    /\bprescribe\b/gi,
+  ];
+
+  const bannedFrequencyWords = [
+    /\bdaily\b/gi,
+    /\btwice\b/gi,
+    /\bper day\b/gi,
+    /\bevery day\b/gi,
+  ];
+
+  const allowedNutrients = ['vitamin_d', 'iron', 'b12', 'folate', 'magnesium', 'omega_3', 'iodine'];
+
+  // Check each item individually
+  sanitized.nutrient_topics_to_discuss = jsonOutput.nutrient_topics_to_discuss
+    .filter((item: any) => {
+      // Remove items with disallowed nutrients
+      if (item.nutrient && !allowedNutrients.includes(item.nutrient)) {
+        console.log(`Removing nutrient item with disallowed nutrient: ${item.nutrient}`);
+        return false;
+      }
+      return true;
+    })
+    .map((item: any) => {
+      const itemString = JSON.stringify(item);
+      let hasBannedContent = false;
+
+      // Check for banned patterns in this specific item
+      [...bannedDosageUnits, ...bannedDirectiveVerbs, ...bannedFrequencyWords].forEach(pattern => {
+        if (pattern.test(itemString)) {
+          hasBannedContent = true;
+        }
+      });
+
+      if (hasBannedContent) {
+        console.log(`Replacing discussion_prompt for ${item.nutrient} due to banned content`);
+        return {
+          ...item,
+          discussion_prompt: safeFallback
+        };
+      }
+
+      return item;
+    });
+
   return sanitized;
 }
 
@@ -268,6 +331,7 @@ CRITICAL CONTEXT GATING RULES:
 - If a context field is unknown, do NOT reference it at all
 
 CRITICAL NUTRIENT & SUPPLEMENT RULES (HARD CONSTRAINTS):
+- REQUIRED: Include at least 1 nutrient topic when ANY biomarker is out_of_range OR when a biomarker is borderline/low-normal AND the user has reported relevant symptoms
 - ONLY include nutrients if DIRECTLY tied to a specific lab value or reported symptom
 - NEVER include nutrients as general wellness advice
 - NEVER recommend, prescribe, or suggest taking anything
