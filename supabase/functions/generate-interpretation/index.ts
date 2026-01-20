@@ -166,65 +166,69 @@ Deno.serve(async (req: Request) => {
 // Validation functions for nutrient safety
 function validateNutrientContent(jsonOutput: any): { valid: boolean; violations: string[] } {
   const violations: string[] = [];
+  const allowedNutrients = ['vitamin_d', 'iron', 'b12', 'folate', 'magnesium', 'omega_3', 'iodine'];
 
-  // Banned dosage-related keywords
-  const bannedDosageKeywords = [
-    /\b\d+\s*(mg|mcg|iu|g|ml)\b/gi,  // Dosage units with numbers
+  // Banned dosage units
+  const bannedDosageUnits = [
+    /\bIU\b/gi,
+    /\bmg\b/gi,
+    /\bmcg\b/gi,
+    /\b\d+\s*g\b/gi,  // numbers followed by 'g'
+    /\bmL\b/gi,
+  ];
+
+  // Banned directive verbs
+  const bannedDirectiveVerbs = [
+    /\btake\b/gi,
+    /\bstart\b/gi,
+    /\bincrease\b/gi,
+    /\bdecrease\b/gi,
+    /\brecommended\b/gi,
+    /\bprescribe\b/gi,
+  ];
+
+  // Banned frequency words
+  const bannedFrequencyWords = [
     /\bdaily\b/gi,
-    /\bweekly\b/gi,
     /\btwice\b/gi,
     /\bper day\b/gi,
     /\bevery day\b/gi,
-    /\bonce\b/gi,
-  ];
-
-  // Banned prescriptive language
-  const bannedPrescriptiveWords = [
-    /\btake\b/gi,
-    /\byou should\b/gi,
-    /\bconsider taking\b/gi,
-    /\bsupplement with\b/gi,
-    /\brecommend taking\b/gi,
-    /\bstart taking\b/gi,
-  ];
-
-  // Banned herbal/alternative supplements
-  const bannedSupplements = [
-    /\bashwagandha\b/gi,
-    /\bmaca\b/gi,
-    /\bvitex\b/gi,
-    /\bDIM\b/gi,
-    /\bevening primrose\b/gi,
-    /\bblack cohosh\b/gi,
-    /\badaptogen/gi,
-    /\bherbal/gi,
   ];
 
   const jsonString = JSON.stringify(jsonOutput);
 
-  // Check for banned dosage keywords
-  bannedDosageKeywords.forEach(pattern => {
+  // Check for banned dosage units
+  bannedDosageUnits.forEach(pattern => {
     const matches = jsonString.match(pattern);
     if (matches) {
-      violations.push(`Contains banned dosage language: ${matches.join(', ')}`);
+      violations.push(`Contains banned dosage unit: ${matches.join(', ')}`);
     }
   });
 
-  // Check for banned prescriptive words
-  bannedPrescriptiveWords.forEach(pattern => {
+  // Check for banned directive verbs
+  bannedDirectiveVerbs.forEach(pattern => {
     const matches = jsonString.match(pattern);
     if (matches) {
-      violations.push(`Contains banned prescriptive language: ${matches.join(', ')}`);
+      violations.push(`Contains banned directive verb: ${matches.join(', ')}`);
     }
   });
 
-  // Check for banned supplements
-  bannedSupplements.forEach(pattern => {
+  // Check for banned frequency words
+  bannedFrequencyWords.forEach(pattern => {
     const matches = jsonString.match(pattern);
     if (matches) {
-      violations.push(`Contains banned supplement: ${matches.join(', ')}`);
+      violations.push(`Contains banned frequency word: ${matches.join(', ')}`);
     }
   });
+
+  // Validate allow-list for nutrients
+  if (jsonOutput.nutrient_topics_to_discuss && Array.isArray(jsonOutput.nutrient_topics_to_discuss)) {
+    jsonOutput.nutrient_topics_to_discuss.forEach((item: any, index: number) => {
+      if (item.nutrient && !allowedNutrients.includes(item.nutrient)) {
+        violations.push(`Nutrient at index ${index} not in allow-list: ${item.nutrient}`);
+      }
+    });
+  }
 
   return {
     valid: violations.length === 0,
@@ -233,12 +237,10 @@ function validateNutrientContent(jsonOutput: any): { valid: boolean; violations:
 }
 
 function sanitizeNutrientSection(jsonOutput: any): any {
-  // Remove the nutrient_topics_to_discuss section if it exists
+  // Set nutrient_topics_to_discuss to empty array due to validation failures
   const sanitized = { ...jsonOutput };
-  if (sanitized.nutrient_topics_to_discuss) {
-    console.log("Removing nutrient_topics_to_discuss section due to validation failures");
-    delete sanitized.nutrient_topics_to_discuss;
-  }
+  console.log("Setting nutrient_topics_to_discuss to empty array due to validation failures");
+  sanitized.nutrient_topics_to_discuss = [];
   return sanitized;
 }
 
@@ -270,10 +272,10 @@ CRITICAL NUTRIENT & SUPPLEMENT RULES (HARD CONSTRAINTS):
 - NEVER include nutrients as general wellness advice
 - NEVER recommend, prescribe, or suggest taking anything
 - NEVER include dosages, frequencies, timing, or brands (BANNED: IU, mg, mcg, daily, weekly, twice, etc.)
-- NEVER use prescriptive language (BANNED: "take", "you should", "consider taking", "supplement with")
+- NEVER use prescriptive language (BANNED: "take", "start", "increase", "decrease", "recommended", "prescribe")
 - ONLY use consultative phrasing: "Some clinicians may discuss...", "You may want to ask your provider about..."
 - NEVER include alternative, herbal, adaptogen, or hormone-modulating supplements (BANNED: ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
-- ALLOWED nutrients (ONLY if tied to lab/symptom): vitamin D, vitamin B12, folate, iron, magnesium, omega-3, zinc
+- ALLOWED nutrients (ONLY if tied to lab/symptom): vitamin_d, iron, b12, folate, magnesium, omega_3, iodine
 - Each nutrient must include clear reasoning for why it came up based on specific data
 
 RANGE INTERPRETATION RULES:
@@ -320,7 +322,7 @@ You must respond with ONLY a valid JSON object matching this exact structure:
     "when_clinicians_follow_up": ["string"]
   }],
   "nutrient_topics_to_discuss": [{
-    "name": "vitamin_d" | "vitamin_b12" | "folate" | "iron" | "magnesium" | "omega_3" | "zinc",
+    "nutrient": "vitamin_d" | "iron" | "b12" | "folate" | "magnesium" | "omega_3" | "iodine",
     "why_it_came_up": "string explaining which specific lab value or symptom triggered this",
     "discussion_prompt": "string using ONLY consultative language like 'Some clinicians may discuss...' or 'You may want to ask your provider about...'"
   }],

@@ -72,6 +72,11 @@ export interface AIInterpretation {
     common_non_alarm_reasons: string[];
     when_clinicians_follow_up: string[];
   }[];
+  nutrient_topics_to_discuss: {
+    nutrient: 'vitamin_d' | 'iron' | 'b12' | 'folate' | 'magnesium' | 'omega_3' | 'iodine';
+    why_it_came_up: string;
+    discussion_prompt: string;
+  }[];
   supportive_considerations: {
     nutrition: string[];
     sleep_stress: string[];

@@ -14,12 +14,12 @@ This document outlines the strict rules and validation logic for how nutrients a
 Nutrients may ONLY be mentioned if they are in this allow-list AND directly related to a lab value or symptom:
 
 - **vitamin D** (vitamin_d)
-- **vitamin B12** (vitamin_b12)
+- **vitamin B12** (b12)
 - **folate** (folate)
 - **iron** (iron)
 - **magnesium** (magnesium)
 - **omega-3** (omega_3)
-- **zinc** (zinc)
+- **iodine** (iodine)
 
 ## Banned Content
 
@@ -41,18 +41,18 @@ These supplements must NEVER be mentioned:
 The following words and phrases are FORBIDDEN:
 
 - "take"
-- "you should"
-- "consider taking"
-- "supplement with"
-- "recommend taking"
-- "start taking"
+- "start"
+- "increase"
+- "decrease"
+- "recommended"
+- "prescribe"
 
 ### 3. Banned Dosage/Timing Language
 
 Never include:
 
-- Specific amounts (mg, mcg, IU, g, ml)
-- Frequency terms (daily, weekly, twice, per day, every day, once)
+- Specific dosage units (IU, mg, mcg, g, mL)
+- Frequency terms (daily, twice, per day, every day)
 - Timing instructions (morning, evening, with food)
 - Brand names or product recommendations
 
@@ -97,9 +97,9 @@ The AI generates a `nutrient_topics_to_discuss` array in the interpretation JSON
 {
   "nutrient_topics_to_discuss": [
     {
-      "name": "vitamin_d",
-      "why_it_came_up": "Your vitamin D level (18 ng/mL) is below the reference range (30-100 ng/mL)",
-      "discussion_prompt": "Some clinicians may discuss vitamin D supplementation or increased sun exposure in the context of your lab results. You may want to ask your provider about options that would be appropriate for your situation."
+      "nutrient": "vitamin_d",
+      "why_it_came_up": "Vitamin D is below the lab reference range (24 vs 30–100).",
+      "discussion_prompt": "Some clinicians may discuss dietary sources, sun exposure, or supplementation. You may want to ask your provider what's appropriate for you."
     }
   ]
 }
@@ -107,7 +107,7 @@ The AI generates a `nutrient_topics_to_discuss` array in the interpretation JSON
 
 ### Required Fields
 
-- **name**: Must be one of the allowed nutrient identifiers
+- **nutrient**: Must be one of the allowed nutrient identifiers (vitamin_d, iron, b12, folate, magnesium, omega_3, iodine)
 - **why_it_came_up**: Clear explanation of which specific lab value or symptom triggered this inclusion
 - **discussion_prompt**: Consultative language only, no prescriptive advice
 
@@ -123,17 +123,17 @@ The edge function performs automatic validation on all AI-generated content:
    - Log violations
    - Attempt one regeneration with the same strict rules
 4. **If Second Attempt Fails**:
-   - Remove the entire `nutrient_topics_to_discuss` section
+   - Set `nutrient_topics_to_discuss` to empty array
    - Proceed with the rest of the interpretation intact
 
 ### Banned Pattern Detection
 
 The validator checks for:
 
-1. **Dosage patterns**: Numbers followed by units (mg, mcg, IU, g, ml)
-2. **Frequency words**: daily, weekly, twice, per day, every day, once
-3. **Prescriptive verbs**: take, you should, consider taking, supplement with, recommend taking
-4. **Banned supplements**: ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, adaptogen, herbal
+1. **Dosage units**: IU, mg, mcg, g (with numbers), mL
+2. **Directive verbs**: take, start, increase, decrease, recommended, prescribe
+3. **Frequency words**: daily, twice, per day, every day
+4. **Allow-list validation**: Ensures all nutrient values are in the approved list (vitamin_d, iron, b12, folate, magnesium, omega_3, iodine)
 
 ### Validation Behavior
 
@@ -146,7 +146,7 @@ if (attemptNumber === 1 && !validation.valid) {
 
 // If violations detected on second attempt
 if (attemptNumber === 2 && !validation.valid) {
-  // Remove nutrient section entirely
+  // Set nutrient_topics_to_discuss to empty array
   return sanitizeNutrientSection(parsedJson);
 }
 ```
@@ -155,16 +155,16 @@ if (attemptNumber === 2 && !validation.valid) {
 
 ### ✅ COMPLIANT Example
 
-**Lab Value**: Vitamin D = 18 ng/mL (Reference: 30-100 ng/mL)
+**Lab Value**: Vitamin D = 24 ng/mL (Reference: 30-100 ng/mL)
 
 **Symptom**: User reports "fatigue"
 
 **Output**:
 ```json
 {
-  "name": "vitamin_d",
-  "why_it_came_up": "Your vitamin D level (18 ng/mL) is below the reference range, and you mentioned experiencing fatigue, which can sometimes be associated with low vitamin D levels",
-  "discussion_prompt": "Some clinicians may discuss vitamin D in the context of your lab results and symptoms. You may want to ask your provider about whether this could be relevant to your health and what approaches might be appropriate for you."
+  "nutrient": "vitamin_d",
+  "why_it_came_up": "Vitamin D is below the lab reference range (24 vs 30–100).",
+  "discussion_prompt": "Some clinicians may discuss dietary sources, sun exposure, or supplementation. You may want to ask your provider what's appropriate for you."
 }
 ```
 
@@ -189,21 +189,31 @@ if (attemptNumber === 2 && !validation.valid) {
 **Example 3 - Banned supplement**:
 ```json
 {
-  "name": "ashwagandha",
+  "nutrient": "ashwagandha",
   "discussion_prompt": "Some clinicians may discuss adaptogenic herbs..."
 }
 ```
-❌ Banned supplement type
+❌ Banned supplement type (not in allow-list)
 
 **Example 4 - General wellness advice**:
 ```json
 {
-  "name": "magnesium",
+  "nutrient": "magnesium",
   "why_it_came_up": "Magnesium is important for overall health",
   "discussion_prompt": "You may want to discuss magnesium with your provider"
 }
 ```
 ❌ Not tied to a specific lab value or symptom
+
+**Example 5 - Not in allow-list**:
+```json
+{
+  "nutrient": "zinc",
+  "why_it_came_up": "Low zinc levels detected",
+  "discussion_prompt": "Some clinicians may discuss zinc supplementation"
+}
+```
+❌ "zinc" was removed from the allow-list and is no longer permitted
 
 ## Implementation Files
 
@@ -223,8 +233,23 @@ Check edge function logs for:
 ```
 "Nutrient content validation failed: [violations]"
 "Attempting regeneration with stricter prompt..."
-"Removing nutrient_topics_to_discuss section due to validation failures"
+"Setting nutrient_topics_to_discuss to empty array due to validation failures"
 ```
+
+## UI Display
+
+The nutrient discussion section is displayed in the report view with:
+
+**Section Title**: "Nutrient topics to discuss with your clinician"
+
+**Disclaimer Text**: "Conversation starters only — your clinician can advise what's appropriate for you."
+
+**Content Display**: For each nutrient topic:
+- Nutrient name (formatted for display)
+- "Why this came up" explanation
+- Discussion prompt text
+
+The section only appears if `nutrient_topics_to_discuss` array is not empty.
 
 ## Updates and Maintenance
 

@@ -337,6 +337,32 @@ export function ReportView({ reportId }: ReportViewProps) {
             </div>
           </div>
 
+          {interpretation.nutrient_topics_to_discuss && interpretation.nutrient_topics_to_discuss.length > 0 && (
+            <Card>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                Nutrient topics to discuss with your clinician
+              </h2>
+              <p className="text-sm text-gray-600 mb-4 italic">
+                Conversation starters only — your clinician can advise what's appropriate for you.
+              </p>
+              <div className="space-y-4">
+                {interpretation.nutrient_topics_to_discuss.map((topic, index) => (
+                  <div key={index} className="border-l-4 border-teal-500 pl-4 py-2">
+                    <h3 className="font-medium text-gray-900 mb-2 capitalize">
+                      {topic.nutrient.replace('_', ' ')}
+                    </h3>
+                    <p className="text-sm text-gray-700 mb-2">
+                      <span className="font-medium">Why this came up:</span> {topic.why_it_came_up}
+                    </p>
+                    <p className="text-gray-700">
+                      {topic.discussion_prompt}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           <Card>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Supportive Considerations</h2>
             <div className="space-y-4">
