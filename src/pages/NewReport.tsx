@@ -3,10 +3,14 @@ import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
+import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { BiomarkerName, Symptom, BiomarkerInput, LabReportContext } from '../types';
-import { Upload, ArrowRight, ArrowLeft } from 'lucide-react';
+import type { ExtractedBiomarker } from '../utils/biomarkerParser';
+import { extractTextFromPDF } from '../utils/pdfExtractor';
+import { parseBiomarkersFromText, validateExtractedBiomarkers } from '../utils/biomarkerParser';
+import { Upload, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
   { value: 'fatigue', label: 'Fatigue' },
@@ -37,6 +41,7 @@ export function NewReport() {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
 
   const [file, setFile] = useState<File | null>(null);
@@ -47,6 +52,7 @@ export function NewReport() {
   const [pregnant, setPregnant] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [postpartum, setPostpartum] = useState<'yes' | 'no'>('no');
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
+  const [extractedBiomarkers, setExtractedBiomarkers] = useState<ExtractedBiomarker[]>([]);
   const [biomarkers, setBiomarkers] = useState<BiomarkerInput[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,12 +68,68 @@ export function NewReport() {
     }
   };
 
+  const handleProceedFromStep1 = async () => {
+    if (!file || !reportDate) return;
+
+    if (file.type === 'application/pdf') {
+      setExtracting(true);
+      setError('');
+
+      try {
+        const text = await extractTextFromPDF(file);
+        const parsed = parseBiomarkersFromText(text);
+        const validated = validateExtractedBiomarkers(parsed);
+
+        if (validated.length > 0) {
+          setExtractedBiomarkers(validated);
+        }
+      } catch (err) {
+        console.error('PDF extraction failed:', err);
+      } finally {
+        setExtracting(false);
+      }
+    }
+
+    setStep(2);
+  };
+
   const toggleSymptom = (symptom: Symptom) => {
     if (symptoms.includes(symptom)) {
       setSymptoms(symptoms.filter((s) => s !== symptom));
     } else if (symptoms.length < 5) {
       setSymptoms([...symptoms, symptom]);
     }
+  };
+
+  const handleProceedToStep3 = () => {
+    if (extractedBiomarkers.length > 0) {
+      const convertedBiomarkers: BiomarkerInput[] = extractedBiomarkers.map((eb) => ({
+        name: eb.name,
+        value: eb.value,
+        unit: eb.unit,
+        reference_min: eb.reference_min,
+        reference_max: eb.reference_max,
+      }));
+      setBiomarkers(convertedBiomarkers);
+    }
+    setStep(3);
+  };
+
+  const updateExtractedBiomarker = (index: number, field: keyof ExtractedBiomarker, value: string | number) => {
+    const updated = [...extractedBiomarkers];
+    updated[index] = { ...updated[index], [field]: value } as ExtractedBiomarker;
+    setExtractedBiomarkers(updated);
+  };
+
+  const removeExtractedBiomarker = (index: number) => {
+    setExtractedBiomarkers(extractedBiomarkers.filter((_, i) => i !== index));
+  };
+
+  const addExtractedBiomarker = () => {
+    setExtractedBiomarkers([
+      ...extractedBiomarkers,
+      { name: 'estradiol', value: 0, unit: 'pg/mL', confidence: 'low' },
+    ]);
   };
 
   const addBiomarker = () => {
@@ -273,11 +335,20 @@ export function NewReport() {
 
               <div className="flex justify-end">
                 <Button
-                  onClick={() => setStep(2)}
-                  disabled={!canProceedStep1}
+                  onClick={handleProceedFromStep1}
+                  disabled={!canProceedStep1 || extracting}
                 >
-                  Next
-                  <ArrowRight className="w-5 h-5 ml-2" />
+                  {extracting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      Next
+                      <ArrowRight className="w-5 h-5 ml-2" />
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -401,7 +472,7 @@ export function NewReport() {
                   Back
                 </Button>
                 <Button
-                  onClick={() => setStep(3)}
+                  onClick={handleProceedToStep3}
                   disabled={!canProceedStep2}
                 >
                   Next
@@ -412,11 +483,51 @@ export function NewReport() {
           </Card>
         )}
 
-        {step === 3 && (
+        {step === 3 && extractedBiomarkers.length > 0 && biomarkers.length === 0 && (
           <Card>
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              Enter Biomarkers
+              Review Extracted Biomarkers
             </h2>
+
+            <ReviewBiomarkers
+              extractedBiomarkers={extractedBiomarkers}
+              onUpdate={updateExtractedBiomarker}
+              onRemove={removeExtractedBiomarker}
+              onAddNew={addExtractedBiomarker}
+            />
+
+            <div className="flex justify-between pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => setStep(2)}
+              >
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Back
+              </Button>
+              <Button
+                onClick={handleProceedToStep3}
+                disabled={extractedBiomarkers.length === 0}
+              >
+                Continue to Submit
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {step === 3 && (extractedBiomarkers.length === 0 || biomarkers.length > 0) && (
+          <Card>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+              {biomarkers.length > 0 ? 'Review and Submit' : 'Enter Biomarkers'}
+            </h2>
+
+            {extractedBiomarkers.length === 0 && biomarkers.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-amber-700">
+                  We couldn't automatically extract biomarkers from your file. Please enter them manually below.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-6">
               {biomarkers.map((biomarker, index) => (
