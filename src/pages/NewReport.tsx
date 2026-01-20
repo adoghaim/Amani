@@ -50,7 +50,7 @@ export function NewReport() {
   const [cycleLength, setCycleLength] = useState('28');
   const [birthControl, setBirthControl] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [pregnant, setPregnant] = useState<'yes' | 'no' | 'unsure'>('unsure');
-  const [postpartum, setPostpartum] = useState<'yes' | 'no'>('no');
+  const [postpartum, setPostpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
   const [extractedBiomarkers, setExtractedBiomarkers] = useState<ExtractedBiomarker[]>([]);
   const [biomarkers, setBiomarkers] = useState<BiomarkerInput[]>([]);
@@ -452,7 +452,7 @@ export function NewReport() {
                   Are you postpartum?
                 </label>
                 <div className="flex gap-4">
-                  {['yes', 'no'].map((option) => (
+                  {['yes', 'no', 'unsure'].map((option) => (
                     <button
                       key={option}
                       onClick={() => setPostpartum(option as typeof postpartum)}

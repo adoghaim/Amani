@@ -30,7 +30,7 @@ export type Symptom =
 export interface LabReportContext {
   birth_control: 'yes' | 'no' | 'unsure';
   pregnant: 'yes' | 'no' | 'unsure';
-  postpartum: 'yes' | 'no';
+  postpartum: 'yes' | 'no' | 'unsure';
   top_symptoms: Symptom[];
 }
 
