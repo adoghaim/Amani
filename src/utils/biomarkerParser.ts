@@ -61,32 +61,23 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
 
 export function parseBiomarkersFromText(text: string): ExtractedBiomarker[] {
   const extractedBiomarkers: ExtractedBiomarker[] = [];
-  const lines = text.split('\n');
+  const textLower = text.toLowerCase();
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line || line.length < 3) continue;
+  for (const pattern of BIOMARKER_PATTERNS) {
+    for (const patternStr of pattern.patterns) {
+      const patternLower = patternStr.toLowerCase();
+      let searchIndex = 0;
 
-    const lineLower = line.toLowerCase();
+      while (true) {
+        const foundIndex = textLower.indexOf(patternLower, searchIndex);
+        if (foundIndex === -1) break;
 
-    for (const pattern of BIOMARKER_PATTERNS) {
-      const matchedPattern = pattern.patterns.find((p) =>
-        lineLower.includes(p.toLowerCase())
-      );
+        const contextStart = Math.max(0, foundIndex - 50);
+        const contextEnd = Math.min(text.length, foundIndex + 200);
+        const contextText = text.substring(contextStart, contextEnd);
 
-      if (matchedPattern) {
-        let contextLines = [line];
-
-        if (i + 1 < lines.length && lines[i + 1].trim()) {
-          contextLines.push(lines[i + 1]);
-        }
-        if (i - 1 >= 0 && lines[i - 1].trim()) {
-          contextLines.unshift(lines[i - 1]);
-        }
-
-        const extracted = extractBiomarkerFromLine(
-          lineLower,
-          contextLines.join(' '),
+        const extracted = extractBiomarkerFromContext(
+          contextText,
           pattern.canonical,
           pattern.commonUnits
         );
@@ -105,7 +96,7 @@ export function parseBiomarkersFromText(text: string): ExtractedBiomarker[] {
           }
         }
 
-        break;
+        searchIndex = foundIndex + patternLower.length;
       }
     }
   }
@@ -113,14 +104,13 @@ export function parseBiomarkersFromText(text: string): ExtractedBiomarker[] {
   return extractedBiomarkers;
 }
 
-function extractBiomarkerFromLine(
-  lineLower: string,
-  lineOriginal: string,
+function extractBiomarkerFromContext(
+  contextText: string,
   name: BiomarkerName,
   commonUnits: string[]
 ): ExtractedBiomarker | null {
   const numberPattern = /(\d+\.?\d*)/g;
-  const numbers = [...lineOriginal.matchAll(numberPattern)].map((m) => parseFloat(m[1]));
+  const numbers = [...contextText.matchAll(numberPattern)].map((m) => parseFloat(m[1]));
 
   if (numbers.length === 0) return null;
 
@@ -134,7 +124,7 @@ function extractBiomarkerFromLine(
     const unitLower = u.toLowerCase();
     const escapedUnit = unitLower.replace(/[/()]/g, '\\$&');
     const unitRegex = new RegExp(escapedUnit, 'i');
-    return unitRegex.test(lineOriginal);
+    return unitRegex.test(contextText);
   });
 
   if (unitMatch) {
@@ -153,7 +143,7 @@ function extractBiomarkerFromLine(
 
   let rangeMatches: RegExpMatchArray[] = [];
   for (const pattern of rangePatterns) {
-    rangeMatches = [...lineOriginal.matchAll(pattern)];
+    rangeMatches = [...contextText.matchAll(pattern)];
     if (rangeMatches.length > 0) break;
   }
 
@@ -204,7 +194,7 @@ function extractBiomarkerFromLine(
     reference_min: referenceMin,
     reference_max: referenceMax,
     confidence,
-    rawText: lineOriginal,
+    rawText: contextText.substring(0, 100),
   };
 }
 
