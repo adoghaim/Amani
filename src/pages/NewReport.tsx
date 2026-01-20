@@ -80,19 +80,38 @@ export function NewReport() {
         console.log('Extracted text from PDF:', text.substring(0, 500));
         console.log('Total text length:', text.length);
 
-        const parsed = parseBiomarkersFromText(text);
-        console.log('Parsed biomarkers:', parsed);
+        if (text.trim().length > 0) {
+          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-biomarkers`;
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text }),
+          });
 
-        const validated = validateExtractedBiomarkers(parsed);
-        console.log('Validated biomarkers:', validated);
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Extracted biomarkers from AI:', data.biomarkers);
 
-        if (validated.length > 0) {
-          setExtractedBiomarkers(validated);
-        } else {
-          console.warn('No biomarkers found in PDF text');
+            if (data.biomarkers && data.biomarkers.length > 0) {
+              setExtractedBiomarkers(data.biomarkers);
+            } else {
+              console.warn('No biomarkers found by AI extraction');
+            }
+          } else {
+            console.error('AI extraction failed, falling back to local parser');
+            const parsed = parseBiomarkersFromText(text);
+            const validated = validateExtractedBiomarkers(parsed);
+            if (validated.length > 0) {
+              setExtractedBiomarkers(validated);
+            }
+          }
         }
       } catch (err) {
         console.error('PDF extraction failed:', err);
+        setError('Failed to extract biomarkers from PDF. You can enter them manually.');
       } finally {
         setExtracting(false);
       }

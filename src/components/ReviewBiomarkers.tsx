@@ -55,6 +55,21 @@ export function ReviewBiomarkers({
         </p>
       </div>
 
+      {extractedBiomarkers.some(b => b.confidence === 'low') && (
+        <div className="bg-red-50 border border-red-300 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-medium text-red-900 mb-1">Review Required</h3>
+              <p className="text-sm text-red-700">
+                Some extracted values have low confidence. Please verify each value carefully before continuing.
+                Common issues include decimal point errors (e.g., 2.1 vs 21) or misidentified reference ranges.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {extractedBiomarkers.map((biomarker, index) => (
         <div
           key={index}
