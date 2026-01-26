@@ -17,7 +17,8 @@ import {
   TrendingUp,
   Droplet,
   ArrowRight,
-  TestTube2
+  TestTube2,
+  X
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -27,6 +28,7 @@ export function Dashboard() {
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
   const [loading, setLoading] = useState(true);
+  const [showContextNudge, setShowContextNudge] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -86,6 +88,15 @@ export function Dashboard() {
       if (!interventionsResult.error && interventionsResult.data) {
         setInterventions(interventionsResult.data as Intervention[]);
       }
+
+      const hasReports = fetchedReports.length >= 1;
+      const hasInterventions = (interventionsResult.data as Intervention[])?.length > 0;
+      const hasCycleEvents = (eventsResult.data as CycleEvent[])?.length > 0;
+
+      if (hasReports && !hasInterventions && !hasCycleEvents) {
+        const nudgeDismissed = sessionStorage.getItem('contextNudgeDismissed');
+        setShowContextNudge(!nudgeDismissed);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -129,7 +140,18 @@ export function Dashboard() {
     return false;
   };
 
+  const getTrialDaysRemaining = (): number | null => {
+    if (!userProfile || userProfile.subscription_status !== 'trial') return null;
+    const trialStart = new Date(userProfile.trial_start_date);
+    const now = new Date();
+    const daysSinceStart = Math.floor((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
+    const daysRemaining = 30 - daysSinceStart;
+    return daysRemaining > 0 ? daysRemaining : 0;
+  };
+
   const canCreateReport = userProfile?.subscription_status === 'active' || isTrialActive();
+  const trialDaysRemaining = getTrialDaysRemaining();
+  const showTrialBanner = trialDaysRemaining !== null && trialDaysRemaining <= 3;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -202,6 +224,11 @@ export function Dashboard() {
     return colors[category] || colors.other;
   };
 
+  const handleDismissNudge = () => {
+    sessionStorage.setItem('contextNudgeDismissed', 'true');
+    setShowContextNudge(false);
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -232,6 +259,22 @@ export function Dashboard() {
           </a>
         </div>
 
+        {showTrialBanner && (
+          <Card className="mb-6 bg-gradient-to-r from-teal-50 to-cyan-50 border-teal-200">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Keep your health timeline intact</h3>
+                <p className="text-sm text-gray-700 mb-4">
+                  Your insights improve as your data grows. {trialDaysRemaining === 1 ? '1 day' : `${trialDaysRemaining} days`} left in your trial.
+                </p>
+                <a href="/app/billing">
+                  <Button>Continue tracking</Button>
+                </a>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {!canCreateReport && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
             <p className="text-yellow-800">
@@ -241,6 +284,34 @@ export function Dashboard() {
               Manage subscription
             </a>
           </div>
+        )}
+
+        {showContextNudge && (
+          <Card className="mb-6 bg-gradient-to-r from-blue-50 to-teal-50 border-blue-200">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Add context to your labs</h3>
+                <p className="text-sm text-gray-700 mb-4">
+                  Tracking even one change helps explain future results.
+                </p>
+                <div className="flex gap-3">
+                  <a href="/app/tracker">
+                    <Button size="sm">Add intervention</Button>
+                  </a>
+                  <a href="/app/tracker">
+                    <Button size="sm" variant="ghost">Add cycle start</Button>
+                  </a>
+                </div>
+              </div>
+              <button
+                onClick={handleDismissNudge}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Dismiss"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </Card>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -312,6 +383,34 @@ export function Dashboard() {
             </div>
           </Card>
         </div>
+
+        {reports.length > 0 && (
+          <Card className="mb-6 bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-600 mb-2">Timeline Progress</h3>
+                <div className="flex gap-6">
+                  <div>
+                    <span className="text-2xl font-bold text-gray-900">{reports.length}</span>
+                    <span className="text-sm text-gray-600 ml-1">labs tracked</span>
+                  </div>
+                  <div>
+                    <span className="text-2xl font-bold text-gray-900">{interventions.length}</span>
+                    <span className="text-sm text-gray-600 ml-1">interventions</span>
+                  </div>
+                  <div>
+                    <span className="text-2xl font-bold text-gray-900">{reports.length > 1 ? reports.length - 1 : 0}</span>
+                    <span className="text-sm text-gray-600 ml-1">comparisons</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-700">Your timeline gets smarter over time</p>
+                <p className="text-xs text-gray-500 mt-1">Each lab adds to your health story</p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2">

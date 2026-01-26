@@ -150,6 +150,15 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
               </div>
             </div>
 
+            {index === 0 && sortedReports.length === 1 && (
+              <div className="mb-4 bg-teal-50 border border-teal-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-teal-900">This is your baseline. Everything builds from here.</p>
+                <p className="text-xs text-teal-700 mt-1">
+                  Upload another lab report to see how your biomarkers change over time.
+                </p>
+              </div>
+            )}
+
             {quickHighlights.length > 0 && (
               <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <p className="text-xs font-medium text-gray-600 mb-1">Quick highlights vs previous</p>

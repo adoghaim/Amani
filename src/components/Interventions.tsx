@@ -36,6 +36,7 @@ const getCategoryColor = (category: InterventionCategory): string => {
 export function Interventions({ interventions, onAdd, onUpdate, onDelete }: InterventionsProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showFirstInterventionMessage, setShowFirstInterventionMessage] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     category: 'supplement' as InterventionCategory,
@@ -61,6 +62,8 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
     if (!formData.title || !formData.start_date) return;
 
     try {
+      const isFirstIntervention = !editingId && interventions.length === 0;
+
       if (editingId) {
         await onUpdate(editingId, {
           title: formData.title,
@@ -77,6 +80,11 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
           end_date: formData.end_date || null,
           notes: formData.notes || null,
         });
+
+        if (isFirstIntervention) {
+          setShowFirstInterventionMessage(true);
+          setTimeout(() => setShowFirstInterventionMessage(false), 8000);
+        }
       }
       resetForm();
     } catch (error) {
@@ -125,6 +133,17 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
           </Button>
         )}
       </div>
+
+      {showFirstInterventionMessage && (
+        <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+          <p className="text-sm font-medium text-teal-900">
+            We'll track how this overlaps with future labs.
+          </p>
+          <p className="text-xs text-teal-700 mt-1">
+            Your intervention will appear in the timeline alongside your lab results.
+          </p>
+        </div>
+      )}
 
       {showForm && (
         <Card>

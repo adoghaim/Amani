@@ -41,10 +41,10 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
       <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Lab Insights</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Your health story so far</h2>
             {reportDates && (
               <p className="text-sm text-gray-600">
-                Comparing {formatDate(reportDates.previous)} to {formatDate(reportDates.current)} ({reportDates.days_between} days)
+                Since your last labs on {formatDate(reportDates.previous)} ({reportDates.days_between} days ago)
               </p>
             )}
           </div>
@@ -77,13 +77,14 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
           {insights && !loading && !error && (
             <div className="space-y-6">
               <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
-                <h3 className="font-semibold text-teal-900 mb-2">Summary</h3>
+                <h3 className="font-semibold text-teal-900 mb-2">What's happening</h3>
                 <p className="text-teal-800">{insights.summary}</p>
               </div>
 
               {insights.notable_changes && insights.notable_changes.length > 0 && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Notable Changes</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">Since your last labs</h3>
+                  <p className="text-sm text-gray-600 mb-3">These changes stood out during this window:</p>
                   <div className="space-y-4">
                     {insights.notable_changes.map((change, idx) => (
                       <div key={idx} className="border-l-4 border-teal-500 pl-4">
@@ -91,7 +92,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
                         <p className="text-gray-700 mt-1">{change.change}</p>
                         {change.possible_factors && change.possible_factors.length > 0 && (
                           <div className="mt-2">
-                            <p className="text-sm font-medium text-gray-700">Possible factors:</p>
+                            <p className="text-sm font-medium text-gray-700">This change may have coincided with:</p>
                             <ul className="text-sm text-gray-600 list-disc list-inside mt-1">
                               {change.possible_factors.map((factor, fidx) => (
                                 <li key={fidx}>{factor}</li>

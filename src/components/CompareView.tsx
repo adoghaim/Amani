@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Card } from './Card';
 import { LabReport, Biomarker } from '../types';
@@ -16,6 +16,22 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
 
   const [baselineId, setBaselineId] = useState('');
   const [followupId, setFollowupId] = useState('');
+
+  useEffect(() => {
+    const shouldAutoCompare = sessionStorage.getItem('showSecondLabComparison');
+    if (shouldAutoCompare === 'true' && sortedReports.length === 2) {
+      setBaselineId(sortedReports[0].id);
+      setFollowupId(sortedReports[1].id);
+      sessionStorage.removeItem('showSecondLabComparison');
+
+      setTimeout(() => {
+        const element = document.getElementById('biggest-changes');
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    }
+  }, [sortedReports]);
 
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -82,8 +98,14 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
   if (sortedReports.length < 2) {
     return (
       <Card>
-        <div className="text-center py-8 text-gray-600">
-          <p>Upload at least two lab reports to compare results</p>
+        <div className="text-center py-12">
+          <div className="bg-gray-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+            <ArrowUp className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Compare once you upload another lab</h3>
+          <p className="text-sm text-gray-600 max-w-md mx-auto">
+            This view will let you see side-by-side changes in your biomarkers between any two lab reports.
+          </p>
         </div>
       </Card>
     );
@@ -133,11 +155,12 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
         </div>
 
         {highlights.length > 0 && (
-          <div className="mt-4 p-4 rounded-lg border border-teal-200 bg-teal-50">
-            <h4 className="text-sm font-semibold text-teal-900 mb-2">Highlights</h4>
+          <div className="mt-4 p-4 rounded-lg border border-teal-200 bg-teal-50" id="biggest-changes">
+            <p className="text-xs font-medium text-teal-700 mb-2">Here's what changed since your last labs</p>
+            <h4 className="text-sm font-semibold text-teal-900 mb-2">Biggest Changes</h4>
             <ul className="text-sm text-teal-800 list-disc list-inside space-y-1">
               {highlights.map((h, idx) => (
-                <li key={idx}>{h}</li>
+                <li key={idx} className="font-medium">{h}</li>
               ))}
             </ul>
             <p className="text-xs text-teal-700 mt-3">

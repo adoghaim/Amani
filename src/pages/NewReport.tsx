@@ -235,6 +235,13 @@ export function NewReport() {
     setError('');
 
     try {
+      const { data: existingReports } = await supabase
+        .from('lab_reports')
+        .select('id')
+        .eq('user_id', user.id);
+
+      const isSecondReport = existingReports?.length === 1;
+
       let fileUrl = null;
 
       if (file) {
@@ -306,7 +313,12 @@ export function NewReport() {
         body: JSON.stringify({ reportId: reportData.id }),
       });
 
-      window.location.href = `/app/reports/${reportData.id}`;
+      if (isSecondReport) {
+        sessionStorage.setItem('showSecondLabComparison', 'true');
+        window.location.href = '/app/tracker';
+      } else {
+        window.location.href = `/app/reports/${reportData.id}`;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
