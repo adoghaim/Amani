@@ -24,6 +24,9 @@ export function Layout({ children }: LayoutProps) {
               <a href="/app" className="text-gray-600 hover:text-gray-900">
                 Dashboard
               </a>
+              <a href="/app/tracker" className="text-gray-600 hover:text-gray-900">
+                Tracker
+              </a>
               <a href="/app/billing" className="text-gray-600 hover:text-gray-900">
                 Billing
               </a>

@@ -21,6 +21,8 @@ export interface Database {
           trial_start_date: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
+          default_cycle_length: number | null
+          default_period_length: number | null
         }
         Insert: {
           id: string
@@ -33,6 +35,8 @@ export interface Database {
           trial_start_date?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          default_cycle_length?: number | null
+          default_period_length?: number | null
         }
         Update: {
           id?: string
@@ -45,6 +49,8 @@ export interface Database {
           trial_start_date?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          default_cycle_length?: number | null
+          default_period_length?: number | null
         }
       }
       lab_reports: {
@@ -147,6 +153,32 @@ export interface Database {
           json_output?: Json
           generated_at?: string
           disclaimer_version?: string
+        }
+      }
+      cycle_events: {
+        Row: {
+          id: string
+          user_id: string
+          event_date: string
+          event_type: string
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          event_date: string
+          event_type: string
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          event_date?: string
+          event_type?: string
+          notes?: string | null
+          created_at?: string
         }
       }
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -54,6 +54,37 @@ export function NewReport() {
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
   const [extractedBiomarkers, setExtractedBiomarkers] = useState<ExtractedBiomarker[]>([]);
   const [biomarkers, setBiomarkers] = useState<BiomarkerInput[]>([]);
+
+  useEffect(() => {
+    const fetchMostRecentCycleEvent = async () => {
+      if (!user || !reportDate) return;
+
+      try {
+        const { data: events, error } = await supabase
+          .from('cycle_events')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('event_type', 'period_start')
+          .lte('event_date', reportDate)
+          .order('event_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error fetching cycle events:', error);
+          return;
+        }
+
+        if (events && !lastPeriodDate) {
+          setLastPeriodDate(events.event_date);
+        }
+      } catch (error) {
+        console.error('Error in fetchMostRecentCycleEvent:', error);
+      }
+    };
+
+    fetchMostRecentCycleEvent();
+  }, [reportDate, user, lastPeriodDate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

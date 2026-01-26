@@ -99,6 +99,19 @@ export interface User {
   trial_start_date: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  default_cycle_length: number | null;
+  default_period_length: number | null;
+}
+
+export type CycleEventType = 'period_start';
+
+export interface CycleEvent {
+  id: string;
+  user_id: string;
+  event_date: string;
+  event_type: CycleEventType;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface LabReport {

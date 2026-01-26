@@ -9,6 +9,7 @@ import { NewReport } from './pages/NewReport';
 import { ReportView } from './pages/ReportView';
 import { Billing } from './pages/Billing';
 import { Settings } from './pages/Settings';
+import { Tracker } from './pages/Tracker';
 
 function App() {
   const { user, loading } = useAuth();
@@ -88,6 +89,10 @@ function App() {
 
   if (route === '/app/settings') {
     return <Settings />;
+  }
+
+  if (route === '/app/tracker') {
+    return <Tracker />;
   }
 
   return (
