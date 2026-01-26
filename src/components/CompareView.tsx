@@ -62,6 +62,23 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
     return comparisons;
   }, [baselineId, followupId, biomarkersByReport]);
 
+  const highlights = useMemo(() => {
+    if (!comparison || comparison.length === 0) return [];
+    // Rank by magnitude of percent change, fall back to absolute delta.
+    const ranked = [...comparison].sort((a, b) => {
+      const ap = Math.abs(a.percentChange);
+      const bp = Math.abs(b.percentChange);
+      if (bp !== ap) return bp - ap;
+      return Math.abs(b.delta) - Math.abs(a.delta);
+    });
+    return ranked.slice(0, 5).map((c) => {
+      const direction = c.delta === 0 ? 'no change' : c.delta > 0 ? 'increased' : 'decreased';
+      const deltaStr = `${c.delta > 0 ? '+' : ''}${c.delta.toFixed(2)} ${c.followup.unit}`;
+      const pctStr = `${c.percentChange >= 0 ? '+' : ''}${c.percentChange.toFixed(0)}%`;
+      return `${c.name} ${direction} by ${deltaStr} (${pctStr})`;
+    });
+  }, [comparison]);
+
   if (sortedReports.length < 2) {
     return (
       <Card>
@@ -114,6 +131,20 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
             </select>
           </div>
         </div>
+
+        {highlights.length > 0 && (
+          <div className="mt-4 p-4 rounded-lg border border-teal-200 bg-teal-50">
+            <h4 className="text-sm font-semibold text-teal-900 mb-2">Highlights</h4>
+            <ul className="text-sm text-teal-800 list-disc list-inside space-y-1">
+              {highlights.map((h, idx) => (
+                <li key={idx}>{h}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-teal-700 mt-3">
+              Tip: use the sparkle button in the timeline to generate an educational AI summary.
+            </p>
+          </div>
+        )}
 
         {comparison && comparison.length > 0 && (
           <div className="mt-6">

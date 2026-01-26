@@ -13,6 +13,35 @@ interface BiomarkerData {
   unit: string;
 }
 
+type BiomarkerChange = {
+  name: string;
+  previous_value: number;
+  current_value: number;
+  unit: string;
+  delta: number;
+  percent_change: number;
+};
+
+const normalizeName = (s: string) => s.toLowerCase().trim();
+
+// Keep this conservative to avoid noise.
+// Many lab units vary widely, so we primarily rely on percent change.
+const isSignificantChange = (change: BiomarkerChange): boolean => {
+  const absPct = Math.abs(change.percent_change);
+  // Treat tiny baselines carefully: percent changes can explode.
+  // If previous value is very small, require a meaningful absolute delta too.
+  if (Math.abs(change.previous_value) < 0.01) {
+    return Math.abs(change.delta) >= 0.5;
+  }
+  return absPct >= 10;
+};
+
+const topChanges = (changes: BiomarkerChange[], n = 10): BiomarkerChange[] => {
+  return [...changes]
+    .sort((a, b) => Math.abs(b.percent_change) - Math.abs(a.percent_change))
+    .slice(0, n);
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -85,32 +114,40 @@ Deno.serve(async (req: Request) => {
       .select("name, value, unit")
       .eq("lab_report_id", previousReportId);
 
-    const biomarkerChanges = (currentBiomarkers || []).map((current: BiomarkerData) => {
-      const previous = (previousBiomarkers || []).find(
-        (p: BiomarkerData) => p.name.toLowerCase() === current.name.toLowerCase()
-      );
+    const biomarkerChangesAll: BiomarkerChange[] = (currentBiomarkers || [])
+      .map((current: BiomarkerData) => {
+        const previous = (previousBiomarkers || []).find(
+          (p: BiomarkerData) => normalizeName(p.name) === normalizeName(current.name)
+        );
 
-      if (previous && previous.unit === current.unit) {
-        const delta = current.value - previous.value;
-        const percentChange = previous.value !== 0 ? (delta / previous.value) * 100 : 0;
-        return {
-          name: current.name,
-          previous_value: previous.value,
-          current_value: current.value,
-          unit: current.unit,
-          delta,
-          percent_change: percentChange,
-        };
-      }
-      return null;
-    }).filter(Boolean);
+        if (previous && previous.unit === current.unit) {
+          const delta = current.value - previous.value;
+          const percentChange = previous.value !== 0 ? (delta / previous.value) * 100 : 0;
+          return {
+            name: current.name,
+            previous_value: previous.value,
+            current_value: current.value,
+            unit: current.unit,
+            delta,
+            percent_change: percentChange,
+          } as BiomarkerChange;
+        }
+        return null;
+      })
+      .filter((x): x is BiomarkerChange => Boolean(x));
 
+    const significantChanges = biomarkerChangesAll.filter(isSignificantChange);
+    const mostNotable = topChanges(significantChanges.length > 0 ? significantChanges : biomarkerChangesAll, 12);
+
+    // Interventions relevant to the comparison window:
+    // - started before/current
+    // - and active at any point between previous and current (end_date null or end_date >= previous)
     const { data: interventions } = await supabase
       .from("interventions")
       .select("title, category, start_date, end_date")
       .eq("user_id", userId)
       .lte("start_date", currentReport.report_date)
-      .gte("start_date", previousReport.report_date);
+      .or(`end_date.is.null,end_date.gte.${previousReport.report_date}`);
 
     const daysBetween = Math.floor(
       (new Date(currentReport.report_date).getTime() -
@@ -118,23 +155,42 @@ Deno.serve(async (req: Request) => {
         (1000 * 60 * 60 * 24)
     );
 
-    const prompt = `You are a health education assistant analyzing lab results over time. Provide educational insights only - never diagnose or prescribe.
+    const cycleContext = {
+      previous: {
+        phase: previousReport.estimated_cycle_phase ?? null,
+        day: previousReport.estimated_cycle_day ?? null,
+      },
+      current: {
+        phase: currentReport.estimated_cycle_phase ?? null,
+        day: currentReport.estimated_cycle_day ?? null,
+      },
+    };
+
+    const prompt = `You are a health education assistant analyzing lab results over time.
+Provide educational insights only — never diagnose, prescribe, or claim certainty.
 
 Previous lab: ${new Date(previousReport.report_date).toLocaleDateString()}
 Current lab: ${new Date(currentReport.report_date).toLocaleDateString()}
 Time between labs: ${daysBetween} days
 
-Biomarker changes:
-${biomarkerChanges.map((bc: any) => `- ${bc.name}: ${bc.previous_value} → ${bc.current_value} ${bc.unit} (${bc.delta > 0 ? '+' : ''}${bc.delta.toFixed(1)}, ${bc.percent_change.toFixed(0)}%)`).join('\n')}
+Most notable biomarker changes (focus on significance; do not mention every small change):
+${mostNotable.map((bc) => `- ${bc.name}: ${bc.previous_value} → ${bc.current_value} ${bc.unit} (${bc.delta > 0 ? '+' : ''}${bc.delta.toFixed(1)}, ${bc.percent_change.toFixed(0)}%)`).join('\n')}
 
-Interventions started between labs:
-${interventions && interventions.length > 0 ? interventions.map((i: any) => `- ${i.title} (${i.category})`).join('\n') : 'None tracked'}
+All significant changes count: ${significantChanges.length}
+
+Cycle context (if available; use only as possible context, not as an explanation):
+- Previous cycle phase/day: ${cycleContext.previous.phase ?? 'unknown'} / ${cycleContext.previous.day ?? 'unknown'}
+- Current cycle phase/day: ${cycleContext.current.phase ?? 'unknown'} / ${cycleContext.current.day ?? 'unknown'}
+
+Tracked interventions active during this window:
+${interventions && interventions.length > 0 ? interventions.map((i: any) => `- ${i.title} (${i.category}) start ${i.start_date}${i.end_date ? `, end ${i.end_date}` : ''}`).join('\n') : 'None tracked'}
 
 Please provide:
-1. A brief summary of notable changes (2-3 sentences)
-2. Notable changes in key biomarkers (mention only significant changes)
-3. Possible contributing factors (educational only, mention tracked interventions if relevant)
-4. Questions to ask a healthcare provider
+1) A brief summary (2–4 sentences) that highlights the most meaningful changes and what they may imply generally.
+2) Notable changes: include 3–6 items max. Prefer bigger changes and clinically-relevant markers.
+3) Possible factors: keep it cautious. Mention interventions as hypotheses ("may", "could").
+4) Questions to ask a healthcare provider.
+5) General next steps (non-prescriptive, educational). Keep it practical.
 
 Format as JSON:
 {
@@ -145,10 +201,10 @@ Format as JSON:
 }
 
 Remember:
-- Use cautious, educational language
-- Encourage consulting with healthcare providers
-- Do not diagnose conditions
-- Keep explanations accessible`;
+- Use cautious, educational language.
+- Avoid diagnosis, treatment advice, or urgency language.
+- If cycle context is present, treat it as possible context only.
+- Keep explanations accessible and action-neutral ("consider discussing", "ask about").`;
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

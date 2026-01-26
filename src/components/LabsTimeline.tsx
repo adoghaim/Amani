@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUp, ArrowDown, Minus, Sparkles, X } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
 import { LabReport, Biomarker, Intervention } from '../types';
 import { Card } from './Card';
 import { Button } from './Button';
@@ -48,6 +48,18 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
     const delta = current - previous;
     const percent = previous !== 0 ? (delta / previous) * 100 : 0;
     return { value: delta, percent };
+  };
+
+  const getQuickHighlights = (items: Array<{ biomarkerName: string; current: Biomarker; previous: Biomarker | null; delta: { value: number; percent: number } | null }>) => {
+    const ranked = items
+      .filter((i) => i.delta !== null)
+      .sort((a, b) => Math.abs((b.delta?.percent ?? 0)) - Math.abs((a.delta?.percent ?? 0)))
+      .slice(0, 2);
+    return ranked.map((i) => {
+      const d = i.delta!;
+      const dir = d.value === 0 ? 'no change' : d.value > 0 ? 'up' : 'down';
+      return `${i.biomarkerName}: ${dir} ${d.value > 0 ? '+' : ''}${d.value.toFixed(1)} (${d.percent.toFixed(0)}%)`;
+    });
   };
 
   const formatDate = (dateString: string): string => {
@@ -100,6 +112,8 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
           return { biomarkerName: current.name, current, previous, delta };
         }).filter((c) => c !== null);
 
+        const quickHighlights = getQuickHighlights(comparisons as any);
+
         const activeInterventions = getActiveInterventions(report.report_date);
         const displayedInterventions = activeInterventions.slice(0, 3);
         const remainingCount = activeInterventions.length - 3;
@@ -127,11 +141,25 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
                     disabled={!previousReport}
                     title={!previousReport ? 'Upload at least two labs to compare' : 'Generate AI insights'}
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <span className="inline-flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      <span className="hidden sm:inline">Insights</span>
+                    </span>
                   </Button>
                 )}
               </div>
             </div>
+
+            {quickHighlights.length > 0 && (
+              <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-xs font-medium text-gray-600 mb-1">Quick highlights vs previous</p>
+                <ul className="text-sm text-gray-800 list-disc list-inside space-y-1">
+                  {quickHighlights.map((h, i) => (
+                    <li key={i}>{h}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {activeInterventions.length > 0 && (
               <div className="mb-4">
