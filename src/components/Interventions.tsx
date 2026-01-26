@@ -1,0 +1,269 @@
+import { useState } from 'react';
+import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Button } from './Button';
+import { Input } from './Input';
+import { Card } from './Card';
+import { Intervention, InterventionCategory } from '../types';
+
+interface InterventionsProps {
+  interventions: Intervention[];
+  onAdd: (intervention: Omit<Intervention, 'id' | 'user_id' | 'created_at'>) => Promise<void>;
+  onUpdate: (id: string, intervention: Partial<Intervention>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}
+
+const CATEGORIES: { value: InterventionCategory; label: string }[] = [
+  { value: 'supplement', label: 'Supplement' },
+  { value: 'diet', label: 'Diet' },
+  { value: 'exercise', label: 'Exercise' },
+  { value: 'medication', label: 'Medication' },
+  { value: 'sleep', label: 'Sleep' },
+  { value: 'other', label: 'Other' },
+];
+
+const getCategoryColor = (category: InterventionCategory): string => {
+  const colors = {
+    supplement: 'bg-purple-100 text-purple-800',
+    diet: 'bg-green-100 text-green-800',
+    exercise: 'bg-blue-100 text-blue-800',
+    medication: 'bg-red-100 text-red-800',
+    sleep: 'bg-indigo-100 text-indigo-800',
+    other: 'bg-gray-100 text-gray-800',
+  };
+  return colors[category];
+};
+
+export function Interventions({ interventions, onAdd, onUpdate, onDelete }: InterventionsProps) {
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    title: '',
+    category: 'supplement' as InterventionCategory,
+    start_date: '',
+    end_date: '',
+    notes: '',
+  });
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      category: 'supplement',
+      start_date: '',
+      end_date: '',
+      notes: '',
+    });
+    setShowForm(false);
+    setEditingId(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title || !formData.start_date) return;
+
+    try {
+      if (editingId) {
+        await onUpdate(editingId, {
+          title: formData.title,
+          category: formData.category,
+          start_date: formData.start_date,
+          end_date: formData.end_date || null,
+          notes: formData.notes || null,
+        });
+      } else {
+        await onAdd({
+          title: formData.title,
+          category: formData.category,
+          start_date: formData.start_date,
+          end_date: formData.end_date || null,
+          notes: formData.notes || null,
+        });
+      }
+      resetForm();
+    } catch (error) {
+      console.error('Error saving intervention:', error);
+    }
+  };
+
+  const handleEdit = (intervention: Intervention) => {
+    setFormData({
+      title: intervention.title,
+      category: intervention.category,
+      start_date: intervention.start_date,
+      end_date: intervention.end_date || '',
+      notes: intervention.notes || '',
+    });
+    setEditingId(intervention.id);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Delete this intervention?')) {
+      await onDelete(id);
+    }
+  };
+
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const sortedInterventions = [...interventions].sort(
+    (a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold text-gray-900">Interventions</h3>
+        {!showForm && (
+          <Button onClick={() => setShowForm(true)} size="sm">
+            <Plus className="w-4 h-4 mr-1" />
+            Add Intervention
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <Card>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="font-medium text-gray-900">
+                {editingId ? 'Edit Intervention' : 'New Intervention'}
+              </h4>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <Input
+              label="Title"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="e.g., Magnesium glycinate"
+              required
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+              </label>
+              <select
+                value={formData.category}
+                onChange={(e) =>
+                  setFormData({ ...formData, category: e.target.value as InterventionCategory })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Start Date"
+                type="date"
+                value={formData.start_date}
+                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                required
+              />
+              <Input
+                label="End Date (optional)"
+                type="date"
+                value={formData.end_date}
+                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notes (optional)
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                placeholder="Any additional details..."
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button type="submit">
+                {editingId ? 'Update' : 'Add'} Intervention
+              </Button>
+              <Button type="button" variant="ghost" onClick={resetForm}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {sortedInterventions.length === 0 ? (
+        <Card>
+          <div className="text-center py-8 text-gray-600">
+            <p className="mb-2">No interventions tracked yet</p>
+            <p className="text-sm">Add an intervention to track what changed between labs</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {sortedInterventions.map((intervention) => (
+            <Card key={intervention.id}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="font-medium text-gray-900">{intervention.title}</h4>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded ${getCategoryColor(
+                        intervention.category
+                      )}`}
+                    >
+                      {intervention.category}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    <span>Started {formatDate(intervention.start_date)}</span>
+                    {intervention.end_date ? (
+                      <span> • Ended {formatDate(intervention.end_date)}</span>
+                    ) : (
+                      <span> • Ongoing</span>
+                    )}
+                  </div>
+                  {intervention.notes && (
+                    <p className="text-sm text-gray-600 mt-2">{intervention.notes}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEdit(intervention)}
+                    className="text-gray-400 hover:text-teal-600"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(intervention.id)}
+                    className="text-gray-400 hover:text-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

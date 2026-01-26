@@ -114,6 +114,19 @@ export interface CycleEvent {
   created_at: string;
 }
 
+export type InterventionCategory = 'supplement' | 'diet' | 'exercise' | 'medication' | 'sleep' | 'other';
+
+export interface Intervention {
+  id: string;
+  user_id: string;
+  title: string;
+  category: InterventionCategory;
+  start_date: string;
+  end_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface LabReport {
   id: string;
   user_id: string;

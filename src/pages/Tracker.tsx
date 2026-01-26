@@ -4,8 +4,11 @@ import { supabase } from '../lib/supabase';
 import { Layout } from '../components/Layout';
 import { Calendar } from '../components/Calendar';
 import { LabsTimeline } from '../components/LabsTimeline';
+import { Interventions } from '../components/Interventions';
+import { CompareView } from '../components/CompareView';
+import { InsightsModal } from '../components/InsightsModal';
 import { Loading } from '../components/Loading';
-import { LabReport, Biomarker, CycleEvent } from '../types';
+import { LabReport, Biomarker, CycleEvent, Intervention } from '../types';
 
 export function Tracker() {
   const { user } = useAuth();
@@ -13,7 +16,11 @@ export function Tracker() {
   const [reports, setReports] = useState<LabReport[]>([]);
   const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
   const [cycleEvents, setCycleEvents] = useState<CycleEvent[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [interventions, setInterventions] = useState<Intervention[]>([]);
+  const [showInsightsModal, setShowInsightsModal] = useState(false);
+  const [insightsData, setInsightsData] = useState<any>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -27,7 +34,7 @@ export function Tracker() {
     try {
       setLoading(true);
 
-      const [reportsResult, eventsResult] = await Promise.all([
+      const [reportsResult, eventsResult, interventionsResult] = await Promise.all([
         supabase
           .from('lab_reports')
           .select('*')
@@ -38,14 +45,21 @@ export function Tracker() {
           .select('*')
           .eq('user_id', user.id)
           .order('event_date', { ascending: false }),
+        supabase
+          .from('interventions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('start_date', { ascending: false }),
       ]);
 
       if (reportsResult.error) throw reportsResult.error;
       if (eventsResult.error) throw eventsResult.error;
+      if (interventionsResult.error) throw interventionsResult.error;
 
       const fetchedReports = reportsResult.data as LabReport[];
       setReports(fetchedReports);
       setCycleEvents(eventsResult.data as CycleEvent[]);
+      setInterventions(interventionsResult.data as Intervention[]);
 
       if (fetchedReports.length > 0) {
         const reportIds = fetchedReports.map((r) => r.id);
@@ -121,6 +135,87 @@ export function Tracker() {
     }
   };
 
+  const handleAddIntervention = async (intervention: Omit<Intervention, 'id' | 'user_id' | 'created_at'>) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.from('interventions').insert({
+        user_id: user.id,
+        ...intervention,
+      });
+
+      if (error) throw error;
+      await fetchData();
+    } catch (error) {
+      console.error('Error adding intervention:', error);
+      alert('Failed to add intervention. Please try again.');
+    }
+  };
+
+  const handleUpdateIntervention = async (id: string, intervention: Partial<Intervention>) => {
+    try {
+      const { error } = await supabase
+        .from('interventions')
+        .update(intervention)
+        .eq('id', id);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (error) {
+      console.error('Error updating intervention:', error);
+      alert('Failed to update intervention. Please try again.');
+    }
+  };
+
+  const handleDeleteIntervention = async (id: string) => {
+    try {
+      const { error } = await supabase.from('interventions').delete().eq('id', id);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting intervention:', error);
+      alert('Failed to delete intervention. Please try again.');
+    }
+  };
+
+  const handleGenerateInsights = async (reportId: string, previousReportId: string | null) => {
+    if (!user || !previousReportId) return;
+
+    setShowInsightsModal(true);
+    setInsightsLoading(true);
+    setInsightsError(null);
+    setInsightsData(null);
+
+    try {
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lab-insights`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentReportId: reportId,
+          previousReportId,
+          userId: user.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate insights');
+      }
+
+      const data = await response.json();
+      setInsightsData(data);
+    } catch (error) {
+      console.error('Error generating insights:', error);
+      setInsightsError(error instanceof Error ? error.message : 'Failed to generate insights');
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
+
   const calendarEvents = [
     ...reports.map((r) => ({
       date: r.report_date,
@@ -149,12 +244,12 @@ export function Tracker() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Tracker</h1>
           <p className="mt-2 text-gray-600">
-            Track your lab results over time and overlay your menstrual cycle
+            Track your lab results, interventions, and cycle over time
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <div className="lg:col-span-2">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Calendar</h2>
             <Calendar events={calendarEvents} onDateClick={handleDateClick} />
             <div className="mt-4 p-4 bg-teal-50 rounded-lg border border-teal-200">
@@ -166,13 +261,41 @@ export function Tracker() {
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Labs Timeline</h2>
-            <div className="space-y-4 max-h-[800px] overflow-y-auto">
-              <LabsTimeline reports={reports} biomarkersByReport={biomarkersByReport} />
-            </div>
+            <Interventions
+              interventions={interventions}
+              onAdd={handleAddIntervention}
+              onUpdate={handleUpdateIntervention}
+              onDelete={handleDeleteIntervention}
+            />
+          </div>
+        </div>
+
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Compare Labs</h2>
+          <CompareView reports={reports} biomarkersByReport={biomarkersByReport} />
+        </div>
+
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Labs Timeline</h2>
+          <div className="space-y-4">
+            <LabsTimeline
+              reports={reports}
+              biomarkersByReport={biomarkersByReport}
+              interventions={interventions}
+              onGenerateInsights={handleGenerateInsights}
+            />
           </div>
         </div>
       </div>
+
+      <InsightsModal
+        isOpen={showInsightsModal}
+        onClose={() => setShowInsightsModal(false)}
+        insights={insightsData?.insights || null}
+        reportDates={insightsData?.report_dates}
+        loading={insightsLoading}
+        error={insightsError || undefined}
+      />
     </Layout>
   );
 }
