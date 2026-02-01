@@ -11,13 +11,13 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  const baseStyles = 'font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'font-medium rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm';
 
   const variants = {
-    primary: 'bg-teal-600 hover:bg-teal-700 text-white',
-    secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-900',
-    danger: 'bg-red-600 hover:bg-red-700 text-white',
-    ghost: 'bg-transparent hover:bg-gray-100 text-gray-700',
+    primary: 'bg-theme-primary hover:bg-theme-primary-dark text-white',
+    secondary: 'bg-theme-surface-2 hover:bg-theme-border text-theme-text border border-theme-border',
+    danger: 'bg-theme-danger hover:bg-red-700 text-white',
+    ghost: 'bg-transparent hover:bg-theme-surface-2 text-theme-muted-text',
   };
 
   const sizes = {

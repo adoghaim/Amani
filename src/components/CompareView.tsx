@@ -98,13 +98,13 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
   if (sortedReports.length < 2) {
     return (
       <Card>
-        <div className="text-center py-12">
-          <div className="bg-gray-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-            <ArrowUp className="w-8 h-8 text-gray-400" />
+        <div className="text-center py-16">
+          <div className="bg-theme-surface-2 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+            <ArrowUp className="w-10 h-10 text-theme-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Compare once you upload another lab</h3>
-          <p className="text-sm text-gray-600 max-w-md mx-auto">
-            This view will let you see side-by-side changes in your biomarkers between any two lab reports.
+          <h3 className="text-lg font-semibold text-theme-text mb-2">Your progress will appear here</h3>
+          <p className="text-sm text-theme-muted-text max-w-md mx-auto">
+            Once you upload another lab report, you'll be able to see how your biomarkers shift over time.
           </p>
         </div>
       </Card>
@@ -112,20 +112,20 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Card>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Before/After Comparison</h3>
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <h3 className="text-xl font-semibold text-theme-text mb-6">Your Progress</h3>
+        <div className="grid grid-cols-2 gap-6 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Baseline (Earlier)
+            <label className="block text-sm font-medium text-theme-text mb-2">
+              Earlier
             </label>
             <select
               value={baselineId}
               onChange={(e) => setBaselineId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-4 py-2 border border-theme-border rounded-xl focus:outline-none focus:ring-2 focus:ring-theme-primary transition-all"
             >
-              <option value="">Select baseline report</option>
+              <option value="">Select earlier report</option>
               {sortedReports.map((report) => (
                 <option key={report.id} value={report.id}>
                   {formatDate(report.report_date)}
@@ -135,15 +135,15 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Follow-up (Later)
+            <label className="block text-sm font-medium text-theme-text mb-2">
+              Later
             </label>
             <select
               value={followupId}
               onChange={(e) => setFollowupId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-4 py-2 border border-theme-border rounded-xl focus:outline-none focus:ring-2 focus:ring-theme-primary transition-all"
             >
-              <option value="">Select follow-up report</option>
+              <option value="">Select later report</option>
               {sortedReports.map((report) => (
                 <option key={report.id} value={report.id}>
                   {formatDate(report.report_date)}
@@ -155,67 +155,70 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
         </div>
 
         {highlights.length > 0 && (
-          <div className="mt-4 p-4 rounded-lg border border-teal-200 bg-teal-50" id="biggest-changes">
-            <p className="text-xs font-medium text-teal-700 mb-2">Here's what changed since your last labs</p>
-            <h4 className="text-sm font-semibold text-teal-900 mb-2">Biggest Changes</h4>
-            <ul className="text-sm text-teal-800 list-disc list-inside space-y-1">
+          <div className="mt-6 p-5 rounded-2xl border border-theme-primary/20 bg-gradient-to-br from-theme-surface-2 to-pink-50 shadow-sm" id="biggest-changes">
+            <p className="text-xs font-medium text-theme-muted-text mb-3">Here's what shifted between these labs</p>
+            <h4 className="text-base font-semibold text-theme-text mb-3">Notable Shifts</h4>
+            <ul className="text-sm text-theme-text space-y-2 mb-4">
               {highlights.map((h, idx) => (
-                <li key={idx} className="font-medium">{h}</li>
+                <li key={idx} className="flex items-start gap-2">
+                  <span className="text-theme-primary mt-0.5">•</span>
+                  <span>{h}</span>
+                </li>
               ))}
             </ul>
-            <p className="text-xs text-teal-700 mt-3">
-              Tip: use the sparkle button in the timeline to generate an educational AI summary.
+            <p className="text-xs text-theme-muted-text italic border-t border-theme-border pt-3">
+              Fluctuations can be normal. Context matters.
             </p>
           </div>
         )}
 
         {comparison && comparison.length > 0 && (
-          <div className="mt-6">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+          <div className="mt-8">
+            <div className="overflow-x-auto rounded-xl border border-theme-border">
+              <table className="min-w-full divide-y divide-theme-border">
+                <thead className="bg-theme-surface-2">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-medium text-theme-muted-text tracking-wider">
                       Biomarker
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Baseline
+                    <th className="px-6 py-4 text-left text-xs font-medium text-theme-muted-text tracking-wider">
+                      Earlier
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Follow-up
+                    <th className="px-6 py-4 text-left text-xs font-medium text-theme-muted-text tracking-wider">
+                      Later
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-medium text-theme-muted-text tracking-wider">
                       Change
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-theme-surface divide-y divide-theme-border">
                   {comparison.map((comp, idx) => (
-                    <tr key={idx}>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <tr key={idx} className="hover:bg-theme-surface-2/50 transition-colors">
+                      <td className="px-6 py-4 text-sm font-medium text-theme-text">
                         {comp.name}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="px-6 py-4 text-sm text-theme-muted-text">
                         {comp.baseline.value} {comp.baseline.unit}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="px-6 py-4 text-sm text-theme-muted-text">
                         {comp.followup.value} {comp.followup.unit}
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-6 py-4 text-sm">
                         {comp.delta === 0 ? (
-                          <div className="flex items-center gap-1 text-gray-600">
+                          <div className="flex items-center gap-1 text-theme-muted-text">
                             <Minus className="w-4 h-4" />
                             <span>No change</span>
                           </div>
                         ) : comp.delta > 0 ? (
-                          <div className="flex items-center gap-1 text-orange-600">
+                          <div className="flex items-center gap-1 text-theme-warning">
                             <ArrowUp className="w-4 h-4" />
                             <span className="font-medium">
                               +{comp.delta.toFixed(2)} ({comp.percentChange.toFixed(0)}%)
                             </span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1 text-blue-600">
+                          <div className="flex items-center gap-1 text-theme-success">
                             <ArrowDown className="w-4 h-4" />
                             <span className="font-medium">
                               {comp.delta.toFixed(2)} ({comp.percentChange.toFixed(0)}%)
@@ -232,8 +235,8 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
         )}
 
         {comparison && comparison.length === 0 && baselineId && followupId && (
-          <div className="text-center py-8 text-gray-600">
-            <p>No matching biomarkers found between these two reports</p>
+          <div className="text-center py-12 text-theme-muted-text">
+            <p>No matching biomarkers found between these reports</p>
           </div>
         )}
       </Card>

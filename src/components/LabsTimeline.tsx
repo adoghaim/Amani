@@ -15,12 +15,12 @@ const KEY_BIOMARKERS = ['ferritin', 'vitamin d', 'vitamin_d', 'tsh', 'hba1c', 'l
 
 const getCategoryColor = (category: string): string => {
   const colors: Record<string, string> = {
-    supplement: 'bg-purple-100 text-purple-700 border-purple-200',
-    diet: 'bg-green-100 text-green-700 border-green-200',
-    exercise: 'bg-blue-100 text-blue-700 border-blue-200',
-    medication: 'bg-red-100 text-red-700 border-red-200',
-    sleep: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-    other: 'bg-gray-100 text-gray-700 border-gray-200',
+    supplement: 'bg-purple-50 text-purple-700 border-purple-200',
+    diet: 'bg-green-50 text-green-700 border-green-200',
+    exercise: 'bg-blue-50 text-blue-700 border-blue-200',
+    medication: 'bg-rose-50 text-rose-700 border-rose-200',
+    sleep: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    other: 'bg-theme-surface-2 text-theme-muted-text border-theme-border',
   };
   return colors[category] || colors.other;
 };
@@ -80,7 +80,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
   if (sortedReports.length === 0) {
     return (
       <Card>
-        <div className="text-center py-8 text-gray-600">
+        <div className="text-center py-12 text-theme-muted-text">
           <p>No lab reports yet. Upload your first lab report to start tracking.</p>
         </div>
       </Card>
@@ -120,16 +120,16 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
 
         return (
           <Card key={report.id}>
-            <div className="flex justify-between items-start mb-4">
+            <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">{formatDate(report.report_date)}</h3>
+                <h3 className="text-lg font-semibold text-theme-text">{formatDate(report.report_date)}</h3>
                 {report.lab_name && (
-                  <p className="text-sm text-gray-600">{report.lab_name}</p>
+                  <p className="text-sm text-theme-muted-text">{report.lab_name}</p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {daysSincePrevious !== null && (
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-theme-muted-text">
                     {daysSincePrevious} days since previous
                   </span>
                 )}
@@ -142,7 +142,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
                     title={!previousReport ? 'Upload at least two labs to compare' : 'Generate AI insights'}
                   >
                     <span className="inline-flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="w-4 h-4 text-theme-accent" />
                       <span className="hidden sm:inline">Insights</span>
                     </span>
                   </Button>
@@ -151,18 +151,18 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
             </div>
 
             {index === 0 && sortedReports.length === 1 && (
-              <div className="mb-4 bg-teal-50 border border-teal-200 rounded-lg p-3">
-                <p className="text-sm font-medium text-teal-900">This is your baseline. Everything builds from here.</p>
-                <p className="text-xs text-teal-700 mt-1">
+              <div className="mb-6 bg-gradient-to-r from-theme-surface-2 to-pink-50 border border-theme-border rounded-xl p-4 shadow-sm">
+                <p className="text-sm font-medium text-theme-text">This is your baseline. Everything builds from here.</p>
+                <p className="text-xs text-theme-muted-text mt-2">
                   Upload another lab report to see how your biomarkers change over time.
                 </p>
               </div>
             )}
 
             {quickHighlights.length > 0 && (
-              <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <p className="text-xs font-medium text-gray-600 mb-1">Quick highlights vs previous</p>
-                <ul className="text-sm text-gray-800 list-disc list-inside space-y-1">
+              <div className="mb-6 bg-theme-surface-2 border border-theme-border rounded-xl p-4 shadow-sm">
+                <p className="text-xs font-medium text-theme-muted-text mb-2">What stood out</p>
+                <ul className="text-sm text-theme-text list-disc list-inside space-y-1.5">
                   {quickHighlights.map((h, i) => (
                     <li key={i}>{h}</li>
                   ))}
@@ -171,13 +171,13 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
             )}
 
             {activeInterventions.length > 0 && (
-              <div className="mb-4">
-                <p className="text-xs font-medium text-gray-600 mb-2">Active interventions:</p>
+              <div className="mb-6">
+                <p className="text-xs font-medium text-theme-muted-text mb-2">Active during this period:</p>
                 <div className="flex flex-wrap gap-2">
                   {displayedInterventions.map((intervention) => (
                     <span
                       key={intervention.id}
-                      className={`px-2 py-1 text-xs font-medium rounded border ${getCategoryColor(
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${getCategoryColor(
                         intervention.category
                       )}`}
                     >
@@ -185,7 +185,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
                     </span>
                   ))}
                   {remainingCount > 0 && (
-                    <span className="px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700 border border-gray-200">
+                    <span className="px-3 py-1.5 text-xs font-medium rounded-lg bg-theme-surface-2 text-theme-muted-text border border-theme-border">
                       +{remainingCount} more
                     </span>
                   )}
@@ -195,33 +195,33 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
 
             {comparisons.length > 0 && (
               <div className="space-y-3">
-                <h4 className="text-sm font-medium text-gray-700">Key biomarkers</h4>
+                <h4 className="text-sm font-medium text-theme-text">Key biomarkers</h4>
                 {comparisons.map((comparison, idx) => {
                   const { biomarkerName, current, delta } = comparison!;
                   return (
-                    <div key={idx} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <div key={idx} className="flex items-center justify-between py-3 border-b border-theme-border last:border-0">
                       <div className="flex-1">
-                        <span className="text-sm font-medium text-gray-900">{biomarkerName}</span>
-                        <div className="text-sm text-gray-600">
+                        <span className="text-sm font-medium text-theme-text">{biomarkerName}</span>
+                        <div className="text-sm text-theme-muted-text">
                           {current.value} {current.unit}
                         </div>
                       </div>
                       {delta && (
                         <div className="flex items-center gap-2">
                           {delta.value === 0 ? (
-                            <div className="flex items-center gap-1 text-gray-600">
+                            <div className="flex items-center gap-1 text-theme-muted-text">
                               <Minus className="w-4 h-4" />
                               <span className="text-sm">No change</span>
                             </div>
                           ) : delta.value > 0 ? (
-                            <div className="flex items-center gap-1 text-orange-600">
+                            <div className="flex items-center gap-1 text-theme-warning">
                               <ArrowUp className="w-4 h-4" />
                               <span className="text-sm font-medium">
                                 +{delta.value.toFixed(1)} ({delta.percent.toFixed(0)}%)
                               </span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1 text-blue-600">
+                            <div className="flex items-center gap-1 text-theme-success">
                               <ArrowDown className="w-4 h-4" />
                               <span className="text-sm font-medium">
                                 {delta.value.toFixed(1)} ({delta.percent.toFixed(0)}%)
@@ -237,7 +237,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
             )}
 
             {comparisons.length === 0 && (
-              <p className="text-sm text-gray-600">No key biomarkers tracked in this report</p>
+              <p className="text-sm text-theme-muted-text">No key biomarkers tracked in this report</p>
             )}
           </Card>
         );

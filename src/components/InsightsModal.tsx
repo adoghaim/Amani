@@ -38,35 +38,35 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+      <div className="bg-theme-surface rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="sticky top-0 bg-gradient-to-r from-theme-surface-2 to-pink-50 border-b border-theme-border px-8 py-6 flex justify-between items-center rounded-t-2xl">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Your health story so far</h2>
+            <h2 className="text-2xl font-semibold text-theme-text">Your health story so far</h2>
             {reportDates && (
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-theme-muted-text mt-1">
                 Since your last labs on {formatDate(reportDates.previous)} ({reportDates.days_between} days ago)
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-theme-muted-text hover:text-theme-text transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="px-6 py-6">
+        <div className="px-8 py-8">
           {loading && (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
-              <p className="mt-4 text-gray-600">Generating insights...</p>
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-theme-primary"></div>
+              <p className="mt-4 text-theme-muted-text">Generating insights...</p>
             </div>
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-theme-danger flex-shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-medium text-red-900">Error</h3>
                 <p className="text-sm text-red-700 mt-1">{error}</p>
@@ -75,27 +75,30 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
           )}
 
           {insights && !loading && !error && (
-            <div className="space-y-6">
-              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
-                <h3 className="font-semibold text-teal-900 mb-2">What's happening</h3>
-                <p className="text-teal-800">{insights.summary}</p>
+            <div className="space-y-8">
+              <div className="bg-gradient-to-br from-theme-surface-2 to-pink-50 border border-theme-border rounded-xl p-5">
+                <h3 className="font-semibold text-theme-text mb-3">What's happening</h3>
+                <p className="text-theme-text leading-relaxed">{insights.summary}</p>
               </div>
 
               {insights.notable_changes && insights.notable_changes.length > 0 && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-2">Since your last labs</h3>
-                  <p className="text-sm text-gray-600 mb-3">These changes stood out during this window:</p>
-                  <div className="space-y-4">
+                  <h3 className="font-semibold text-theme-text mb-3">Since your last labs</h3>
+                  <p className="text-sm text-theme-muted-text mb-4">These changes stood out during this window:</p>
+                  <div className="space-y-5">
                     {insights.notable_changes.map((change, idx) => (
-                      <div key={idx} className="border-l-4 border-teal-500 pl-4">
-                        <h4 className="font-medium text-gray-900">{change.biomarker}</h4>
-                        <p className="text-gray-700 mt-1">{change.change}</p>
+                      <div key={idx} className="border-l-4 border-theme-primary pl-5 py-1">
+                        <h4 className="font-medium text-theme-text">{change.biomarker}</h4>
+                        <p className="text-theme-muted-text mt-2 leading-relaxed">{change.change}</p>
                         {change.possible_factors && change.possible_factors.length > 0 && (
-                          <div className="mt-2">
-                            <p className="text-sm font-medium text-gray-700">This change may have coincided with:</p>
-                            <ul className="text-sm text-gray-600 list-disc list-inside mt-1">
+                          <div className="mt-3">
+                            <p className="text-sm font-medium text-theme-text">This change may have coincided with:</p>
+                            <ul className="text-sm text-theme-muted-text space-y-1 mt-2">
                               {change.possible_factors.map((factor, fidx) => (
-                                <li key={fidx}>{factor}</li>
+                                <li key={fidx} className="flex items-start gap-2">
+                                  <span className="text-theme-primary mt-1">•</span>
+                                  <span>{factor}</span>
+                                </li>
                               ))}
                             </ul>
                           </div>
@@ -108,12 +111,12 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
 
               {insights.questions_to_ask && insights.questions_to_ask.length > 0 && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Questions for Your Healthcare Provider</h3>
-                  <ul className="space-y-2">
+                  <h3 className="font-semibold text-theme-text mb-4">Key Takeaways for your provider</h3>
+                  <ul className="space-y-3">
                     {insights.questions_to_ask.map((question, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-teal-600 font-semibold">•</span>
-                        <span className="text-gray-700">{question}</span>
+                      <li key={idx} className="flex items-start gap-3">
+                        <span className="text-theme-primary font-semibold">•</span>
+                        <span className="text-theme-muted-text leading-relaxed">{question}</span>
                       </li>
                     ))}
                   </ul>
@@ -122,20 +125,20 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
 
               {insights.next_steps_general && insights.next_steps_general.length > 0 && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">General Next Steps</h3>
-                  <ul className="space-y-2">
+                  <h3 className="font-semibold text-theme-text mb-4">General Next Steps</h3>
+                  <ul className="space-y-3">
                     {insights.next_steps_general.map((step, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-teal-600 font-semibold">{idx + 1}.</span>
-                        <span className="text-gray-700">{step}</span>
+                      <li key={idx} className="flex items-start gap-3">
+                        <span className="text-theme-primary font-semibold">{idx + 1}.</span>
+                        <span className="text-theme-muted-text leading-relaxed">{step}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <p className="text-sm text-amber-900">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5">
+                <p className="text-sm text-amber-900 leading-relaxed">
                   <strong>Disclaimer:</strong> This information is for educational purposes only and is not medical advice.
                   Always consult with your healthcare provider before making any changes to your health routine.
                 </p>
@@ -144,7 +147,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
+        <div className="sticky bottom-0 bg-theme-surface-2 border-t border-theme-border px-8 py-5 rounded-b-2xl">
           <Button onClick={onClose} className="w-full">
             Close
           </Button>

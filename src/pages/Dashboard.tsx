@@ -260,11 +260,11 @@ export function Dashboard() {
         </div>
 
         {showTrialBanner && (
-          <Card className="mb-6 bg-gradient-to-r from-teal-50 to-cyan-50 border-teal-200">
+          <Card className="mb-8 bg-gradient-to-r from-theme-surface-2 to-pink-50 border-theme-primary/30 shadow-md">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Keep your health timeline intact</h3>
-                <p className="text-sm text-gray-700 mb-4">
+                <h3 className="text-xl font-semibold text-theme-text mb-2">Keep your health timeline intact</h3>
+                <p className="text-sm text-theme-muted-text mb-5">
                   Your insights improve as your data grows. {trialDaysRemaining === 1 ? '1 day' : `${trialDaysRemaining} days`} left in your trial.
                 </p>
                 <a href="/app/billing">
@@ -276,7 +276,7 @@ export function Dashboard() {
         )}
 
         {!canCreateReport && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 mb-8">
             <p className="text-yellow-800">
               Your trial has expired. Please activate your subscription to create new reports.
             </p>
@@ -287,11 +287,11 @@ export function Dashboard() {
         )}
 
         {showContextNudge && (
-          <Card className="mb-6 bg-gradient-to-r from-blue-50 to-teal-50 border-blue-200">
+          <Card className="mb-8 bg-gradient-to-r from-blue-50 to-theme-surface-2 border-theme-border shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Add context to your labs</h3>
-                <p className="text-sm text-gray-700 mb-4">
+                <h3 className="text-xl font-semibold text-theme-text mb-2">Add context to your labs</h3>
+                <p className="text-sm text-theme-muted-text mb-5">
                   Tracking even one change helps explain future results.
                 </p>
                 <div className="flex gap-3">
@@ -305,7 +305,7 @@ export function Dashboard() {
               </div>
               <button
                 onClick={handleDismissNudge}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-theme-muted-text hover:text-theme-text transition-colors"
                 aria-label="Dismiss"
               >
                 <X className="w-5 h-5" />
@@ -314,70 +314,70 @@ export function Dashboard() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-gradient-to-br from-theme-surface-2 to-pink-50 border-theme-border hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Lab Reports</p>
-                <p className="text-3xl font-bold text-gray-900">{reports.length}</p>
+                <p className="text-sm font-medium text-theme-muted-text mb-2">Total Lab Reports</p>
+                <p className="text-3xl font-bold text-theme-text">{reports.length}</p>
                 {daysSinceLastLab !== null && (
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-theme-muted-text mt-2">
                     Last lab {daysSinceLastLab} days ago
                   </p>
                 )}
               </div>
-              <div className="bg-teal-100 p-3 rounded-lg">
-                <FileText className="w-6 h-6 text-teal-600" />
+              <div className="bg-theme-primary/10 p-3 rounded-xl">
+                <FileText className="w-6 h-6 text-theme-primary" />
               </div>
             </div>
           </Card>
 
-          <Card className="bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200">
+          <Card className="bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Cycle Day</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-theme-muted-text mb-2">Cycle Day</p>
+                <p className="text-3xl font-bold text-theme-text">
                   {daysSinceLastPeriod !== null ? `Day ${daysSinceLastPeriod + 1}` : 'N/A'}
                 </p>
                 {latestCycleEvent && (
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-theme-muted-text mt-2">
                     Period started {formatDate(latestCycleEvent.event_date)}
                   </p>
                 )}
               </div>
-              <div className="bg-pink-100 p-3 rounded-lg">
+              <div className="bg-pink-200/50 p-3 rounded-xl">
                 <Droplet className="w-6 h-6 text-pink-600" />
               </div>
             </div>
           </Card>
 
-          <Card className="bg-gradient-to-br from-blue-50 to-sky-50 border-blue-200">
+          <Card className="bg-gradient-to-br from-blue-50 to-sky-50 border-blue-200 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Active Interventions</p>
-                <p className="text-3xl font-bold text-gray-900">{activeInterventions.length}</p>
+                <p className="text-sm font-medium text-theme-muted-text mb-2">Active Interventions</p>
+                <p className="text-3xl font-bold text-theme-text">{activeInterventions.length}</p>
                 {activeInterventions.length > 0 && (
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-theme-muted-text mt-2">
                     Currently tracking
                   </p>
                 )}
               </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
+              <div className="bg-blue-200/50 p-3 rounded-xl">
                 <Activity className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </Card>
 
-          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Cycle Events</p>
-                <p className="text-3xl font-bold text-gray-900">{cycleEvents.length}</p>
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-sm font-medium text-theme-muted-text mb-2">Cycle Events</p>
+                <p className="text-3xl font-bold text-theme-text">{cycleEvents.length}</p>
+                <p className="text-xs text-theme-muted-text mt-2">
                   Tracked periods
                 </p>
               </div>
-              <div className="bg-green-100 p-3 rounded-lg">
+              <div className="bg-green-200/50 p-3 rounded-xl">
                 <CalendarIcon className="w-6 h-6 text-green-600" />
               </div>
             </div>
@@ -385,28 +385,28 @@ export function Dashboard() {
         </div>
 
         {reports.length > 0 && (
-          <Card className="mb-6 bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200">
+          <Card className="mb-8 bg-gradient-to-r from-theme-surface-2 to-pink-50 border-theme-border">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium text-gray-600 mb-2">Timeline Progress</h3>
-                <div className="flex gap-6">
+                <h3 className="text-sm font-medium text-theme-muted-text mb-3">Timeline Progress</h3>
+                <div className="flex gap-8">
                   <div>
-                    <span className="text-2xl font-bold text-gray-900">{reports.length}</span>
-                    <span className="text-sm text-gray-600 ml-1">labs tracked</span>
+                    <span className="text-2xl font-bold text-theme-text">{reports.length}</span>
+                    <span className="text-sm text-theme-muted-text ml-2">labs tracked</span>
                   </div>
                   <div>
-                    <span className="text-2xl font-bold text-gray-900">{interventions.length}</span>
-                    <span className="text-sm text-gray-600 ml-1">interventions</span>
+                    <span className="text-2xl font-bold text-theme-text">{interventions.length}</span>
+                    <span className="text-sm text-theme-muted-text ml-2">interventions</span>
                   </div>
                   <div>
-                    <span className="text-2xl font-bold text-gray-900">{reports.length > 1 ? reports.length - 1 : 0}</span>
-                    <span className="text-sm text-gray-600 ml-1">comparisons</span>
+                    <span className="text-2xl font-bold text-theme-text">{reports.length > 1 ? reports.length - 1 : 0}</span>
+                    <span className="text-sm text-theme-muted-text ml-2">comparisons</span>
                   </div>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-700">Your timeline gets smarter over time</p>
-                <p className="text-xs text-gray-500 mt-1">Each lab adds to your health story</p>
+                <p className="text-sm font-medium text-theme-text">Your timeline gets smarter over time</p>
+                <p className="text-xs text-theme-muted-text mt-1">Each lab adds to your health story</p>
               </div>
             </div>
           </Card>

@@ -7,18 +7,18 @@ export function Input({ label, error, className = '', ...props }: InputProps) {
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-theme-text mb-2">
           {label}
         </label>
       )}
       <input
-        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all ${
-          error ? 'border-red-500' : 'border-gray-300'
+        className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-theme-primary focus:border-transparent transition-all ${
+          error ? 'border-theme-danger' : 'border-theme-border'
         } ${className}`}
         {...props}
       />
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-1 text-sm text-theme-danger">{error}</p>
       )}
     </div>
   );
