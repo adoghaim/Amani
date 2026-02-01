@@ -216,7 +216,7 @@ export function Dashboard() {
     const colors: Record<string, string> = {
       supplement: 'bg-amber-100 text-amber-800 border-amber-200',
       diet: 'bg-green-100 text-green-800 border-green-200',
-      exercise: 'bg-blue-100 text-blue-800 border-blue-200',
+      exercise: 'bg-purple-100 text-purple-800 border-purple-200',
       medication: 'bg-red-100 text-red-800 border-red-200',
       sleep: 'bg-violet-100 text-violet-800 border-violet-200',
       other: 'bg-gray-100 text-gray-800 border-gray-200',
@@ -233,7 +233,7 @@ export function Dashboard() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-primary"></div>
         </div>
       </Layout>
     );
@@ -287,7 +287,7 @@ export function Dashboard() {
         )}
 
         {showContextNudge && (
-          <Card className="mb-8 bg-gradient-to-r from-blue-50 to-theme-surface-2 border-theme-border shadow-sm">
+          <Card className="mb-8 bg-gradient-to-r from-theme-surface-2 to-pink-50 border-theme-border shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <h3 className="text-xl font-semibold text-theme-text mb-2">Add context to your labs</h3>
@@ -351,7 +351,7 @@ export function Dashboard() {
             </div>
           </Card>
 
-          <Card className="bg-gradient-to-br from-blue-50 to-sky-50 border-blue-200 hover:shadow-md transition-shadow">
+          <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-theme-muted-text mb-2">Active Interventions</p>
@@ -362,8 +362,8 @@ export function Dashboard() {
                   </p>
                 )}
               </div>
-              <div className="bg-blue-200/50 p-3 rounded-xl">
-                <Activity className="w-6 h-6 text-blue-600" />
+              <div className="bg-purple-200/50 p-3 rounded-xl">
+                <Activity className="w-6 h-6 text-purple-600" />
               </div>
             </div>
           </Card>
@@ -416,13 +416,13 @@ export function Dashboard() {
           <div className="lg:col-span-2">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Calendar & Cycle Tracking</h2>
-              <a href="/app/tracker" className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+              <a href="/app/tracker" className="text-sm text-theme-primary hover:text-theme-primary-dark font-medium flex items-center gap-1 transition-colors">
                 View full tracker <ArrowRight className="w-4 h-4" />
               </a>
             </div>
             <Calendar events={calendarEvents} onDateClick={handleDateClick} />
-            <div className="mt-3 p-3 bg-teal-50 rounded-lg border border-teal-200">
-              <p className="text-xs text-gray-700">
+            <div className="mt-3 p-3 bg-theme-surface-2 rounded-lg border border-theme-border">
+              <p className="text-xs text-theme-muted-text">
                 Click any date to add or remove period markers. Lab reports are automatically displayed.
               </p>
             </div>
@@ -431,7 +431,7 @@ export function Dashboard() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Active Interventions</h2>
-              <a href="/app/tracker" className="text-sm text-teal-600 hover:text-teal-700 font-medium">
+              <a href="/app/tracker" className="text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
                 Manage
               </a>
             </div>
@@ -440,7 +440,7 @@ export function Dashboard() {
                 <div className="text-center py-8 text-gray-600">
                   <Activity className="w-10 h-10 text-gray-400 mx-auto mb-2" />
                   <p className="text-sm">No active interventions</p>
-                  <a href="/app/tracker" className="text-sm text-teal-600 hover:text-teal-700 mt-2 inline-block">
+                  <a href="/app/tracker" className="text-sm text-theme-primary hover:text-theme-primary-dark mt-2 inline-block transition-colors">
                     Start tracking
                   </a>
                 </div>
@@ -467,7 +467,7 @@ export function Dashboard() {
                   </Card>
                 ))}
                 {activeInterventions.length > 5 && (
-                  <a href="/app/tracker" className="block text-center text-sm text-teal-600 hover:text-teal-700 py-2">
+                  <a href="/app/tracker" className="block text-center text-sm text-theme-primary hover:text-theme-primary-dark py-2 transition-colors">
                     View {activeInterventions.length - 5} more
                   </a>
                 )}
@@ -479,7 +479,7 @@ export function Dashboard() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Recent Lab Reports</h2>
-            <a href="/app/tracker" className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+            <a href="/app/tracker" className="text-sm text-theme-primary hover:text-theme-primary-dark font-medium flex items-center gap-1 transition-colors">
               View timeline <ArrowRight className="w-4 h-4" />
             </a>
           </div>
@@ -512,11 +512,11 @@ export function Dashboard() {
                   href={`/app/reports/${report.id}`}
                   className="block"
                 >
-                  <Card className="hover:shadow-lg transition-all cursor-pointer border-l-4 border-l-teal-500">
+                  <Card className="hover:shadow-lg transition-all cursor-pointer border-l-4 border-l-theme-primary">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3 flex-1">
-                        <div className="bg-teal-100 p-2 rounded-lg">
-                          <FileText className="w-5 h-5 text-teal-600" />
+                        <div className="bg-theme-primary/10 p-2 rounded-lg">
+                          <FileText className="w-5 h-5 text-theme-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-gray-900 text-sm">
@@ -549,7 +549,7 @@ export function Dashboard() {
 
           {reports.length > 6 && (
             <div className="mt-4 text-center">
-              <a href="/app/tracker" className="text-teal-600 hover:text-teal-700 font-medium text-sm">
+              <a href="/app/tracker" className="text-theme-primary hover:text-theme-primary-dark font-medium text-sm transition-colors">
                 View all {reports.length} lab reports
               </a>
             </div>

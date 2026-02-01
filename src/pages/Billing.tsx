@@ -33,7 +33,7 @@ export function Billing() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-theme-muted-text">Loading...</p>
         </div>
       </Layout>
     );
@@ -42,50 +42,50 @@ export function Billing() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
+        <h1 className="text-3xl font-bold text-theme-text mb-8">
           Billing & Subscription
         </h1>
 
         <div className="space-y-6">
           <Card>
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center">
-                <CreditCard className="w-6 h-6 text-teal-600" />
+              <div className="w-12 h-12 bg-theme-primary/10 rounded-full flex items-center justify-center">
+                <CreditCard className="w-6 h-6 text-theme-primary" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                <h2 className="text-xl font-semibold text-theme-text mb-2">
                   Current Plan
                 </h2>
                 {userProfile.subscription_status === 'trial' && (
                   <div className="space-y-2">
-                    <p className="text-gray-700">
+                    <p className="text-theme-text">
                       <span className="font-medium">Status:</span> Free Trial
                     </p>
-                    <p className="text-gray-700">
+                    <p className="text-theme-text">
                       <span className="font-medium">Days Remaining:</span> {getTrialDaysRemaining()} days
                     </p>
-                    <p className="text-gray-700">
+                    <p className="text-theme-text">
                       <span className="font-medium">Trial Ends:</span> {formatDate(userProfile.trial_start_date)}
                     </p>
                   </div>
                 )}
                 {userProfile.subscription_status === 'active' && (
                   <div className="space-y-2">
-                    <p className="text-gray-700 flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    <p className="text-theme-text flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-theme-success" />
                       <span className="font-medium">Active Subscription</span>
                     </p>
-                    <p className="text-gray-700">
+                    <p className="text-theme-text">
                       $24/month
                     </p>
                   </div>
                 )}
                 {userProfile.subscription_status === 'expired' && (
                   <div className="space-y-2">
-                    <p className="text-gray-700">
+                    <p className="text-theme-text">
                       <span className="font-medium">Status:</span> Expired
                     </p>
-                    <p className="text-gray-600">
+                    <p className="text-theme-muted-text">
                       Reactivate your subscription to create new lab reports.
                     </p>
                   </div>
@@ -95,34 +95,34 @@ export function Billing() {
           </Card>
 
           <Card>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-xl font-semibold text-theme-text mb-4">
               Plan Details
             </h2>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-teal-600" />
-                <span className="text-gray-700">Unlimited lab report uploads</span>
+                <CheckCircle className="w-5 h-5 text-theme-primary" />
+                <span className="text-theme-text">Unlimited lab report uploads</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-teal-600" />
-                <span className="text-gray-700">AI-powered educational explanations</span>
+                <CheckCircle className="w-5 h-5 text-theme-primary" />
+                <span className="text-theme-text">AI-powered educational explanations</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-teal-600" />
-                <span className="text-gray-700">Cycle-aware context</span>
+                <CheckCircle className="w-5 h-5 text-theme-primary" />
+                <span className="text-theme-text">Cycle-aware context</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-teal-600" />
-                <span className="text-gray-700">Questions to ask your doctor</span>
+                <CheckCircle className="w-5 h-5 text-theme-primary" />
+                <span className="text-theme-text">Questions to ask your doctor</span>
               </div>
             </div>
           </Card>
 
           <Card>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-xl font-semibold text-theme-text mb-4">
               Manage Subscription
             </h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-theme-muted-text mb-4">
               Update your payment method, view billing history, or cancel your subscription.
             </p>
             <Button onClick={handleManageSubscription}>
@@ -132,11 +132,11 @@ export function Billing() {
           </Card>
 
           {userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
-            <Card className="bg-teal-50 border-teal-200">
-              <h3 className="font-semibold text-gray-900 mb-2">
+            <Card className="bg-theme-surface-2 border-theme-border">
+              <h3 className="font-semibold text-theme-text mb-2">
                 Your trial is active
               </h3>
-              <p className="text-gray-700">
+              <p className="text-theme-text">
                 You have {getTrialDaysRemaining()} days remaining in your free trial.
                 After your trial ends, you'll be charged $24/month to continue using Amani.
               </p>

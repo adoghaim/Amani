@@ -252,8 +252,8 @@ export function Tracker() {
           <div className="lg:col-span-2">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Calendar</h2>
             <Calendar events={calendarEvents} onDateClick={handleDateClick} />
-            <div className="mt-4 p-4 bg-teal-50 rounded-lg border border-teal-200">
-              <p className="text-sm text-gray-700">
+            <div className="mt-4 p-4 bg-theme-surface-2 rounded-lg border border-theme-border">
+              <p className="text-sm text-theme-muted-text">
                 Click any date to add or remove a period start marker. This helps you track your cycle
                 alongside your lab results.
               </p>

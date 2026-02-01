@@ -28,14 +28,14 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Heart className="w-8 h-8 text-teal-600" />
-            <span className="text-2xl font-semibold text-gray-900">Amani</span>
+            <Heart className="w-8 h-8 text-theme-primary fill-theme-primary" />
+            <span className="text-2xl font-semibold text-theme-text">Amani</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-theme-text">
             Welcome back
           </h1>
         </div>
@@ -71,9 +71,9 @@ export function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-600">
+          <div className="mt-6 text-center text-sm text-theme-muted-text">
             Don't have an account?{' '}
-            <a href="/signup" className="text-teal-600 hover:text-teal-700 font-medium">
+            <a href="/signup" className="text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
               Start free trial
             </a>
           </div>

@@ -73,12 +73,12 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
       <button
         key={day}
         onClick={() => handleDayClick(day)}
-        className={`h-20 border border-gray-200 p-2 text-left hover:bg-teal-50 transition-colors ${
-          isToday ? 'bg-teal-50 border-teal-300' : 'bg-white'
+        className={`h-20 border border-gray-200 p-2 text-left hover:bg-theme-surface-2 transition-colors ${
+          isToday ? 'bg-theme-surface-2 border-theme-primary/30' : 'bg-white'
         }`}
       >
         <div className="flex flex-col h-full">
-          <span className={`text-sm font-medium ${isToday ? 'text-teal-700' : 'text-gray-700'}`}>
+          <span className={`text-sm font-medium ${isToday ? 'text-theme-primary' : 'text-gray-700'}`}>
             {day}
           </span>
           <div className="flex gap-1 mt-1 flex-wrap">
@@ -89,7 +89,7 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
                 title={event.type === 'lab' ? 'Lab report' : 'Period start'}
               >
                 {event.type === 'lab' ? (
-                  <TestTube2 className="w-3 h-3 text-teal-600" />
+                  <TestTube2 className="w-3 h-3 text-theme-primary" />
                 ) : (
                   <Droplet className="w-3 h-3 text-pink-600" />
                 )}
@@ -126,7 +126,7 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
       </div>
       <div className="flex gap-4 p-4 border-t border-gray-200 text-sm">
         <div className="flex items-center gap-2">
-          <TestTube2 className="w-4 h-4 text-teal-600" />
+          <TestTube2 className="w-4 h-4 text-theme-primary" />
           <span className="text-gray-700">Lab report</span>
         </div>
         <div className="flex items-center gap-2">

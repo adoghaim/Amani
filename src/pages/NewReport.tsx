@@ -338,15 +338,15 @@ export function NewReport() {
 
         <div className="flex items-center justify-center mb-8">
           <div className="flex items-center">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-teal-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-theme-primary text-white' : 'bg-gray-300 text-gray-600'}`}>
               1
             </div>
-            <div className={`w-16 h-1 ${step >= 2 ? 'bg-teal-600' : 'bg-gray-300'}`} />
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-teal-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
+            <div className={`w-16 h-1 ${step >= 2 ? 'bg-theme-primary' : 'bg-gray-300'}`} />
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-theme-primary text-white' : 'bg-gray-300 text-gray-600'}`}>
               2
             </div>
-            <div className={`w-16 h-1 ${step >= 3 ? 'bg-teal-600' : 'bg-gray-300'}`} />
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-teal-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
+            <div className={`w-16 h-1 ${step >= 3 ? 'bg-theme-primary' : 'bg-gray-300'}`} />
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-theme-primary text-white' : 'bg-gray-300 text-gray-600'}`}>
               3
             </div>
           </div>
@@ -369,7 +369,7 @@ export function NewReport() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Lab file (PDF or image)
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-teal-500 transition-colors">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-theme-primary transition-colors">
                   <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <input
                     type="file"
@@ -379,7 +379,7 @@ export function NewReport() {
                     id="file-upload"
                   />
                   <label htmlFor="file-upload" className="cursor-pointer">
-                    <span className="text-teal-600 hover:text-teal-700 font-medium">
+                    <span className="text-theme-primary hover:text-theme-primary-dark font-medium">
                       Choose a file
                     </span>
                     <span className="text-gray-600"> or drag and drop</span>
@@ -459,7 +459,7 @@ export function NewReport() {
                       onClick={() => setBirthControl(option as typeof birthControl)}
                       className={`px-4 py-2 rounded-lg border-2 transition-colors ${
                         birthControl === option
-                          ? 'border-teal-600 bg-teal-50 text-teal-900'
+                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                     >
@@ -480,7 +480,7 @@ export function NewReport() {
                       onClick={() => setPregnant(option as typeof pregnant)}
                       className={`px-4 py-2 rounded-lg border-2 transition-colors ${
                         pregnant === option
-                          ? 'border-teal-600 bg-teal-50 text-teal-900'
+                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                     >
@@ -501,7 +501,7 @@ export function NewReport() {
                       onClick={() => setPostpartum(option as typeof postpartum)}
                       className={`px-4 py-2 rounded-lg border-2 transition-colors ${
                         postpartum === option
-                          ? 'border-teal-600 bg-teal-50 text-teal-900'
+                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                     >
@@ -522,7 +522,7 @@ export function NewReport() {
                       onClick={() => toggleSymptom(symptom.value)}
                       className={`px-4 py-2 rounded-lg border-2 transition-colors ${
                         symptoms.includes(symptom.value)
-                          ? 'border-teal-600 bg-teal-50 text-teal-900'
+                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                       disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}
@@ -610,7 +610,7 @@ export function NewReport() {
                       <select
                         value={biomarker.name}
                         onChange={(e) => updateBiomarker(index, 'name', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
                       >
                         {BIOMARKERS.map((b) => (
                           <option key={b.value} value={b.value}>
@@ -629,7 +629,7 @@ export function NewReport() {
                         step="0.01"
                         value={biomarker.value}
                         onChange={(e) => updateBiomarker(index, 'value', parseFloat(e.target.value))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
                       />
                     </div>
 
@@ -640,7 +640,7 @@ export function NewReport() {
                       <select
                         value={biomarker.unit}
                         onChange={(e) => updateBiomarker(index, 'unit', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
                       >
                         {BIOMARKERS.find((b) => b.value === biomarker.name)?.commonUnits.map((unit) => (
                           <option key={unit} value={unit}>
@@ -659,7 +659,7 @@ export function NewReport() {
                         step="0.01"
                         value={biomarker.reference_min || ''}
                         onChange={(e) => updateBiomarker(index, 'reference_min', parseFloat(e.target.value))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
                         placeholder="Optional"
                       />
                     </div>
@@ -673,7 +673,7 @@ export function NewReport() {
                         step="0.01"
                         value={biomarker.reference_max || ''}
                         onChange={(e) => updateBiomarker(index, 'reference_max', parseFloat(e.target.value))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
                         placeholder="Optional"
                       />
                     </div>
