@@ -338,7 +338,7 @@ export function ReportView({ reportId }: ReportViewProps) {
           </div>
 
           <Card>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Supportive Considerations</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Lifestyle Considerations</h2>
             <div className="space-y-4">
               {interpretation.supportive_considerations.nutrition.length > 0 && (
                 <div>

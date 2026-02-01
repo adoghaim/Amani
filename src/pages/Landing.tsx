@@ -28,10 +28,13 @@ export function Landing() {
       </nav>
 
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
-        <h1 className="text-5xl md:text-6xl font-bold text-theme-text mb-6 leading-tight">
-          Understand your lab results — calmly.
+        <h1 className="text-5xl md:text-6xl font-bold text-theme-text mb-4 leading-tight">
+          Understand your lab results.
         </h1>
-        <p className="text-xl text-theme-muted-text mb-10 max-w-3xl mx-auto">
+        <p className="text-2xl text-theme-text mb-6 font-medium">
+          Clear explanations with real context.
+        </p>
+        <p className="text-lg text-theme-muted-text mb-10 max-w-3xl mx-auto">
           Amani helps you make sense of hormone labs in context, so you can have better conversations with your doctor.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -80,10 +83,10 @@ export function Landing() {
               <FileText className="w-8 h-8 text-theme-primary" />
             </div>
             <h3 className="text-xl font-semibold text-theme-text mb-2">
-              3. Get a clear, calm explanation
+              3. Get clear explanations
             </h3>
             <p className="text-theme-muted-text">
-              Receive an educational breakdown with context, questions to ask your doctor, and supportive guidance.
+              Receive an educational breakdown with context, questions to ask your doctor, and guidance on next steps.
             </p>
           </div>
         </div>
