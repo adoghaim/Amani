@@ -10,6 +10,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
 }
 
@@ -99,6 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserProfile(null);
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  };
+
   const value = {
     user,
     userProfile,
@@ -106,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signIn,
     signOut,
+    resetPassword,
     refreshUserProfile,
   };
 

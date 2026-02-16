@@ -4,6 +4,7 @@ import { Loading } from './components/Loading';
 import { Landing } from './pages/Landing';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
+import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard } from './pages/Dashboard';
 import { NewReport } from './pages/NewReport';
 import { ReportView } from './pages/ReportView';
@@ -45,7 +46,7 @@ function App() {
     return <Loading />;
   }
 
-  const publicRoutes = ['/', '/signup', '/login'];
+  const publicRoutes = ['/', '/signup', '/login', '/reset-password'];
   const isPublicRoute = publicRoutes.includes(route);
 
   if (!user && !isPublicRoute) {
@@ -68,6 +69,10 @@ function App() {
 
   if (route === '/login') {
     return <Login />;
+  }
+
+  if (route === '/reset-password') {
+    return <ResetPassword />;
   }
 
   if (route === '/app') {
