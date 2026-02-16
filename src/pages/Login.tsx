@@ -23,7 +23,7 @@ export function Login() {
       await signIn(email, password);
       window.location.href = '/app';
     } catch (err) {
-      setError('Invalid email or password');
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setLoading(false);
     }
