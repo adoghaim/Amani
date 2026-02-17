@@ -66,7 +66,7 @@ export function Billing() {
       const data = await response.json();
 
       if (!response.ok) {
-        const msg = data.error || data.details || `HTTP ${response.status}`;
+        const msg = data.detail || data.error || `HTTP ${response.status}`;
         throw new Error(msg);
       }
 
