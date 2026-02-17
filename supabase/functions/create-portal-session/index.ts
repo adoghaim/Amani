@@ -44,28 +44,35 @@ Deno.serve(async (req: Request) => {
 
     const { data: profile } = await supabase
       .from("users")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id, email")
       .eq("id", user.id)
       .maybeSingle();
-
-    if (!profile?.stripe_customer_id) {
-      return new Response(
-        JSON.stringify({ error: "No Stripe customer found" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
       apiVersion: "2024-11-20.acacia",
     });
 
+    let customerId = profile?.stripe_customer_id;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: profile?.email || user.email,
+        metadata: {
+          supabase_user_id: user.id,
+        },
+      });
+      customerId = customer.id;
+
+      await supabase
+        .from("users")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", user.id);
+    }
+
     const origin = req.headers.get("origin") || "http://localhost:5173";
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: profile.stripe_customer_id,
+      customer: customerId,
       return_url: `${origin}/billing`,
     });
 
