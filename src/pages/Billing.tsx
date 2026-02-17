@@ -2,10 +2,13 @@ import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { CreditCard, Calendar, CheckCircle } from 'lucide-react';
+import { useState } from 'react';
 
 export function Billing() {
   const { userProfile } = useAuth();
+  const [loading, setLoading] = useState(false);
 
   const getTrialDaysRemaining = () => {
     if (!userProfile) return 0;
@@ -26,7 +29,43 @@ export function Billing() {
   };
 
   const handleManageSubscription = async () => {
-    alert('Stripe integration is not yet configured. Please add your Stripe keys to enable subscription management.');
+    try {
+      setLoading(true);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const functionName = userProfile?.subscription_status === 'active'
+        ? 'create-portal-session'
+        : 'create-checkout-session';
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create session');
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Failed to manage subscription. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!userProfile) {
@@ -125,9 +164,9 @@ export function Billing() {
             <p className="text-theme-muted-text mb-4">
               Update your payment method, view billing history, or cancel your subscription.
             </p>
-            <Button onClick={handleManageSubscription}>
+            <Button onClick={handleManageSubscription} disabled={loading}>
               <Calendar className="w-5 h-5 mr-2" />
-              Manage via Stripe
+              {loading ? 'Loading...' : userProfile?.subscription_status === 'active' ? 'Manage via Stripe' : 'Subscribe Now'}
             </Button>
           </Card>
 
