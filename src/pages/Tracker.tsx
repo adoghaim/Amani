@@ -58,7 +58,11 @@ export function Tracker() {
 
       const fetchedReports = reportsResult.data as LabReport[];
       setReports(fetchedReports);
-      setCycleEvents(eventsResult.data as CycleEvent[]);
+
+      const fetchedEvents = eventsResult.data as CycleEvent[];
+      console.log('Fetched cycle events:', fetchedEvents);
+      setCycleEvents(fetchedEvents);
+
       setInterventions(interventionsResult.data as Intervention[]);
 
       if (fetchedReports.length > 0) {
@@ -129,9 +133,13 @@ export function Tracker() {
       if (!choice) return;
 
       const num = parseInt(choice);
+      console.log('User choice:', choice, 'Parsed as:', num);
+
       if (num === 1) {
+        console.log('Adding period_start');
         await addPeriodEvent(date, 'period_start');
       } else if (num === 2) {
+        console.log('Adding period_end');
         await addPeriodEvent(date, 'period_end');
       }
     }
@@ -140,12 +148,16 @@ export function Tracker() {
   const addPeriodEvent = async (date: string, eventType: 'period_start' | 'period_end') => {
     if (!user) return;
 
+    console.log('Adding period event:', { date, eventType });
+
     try {
-      const { error } = await supabase.from('cycle_events').insert({
+      const { data, error } = await supabase.from('cycle_events').insert({
         user_id: user.id,
         event_date: date,
         event_type: eventType,
-      });
+      }).select();
+
+      console.log('Insert result:', { data, error });
 
       if (error) throw error;
       await fetchData();
@@ -248,24 +260,31 @@ export function Tracker() {
     }
   };
 
+  const periodStartEvents = cycleEvents
+    .filter((e) => e.event_type === 'period_start')
+    .map((e) => ({
+      date: e.event_date,
+      type: 'period_start' as const,
+    }));
+
+  const periodEndEvents = cycleEvents
+    .filter((e) => e.event_type === 'period_end')
+    .map((e) => ({
+      date: e.event_date,
+      type: 'period_end' as const,
+    }));
+
+  console.log('Period start events:', periodStartEvents);
+  console.log('Period end events:', periodEndEvents);
+
   const calendarEvents = [
     ...reports.map((r) => ({
       date: r.report_date,
       type: 'lab' as const,
       label: r.lab_name || 'Lab report',
     })),
-    ...cycleEvents
-      .filter((e) => e.event_type === 'period_start')
-      .map((e) => ({
-        date: e.event_date,
-        type: 'period_start' as const,
-      })),
-    ...cycleEvents
-      .filter((e) => e.event_type === 'period_end')
-      .map((e) => ({
-        date: e.event_date,
-        type: 'period_end' as const,
-      })),
+    ...periodStartEvents,
+    ...periodEndEvents,
   ];
 
   if (loading) {
