@@ -56,15 +56,17 @@ export function Billing() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create session');
+        const msg = data.error || data.details || `HTTP ${response.status}`;
+        throw new Error(msg);
       }
 
       if (data.url) {
         window.location.href = data.url;
       }
     } catch (error) {
-      console.error('Error:', error);
-      setError('Unable to open the billing portal right now. Please contact support or try again later.');
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Billing error:', msg);
+      setError(`Failed to open billing portal: ${msg}`);
     } finally {
       setLoading(false);
     }
