@@ -4,7 +4,7 @@ import { Button } from './Button';
 
 interface CalendarEvent {
   date: string;
-  type: 'lab' | 'period';
+  type: 'lab' | 'period_start' | 'period_end';
   label?: string;
 }
 
@@ -86,12 +86,20 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
               <div
                 key={idx}
                 className="flex items-center"
-                title={event.type === 'lab' ? 'Lab report' : 'Period start'}
+                title={
+                  event.type === 'lab'
+                    ? 'Lab report'
+                    : event.type === 'period_start'
+                    ? 'Period start'
+                    : 'Period end'
+                }
               >
                 {event.type === 'lab' ? (
                   <TestTube2 className="w-3 h-3 text-theme-primary" />
+                ) : event.type === 'period_start' ? (
+                  <Droplet className="w-3 h-3 text-pink-600 fill-pink-600" />
                 ) : (
-                  <Droplet className="w-3 h-3 text-pink-600" />
+                  <Droplet className="w-3 h-3 text-pink-400" />
                 )}
               </div>
             ))}
@@ -130,8 +138,12 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
           <span className="text-gray-700">Lab report</span>
         </div>
         <div className="flex items-center gap-2">
-          <Droplet className="w-4 h-4 text-pink-600" />
+          <Droplet className="w-4 h-4 text-pink-600 fill-pink-600" />
           <span className="text-gray-700">Period start</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Droplet className="w-4 h-4 text-pink-400" />
+          <span className="text-gray-700">Period end</span>
         </div>
       </div>
     </div>

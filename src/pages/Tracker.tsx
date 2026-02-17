@@ -88,38 +88,70 @@ export function Tracker() {
   };
 
   const handleDateClick = async (date: string) => {
-    const existingEvent = cycleEvents.find(
+    const periodStartEvent = cycleEvents.find(
       (e) => e.event_date === date && e.event_type === 'period_start'
     );
+    const periodEndEvent = cycleEvents.find(
+      (e) => e.event_date === date && e.event_type === 'period_end'
+    );
 
-    if (existingEvent) {
-      const confirmDelete = window.confirm('Remove period start marker from this date?');
-      if (confirmDelete) {
-        await deletePeriodEvent(existingEvent.id);
+    const existingEvents = [];
+    if (periodStartEvent) existingEvents.push('Period Start');
+    if (periodEndEvent) existingEvents.push('Period End');
+
+    let message = '';
+    if (existingEvents.length > 0) {
+      message = `This date has: ${existingEvents.join(', ')}\n\nWhat would you like to do?`;
+      const options = ['Add Period Start', 'Add Period End'];
+      if (periodStartEvent) options.push('Remove Period Start');
+      if (periodEndEvent) options.push('Remove Period End');
+      options.push('Cancel');
+
+      const choice = prompt(message + '\n\nEnter:\n1 - Add Period Start\n2 - Add Period End' +
+        (periodStartEvent ? '\n3 - Remove Period Start' : '') +
+        (periodEndEvent ? '\n' + (periodStartEvent ? '4' : '3') + ' - Remove Period End' : '') +
+        '\n' + (periodStartEvent && periodEndEvent ? '5' : periodStartEvent || periodEndEvent ? '4' : '3') + ' - Cancel');
+
+      if (!choice) return;
+
+      const num = parseInt(choice);
+      if (num === 1) {
+        if (!periodStartEvent) await addPeriodEvent(date, 'period_start');
+      } else if (num === 2) {
+        if (!periodEndEvent) await addPeriodEvent(date, 'period_end');
+      } else if (periodStartEvent && num === 3) {
+        await deletePeriodEvent(periodStartEvent.id);
+      } else if (periodEndEvent && num === (periodStartEvent ? 4 : 3)) {
+        await deletePeriodEvent(periodEndEvent.id);
       }
     } else {
-      const confirmAdd = window.confirm('Add period start marker to this date?');
-      if (confirmAdd) {
-        await addPeriodEvent(date);
+      const choice = prompt('Add a period marker:\n\n1 - Period Start\n2 - Period End\n3 - Cancel');
+      if (!choice) return;
+
+      const num = parseInt(choice);
+      if (num === 1) {
+        await addPeriodEvent(date, 'period_start');
+      } else if (num === 2) {
+        await addPeriodEvent(date, 'period_end');
       }
     }
   };
 
-  const addPeriodEvent = async (date: string) => {
+  const addPeriodEvent = async (date: string, eventType: 'period_start' | 'period_end') => {
     if (!user) return;
 
     try {
       const { error } = await supabase.from('cycle_events').insert({
         user_id: user.id,
         event_date: date,
-        event_type: 'period_start',
+        event_type: eventType,
       });
 
       if (error) throw error;
       await fetchData();
     } catch (error) {
       console.error('Error adding period event:', error);
-      alert('Failed to add period start marker. Please try again.');
+      alert(`Failed to add ${eventType === 'period_start' ? 'period start' : 'period end'} marker. Please try again.`);
     }
   };
 
@@ -226,7 +258,13 @@ export function Tracker() {
       .filter((e) => e.event_type === 'period_start')
       .map((e) => ({
         date: e.event_date,
-        type: 'period' as const,
+        type: 'period_start' as const,
+      })),
+    ...cycleEvents
+      .filter((e) => e.event_type === 'period_end')
+      .map((e) => ({
+        date: e.event_date,
+        type: 'period_end' as const,
       })),
   ];
 
@@ -254,7 +292,7 @@ export function Tracker() {
             <Calendar events={calendarEvents} onDateClick={handleDateClick} />
             <div className="mt-4 p-4 bg-theme-surface-2 rounded-lg border border-theme-border">
               <p className="text-sm text-theme-muted-text">
-                Click any date to add or remove a period start marker. This helps you track your cycle
+                Click any date to add or remove period markers (start and end). This helps you track your cycle
                 alongside your lab results.
               </p>
             </div>
