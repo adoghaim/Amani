@@ -46,6 +46,11 @@ Deno.serve(async (req: Request) => {
       apiVersion: "2024-11-20.acacia",
     });
 
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
     const { data: profile } = await supabase
       .from("users")
       .select("stripe_customer_id, email")
@@ -55,18 +60,44 @@ Deno.serve(async (req: Request) => {
     let customerId = profile?.stripe_customer_id;
 
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: profile?.email || user.email,
-        metadata: {
-          supabase_user_id: user.id,
-        },
-      });
-      customerId = customer.id;
+      const { data: existingCustomer } = await supabaseAdmin
+        .from("stripe_customers")
+        .select("customer_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      await supabase
-        .from("users")
-        .update({ stripe_customer_id: customerId })
-        .eq("id", user.id);
+      if (existingCustomer?.customer_id) {
+        customerId = existingCustomer.customer_id;
+      } else {
+        const customer = await stripe.customers.create({
+          email: profile?.email || user.email,
+          metadata: {
+            supabase_user_id: user.id,
+          },
+        });
+        customerId = customer.id;
+
+        await supabaseAdmin
+          .from("stripe_customers")
+          .insert({ user_id: user.id, customer_id: customerId });
+
+        await supabase
+          .from("users")
+          .update({ stripe_customer_id: customerId })
+          .eq("id", user.id);
+      }
+    } else {
+      const { data: existingCustomer } = await supabaseAdmin
+        .from("stripe_customers")
+        .select("customer_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!existingCustomer) {
+        await supabaseAdmin
+          .from("stripe_customers")
+          .insert({ user_id: user.id, customer_id: customerId });
+      }
     }
 
     const origin = req.headers.get("origin") || "http://localhost:5173";

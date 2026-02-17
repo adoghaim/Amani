@@ -2,14 +2,18 @@ import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
 import { supabase } from '../lib/supabase';
 import { CreditCard, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
 export function Billing() {
   const { userProfile } = useAuth();
+  const { subscription, loading: subLoading } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isActive = subscription?.subscription_status === 'active';
 
   const getTrialDaysRemaining = () => {
     if (!userProfile) return 0;
@@ -29,6 +33,15 @@ export function Billing() {
     });
   };
 
+  const formatPeriodEnd = (timestamp: number | null) => {
+    if (!timestamp) return null;
+    return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
   const handleManageSubscription = async () => {
     try {
       setLoading(true);
@@ -39,10 +52,7 @@ export function Billing() {
         throw new Error('Not authenticated');
       }
 
-      const functionName = userProfile?.subscription_status === 'active'
-        ? 'create-portal-session'
-        : 'create-checkout-session';
-
+      const functionName = isActive ? 'create-portal-session' : 'create-checkout-session';
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`;
 
       const response = await fetch(apiUrl, {
@@ -72,7 +82,7 @@ export function Billing() {
     }
   };
 
-  if (!userProfile) {
+  if (!userProfile || subLoading) {
     return (
       <Layout>
         <div className="text-center py-12">
@@ -99,7 +109,22 @@ export function Billing() {
                 <h2 className="text-xl font-semibold text-theme-text mb-2">
                   Current Plan
                 </h2>
-                {userProfile.subscription_status === 'trial' && (
+                {isActive ? (
+                  <div className="space-y-2">
+                    <p className="text-theme-text flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-theme-success" />
+                      <span className="font-medium">Active Subscription</span>
+                    </p>
+                    <p className="text-theme-text">$24/month</p>
+                    {subscription?.current_period_end && (
+                      <p className="text-theme-muted-text text-sm">
+                        {subscription.cancel_at_period_end
+                          ? `Cancels on ${formatPeriodEnd(subscription.current_period_end)}`
+                          : `Renews on ${formatPeriodEnd(subscription.current_period_end)}`}
+                      </p>
+                    )}
+                  </div>
+                ) : userProfile.subscription_status === 'trial' ? (
                   <div className="space-y-2">
                     <p className="text-theme-text">
                       <span className="font-medium">Status:</span> Free Trial
@@ -111,19 +136,7 @@ export function Billing() {
                       <span className="font-medium">Trial Ends:</span> {formatDate(userProfile.trial_start_date)}
                     </p>
                   </div>
-                )}
-                {userProfile.subscription_status === 'active' && (
-                  <div className="space-y-2">
-                    <p className="text-theme-text flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-theme-success" />
-                      <span className="font-medium">Active Subscription</span>
-                    </p>
-                    <p className="text-theme-text">
-                      $24/month
-                    </p>
-                  </div>
-                )}
-                {userProfile.subscription_status === 'expired' && (
+                ) : (
                   <div className="space-y-2">
                     <p className="text-theme-text">
                       <span className="font-medium">Status:</span> Expired
@@ -166,7 +179,9 @@ export function Billing() {
               Manage Subscription
             </h2>
             <p className="text-theme-muted-text mb-4">
-              Update your payment method, view billing history, or cancel your subscription.
+              {isActive
+                ? 'Update your payment method, view billing history, or cancel your subscription.'
+                : 'Subscribe to unlock full access to all features.'}
             </p>
             {error && (
               <div className="flex items-start gap-3 p-4 mb-4 bg-red-50 border border-red-200 rounded-lg">
@@ -176,11 +191,11 @@ export function Billing() {
             )}
             <Button onClick={handleManageSubscription} disabled={loading}>
               <Calendar className="w-5 h-5 mr-2" />
-              {loading ? 'Loading...' : userProfile?.subscription_status === 'active' ? 'Manage via Stripe' : 'Subscribe Now'}
+              {loading ? 'Loading...' : isActive ? 'Manage via Stripe' : 'Subscribe Now'}
             </Button>
           </Card>
 
-          {userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
+          {!isActive && userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
             <Card className="bg-theme-surface-2 border-theme-border">
               <h3 className="font-semibold text-theme-text mb-2">
                 Your trial is active
