@@ -1,10 +1,12 @@
 import React from 'react'
 import { SignupForm } from '../components/auth/SignupForm'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 export function SignupPage() {
+  const navigate = useNavigate()
+
   const handleSuccess = () => {
-    window.location.href = '/'
+    navigate('/app')
   }
 
   return (
@@ -18,13 +20,13 @@ export function SignupPage() {
             Or{' '}
             <Link
               to="/login"
-              className="font-medium text-indigo-600 hover:text-indigo-500"
+              className="font-medium text-rose-600 hover:text-rose-500"
             >
               sign in to your existing account
             </Link>
           </p>
         </div>
-        
+
         <SignupForm onSuccess={handleSuccess} />
       </div>
     </div>

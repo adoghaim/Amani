@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from './hooks/useAuth'
+import { useAuth } from './contexts/AuthContext'
 import { Dashboard } from './pages/Dashboard'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
@@ -34,8 +34,8 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={user ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
+        <Route path="/signup" element={user ? <Navigate to="/app" replace /> : <SignupPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/success" element={<SuccessPage />} />
 

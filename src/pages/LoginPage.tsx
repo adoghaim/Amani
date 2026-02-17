@@ -1,10 +1,12 @@
 import React from 'react'
 import { LoginForm } from '../components/auth/LoginForm'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 export function LoginPage() {
+  const navigate = useNavigate()
+
   const handleSuccess = () => {
-    window.location.href = '/'
+    navigate('/app')
   }
 
   return (
@@ -18,13 +20,13 @@ export function LoginPage() {
             Or{' '}
             <Link
               to="/signup"
-              className="font-medium text-indigo-600 hover:text-indigo-500"
+              className="font-medium text-rose-600 hover:text-rose-500"
             >
               create a new account
             </Link>
           </p>
         </div>
-        
+
         <LoginForm onSuccess={handleSuccess} />
       </div>
     </div>
