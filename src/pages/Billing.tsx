@@ -3,12 +3,13 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { CreditCard, Calendar, CheckCircle } from 'lucide-react';
+import { CreditCard, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
 export function Billing() {
   const { userProfile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const getTrialDaysRemaining = () => {
     if (!userProfile) return 0;
@@ -31,6 +32,7 @@ export function Billing() {
   const handleManageSubscription = async () => {
     try {
       setLoading(true);
+      setError(null);
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -62,7 +64,7 @@ export function Billing() {
       }
     } catch (error) {
       console.error('Error:', error);
-      alert(`Failed to manage subscription: ${error instanceof Error ? error.message : 'Please try again.'}`);
+      setError('Unable to open the billing portal right now. Please contact support or try again later.');
     } finally {
       setLoading(false);
     }
@@ -164,6 +166,12 @@ export function Billing() {
             <p className="text-theme-muted-text mb-4">
               Update your payment method, view billing history, or cancel your subscription.
             </p>
+            {error && (
+              <div className="flex items-start gap-3 p-4 mb-4 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
             <Button onClick={handleManageSubscription} disabled={loading}>
               <Calendar className="w-5 h-5 mr-2" />
               {loading ? 'Loading...' : userProfile?.subscription_status === 'active' ? 'Manage via Stripe' : 'Subscribe Now'}
