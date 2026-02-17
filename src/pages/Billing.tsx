@@ -62,7 +62,7 @@ export function Billing() {
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to manage subscription. Please try again.');
+      alert(`Failed to manage subscription: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setLoading(false);
     }
