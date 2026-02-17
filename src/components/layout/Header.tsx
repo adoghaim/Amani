@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useSubscription } from '../../hooks/useSubscription'
 import { Button } from '../ui/Button'
@@ -15,9 +16,9 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <h1 className="text-xl font-bold text-gray-900">
+            <Link to="/" className="text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
               Amani Health
-            </h1>
+            </Link>
           </div>
 
           <div className="flex items-center space-x-4">
@@ -43,19 +44,21 @@ export function Header() {
               </>
             ) : (
               <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.location.href = '/login'}
-                >
-                  Sign In
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => window.location.href = '/signup'}
-                >
-                  Sign Up
-                </Button>
+                <Link to="/login">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                  >
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button
+                    size="sm"
+                  >
+                    Sign Up
+                  </Button>
+                </Link>
               </div>
             )}
           </div>
