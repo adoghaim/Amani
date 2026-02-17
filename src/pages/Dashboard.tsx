@@ -57,27 +57,28 @@ export function Dashboard() {
           .order('start_date', { ascending: false }),
       ]);
 
-      if (!reportsResult.error && reportsResult.data) {
-        const fetchedReports = reportsResult.data as LabReport[];
-        setReports(fetchedReports);
+      const fetchedReports = (!reportsResult.error && reportsResult.data)
+        ? reportsResult.data as LabReport[]
+        : [];
 
-        if (fetchedReports.length > 0) {
-          const reportIds = fetchedReports.map((r) => r.id);
-          const { data: biomarkersData } = await supabase
-            .from('biomarkers')
-            .select('*')
-            .in('lab_report_id', reportIds);
+      setReports(fetchedReports);
 
-          if (biomarkersData) {
-            const grouped = (biomarkersData as Biomarker[]).reduce((acc, biomarker) => {
-              if (!acc[biomarker.lab_report_id]) {
-                acc[biomarker.lab_report_id] = [];
-              }
-              acc[biomarker.lab_report_id].push(biomarker);
-              return acc;
-            }, {} as Record<string, Biomarker[]>);
-            setBiomarkersByReport(grouped);
-          }
+      if (fetchedReports.length > 0) {
+        const reportIds = fetchedReports.map((r) => r.id);
+        const { data: biomarkersData } = await supabase
+          .from('biomarkers')
+          .select('*')
+          .in('lab_report_id', reportIds);
+
+        if (biomarkersData) {
+          const grouped = (biomarkersData as Biomarker[]).reduce((acc, biomarker) => {
+            if (!acc[biomarker.lab_report_id]) {
+              acc[biomarker.lab_report_id] = [];
+            }
+            acc[biomarker.lab_report_id].push(biomarker);
+            return acc;
+          }, {} as Record<string, Biomarker[]>);
+          setBiomarkersByReport(grouped);
         }
       }
 
