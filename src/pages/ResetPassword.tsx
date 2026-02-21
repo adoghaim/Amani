@@ -1,57 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { Heart } from 'lucide-react';
 
 export function ResetPassword() {
+  const { isPasswordRecovery, user, loading } = useAuth();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [validSession, setValidSession] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let resolved = false;
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
-        resolved = true;
-        setValidSession(true);
-      }
-    });
-
-    const hashParams = new URLSearchParams(window.location.hash.replace('#', '?').slice(1));
-    const type = hashParams.get('type');
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-
-    if (type === 'recovery' && accessToken && refreshToken) {
-      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
-        if (!error) {
-          resolved = true;
-          setValidSession(true);
-        } else {
-          if (!resolved) setValidSession(false);
-        }
-      });
-    } else {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          resolved = true;
-          setValidSession(true);
-        } else {
-          setTimeout(() => {
-            if (!resolved) setValidSession(false);
-          }, 2000);
-        }
-      });
-    }
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +28,7 @@ export function ResetPassword() {
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
 
     try {
       const { error } = await supabase.auth.updateUser({ password });
@@ -81,11 +42,11 @@ export function ResetPassword() {
     } catch (err: any) {
       setError(err.message || 'Failed to reset password');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  if (validSession === null) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
         <div className="text-theme-muted-text">Loading...</div>
@@ -93,7 +54,9 @@ export function ResetPassword() {
     );
   }
 
-  if (!validSession) {
+  const hasValidSession = isPasswordRecovery || (user != null);
+
+  if (!hasValidSession) {
     return (
       <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
         <div className="w-full max-w-md">
@@ -159,8 +122,8 @@ export function ResetPassword() {
                 placeholder="Confirm new password"
               />
 
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? 'Updating...' : 'Update password'}
+              <Button type="submit" disabled={submitting} className="w-full">
+                {submitting ? 'Updating...' : 'Update password'}
               </Button>
             </form>
           )}

@@ -7,6 +7,7 @@ interface AuthContextType {
   user: SupabaseUser | null;
   userProfile: User | null;
   loading: boolean;
+  isPasswordRecovery: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -20,6 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const fetchUserProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -50,8 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })();
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       (async () => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true);
+          setUser(session?.user ?? null);
+          setLoading(false);
+          return;
+        }
         setUser(session?.user ?? null);
         if (session?.user) {
           await fetchUserProfile(session.user.id);
@@ -114,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     userProfile,
     loading,
+    isPasswordRecovery,
     signUp,
     signIn,
     signOut,
