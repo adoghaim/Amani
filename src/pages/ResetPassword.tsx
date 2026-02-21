@@ -1,38 +1,56 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { Heart } from 'lucide-react';
 
+type PageState = 'loading' | 'ready' | 'invalid';
+
 export function ResetPassword() {
-  const { isPasswordRecovery, user, loading } = useAuth();
+  const [pageState, setPageState] = useState<PageState>('loading');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [waitingForSession, setWaitingForSession] = useState(false);
-
-  const hasCodeInUrl = (() => {
-    const params = new URLSearchParams(window.location.search);
-    const hash = window.location.hash;
-    return params.has('code') || hash.includes('access_token') || hash.includes('type=recovery');
-  })();
 
   useEffect(() => {
-    if (hasCodeInUrl && !loading && !user && !isPasswordRecovery) {
-      setWaitingForSession(true);
-      const timer = setTimeout(() => {
-        setWaitingForSession(false);
-      }, 3000);
-      return () => clearTimeout(timer);
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const hash = window.location.hash;
+    const isHashRecovery = hash.includes('type=recovery') || hash.includes('access_token');
+
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) {
+          setPageState('invalid');
+        } else {
+          setPageState('ready');
+        }
+      });
+      return;
     }
-    if (user || isPasswordRecovery) {
-      setWaitingForSession(false);
+
+    if (isHashRecovery) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setPageState('ready');
+        } else {
+          setPageState('invalid');
+        }
+      });
+      return;
     }
-  }, [hasCodeInUrl, loading, user, isPasswordRecovery]);
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setPageState('ready');
+      } else {
+        setPageState('invalid');
+      }
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +73,7 @@ export function ResetPassword() {
       if (error) throw error;
 
       setSuccess(true);
+      await supabase.auth.signOut();
       setTimeout(() => {
         window.location.href = '/login';
       }, 2000);
@@ -65,17 +84,15 @@ export function ResetPassword() {
     }
   };
 
-  if (loading || waitingForSession) {
+  if (pageState === 'loading') {
     return (
       <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
-        <div className="text-theme-muted-text">Loading...</div>
+        <div className="text-theme-muted-text">Verifying reset link...</div>
       </div>
     );
   }
 
-  const hasValidSession = isPasswordRecovery || user != null;
-
-  if (!hasValidSession) {
+  if (pageState === 'invalid') {
     return (
       <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
         <div className="w-full max-w-md">
