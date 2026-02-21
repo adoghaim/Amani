@@ -8,13 +8,13 @@ export interface StripeProduct {
   mode: 'subscription' | 'payment';
 }
 
-export const stripeProducts: StripeProduct[] = [
+export const STRIPE_PRODUCTS: StripeProduct[] = [
   {
     id: 'prod_TzWOKu75bqEM0F',
     priceId: 'price_1T1XLT0qFZxXyzLU9mGfg7Ba',
     name: 'Amani Yearly',
-    description: 'Full access to Amani with yearly billing',
-    price: 79.99,
+    description: 'Full access to Amani with yearly billing - save 17%',
+    price: 99.99,
     currency: 'usd',
     mode: 'subscription'
   },
@@ -28,10 +28,6 @@ export const stripeProducts: StripeProduct[] = [
     mode: 'subscription'
   }
 ];
-
-export const getProductByPriceId = (priceId: string): StripeProduct | undefined => {
-  return stripeProducts.find(product => product.priceId === priceId);
-};
 
 export const formatPrice = (price: number, currency: string): string => {
   return new Intl.NumberFormat('en-US', {

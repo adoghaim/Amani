@@ -1,8 +1,8 @@
 import React from 'react';
 import { PricingCard } from '../components/PricingCard';
-import { stripeProducts } from '../stripe-config';
+import { STRIPE_PRODUCTS } from '../stripe-config';
 
-export function Pricing() {
+export const Pricing: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -16,7 +16,7 @@ export function Pricing() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {stripeProducts.map((product, index) => (
+          {STRIPE_PRODUCTS.map((product, index) => (
             <PricingCard
               key={product.id}
               product={product}
@@ -25,12 +25,17 @@ export function Pricing() {
           ))}
         </div>
 
-        <div className="text-center mt-12">
-          <p className="text-gray-600">
+        <div className="mt-12 text-center">
+          <p className="text-gray-600 mb-4">
             All plans include a 7-day free trial. Cancel anytime.
           </p>
+          <div className="flex justify-center space-x-8 text-sm text-gray-500">
+            <span>✓ Secure payments</span>
+            <span>✓ No setup fees</span>
+            <span>✓ Cancel anytime</span>
+          </div>
         </div>
       </div>
     </div>
   );
-}
+};
