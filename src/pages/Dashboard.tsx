@@ -5,6 +5,7 @@ import { Card } from '../components/Card';
 import { Calendar } from '../components/Calendar';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { SubscriptionStatus } from '../components/SubscriptionStatus';
 import type { LabReport, CycleEvent, Intervention, Biomarker } from '../types';
 import {
   FileText,
@@ -243,6 +244,10 @@ export function Dashboard() {
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="mb-6">
+          <SubscriptionStatus />
+        </div>
+        
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-1">
