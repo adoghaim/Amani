@@ -22,12 +22,12 @@ export function Billing() {
     const trialStart = new Date(userProfile.trial_start_date);
     const now = new Date();
     const daysSinceStart = Math.floor((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, 30 - daysSinceStart);
+    return Math.max(0, 7 - daysSinceStart);
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    date.setDate(date.getDate() + 30);
+    date.setDate(date.getDate() + 7);
     return date.toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',

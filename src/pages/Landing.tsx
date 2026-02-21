@@ -117,7 +117,7 @@ export function Landing() {
           </div>
 
           <p className="text-sm text-theme-muted-text mb-6">
-            30-day free trial • Cancel anytime • Founders Launch pricing available for a limited time.
+            7-day free trial • Cancel anytime • Founders Launch pricing available for a limited time.
           </p>
 
           <ul className="text-left space-y-3 mb-8 max-w-md mx-auto">

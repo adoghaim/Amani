@@ -128,7 +128,7 @@ export function ReportView({ reportId }: ReportViewProps) {
       const trialStart = new Date(userProfile.trial_start_date);
       const now = new Date();
       const daysSinceStart = Math.floor((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
-      return daysSinceStart < 30;
+      return daysSinceStart < 7;
     }
     return false;
   };

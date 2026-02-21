@@ -39,7 +39,7 @@ export function Signup() {
             Start your free trial
           </h1>
           <p className="text-theme-muted-text">
-            30 days free, then $24/month
+            7 days free, then $9.99/month
           </p>
         </div>
 
