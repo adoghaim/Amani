@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/Button';
@@ -13,6 +13,26 @@ export function ResetPassword() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [waitingForSession, setWaitingForSession] = useState(false);
+
+  const hasCodeInUrl = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash;
+    return params.has('code') || hash.includes('access_token') || hash.includes('type=recovery');
+  })();
+
+  useEffect(() => {
+    if (hasCodeInUrl && !loading && !user && !isPasswordRecovery) {
+      setWaitingForSession(true);
+      const timer = setTimeout(() => {
+        setWaitingForSession(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+    if (user || isPasswordRecovery) {
+      setWaitingForSession(false);
+    }
+  }, [hasCodeInUrl, loading, user, isPasswordRecovery]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +52,6 @@ export function ResetPassword() {
 
     try {
       const { error } = await supabase.auth.updateUser({ password });
-
       if (error) throw error;
 
       setSuccess(true);
@@ -46,7 +65,7 @@ export function ResetPassword() {
     }
   };
 
-  if (loading) {
+  if (loading || waitingForSession) {
     return (
       <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
         <div className="text-theme-muted-text">Loading...</div>
@@ -54,7 +73,7 @@ export function ResetPassword() {
     );
   }
 
-  const hasValidSession = isPasswordRecovery || (user != null);
+  const hasValidSession = isPasswordRecovery || user != null;
 
   if (!hasValidSession) {
     return (
