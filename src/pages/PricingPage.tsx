@@ -5,32 +5,36 @@ import { PricingCard } from '../components/pricing/PricingCard'
 import { stripeProducts } from '../stripe-config'
 
 export function PricingPage() {
+  const yearly = stripeProducts.find(p => p.interval === 'year')
+  const monthly = stripeProducts.find(p => p.interval === 'month')
+  const ordered = [yearly, monthly].filter(Boolean) as typeof stripeProducts
+
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-16">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
           to="/app"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-8 transition-colors"
+          className="inline-flex items-center text-gray-500 hover:text-gray-800 mb-10 transition-colors text-sm"
         >
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back to Dashboard
         </Link>
 
-        <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-            Choose Your Plan
-          </h2>
-          <p className="mt-4 text-xl text-gray-600">
-            Select the perfect plan for your health journey
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">
+            Choose your plan
+          </h1>
+          <p className="text-gray-500 text-base">
+            Founders Launch pricing available for a limited time.
           </p>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto">
-          {stripeProducts.map((product, index) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
+          {ordered.map((product, index) => (
             <PricingCard
               key={product.id}
               product={product}
-              isPopular={index === 0} // Make yearly plan popular
+              isPopular={index === 0}
             />
           ))}
         </div>

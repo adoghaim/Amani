@@ -13,10 +13,10 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
 
   const handleSubscribe = async () => {
     setLoading(true)
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      
+
       if (!session) {
         window.location.href = '/login'
         return
@@ -31,7 +31,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         body: JSON.stringify({
           price_id: product.priceId,
           success_url: `${window.location.origin}/success`,
-          cancel_url: `${window.location.origin}/pricing`,
+          cancel_url: `${window.location.origin}/app/pricing`,
           mode: product.mode
         })
       })
@@ -50,41 +50,51 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
     }
   }
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(price)
-  }
+  const fmt = (price: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price)
+
+  const intervalLabel = product.interval === 'year' ? '/yr' : '/mo'
 
   return (
-    <div className={`relative rounded-2xl border ${isPopular ? 'border-indigo-500 shadow-lg' : 'border-gray-200'} bg-white p-8`}>
+    <div className={`relative rounded-2xl border-2 ${isPopular ? 'border-rose-400 shadow-xl' : 'border-gray-200 shadow-sm'} bg-white p-8 flex flex-col`}>
+      <div className="absolute -top-3 left-6">
+        <span className="bg-rose-500 text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide uppercase">
+          Founders Launch
+        </span>
+      </div>
+
       {isPopular && (
-        <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-          <span className="bg-indigo-500 text-white px-4 py-1 rounded-full text-sm font-medium">
-            Most Popular
+        <div className="absolute -top-3 right-6">
+          <span className="bg-gray-900 text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide">
+            Best Value
           </span>
         </div>
       )}
-      
-      <div className="text-center">
-        <h3 className="text-2xl font-bold text-gray-900 mb-2">
+
+      <div className="mt-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">
           {product.name}
         </h3>
-        
-        <p className="text-gray-600 mb-6">
+        <p className="text-sm text-gray-500 mb-6">
           {product.description}
         </p>
-        
+
         <div className="mb-8">
-          <span className="text-4xl font-bold text-gray-900">
-            {formatPrice(product.price)}
-          </span>
-          <span className="text-gray-600 ml-1">
-            /{product.name.toLowerCase().includes('yearly') ? 'year' : 'month'}
-          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm text-gray-400 line-through">
+              {fmt(product.beforePrice)}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1 mt-1">
+            <span className="text-4xl font-bold text-gray-900">
+              {fmt(product.price)}
+            </span>
+            <span className="text-gray-500 text-sm">
+              {intervalLabel}
+            </span>
+          </div>
         </div>
-        
+
         <Button
           onClick={handleSubscribe}
           loading={loading}

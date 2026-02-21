@@ -13,8 +13,6 @@ import { Tracker } from './pages/Tracker'
 import { Billing } from './pages/Billing'
 import { Settings } from './pages/Settings'
 import { Loading } from './components/Loading'
-import { Pricing } from './pages/Pricing'
-import { Success } from './pages/Success'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
@@ -40,11 +38,10 @@ function App() {
         <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
         <Route path="/signup" element={user ? <Navigate to="/app" replace /> : <SignupPage />} />
         <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/pricing" element={<Pricing />} />
         <Route path="/success" element={<SuccessPage />} />
-        <Route path="/success" element={<Success />} />
 
         <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/app/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
         <Route path="/app/new" element={<ProtectedRoute><NewReport /></ProtectedRoute>} />
         <Route path="/app/reports/:id" element={<ProtectedRoute><ReportView /></ProtectedRoute>} />
         <Route path="/app/tracker" element={<ProtectedRoute><Tracker /></ProtectedRoute>} />

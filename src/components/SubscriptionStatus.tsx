@@ -61,10 +61,10 @@ export const SubscriptionStatus: React.FC = () => {
             </p>
           </div>
           <Link
-            to="/pricing"
+            to="/app/pricing"
             className="ml-4 bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-yellow-700 transition-colors"
           >
-            Subscribe
+            View pricing
           </Link>
         </div>
       </div>

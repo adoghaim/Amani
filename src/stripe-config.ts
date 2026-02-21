@@ -4,7 +4,9 @@ export interface StripeProduct {
   name: string;
   description: string;
   price: number;
+  beforePrice: number;
   currency: string;
+  interval: 'month' | 'year';
   mode: 'subscription' | 'payment';
 }
 
@@ -13,9 +15,11 @@ export const STRIPE_PRODUCTS: StripeProduct[] = [
     id: 'prod_TzWOKu75bqEM0F',
     priceId: 'price_1T1XLT0qFZxXyzLU9mGfg7Ba',
     name: 'Amani Yearly',
-    description: 'Full access to Amani with yearly billing - save 17%',
+    description: 'Full access to Amani with yearly billing',
     price: 99.99,
+    beforePrice: 199.99,
     currency: 'usd',
+    interval: 'year',
     mode: 'subscription'
   },
   {
@@ -24,7 +28,9 @@ export const STRIPE_PRODUCTS: StripeProduct[] = [
     name: 'Amani Monthly',
     description: 'Full access to Amani with monthly billing',
     price: 9.99,
+    beforePrice: 19.99,
     currency: 'usd',
+    interval: 'month',
     mode: 'subscription'
   }
 ];

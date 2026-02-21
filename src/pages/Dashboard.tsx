@@ -265,6 +265,26 @@ export function Dashboard() {
           </a>
         </div>
 
+        {userProfile?.subscription_status !== 'active' && (
+          <a href="/app/pricing" className="block mb-6">
+            <div className="flex items-center justify-between gap-4 bg-white border border-gray-200 rounded-xl px-5 py-4 hover:border-rose-300 hover:shadow-sm transition-all">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
+                  Founders Launch
+                </span>
+                <span className="text-sm text-gray-700 font-medium">
+                  <span className="text-gray-400 line-through mr-1.5">$19.99/mo</span>
+                  $9.99/mo &nbsp;&middot;&nbsp;
+                  <span className="text-gray-400 line-through mr-1.5">$199.99/yr</span>
+                  $99.99/yr
+                </span>
+              </div>
+              <span className="text-sm font-medium text-rose-600 shrink-0">View pricing &rarr;</span>
+            </div>
+          </a>
+        )}
+
         {showTrialBanner && (
           <Card className="mb-8 bg-gradient-to-r from-theme-surface-2 to-pink-50 border-theme-primary/30 shadow-md">
             <div className="flex items-start justify-between gap-4">
@@ -286,8 +306,8 @@ export function Dashboard() {
             <p className="text-yellow-800">
               Your trial has expired. Please activate your subscription to create new reports.
             </p>
-            <a href="/app/billing" className="text-yellow-900 underline font-medium">
-              Manage subscription
+            <a href="/app/pricing" className="text-yellow-900 underline font-medium">
+              View pricing
             </a>
           </div>
         )}

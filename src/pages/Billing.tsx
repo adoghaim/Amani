@@ -4,12 +4,14 @@ import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 import { CreditCard, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
 export function Billing() {
   const { userProfile } = useAuth();
   const { subscription, loading: subLoading } = useSubscription();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +45,11 @@ export function Billing() {
   };
 
   const handleManageSubscription = async () => {
+    if (!isActive) {
+      navigate('/app/pricing');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -52,8 +59,7 @@ export function Billing() {
         throw new Error('Not authenticated');
       }
 
-      const functionName = isActive ? 'create-portal-session' : 'create-checkout-session';
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`;
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-portal-session`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -115,7 +121,7 @@ export function Billing() {
                       <CheckCircle className="w-5 h-5 text-theme-success" />
                       <span className="font-medium">Active Subscription</span>
                     </p>
-                    <p className="text-theme-text">$24/month</p>
+                    <p className="text-theme-text">Active plan</p>
                     {subscription?.current_period_end && (
                       <p className="text-theme-muted-text text-sm">
                         {subscription.cancel_at_period_end
@@ -202,7 +208,7 @@ export function Billing() {
               </h3>
               <p className="text-theme-text">
                 You have {getTrialDaysRemaining()} days remaining in your free trial.
-                After your trial ends, you'll be charged $24/month to continue using Amani.
+                After your trial ends, a subscription is required to continue using Amani.
               </p>
             </Card>
           )}

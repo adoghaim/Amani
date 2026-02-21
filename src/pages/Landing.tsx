@@ -94,15 +94,32 @@ export function Landing() {
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="bg-theme-surface rounded-2xl shadow-lg border border-theme-border p-8 text-center">
-          <h2 className="text-3xl font-bold text-theme-text mb-4">
-            Transparent pricing
-          </h2>
-          <div className="text-5xl font-bold text-theme-text mb-2">
-            $24<span className="text-2xl text-theme-muted-text">/month</span>
+          <div className="inline-flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-full px-4 py-1.5 mb-5">
+            <span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
+            <span className="text-rose-700 text-sm font-semibold tracking-wide uppercase">Founders Launch</span>
           </div>
-          <p className="text-lg text-theme-muted-text mb-6">
-            30-day free trial • Cancel anytime
+          <h2 className="text-3xl font-bold text-theme-text mb-6">
+            Simple, transparent pricing
+          </h2>
+
+          <div className="grid sm:grid-cols-2 gap-6 mb-8 text-left max-w-xl mx-auto">
+            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Monthly</p>
+              <p className="text-sm text-gray-400 line-through mb-0.5">$19.99/mo</p>
+              <p className="text-3xl font-bold text-gray-900">$9.99<span className="text-base font-normal text-gray-500">/mo</span></p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-5 border border-rose-300 relative">
+              <span className="absolute -top-2.5 right-4 bg-gray-900 text-white text-xs font-semibold px-2.5 py-0.5 rounded-full">Best Value</span>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Yearly</p>
+              <p className="text-sm text-gray-400 line-through mb-0.5">$199.99/yr</p>
+              <p className="text-3xl font-bold text-gray-900">$99.99<span className="text-base font-normal text-gray-500">/yr</span></p>
+            </div>
+          </div>
+
+          <p className="text-sm text-theme-muted-text mb-6">
+            30-day free trial • Cancel anytime • Founders Launch pricing available for a limited time.
           </p>
+
           <ul className="text-left space-y-3 mb-8 max-w-md mx-auto">
             <li className="flex items-start gap-2">
               <span className="text-theme-primary mt-1">✓</span>
