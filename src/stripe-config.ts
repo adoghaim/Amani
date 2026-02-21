@@ -29,6 +29,12 @@ export const STRIPE_PRODUCTS: StripeProduct[] = [
   }
 ];
 
+export const stripeProducts = STRIPE_PRODUCTS;
+
+export const getProductByPriceId = (priceId: string): StripeProduct | undefined => {
+  return STRIPE_PRODUCTS.find(p => p.priceId === priceId);
+};
+
 export const formatPrice = (price: number, currency: string): string => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
