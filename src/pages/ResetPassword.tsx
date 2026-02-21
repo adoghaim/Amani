@@ -14,25 +14,41 @@ export function ResetPassword() {
   const [validSession, setValidSession] = useState<boolean | null>(null);
 
   useEffect(() => {
+    let resolved = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        resolved = true;
         setValidSession(true);
-      } else if (event === 'SIGNED_IN' && session) {
-        setValidSession(true);
-      } else if (!session && validSession === null) {
-        setValidSession(false);
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setValidSession(true);
-      } else {
-        setTimeout(() => {
-          setValidSession((prev) => (prev === null ? false : prev));
-        }, 1500);
-      }
-    });
+    const hashParams = new URLSearchParams(window.location.hash.replace('#', '?').slice(1));
+    const type = hashParams.get('type');
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+
+    if (type === 'recovery' && accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
+        if (!error) {
+          resolved = true;
+          setValidSession(true);
+        } else {
+          if (!resolved) setValidSession(false);
+        }
+      });
+    } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          resolved = true;
+          setValidSession(true);
+        } else {
+          setTimeout(() => {
+            if (!resolved) setValidSession(false);
+          }, 2000);
+        }
+      });
+    }
 
     return () => subscription.unsubscribe();
   }, []);
