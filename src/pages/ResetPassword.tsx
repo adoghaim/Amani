@@ -14,9 +14,27 @@ export function ResetPassword() {
   const [validSession, setValidSession] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setValidSession(!!session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setValidSession(true);
+      } else if (event === 'SIGNED_IN' && session) {
+        setValidSession(true);
+      } else if (!session && validSession === null) {
+        setValidSession(false);
+      }
     });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setValidSession(true);
+      } else {
+        setTimeout(() => {
+          setValidSession((prev) => (prev === null ? false : prev));
+        }, 1500);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

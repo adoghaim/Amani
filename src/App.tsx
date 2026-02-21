@@ -5,6 +5,7 @@ import { Landing } from './pages/Landing'
 import { Dashboard } from './pages/Dashboard'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
+import { ResetPassword } from './pages/ResetPassword'
 import { PricingPage } from './pages/PricingPage'
 import { SuccessPage } from './pages/SuccessPage'
 import { NewReport } from './pages/NewReport'
@@ -39,6 +40,7 @@ function App() {
         <Route path="/signup" element={user ? <Navigate to="/app" replace /> : <SignupPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/success" element={<SuccessPage />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/app/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
