@@ -17,9 +17,9 @@ export function Landing() {
                   Log in
                 </Button>
               </a>
-              <a href="/signup">
+              <a href="/pricing">
                 <Button size="sm">
-                  Start free trial
+                  Get started
                 </Button>
               </a>
             </div>
@@ -38,9 +38,9 @@ export function Landing() {
           Amani helps you make sense of hormone labs in context, so you can have better conversations with your doctor.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="/signup">
+          <a href="/pricing">
             <Button size="lg" className="w-full sm:w-auto">
-              Start free trial
+              Get started
             </Button>
           </a>
           <a href="/login">
@@ -138,9 +138,9 @@ export function Landing() {
               <span className="text-theme-text">Questions to ask your doctor</span>
             </li>
           </ul>
-          <a href="/signup">
+          <a href="/pricing">
             <Button size="lg" className="w-full sm:w-auto">
-              Start your free trial
+              Get started
             </Button>
           </a>
         </div>

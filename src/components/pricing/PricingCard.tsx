@@ -18,7 +18,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
       const { data: { session } } = await supabase.auth.getSession()
 
       if (!session) {
-        window.location.href = '/login'
+        window.location.href = `/signup?redirect=${encodeURIComponent('/pricing')}`
         return
       }
 

@@ -36,8 +36,8 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={user ? <Navigate to="/app" replace /> : <Landing />} />
-        <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
-        <Route path="/signup" element={user ? <Navigate to="/app" replace /> : <SignupPage />} />
+        <Route path="/login" element={user ? <Navigate to={new URLSearchParams(window.location.search).get('redirect') || '/app'} replace /> : <LoginPage />} />
+        <Route path="/signup" element={user ? <Navigate to={new URLSearchParams(window.location.search).get('redirect') || '/app'} replace /> : <SignupPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/success" element={<SuccessPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
