@@ -10,9 +10,11 @@ interface PricingCardProps {
 
 export function PricingCard({ product, isPopular = false }: PricingCardProps) {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubscribe = async () => {
     setLoading(true)
+    setError(null)
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -41,10 +43,10 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
       if (data.url) {
         window.location.href = data.url
       } else {
-        console.error('No checkout URL returned')
+        setError(data.error || 'Something went wrong. Please try again.')
       }
-    } catch (error) {
-      console.error('Error creating checkout session:', error)
+    } catch (err) {
+      setError('Unable to connect. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -103,6 +105,10 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         >
           Get Started
         </Button>
+
+        {error && (
+          <p className="mt-3 text-sm text-red-600 text-center">{error}</p>
+        )}
       </div>
     </div>
   )
