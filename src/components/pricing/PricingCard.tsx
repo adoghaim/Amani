@@ -43,10 +43,10 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
       if (data.url) {
         window.location.href = data.url
       } else {
-        setError(data.error || 'Something went wrong. Please try again.')
+        setError(`Error (${response.status}): ${data.error || 'Unknown error'}`)
       }
-    } catch (err) {
-      setError('Unable to connect. Please try again.')
+    } catch (err: any) {
+      setError(`Connection error: ${err?.message || 'Unknown'}`)
     } finally {
       setLoading(false)
     }
