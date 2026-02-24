@@ -51,19 +51,44 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = user.id;
 
     if (!openaiApiKey) {
       throw new Error("OpenAI API key not configured");
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const body = await req.json();
-    const { currentReportId, previousReportId, userId } = body;
 
-    if (!currentReportId || !userId) {
+    await checkAndIncrementRateLimit(supabase, userId, "lab-insights", 30);
+
+    const body = await req.json();
+    const { currentReportId, previousReportId } = body;
+
+    if (!currentReportId) {
       throw new Error("Missing required parameters");
     }
 
@@ -250,8 +275,14 @@ Remember:
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating insights:", error);
+    if (error?.message === "RATE_LIMIT_EXCEEDED") {
+      return new Response(
+        JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     return new Response(
       JSON.stringify({
         error: error.message || "Failed to generate insights",
@@ -263,3 +294,38 @@ Remember:
     );
   }
 });
+
+async function checkAndIncrementRateLimit(
+  supabase: any,
+  userId: string,
+  endpoint: string,
+  limitPerDay: number
+): Promise<void> {
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+
+  const { data: existing } = await supabase
+    .from("rate_limits")
+    .select("id, count")
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint)
+    .gte("window_start", windowStart.toISOString())
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.count >= limitPerDay) {
+      throw new Error("RATE_LIMIT_EXCEEDED");
+    }
+    await supabase
+      .from("rate_limits")
+      .update({ count: existing.count + 1 })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("rate_limits").insert({
+      user_id: userId,
+      endpoint,
+      window_start: windowStart.toISOString(),
+      count: 1,
+    });
+  }
+}

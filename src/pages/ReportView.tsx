@@ -82,11 +82,13 @@ export function ReportView({ reportId }: ReportViewProps) {
         })
         .eq('id', reportId);
 
+      const { data: { session: regenSession } } = await supabase.auth.getSession();
+      const regenToken = regenSession?.access_token;
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
       await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${regenToken ?? ''}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ reportId }),

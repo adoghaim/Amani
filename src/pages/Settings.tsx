@@ -4,7 +4,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Trash2, AlertTriangle } from 'lucide-react';
+import { Trash2, AlertTriangle, ShieldCheck, Lock } from 'lucide-react';
 
 export function Settings() {
   const { user, userProfile } = useAuth();
@@ -13,7 +13,7 @@ export function Settings() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteData = async () => {
     if (deleteConfirmText !== 'DELETE') {
       setError('Please type DELETE to confirm');
       return;
@@ -23,40 +23,32 @@ export function Settings() {
     setError('');
 
     try {
-      if (user) {
-        const { data: reports } = await supabase
-          .from('lab_reports')
-          .select('file_url')
-          .eq('user_id', user.id);
-
-        if (reports) {
-          for (const report of reports) {
-            if (report.file_url) {
-              const fileName = report.file_url.split('/').pop();
-              if (fileName) {
-                await supabase.storage
-                  .from('lab-files')
-                  .remove([`${user.id}/${fileName}`]);
-              }
-            }
-          }
-        }
-
-        await supabase
-          .from('lab_reports')
-          .delete()
-          .eq('user_id', user.id);
-
-        await supabase
-          .from('users')
-          .delete()
-          .eq('id', user.id);
-
-        await supabase.auth.signOut();
-        window.location.href = '/';
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError('Session expired. Please log in again.');
+        setDeleting(false);
+        return;
       }
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user-data`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete data');
+      }
+
+      await supabase.from('users').delete().eq('id', user!.id);
+      await supabase.auth.signOut();
+      window.location.href = '/';
     } catch (err) {
-      setError('Failed to delete account. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to delete data. Please try again.');
       setDeleting(false);
     }
   };
@@ -105,6 +97,28 @@ export function Settings() {
             </div>
           </Card>
 
+          <Card className="border-teal-200 bg-teal-50/40">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-5 h-5 text-teal-700" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">
+                  Data Privacy & Security
+                </h2>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Your data is protected with account-based access controls and encryption in transit.
+                  Only you can access your lab results and health information — no other user or third party
+                  can view your data.
+                </p>
+                <div className="mt-3 flex items-center gap-2 text-xs text-teal-700 font-medium">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>All data is scoped to your account and encrypted in transit</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           <Card className="border-red-200">
             <div className="flex items-start gap-4 mb-4">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
@@ -112,17 +126,17 @@ export function Settings() {
               </div>
               <div className="flex-1">
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                  Delete Account
+                  Delete My Data
                 </h2>
                 <p className="text-gray-600 mb-4">
-                  Permanently delete your account and all associated data. This action cannot be undone.
+                  Permanently delete all your health data and account. This action cannot be undone.
                 </p>
                 {!showDeleteConfirm ? (
                   <Button
                     variant="danger"
                     onClick={() => setShowDeleteConfirm(true)}
                   >
-                    Delete My Account
+                    Delete My Data
                   </Button>
                 ) : (
                   <div className="space-y-4">
@@ -134,13 +148,13 @@ export function Settings() {
                             Warning: This action is permanent
                           </h3>
                           <p className="text-sm text-red-800">
-                            Deleting your account will:
+                            Deleting your data will:
                           </p>
                           <ul className="text-sm text-red-800 list-disc list-inside mt-2 space-y-1">
                             <li>Permanently delete all your lab reports</li>
                             <li>Remove all uploaded files</li>
                             <li>Delete all biomarker data and interpretations</li>
-                            <li>Cancel any active subscriptions</li>
+                            <li>Delete all cycle events and interventions</li>
                             <li>Remove your account and email from our system</li>
                           </ul>
                         </div>
@@ -169,10 +183,10 @@ export function Settings() {
                     <div className="flex gap-3">
                       <Button
                         variant="danger"
-                        onClick={handleDeleteAccount}
+                        onClick={handleDeleteData}
                         disabled={deleting || deleteConfirmText !== 'DELETE'}
                       >
-                        {deleting ? 'Deleting...' : 'Yes, Delete My Account'}
+                        {deleting ? 'Deleting...' : 'Yes, Delete My Data'}
                       </Button>
                       <Button
                         variant="secondary"

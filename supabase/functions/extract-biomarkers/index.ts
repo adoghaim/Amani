@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,36 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    await checkAndIncrementRateLimit(supabaseAdmin, user.id, "extract-biomarkers", 20);
+
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
     if (!openaiApiKey) {
@@ -174,6 +205,12 @@ Remember:
 
     const validatedBiomarkers = applySanityChecks(biomarkers);
 
+    await supabaseAdmin.from("audit_events").insert({
+      user_id: user.id,
+      event_type: "lab_uploaded",
+      metadata: { biomarker_count: validatedBiomarkers.length },
+    }).then(() => {});
+
     return new Response(
       JSON.stringify({ biomarkers: validatedBiomarkers }),
       {
@@ -181,8 +218,15 @@ Remember:
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error extracting biomarkers:", error);
+
+    if (error?.message === "RATE_LIMIT_EXCEEDED") {
+      return new Response(
+        JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({
@@ -195,6 +239,41 @@ Remember:
     );
   }
 });
+
+async function checkAndIncrementRateLimit(
+  supabase: any,
+  userId: string,
+  endpoint: string,
+  limitPerDay: number
+): Promise<void> {
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+
+  const { data: existing } = await supabase
+    .from("rate_limits")
+    .select("id, count")
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint)
+    .gte("window_start", windowStart.toISOString())
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.count >= limitPerDay) {
+      throw new Error("RATE_LIMIT_EXCEEDED");
+    }
+    await supabase
+      .from("rate_limits")
+      .update({ count: existing.count + 1 })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("rate_limits").insert({
+      user_id: userId,
+      endpoint,
+      window_start: windowStart.toISOString(),
+      count: 1,
+    });
+  }
+}
 
 function applySanityChecks(biomarkers: ExtractedBiomarker[]): ExtractedBiomarker[] {
   const validated = biomarkers.map(b => {

@@ -232,17 +232,22 @@ export function Tracker() {
     setInsightsData(null);
 
     try {
+      const { data: { session: insightsSession } } = await supabase.auth.getSession();
+      if (!insightsSession) {
+        setInsightsError('Session expired. Please log in again.');
+        setInsightsLoading(false);
+        return;
+      }
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lab-insights`;
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${insightsSession.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           currentReportId: reportId,
           previousReportId,
-          userId: user.id,
         }),
       });
 

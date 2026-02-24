@@ -112,11 +112,16 @@ export function NewReport() {
         console.log('Total text length:', text.length);
 
         if (text.trim().length > 0) {
+          const { data: { session: extractSession } } = await supabase.auth.getSession();
+          if (!extractSession) {
+            window.location.href = '/login';
+            return;
+          }
           const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-biomarkers`;
           const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${extractSession.access_token}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ text }),
@@ -246,17 +251,14 @@ export function NewReport() {
 
       if (file) {
         const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        const storagePath = `${user.id}/${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from('lab-files')
-          .upload(fileName, file);
+          .upload(storagePath, file);
 
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage
-          .from('lab-files')
-          .getPublicUrl(fileName);
-        fileUrl = urlData.publicUrl;
+        fileUrl = storagePath;
       }
 
       const { cycleDay, cyclePhase } = calculateCycleInfo();
@@ -303,11 +305,13 @@ export function NewReport() {
         if (biomarkerError) throw biomarkerError;
       }
 
+      const { data: { session: interpSession } } = await supabase.auth.getSession();
+      const interpToken = interpSession?.access_token;
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
       await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${interpToken ?? ''}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ reportId: reportData.id }),

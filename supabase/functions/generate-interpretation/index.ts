@@ -38,13 +38,37 @@ Deno.serve(async (req: Request) => {
 
   let supabase: any;
   let reportId: string | null = null;
+  let user: any = null;
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user: authUser }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !authUser) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    user = authUser;
+
     supabase = createClient(supabaseUrl, supabaseKey);
+
+    await checkAndIncrementRateLimit(supabase, user.id, "generate-interpretation", 20);
 
     const body = await req.json();
     reportId = body.reportId;
@@ -63,6 +87,7 @@ Deno.serve(async (req: Request) => {
       .from("lab_reports")
       .select("*")
       .eq("id", reportId)
+      .eq("user_id", user.id)
       .maybeSingle();
 
     if (reportError || !report) {
@@ -129,6 +154,12 @@ Deno.serve(async (req: Request) => {
       throw new Error("Failed to update report status");
     }
 
+    await supabase.from("audit_events").insert({
+      user_id: user.id,
+      event_type: "insights_generated",
+      metadata: { report_id: reportId, source: interpretationSource },
+    }).then(() => {});
+
     return new Response(
       JSON.stringify({ success: true }),
       {
@@ -136,8 +167,15 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating interpretation:", error);
+
+    if (error?.message === "RATE_LIMIT_EXCEEDED") {
+      return new Response(
+        JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Update report status to error if we have the reportId
     if (supabase && reportId) {
@@ -162,6 +200,41 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+async function checkAndIncrementRateLimit(
+  supabase: any,
+  userId: string,
+  endpoint: string,
+  limitPerDay: number
+): Promise<void> {
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+
+  const { data: existing } = await supabase
+    .from("rate_limits")
+    .select("id, count")
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint)
+    .gte("window_start", windowStart.toISOString())
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.count >= limitPerDay) {
+      throw new Error("RATE_LIMIT_EXCEEDED");
+    }
+    await supabase
+      .from("rate_limits")
+      .update({ count: existing.count + 1 })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("rate_limits").insert({
+      user_id: userId,
+      endpoint,
+      window_start: windowStart.toISOString(),
+      count: 1,
+    });
+  }
+}
 
 // Validation functions for nutrient safety
 function validateNutrientContent(jsonOutput: any): { valid: boolean; violations: string[] } {
