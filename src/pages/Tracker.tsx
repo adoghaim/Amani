@@ -421,8 +421,6 @@ export function Tracker() {
     );
   }
 
-  const hasOpenPeriod = !!lastPeriodLog && !lastPeriodLog.end_date;
-
   return (
     <Layout>
       <div className="max-w-5xl mx-auto">
@@ -488,14 +486,12 @@ export function Tracker() {
                     onClick={openStartPeriod}
                     variant="rose"
                   />
-                  {hasOpenPeriod && (
-                    <QuickLogButton
-                      icon={<Droplets className="w-4 h-4 opacity-60" />}
-                      label="Period end"
-                      onClick={openEndPeriod}
-                      variant="rose-light"
-                    />
-                  )}
+                  <QuickLogButton
+                    icon={<Droplets className="w-4 h-4 opacity-60" />}
+                    label="Period end"
+                    onClick={openEndPeriod}
+                    variant="rose-light"
+                  />
                   <QuickLogButton
                     icon={<Plus className="w-4 h-4" />}
                     label="Add symptom"
