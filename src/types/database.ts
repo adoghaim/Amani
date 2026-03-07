@@ -162,6 +162,7 @@ export interface Database {
           event_date: string
           event_type: string
           notes: string | null
+          metadata: Json | null
           created_at: string
         }
         Insert: {
@@ -170,6 +171,7 @@ export interface Database {
           event_date: string
           event_type: string
           notes?: string | null
+          metadata?: Json | null
           created_at?: string
         }
         Update: {
@@ -178,6 +180,7 @@ export interface Database {
           event_date?: string
           event_type?: string
           notes?: string | null
+          metadata?: Json | null
           created_at?: string
         }
       }
@@ -210,6 +213,137 @@ export interface Database {
           start_date?: string
           end_date?: string | null
           notes?: string | null
+          created_at?: string
+        }
+      }
+      period_logs: {
+        Row: {
+          id: string
+          user_id: string
+          start_date: string
+          end_date: string | null
+          flow_intensity: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          start_date: string
+          end_date?: string | null
+          flow_intensity?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          start_date?: string
+          end_date?: string | null
+          flow_intensity?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      symptom_logs: {
+        Row: {
+          id: string
+          user_id: string
+          log_date: string
+          symptoms: Json
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          log_date: string
+          symptoms?: Json
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          log_date?: string
+          symptoms?: Json
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      notification_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          period_reminders: boolean
+          fertile_reminders: boolean
+          ovulation_reminders: boolean
+          lab_reminders: boolean
+          intervention_reminders: boolean
+          reminder_time: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          period_reminders?: boolean
+          fertile_reminders?: boolean
+          ovulation_reminders?: boolean
+          lab_reminders?: boolean
+          intervention_reminders?: boolean
+          reminder_time?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          period_reminders?: boolean
+          fertile_reminders?: boolean
+          ovulation_reminders?: boolean
+          lab_reminders?: boolean
+          intervention_reminders?: boolean
+          reminder_time?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      reminders: {
+        Row: {
+          id: string
+          user_id: string
+          reminder_type: string
+          scheduled_for: string
+          delivered: boolean
+          read: boolean
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          reminder_type: string
+          scheduled_for: string
+          delivered?: boolean
+          read?: boolean
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          reminder_type?: string
+          scheduled_for?: string
+          delivered?: boolean
+          read?: boolean
+          metadata?: Json | null
           created_at?: string
         }
       }

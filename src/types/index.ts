@@ -15,6 +15,17 @@ export type BiomarkerName =
   | 'ferritin'
   | 'vitamin_d';
 
+export type DailySymptom =
+  | 'cramps'
+  | 'headache'
+  | 'bloating'
+  | 'fatigue'
+  | 'acne'
+  | 'mood_changes'
+  | 'breast_tenderness'
+  | 'sleep_issues'
+  | 'low_energy';
+
 export type Symptom =
   | 'fatigue'
   | 'acne'
@@ -26,6 +37,8 @@ export type Symptom =
   | 'cramps'
   | 'low_libido'
   | 'hot_flashes';
+
+export type FlowIntensity = 'spotting' | 'light' | 'medium' | 'heavy';
 
 export interface LabReportContext {
   birth_control: 'yes' | 'no' | 'unsure';
@@ -103,7 +116,7 @@ export interface User {
   default_period_length: number | null;
 }
 
-export type CycleEventType = 'period_start';
+export type CycleEventType = 'period_start' | 'period_end' | 'symptom' | 'note';
 
 export interface CycleEvent {
   id: string;
@@ -111,6 +124,7 @@ export interface CycleEvent {
   event_date: string;
   event_type: CycleEventType;
   notes: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -141,4 +155,63 @@ export interface LabReport {
   context: LabReportContext;
   status: ReportStatus;
   regeneration_count: number;
+}
+
+export interface PeriodLog {
+  id: string;
+  user_id: string;
+  start_date: string;
+  end_date: string | null;
+  flow_intensity: FlowIntensity | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SymptomLog {
+  id: string;
+  user_id: string;
+  log_date: string;
+  symptoms: DailySymptom[];
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationPreferences {
+  id: string;
+  user_id: string;
+  period_reminders: boolean;
+  fertile_reminders: boolean;
+  ovulation_reminders: boolean;
+  lab_reminders: boolean;
+  intervention_reminders: boolean;
+  reminder_time: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ReminderType = 'period' | 'fertile_window' | 'ovulation' | 'lab' | 'intervention';
+
+export interface Reminder {
+  id: string;
+  user_id: string;
+  reminder_type: ReminderType;
+  scheduled_for: string;
+  delivered: boolean;
+  read: boolean;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface CyclePrediction {
+  nextPeriodStart: Date;
+  nextPeriodEnd: Date;
+  fertileWindowStart: Date;
+  fertileWindowEnd: Date;
+  ovulationDay: Date;
+  currentCycleDay: number;
+  currentPhase: CyclePhase;
+  cycleLength: number;
+  periodLength: number;
 }
