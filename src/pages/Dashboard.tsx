@@ -6,7 +6,7 @@ import { Calendar } from '../components/Calendar';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
-import type { LabReport, CycleEvent, Intervention, Biomarker } from '../types';
+import type { LabReport, PeriodLog, Intervention, Biomarker } from '../types';
 import {
   FileText,
   Plus,
@@ -25,7 +25,7 @@ import {
 export function Dashboard() {
   const { user, userProfile } = useAuth();
   const [reports, setReports] = useState<LabReport[]>([]);
-  const [cycleEvents, setCycleEvents] = useState<CycleEvent[]>([]);
+  const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
   const [loading, setLoading] = useState(true);
@@ -41,16 +41,16 @@ export function Dashboard() {
     if (!user) return;
 
     try {
-      const [reportsResult, eventsResult, interventionsResult] = await Promise.all([
+      const [reportsResult, periodLogsResult, interventionsResult] = await Promise.all([
         supabase
           .from('lab_reports')
           .select('*')
           .order('report_date', { ascending: false }),
         supabase
-          .from('cycle_events')
+          .from('period_logs')
           .select('*')
           .eq('user_id', user.id)
-          .order('event_date', { ascending: false }),
+          .order('start_date', { ascending: false }),
         supabase
           .from('interventions')
           .select('*')
@@ -83,8 +83,8 @@ export function Dashboard() {
         }
       }
 
-      if (!eventsResult.error && eventsResult.data) {
-        setCycleEvents(eventsResult.data as CycleEvent[]);
+      if (!periodLogsResult.error && periodLogsResult.data) {
+        setPeriodLogs(periodLogsResult.data as PeriodLog[]);
       }
 
       if (!interventionsResult.error && interventionsResult.data) {
@@ -93,9 +93,9 @@ export function Dashboard() {
 
       const hasReports = fetchedReports.length >= 1;
       const hasInterventions = (interventionsResult.data as Intervention[])?.length > 0;
-      const hasCycleEvents = (eventsResult.data as CycleEvent[])?.length > 0;
+      const hasPeriodLogs = (periodLogsResult.data as PeriodLog[])?.length > 0;
 
-      if (hasReports && !hasInterventions && !hasCycleEvents) {
+      if (hasReports && !hasInterventions && !hasPeriodLogs) {
         const nudgeDismissed = sessionStorage.getItem('contextNudgeDismissed');
         setShowContextNudge(!nudgeDismissed);
       }
@@ -107,23 +107,20 @@ export function Dashboard() {
   };
 
   const handleDateClick = async (date: string) => {
-    const existingEvent = cycleEvents.find(
-      (e) => e.event_date === date && e.event_type === 'period_start'
-    );
+    const existingLog = periodLogs.find((p) => p.start_date === date);
 
-    if (existingEvent) {
+    if (existingLog) {
       const confirmDelete = window.confirm('Remove period start marker from this date?');
       if (confirmDelete) {
-        await supabase.from('cycle_events').delete().eq('id', existingEvent.id);
+        await supabase.from('period_logs').delete().eq('id', existingLog.id);
         await fetchData();
       }
     } else {
       const confirmAdd = window.confirm('Add period start marker to this date?');
       if (confirmAdd) {
-        await supabase.from('cycle_events').insert({
+        await supabase.from('period_logs').insert({
           user_id: user!.id,
-          event_date: date,
-          event_type: 'period_start',
+          start_date: date,
         });
         await fetchData();
       }
@@ -190,9 +187,9 @@ export function Dashboard() {
   };
 
   const activeInterventions = interventions.filter(i => !i.end_date);
-  const latestCycleEvent = cycleEvents.find(e => e.event_type === 'period_start');
-  const daysSinceLastPeriod = latestCycleEvent
-    ? Math.floor((new Date().getTime() - new Date(latestCycleEvent.event_date).getTime()) / (1000 * 60 * 60 * 24))
+  const latestPeriodLog = periodLogs[0];
+  const daysSinceLastPeriod = latestPeriodLog
+    ? Math.floor((new Date().getTime() - new Date(latestPeriodLog.start_date).getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
   const latestReport = reports[0];
@@ -206,11 +203,15 @@ export function Dashboard() {
       type: 'lab' as const,
       label: r.lab_name || 'Lab report',
     })),
-    ...cycleEvents
-      .filter((e) => e.event_type === 'period_start')
-      .map((e) => ({
-        date: e.event_date,
-        type: 'period' as const,
+    ...periodLogs.map((p) => ({
+      date: p.start_date,
+      type: 'period_start' as const,
+    })),
+    ...periodLogs
+      .filter((p) => !!p.end_date)
+      .map((p) => ({
+        date: p.end_date!,
+        type: 'period_end' as const,
       })),
   ];
 
@@ -365,9 +366,9 @@ export function Dashboard() {
                 <p className="text-3xl font-bold text-theme-text">
                   {daysSinceLastPeriod !== null ? `Day ${daysSinceLastPeriod + 1}` : 'N/A'}
                 </p>
-                {latestCycleEvent && (
+                {latestPeriodLog && (
                   <p className="text-xs text-theme-muted-text mt-2">
-                    Period started {formatDate(latestCycleEvent.event_date)}
+                    Period started {formatDate(latestPeriodLog.start_date)}
                   </p>
                 )}
               </div>
@@ -397,8 +398,8 @@ export function Dashboard() {
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-theme-muted-text mb-2">Cycle Events</p>
-                <p className="text-3xl font-bold text-theme-text">{cycleEvents.length}</p>
+                <p className="text-sm font-medium text-theme-muted-text mb-2">Periods Logged</p>
+                <p className="text-3xl font-bold text-theme-text">{periodLogs.length}</p>
                 <p className="text-xs text-theme-muted-text mt-2">
                   Tracked periods
                 </p>
