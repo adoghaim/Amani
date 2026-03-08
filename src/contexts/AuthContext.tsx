@@ -75,15 +75,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
 
     if (data.user) {
-      const { error: profileError } = await supabase
+      await supabase
         .from('users')
-        .insert({
-          id: data.user.id,
-          email: data.user.email!,
-          has_consented: true,
-        });
-
-      if (profileError) throw profileError;
+        .upsert(
+          {
+            id: data.user.id,
+            email: data.user.email!,
+            has_consented: true,
+            subscription_status: 'trial',
+            trial_start_date: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        );
     }
   };
 

@@ -1,113 +1,75 @@
-import React, { useEffect, useState } from 'react';
-import { Crown, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Crown, Clock, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
-interface SubscriptionData {
-  subscription_status: string;
-  price_id: string;
-  current_period_end: number;
-  cancel_at_period_end: boolean;
-}
-
-export const SubscriptionStatus: React.FC = () => {
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchSubscription = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('stripe_user_subscriptions')
-          .select('*')
-          .single();
-
-        if (!error && data) {
-          setSubscription(data);
-        }
-      } catch (error) {
-        console.error('Error fetching subscription:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSubscription();
-  }, []);
+export function SubscriptionStatus() {
+  const { userProfile, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="animate-pulse flex space-x-4">
-          <div className="rounded-full bg-gray-200 h-10 w-10"></div>
-          <div className="flex-1 space-y-2 py-1">
-            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      <div className="bg-white rounded-xl border border-[#E9D6DA] p-4 animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#F6ECEB]" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 bg-[#F6ECEB] rounded w-1/3" />
+            <div className="h-3 bg-[#F6ECEB] rounded w-1/2" />
           </div>
         </div>
       </div>
     );
   }
 
-  if (!subscription || subscription.subscription_status === 'canceled') {
+  if (!userProfile) return null;
+
+  if (userProfile.subscription_status === 'active') {
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <div className="flex items-center">
-          <AlertCircle className="h-5 w-5 text-yellow-600 mr-3" />
-          <div className="flex-1">
-            <h3 className="text-sm font-medium text-yellow-800">No Active Subscription</h3>
-            <p className="text-sm text-yellow-700 mt-1">
-              Subscribe to unlock all features and get personalized insights.
+      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
+        <Crown className="w-4 h-4 text-green-600 shrink-0" />
+        <p className="text-sm text-green-800 font-medium">Active subscription</p>
+      </div>
+    );
+  }
+
+  if (userProfile.subscription_status === 'trial') {
+    const trialStart = new Date(userProfile.trial_start_date);
+    const daysSinceStart = Math.floor((Date.now() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
+    const daysRemaining = Math.max(0, 7 - daysSinceStart);
+    const trialActive = daysRemaining > 0;
+
+    if (trialActive) {
+      return (
+        <div className="bg-[#F6ECEB] border border-[#E9D6DA] rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Clock className="w-4 h-4 text-[#C97C8B] shrink-0" />
+            <p className="text-sm text-[#2A1F23] font-medium">
+              Free trial &mdash; {daysRemaining === 1 ? '1 day' : `${daysRemaining} days`} remaining
             </p>
           </div>
           <Link
             to="/app/pricing"
-            className="ml-4 bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-yellow-700 transition-colors"
+            className="text-xs font-semibold text-[#C97C8B] hover:text-[#A85C6D] shrink-0 transition-colors"
           >
-            View pricing
+            Upgrade
           </Link>
         </div>
-      </div>
-    );
+      );
+    }
   }
 
-  const planName = subscription.price_id?.includes('yearly') ? 'Amani Yearly' : 'Amani Monthly';
-  const isActive = subscription.subscription_status === 'active';
-  const nextBilling = subscription.current_period_end 
-    ? new Date(subscription.current_period_end * 1000).toLocaleDateString()
-    : null;
-
   return (
-    <div className={`rounded-lg border p-4 ${
-      isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
-    }`}>
-      <div className="flex items-center">
-        <Crown className={`h-5 w-5 mr-3 ${
-          isActive ? 'text-green-600' : 'text-gray-400'
-        }`} />
-        <div className="flex-1">
-          <h3 className={`text-sm font-medium ${
-            isActive ? 'text-green-800' : 'text-gray-800'
-          }`}>
-            {planName}
-          </h3>
-          <div className="text-sm mt-1">
-            <span className={`capitalize ${
-              isActive ? 'text-green-700' : 'text-gray-600'
-            }`}>
-              {subscription.subscription_status}
-            </span>
-            {nextBilling && (
-              <span className={isActive ? 'text-green-700' : 'text-gray-600'}>
-                {subscription.cancel_at_period_end 
-                  ? ` • Expires ${nextBilling}`
-                  : ` • Renews ${nextBilling}`
-                }
-              </span>
-            )}
-          </div>
-        </div>
+    <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0" />
+        <p className="text-sm text-yellow-800 font-medium">
+          {userProfile.subscription_status === 'trial' ? 'Trial expired' : 'No active subscription'}
+        </p>
       </div>
+      <Link
+        to="/app/pricing"
+        className="text-xs font-semibold text-yellow-700 hover:text-yellow-900 shrink-0 transition-colors"
+      >
+        View plans
+      </Link>
     </div>
   );
-};
+}
