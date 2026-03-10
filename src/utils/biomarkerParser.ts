@@ -43,7 +43,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'total_testosterone',
-    patterns: ['testosterone, total', 'total testosterone', 'testosterone total', 'testosterone serum', 'testosterone,total'],
+    patterns: ['testosterone, total, ms', 'testosterone, total', 'total testosterone', 'testosterone total', 'testosterone serum', 'testosterone,total'],
     commonUnits: ['ng/dL', 'nmol/L', 'ng/dl'],
   },
   {
@@ -68,7 +68,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'shbg',
-    patterns: ['shbg', 'sex hormone binding globulin', 'sex-hormone-binding globulin'],
+    patterns: ['sex hormone binding globulin', 'shbg', 'sex-hormone-binding globulin'],
     commonUnits: ['nmol/L', 'nM', 'nmol/l'],
   },
   {
@@ -78,12 +78,12 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'free_t4',
-    patterns: ['free t4', 'free thyroxine', 't4 free', 'ft4', 'free t 4', 't4, free', 't4,free'],
+    patterns: ['t4, free', 'free t4', 'free thyroxine', 't4 free', 'ft4', 'free t 4', 't4,free'],
     commonUnits: ['ng/dL', 'pmol/L', 'ng/dl', 'ug/dl', 'μg/dL'],
   },
   {
     canonical: 'free_t3',
-    patterns: ['free t3', 'free triiodothyronine', 't3 free', 'ft3', 'free t 3', 't3, free', 't3,free'],
+    patterns: ['t3, free', 'free t3', 'free triiodothyronine', 't3 free', 'ft3', 'free t 3', 't3,free'],
     commonUnits: ['pg/mL', 'pmol/L', 'pg/ml'],
   },
   {
@@ -98,7 +98,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'tpo_antibodies',
-    patterns: ['tpo antibodies', 'thyroid peroxidase antibodies', 'anti-tpo', 'tpo ab', 'antithyroid peroxidase', 'thyroid peroxidase (tpo) ab', 'tpo ab igg'],
+    patterns: ['thyroid peroxidase antibodies', 'thyroid peroxidase (tpo) ab', 'tpo antibodies', 'anti-tpo', 'tpo ab', 'antithyroid peroxidase', 'tpo ab igg'],
     commonUnits: ['IU/mL', 'U/mL', 'kIU/L'],
   },
   {
@@ -113,7 +113,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'hemoglobin_a1c',
-    patterns: ['hba1c', 'hemoglobin a1c', 'glycated hemoglobin', 'a1c', 'hgba1c', 'haemoglobin a1c', 'hemoglobin a1c (hba1c)'],
+    patterns: ['hemoglobin a1c (hba1c)', 'hba1c', 'hemoglobin a1c', 'glycated hemoglobin', 'a1c', 'hgba1c', 'haemoglobin a1c'],
     commonUnits: ['%', 'mmol/mol'],
   },
   {
@@ -123,7 +123,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'total_cholesterol',
-    patterns: ['total cholesterol', 'cholesterol, total', 'cholesterol total', 'cholesterol,total'],
+    patterns: ['cholesterol, total', 'total cholesterol', 'cholesterol total', 'cholesterol,total'],
     commonUnits: ['mg/dL', 'mmol/L', 'mg/dl'],
   },
   {
@@ -148,7 +148,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'apob',
-    patterns: ['apob', 'apolipoprotein b', 'apo b', 'apolipoprotein-b'],
+    patterns: ['apolipoprotein b', 'apob', 'apo b', 'apolipoprotein-b'],
     commonUnits: ['mg/dL', 'g/L', 'mg/dl'],
   },
   {
@@ -158,17 +158,17 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'alt',
-    patterns: ['alt (sgpt)', 'alt/sgpt', 'alt', 'alanine aminotransferase', 'alanine transaminase', 'sgpt'],
+    patterns: ['alt (sgpt)', 'alt/sgpt', 'alanine aminotransferase', 'alanine transaminase', 'sgpt', 'alt'],
     commonUnits: ['U/L', 'IU/L', 'u/l'],
   },
   {
     canonical: 'ast',
-    patterns: ['ast (sgot)', 'ast/sgot', 'ast', 'aspartate aminotransferase', 'aspartate transaminase', 'sgot'],
+    patterns: ['ast (sgot)', 'ast/sgot', 'aspartate aminotransferase', 'aspartate transaminase', 'sgot', 'ast'],
     commonUnits: ['U/L', 'IU/L', 'u/l'],
   },
   {
     canonical: 'ggt',
-    patterns: ['ggt', 'gamma-glutamyl transferase', 'gamma glutamyl', 'ggtp', 'gamma-gt', 'ggt (gamma glutamyl transpeptidase)'],
+    patterns: ['ggt (gamma glutamyl transpeptidase)', 'ggt', 'gamma-glutamyl transferase', 'gamma glutamyl', 'ggtp', 'gamma-gt'],
     commonUnits: ['U/L', 'IU/L', 'u/l'],
   },
   {
@@ -178,27 +178,27 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'bilirubin_total',
-    patterns: ['total bilirubin', 'bilirubin total', 'bilirubin, total', 'tbili', 'bilirubin,total'],
+    patterns: ['bilirubin, total', 'total bilirubin', 'bilirubin total', 'tbili', 'bilirubin,total'],
     commonUnits: ['mg/dL', 'umol/L', 'mg/dl'],
   },
   {
     canonical: 'creatinine',
-    patterns: ['creatinine, serum', 'creatinine', 'serum creatinine', 'creat'],
+    patterns: ['creatinine, serum', 'serum creatinine', 'creatinine', 'creat'],
     commonUnits: ['mg/dL', 'umol/L', 'mg/dl'],
   },
   {
     canonical: 'egfr',
-    patterns: ['egfr non-afr. american', 'egfr african american', 'egfr', 'estimated gfr', 'glomerular filtration rate', 'egfr-ckd-epi', 'gfr estimated non-african american'],
+    patterns: ['egfr non-afr. american', 'gfr estimated non-african american', 'egfr african american', 'egfr', 'estimated gfr', 'glomerular filtration rate', 'egfr-ckd-epi'],
     commonUnits: ['mL/min/1.73m2', 'mL/min', 'ml/min'],
   },
   {
     canonical: 'bun',
-    patterns: ['bun', 'blood urea nitrogen', 'urea nitrogen', 'urea', 'urea nitrogen (bun)'],
+    patterns: ['urea nitrogen (bun)', 'bun', 'blood urea nitrogen', 'urea nitrogen', 'urea'],
     commonUnits: ['mg/dL', 'mmol/L', 'mg/dl'],
   },
   {
     canonical: 'hs_crp',
-    patterns: ['c-reactive protein, cardiac', 'hs-crp', 'hscrp', 'high sensitivity crp', 'high-sensitivity c-reactive protein', 'hs crp', 'hscrp', 'c-reactive protein (high sensitivity)', 'crp, high sensitivity'],
+    patterns: ['c-reactive protein, cardiac', 'hs-crp', 'hscrp', 'high sensitivity crp', 'high-sensitivity c-reactive protein', 'hs crp', 'c-reactive protein (high sensitivity)', 'crp, high sensitivity'],
     commonUnits: ['mg/L', 'mg/dL', 'mg/l'],
   },
   {
@@ -223,17 +223,17 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'vitamin_b12',
-    patterns: ['vitamin b12', 'b12', 'cobalamin', 'cyanocobalamin', 'vit b12', 'vitamin b12, serum'],
+    patterns: ['vitamin b12, serum', 'vitamin b12', 'b12', 'cobalamin', 'cyanocobalamin', 'vit b12'],
     commonUnits: ['pg/mL', 'pmol/L', 'pg/ml'],
   },
   {
     canonical: 'folate',
-    patterns: ['folate', 'folic acid', 'rbc folate', 'folate rbc', 'vitamin b9', 'folate, serum'],
+    patterns: ['folate, serum', 'folate', 'folic acid', 'rbc folate', 'folate rbc', 'vitamin b9'],
     commonUnits: ['ng/mL', 'nmol/L', 'ng/ml'],
   },
   {
     canonical: 'magnesium',
-    patterns: ['magnesium', 'rbc magnesium', 'magnesium rbc', 'serum magnesium', 'mg rbc', 'magnesium, serum'],
+    patterns: ['magnesium, serum', 'magnesium', 'rbc magnesium', 'magnesium rbc', 'serum magnesium', 'mg rbc'],
     commonUnits: ['mg/dL', 'mEq/L', 'mg/dl', 'mmol/L'],
   },
 ];
@@ -277,7 +277,216 @@ function parseValueWithPrefix(text: string): { value: number; rawValue: string }
   return null;
 }
 
+// ─── Layer 1: Split text into lines ─────────────────────────────────────────
+
+function splitIntoLines(text: string): string[] {
+  return text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+}
+
+// ─── Layer 2: Detect lab section boundaries ──────────────────────────────────
+
+const SECTION_HEADERS = [
+  'lipid panel', 'lipids', 'lipid',
+  'comprehensive metabolic', 'cmp', 'basic metabolic', 'bmp',
+  'complete blood count', 'cbc',
+  'thyroid', 'thyroid panel', 'thyroid function',
+  'hormone', 'hormones', 'reproductive hormones', 'sex hormones',
+  'liver', 'hepatic', 'liver function',
+  'kidney', 'renal', 'renal function',
+  'inflammation', 'inflammatory markers',
+  'nutrients', 'nutritional', 'vitamins', 'minerals',
+  'iron studies', 'iron panel',
+  'diabetes', 'glucose metabolism',
+  'cardiovascular',
+];
+
+function isSectionHeader(line: string): boolean {
+  const lower = line.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+  return SECTION_HEADERS.some(h => lower === h || lower.startsWith(h + ' ') || lower.endsWith(' ' + h));
+}
+
+// ─── Layer 3: Detect if a line is a biomarker label ──────────────────────────
+
+function matchBiomarkerLabel(line: string): BiomarkerPattern | null {
+  const lineLower = line.toLowerCase().trim();
+
+  for (const bp of BIOMARKER_PATTERNS) {
+    const sortedPatterns = [...bp.patterns].sort((a, b) => b.length - a.length);
+    for (const p of sortedPatterns) {
+      if (lineLower === p || lineLower.startsWith(p + ' ') || lineLower.startsWith(p + ',')) {
+        return bp;
+      }
+      if (lineLower.includes(p) && p.length > 5) {
+        return bp;
+      }
+    }
+  }
+  return null;
+}
+
+// ─── Layer 4: Extract value + unit from a line (or nearby lines) ─────────────
+
+interface ParsedResult {
+  value: number;
+  rawValue?: string;
+  unit: string | null;
+  reference_min?: number;
+  reference_max?: number;
+}
+
+const KNOWN_UNITS = [
+  'pg/mL', 'pg/ml', 'ng/mL', 'ng/ml', 'ng/dL', 'ng/dl',
+  'mcg/dL', 'mcg/dl', 'ug/dL', 'ug/dl',
+  'nmol/L', 'nmol/l', 'pmol/L', 'pmol/l', 'mmol/L', 'mmol/l',
+  'mIU/mL', 'miu/ml', 'mIU/L', 'miu/l', 'IU/mL', 'iu/ml', 'IU/L', 'iu/l',
+  'uIU/mL', 'uiu/ml', 'mcIU/mL', 'mcu/ml',
+  'mg/dL', 'mg/dl', 'mg/L', 'mg/l',
+  'U/L', 'u/l', 'IU/L',
+  'mL/min/1.73m2', 'ml/min/1.73m2', 'mL/min', 'ml/min',
+  'mm/h', 'mm/hr',
+  '%',
+  'mEq/L', 'meq/l',
+];
+
+function detectUnit(text: string): string | null {
+  for (const u of KNOWN_UNITS) {
+    const escaped = u.replace(/[/()[\].+*?^${}|\\]/g, '\\$&');
+    if (new RegExp('\\b' + escaped + '\\b', 'i').test(text)) {
+      return u;
+    }
+  }
+  return null;
+}
+
+function detectReferenceRange(text: string): { min: number; max: number } | null {
+  const patterns = [
+    /(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/,
+    /(\d+\.?\d*)\s+to\s+(\d+\.?\d*)/i,
+  ];
+  for (const rp of patterns) {
+    const m = text.match(rp);
+    if (m) {
+      const min = parseFloat(m[1]);
+      const max = parseFloat(m[2]);
+      if (!isNaN(min) && !isNaN(max) && min < max) {
+        return { min, max };
+      }
+    }
+  }
+  return null;
+}
+
+function extractValueFromLine(line: string, preferredUnits: string[]): ParsedResult | null {
+  const prefixMatch = line.match(/(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/);
+  if (prefixMatch) {
+    const parsed = parseValueWithPrefix(prefixMatch[1]);
+    if (!parsed) return null;
+    const unit = detectUnit(line) ?? preferredUnits[0] ?? null;
+    const range = detectReferenceRange(line);
+    return {
+      value: parsed.value,
+      rawValue: parsed.rawValue,
+      unit,
+      reference_min: range?.min,
+      reference_max: range?.max,
+    };
+  }
+
+  const range = detectReferenceRange(line);
+  const unit = detectUnit(line) ?? preferredUnits[0] ?? null;
+
+  const numMatches = [...line.matchAll(/(\d+\.?\d*)/g)].map(m => ({
+    value: parseFloat(m[1]),
+    index: m.index ?? 0,
+  }));
+
+  if (numMatches.length === 0) return null;
+
+  let candidateValue: number | null = null;
+
+  if (range) {
+    const outsideRange = numMatches.filter(
+      n => Math.abs(n.value - range.min) > 0.001 && Math.abs(n.value - range.max) > 0.001
+    );
+    if (outsideRange.length > 0) {
+      candidateValue = outsideRange[0].value;
+    } else {
+      candidateValue = numMatches[0].value;
+    }
+  } else {
+    candidateValue = numMatches[0].value;
+  }
+
+  if (candidateValue === null) return null;
+
+  return {
+    value: candidateValue,
+    unit,
+    reference_min: range?.min,
+    reference_max: range?.max,
+  };
+}
+
+// ─── Layer 5 & 6: Layered parse – label proximity matching ──────────────────
+
+function layeredParse(text: string): ExtractedBiomarker[] {
+  const lines = splitIntoLines(text);
+  const results = new Map<string, ExtractedBiomarker>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (isSectionHeader(line)) continue;
+
+    const bp = matchBiomarkerLabel(line);
+    if (!bp) continue;
+
+    const lookAheadWindow = lines.slice(i, Math.min(i + 5, lines.length)).join(' ');
+
+    const parsed = extractValueFromLine(lookAheadWindow, bp.commonUnits);
+    if (!parsed || parsed.value === null) continue;
+
+    if (parsed.value < 0 || parsed.value > 100000) continue;
+
+    const confidence: 'high' | 'medium' | 'low' =
+      parsed.reference_min !== undefined && parsed.unit
+        ? 'high'
+        : parsed.unit
+        ? 'medium'
+        : 'low';
+
+    const canonical = normalizeToCatalogSlug(bp.canonical);
+
+    const existing = results.get(canonical);
+    if (!existing || confidenceRank(confidence) > confidenceRank(existing.confidence)) {
+      results.set(canonical, {
+        name: canonical,
+        value: parsed.value,
+        rawValue: parsed.rawValue,
+        unit: parsed.unit,
+        reference_min: parsed.reference_min,
+        reference_max: parsed.reference_max,
+        confidence,
+        rawText: lookAheadWindow.substring(0, 120),
+      });
+    }
+  }
+
+  return Array.from(results.values());
+}
+
+function confidenceRank(c: 'high' | 'medium' | 'low'): number {
+  return c === 'high' ? 2 : c === 'medium' ? 1 : 0;
+}
+
+// ─── Legacy flat-scan parser (fallback) ─────────────────────────────────────
+
 export function parseBiomarkersFromText(text: string): ExtractedBiomarker[] {
+  const layeredResults = layeredParse(text);
+  if (layeredResults.length > 0) {
+    return layeredResults;
+  }
+
   const extractedBiomarkers: ExtractedBiomarker[] = [];
   const textLower = text.toLowerCase();
 

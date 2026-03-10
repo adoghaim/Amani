@@ -11,7 +11,7 @@ import type { Symptom, LabReportContext } from '../types';
 import type { ExtractedBiomarker } from '../utils/biomarkerParser';
 import { extractTextFromPDF } from '../utils/pdfExtractor';
 import { parseBiomarkersFromText, validateExtractedBiomarkers } from '../utils/biomarkerParser';
-import { Upload, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 
 interface BiomarkerEntry {
   name: string;
@@ -36,8 +36,15 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
 
 export function NewReport() {
   const { user } = useAuth();
-  const { catalog } = useBiomarkerCatalog();
+  const { catalog, loading: catalogLoading } = useBiomarkerCatalog();
   const [step, setStep] = useState(1);
+
+  useEffect(() => {
+    if (!catalogLoading) {
+      console.log('[NewReport] Biomarker catalog loaded:', catalog.length, 'entries');
+    }
+  }, [catalog.length, catalogLoading]);
+
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
@@ -367,6 +374,15 @@ export function NewReport() {
             </div>
           </div>
         </div>
+
+        {!catalogLoading && catalog.length < 44 && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800">
+              Biomarker catalog only loaded {catalog.length} of 44 expected entries. The dropdown may be incomplete.
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
