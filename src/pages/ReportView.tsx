@@ -313,23 +313,9 @@ export function ReportView() {
     );
   }
 
-  if (report.status === 'error' || !interpretation) {
-    return (
-      <Layout>
-        <Card>
-          <div className="text-center py-12">
-            <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Unable to generate report</h2>
-            <p className="text-gray-600 mb-6">There was an issue processing your lab results. Please try again.</p>
-            <Button onClick={handleRegenerate}>Try Again</Button>
-          </div>
-        </Card>
-      </Layout>
-    );
-  }
-
   const canRegenerate = report.regeneration_count < 3 && (userProfile?.subscription_status === 'active' || isTrialActive());
   const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
+  const hasError = report.status === 'error';
 
   return (
     <Layout>
@@ -372,18 +358,39 @@ export function ReportView() {
           </div>
         )}
 
+        {!interpretation && !hasError && (
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-6">
+            <Clock className="w-5 h-5 shrink-0 text-amber-500 animate-pulse" />
+            <p className="text-sm font-medium">
+              AI summary is still generating — your lab data is shown below. Refresh in a moment to see the full interpretation.
+            </p>
+          </div>
+        )}
+
+        {hasError && !interpretation && (
+          <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-4 rounded-xl mb-6">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium mb-1">AI summary could not be generated</p>
+              <p className="text-sm text-red-700">Your lab data is shown below. {canRegenerate ? 'You can try regenerating above.' : ''}</p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-6">
-          <Card>
-            <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Summary</h2>
-            <ul className="space-y-2">
-              {interpretation.summary_bullets.map((bullet, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="text-[#C97C8B] mt-1 shrink-0">•</span>
-                  <span className="text-gray-700">{bullet}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
+          {interpretation && (
+            <Card>
+              <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Summary</h2>
+              <ul className="space-y-2">
+                {interpretation.summary_bullets.map((bullet, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-[#C97C8B] mt-1 shrink-0">•</span>
+                    <span className="text-gray-700">{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           {biomarkers.length > 0 && (
             <QuickHighlights
@@ -398,12 +405,14 @@ export function ReportView() {
             />
           )}
 
-          <BiomarkerSystemDashboard
-            biomarkers={biomarkers}
-            cyclePhase={cyclePhase}
-            onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
-            activeCategory={activeCategory}
-          />
+          {biomarkers.length > 0 && (
+            <BiomarkerSystemDashboard
+              biomarkers={biomarkers}
+              cyclePhase={cyclePhase}
+              onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
+              activeCategory={activeCategory}
+            />
+          )}
 
           {insightFlags.length > 0 && <InsightFlagsPanel flags={insightFlags} />}
 
@@ -469,12 +478,11 @@ export function ReportView() {
                 <div className="flex items-center gap-2">
                   <Microscope className="w-5 h-5 text-blue-500" />
                   <h2 className="text-lg font-semibold text-[#2A1F23]">
-                    Extended Lab Items
+                    Full Lab Panel
                   </h2>
-                  <span className="text-sm text-blue-500 font-normal">({extendedItems.length})</span>
+                  <span className="text-sm text-blue-500 font-normal">({extendedItems.length} items)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 hidden sm:inline">Stored for history — not used in scoring</span>
                   {showExtended ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
                 </div>
               </button>
@@ -505,141 +513,145 @@ export function ReportView() {
             activeCategory={activeCategory}
           />
 
-          <Card>
-            <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Cycle Context</h2>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-gray-700">
-                <span className="font-medium">Estimated Cycle Day:</span>
-                <span>{interpretation.cycle_context.estimated_cycle_day || 'Unknown'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-700">
-                <span className="font-medium">Estimated Phase:</span>
-                <span className="capitalize">{interpretation.cycle_context.estimated_cycle_phase}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-700">
-                <span className="font-medium">Confidence:</span>
-                <span className="capitalize">{interpretation.cycle_context.confidence}</span>
-              </div>
-              <p className="text-gray-700 mt-2">{interpretation.cycle_context.explanation}</p>
-            </div>
-          </Card>
+          {interpretation && (
+            <>
+              <Card>
+                <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Cycle Context</h2>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <span className="font-medium">Estimated Cycle Day:</span>
+                    <span>{interpretation.cycle_context.estimated_cycle_day || 'Unknown'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <span className="font-medium">Estimated Phase:</span>
+                    <span className="capitalize">{interpretation.cycle_context.estimated_cycle_phase}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <span className="font-medium">Confidence:</span>
+                    <span className="capitalize">{interpretation.cycle_context.confidence}</span>
+                  </div>
+                  <p className="text-gray-700 mt-2">{interpretation.cycle_context.explanation}</p>
+                </div>
+              </Card>
 
-          <Card>
-            <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Lifestyle Considerations</h2>
-            <div className="space-y-4">
-              {interpretation.supportive_considerations.nutrition.length > 0 && (
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-2">Nutrition</h3>
-                  <ul className="space-y-1">
-                    {interpretation.supportive_considerations.nutrition.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-gray-700">
-                        <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {interpretation.supportive_considerations.sleep_stress.length > 0 && (
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-2">Sleep & Stress</h3>
-                  <ul className="space-y-1">
-                    {interpretation.supportive_considerations.sleep_stress.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-gray-700">
-                        <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {interpretation.supportive_considerations.lifestyle.length > 0 && (
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-2">Lifestyle</h3>
-                  <ul className="space-y-1">
-                    {interpretation.supportive_considerations.lifestyle.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-gray-700">
-                        <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {interpretation.nutrient_topics_to_discuss?.length > 0 && (
-            <Card>
-              <h2 className="text-lg font-semibold text-[#2A1F23] mb-2">
-                Nutrient topics to discuss with your clinician
-              </h2>
-              <p className="text-sm text-gray-600 mb-4 italic">
-                Conversation starters only — your clinician can advise what's appropriate for you.
-              </p>
-              <div className="space-y-4">
-                {interpretation.nutrient_topics_to_discuss
-                  .filter(t => t.nutrient)
-                  .map((topic, i) => (
-                    <div key={i} className="border-l-4 border-[#C97C8B] pl-4 py-2">
-                      <h3 className="font-medium text-gray-900 mb-1 capitalize">
-                        {topic.nutrient.replace(/_/g, ' ')}
-                      </h3>
-                      <p className="text-sm text-gray-700 mb-1">
-                        <span className="font-medium">Why this came up:</span> {topic.why_it_came_up}
-                      </p>
-                      <p className="text-gray-700 text-sm">{topic.discussion_prompt}</p>
+              <Card>
+                <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Lifestyle Considerations</h2>
+                <div className="space-y-4">
+                  {interpretation.supportive_considerations.nutrition.length > 0 && (
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Nutrition</h3>
+                      <ul className="space-y-1">
+                        {interpretation.supportive_considerations.nutrition.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-gray-700">
+                            <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
+                  )}
+                  {interpretation.supportive_considerations.sleep_stress.length > 0 && (
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Sleep & Stress</h3>
+                      <ul className="space-y-1">
+                        {interpretation.supportive_considerations.sleep_stress.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-gray-700">
+                            <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {interpretation.supportive_considerations.lifestyle.length > 0 && (
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Lifestyle</h3>
+                      <ul className="space-y-1">
+                        {interpretation.supportive_considerations.lifestyle.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-gray-700">
+                            <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              {interpretation.nutrient_topics_to_discuss?.length > 0 && (
+                <Card>
+                  <h2 className="text-lg font-semibold text-[#2A1F23] mb-2">
+                    Nutrient topics to discuss with your clinician
+                  </h2>
+                  <p className="text-sm text-gray-600 mb-4 italic">
+                    Conversation starters only — your clinician can advise what's appropriate for you.
+                  </p>
+                  <div className="space-y-4">
+                    {interpretation.nutrient_topics_to_discuss
+                      .filter(t => t.nutrient)
+                      .map((topic, i) => (
+                        <div key={i} className="border-l-4 border-[#C97C8B] pl-4 py-2">
+                          <h3 className="font-medium text-gray-900 mb-1 capitalize">
+                            {topic.nutrient.replace(/_/g, ' ')}
+                          </h3>
+                          <p className="text-sm text-gray-700 mb-1">
+                            <span className="font-medium">Why this came up:</span> {topic.why_it_came_up}
+                          </p>
+                          <p className="text-gray-700 text-sm">{topic.discussion_prompt}</p>
+                        </div>
+                      ))}
+                  </div>
+                </Card>
+              )}
+
+              <Card>
+                <div className="flex justify-between items-start mb-4">
+                  <h2 className="text-lg font-semibold text-[#2A1F23]">Questions to Ask Your Doctor</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(interpretation.questions_for_doctor.join('\n'))}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy
+                  </Button>
+                </div>
+                <ul className="space-y-2">
+                  {interpretation.questions_for_doctor.map((q, i) => (
+                    <li key={i} className="flex items-start gap-2 text-gray-700">
+                      <span className="text-[#C97C8B] mt-1">•</span><span>{q}</span>
+                    </li>
                   ))}
-              </div>
-            </Card>
+                </ul>
+              </Card>
+
+              {interpretation.suggested_followups_to_discuss.length > 0 && (
+                <Card>
+                  <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Suggested Follow-ups to Discuss</h2>
+                  <ul className="space-y-2">
+                    {interpretation.suggested_followups_to_discuss.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-gray-700">
+                        <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+
+              <Card className="bg-amber-50 border-amber-200">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">When to Seek Care</h2>
+                <ul className="space-y-2">
+                  {interpretation.safety_notes.map((note, i) => (
+                    <li key={i} className="flex items-start gap-2 text-gray-700">
+                      <span className="text-amber-600 mt-1">•</span><span>{note}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+
+              <Card className="bg-gray-50">
+                <p className="text-sm text-gray-700 italic">{interpretation.disclaimer}</p>
+              </Card>
+            </>
           )}
-
-          <Card>
-            <div className="flex justify-between items-start mb-4">
-              <h2 className="text-lg font-semibold text-[#2A1F23]">Questions to Ask Your Doctor</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => copyToClipboard(interpretation.questions_for_doctor.join('\n'))}
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                Copy
-              </Button>
-            </div>
-            <ul className="space-y-2">
-              {interpretation.questions_for_doctor.map((q, i) => (
-                <li key={i} className="flex items-start gap-2 text-gray-700">
-                  <span className="text-[#C97C8B] mt-1">•</span><span>{q}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          {interpretation.suggested_followups_to_discuss.length > 0 && (
-            <Card>
-              <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Suggested Follow-ups to Discuss</h2>
-              <ul className="space-y-2">
-                {interpretation.suggested_followups_to_discuss.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-gray-700">
-                    <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          <Card className="bg-amber-50 border-amber-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">When to Seek Care</h2>
-            <ul className="space-y-2">
-              {interpretation.safety_notes.map((note, i) => (
-                <li key={i} className="flex items-start gap-2 text-gray-700">
-                  <span className="text-amber-600 mt-1">•</span><span>{note}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          <Card className="bg-gray-50">
-            <p className="text-sm text-gray-700 italic">{interpretation.disclaimer}</p>
-          </Card>
         </div>
       </div>
     </Layout>

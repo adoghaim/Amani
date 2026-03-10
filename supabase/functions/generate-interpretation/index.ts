@@ -15,6 +15,24 @@ interface BiomarkerData {
   reference_max: number | null;
 }
 
+interface ReportItemData {
+  id: string;
+  raw_name: string;
+  canonical_slug: string | null;
+  category: string | null;
+  value_numeric: number;
+  value_text: string | null;
+  unit: string | null;
+  raw_reference_range: string | null;
+  normalized_reference_min: number | null;
+  normalized_reference_max: number | null;
+  reference_operator: string | null;
+  reference_operator_value: number | null;
+  confidence_score: string;
+  needs_review: boolean;
+  is_core_biomarker: boolean;
+}
+
 interface LabReportData {
   id: string;
   report_date: string;
@@ -76,10 +94,7 @@ Deno.serve(async (req: Request) => {
     if (!reportId) {
       return new Response(
         JSON.stringify({ error: "reportId is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -100,34 +115,46 @@ Deno.serve(async (req: Request) => {
       .eq("lab_report_id", reportId);
 
     if (biomarkersError) {
-      throw new Error("Failed to fetch biomarkers");
+      console.error("[generate-interpretation] Failed to fetch biomarkers:", biomarkersError);
     }
 
+    const { data: reportItems, error: reportItemsError } = await supabase
+      .from("report_items")
+      .select("*")
+      .eq("lab_report_id", reportId)
+      .order("raw_name");
+
+    if (reportItemsError) {
+      console.error("[generate-interpretation] Failed to fetch report_items:", reportItemsError);
+    }
+
+    const biomarkersList = (biomarkers ?? []) as BiomarkerData[];
+    const reportItemsList = (reportItems ?? []) as ReportItemData[];
+
+    console.log(`[generate-interpretation] report_id=${reportId} biomarkers=${biomarkersList.length} report_items=${reportItemsList.length} openai=${openaiApiKey ? "yes" : "no"}`);
+
     const labReport = report as LabReportData;
-    const biomarkersList = biomarkers as BiomarkerData[];
 
     let interpretationJson;
     let interpretationSource = "demo";
 
-    // Try OpenAI if API key is available
     if (openaiApiKey) {
       try {
-        const prompt = generatePrompt(labReport, biomarkersList);
-
-        interpretationJson = await callOpenAIWithRetry(openaiApiKey, prompt, labReport, biomarkersList);
+        const prompt = generatePrompt(labReport, biomarkersList, reportItemsList);
+        interpretationJson = await callOpenAIWithRetry(openaiApiKey, prompt, labReport, biomarkersList, reportItemsList);
         interpretationSource = "ai";
+        console.log("[generate-interpretation] AI mode succeeded");
       } catch (openaiError) {
-        console.error("OpenAI request failed, using demo mode:", openaiError);
-        interpretationJson = generateDemoInterpretation(labReport, biomarkersList);
+        console.error("[generate-interpretation] OpenAI failed, falling back to demo:", openaiError);
+        interpretationJson = generateDemoInterpretation(labReport, biomarkersList, reportItemsList);
         interpretationSource = "demo";
       }
     } else {
-      // No API key, use demo mode
-      interpretationJson = generateDemoInterpretation(labReport, biomarkersList);
+      console.log("[generate-interpretation] No OpenAI key — using deterministic fallback");
+      interpretationJson = generateDemoInterpretation(labReport, biomarkersList, reportItemsList);
       interpretationSource = "demo";
     }
 
-    // Upsert interpretation into interpretations table (insert or update if exists)
     const { error: upsertError } = await supabase
       .from("interpretations")
       .upsert({
@@ -135,19 +162,16 @@ Deno.serve(async (req: Request) => {
         json_output: interpretationJson,
         interpretation_source: interpretationSource,
       }, {
-        onConflict: 'lab_report_id'
+        onConflict: "lab_report_id",
       });
 
     if (upsertError) {
       throw new Error("Failed to save interpretation");
     }
 
-    // Update report status to ready
     const { error: updateError } = await supabase
       .from("lab_reports")
-      .update({
-        status: "ready",
-      })
+      .update({ status: "ready" })
       .eq("id", reportId);
 
     if (updateError) {
@@ -162,13 +186,10 @@ Deno.serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({ success: true }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error("Error generating interpretation:", error);
+    console.error("[generate-interpretation] Fatal error:", error?.message ?? error);
 
     if (error?.message === "RATE_LIMIT_EXCEEDED") {
       return new Response(
@@ -177,26 +198,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Update report status to error if we have the reportId
     if (supabase && reportId) {
       try {
-        await supabase
-          .from("lab_reports")
-          .update({ status: "error" })
-          .eq("id", reportId);
+        await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
       } catch (updateError) {
-        console.error("Failed to update report status to error:", updateError);
+        console.error("[generate-interpretation] Failed to set error status:", updateError);
       }
     }
 
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error occurred" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
@@ -222,10 +234,7 @@ async function checkAndIncrementRateLimit(
     if (existing.count >= limitPerDay) {
       throw new Error("RATE_LIMIT_EXCEEDED");
     }
-    await supabase
-      .from("rate_limits")
-      .update({ count: existing.count + 1 })
-      .eq("id", existing.id);
+    await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
   } else {
     await supabase.from("rate_limits").insert({
       user_id: userId,
@@ -236,65 +245,18 @@ async function checkAndIncrementRateLimit(
   }
 }
 
-// Validation functions for nutrient safety
 function validateNutrientContent(jsonOutput: any): { valid: boolean; violations: string[] } {
   const violations: string[] = [];
-  const allowedNutrients = ['vitamin_d', 'iron', 'b12', 'folate', 'magnesium', 'omega_3', 'iodine'];
-
-  // Banned dosage units
-  const bannedDosageUnits = [
-    /\bIU\b/gi,
-    /\bmg\b/gi,
-    /\bmcg\b/gi,
-    /\b\d+\s*g\b/gi,  // numbers followed by 'g'
-    /\bmL\b/gi,
-  ];
-
-  // Banned directive verbs
-  const bannedDirectiveVerbs = [
-    /\btake\b/gi,
-    /\bstart\b/gi,
-    /\bincrease\b/gi,
-    /\bdecrease\b/gi,
-    /\brecommended\b/gi,
-    /\bprescribe\b/gi,
-  ];
-
-  // Banned frequency words
-  const bannedFrequencyWords = [
-    /\bdaily\b/gi,
-    /\btwice\b/gi,
-    /\bper day\b/gi,
-    /\bevery day\b/gi,
-  ];
+  const allowedNutrients = ["vitamin_d", "iron", "b12", "folate", "magnesium", "omega_3", "iodine"];
+  const bannedDosageUnits = [/\bIU\b/gi, /\bmg\b/gi, /\bmcg\b/gi, /\b\d+\s*g\b/gi, /\bmL\b/gi];
+  const bannedDirectiveVerbs = [/\btake\b/gi, /\bstart\b/gi, /\bincrease\b/gi, /\bdecrease\b/gi, /\brecommended\b/gi, /\bprescribe\b/gi];
+  const bannedFrequencyWords = [/\bdaily\b/gi, /\btwice\b/gi, /\bper day\b/gi, /\bevery day\b/gi];
 
   const jsonString = JSON.stringify(jsonOutput);
+  bannedDosageUnits.forEach(p => { const m = jsonString.match(p); if (m) violations.push(`Contains banned dosage unit: ${m.join(", ")}`); });
+  bannedDirectiveVerbs.forEach(p => { const m = jsonString.match(p); if (m) violations.push(`Contains banned directive verb: ${m.join(", ")}`); });
+  bannedFrequencyWords.forEach(p => { const m = jsonString.match(p); if (m) violations.push(`Contains banned frequency word: ${m.join(", ")}`); });
 
-  // Check for banned dosage units
-  bannedDosageUnits.forEach(pattern => {
-    const matches = jsonString.match(pattern);
-    if (matches) {
-      violations.push(`Contains banned dosage unit: ${matches.join(', ')}`);
-    }
-  });
-
-  // Check for banned directive verbs
-  bannedDirectiveVerbs.forEach(pattern => {
-    const matches = jsonString.match(pattern);
-    if (matches) {
-      violations.push(`Contains banned directive verb: ${matches.join(', ')}`);
-    }
-  });
-
-  // Check for banned frequency words
-  bannedFrequencyWords.forEach(pattern => {
-    const matches = jsonString.match(pattern);
-    if (matches) {
-      violations.push(`Contains banned frequency word: ${matches.join(', ')}`);
-    }
-  });
-
-  // Validate allow-list for nutrients
   if (jsonOutput.nutrient_topics_to_discuss && Array.isArray(jsonOutput.nutrient_topics_to_discuss)) {
     jsonOutput.nutrient_topics_to_discuss.forEach((item: any, index: number) => {
       if (item.nutrient && !allowedNutrients.includes(item.nutrient)) {
@@ -303,78 +265,28 @@ function validateNutrientContent(jsonOutput: any): { valid: boolean; violations:
     });
   }
 
-  return {
-    valid: violations.length === 0,
-    violations
-  };
+  return { valid: violations.length === 0, violations };
 }
 
 function sanitizeNutrientSection(jsonOutput: any): any {
   const sanitized = { ...jsonOutput };
-
   if (!jsonOutput.nutrient_topics_to_discuss || !Array.isArray(jsonOutput.nutrient_topics_to_discuss)) {
     return sanitized;
   }
 
   const safeFallback = "Some clinicians may discuss options. Ask your provider what's appropriate for you.";
+  const allowedNutrients = ["vitamin_d", "iron", "b12", "folate", "magnesium", "omega_3", "iodine"];
+  const bannedPatterns = [/\bIU\b/gi, /\bmg\b/gi, /\bmcg\b/gi, /\b\d+\s*g\b/gi, /\bmL\b/gi, /\btake\b/gi, /\bstart\b/gi, /\bincrease\b/gi, /\bdecrease\b/gi, /\brecommended\b/gi, /\bprescribe\b/gi, /\bdaily\b/gi, /\btwice\b/gi, /\bper day\b/gi, /\bevery day\b/gi];
 
-  // Banned patterns
-  const bannedDosageUnits = [
-    /\bIU\b/gi,
-    /\bmg\b/gi,
-    /\bmcg\b/gi,
-    /\b\d+\s*g\b/gi,
-    /\bmL\b/gi,
-  ];
-
-  const bannedDirectiveVerbs = [
-    /\btake\b/gi,
-    /\bstart\b/gi,
-    /\bincrease\b/gi,
-    /\bdecrease\b/gi,
-    /\brecommended\b/gi,
-    /\bprescribe\b/gi,
-  ];
-
-  const bannedFrequencyWords = [
-    /\bdaily\b/gi,
-    /\btwice\b/gi,
-    /\bper day\b/gi,
-    /\bevery day\b/gi,
-  ];
-
-  const allowedNutrients = ['vitamin_d', 'iron', 'b12', 'folate', 'magnesium', 'omega_3', 'iodine'];
-
-  // Check each item individually
   sanitized.nutrient_topics_to_discuss = jsonOutput.nutrient_topics_to_discuss
     .filter((item: any) => {
-      // Remove items with disallowed nutrients
-      if (item.nutrient && !allowedNutrients.includes(item.nutrient)) {
-        console.log(`Removing nutrient item with disallowed nutrient: ${item.nutrient}`);
-        return false;
-      }
+      if (item.nutrient && !allowedNutrients.includes(item.nutrient)) return false;
       return true;
     })
     .map((item: any) => {
       const itemString = JSON.stringify(item);
-      let hasBannedContent = false;
-
-      // Check for banned patterns in this specific item
-      [...bannedDosageUnits, ...bannedDirectiveVerbs, ...bannedFrequencyWords].forEach(pattern => {
-        if (pattern.test(itemString)) {
-          hasBannedContent = true;
-        }
-      });
-
-      if (hasBannedContent) {
-        console.log(`Replacing discussion_prompt for ${item.nutrient} due to banned content`);
-        return {
-          ...item,
-          discussion_prompt: safeFallback
-        };
-      }
-
-      return item;
+      const hasBanned = bannedPatterns.some(p => p.test(itemString));
+      return hasBanned ? { ...item, discussion_prompt: safeFallback } : item;
     });
 
   return sanitized;
@@ -385,7 +297,8 @@ async function callOpenAIWithRetry(
   prompt: string,
   report: LabReportData,
   biomarkers: BiomarkerData[],
-  maxOutputTokens = 1800,
+  reportItems: ReportItemData[],
+  maxOutputTokens = 2200,
   attemptNumber = 1
 ): Promise<any> {
   const systemPrompt = `You are Amani, a women's health AI assistant. You provide clear, educational interpretations of lab results with cycle awareness. You NEVER diagnose, alarm, or replace medical advice.
@@ -394,49 +307,28 @@ CRITICAL LANGUAGE RULES - NEVER USE THESE WORDS:
 - FORBIDDEN: "healthy", "normal", "indicates", "confirms", "shows that", "proves", "diagnoses", "recovery"
 - FORBIDDEN: "concerning", "worrying", "abnormal", "problematic"
 - REQUIRED: "may", "can", "could", "often", "commonly", "sometimes", "consistent with", "suggests"
-- REQUIRED: Use phrases like "often consistent with", "commonly seen", "may align with", "can be associated with"
 - For out-of-range values: "outside typical range" or "may benefit from discussion with your provider"
 
 CRITICAL CONTEXT GATING RULES:
-- ONLY mention postpartum if postpartum = "yes". If postpartum = "no" OR "unsure", you MUST NOT mention postpartum, recovery, childbirth, or post-birth changes. This is an error.
-- ONLY mention pregnancy if pregnant = "yes". If pregnant = "no" OR "unsure", you MUST NOT mention pregnancy.
-- Do NOT assume or infer pregnancy or postpartum status from symptoms or biomarker values
-- If a context field is unknown, do NOT reference it at all
+- ONLY mention postpartum if postpartum = "yes"
+- ONLY mention pregnancy if pregnant = "yes"
 
-CRITICAL NUTRIENT & SUPPLEMENT RULES (HARD CONSTRAINTS):
-- REQUIRED: Include at least 1 nutrient topic when ANY biomarker is out_of_range OR when a biomarker is borderline/low-normal AND the user has reported relevant symptoms
+CRITICAL NUTRIENT & SUPPLEMENT RULES:
 - ONLY include nutrients if DIRECTLY tied to a specific lab value or reported symptom
-- NEVER include nutrients as general wellness advice
 - NEVER recommend, prescribe, or suggest taking anything
 - NEVER include dosages, frequencies, timing, or brands (BANNED: IU, mg, mcg, daily, weekly, twice, etc.)
-- NEVER use prescriptive language (BANNED: "take", "start", "increase", "decrease", "recommended", "prescribe")
 - ONLY use consultative phrasing: "Some clinicians may discuss...", "You may want to ask your provider about..."
-- NEVER include alternative, herbal, adaptogen, or hormone-modulating supplements (BANNED: ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
-- ALLOWED nutrients (ONLY if tied to lab/symptom): vitamin_d, iron, b12, folate, magnesium, omega_3, iodine
-- Each nutrient must include clear reasoning for why it came up based on specific data
+- ALLOWED nutrients: vitamin_d, iron, b12, folate, magnesium, omega_3, iodine
 
-RANGE INTERPRETATION RULES:
-- If a value is in range but near the low/high end, you may say "within range, though near the lower/higher end" and suggest discussing in context of symptoms
-- Always contextualize with cycle phase when relevant
-- Emphasize natural variation throughout the menstrual cycle
-
-SAFETY NOTES REQUIREMENTS:
-- safety_notes MUST include 3-5 concrete examples of when to seek urgent care
-- Examples should be general, non-diagnostic, actionable
-- Examples: "Seek immediate care if you experience severe abdominal pain", "Contact your provider if you have unusually heavy bleeding (soaking through a pad in an hour)", "Seek care for sudden severe headaches or vision changes"
-- Do not make these specific to the user's lab values
+REPORTING SCOPE:
+- Use the full lab panel (report_items) to build a comprehensive narrative
+- Summary bullets should reflect findings across ALL systems in the uploaded report
+- The biomarkers JSON array should use canonical core biomarker names
+- Reference extended items in summary, questions, and considerations where clinically relevant
 
 DATA RULES:
-- user_value must NEVER include units (e.g., "45.2" not "45.2 ng/mL")
-- Units must be provided ONLY in the separate unit field
-- Ensure user_value is always a string containing only the numeric value
-
-Your communication style:
-- Clear, educational, non-alarming
-- Acknowledge cycle context and hormonal variation
-- Emphasize that results are snapshots, not diagnoses
-- Always include disclaimers about consulting healthcare providers
-- Professional and informative
+- user_value must NEVER include units
+- Units provided ONLY in the separate unit field
 
 You must respond with ONLY a valid JSON object matching this exact structure:
 {
@@ -460,8 +352,8 @@ You must respond with ONLY a valid JSON object matching this exact structure:
   }],
   "nutrient_topics_to_discuss": [{
     "nutrient": "vitamin_d" | "iron" | "b12" | "folate" | "magnesium" | "omega_3" | "iodine",
-    "why_it_came_up": "string explaining which specific lab value or symptom triggered this",
-    "discussion_prompt": "string using ONLY consultative language like 'Some clinicians may discuss...' or 'You may want to ask your provider about...'"
+    "why_it_came_up": "string",
+    "discussion_prompt": "string"
   }],
   "supportive_considerations": {
     "nutrition": ["string"],
@@ -473,6 +365,7 @@ You must respond with ONLY a valid JSON object matching this exact structure:
   "safety_notes": ["string"],
   "disclaimer": "string"
 }`;
+
   try {
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -484,17 +377,17 @@ You must respond with ONLY a valid JSON object matching this exact structure:
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: prompt }
+          { role: "user", content: prompt },
         ],
         max_tokens: maxOutputTokens,
         temperature: 0.7,
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
       }),
     });
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
-      console.error("OpenAI API error:", errorData);
+      console.error("[generate-interpretation] OpenAI API error:", errorData);
       throw new Error(`OpenAI API error: ${errorData}`);
     }
 
@@ -503,42 +396,31 @@ You must respond with ONLY a valid JSON object matching this exact structure:
 
     try {
       const parsedJson = JSON.parse(content);
-
-      // Validate nutrient content
       const validation = validateNutrientContent(parsedJson);
 
       if (!validation.valid) {
-        console.warn("Nutrient content validation failed:", validation.violations);
-
-        // Allow one retry on first attempt
+        console.warn("[generate-interpretation] Nutrient validation failed:", validation.violations);
         if (attemptNumber === 1) {
-          console.log("Attempting regeneration with stricter prompt...");
-          return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, maxOutputTokens, 2);
+          return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, maxOutputTokens, 2);
         } else {
-          // Second attempt failed, sanitize by removing nutrient section
-          console.log("Second attempt also failed validation, removing nutrient section");
           return sanitizeNutrientSection(parsedJson);
         }
       }
 
       return parsedJson;
     } catch (parseError) {
-      console.error("Failed to parse JSON response, content:", content);
-
+      console.error("[generate-interpretation] Failed to parse JSON, content:", content);
       if (maxOutputTokens > 1500) {
-        console.log("Retrying with lower token limit (1500)...");
-        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500, attemptNumber);
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, 1500, attemptNumber);
       }
-
       throw new Error("Invalid JSON response from OpenAI");
     }
   } catch (error) {
     if (maxOutputTokens > 1500) {
-      console.log("OpenAI call failed, retrying with lower token limit...");
       try {
-        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, 1500, attemptNumber);
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, 1500, attemptNumber);
       } catch (retryError) {
-        console.error("Retry also failed:", retryError);
+        console.error("[generate-interpretation] Retry also failed:", retryError);
         throw retryError;
       }
     }
@@ -546,34 +428,41 @@ You must respond with ONLY a valid JSON object matching this exact structure:
   }
 }
 
-function generatePrompt(report: LabReportData, biomarkers: BiomarkerData[]): string {
+function generatePrompt(report: LabReportData, biomarkers: BiomarkerData[], reportItems: ReportItemData[]): string {
   const cycleInfo = report.estimated_cycle_day && report.estimated_cycle_phase
     ? `Cycle Day ${report.estimated_cycle_day}, ${report.estimated_cycle_phase} phase`
     : "Cycle information not provided";
 
   const contextInfo = [];
-  if (report.context.birth_control === "yes") {
-    contextInfo.push("User is currently using birth control");
-  }
-  if (report.context.pregnant === "yes") {
-    contextInfo.push("User is currently pregnant");
-  }
-  if (report.context.postpartum === "yes") {
-    contextInfo.push("User is postpartum");
-  }
+  if (report.context.birth_control === "yes") contextInfo.push("User is currently using birth control");
+  if (report.context.pregnant === "yes") contextInfo.push("User is currently pregnant");
+  if (report.context.postpartum === "yes") contextInfo.push("User is postpartum");
   if (report.context.top_symptoms && report.context.top_symptoms.length > 0) {
-    contextInfo.push(`Top symptoms: ${report.context.top_symptoms.join(", ")}`);
+    contextInfo.push(`Reported symptoms: ${report.context.top_symptoms.join(", ")}`);
   }
 
-  const biomarkersText = biomarkers
-    .map((b) => {
-      let text = `${b.name}: ${b.value} ${b.unit}`;
-      if (b.reference_min !== null && b.reference_max !== null) {
-        text += ` (Reference range: ${b.reference_min}-${b.reference_max} ${b.unit})`;
-      }
-      return text;
-    })
-    .join("\n");
+  const coreBiomarkersText = biomarkers.length > 0
+    ? biomarkers.map((b) => {
+        let text = `${b.name}: ${b.value} ${b.unit}`;
+        if (b.reference_min !== null && b.reference_max !== null) {
+          text += ` (ref: ${b.reference_min}–${b.reference_max})`;
+        }
+        return text;
+      }).join("\n")
+    : "No core biomarkers mapped";
+
+  const extendedItems = reportItems.filter(i => !i.is_core_biomarker);
+  const extendedText = extendedItems.length > 0
+    ? extendedItems.slice(0, 60).map((item) => {
+        let text = `${item.raw_name}: ${item.value_text ?? item.value_numeric}${item.unit ? " " + item.unit : ""}`;
+        if (item.raw_reference_range) text += ` (ref: ${item.raw_reference_range})`;
+        else if (item.normalized_reference_min !== null && item.normalized_reference_max !== null) {
+          text += ` (ref: ${item.normalized_reference_min}–${item.normalized_reference_max})`;
+        }
+        if (item.needs_review) text += " [flagged for review]";
+        return text;
+      }).join("\n")
+    : "No additional lab items";
 
   return `Please provide a clear, educational interpretation of these lab results:
 
@@ -581,38 +470,126 @@ Report Date: ${report.report_date}
 ${cycleInfo}
 ${contextInfo.length > 0 ? `Context: ${contextInfo.join(", ")}` : ""}
 
-Biomarkers:
-${biomarkersText}
+CORE BIOMARKERS (use these for the structured biomarkers JSON array):
+${coreBiomarkersText}
 
-Remember to:
-- Consider the cycle phase when interpreting hormone levels
-- Use clear, educational language
-- Provide context about what's normal variation vs. what might warrant discussion
-- Include practical questions they can bring to their doctor
-- Emphasize this is educational information, not medical advice`;
+FULL LAB PANEL (use these for summary bullets, narrative, questions, and lifestyle considerations):
+${extendedText}
+
+Instructions:
+- Use the full lab panel to tell the complete story of this report
+- Reference specific items by name in summary bullets where meaningful
+- Focus the biomarkers JSON array on the canonical core biomarker names above
+- Include practical, specific questions for the doctor
+- This is educational information, not medical advice`;
 }
 
-function generateDemoInterpretation(report: LabReportData, biomarkers: BiomarkerData[]) {
+function classifyItem(item: ReportItemData): "in_range" | "out_of_range" | "borderline" | "unknown" {
+  const v = item.value_numeric;
+  if (item.normalized_reference_min !== null && item.normalized_reference_max !== null) {
+    const range = item.normalized_reference_max - item.normalized_reference_min;
+    const buf = range * 0.08;
+    if (v < item.normalized_reference_min - buf || v > item.normalized_reference_max + buf) return "out_of_range";
+    if (v < item.normalized_reference_min || v > item.normalized_reference_max) return "borderline";
+    return "in_range";
+  }
+  if (item.reference_operator && item.reference_operator_value !== null) {
+    const val = item.reference_operator_value;
+    const op = item.reference_operator;
+    if (op === "<" || op === "<=" || op === "< OR =") return v <= val ? "in_range" : "out_of_range";
+    if (op === ">" || op === ">=" || op === "> OR =") return v >= val ? "in_range" : "out_of_range";
+  }
+  return "unknown";
+}
+
+const NUTRIENT_SLUG_MAP: Record<string, string> = {
+  ferritin: "iron",
+  iron: "iron",
+  "vitamin_d": "vitamin_d",
+  "vitamin d": "vitamin_d",
+  "vit d": "vitamin_d",
+  "25-oh": "vitamin_d",
+  "vitamin_b12": "b12",
+  "vitamin b12": "b12",
+  "b12": "b12",
+  cobalamin: "b12",
+  folate: "folate",
+  "folic acid": "folate",
+  magnesium: "magnesium",
+  "omega-3": "omega_3",
+  omega_3: "omega_3",
+  iodine: "iodine",
+};
+
+function generateDemoInterpretation(report: LabReportData, biomarkers: BiomarkerData[], reportItems: ReportItemData[]) {
   const cyclePhase = report.estimated_cycle_phase || "unknown";
   const cycleDay = report.estimated_cycle_day;
+  const symptoms = report.context.top_symptoms ?? [];
+
+  const outOfRange = reportItems.filter(i => classifyItem(i) === "out_of_range");
+  const borderline = reportItems.filter(i => classifyItem(i) === "borderline");
+
+  const categoryCounts: Record<string, { total: number; flagged: number; items: ReportItemData[] }> = {};
+  for (const item of reportItems) {
+    const cat = item.category ?? "other";
+    if (!categoryCounts[cat]) categoryCounts[cat] = { total: 0, flagged: 0, items: [] };
+    categoryCounts[cat].total++;
+    const status = classifyItem(item);
+    if (status === "out_of_range" || status === "borderline") {
+      categoryCounts[cat].flagged++;
+      categoryCounts[cat].items.push(item);
+    }
+  }
+
+  const topFindings = [...outOfRange, ...borderline].slice(0, 5);
+  const summaryBullets: string[] = [];
+
+  if (reportItems.length > 0) {
+    const totalFlagged = outOfRange.length + borderline.length;
+    if (totalFlagged === 0) {
+      summaryBullets.push(`Your ${reportItems.length}-item panel shows values largely within typical reference ranges across all systems tested.`);
+    } else {
+      summaryBullets.push(`Your ${reportItems.length}-item panel includes ${outOfRange.length} value${outOfRange.length !== 1 ? "s" : ""} outside typical ranges and ${borderline.length} borderline result${borderline.length !== 1 ? "s" : ""} — see below for a breakdown by system.`);
+    }
+  } else if (biomarkers.length > 0) {
+    summaryBullets.push(`Your panel includes ${biomarkers.length} biomarker${biomarkers.length !== 1 ? "s" : ""} across key systems.`);
+  } else {
+    summaryBullets.push("Your lab report has been saved. Add your results manually if automatic extraction did not capture them.");
+  }
+
+  if (cycleDay && cyclePhase !== "unknown") {
+    summaryBullets.push(`Results collected on cycle day ${cycleDay} (${cyclePhase} phase) — hormone values are expected to vary naturally at this stage of your cycle.`);
+  } else {
+    summaryBullets.push("Providing your last period start date at upload helps contextualize hormone results, especially estradiol, progesterone, LH, and FSH.");
+  }
+
+  if (topFindings.length > 0) {
+    const names = topFindings.slice(0, 3).map(i => i.raw_name).join(", ");
+    const more = topFindings.length > 3 ? ` and ${topFindings.length - 3} more` : "";
+    summaryBullets.push(`Values worth discussing with your provider: ${names}${more}.`);
+  } else {
+    summaryBullets.push("No values stood out as significantly outside reference ranges — this serves as a useful baseline for tracking trends over time.");
+  }
 
   const biomarkerInterpretations = biomarkers.map((b) => {
     let status: "in_range" | "borderline" | "out_of_range" | "unknown" = "unknown";
-    let meaning = `${b.name} is a hormone that may play a role in regulating your menstrual cycle and overall health.`;
-    let timingNotes = "Hormone levels naturally fluctuate throughout your cycle.";
-    let commonReasons = ["Natural cycle variation", "Time of day", "Recent diet or exercise"];
-    let followUp = ["If you have symptoms that interfere with daily life", "If values are significantly outside your typical range"];
+    let meaning = `${b.name} plays a role in regulating your menstrual cycle and overall hormonal health.`;
+    const timingNotes = cyclePhase !== "unknown"
+      ? `In the ${cyclePhase} phase (around day ${cycleDay ?? "?"}), this value is expected to ${cyclePhase === "luteal" ? "be elevated relative to follicular phase" : cyclePhase === "ovulatory" ? "peak briefly around ovulation" : "be near its baseline range"}.`
+      : "Hormone levels vary significantly throughout the cycle — cycle day context helps with interpretation.";
 
     if (b.reference_min !== null && b.reference_max !== null) {
+      const range = b.reference_max - b.reference_min;
+      const buf = range * 0.08;
       if (b.value >= b.reference_min && b.value <= b.reference_max) {
         status = "in_range";
-        meaning = `Your ${b.name} level is often consistent with the typical reference range for this test.`;
-      } else if (b.value < b.reference_min * 0.8 || b.value > b.reference_max * 1.2) {
+        meaning = `Your ${b.name} level is often consistent with the reference range for this test.`;
+      } else if (b.value < b.reference_min - buf || b.value > b.reference_max + buf) {
         status = "out_of_range";
-        meaning = `Your ${b.name} level is outside the typical reference range. This may benefit from discussion with your healthcare provider.`;
+        meaning = `Your ${b.name} is outside the typical reference range — this may benefit from discussion with your provider, especially in the context of your symptoms.`;
       } else {
         status = "borderline";
-        meaning = `Your ${b.name} level is slightly outside the typical reference range but may align with individual variation.`;
+        meaning = `Your ${b.name} is slightly outside the typical reference range but may align with individual variation, particularly given cycle timing.`;
       }
     }
 
@@ -621,21 +598,93 @@ function generateDemoInterpretation(report: LabReportData, biomarkers: Biomarker
       user_value: b.value.toString(),
       unit: b.unit,
       reference_range: b.reference_min !== null && b.reference_max !== null
-        ? `${b.reference_min}-${b.reference_max}`
+        ? `${b.reference_min}–${b.reference_max}`
         : "Reference range not provided",
       status_label: status,
       plain_english_meaning: meaning,
       timing_notes: timingNotes,
-      common_non_alarm_reasons: commonReasons,
-      when_clinicians_follow_up: followUp,
+      common_non_alarm_reasons: [
+        "Natural variation within your cycle",
+        "Time of day the sample was collected",
+        "Recent stress, sleep changes, or intense exercise",
+      ],
+      when_clinicians_follow_up: [
+        "If levels are persistently outside range on repeat testing",
+        "If you have symptoms that significantly affect quality of life",
+      ],
     };
   });
 
-  const summaryBullets = [
-    `Your lab results show ${biomarkers.length} biomarker${biomarkers.length > 1 ? 's' : ''} tested`,
-    cycleDay ? `Results collected on cycle day ${cycleDay} (${cyclePhase} phase)` : "Cycle timing information helps contextualize hormone levels",
-    "Hormone levels naturally fluctuate throughout your cycle",
+  const nutrientTopics: any[] = [];
+  const seenNutrients = new Set<string>();
+
+  for (const item of reportItems) {
+    if (nutrientTopics.length >= 2) break;
+    const status = classifyItem(item);
+    if (status !== "out_of_range" && status !== "borderline") continue;
+
+    const nameLower = (item.canonical_slug ?? item.raw_name).toLowerCase();
+    let nutrient: string | null = null;
+    for (const [key, val] of Object.entries(NUTRIENT_SLUG_MAP)) {
+      if (nameLower.includes(key)) { nutrient = val; break; }
+    }
+
+    if (nutrient && !seenNutrients.has(nutrient)) {
+      seenNutrients.add(nutrient);
+      nutrientTopics.push({
+        nutrient,
+        why_it_came_up: `${item.raw_name} was ${status === "out_of_range" ? "outside" : "near the edge of"} the reference range on your panel.`,
+        discussion_prompt: `Some clinicians may discuss whether your ${nutrient.replace(/_/g, " ")} level warrants further evaluation — you may want to ask your provider what's appropriate given your full history.`,
+      });
+    }
+  }
+
+  if (nutrientTopics.length === 0 && symptoms.some(s => ["fatigue", "hair_loss", "mood_changes"].includes(s))) {
+    nutrientTopics.push({
+      nutrient: "iron",
+      why_it_came_up: "Fatigue, hair loss, or mood changes are sometimes associated with iron or ferritin levels, especially in people who menstruate.",
+      discussion_prompt: "You may want to ask your provider whether checking ferritin and iron stores would be useful given your reported symptoms.",
+    });
+  }
+
+  const systemsWithFindings = new Set(
+    Object.entries(categoryCounts).filter(([, v]) => v.flagged > 0).map(([cat]) => cat)
+  );
+
+  const nutritionRecs: string[] = [];
+  const sleepStressRecs: string[] = [];
+  const lifestyleRecs: string[] = [];
+
+  if (systemsWithFindings.has("metabolic")) {
+    nutritionRecs.push("A diet lower in refined carbohydrates and higher in fiber may support blood sugar balance — worth discussing with your provider.");
+  }
+  if (systemsWithFindings.has("lipids")) {
+    nutritionRecs.push("Foods rich in omega-3 fatty acids (like fatty fish, walnuts, and flaxseed) often come up in conversations about cardiovascular health.");
+  }
+  if (systemsWithFindings.has("thyroid") || symptoms.includes("fatigue")) {
+    sleepStressRecs.push("Thyroid function can be sensitive to chronic stress and poor sleep — prioritizing consistent sleep timing may be beneficial.");
+  }
+  if (systemsWithFindings.has("liver")) {
+    lifestyleRecs.push("Limiting alcohol and supporting liver health through a varied, nutrient-dense diet are often discussed in the context of liver markers.");
+  }
+
+  nutritionRecs.push("Balanced meals with adequate protein, healthy fats, and complex carbohydrates support overall hormone production.");
+  sleepStressRecs.push("Quality sleep of 7–9 hours supports hormonal rhythm and cortisol regulation.");
+  lifestyleRecs.push("Tracking your cycle alongside symptoms between now and your next visit can give your provider valuable context.");
+  lifestyleRecs.push("Regular moderate movement is commonly associated with improved hormonal and metabolic wellbeing.");
+
+  const questions: string[] = [
+    "What do these results mean in the context of my full health history and current symptoms?",
+    "Are there any values you'd recommend retesting — and if so, at what point in my cycle?",
   ];
+  if (topFindings.length > 0) {
+    questions.push(`Can you help me understand the ${topFindings[0].raw_name} result and what it might mean for me?`);
+  }
+  if (systemsWithFindings.size > 0) {
+    const sys = [...systemsWithFindings][0];
+    questions.push(`Given the ${sys} results, are there any further tests or follow-ups you'd suggest?`);
+  }
+  questions.push("How does my cycle timing affect how we should interpret the hormone values in this panel?");
 
   return {
     summary_bullets: summaryBullets,
@@ -644,46 +693,29 @@ function generateDemoInterpretation(report: LabReportData, biomarkers: Biomarker
       estimated_cycle_phase: cyclePhase,
       confidence: cycleDay ? "medium" : "low",
       explanation: cycleDay
-        ? `Based on your cycle information, you may be in the ${cyclePhase} phase. Hormone levels can vary significantly depending on where you are in your cycle, which is important context for interpreting these results.`
-        : "Without cycle timing information, hormone level interpretation may be limited. Consider tracking your cycle to provide more context for future lab work.",
+        ? `Based on your cycle information, you may be in the ${cyclePhase} phase around day ${cycleDay}. Hormone levels can vary significantly across the cycle, which is important context for interpreting results — especially estradiol, progesterone, LH, and FSH.`
+        : "Without cycle timing information, hormone level interpretation is limited. Consider noting your last period start date at your next upload.",
     },
     biomarkers: biomarkerInterpretations,
-    nutrient_topics_to_discuss: [],
+    nutrient_topics_to_discuss: nutrientTopics,
     supportive_considerations: {
-      nutrition: [
-        "Maintain a balanced diet with adequate protein, healthy fats, and complex carbohydrates",
-        "Consider foods rich in nutrients that support hormone health",
-        "Stay hydrated throughout the day",
-      ],
-      sleep_stress: [
-        "Aim for 7-9 hours of quality sleep per night",
-        "Practice stress management techniques like deep breathing or meditation",
-        "Consider how sleep patterns may affect hormone levels",
-      ],
-      lifestyle: [
-        "Regular moderate exercise can support hormonal balance",
-        "Track your cycle to better understand your body's patterns",
-        "Be mindful of factors that may influence lab results like time of day and recent meals",
-      ],
+      nutrition: nutritionRecs,
+      sleep_stress: sleepStressRecs,
+      lifestyle: lifestyleRecs,
     },
-    questions_for_doctor: [
-      "What do these results mean in the context of my overall health and symptoms?",
-      "Are there any follow-up tests you'd recommend?",
-      "How does my cycle timing affect the interpretation of these results?",
-      "What lifestyle factors might be influencing these values?",
-    ],
+    questions_for_doctor: questions,
     suggested_followups_to_discuss: [
-      "Retesting at a different point in your cycle if timing was unclear",
-      "Additional biomarkers that might provide more context",
-      "Tracking symptoms alongside cycle phase for better pattern recognition",
+      "Retesting any borderline values at a different cycle phase for comparison",
+      "Adding a ferritin or full iron panel if not already included, especially if fatigue is a concern",
+      "Tracking symptoms between now and your next appointment to give your provider more context",
     ],
     safety_notes: [
-      "Seek immediate care if you experience severe abdominal pain",
-      "Contact your provider if you have unusually heavy bleeding (soaking through a pad in an hour)",
-      "Seek care for sudden severe headaches or vision changes",
-      "Get urgent care if you experience signs of infection such as high fever (over 101°F) with chills",
-      "Remember that lab values are just one piece of your health picture",
+      "Seek immediate care if you experience severe abdominal or pelvic pain that is sudden or worsening",
+      "Contact your provider if you have unusually heavy bleeding (soaking through a pad within an hour for several hours)",
+      "Seek care for sudden severe headaches, vision changes, or confusion",
+      "Get urgent care if you develop a high fever (over 101°F / 38.3°C) with chills or signs of infection",
+      "If any symptom feels dramatically different from your baseline, trust your instincts and seek care promptly",
     ],
-    disclaimer: "This interpretation is for educational purposes only and is not medical advice. Please consult with your healthcare provider to discuss your results and any questions or concerns you may have. Lab values should always be interpreted in the context of your complete health history and symptoms.",
+    disclaimer: "This report is for educational purposes only and is not medical advice. Please consult your healthcare provider to discuss your results and any questions or concerns. Lab values should always be interpreted in the context of your complete health history, symptoms, and clinical examination.",
   };
 }

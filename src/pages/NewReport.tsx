@@ -282,14 +282,24 @@ export function NewReport() {
       const { data: { session: interpSession } } = await supabase.auth.getSession();
       const interpToken = interpSession?.access_token;
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
-      await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${interpToken ?? ''}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ reportId: reportData.id }),
-      });
+
+      try {
+        const interpResponse = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${interpToken ?? ''}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ reportId: reportData.id }),
+        });
+
+        if (!interpResponse.ok) {
+          const errBody = await interpResponse.text().catch(() => '(no body)');
+          console.error('[NewReport] generate-interpretation failed:', interpResponse.status, errBody);
+        }
+      } catch (interpErr) {
+        console.error('[NewReport] generate-interpretation network error:', interpErr);
+      }
 
       if (isSecondReport) {
         sessionStorage.setItem('showSecondLabComparison', 'true');
