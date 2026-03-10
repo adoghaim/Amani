@@ -14,25 +14,111 @@ import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMet
 import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
 import { CATEGORY_DISPLAY } from '../types';
 import type { LabReport, Biomarker, AIInterpretation, BiomarkerCategory, BiomarkerName } from '../types';
-import { RefreshCw, Trash2, Copy, Clock, AlertCircle } from 'lucide-react';
+import { RefreshCw, Trash2, Copy, Clock, AlertCircle, ChevronDown, ChevronRight, Microscope } from 'lucide-react';
 
 interface ReportViewProps {
   reportId: string;
+}
+
+interface ReportItem {
+  id: string;
+  lab_report_id: string;
+  raw_name: string;
+  canonical_slug: string | null;
+  category: string | null;
+  value_numeric: number;
+  value_text: string | null;
+  unit: string | null;
+  raw_reference_range: string | null;
+  normalized_reference_min: number | null;
+  normalized_reference_max: number | null;
+  reference_operator: string | null;
+  reference_operator_value: number | null;
+  confidence_score: 'high' | 'medium' | 'low';
+  needs_review: boolean;
+  is_core_biomarker: boolean;
+  created_at: string;
 }
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
 ];
 
+function formatRefRange(item: ReportItem): string {
+  if (item.raw_reference_range) return item.raw_reference_range;
+  if (item.normalized_reference_min != null && item.normalized_reference_max != null) {
+    return `${item.normalized_reference_min} – ${item.normalized_reference_max}`;
+  }
+  if (item.reference_operator && item.reference_operator_value != null) {
+    return `${item.reference_operator} ${item.reference_operator_value}`;
+  }
+  return '—';
+}
+
+function labStatusFromItem(item: ReportItem): 'in_range' | 'out_of_range' | 'borderline' | 'unknown' {
+  const v = item.value_numeric;
+  if (item.normalized_reference_min != null && item.normalized_reference_max != null) {
+    const range = item.normalized_reference_max - item.normalized_reference_min;
+    const buf = range * 0.08;
+    if (v < item.normalized_reference_min - buf || v > item.normalized_reference_max + buf) return 'out_of_range';
+    if (v < item.normalized_reference_min || v > item.normalized_reference_max) return 'borderline';
+    return 'in_range';
+  }
+  if (item.reference_operator && item.reference_operator_value != null) {
+    const val = item.reference_operator_value;
+    if (item.reference_operator === '<' || item.reference_operator === '<=' || item.reference_operator === '< OR =') {
+      return v <= val ? 'in_range' : 'out_of_range';
+    }
+    if (item.reference_operator === '>' || item.reference_operator === '>=' || item.reference_operator === '> OR =') {
+      return v >= val ? 'in_range' : 'out_of_range';
+    }
+  }
+  return 'unknown';
+}
+
+const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+  in_range:    { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'In range' },
+  out_of_range:{ bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500',     label: 'Out of range' },
+  borderline:  { bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400',   label: 'Borderline' },
+  unknown:     { bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400',    label: 'No range' },
+};
+
+function ExtendedItemRow({ item }: { item: ReportItem }) {
+  const status = labStatusFromItem(item);
+  const style = STATUS_STYLE[status];
+  return (
+    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-900 truncate">{item.raw_name}</p>
+        {item.raw_reference_range && (
+          <p className="text-xs text-gray-400">Ref: {formatRefRange(item)}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+        <span className="text-sm font-semibold text-gray-900 tabular-nums">
+          {item.value_text ?? item.value_numeric}
+          {item.unit && <span className="text-gray-500 font-normal ml-1 text-xs">{item.unit}</span>}
+        </span>
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+          {style.label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function ReportView({ reportId }: ReportViewProps) {
   const { userProfile } = useAuth();
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
+  const [extendedItems, setExtendedItems] = useState<ReportItem[]>([]);
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
+  const [showExtended, setShowExtended] = useState(false);
 
   useEffect(() => {
     fetchReport();
@@ -62,6 +148,17 @@ export function ReportView({ reportId }: ReportViewProps) {
       setBiomarkers(biomarkersData as Biomarker[]);
     }
 
+    const { data: reportItemsData } = await supabase
+      .from('report_items')
+      .select('*')
+      .eq('lab_report_id', reportId)
+      .eq('is_core_biomarker', false)
+      .order('raw_name');
+
+    if (reportItemsData) {
+      setExtendedItems(reportItemsData as ReportItem[]);
+    }
+
     const { data: interpretationData } = await supabase
       .from('interpretations')
       .select('*')
@@ -84,7 +181,7 @@ export function ReportView({ reportId }: ReportViewProps) {
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
     for (const b of biomarkers) {
-      const cat = BIOMARKER_CATEGORY_MAP[b.name] ?? null;
+      const cat = BIOMARKER_CATEGORY_MAP[b.name as BiomarkerName] ?? null;
       if (!cat) continue;
       if (!groups[cat]) groups[cat] = [];
       groups[cat]!.push(b);
@@ -112,6 +209,16 @@ export function ReportView({ reportId }: ReportViewProps) {
     biomarkers.map(b => b.name),
     [biomarkers]
   );
+
+  const extendedByCategory = useMemo(() => {
+    const groups: Record<string, ReportItem[]> = {};
+    for (const item of extendedItems) {
+      const key = item.category ?? 'Other';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    }
+    return groups;
+  }, [extendedItems]);
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
@@ -234,6 +341,12 @@ export function ReportView({ reportId }: ReportViewProps) {
                 {cyclePhase.replace(/_/g, ' ')} phase
               </span>
             )}
+            <div className="flex gap-3 mt-2">
+              <span className="text-xs text-gray-500">{biomarkers.length} core biomarkers</span>
+              {extendedItems.length > 0 && (
+                <span className="text-xs text-blue-500">{extendedItems.length} extended items</span>
+              )}
+            </div>
           </div>
           <div className="flex gap-2">
             {canRegenerate && (
@@ -296,7 +409,7 @@ export function ReportView({ reportId }: ReportViewProps) {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-[#2A1F23]">
-                  Biomarkers
+                  Core Biomarkers
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-[#C97C8B]">
                       — {CATEGORY_DISPLAY[activeCategory].label}
@@ -341,6 +454,46 @@ export function ReportView({ reportId }: ReportViewProps) {
                 ))}
               </div>
             </div>
+          )}
+
+          {extendedItems.length > 0 && (
+            <Card>
+              <button
+                className="flex items-center justify-between w-full text-left"
+                onClick={() => setShowExtended(v => !v)}
+              >
+                <div className="flex items-center gap-2">
+                  <Microscope className="w-5 h-5 text-blue-500" />
+                  <h2 className="text-lg font-semibold text-[#2A1F23]">
+                    Extended Lab Items
+                  </h2>
+                  <span className="text-sm text-blue-500 font-normal">({extendedItems.length})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 hidden sm:inline">Stored for history — not used in scoring</span>
+                  {showExtended ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                </div>
+              </button>
+
+              {showExtended && (
+                <div className="mt-4 space-y-6">
+                  {Object.entries(extendedByCategory)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([cat, items]) => (
+                      <div key={cat}>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                          {cat}
+                        </h3>
+                        <div className="divide-y divide-gray-100">
+                          {items.map(item => (
+                            <ExtendedItemRow key={item.id} item={item} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </Card>
           )}
 
           <RecommendedLabs

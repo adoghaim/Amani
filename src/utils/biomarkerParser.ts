@@ -18,6 +18,24 @@ export interface ExtractedBiomarker {
   debugInfo?: ParserDebugInfo;
 }
 
+export interface ReportItem {
+  raw_name: string;
+  canonical_slug: string | null;
+  category: string | null;
+  value_numeric: number;
+  value_text: string | null;
+  unit: string | null;
+  raw_reference_range: string | null;
+  normalized_reference_min: number | null;
+  normalized_reference_max: number | null;
+  reference_operator: string | null;
+  reference_operator_value: number | null;
+  confidence_score: 'high' | 'medium' | 'low';
+  is_core_biomarker: boolean;
+  needs_review: boolean;
+  source_snippet: string | null;
+}
+
 export interface ParserDebugInfo {
   matchedLabel: string;
   chosenValue: number;
@@ -725,4 +743,135 @@ export function validateExtractedBiomarkers(
 
 export function getCatalogSlug(legacyName: string): string {
   return normalizeToCatalogSlug(legacyName);
+}
+
+// ─── Core biomarker metadata for ReportItem conversion ───────────────────────
+
+const CORE_SLUGS = new Set([
+  'estradiol','progesterone','lh','fsh','amh','total_testosterone','free_testosterone',
+  'dheas','prolactin','fasting_insulin','shbg',
+  'tsh','free_t4','free_t3','total_t4','reverse_t3','tpo_antibodies','tg_antibodies',
+  'fasting_glucose','hemoglobin_a1c','c_peptide',
+  'total_cholesterol','ldl_cholesterol','hdl_cholesterol','triglycerides','non_hdl_cholesterol','apob','lpa',
+  'alt','ast','ggt','alkaline_phosphatase','bilirubin_total',
+  'creatinine','egfr','bun',
+  'hs_crp','esr',
+  'ferritin','iron_saturation','vitamin_d_25_oh','vitamin_b12','folate','magnesium',
+]);
+
+const CORE_CATEGORIES: Record<string, string> = {
+  estradiol:'hormones',progesterone:'hormones',lh:'hormones',fsh:'hormones',amh:'hormones',
+  total_testosterone:'hormones',free_testosterone:'hormones',dheas:'hormones',prolactin:'hormones',
+  fasting_insulin:'hormones',shbg:'hormones',
+  tsh:'thyroid',free_t4:'thyroid',free_t3:'thyroid',total_t4:'thyroid',reverse_t3:'thyroid',
+  tpo_antibodies:'thyroid',tg_antibodies:'thyroid',
+  fasting_glucose:'metabolic',hemoglobin_a1c:'metabolic',c_peptide:'metabolic',
+  total_cholesterol:'lipids',ldl_cholesterol:'lipids',hdl_cholesterol:'lipids',triglycerides:'lipids',
+  non_hdl_cholesterol:'lipids',apob:'lipids',lpa:'lipids',
+  alt:'liver',ast:'liver',ggt:'liver',alkaline_phosphatase:'liver',bilirubin_total:'liver',
+  creatinine:'kidney',egfr:'kidney',bun:'kidney',
+  hs_crp:'inflammation',esr:'inflammation',
+  ferritin:'nutrients',iron_saturation:'nutrients',vitamin_d_25_oh:'nutrients',
+  vitamin_b12:'nutrients',folate:'nutrients',magnesium:'nutrients',
+};
+
+export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): ReportItem[] {
+  return extracted.map(b => {
+    const slug = b.name;
+    const isCore = CORE_SLUGS.has(slug);
+    const ref = b.reference_comparator;
+    return {
+      raw_name: b.name,
+      canonical_slug: isCore ? slug : null,
+      category: isCore ? (CORE_CATEGORIES[slug] ?? null) : null,
+      value_numeric: b.value,
+      value_text: b.rawValue ?? null,
+      unit: b.unit,
+      raw_reference_range: b.reference_text_raw ?? null,
+      normalized_reference_min: b.reference_min ?? null,
+      normalized_reference_max: b.reference_max ?? null,
+      reference_operator: ref?.operator ?? null,
+      reference_operator_value: ref?.value ?? null,
+      confidence_score: b.confidence,
+      is_core_biomarker: isCore,
+      needs_review: b.confidence === 'low' || !b.unit,
+      source_snippet: b.rawText ?? null,
+    };
+  });
+}
+
+// ─── Generic line-based extractor for non-core items ─────────────────────────
+//
+// Runs after the core parser and captures any remaining lines that look like
+// "Label    Value   Unit   Reference" but didn't match the core pattern list.
+
+const SKIP_LINES_RE = /^(?:test|result|reference|range|units?|flag|status|notes?|comments?|physician|patient|dob|date|page|lab\s|quest\s|labcorp)/i;
+const LABEL_VALUE_RE = /^([A-Za-z][A-Za-z0-9,.()\-/%\s]{2,50}?)\s{2,}(<?>\s*\d+\.?\d*|>=?\s*\d+\.?\d*|<=?\s*\d+\.?\d*|\d+\.?\d*)(?:\s+([a-zA-Z%/]+[0-9]?))?/;
+
+export function parseAllReportItems(text: string, debug = false): ReportItem[] {
+  const coreExtracted = parseBiomarkersFromText(text, debug);
+  const coreItems = convertExtractedToReportItems(coreExtracted);
+  const coreRawNames = new Set(coreItems.map(i => i.raw_name.toLowerCase()));
+
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  const extendedItems: ReportItem[] = [];
+
+  for (const line of lines) {
+    if (SKIP_LINES_RE.test(line)) continue;
+    if (line.length > 120) continue;
+
+    const m = line.match(LABEL_VALUE_RE);
+    if (!m) continue;
+
+    const rawName = m[1].trim();
+    const rawValueStr = m[2].trim();
+    const rawUnit = m[3]?.trim() ?? null;
+
+    if (coreRawNames.has(rawName.toLowerCase())) continue;
+    if (rawName.split(' ').length > 8) continue;
+
+    let valueNumeric: number;
+    let valueText: string | null = null;
+
+    if (/^</.test(rawValueStr)) {
+      const n = parseFloat(rawValueStr.replace(/[^0-9.]/g, ''));
+      if (isNaN(n)) continue;
+      valueNumeric = n * 0.5;
+      valueText = rawValueStr;
+    } else if (/^>/.test(rawValueStr)) {
+      const n = parseFloat(rawValueStr.replace(/[^0-9.]/g, ''));
+      if (isNaN(n)) continue;
+      valueNumeric = n;
+      valueText = rawValueStr;
+    } else {
+      valueNumeric = parseFloat(rawValueStr);
+      if (isNaN(valueNumeric)) continue;
+    }
+
+    if (valueNumeric < 0 || valueNumeric > 100000) continue;
+
+    const ref = detectReferenceRange(line);
+    const confidence: 'high' | 'medium' | 'low' =
+      rawUnit && ref ? 'high' : rawUnit ? 'medium' : 'low';
+
+    extendedItems.push({
+      raw_name: rawName,
+      canonical_slug: null,
+      category: null,
+      value_numeric: valueNumeric,
+      value_text: valueText,
+      unit: rawUnit,
+      raw_reference_range: ref?.raw ?? null,
+      normalized_reference_min: ref?.min ?? null,
+      normalized_reference_max: ref?.max ?? null,
+      reference_operator: ref?.comparator?.operator ?? null,
+      reference_operator_value: ref?.comparator?.value ?? null,
+      confidence_score: confidence,
+      is_core_biomarker: false,
+      needs_review: confidence === 'low',
+      source_snippet: line.substring(0, 120),
+    });
+  }
+
+  return [...coreItems, ...extendedItems];
 }

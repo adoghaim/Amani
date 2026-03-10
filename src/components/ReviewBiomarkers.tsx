@@ -1,200 +1,288 @@
-import { AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { AlertCircle, CheckCircle, AlertTriangle, ChevronDown, ChevronRight, FlaskConical, Microscope } from 'lucide-react';
 import { Button } from './Button';
-import type { ExtractedBiomarker } from '../utils/biomarkerParser';
+import type { ReportItem } from '../utils/biomarkerParser';
 import { useBiomarkerCatalog } from '../hooks/useBiomarkerCatalog';
 
 interface ReviewBiomarkersProps {
-  extractedBiomarkers: ExtractedBiomarker[];
-  onUpdate: (index: number, field: keyof ExtractedBiomarker, value: string | number) => void;
+  items: ReportItem[];
+  onUpdate: (index: number, field: keyof ReportItem, value: string | number | null | boolean) => void;
   onRemove: (index: number) => void;
   onAddNew: () => void;
 }
 
-const ConfidenceIndicator = ({ confidence }: { confidence: 'high' | 'medium' | 'low' }) => {
+const ConfidenceBadge = ({ confidence }: { confidence: 'high' | 'medium' | 'low' }) => {
   const config = {
-    high: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', label: 'High confidence' },
-    medium: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50', label: 'Medium confidence' },
-    low: { icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50', label: 'Low confidence - review carefully' },
+    high:   { icon: CheckCircle,  color: 'text-emerald-600', bg: 'bg-emerald-50',  label: 'High' },
+    medium: { icon: AlertTriangle, color: 'text-amber-600',  bg: 'bg-amber-50',    label: 'Review' },
+    low:    { icon: AlertCircle,  color: 'text-red-600',     bg: 'bg-red-50',      label: 'Low confidence' },
   };
-
   const { icon: Icon, color, bg, label } = config[confidence];
-
   return (
-    <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${bg}`}>
-      <Icon className={`w-4 h-4 ${color}`} />
-      <span className={`text-xs font-medium ${color}`}>{label}</span>
-    </div>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${bg} ${color}`}>
+      <Icon className="w-3 h-3" />
+      {label}
+    </span>
   );
 };
 
-export function ReviewBiomarkers({
-  extractedBiomarkers,
+function formatRefRange(item: ReportItem): string {
+  if (item.raw_reference_range) return item.raw_reference_range;
+  if (item.normalized_reference_min != null && item.normalized_reference_max != null) {
+    return `${item.normalized_reference_min} – ${item.normalized_reference_max}`;
+  }
+  if (item.reference_operator && item.reference_operator_value != null) {
+    return `${item.reference_operator} ${item.reference_operator_value}`;
+  }
+  return '—';
+}
+
+function ItemCard({
+  item,
+  index,
+  globalIndex,
   onUpdate,
   onRemove,
-  onAddNew,
-}: ReviewBiomarkersProps) {
-  const { catalog, loading } = useBiomarkerCatalog();
+  catalogSlugs,
+}: {
+  item: ReportItem;
+  index: number;
+  globalIndex: number;
+  onUpdate: ReviewBiomarkersProps['onUpdate'];
+  onRemove: ReviewBiomarkersProps['onRemove'];
+  catalogSlugs: { slug: string; name: string; unit: string }[];
+}) {
+  const [expanded, setExpanded] = useState(item.confidence_score === 'low');
 
-  const unitsForSlug = (slug: string): string[] => {
-    const entry = catalog.find(b => b.slug === slug);
-    return entry ? [entry.unit] : [''];
-  };
+  const borderColor =
+    item.confidence_score === 'low'
+      ? 'border-red-200 bg-red-50/40'
+      : item.confidence_score === 'medium'
+      ? 'border-amber-200'
+      : 'border-gray-200';
 
   return (
-    <div className="space-y-6">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-medium text-blue-900 mb-2">Review Extracted Biomarkers</h3>
-        <p className="text-sm text-blue-700">
-          We automatically extracted {extractedBiomarkers.length} biomarker{extractedBiomarkers.length !== 1 ? 's' : ''} from your lab report.
-          Please review and edit as needed before submitting.
-        </p>
+    <div className={`border rounded-lg overflow-hidden ${borderColor}`}>
+      <div
+        className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-gray-50/50 transition-colors"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          {expanded ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+          <span className="font-medium text-gray-900 truncate">
+            {item.raw_name || <span className="text-gray-400 italic">Unnamed</span>}
+          </span>
+          {item.canonical_slug && (
+            <span className="hidden sm:inline text-xs text-gray-400">({item.canonical_slug})</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+          <span className="font-semibold text-gray-900 tabular-nums">
+            {item.value_text ?? item.value_numeric}
+            {item.unit && <span className="text-gray-500 font-normal ml-1">{item.unit}</span>}
+          </span>
+          <ConfidenceBadge confidence={item.confidence_score} />
+          <button
+            className="text-gray-400 hover:text-red-500 transition-colors ml-1"
+            onClick={e => { e.stopPropagation(); onRemove(globalIndex); }}
+            title="Remove"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
-      {extractedBiomarkers.some(b => b.confidence === 'low') && (
-        <div className="bg-red-50 border border-red-300 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-gray-100 bg-white">
+          {item.source_snippet && (
+            <p className="mt-3 text-xs text-gray-400 italic truncate">Source: "{item.source_snippet}"</p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             <div>
-              <h3 className="font-medium text-red-900 mb-1">Review Required</h3>
-              <p className="text-sm text-red-700">
-                Some extracted values have low confidence. Please verify each value carefully before continuing.
-                Common issues include decimal point errors (e.g., 2.1 vs 21) or misidentified reference ranges.
-              </p>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Test name</label>
+              <input
+                type="text"
+                value={item.raw_name}
+                onChange={e => onUpdate(globalIndex, 'raw_name', e.target.value)}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+              />
             </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Map to core biomarker</label>
+              <select
+                value={item.canonical_slug ?? ''}
+                onChange={e => {
+                  const slug = e.target.value || null;
+                  onUpdate(globalIndex, 'canonical_slug', slug);
+                  onUpdate(globalIndex, 'is_core_biomarker', slug !== null);
+                }}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+              >
+                <option value="">— Extended (not mapped) —</option>
+                {catalogSlugs.map(b => (
+                  <option key={b.slug} value={b.slug}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
+              <input
+                type="number"
+                step="0.001"
+                value={item.value_numeric}
+                onChange={e => onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value))}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
+              <input
+                type="text"
+                value={item.unit ?? ''}
+                onChange={e => onUpdate(globalIndex, 'unit', e.target.value || null)}
+                placeholder="e.g. mg/dL"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Reference range (raw)</label>
+              <input
+                type="text"
+                value={item.raw_reference_range ?? ''}
+                onChange={e => onUpdate(globalIndex, 'raw_reference_range', e.target.value || null)}
+                placeholder='e.g. "65-99" or "<200"'
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+              />
+            </div>
+
+            {item.normalized_reference_min != null || item.normalized_reference_max != null ? (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Ref min</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={item.normalized_reference_min ?? ''}
+                    onChange={e => onUpdate(globalIndex, 'normalized_reference_min', e.target.value ? parseFloat(e.target.value) : null)}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Ref max</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={item.normalized_reference_max ?? ''}
+                    onChange={e => onUpdate(globalIndex, 'normalized_reference_max', e.target.value ? parseFloat(e.target.value) : null)}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    placeholder="Optional"
+                  />
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {extractedBiomarkers.map((biomarker, index) => {
-        const units = unitsForSlug(biomarker.name);
-        return (
-          <div
-            key={index}
-            className={`border-2 rounded-lg p-4 ${
-              biomarker.confidence === 'low'
-                ? 'border-red-200 bg-red-50'
-                : biomarker.confidence === 'medium'
-                ? 'border-amber-200 bg-amber-50'
-                : 'border-gray-200'
-            }`}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <ConfidenceIndicator confidence={biomarker.confidence} />
-              <Button variant="danger" size="sm" onClick={() => onRemove(index)}>
-                Remove
-              </Button>
-            </div>
+export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: ReviewBiomarkersProps) {
+  const { catalog, loading: catalogLoading } = useBiomarkerCatalog();
+  const [showExtended, setShowExtended] = useState(true);
 
-            {biomarker.rawText && (
-              <div className="mb-4 text-sm text-gray-600 italic">
-                Original text: "{biomarker.rawText}"
-              </div>
-            )}
+  const catalogSlugs = catalog.map(b => ({ slug: b.slug, name: b.name, unit: b.unit }));
+  const coreItems = items.map((item, i) => ({ item, globalIndex: i })).filter(({ item }) => item.is_core_biomarker);
+  const extendedItems = items.map((item, i) => ({ item, globalIndex: i })).filter(({ item }) => !item.is_core_biomarker);
+  const needsReview = items.filter(i => i.needs_review).length;
 
-            {biomarker.rawValue && (
-              <div className="mb-4 text-xs text-gray-500">
-                Raw value on report: <span className="font-mono font-medium">{biomarker.rawValue}</span>
-              </div>
-            )}
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+        <h3 className="font-semibold text-blue-900 mb-1">
+          {items.length} lab item{items.length !== 1 ? 's' : ''} extracted
+        </h3>
+        <p className="text-sm text-blue-700">
+          {coreItems.length} match the Amani core panel &middot; {extendedItems.length} extended items saved for history.
+          {needsReview > 0 && <span className="text-amber-700 font-medium ml-1">{needsReview} need review.</span>}
+        </p>
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Biomarker
-                </label>
-                {loading ? (
-                  <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 text-sm">
-                    Loading...
-                  </div>
-                ) : (
-                  <select
-                    value={biomarker.name}
-                    onChange={(e) => onUpdate(index, 'name', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                  >
-                    {!catalog.find(b => b.slug === biomarker.name) && (
-                      <option value={biomarker.name}>{biomarker.name} (unknown)</option>
-                    )}
-                    {catalog.map((b) => (
-                      <option key={b.slug} value={b.slug}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
+      {needsReview > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800">
+            Some items have low extraction confidence — missing units or unusual values. Review them before submitting.
+          </p>
+        </div>
+      )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Value
-                </label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={biomarker.value}
-                  onChange={(e) => onUpdate(index, 'value', parseFloat(e.target.value))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Unit
-                </label>
-                <select
-                  value={biomarker.unit ?? ''}
-                  onChange={(e) => onUpdate(index, 'unit', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                >
-                  {biomarker.unit && !units.includes(biomarker.unit) && (
-                    <option value={biomarker.unit}>{biomarker.unit}</option>
-                  )}
-                  {units.map((unit) => (
-                    <option key={unit} value={unit}>
-                      {unit}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reference Min
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={biomarker.reference_min ?? ''}
-                  onChange={(e) =>
-                    onUpdate(index, 'reference_min', e.target.value ? parseFloat(e.target.value) : undefined as any)
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reference Max
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={biomarker.reference_max ?? ''}
-                  onChange={(e) =>
-                    onUpdate(index, 'reference_max', e.target.value ? parseFloat(e.target.value) : undefined as any)
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                  placeholder="Optional"
-                />
-              </div>
-            </div>
+      {coreItems.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <FlaskConical className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Core Biomarkers ({coreItems.length})</h3>
+            <span className="text-xs text-gray-400">Used for scoring & insights</span>
           </div>
-        );
-      })}
+          <div className="space-y-2">
+            {catalogLoading ? (
+              <p className="text-sm text-gray-400">Loading catalog...</p>
+            ) : (
+              coreItems.map(({ item, globalIndex }, localIdx) => (
+                <ItemCard
+                  key={globalIndex}
+                  item={item}
+                  index={localIdx}
+                  globalIndex={globalIndex}
+                  onUpdate={onUpdate}
+                  onRemove={onRemove}
+                  catalogSlugs={catalogSlugs}
+                />
+              ))
+            )}
+          </div>
+        </section>
+      )}
 
-      <Button variant="secondary" onClick={onAddNew}>
-        Add Another Biomarker
+      {extendedItems.length > 0 && (
+        <section>
+          <button
+            className="flex items-center gap-2 mb-3 group w-full text-left"
+            onClick={() => setShowExtended(v => !v)}
+          >
+            <Microscope className="w-4 h-4 text-blue-500" />
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide group-hover:text-gray-900 transition-colors">
+              Extended Lab Items ({extendedItems.length})
+            </h3>
+            <span className="text-xs text-gray-400">Stored for history — not used in scoring</span>
+            {showExtended ? <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" /> : <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />}
+          </button>
+
+          {showExtended && (
+            <div className="space-y-2">
+              {extendedItems.map(({ item, globalIndex }, localIdx) => (
+                <ItemCard
+                  key={globalIndex}
+                  item={item}
+                  index={localIdx}
+                  globalIndex={globalIndex}
+                  onUpdate={onUpdate}
+                  onRemove={onRemove}
+                  catalogSlugs={catalogSlugs}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      <Button variant="secondary" size="sm" onClick={onAddNew}>
+        + Add lab item manually
       </Button>
     </div>
   );

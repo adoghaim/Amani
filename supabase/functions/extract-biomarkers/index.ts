@@ -8,24 +8,28 @@ const corsHeaders = {
 };
 
 interface ComparatorRange {
-  operator: '<' | '<=' | '>' | '>=' | '> OR =' | '< OR =';
+  operator: string;
   value: number;
   raw: string;
 }
 
-interface ExtractedBiomarker {
-  name: string;
-  value: number;
-  rawValue?: string;
-  unit: string;
-  reference_min: number | null;
-  reference_max: number | null;
-  reference_comparator?: ComparatorRange;
-  reference_text_raw?: string;
-  confidence: 'high' | 'medium' | 'low';
+interface ReportItem {
+  raw_name: string;
+  canonical_slug: string | null;
+  category: string | null;
+  value_numeric: number;
+  value_text: string | null;
+  unit: string | null;
+  raw_reference_range: string | null;
+  normalized_reference_min: number | null;
+  normalized_reference_max: number | null;
+  reference_operator: string | null;
+  reference_operator_value: number | null;
+  confidence_score: "high" | "medium" | "low";
+  is_core_biomarker: boolean;
 }
 
-const SUPPORTED_BIOMARKERS = [
+const CORE_BIOMARKER_SLUGS = new Set([
   'estradiol', 'progesterone', 'lh', 'fsh', 'amh',
   'total_testosterone', 'free_testosterone', 'dheas', 'prolactin', 'fasting_insulin', 'shbg',
   'tsh', 'free_t4', 'free_t3', 'total_t4', 'reverse_t3', 'tpo_antibodies', 'tg_antibodies',
@@ -35,7 +39,23 @@ const SUPPORTED_BIOMARKERS = [
   'creatinine', 'egfr', 'bun',
   'hs_crp', 'esr',
   'ferritin', 'iron_saturation', 'vitamin_d_25_oh', 'vitamin_b12', 'folate', 'magnesium',
-];
+]);
+
+const CORE_BIOMARKER_CATEGORIES: Record<string, string> = {
+  estradiol: 'hormones', progesterone: 'hormones', lh: 'hormones', fsh: 'hormones', amh: 'hormones',
+  total_testosterone: 'hormones', free_testosterone: 'hormones', dheas: 'hormones', prolactin: 'hormones',
+  fasting_insulin: 'hormones', shbg: 'hormones',
+  tsh: 'thyroid', free_t4: 'thyroid', free_t3: 'thyroid', total_t4: 'thyroid', reverse_t3: 'thyroid',
+  tpo_antibodies: 'thyroid', tg_antibodies: 'thyroid',
+  fasting_glucose: 'metabolic', hemoglobin_a1c: 'metabolic', c_peptide: 'metabolic',
+  total_cholesterol: 'lipids', ldl_cholesterol: 'lipids', hdl_cholesterol: 'lipids', triglycerides: 'lipids',
+  non_hdl_cholesterol: 'lipids', apob: 'lipids', lpa: 'lipids',
+  alt: 'liver', ast: 'liver', ggt: 'liver', alkaline_phosphatase: 'liver', bilirubin_total: 'liver',
+  creatinine: 'kidney', egfr: 'kidney', bun: 'kidney',
+  hs_crp: 'inflammation', esr: 'inflammation',
+  ferritin: 'nutrients', iron_saturation: 'nutrients', vitamin_d_25_oh: 'nutrients',
+  vitamin_b12: 'nutrients', folate: 'nutrients', magnesium: 'nutrients',
+};
 
 const SLUG_ALIASES: Record<string, string> = {
   testosterone_total: 'total_testosterone',
@@ -113,90 +133,84 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const systemPrompt = `You are a medical lab data extraction specialist. Your task is to extract biomarker data from lab reports with EXTREME precision.
+    const systemPrompt = `You are a medical lab data extraction specialist. Extract EVERY lab test result from the report — not just a fixed set.
 
 CRITICAL RULES:
-1. Parse decimal points EXACTLY as they appear (e.g., "2.1" = 2.1, NOT 21 or 210)
-2. For values like "<0.5" or "< 0.5", set value = 0.25 (half of the limit) and rawValue = "<0.5"
-3. For values like ">200", set value = 200 and rawValue = ">200"
-4. value field must be a NUMBER, never a string
-5. Extract units exactly as shown
-6. Reference ranges: look for patterns like "30–400", "0.4–4.0", null if absent
+1. Extract ALL tests on the report, including CBC components, CMP components, ratios, panels, and any other items
+2. Parse decimal points EXACTLY as shown (2.1 = 2.1, not 21)
+3. For "<0.5" set value_numeric = 0.25, value_text = "<0.5"
+4. For ">200" set value_numeric = 200, value_text = ">200"
+5. For "> OR = 60" set value_numeric = 60, value_text = "> OR = 60"
+6. value_numeric must always be a NUMBER, never a string
+7. Extract units exactly as shown; use null if not present
+8. Preserve reference ranges exactly as shown in raw_reference_range
 
-CANONICAL BIOMARKER NAMES (use these EXACT slugs):
-Hormones:
-- "Estradiol", "E2", "Estrogen" → "estradiol"
-- "Progesterone" → "progesterone"
-- "LH", "Luteinizing Hormone" → "lh"
-- "FSH", "Follicle Stimulating Hormone" → "fsh"
-- "AMH", "Anti-Mullerian Hormone" → "amh"
-- "Testosterone, Total", "Total Testosterone" → "total_testosterone"
-- "Testosterone, Free", "Free Testosterone" → "free_testosterone"
-- "DHEA-S", "DHEA Sulfate", "DHEAS" → "dheas"
-- "Prolactin" → "prolactin"
-- "Insulin", "Fasting Insulin" → "fasting_insulin"
-- "SHBG", "Sex Hormone Binding Globulin" → "shbg"
+CANONICAL SLUG MAPPING (use these slugs when the test matches, null otherwise):
+Hormones: estradiol, progesterone, lh, fsh, amh, total_testosterone, free_testosterone, dheas, prolactin, fasting_insulin, shbg
+Thyroid: tsh, free_t4, free_t3, total_t4, reverse_t3, tpo_antibodies, tg_antibodies
+Metabolic: fasting_glucose, hemoglobin_a1c, c_peptide
+Lipids/CV: total_cholesterol, ldl_cholesterol, hdl_cholesterol, triglycerides, non_hdl_cholesterol, apob, lpa
+Liver: alt, ast, ggt, alkaline_phosphatase, bilirubin_total
+Kidney: creatinine, egfr, bun
+Inflammation: hs_crp, esr
+Nutrients: ferritin, iron_saturation, vitamin_d_25_oh, vitamin_b12, folate, magnesium
 
-Thyroid:
-- "TSH", "Thyroid Stimulating Hormone" → "tsh"
-- "Free T4", "FT4", "Free Thyroxine", "T4, Free" → "free_t4"
-- "Free T3", "FT3", "Free Triiodothyronine", "T3, Free" → "free_t3"
-- "T4 Total", "Total T4" → "total_t4"
-- "Reverse T3", "RT3" → "reverse_t3"
-- "TPO Antibodies", "Thyroid Peroxidase Antibodies", "TPO Ab", "Anti-TPO" → "tpo_antibodies"
-- "Thyroglobulin Antibodies", "TgAb", "Thyroglobulin Ab" → "tg_antibodies"
+ALIAS MAPPING:
+"Testosterone, Total" → total_testosterone, "Testosterone, Free" → free_testosterone
+"DHEA-S", "DHEA Sulfate" → dheas, "Insulin", "Fasting Insulin" → fasting_insulin
+"TSH" → tsh, "Free T4", "T4, Free" → free_t4, "Free T3", "T3, Free" → free_t3
+"Glucose", "Glucose, Serum" → fasting_glucose, "HbA1c", "A1C" → hemoglobin_a1c
+"LDL Chol Calc", "LDL-C" → ldl_cholesterol, "HDL Chol Direct" → hdl_cholesterol
+"ALT (SGPT)", "SGPT" → alt, "AST (SGOT)", "SGOT" → ast
+"Creatinine, Serum" → creatinine, "eGFR", "GFR Estimated" → egfr
+"hs-CRP", "C-Reactive Protein, Cardiac" → hs_crp
+"Ferritin, Serum" → ferritin, "Iron, % Saturation" → iron_saturation
+"Vitamin D, 25-Hydroxy", "Vitamin D (25-OH)" → vitamin_d_25_oh
+"Vitamin B12, Serum" → vitamin_b12, "Folate, Serum" → folate, "Magnesium, Serum" → magnesium
+"Bilirubin, Total" → bilirubin_total, "Urea Nitrogen (BUN)", "Blood Urea Nitrogen" → bun
+"TPO Ab", "Thyroid Peroxidase Antibodies" → tpo_antibodies
 
-Metabolic:
-- "Glucose", "Fasting Glucose", "Glucose, Serum" → "fasting_glucose"
-- "HbA1c", "A1C", "Hemoglobin A1c" → "hemoglobin_a1c"
-- "C-Peptide" → "c_peptide"
+REFERENCE RANGE FORMATS - preserve exactly in raw_reference_range:
+- Min-max: "65-99" → normalized_reference_min: 65, normalized_reference_max: 99, reference_operator: null
+- Comparator: "<200" → normalized_reference_min: null, normalized_reference_max: null, reference_operator: "<", reference_operator_value: 200
+- Comparator: "> OR = 60" → reference_operator: "> OR =", reference_operator_value: 60
+- Comparator: ">= 60" → reference_operator: ">=", reference_operator_value: 60
+- Comparator: "<= 9" → reference_operator: "<=", reference_operator_value: 9
 
-Cardiovascular/Lipids:
-- "Total Cholesterol", "Cholesterol, Total" → "total_cholesterol"
-- "LDL Cholesterol", "LDL Chol Calc", "LDL-C" → "ldl_cholesterol"
-- "HDL Cholesterol", "HDL Chol Direct", "HDL-C" → "hdl_cholesterol"
-- "Triglycerides" → "triglycerides"
-- "Non-HDL Cholesterol", "Non-HDL Chol" → "non_hdl_cholesterol"
-- "ApoB", "Apolipoprotein B" → "apob"
-- "Lp(a)", "Lipoprotein(a)" → "lpa"
+EXTENDED ITEMS (extract even if not in the canonical list above):
+- CBC components: WBC, RBC, Hemoglobin, Hematocrit, MCV, MCH, MCHC, RDW, Platelets, Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils
+- CMP/BMP: Sodium, Potassium, Chloride, CO2, Calcium, Total Protein, Albumin, Globulin, A/G Ratio
+- Lipid ratios: Cholesterol/HDL ratio
+- Thyroid extended: Total T3, T3 Uptake
+- Iron panel: Serum Iron, TIBC, UIBC
+- Urinalysis components if present
+- Any other test with a numeric result and unit
 
-Liver:
-- "ALT", "Alanine Aminotransferase", "ALT (SGPT)", "SGPT" → "alt"
-- "AST", "Aspartate Aminotransferase", "AST (SGOT)", "SGOT" → "ast"
-- "GGT", "Gamma-Glutamyl Transferase", "GGT (Gamma Glutamyl Transpeptidase)" → "ggt"
-- "Alkaline Phosphatase", "Alk Phos", "ALP" → "alkaline_phosphatase"
-- "Total Bilirubin", "Bilirubin, Total" → "bilirubin_total"
+For items NOT in the canonical list: set canonical_slug = null, category = null.
 
-Kidney:
-- "Creatinine", "Serum Creatinine", "Creatinine, Serum" → "creatinine"
-- "eGFR", "Estimated GFR", "eGFR Non-Afr. American", "GFR Estimated Non-African American" → "egfr"
-- "BUN", "Blood Urea Nitrogen", "Urea Nitrogen" → "bun"
+Return ONLY a JSON object: { "items": [...] }
 
-Inflammation:
-- "hs-CRP", "High Sensitivity CRP", "hsCRP", "C-Reactive Protein, Cardiac" → "hs_crp"
-- "ESR", "Sed Rate", "Sedimentation Rate" → "esr"
-
-Nutrients:
-- "Ferritin", "Ferritin, Serum" → "ferritin"
-- "Iron Saturation", "Iron, % Saturation", "Transferrin Saturation" → "iron_saturation"
-- "Vitamin D, 25-Hydroxy", "25-OH Vitamin D", "Vitamin D (25-OH)" → "vitamin_d_25_oh"
-- "Vitamin B12", "B12", "Vitamin B12, Serum" → "vitamin_b12"
-- "Folate", "Folic Acid", "Folate, Serum" → "folate"
-- "Magnesium", "Magnesium, Serum" → "magnesium"
-
-ONLY extract biomarkers from the above list. Return ONLY a JSON object with a "biomarkers" array.
-
-REFERENCE RANGE FORMATS - preserve exactly:
-- Min-max: "65-99" → reference_min: 65, reference_max: 99
-- Comparator: "<200", ">60", "> OR = 50", "<= 9", ">= 60" → reference_text_raw: "<200", reference_min: null, reference_max: null
-- For comparator-only ranges (no min/max), set reference_min and reference_max to null and include reference_text_raw with the exact text.
+Each item has these fields:
+{
+  "raw_name": string,         // test name exactly as on report
+  "canonical_slug": string | null,
+  "value_numeric": number,
+  "value_text": string | null,
+  "unit": string | null,
+  "raw_reference_range": string | null,
+  "normalized_reference_min": number | null,
+  "normalized_reference_max": number | null,
+  "reference_operator": string | null,
+  "reference_operator_value": number | null,
+  "confidence_score": "high" | "medium" | "low"
+}
 
 CONFIDENCE:
-- high: value + unit + reference range (any format) all extracted
+- high: value + unit + reference range all found
 - medium: value + unit, no reference range
-- low: value only, unit unclear`;
+- low: value only, unit missing or unclear`;
 
-    const userPrompt = `Extract all biomarker data from this lab report text:\n\n${text}\n\nReturn JSON: { "biomarkers": [...] }`;
+    const userPrompt = `Extract ALL lab test results from this report. Include every item with a numeric result.\n\n${text}\n\nReturn JSON: { "items": [...] }`;
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -210,7 +224,7 @@ CONFIDENCE:
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        max_tokens: 3000,
+        max_tokens: 4000,
         temperature: 0.1,
         response_format: { type: "json_object" }
       }),
@@ -225,37 +239,65 @@ CONFIDENCE:
     const openaiData = await openaiResponse.json();
     const content = openaiData.choices[0].message.content;
 
-    let biomarkers: ExtractedBiomarker[];
+    let rawItems: any[];
     try {
       const parsedJson = JSON.parse(content);
       if (Array.isArray(parsedJson)) {
-        biomarkers = parsedJson;
+        rawItems = parsedJson;
+      } else if (parsedJson.items && Array.isArray(parsedJson.items)) {
+        rawItems = parsedJson.items;
       } else if (parsedJson.biomarkers && Array.isArray(parsedJson.biomarkers)) {
-        biomarkers = parsedJson.biomarkers;
+        rawItems = parsedJson.biomarkers;
       } else {
-        biomarkers = [];
+        rawItems = [];
       }
     } catch {
-      biomarkers = [];
+      rawItems = [];
     }
 
-    const normalizedBiomarkers = biomarkers.map(b => ({
-      ...b,
-      name: normalizeName(b.name),
-    }));
+    const items: ReportItem[] = rawItems
+      .filter(item => typeof item.value_numeric === 'number' && !isNaN(item.value_numeric))
+      .map(item => {
+        const rawSlug = item.canonical_slug ?? item.name ?? null;
+        const normalizedSlug = rawSlug ? normalizeName(rawSlug) : null;
+        const canonicalSlug = normalizedSlug && CORE_BIOMARKER_SLUGS.has(normalizedSlug) ? normalizedSlug : null;
+        const isCore = canonicalSlug !== null;
+        const category = canonicalSlug ? (CORE_BIOMARKER_CATEGORIES[canonicalSlug] ?? null) : null;
 
-    const validatedBiomarkers = applySanityChecks(
-      normalizedBiomarkers.filter(b => SUPPORTED_BIOMARKERS.includes(b.name))
-    );
+        return {
+          raw_name: item.raw_name ?? item.name ?? 'Unknown',
+          canonical_slug: canonicalSlug,
+          category,
+          value_numeric: typeof item.value_numeric === 'number' ? item.value_numeric : parseFloat(item.value_numeric),
+          value_text: item.value_text ?? null,
+          unit: item.unit ?? null,
+          raw_reference_range: item.raw_reference_range ?? null,
+          normalized_reference_min: item.normalized_reference_min ?? null,
+          normalized_reference_max: item.normalized_reference_max ?? null,
+          reference_operator: item.reference_operator ?? null,
+          reference_operator_value: item.reference_operator_value ?? null,
+          confidence_score: item.confidence_score ?? 'low',
+          is_core_biomarker: isCore,
+        };
+      });
+
+    const validatedItems = applySanityChecks(items);
+
+    const coverage = {
+      total_detected: validatedItems.length,
+      total_core: validatedItems.filter(i => i.is_core_biomarker).length,
+      total_extended: validatedItems.filter(i => !i.is_core_biomarker).length,
+      needs_review: validatedItems.filter(i => i.confidence_score === 'low' || !i.unit).length,
+    };
 
     await supabaseAdmin.from("audit_events").insert({
       user_id: user.id,
       event_type: "lab_uploaded",
-      metadata: { biomarker_count: validatedBiomarkers.length },
+      metadata: { ...coverage },
     }).then(() => {});
 
     return new Response(
-      JSON.stringify({ biomarkers: validatedBiomarkers }),
+      JSON.stringify({ items: validatedItems, coverage }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
@@ -305,45 +347,20 @@ async function checkAndIncrementRateLimit(
   }
 }
 
-function applySanityChecks(biomarkers: ExtractedBiomarker[]): ExtractedBiomarker[] {
-  const validated = biomarkers.map(b => {
-    const marker = { ...b };
-    if (marker.name === 'tsh' && marker.value > 50) marker.confidence = 'low';
-    if (marker.name === 'estradiol' && marker.value > 5000) marker.confidence = 'low';
-    if (marker.name === 'progesterone' && marker.value > 100) marker.confidence = 'low';
-    if (marker.name === 'ferritin' && marker.value > 10000) marker.confidence = 'low';
-    if (marker.name === 'vitamin_d_25_oh' && marker.value > 500) marker.confidence = 'low';
-    if (marker.name === 'free_t4' && marker.value > 10) marker.confidence = 'low';
-    if (marker.name === 'fasting_glucose' && marker.value > 600) marker.confidence = 'low';
-    if (marker.name === 'total_cholesterol' && marker.value > 1000) marker.confidence = 'low';
-    if (marker.name === 'hemoglobin_a1c' && marker.value > 20) marker.confidence = 'low';
-    if (marker.name === 'egfr' && marker.value > 200) marker.confidence = 'low';
-    if (marker.value <= 0) marker.confidence = 'low';
-    if (marker.reference_min !== null && marker.reference_max !== null) {
-      if (marker.reference_min >= marker.reference_max) marker.confidence = 'low';
-    }
-    return marker;
+function applySanityChecks(items: ReportItem[]): ReportItem[] {
+  return items.map(item => {
+    const b = { ...item };
+    if (b.canonical_slug === 'tsh' && b.value_numeric > 50) b.confidence_score = 'low';
+    if (b.canonical_slug === 'estradiol' && b.value_numeric > 5000) b.confidence_score = 'low';
+    if (b.canonical_slug === 'progesterone' && b.value_numeric > 100) b.confidence_score = 'low';
+    if (b.canonical_slug === 'ferritin' && b.value_numeric > 10000) b.confidence_score = 'low';
+    if (b.canonical_slug === 'vitamin_d_25_oh' && b.value_numeric > 500) b.confidence_score = 'low';
+    if (b.canonical_slug === 'free_t4' && b.value_numeric > 10) b.confidence_score = 'low';
+    if (b.canonical_slug === 'fasting_glucose' && b.value_numeric > 600) b.confidence_score = 'low';
+    if (b.canonical_slug === 'total_cholesterol' && b.value_numeric > 1000) b.confidence_score = 'low';
+    if (b.canonical_slug === 'hemoglobin_a1c' && b.value_numeric > 20) b.confidence_score = 'low';
+    if (b.canonical_slug === 'egfr' && b.value_numeric > 200) b.confidence_score = 'low';
+    if (b.value_numeric <= 0) b.confidence_score = 'low';
+    return b;
   });
-
-  const referenceRanges = new Map<string, number>();
-  validated.forEach(b => {
-    if (b.reference_min !== null && b.reference_max !== null) {
-      const rangeKey = `${b.reference_min}-${b.reference_max}`;
-      referenceRanges.set(rangeKey, (referenceRanges.get(rangeKey) || 0) + 1);
-    }
-  });
-
-  referenceRanges.forEach((count, range) => {
-    if (count > 3) {
-      validated.forEach(b => {
-        if (b.reference_min !== null && b.reference_max !== null) {
-          if (`${b.reference_min}-${b.reference_max}` === range) {
-            b.confidence = 'low';
-          }
-        }
-      });
-    }
-  });
-
-  return validated;
 }

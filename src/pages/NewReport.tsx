@@ -6,20 +6,11 @@ import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useBiomarkerCatalog } from '../hooks/useBiomarkerCatalog';
 import type { Symptom, LabReportContext } from '../types';
-import type { ExtractedBiomarker } from '../utils/biomarkerParser';
+import type { ReportItem } from '../utils/biomarkerParser';
 import { extractTextFromPDF } from '../utils/pdfExtractor';
-import { parseBiomarkersFromText, validateExtractedBiomarkers } from '../utils/biomarkerParser';
+import { parseAllReportItems } from '../utils/biomarkerParser';
 import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
-
-interface BiomarkerEntry {
-  name: string;
-  value: number;
-  unit: string;
-  reference_min?: number;
-  reference_max?: number;
-}
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
   { value: 'fatigue', label: 'Fatigue' },
@@ -36,15 +27,7 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
 
 export function NewReport() {
   const { user } = useAuth();
-  const { catalog, loading: catalogLoading } = useBiomarkerCatalog();
   const [step, setStep] = useState(1);
-
-  useEffect(() => {
-    if (!catalogLoading) {
-      console.log('[NewReport] Biomarker catalog loaded:', catalog.length, 'entries');
-    }
-  }, [catalog.length, catalogLoading]);
-
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
@@ -57,18 +40,14 @@ export function NewReport() {
   const [pregnant, setPregnant] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [postpartum, setPostpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
-  const [extractedBiomarkers, setExtractedBiomarkers] = useState<ExtractedBiomarker[]>([]);
-  const [biomarkers, setBiomarkers] = useState<BiomarkerEntry[]>([]);
-
-  const defaultSlug = catalog.length > 0 ? catalog[0].slug : 'estradiol';
-  const defaultUnit = catalog.length > 0 ? catalog[0].unit : '';
+  const [reportItems, setReportItems] = useState<ReportItem[]>([]);
+  const [coverage, setCoverage] = useState<{ total_detected: number; total_core: number; total_extended: number; needs_review: number } | null>(null);
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
       if (!user || !reportDate) return;
-
       try {
-        const { data: events, error } = await supabase
+        const { data: events } = await supabase
           .from('cycle_events')
           .select('*')
           .eq('user_id', user.id)
@@ -77,20 +56,11 @@ export function NewReport() {
           .order('event_date', { ascending: false })
           .limit(1)
           .maybeSingle();
-
-        if (error) {
-          console.error('Error fetching cycle events:', error);
-          return;
-        }
-
         if (events && !lastPeriodDate) {
           setLastPeriodDate(events.event_date);
         }
-      } catch (error) {
-        console.error('Error in fetchMostRecentCycleEvent:', error);
-      }
+      } catch {}
     };
-
     fetchMostRecentCycleEvent();
   }, [reportDate, user, lastPeriodDate]);
 
@@ -116,8 +86,7 @@ export function NewReport() {
 
       try {
         const text = await extractTextFromPDF(file);
-        console.log('Extracted text from PDF (first 1000 chars):', text.substring(0, 1000));
-        console.log('Total text length:', text.length);
+        console.log('[NewReport] Extracted PDF text length:', text.length);
 
         if (text.trim().length > 0) {
           const { data: { session: extractSession } } = await supabase.auth.getSession();
@@ -125,6 +94,7 @@ export function NewReport() {
             window.location.href = '/login';
             return;
           }
+
           const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-biomarkers`;
           const response = await fetch(apiUrl, {
             method: 'POST',
@@ -137,31 +107,39 @@ export function NewReport() {
 
           if (response.ok) {
             const data = await response.json();
-            console.log('Extracted biomarkers from AI:', data.biomarkers);
+            console.log('[NewReport] AI extraction result:', data.coverage, data.items?.length, 'items');
 
-            if (data.biomarkers && data.biomarkers.length > 0) {
-              setExtractedBiomarkers(data.biomarkers);
+            if (data.items && data.items.length > 0) {
+              setReportItems(data.items);
+              setCoverage(data.coverage ?? null);
             } else {
-              console.warn('No biomarkers found by AI extraction, falling back to local parser');
-              const parsed = parseBiomarkersFromText(text);
-              const validated = validateExtractedBiomarkers(parsed);
-              console.log('Local parser results:', validated);
-              if (validated.length > 0) {
-                setExtractedBiomarkers(validated);
-              }
+              console.warn('[NewReport] AI returned no items, falling back to local parser');
+              const items = parseAllReportItems(text, true);
+              const cov = {
+                total_detected: items.length,
+                total_core: items.filter(i => i.is_core_biomarker).length,
+                total_extended: items.filter(i => !i.is_core_biomarker).length,
+                needs_review: items.filter(i => i.needs_review).length,
+              };
+              setReportItems(items);
+              setCoverage(cov);
             }
           } else {
-            console.error('AI extraction failed, falling back to local parser');
-            const parsed = parseBiomarkersFromText(text);
-            const validated = validateExtractedBiomarkers(parsed);
-            if (validated.length > 0) {
-              setExtractedBiomarkers(validated);
-            }
+            console.error('[NewReport] AI extraction failed, falling back to local parser');
+            const items = parseAllReportItems(text, true);
+            const cov = {
+              total_detected: items.length,
+              total_core: items.filter(i => i.is_core_biomarker).length,
+              total_extended: items.filter(i => !i.is_core_biomarker).length,
+              needs_review: items.filter(i => i.needs_review).length,
+            };
+            setReportItems(items);
+            setCoverage(cov);
           }
         }
       } catch (err) {
-        console.error('PDF extraction failed:', err);
-        setError('Failed to extract biomarkers from PDF. You can enter them manually.');
+        console.error('[NewReport] PDF extraction failed:', err);
+        setError('Failed to extract data from PDF. You can enter items manually.');
       } finally {
         setExtracting(false);
       }
@@ -172,89 +150,36 @@ export function NewReport() {
 
   const toggleSymptom = (symptom: Symptom) => {
     if (symptoms.includes(symptom)) {
-      setSymptoms(symptoms.filter((s) => s !== symptom));
+      setSymptoms(symptoms.filter(s => s !== symptom));
     } else if (symptoms.length < 5) {
       setSymptoms([...symptoms, symptom]);
     }
   };
 
   const handleProceedToStep3 = () => {
-    if (extractedBiomarkers.length > 0) {
-      const convertedBiomarkers: BiomarkerEntry[] = extractedBiomarkers.map((eb) => ({
-        name: eb.name,
-        value: eb.value,
-        unit: eb.unit ?? '',
-        reference_min: eb.reference_min,
-        reference_max: eb.reference_max,
-      }));
-      setBiomarkers(convertedBiomarkers);
-    }
     setStep(3);
-  };
-
-  const updateExtractedBiomarker = (index: number, field: keyof ExtractedBiomarker, value: string | number) => {
-    const updated = [...extractedBiomarkers];
-    updated[index] = { ...updated[index], [field]: value } as ExtractedBiomarker;
-    setExtractedBiomarkers(updated);
-  };
-
-  const removeExtractedBiomarker = (index: number) => {
-    setExtractedBiomarkers(extractedBiomarkers.filter((_, i) => i !== index));
-  };
-
-  const addExtractedBiomarker = () => {
-    setExtractedBiomarkers([
-      ...extractedBiomarkers,
-      { name: defaultSlug, value: 0, unit: defaultUnit, confidence: 'low' },
-    ]);
-  };
-
-  const addBiomarker = () => {
-    setBiomarkers([
-      ...biomarkers,
-      { name: defaultSlug, value: 0, unit: defaultUnit },
-    ]);
-  };
-
-  const removeBiomarker = (index: number) => {
-    setBiomarkers(biomarkers.filter((_, i) => i !== index));
-  };
-
-  const updateBiomarker = (index: number, field: keyof BiomarkerEntry, value: string | number) => {
-    const updated = [...biomarkers];
-    if (field === 'name') {
-      const entry = catalog.find(b => b.slug === value);
-      updated[index] = { ...updated[index], name: value as string, unit: entry?.unit ?? updated[index].unit };
-    } else {
-      updated[index] = { ...updated[index], [field]: value };
-    }
-    setBiomarkers(updated);
   };
 
   const calculateCycleInfo = () => {
     if (!reportDate || !lastPeriodDate) {
       return { cycleDay: null, cyclePhase: 'unknown' as const };
     }
-
     const reportDateObj = new Date(reportDate);
     const lastPeriodDateObj = new Date(lastPeriodDate);
     const daysDiff = Math.floor(
       (reportDateObj.getTime() - lastPeriodDateObj.getTime()) / (1000 * 60 * 60 * 24)
     );
     const cycleDay = daysDiff + 1;
-
     let cyclePhase: 'menstrual' | 'follicular' | 'ovulatory' | 'luteal' | 'unknown' = 'unknown';
     if (cycleDay >= 1 && cycleDay <= 5) cyclePhase = 'menstrual';
     else if (cycleDay >= 6 && cycleDay <= 12) cyclePhase = 'follicular';
     else if (cycleDay >= 13 && cycleDay <= 16) cyclePhase = 'ovulatory';
     else if (cycleDay >= 17 && cycleDay <= 35) cyclePhase = 'luteal';
-
     return { cycleDay, cyclePhase };
   };
 
   const handleSubmit = async () => {
     if (!user) return;
-
     setLoading(true);
     setError('');
 
@@ -267,21 +192,17 @@ export function NewReport() {
       const isSecondReport = existingReports?.length === 1;
 
       let fileUrl = null;
-
       if (file) {
         const fileExt = file.name.split('.').pop();
         const storagePath = `${user.id}/${Date.now()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from('lab-files')
           .upload(storagePath, file);
-
         if (uploadError) throw uploadError;
-
         fileUrl = storagePath;
       }
 
       const { cycleDay, cyclePhase } = calculateCycleInfo();
-
       const context: LabReportContext = {
         birth_control: birthControl,
         pregnant,
@@ -307,21 +228,55 @@ export function NewReport() {
 
       if (reportError) throw reportError;
 
-      if (biomarkers.length > 0) {
-        const biomarkerInserts = biomarkers.map((b) => ({
+      const itemsToSave = reportItems.filter(i => i.value_numeric > 0 && i.value_numeric <= 100000);
+
+      if (itemsToSave.length > 0) {
+        const reportItemInserts = itemsToSave.map(item => ({
           lab_report_id: reportData.id,
-          name: b.name,
-          value: b.value,
-          unit: b.unit,
-          reference_min: b.reference_min || null,
-          reference_max: b.reference_max || null,
+          raw_name: item.raw_name,
+          canonical_slug: item.canonical_slug,
+          category: item.category,
+          value_numeric: item.value_numeric,
+          value_text: item.value_text,
+          unit: item.unit,
+          raw_reference_range: item.raw_reference_range,
+          normalized_reference_min: item.normalized_reference_min,
+          normalized_reference_max: item.normalized_reference_max,
+          reference_operator: item.reference_operator,
+          reference_operator_value: item.reference_operator_value,
+          confidence_score: item.confidence_score,
+          needs_review: item.needs_review,
+          is_core_biomarker: item.is_core_biomarker,
+          source_snippet: item.source_snippet,
         }));
 
-        const { error: biomarkerError } = await supabase
-          .from('biomarkers')
-          .insert(biomarkerInserts);
+        const { error: itemsError } = await supabase
+          .from('report_items')
+          .insert(reportItemInserts);
 
-        if (biomarkerError) throw biomarkerError;
+        if (itemsError) {
+          console.error('[NewReport] Failed to save report_items:', itemsError);
+        }
+
+        const coreItems = itemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
+        if (coreItems.length > 0) {
+          const biomarkerInserts = coreItems.map(item => ({
+            lab_report_id: reportData.id,
+            name: item.canonical_slug!,
+            value: item.value_numeric,
+            unit: item.unit ?? '',
+            reference_min: item.normalized_reference_min ?? null,
+            reference_max: item.normalized_reference_max ?? null,
+          }));
+
+          const { error: biomarkerError } = await supabase
+            .from('biomarkers')
+            .insert(biomarkerInserts);
+
+          if (biomarkerError) {
+            console.error('[NewReport] Failed to save core biomarkers:', biomarkerError);
+          }
+        }
       }
 
       const { data: { session: interpSession } } = await supabase.auth.getSession();
@@ -349,40 +304,24 @@ export function NewReport() {
   };
 
   const canProceedStep1 = file && reportDate;
-  const canProceedStep2 = true;
-  const canSubmit = biomarkers.length > 0;
 
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          New Lab Report
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">New Lab Report</h1>
 
         <div className="flex items-center justify-center mb-8">
           <div className="flex items-center">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-theme-primary text-white' : 'bg-gray-300 text-gray-600'}`}>
-              1
-            </div>
-            <div className={`w-16 h-1 ${step >= 2 ? 'bg-theme-primary' : 'bg-gray-300'}`} />
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-theme-primary text-white' : 'bg-gray-300 text-gray-600'}`}>
-              2
-            </div>
-            <div className={`w-16 h-1 ${step >= 3 ? 'bg-theme-primary' : 'bg-gray-300'}`} />
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-theme-primary text-white' : 'bg-gray-300 text-gray-600'}`}>
-              3
-            </div>
+            {[1, 2, 3].map((s, idx) => (
+              <div key={s} className="flex items-center">
+                {idx > 0 && <div className={`w-16 h-1 ${step >= s ? 'bg-theme-primary' : 'bg-gray-300'}`} />}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= s ? 'bg-theme-primary text-white' : 'bg-gray-200 text-gray-600'}`}>
+                  {s}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-
-        {!catalogLoading && catalog.length < 44 && (
-          <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-800">
-              Biomarker catalog only loaded {catalog.length} of 44 expected entries. The dropdown may be incomplete.
-            </p>
-          </div>
-        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
@@ -392,15 +331,10 @@ export function NewReport() {
 
         {step === 1 && (
           <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              Upload Lab Results
-            </h2>
-
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Upload Lab Results</h2>
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Lab file (PDF or image)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Lab file (PDF or image)</label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-theme-primary transition-colors">
                   <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <input
@@ -411,19 +345,11 @@ export function NewReport() {
                     id="file-upload"
                   />
                   <label htmlFor="file-upload" className="cursor-pointer">
-                    <span className="text-theme-primary hover:text-theme-primary-dark font-medium">
-                      Choose a file
-                    </span>
+                    <span className="text-theme-primary hover:text-theme-primary-dark font-medium">Choose a file</span>
                     <span className="text-gray-600"> or drag and drop</span>
                   </label>
-                  <p className="text-sm text-gray-500 mt-2">
-                    PDF, JPG, or PNG up to 10MB
-                  </p>
-                  {file && (
-                    <p className="text-sm text-gray-900 mt-4 font-medium">
-                      Selected: {file.name}
-                    </p>
-                  )}
+                  <p className="text-sm text-gray-500 mt-2">PDF, JPG, or PNG up to 10MB</p>
+                  {file && <p className="text-sm text-gray-900 mt-4 font-medium">Selected: {file.name}</p>}
                 </div>
               </div>
 
@@ -431,25 +357,16 @@ export function NewReport() {
                 label="Report date (required)"
                 type="date"
                 value={reportDate}
-                onChange={(e) => setReportDate(e.target.value)}
+                onChange={e => setReportDate(e.target.value)}
                 required
               />
 
               <div className="flex justify-end">
-                <Button
-                  onClick={handleProceedFromStep1}
-                  disabled={!canProceedStep1 || extracting}
-                >
+                <Button onClick={handleProceedFromStep1} disabled={!canProceedStep1 || extracting}>
                   {extracting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Extracting...
-                    </>
+                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Extracting...</>
                   ) : (
-                    <>
-                      Next
-                      <ArrowRight className="w-5 h-5 ml-2" />
-                    </>
+                    <>Next<ArrowRight className="w-5 h-5 ml-2" /></>
                   )}
                 </Button>
               </div>
@@ -459,104 +376,66 @@ export function NewReport() {
 
         {step === 2 && (
           <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              Add Context
-            </h2>
-
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Add Context</h2>
             <div className="space-y-6">
               <Input
                 label="Last period start date (optional)"
                 type="date"
                 value={lastPeriodDate}
-                onChange={(e) => setLastPeriodDate(e.target.value)}
+                onChange={e => setLastPeriodDate(e.target.value)}
               />
 
               <Input
                 label="Average cycle length (days)"
                 type="number"
                 value={cycleLength}
-                onChange={(e) => setCycleLength(e.target.value)}
+                onChange={e => setCycleLength(e.target.value)}
                 min="21"
                 max="45"
               />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Are you currently using birth control?
-                </label>
-                <div className="flex gap-4">
-                  {['yes', 'no', 'unsure'].map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setBirthControl(option as typeof birthControl)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${
-                        birthControl === option
-                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {(['birth_control', 'pregnant', 'postpartum'] as const).map(field => {
+                const labels: Record<string, string> = {
+                  birth_control: 'Are you currently using birth control?',
+                  pregnant: 'Are you currently pregnant?',
+                  postpartum: 'Are you postpartum?',
+                };
+                const setters: Record<string, (v: 'yes' | 'no' | 'unsure') => void> = {
+                  birth_control: setBirthControl,
+                  pregnant: setPregnant,
+                  postpartum: setPostpartum,
+                };
+                const values: Record<string, string> = {
+                  birth_control: birthControl,
+                  pregnant,
+                  postpartum,
+                };
+                return (
+                  <div key={field}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">{labels[field]}</label>
+                    <div className="flex gap-4">
+                      {['yes', 'no', 'unsure'].map(opt => (
+                        <button
+                          key={opt}
+                          onClick={() => setters[field](opt as 'yes' | 'no' | 'unsure')}
+                          className={`px-4 py-2 rounded-lg border-2 transition-colors ${values[field] === opt ? 'border-teal-600 bg-theme-surface-2 text-theme-text' : 'border-gray-300 hover:border-gray-400'}`}
+                        >
+                          {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Are you currently pregnant?
-                </label>
-                <div className="flex gap-4">
-                  {['yes', 'no', 'unsure'].map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setPregnant(option as typeof pregnant)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${
-                        pregnant === option
-                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Are you postpartum?
-                </label>
-                <div className="flex gap-4">
-                  {['yes', 'no', 'unsure'].map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setPostpartum(option as typeof postpartum)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${
-                        postpartum === option
-                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Top symptoms (select up to 5)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Top symptoms (select up to 5)</label>
                 <div className="flex flex-wrap gap-2">
-                  {SYMPTOMS.map((symptom) => (
+                  {SYMPTOMS.map(symptom => (
                     <button
                       key={symptom.value}
                       onClick={() => toggleSymptom(symptom.value)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${
-                        symptoms.includes(symptom.value)
-                          ? 'border-teal-600 bg-theme-surface-2 text-theme-text'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
+                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${symptoms.includes(symptom.value) ? 'border-teal-600 bg-theme-surface-2 text-theme-text' : 'border-gray-300 hover:border-gray-400'}`}
                       disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}
                     >
                       {symptom.label}
@@ -566,184 +445,84 @@ export function NewReport() {
               </div>
 
               <div className="flex justify-between">
-                <Button
-                  variant="secondary"
-                  onClick={() => setStep(1)}
-                >
-                  <ArrowLeft className="w-5 h-5 mr-2" />
-                  Back
+                <Button variant="secondary" onClick={() => setStep(1)}>
+                  <ArrowLeft className="w-5 h-5 mr-2" />Back
                 </Button>
-                <Button
-                  onClick={handleProceedToStep3}
-                  disabled={!canProceedStep2}
-                >
-                  Next
-                  <ArrowRight className="w-5 h-5 ml-2" />
+                <Button onClick={handleProceedToStep3}>
+                  Next<ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </div>
             </div>
           </Card>
         )}
 
-        {step === 3 && extractedBiomarkers.length > 0 && biomarkers.length === 0 && (
+        {step === 3 && (
           <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              Review Extracted Biomarkers
-            </h2>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Review & Submit</h2>
 
-            <ReviewBiomarkers
-              extractedBiomarkers={extractedBiomarkers}
-              onUpdate={updateExtractedBiomarker}
-              onRemove={removeExtractedBiomarker}
-              onAddNew={addExtractedBiomarker}
-            />
-
-            <div className="flex justify-between pt-4">
-              <Button
-                variant="secondary"
-                onClick={() => setStep(2)}
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </Button>
-              <Button
-                onClick={handleProceedToStep3}
-                disabled={extractedBiomarkers.length === 0}
-              >
-                Continue to Submit
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        {step === 3 && (extractedBiomarkers.length === 0 || biomarkers.length > 0) && (
-          <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              {biomarkers.length > 0 ? 'Review and Submit' : 'Enter Biomarkers'}
-            </h2>
-
-            {extractedBiomarkers.length === 0 && biomarkers.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-amber-700">
-                  We couldn't automatically extract biomarkers from your file. Please enter them manually below.
-                </p>
+            {coverage && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 mt-2">
+                {[
+                  { label: 'Detected', value: coverage.total_detected, color: 'bg-gray-50 border-gray-200 text-gray-700' },
+                  { label: 'Core panel', value: coverage.total_core, color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                  { label: 'Extended', value: coverage.total_extended, color: 'bg-blue-50 border-blue-200 text-blue-700' },
+                  { label: 'Needs review', value: coverage.needs_review, color: 'bg-amber-50 border-amber-200 text-amber-700' },
+                ].map(stat => (
+                  <div key={stat.label} className={`rounded-lg border px-3 py-2 text-center ${stat.color}`}>
+                    <p className="text-2xl font-bold">{stat.value}</p>
+                    <p className="text-xs font-medium mt-0.5">{stat.label}</p>
+                  </div>
+                ))}
               </div>
             )}
 
-            <div className="space-y-6">
-              {biomarkers.map((biomarker, index) => {
-                const catalogEntry = catalog.find(b => b.slug === biomarker.name);
-                return (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Biomarker
-                        </label>
-                        <select
-                          value={biomarker.name}
-                          onChange={(e) => updateBiomarker(index, 'name', e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                        >
-                          {!catalogEntry && (
-                            <option value={biomarker.name}>{biomarker.name} (unknown)</option>
-                          )}
-                          {catalog.map((b) => (
-                            <option key={b.slug} value={b.slug}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Value
-                        </label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={biomarker.value}
-                          onChange={(e) => updateBiomarker(index, 'value', parseFloat(e.target.value))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Unit
-                        </label>
-                        <input
-                          type="text"
-                          value={biomarker.unit}
-                          onChange={(e) => updateBiomarker(index, 'unit', e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                          placeholder={catalogEntry?.unit ?? ''}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Reference Min (optional)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={biomarker.reference_min || ''}
-                          onChange={(e) => updateBiomarker(index, 'reference_min', parseFloat(e.target.value))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                          placeholder="Optional"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Reference Max (optional)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={biomarker.reference_max || ''}
-                          onChange={(e) => updateBiomarker(index, 'reference_max', parseFloat(e.target.value))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                          placeholder="Optional"
-                        />
-                      </div>
-
-                      <div className="flex items-end">
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => removeBiomarker(index)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <Button variant="secondary" onClick={addBiomarker}>
-                Add Biomarker
-              </Button>
-
-              <div className="flex justify-between pt-4">
-                <Button
-                  variant="secondary"
-                  onClick={() => setStep(2)}
-                >
-                  <ArrowLeft className="w-5 h-5 mr-2" />
-                  Back
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!canSubmit || loading}
-                >
-                  {loading ? 'Processing...' : 'Create Report'}
-                </Button>
+            {reportItems.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-700">
+                    We couldn't automatically extract lab data from your file. You can still submit the report — it will be saved and you can add results manually.
+                  </p>
+                </div>
               </div>
+            )}
+
+            {reportItems.length > 0 && (
+              <ReviewBiomarkers
+                items={reportItems}
+                onUpdate={(index, field, value) => {
+                  const updated = [...reportItems];
+                  updated[index] = { ...updated[index], [field]: value } as ReportItem;
+                  setReportItems(updated);
+                }}
+                onRemove={index => setReportItems(reportItems.filter((_, i) => i !== index))}
+                onAddNew={() => setReportItems([...reportItems, {
+                  raw_name: '',
+                  canonical_slug: null,
+                  category: null,
+                  value_numeric: 0,
+                  value_text: null,
+                  unit: null,
+                  raw_reference_range: null,
+                  normalized_reference_min: null,
+                  normalized_reference_max: null,
+                  reference_operator: null,
+                  reference_operator_value: null,
+                  confidence_score: 'low',
+                  is_core_biomarker: false,
+                  needs_review: true,
+                  source_snippet: null,
+                }])}
+              />
+            )}
+
+            <div className="flex justify-between pt-6">
+              <Button variant="secondary" onClick={() => setStep(2)}>
+                <ArrowLeft className="w-5 h-5 mr-2" />Back
+              </Button>
+              <Button onClick={handleSubmit} disabled={loading}>
+                {loading ? 'Processing...' : 'Create Report'}
+              </Button>
             </div>
           </Card>
         )}
