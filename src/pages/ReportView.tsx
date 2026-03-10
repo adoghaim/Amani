@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -15,10 +16,6 @@ import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY } from '../utils/biomarkerDef
 import { CATEGORY_DISPLAY } from '../types';
 import type { LabReport, Biomarker, AIInterpretation, BiomarkerCategory, BiomarkerName } from '../types';
 import { RefreshCw, Trash2, Copy, Clock, AlertCircle, ChevronDown, ChevronRight, Microscope } from 'lucide-react';
-
-interface ReportViewProps {
-  reportId: string;
-}
 
 interface ReportItem {
   id: string;
@@ -108,7 +105,8 @@ function ExtendedItemRow({ item }: { item: ReportItem }) {
   );
 }
 
-export function ReportView({ reportId }: ReportViewProps) {
+export function ReportView() {
+  const { id: reportId = '' } = useParams<{ id: string }>();
   const { userProfile } = useAuth();
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
@@ -129,9 +127,15 @@ export function ReportView({ reportId }: ReportViewProps) {
       .from('lab_reports')
       .select('*')
       .eq('id', reportId)
-      .single();
+      .maybeSingle();
 
-    if (reportError || !reportData) {
+    if (reportError) {
+      setError(`Failed to load report: ${reportError.message}`);
+      setLoading(false);
+      return;
+    }
+
+    if (!reportData) {
       setError('Report not found');
       setLoading(false);
       return;
