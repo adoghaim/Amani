@@ -4,16 +4,79 @@ export type ReportStatus = 'processing' | 'ready' | 'error';
 
 export type SubscriptionStatus = 'trial' | 'active' | 'expired';
 
+export type BiomarkerCategory =
+  | 'hormones'
+  | 'thyroid'
+  | 'metabolic'
+  | 'lipids'
+  | 'liver'
+  | 'kidney'
+  | 'nutrients'
+  | 'inflammation';
+
 export type BiomarkerName =
-  | 'estradiol'
-  | 'progesterone'
-  | 'lh'
-  | 'fsh'
-  | 'amh'
-  | 'tsh'
-  | 'free_t4'
-  | 'ferritin'
-  | 'vitamin_d';
+  | 'estradiol' | 'progesterone' | 'lh' | 'fsh' | 'amh'
+  | 'testosterone_total' | 'testosterone_free' | 'dhea_s'
+  | 'cortisol' | 'prolactin' | 'insulin' | 'shbg'
+  | 'tsh' | 'free_t4' | 'free_t3' | 'reverse_t3'
+  | 'tpo_antibodies' | 'tgab'
+  | 'glucose_fasting' | 'hba1c'
+  | 'total_cholesterol' | 'ldl' | 'hdl' | 'triglycerides' | 'apob' | 'lpA'
+  | 'alt' | 'ast' | 'ggt' | 'total_bilirubin' | 'albumin'
+  | 'creatinine' | 'egfr' | 'bun' | 'uric_acid'
+  | 'ferritin' | 'vitamin_d' | 'b12' | 'folate' | 'magnesium' | 'zinc' | 'iron'
+  | 'hscrp' | 'homocysteine';
+
+export type DerivedMetricName =
+  | 'HOMA_IR'
+  | 'Triglyceride_HDL_ratio'
+  | 'Free_Androgen_Index'
+  | 'ApoB_ratio'
+  | 'T3_T4_ratio';
+
+export interface DerivedMetric {
+  id: string;
+  lab_report_id: string;
+  name: DerivedMetricName;
+  value: number;
+  interpretation: string;
+  created_at: string;
+}
+
+export type InsightSeverity = 'info' | 'caution' | 'discuss';
+
+export interface InsightFlag {
+  id: string;
+  lab_report_id: string;
+  rule_id: string;
+  severity: InsightSeverity;
+  title: string;
+  description: string;
+  biomarkers_involved: string[];
+  created_at: string;
+}
+
+export interface BiomarkerDefinition {
+  id: string;
+  name: BiomarkerName;
+  display_name: string;
+  category: BiomarkerCategory;
+  unit: string;
+  optimal_range_min: number | null;
+  optimal_range_max: number | null;
+  clinical_range_min: number | null;
+  clinical_range_max: number | null;
+  sex_specific: boolean;
+  description: string;
+}
+
+export interface HealthSystemScore {
+  category: BiomarkerCategory;
+  label: string;
+  score: number;
+  biomarkerCount: number;
+  flaggedCount: number;
+}
 
 export type DailySymptom =
   | 'cramps'
