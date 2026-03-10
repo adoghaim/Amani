@@ -7,6 +7,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface ComparatorRange {
+  operator: '<' | '<=' | '>' | '>=' | '> OR =' | '< OR =';
+  value: number;
+  raw: string;
+}
+
 interface ExtractedBiomarker {
   name: string;
   value: number;
@@ -14,6 +20,8 @@ interface ExtractedBiomarker {
   unit: string;
   reference_min: number | null;
   reference_max: number | null;
+  reference_comparator?: ComparatorRange;
+  reference_text_raw?: string;
   confidence: 'high' | 'medium' | 'low';
 }
 
@@ -178,8 +186,13 @@ Nutrients:
 
 ONLY extract biomarkers from the above list. Return ONLY a JSON object with a "biomarkers" array.
 
+REFERENCE RANGE FORMATS - preserve exactly:
+- Min-max: "65-99" → reference_min: 65, reference_max: 99
+- Comparator: "<200", ">60", "> OR = 50", "<= 9", ">= 60" → reference_text_raw: "<200", reference_min: null, reference_max: null
+- For comparator-only ranges (no min/max), set reference_min and reference_max to null and include reference_text_raw with the exact text.
+
 CONFIDENCE:
-- high: value + unit + reference range all extracted
+- high: value + unit + reference range (any format) all extracted
 - medium: value + unit, no reference range
 - low: value only, unit unclear`;
 
