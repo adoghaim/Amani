@@ -272,6 +272,164 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
     patterns: ['magnesium, serum', 'magnesium', 'rbc magnesium', 'magnesium rbc', 'serum magnesium', 'mg rbc'],
     commonUnits: ['mg/dL', 'mEq/L', 'mg/dl', 'mmol/L'],
   },
+
+  // ─── CBC ──────────────────────────────────────────────────────────────────
+  {
+    canonical: 'wbc',
+    patterns: ['wbc', 'white blood cell count', 'white blood cells', 'leukocytes', 'wbc count', 'white blood count'],
+    commonUnits: ['x10E3/uL', 'K/uL', '10^3/uL', 'x10^3/uL', 'thou/uL', 'K/µL'],
+  },
+  {
+    canonical: 'rbc',
+    patterns: ['rbc', 'red blood cell count', 'red blood cells', 'erythrocytes', 'rbc count', 'red blood count'],
+    commonUnits: ['x10E6/uL', 'M/uL', '10^6/uL', 'x10^6/uL', 'mill/uL', 'M/µL'],
+  },
+  {
+    canonical: 'hemoglobin',
+    patterns: ['hemoglobin', 'haemoglobin', 'hgb', 'hb'],
+    commonUnits: ['g/dL', 'g/dl', 'g/L'],
+  },
+  {
+    canonical: 'hematocrit',
+    patterns: ['hematocrit', 'haematocrit', 'hct', 'packed cell volume', 'pcv'],
+    commonUnits: ['%'],
+  },
+  {
+    canonical: 'mcv',
+    patterns: ['mcv', 'mean corpuscular volume', 'mean cell volume'],
+    commonUnits: ['fL', 'fl'],
+  },
+  {
+    canonical: 'mch',
+    patterns: ['mch', 'mean corpuscular hemoglobin', 'mean cell hemoglobin'],
+    commonUnits: ['pg'],
+  },
+  {
+    canonical: 'mchc',
+    patterns: ['mchc', 'mean corpuscular hemoglobin concentration', 'mean cell hemoglobin concentration'],
+    commonUnits: ['g/dL', 'g/dl'],
+  },
+  {
+    canonical: 'rdw',
+    patterns: ['rdw', 'rdw-cv', 'red cell distribution width', 'red blood cell distribution width'],
+    commonUnits: ['%'],
+  },
+  {
+    canonical: 'platelets',
+    patterns: ['platelet count', 'platelets', 'plt', 'thrombocytes'],
+    commonUnits: ['x10E3/uL', 'K/uL', '10^3/uL', 'thou/uL'],
+  },
+  {
+    canonical: 'neutrophils',
+    patterns: ['neutrophils', 'neutrophils (%)', 'neut %', 'neutrophil %', 'neutrophils absolute', 'neutrophils (abs)', 'abs. neutrophils', 'absolute neutrophils'],
+    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+  },
+  {
+    canonical: 'lymphocytes',
+    patterns: ['lymphocytes', 'lymphs', 'lymphocytes (%)', 'lymph %', 'lymphocytes (abs)', 'absolute lymphocytes'],
+    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+  },
+  {
+    canonical: 'monocytes',
+    patterns: ['monocytes', 'mono %', 'monocytes (%)', 'monocytes (abs)', 'absolute monocytes'],
+    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+  },
+  {
+    canonical: 'eosinophils',
+    patterns: ['eosinophils', 'eos %', 'eosinophils (%)', 'eosinophils (abs)', 'absolute eosinophils'],
+    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+  },
+  {
+    canonical: 'basophils',
+    patterns: ['basophils', 'baso %', 'basophils (%)', 'basophils (abs)', 'absolute basophils'],
+    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+  },
+
+  // ─── CMP / BMP electrolytes & proteins ───────────────────────────────────
+  {
+    canonical: 'sodium',
+    patterns: ['sodium', 'na', 'sodium, serum', 'serum sodium', 'na+'],
+    commonUnits: ['mmol/L', 'mEq/L', 'meq/l'],
+  },
+  {
+    canonical: 'potassium',
+    patterns: ['potassium', 'k', 'potassium, serum', 'serum potassium', 'k+'],
+    commonUnits: ['mmol/L', 'mEq/L', 'meq/l'],
+  },
+  {
+    canonical: 'chloride',
+    patterns: ['chloride', 'cl', 'chloride, serum', 'serum chloride'],
+    commonUnits: ['mmol/L', 'mEq/L', 'meq/l'],
+  },
+  {
+    canonical: 'co2',
+    patterns: ['co2', 'carbon dioxide', 'total co2', 'bicarbonate', 'bicarb', 'hco3', 'co2, total'],
+    commonUnits: ['mmol/L', 'mEq/L', 'meq/l'],
+  },
+  {
+    canonical: 'calcium',
+    patterns: ['calcium', 'ca', 'calcium, serum', 'serum calcium', 'total calcium'],
+    commonUnits: ['mg/dL', 'mmol/L', 'mg/dl'],
+  },
+  {
+    canonical: 'total_protein',
+    patterns: ['total protein', 'protein, total', 'serum protein', 'protein total'],
+    commonUnits: ['g/dL', 'g/L', 'g/dl'],
+  },
+  {
+    canonical: 'albumin',
+    patterns: ['albumin', 'albumin, serum', 'serum albumin'],
+    commonUnits: ['g/dL', 'g/L', 'g/dl'],
+  },
+  {
+    canonical: 'globulin',
+    patterns: ['globulin', 'globulin, total', 'total globulin', 'globulin (calc)'],
+    commonUnits: ['g/dL', 'g/L', 'g/dl'],
+  },
+  {
+    canonical: 'ag_ratio',
+    patterns: ['a/g ratio', 'albumin/globulin ratio', 'a:g ratio', 'ag ratio'],
+    commonUnits: ['ratio', ''],
+  },
+  {
+    canonical: 'bun_creatinine_ratio',
+    patterns: ['bun/creatinine ratio', 'bun/creat ratio', 'urea/creat ratio', 'bun:creatinine'],
+    commonUnits: ['ratio', ''],
+  },
+
+  // ─── Thyroid extras ───────────────────────────────────────────────────────
+  {
+    canonical: 't3_uptake',
+    patterns: ['t3 uptake', 't-3 uptake', 't3 resin uptake', 't3ru', 'triiodothyronine uptake'],
+    commonUnits: ['%'],
+  },
+  {
+    canonical: 'free_thyroxine_index',
+    patterns: ['free thyroxine index', 'fti', 't7', 't4 free index'],
+    commonUnits: [''],
+  },
+  {
+    canonical: 'total_t3',
+    patterns: ['t3 total', 'total t3', 't3, total', 'triiodothyronine total', 'triiodothyronine, total'],
+    commonUnits: ['ng/dL', 'nmol/L', 'ng/dl', 'pg/mL'],
+  },
+
+  // ─── Iron panel extras ────────────────────────────────────────────────────
+  {
+    canonical: 'serum_iron',
+    patterns: ['iron, serum', 'serum iron', 'iron total', 'iron'],
+    commonUnits: ['mcg/dL', 'ug/dL', 'umol/L', 'mcg/dl'],
+  },
+  {
+    canonical: 'tibc',
+    patterns: ['tibc', 'total iron binding capacity', 'iron binding capacity', 'iron-binding capacity'],
+    commonUnits: ['mcg/dL', 'ug/dL', 'umol/L'],
+  },
+  {
+    canonical: 'uibc',
+    patterns: ['uibc', 'unsaturated iron binding capacity', 'unsaturated iron-binding capacity'],
+    commonUnits: ['mcg/dL', 'ug/dL', 'umol/L'],
+  },
 ];
 
 const CATALOG_SLUG_ALIASES: Record<string, string> = {

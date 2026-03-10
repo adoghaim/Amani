@@ -177,16 +177,21 @@ REFERENCE RANGE FORMATS - preserve exactly in raw_reference_range:
 - Comparator: ">= 60" → reference_operator: ">=", reference_operator_value: 60
 - Comparator: "<= 9" → reference_operator: "<=", reference_operator_value: 9
 
-EXTENDED ITEMS (extract even if not in the canonical list above):
-- CBC components: WBC, RBC, Hemoglobin, Hematocrit, MCV, MCH, MCHC, RDW, Platelets, Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils
-- CMP/BMP: Sodium, Potassium, Chloride, CO2, Calcium, Total Protein, Albumin, Globulin, A/G Ratio
-- Lipid ratios: Cholesterol/HDL ratio
-- Thyroid extended: Total T3, T3 Uptake
-- Iron panel: Serum Iron, TIBC, UIBC
-- Urinalysis components if present
-- Any other test with a numeric result and unit
+EXTENDED ITEMS — extract ALL of these too, with canonical_slug = null, category = null:
 
-For items NOT in the canonical list: set canonical_slug = null, category = null.
+CBC: WBC (White Blood Cells), RBC (Red Blood Cells), Hemoglobin (Hgb), Hematocrit (Hct), MCV, MCH, MCHC, RDW (Red Cell Distribution Width), Platelet Count (PLT), Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils
+
+CMP electrolytes & proteins: Sodium (Na), Potassium (K), Chloride (Cl), CO2 (Carbon Dioxide / Bicarbonate), Calcium, Total Protein, Albumin, Globulin, A/G Ratio, BUN/Creatinine Ratio
+
+Thyroid extras: T3 Uptake, Free Thyroxine Index (FTI / T7), Total T3 (Triiodothyronine, Total)
+
+Iron panel: Serum Iron, TIBC (Total Iron Binding Capacity), UIBC (Unsaturated Iron Binding Capacity)
+
+Lipid extras: Cholesterol/HDL Ratio
+
+Any other test on the report with a numeric value — do NOT skip any item.
+
+IMPORTANT: For all CBC/CMP/iron/thyroid-extra items above: set canonical_slug = null (they are not in the core panel).
 
 Return ONLY a JSON object: { "items": [...] }
 
