@@ -64,7 +64,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'lh',
-    patterns: ['lh', 'luteinizing hormone', 'luteinizing', 'lutropin'],
+    patterns: ['lh', 'luteinizing hormone', 'luteinising hormone', 'luteinizing', 'luteinising', 'lutropin', 'lh, serum'],
     commonUnits: ['mIU/mL', 'IU/L', 'miu/ml', 'iu/l', 'mIU/L'],
   },
   {
@@ -124,7 +124,10 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'total_t4',
-    patterns: ['total t4', 't4 total', 't4, total', 'thyroxine total', 'thyroxine, total'],
+    patterns: [
+      'total t4', 't4 total', 't4, total', 'thyroxine total', 'thyroxine, total',
+      't4 (thyroxine)', 'thyroxine (t4)', 't4, serum', 'serum t4',
+    ],
     commonUnits: ['mcg/dL', 'ug/dL', 'nmol/L'],
   },
   {
@@ -134,8 +137,12 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'tpo_antibodies',
-    patterns: ['thyroid peroxidase antibodies', 'thyroid peroxidase (tpo) ab', 'tpo antibodies', 'anti-tpo', 'tpo ab', 'antithyroid peroxidase', 'tpo ab igg'],
-    commonUnits: ['IU/mL', 'U/mL', 'kIU/L'],
+    patterns: [
+      'thyroid peroxidase antibodies', 'thyroid peroxidase (tpo) ab', 'thyroid peroxidase (tpo) antibody',
+      'thyroid peroxidase antibody', 'tpo antibodies', 'tpo antibody', 'anti-tpo', 'tpo ab', 'tpo ab igg',
+      'antithyroid peroxidase', 'thyroid peroxidase ab', 'tpo (thyroid peroxidase antibody)',
+    ],
+    commonUnits: ['IU/mL', 'U/mL', 'kIU/L', 'IU/ml'],
   },
   {
     canonical: 'tg_antibodies',
@@ -184,7 +191,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'apob',
-    patterns: ['apolipoprotein b', 'apob', 'apo b', 'apolipoprotein-b'],
+    patterns: ['apolipoprotein b', 'apob', 'apo b', 'apolipoprotein-b', 'apo b-100', 'apolipoprotein b-100', 'apo b100'],
     commonUnits: ['mg/dL', 'g/L', 'mg/dl'],
   },
   {
@@ -590,9 +597,12 @@ const KNOWN_UNITS = [
   'mIU/mL', 'miu/ml', 'mIU/L', 'miu/l', 'IU/mL', 'iu/ml', 'IU/L', 'iu/l',
   'uIU/mL', 'uiu/ml', 'mcIU/mL', 'mcu/ml',
   'mg/dL', 'mg/dl', 'mg/L', 'mg/l',
-  'U/L', 'u/l',
+  'U/L', 'u/l', 'IU/mL', 'iu/ml', 'kIU/L', 'kiu/l',
   'mL/min/1.73m2', 'ml/min/1.73m2', 'mL/min', 'ml/min',
   'mm/h', 'mm/hr',
+  'g/dL', 'g/dl', 'g/L', 'g/l',
+  'fL', 'fl', 'pg',
+  'x10E3/uL', 'x10E6/uL', 'K/uL', 'M/uL',
   '%',
   'mEq/L', 'meq/l',
 ];

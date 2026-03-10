@@ -168,7 +168,8 @@ ALIAS MAPPING:
 "Vitamin D, 25-Hydroxy", "Vitamin D (25-OH)" → vitamin_d_25_oh
 "Vitamin B12, Serum" → vitamin_b12, "Folate, Serum" → folate, "Magnesium, Serum" → magnesium
 "Bilirubin, Total" → bilirubin_total, "Urea Nitrogen (BUN)", "Blood Urea Nitrogen" → bun
-"TPO Ab", "Thyroid Peroxidase Antibodies" → tpo_antibodies
+"TPO Ab", "TPO Antibody", "TPO (Thyroid Peroxidase Antibody)", "Thyroid Peroxidase Antibodies", "Thyroid Peroxidase Antibody", "Thyroid Peroxidase (TPO) Ab" → tpo_antibodies
+"T4 (Thyroxine)", "T4, Serum", "Thyroxine" → total_t4 (if not labeled as "Free T4")
 
 REFERENCE RANGE FORMATS - preserve exactly in raw_reference_range:
 - Min-max: "65-99" → normalized_reference_min: 65, normalized_reference_max: 99, reference_operator: null
