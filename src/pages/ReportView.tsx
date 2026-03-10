@@ -5,42 +5,24 @@ import { Card } from '../components/Card';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { BiomarkerSystemDashboard } from '../components/BiomarkerSystemDashboard';
+import { BiomarkerCard } from '../components/BiomarkerCard';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
+import { QuickHighlights } from '../components/QuickHighlights';
+import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
-import type { LabReport, Biomarker, AIInterpretation, BiomarkerCategory } from '../types';
+import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
+import { CATEGORY_DISPLAY } from '../types';
+import type { LabReport, Biomarker, AIInterpretation, BiomarkerCategory, BiomarkerName } from '../types';
 import { RefreshCw, Trash2, Copy, Clock, AlertCircle } from 'lucide-react';
-
-const BIOMARKER_CATEGORIES: Record<string, BiomarkerCategory> = {
-  estradiol: 'hormones', progesterone: 'hormones', lh: 'hormones', fsh: 'hormones',
-  amh: 'hormones', testosterone_total: 'hormones', testosterone_free: 'hormones',
-  dhea_s: 'hormones', cortisol: 'hormones', prolactin: 'hormones', insulin: 'hormones', shbg: 'hormones',
-  tsh: 'thyroid', free_t4: 'thyroid', free_t3: 'thyroid', reverse_t3: 'thyroid',
-  tpo_antibodies: 'thyroid', tgab: 'thyroid',
-  glucose_fasting: 'metabolic', hba1c: 'metabolic',
-  total_cholesterol: 'lipids', ldl: 'lipids', hdl: 'lipids', triglycerides: 'lipids',
-  apob: 'lipids', lpA: 'lipids',
-  alt: 'liver', ast: 'liver', ggt: 'liver', total_bilirubin: 'liver', albumin: 'liver',
-  creatinine: 'kidney', egfr: 'kidney', bun: 'kidney', uric_acid: 'kidney',
-  ferritin: 'nutrients', vitamin_d: 'nutrients', b12: 'nutrients', folate: 'nutrients',
-  magnesium: 'nutrients', zinc: 'nutrients', iron: 'nutrients',
-  hscrp: 'inflammation', homocysteine: 'inflammation',
-};
-
-const CATEGORY_SECTION_LABELS: Record<BiomarkerCategory, string> = {
-  hormones: 'Hormones',
-  thyroid: 'Thyroid',
-  metabolic: 'Metabolic',
-  lipids: 'Cardiovascular',
-  liver: 'Liver',
-  kidney: 'Kidney',
-  nutrients: 'Nutrients',
-  inflammation: 'Inflammation',
-};
 
 interface ReportViewProps {
   reportId: string;
 }
+
+const CATEGORY_ORDER: BiomarkerCategory[] = [
+  'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
+];
 
 export function ReportView({ reportId }: ReportViewProps) {
   const { userProfile } = useAuth();
@@ -94,26 +76,42 @@ export function ReportView({ reportId }: ReportViewProps) {
   };
 
   const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
-  const insightFlags = useMemo(() => evaluateInsightRules(biomarkers), [biomarkers]);
+  const insightFlags = useMemo(
+    () => evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+    [biomarkers, report]
+  );
 
   const groupedBiomarkers = useMemo(() => {
-    if (!interpretation) return {};
-    const groups: Partial<Record<BiomarkerCategory, typeof interpretation.biomarkers>> = {};
-    for (const b of interpretation.biomarkers) {
-      const cat = BIOMARKER_CATEGORIES[b.name] ?? 'hormones';
+    const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
+    for (const b of biomarkers) {
+      const cat = BIOMARKER_CATEGORY_MAP[b.name] ?? null;
+      if (!cat) continue;
       if (!groups[cat]) groups[cat] = [];
       groups[cat]!.push(b);
     }
     return groups;
+  }, [biomarkers]);
+
+  const interpMap = useMemo(() => {
+    if (!interpretation) return new Map<string, AIInterpretation['biomarkers'][number]>();
+    return new Map(interpretation.biomarkers.map(b => [b.name, b]));
   }, [interpretation]);
 
-  const categoryOrder: BiomarkerCategory[] = ['hormones','thyroid','metabolic','lipids','liver','kidney','nutrients','inflammation'];
+  const filteredCategories = useMemo(() => {
+    if (activeCategory) {
+      const items = groupedBiomarkers[activeCategory];
+      if (!items) return [];
+      return [{ category: activeCategory, items }];
+    }
+    return CATEGORY_ORDER
+      .map(cat => ({ category: cat, items: groupedBiomarkers[cat] ?? [] }))
+      .filter(g => g.items.length > 0);
+  }, [groupedBiomarkers, activeCategory]);
 
-  const filteredBiomarkers = useMemo(() => {
-    if (!interpretation) return [];
-    if (!activeCategory) return interpretation.biomarkers;
-    return interpretation.biomarkers.filter(b => BIOMARKER_CATEGORIES[b.name] === activeCategory);
-  }, [interpretation, activeCategory]);
+  const presentBiomarkerNames = useMemo(() =>
+    biomarkers.map(b => b.name),
+    [biomarkers]
+  );
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
@@ -220,6 +218,7 @@ export function ReportView({ reportId }: ReportViewProps) {
   }
 
   const canRegenerate = report.regeneration_count < 3 && (userProfile?.subscription_status === 'active' || isTrialActive());
+  const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
 
   return (
     <Layout>
@@ -230,6 +229,11 @@ export function ReportView({ reportId }: ReportViewProps) {
               Lab Report — {formatDate(report.report_date)}
             </h1>
             <p className="text-sm text-[#7A6570]">Generated on {formatDate(report.upload_date)}</p>
+            {cyclePhase && (
+              <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 border border-rose-200 text-rose-700 capitalize">
+                {cyclePhase.replace(/_/g, ' ')} phase
+              </span>
+            )}
           </div>
           <div className="flex gap-2">
             {canRegenerate && (
@@ -264,9 +268,22 @@ export function ReportView({ reportId }: ReportViewProps) {
             </ul>
           </Card>
 
+          {biomarkers.length > 0 && (
+            <QuickHighlights
+              biomarkers={biomarkers.map(b => ({
+                name: b.name,
+                value: b.value,
+                unit: b.unit,
+                labRefMin: b.reference_min,
+                labRefMax: b.reference_max,
+              }))}
+              cyclePhase={cyclePhase}
+            />
+          )}
+
           <BiomarkerSystemDashboard
             biomarkers={biomarkers}
-            interpretationBiomarkers={interpretation.biomarkers}
+            cyclePhase={cyclePhase}
             onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
             activeCategory={activeCategory}
           />
@@ -274,6 +291,62 @@ export function ReportView({ reportId }: ReportViewProps) {
           {insightFlags.length > 0 && <InsightFlagsPanel flags={insightFlags} />}
 
           {derivedMetrics.length > 0 && <DerivedMetricsPanel metrics={derivedMetrics} />}
+
+          {biomarkers.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-[#2A1F23]">
+                  Biomarkers
+                  {activeCategory && (
+                    <span className="ml-2 text-sm font-normal text-[#C97C8B]">
+                      — {CATEGORY_DISPLAY[activeCategory].label}
+                      <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
+                        clear filter
+                      </button>
+                    </span>
+                  )}
+                </h2>
+                <span className="text-sm text-[#7A6570]">
+                  {filteredCategories.reduce((a, g) => a + g.items.length, 0)} shown
+                </span>
+              </div>
+
+              <div className="space-y-8">
+                {filteredCategories.map(({ category, items }) => (
+                  <div key={category}>
+                    <h3 className="text-xs font-bold text-[#7A6570] uppercase tracking-widest mb-3">
+                      {CATEGORY_DISPLAY[category].label}
+                    </h3>
+                    <div className="space-y-3">
+                      {items.map(b => {
+                        const interp = interpMap.get(b.name);
+                        return (
+                          <BiomarkerCard
+                            key={b.id}
+                            name={b.name}
+                            value={b.value}
+                            unit={b.unit}
+                            labRefMin={b.reference_min}
+                            labRefMax={b.reference_max}
+                            cyclePhase={cyclePhase}
+                            plainEnglishMeaning={interp?.plain_english_meaning}
+                            timingNotes={interp?.timing_notes}
+                            commonNonAlarmReasons={interp?.common_non_alarm_reasons}
+                            whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <RecommendedLabs
+            presentBiomarkers={presentBiomarkerNames}
+            activeCategory={activeCategory}
+          />
 
           <Card>
             <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Cycle Context</h2>
@@ -293,50 +366,6 @@ export function ReportView({ reportId }: ReportViewProps) {
               <p className="text-gray-700 mt-2">{interpretation.cycle_context.explanation}</p>
             </div>
           </Card>
-
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#2A1F23]">
-                Biomarkers
-                {activeCategory && (
-                  <span className="ml-2 text-sm font-normal text-[#C97C8B]">
-                    — {CATEGORY_SECTION_LABELS[activeCategory]}
-                    <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
-                      clear filter
-                    </button>
-                  </span>
-                )}
-              </h2>
-              <span className="text-sm text-[#7A6570]">{filteredBiomarkers.length} shown</span>
-            </div>
-
-            {activeCategory ? (
-              <div className="space-y-4">
-                {filteredBiomarkers.map((biomarker, i) => (
-                  <BiomarkerCard key={i} biomarker={biomarker} />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-8">
-                {categoryOrder.map(cat => {
-                  const items = groupedBiomarkers[cat];
-                  if (!items?.length) return null;
-                  return (
-                    <div key={cat}>
-                      <h3 className="text-sm font-semibold text-[#7A6570] uppercase tracking-wide mb-3">
-                        {CATEGORY_SECTION_LABELS[cat]}
-                      </h3>
-                      <div className="space-y-4">
-                        {items.map((biomarker, i) => (
-                          <BiomarkerCard key={i} biomarker={biomarker} />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
           <Card>
             <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Lifestyle Considerations</h2>
@@ -457,74 +486,5 @@ export function ReportView({ reportId }: ReportViewProps) {
         </div>
       </div>
     </Layout>
-  );
-}
-
-function BiomarkerCard({ biomarker }: { biomarker: AIInterpretation['biomarkers'][number] }) {
-  const [expanded, setExpanded] = useState(false);
-
-  const statusStyles = {
-    in_range: 'bg-green-100 text-green-800',
-    borderline: 'bg-yellow-100 text-yellow-800',
-    out_of_range: 'bg-orange-100 text-orange-800',
-    unknown: 'bg-gray-100 text-gray-800',
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-5 py-4 flex items-center gap-4 text-left hover:bg-gray-50 transition-colors"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-semibold text-gray-900 capitalize">
-              {biomarker.name.replace(/_/g, ' ')}
-            </h3>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyles[biomarker.status_label]}`}>
-              {biomarker.status_label.replace('_', ' ')}
-            </span>
-          </div>
-          <p className="text-sm text-[#7A6570] mt-0.5">
-            {biomarker.user_value} {biomarker.unit}
-            {biomarker.reference_range && ` — ref: ${biomarker.reference_range}`}
-          </p>
-        </div>
-        <span className="text-xs text-[#9A8A90]">{expanded ? 'less' : 'more'}</span>
-      </button>
-
-      {expanded && (
-        <div className="px-5 pb-5 space-y-3 border-t border-gray-100">
-          <p className="text-gray-700 pt-3">{biomarker.plain_english_meaning}</p>
-          {biomarker.timing_notes && (
-            <p className="text-gray-600 text-sm italic">{biomarker.timing_notes}</p>
-          )}
-          {biomarker.common_non_alarm_reasons.length > 0 && (
-            <div>
-              <h4 className="font-medium text-gray-900 mb-1 text-sm">Common reasons for this result:</h4>
-              <ul className="space-y-1">
-                {biomarker.common_non_alarm_reasons.map((r, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                    <span className="text-[#C97C8B] mt-0.5">•</span><span>{r}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {biomarker.when_clinicians_follow_up.length > 0 && (
-            <div>
-              <h4 className="font-medium text-gray-900 mb-1 text-sm">When clinicians may follow up:</h4>
-              <ul className="space-y-1">
-                {biomarker.when_clinicians_follow_up.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                    <span className="text-[#C97C8B] mt-0.5">•</span><span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 }

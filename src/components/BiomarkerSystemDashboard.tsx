@@ -1,132 +1,139 @@
 import { useMemo } from 'react';
-import type { Biomarker, BiomarkerCategory, HealthSystemScore } from '../types';
+import {
+  computeHealthScores,
+  BIOMARKER_CATEGORY_MAP,
+  computeAmaniStatus,
+  amaniStatusToVariant,
+} from '../utils/biomarkerDefinitions';
+import type { BiomarkerName, BiomarkerCategory, CyclePhase } from '../types';
 
-const CATEGORY_LABELS: Record<BiomarkerCategory, string> = {
-  hormones: 'Hormones',
-  thyroid: 'Thyroid',
-  metabolic: 'Metabolic',
-  lipids: 'Cardiovascular',
-  liver: 'Liver',
-  kidney: 'Kidney',
-  nutrients: 'Nutrients',
-  inflammation: 'Inflammation',
-};
-
-const CATEGORY_COLORS: Record<BiomarkerCategory, { bg: string; fill: string; text: string; border: string }> = {
-  hormones:    { bg: 'bg-rose-50',   fill: 'bg-rose-400',   text: 'text-rose-700',   border: 'border-rose-200' },
-  thyroid:     { bg: 'bg-amber-50',  fill: 'bg-amber-400',  text: 'text-amber-700',  border: 'border-amber-200' },
-  metabolic:   { bg: 'bg-orange-50', fill: 'bg-orange-400', text: 'text-orange-700', border: 'border-orange-200' },
-  lipids:      { bg: 'bg-sky-50',    fill: 'bg-sky-400',    text: 'text-sky-700',    border: 'border-sky-200' },
-  liver:       { bg: 'bg-lime-50',   fill: 'bg-lime-500',   text: 'text-lime-700',   border: 'border-lime-200' },
-  kidney:      { bg: 'bg-cyan-50',   fill: 'bg-cyan-500',   text: 'text-cyan-700',   border: 'border-cyan-200' },
-  nutrients:   { bg: 'bg-teal-50',   fill: 'bg-teal-400',   text: 'text-teal-700',   border: 'border-teal-200' },
-  inflammation:{ bg: 'bg-red-50',    fill: 'bg-red-400',    text: 'text-red-700',    border: 'border-red-200' },
-};
-
-const BIOMARKER_CATEGORIES: Record<string, BiomarkerCategory> = {
-  estradiol: 'hormones', progesterone: 'hormones', lh: 'hormones', fsh: 'hormones',
-  amh: 'hormones', testosterone_total: 'hormones', testosterone_free: 'hormones',
-  dhea_s: 'hormones', cortisol: 'hormones', prolactin: 'hormones', insulin: 'hormones', shbg: 'hormones',
-  tsh: 'thyroid', free_t4: 'thyroid', free_t3: 'thyroid', reverse_t3: 'thyroid',
-  tpo_antibodies: 'thyroid', tgab: 'thyroid',
-  glucose_fasting: 'metabolic', hba1c: 'metabolic',
-  total_cholesterol: 'lipids', ldl: 'lipids', hdl: 'lipids', triglycerides: 'lipids',
-  apob: 'lipids', lpA: 'lipids',
-  alt: 'liver', ast: 'liver', ggt: 'liver', total_bilirubin: 'liver', albumin: 'liver',
-  creatinine: 'kidney', egfr: 'kidney', bun: 'kidney', uric_acid: 'kidney',
-  ferritin: 'nutrients', vitamin_d: 'nutrients', b12: 'nutrients', folate: 'nutrients',
-  magnesium: 'nutrients', zinc: 'nutrients', iron: 'nutrients',
-  hscrp: 'inflammation', homocysteine: 'inflammation',
-};
-
-function scoreForStatus(status: string): number {
-  switch (status) {
-    case 'in_range': return 100;
-    case 'borderline': return 50;
-    case 'out_of_range': return 0;
-    default: return 75;
-  }
+interface BiomarkerLike {
+  name?: BiomarkerName;
+  biomarker_name?: BiomarkerName;
+  value: number;
+  unit?: string;
 }
 
 interface Props {
-  biomarkers: Biomarker[];
-  interpretationBiomarkers?: { name: string; status_label: string }[];
-  onCategoryClick?: (category: BiomarkerCategory) => void;
+  biomarkers: BiomarkerLike[];
+  cyclePhase?: CyclePhase | null;
   activeCategory?: BiomarkerCategory | null;
+  onCategoryClick?: (cat: BiomarkerCategory) => void;
 }
 
-export function BiomarkerSystemDashboard({ biomarkers, interpretationBiomarkers, onCategoryClick, activeCategory }: Props) {
-  const scores = useMemo<HealthSystemScore[]>(() => {
-    const categoryMap = new Map<BiomarkerCategory, { total: number; count: number; flagged: number }>();
+const CATEGORY_COLORS: Record<BiomarkerCategory, {
+  bg: string; ring: string; bar: string; text: string; border: string;
+}> = {
+  hormones:     { bg: 'bg-rose-50',   ring: 'ring-rose-400',   bar: 'bg-rose-400',   text: 'text-rose-700',   border: 'border-rose-200' },
+  thyroid:      { bg: 'bg-amber-50',  ring: 'ring-amber-400',  bar: 'bg-amber-400',  text: 'text-amber-700',  border: 'border-amber-200' },
+  metabolic:    { bg: 'bg-orange-50', ring: 'ring-orange-400', bar: 'bg-orange-400', text: 'text-orange-700', border: 'border-orange-200' },
+  lipids:       { bg: 'bg-sky-50',    ring: 'ring-sky-400',    bar: 'bg-sky-400',    text: 'text-sky-700',    border: 'border-sky-200' },
+  liver:        { bg: 'bg-lime-50',   ring: 'ring-lime-500',   bar: 'bg-lime-500',   text: 'text-lime-700',   border: 'border-lime-200' },
+  kidney:       { bg: 'bg-cyan-50',   ring: 'ring-cyan-500',   bar: 'bg-cyan-500',   text: 'text-cyan-700',   border: 'border-cyan-200' },
+  inflammation: { bg: 'bg-red-50',    ring: 'ring-red-400',    bar: 'bg-red-400',    text: 'text-red-700',    border: 'border-red-200' },
+  nutrients:    { bg: 'bg-teal-50',   ring: 'ring-teal-400',   bar: 'bg-teal-400',   text: 'text-teal-700',   border: 'border-teal-200' },
+};
 
-    for (const b of biomarkers) {
-      const cat = BIOMARKER_CATEGORIES[b.name] as BiomarkerCategory | undefined;
+const CATEGORY_LABELS: Record<BiomarkerCategory, string> = {
+  hormones: 'Hormones', thyroid: 'Thyroid', metabolic: 'Metabolic', lipids: 'Cardiovascular',
+  liver: 'Liver', kidney: 'Kidney', inflammation: 'Inflammation', nutrients: 'Nutrients',
+};
+
+const CATEGORY_ORDER: BiomarkerCategory[] = [
+  'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
+];
+
+const SCORE_KEY_MAP: Record<BiomarkerCategory, string> = {
+  hormones: 'hormones_score', thyroid: 'thyroid_score', metabolic: 'metabolic_score',
+  lipids: 'lipids_score', liver: 'liver_score', kidney: 'kidney_score',
+  inflammation: 'inflammation_score', nutrients: 'nutrients_score',
+};
+
+export function BiomarkerSystemDashboard({ biomarkers, cyclePhase, activeCategory, onCategoryClick }: Props) {
+  const normalized = useMemo(() =>
+    biomarkers.map(b => ({
+      name: (b.biomarker_name ?? b.name) as BiomarkerName,
+      value: b.value,
+      unit: b.unit ?? '',
+      lab_report_id: '',
+      id: '',
+      lab_ref_min: null,
+      lab_ref_max: null,
+      amani_status: 'unknown' as const,
+      lab_status: 'unknown' as const,
+      cycle_phase: null,
+      extraction_confidence: null,
+      created_at: '',
+    })),
+    [biomarkers]
+  );
+
+  const scores = useMemo(() => computeHealthScores(normalized, cyclePhase), [normalized, cyclePhase]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<BiomarkerCategory, { count: number; flagged: number }>();
+    for (const b of normalized) {
+      const cat = BIOMARKER_CATEGORY_MAP[b.name];
       if (!cat) continue;
-
-      const statusLabel = interpretationBiomarkers?.find(ib => ib.name === b.name)?.status_label ?? b.flagged;
-      const score = scoreForStatus(statusLabel);
-      const flagged = statusLabel === 'out_of_range' || statusLabel === 'borderline' ? 1 : 0;
-
-      const existing = categoryMap.get(cat) ?? { total: 0, count: 0, flagged: 0 };
-      categoryMap.set(cat, {
-        total: existing.total + score,
-        count: existing.count + 1,
-        flagged: existing.flagged + flagged,
-      });
+      const existing = counts.get(cat) ?? { count: 0, flagged: 0 };
+      const status = computeAmaniStatus(b.name, b.value, cyclePhase);
+      const variant = amaniStatusToVariant(status);
+      const flagged = variant === 'out_of_range' || variant === 'borderline_low' || variant === 'borderline_high' ? 1 : 0;
+      counts.set(cat, { count: existing.count + 1, flagged: existing.flagged + flagged });
     }
+    return counts;
+  }, [normalized, cyclePhase]);
 
-    return Array.from(categoryMap.entries()).map(([category, data]) => ({
-      category,
-      label: CATEGORY_LABELS[category],
-      score: Math.round(data.total / data.count),
-      biomarkerCount: data.count,
-      flaggedCount: data.flagged,
-    }));
-  }, [biomarkers, interpretationBiomarkers]);
-
-  if (scores.length === 0) return null;
+  const presentCategories = CATEGORY_ORDER.filter(cat => (categoryCounts.get(cat)?.count ?? 0) > 0);
+  if (presentCategories.length === 0) return null;
 
   return (
     <div className="bg-white rounded-2xl border border-[#E9D6DA] p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-[#2A1F23]">Health Systems Overview</h2>
+        <h2 className="text-lg font-semibold text-[#2A1F23]">Health Systems</h2>
         <p className="text-sm text-[#7A6570] mt-1">
-          Scores calculated from your biomarker results — tap a system to filter below.
+          Scored against Amani optimal ranges. Select a system to filter biomarkers.
         </p>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {scores.map(s => {
-          const colors = CATEGORY_COLORS[s.category];
-          const isActive = activeCategory === s.category;
+        {presentCategories.map(cat => {
+          const colors = CATEGORY_COLORS[cat];
+          const isActive = activeCategory === cat;
+          const cc = categoryCounts.get(cat) ?? { count: 0, flagged: 0 };
+          const score = scores[`${cat}_score`] ?? 100;
+
           return (
             <button
-              key={s.category}
-              onClick={() => onCategoryClick?.(s.category)}
+              key={cat}
+              onClick={() => onCategoryClick?.(cat)}
               className={`rounded-xl border p-4 text-left transition-all duration-150 hover:shadow-md ${
                 isActive
-                  ? `ring-2 ring-offset-1 ring-[#C97C8B] ${colors.bg} ${colors.border}`
+                  ? `ring-2 ring-offset-1 ${colors.ring} ${colors.bg} ${colors.border}`
                   : `${colors.bg} ${colors.border} hover:ring-1 hover:ring-[#C97C8B]/40`
               }`}
             >
-              <div className="flex justify-between items-start mb-2">
-                <span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>
-                  {s.label}
+              <div className="flex justify-between items-start mb-1.5">
+                <span className={`text-[11px] font-bold uppercase tracking-wide ${colors.text}`}>
+                  {CATEGORY_LABELS[cat]}
                 </span>
-                {s.flaggedCount > 0 && (
-                  <span className="text-xs font-bold text-orange-600 bg-orange-100 rounded-full px-1.5 py-0.5 leading-none">
-                    {s.flaggedCount}
+                {cc.flagged > 0 && (
+                  <span className="text-[10px] font-bold text-red-600 bg-red-100 rounded-full px-1.5 py-0.5 leading-none">
+                    {cc.flagged}
                   </span>
                 )}
               </div>
-              <div className="text-2xl font-bold text-[#2A1F23] mb-2">{s.score}</div>
-              <div className="w-full bg-white/60 rounded-full h-1.5">
+              <div className="flex items-baseline gap-1 mb-2">
+                <span className="text-2xl font-bold text-[#2A1F23]">{score}</span>
+                <span className="text-xs text-[#9A8A90]">/100</span>
+              </div>
+              <div className="w-full bg-white/60 rounded-full h-1.5 mb-1.5">
                 <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ${colors.fill}`}
-                  style={{ width: `${s.score}%` }}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${colors.bar}`}
+                  style={{ width: `${score}%` }}
                 />
               </div>
-              <div className="text-xs text-[#7A6570] mt-2">
-                {s.biomarkerCount} marker{s.biomarkerCount !== 1 ? 's' : ''}
+              <div className="text-[11px] text-[#7A6570]">
+                {cc.count} marker{cc.count !== 1 ? 's' : ''}
               </div>
             </button>
           );

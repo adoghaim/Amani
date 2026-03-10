@@ -1,7 +1,14 @@
-export type CyclePhase = 'menstrual' | 'follicular' | 'ovulatory' | 'luteal' | 'unknown';
+export type CyclePhase =
+  | 'menstrual'
+  | 'follicular'
+  | 'ovulatory'
+  | 'luteal'
+  | 'pregnancy_t1'
+  | 'pregnancy_t2'
+  | 'pregnancy_t3'
+  | 'unknown';
 
 export type ReportStatus = 'processing' | 'ready' | 'error';
-
 export type SubscriptionStatus = 'trial' | 'active' | 'expired';
 
 export type BiomarkerCategory =
@@ -11,41 +18,115 @@ export type BiomarkerCategory =
   | 'lipids'
   | 'liver'
   | 'kidney'
-  | 'nutrients'
-  | 'inflammation';
+  | 'inflammation'
+  | 'nutrients';
+
+export const CATEGORY_DISPLAY: Record<BiomarkerCategory, { label: string; shortLabel: string }> = {
+  hormones:    { label: 'Hormones & Reproductive', shortLabel: 'Hormones' },
+  thyroid:     { label: 'Thyroid',                 shortLabel: 'Thyroid' },
+  metabolic:   { label: 'Metabolic & Glucose',     shortLabel: 'Metabolic' },
+  lipids:      { label: 'Lipids & Cardiovascular', shortLabel: 'Cardiovascular' },
+  liver:       { label: 'Liver',                   shortLabel: 'Liver' },
+  kidney:      { label: 'Kidney',                  shortLabel: 'Kidney' },
+  inflammation:{ label: 'Inflammation & Autoimmune', shortLabel: 'Inflammation' },
+  nutrients:   { label: 'Nutrients & Deficiency',  shortLabel: 'Nutrients' },
+};
 
 export type BiomarkerName =
-  | 'estradiol' | 'progesterone' | 'lh' | 'fsh' | 'amh'
-  | 'testosterone_total' | 'testosterone_free' | 'dhea_s'
-  | 'cortisol' | 'prolactin' | 'insulin' | 'shbg'
-  | 'tsh' | 'free_t4' | 'free_t3' | 'reverse_t3'
+  | 'estradiol' | 'progesterone' | 'fsh' | 'lh'
+  | 'testosterone_total' | 'testosterone_free' | 'shbg' | 'dhea_s'
+  | 'prolactin' | 'amh'
+  | 'tsh' | 'free_t3' | 'free_t4' | 'total_t4' | 'reverse_t3'
   | 'tpo_antibodies' | 'tgab'
-  | 'glucose_fasting' | 'hba1c'
-  | 'total_cholesterol' | 'ldl' | 'hdl' | 'triglycerides' | 'apob' | 'lpA'
-  | 'alt' | 'ast' | 'ggt' | 'total_bilirubin' | 'albumin'
-  | 'creatinine' | 'egfr' | 'bun' | 'uric_acid'
-  | 'ferritin' | 'vitamin_d' | 'b12' | 'folate' | 'magnesium' | 'zinc' | 'iron'
-  | 'hscrp' | 'homocysteine';
+  | 'glucose_fasting' | 'hba1c' | 'insulin' | 'c_peptide'
+  | 'total_cholesterol' | 'hdl' | 'ldl' | 'triglycerides'
+  | 'non_hdl' | 'apob' | 'lpa'
+  | 'ast' | 'alt' | 'ggt' | 'alkaline_phosphatase' | 'bilirubin_total'
+  | 'creatinine' | 'bun' | 'egfr'
+  | 'hscrp' | 'esr'
+  | 'ferritin' | 'iron_saturation' | 'vitamin_d' | 'b12' | 'folate' | 'magnesium';
+
+export type AmaniStatus =
+  | 'optimal'
+  | 'normal'
+  | 'borderline_low'
+  | 'borderline_high'
+  | 'out_of_range_low'
+  | 'out_of_range_high'
+  | 'unknown';
+
+export type LabStatus =
+  | 'in_range'
+  | 'borderline_low'
+  | 'borderline_high'
+  | 'out_of_range_low'
+  | 'out_of_range_high'
+  | 'unknown';
+
+export interface BiomarkerDefinition {
+  id: string;
+  name: BiomarkerName;
+  display_name: string;
+  short_name: string;
+  category: BiomarkerCategory;
+  unit: string;
+  optimal_min: number | null;
+  optimal_max: number | null;
+  clinical_min: number | null;
+  clinical_max: number | null;
+  score_weight: number;
+  sex_specific: boolean;
+  cycle_dependent: boolean;
+  description: string;
+  what_it_measures: string;
+  sort_order: number;
+}
+
+export interface PhaseReferenceRange {
+  biomarker_name: BiomarkerName;
+  phase: CyclePhase | 'general';
+  optimal_min: number | null;
+  optimal_max: number | null;
+  clinical_min: number | null;
+  clinical_max: number | null;
+  notes: string | null;
+}
+
+export interface LabResult {
+  id: string;
+  lab_report_id: string;
+  biomarker_name: BiomarkerName;
+  value: number;
+  unit: string;
+  lab_ref_min: number | null;
+  lab_ref_max: number | null;
+  amani_status: AmaniStatus;
+  lab_status: LabStatus;
+  cycle_phase: CyclePhase | null;
+  extraction_confidence: 'high' | 'medium' | 'low' | null;
+  created_at: string;
+}
 
 export type DerivedMetricName =
   | 'HOMA_IR'
-  | 'Triglyceride_HDL_ratio'
-  | 'Free_Androgen_Index'
-  | 'ApoB_ratio'
-  | 'T3_T4_ratio';
+  | 'TG_HDL_RATIO'
+  | 'NON_HDL'
+  | 'FREE_ANDROGEN_INDEX'
+  | 'FT3_FT4_RATIO';
 
-export interface DerivedMetric {
+export interface DerivedMetricResult {
   id: string;
   lab_report_id: string;
-  name: DerivedMetricName;
+  metric_name: DerivedMetricName;
   value: number;
+  status: 'optimal' | 'borderline' | 'out_of_range' | 'unknown';
   interpretation: string;
   created_at: string;
 }
 
 export type InsightSeverity = 'info' | 'caution' | 'discuss';
 
-export interface InsightFlag {
+export interface InsightRuleResult {
   id: string;
   lab_report_id: string;
   rule_id: string;
@@ -56,26 +137,29 @@ export interface InsightFlag {
   created_at: string;
 }
 
-export interface BiomarkerDefinition {
+export interface HealthScores {
   id: string;
-  name: BiomarkerName;
-  display_name: string;
-  category: BiomarkerCategory;
-  unit: string;
-  optimal_range_min: number | null;
-  optimal_range_max: number | null;
-  clinical_range_min: number | null;
-  clinical_range_max: number | null;
-  sex_specific: boolean;
-  description: string;
+  lab_report_id: string;
+  overall_score: number;
+  hormone_score: number;
+  thyroid_score: number;
+  metabolic_score: number;
+  cardiovascular_score: number;
+  liver_score: number;
+  kidney_score: number;
+  inflammation_score: number;
+  nutrient_score: number;
+  score_breakdown: Record<string, unknown>;
+  created_at: string;
 }
 
-export interface HealthSystemScore {
-  category: BiomarkerCategory;
+export interface ScoreDimension {
+  key: string;
   label: string;
   score: number;
   biomarkerCount: number;
   flaggedCount: number;
+  category: BiomarkerCategory | 'overall';
 }
 
 export type DailySymptom =
