@@ -34,17 +34,17 @@ export const CATEGORY_DISPLAY: Record<BiomarkerCategory, { label: string; shortL
 
 export type BiomarkerName =
   | 'estradiol' | 'progesterone' | 'fsh' | 'lh'
-  | 'testosterone_total' | 'testosterone_free' | 'shbg' | 'dhea_s'
+  | 'total_testosterone' | 'free_testosterone' | 'shbg' | 'dheas'
   | 'prolactin' | 'amh'
   | 'tsh' | 'free_t3' | 'free_t4' | 'total_t4' | 'reverse_t3'
-  | 'tpo_antibodies' | 'tgab'
-  | 'glucose_fasting' | 'hba1c' | 'insulin' | 'c_peptide'
-  | 'total_cholesterol' | 'hdl' | 'ldl' | 'triglycerides'
-  | 'non_hdl' | 'apob' | 'lpa'
+  | 'tpo_antibodies' | 'tg_antibodies'
+  | 'fasting_glucose' | 'hemoglobin_a1c' | 'fasting_insulin' | 'c_peptide'
+  | 'total_cholesterol' | 'hdl_cholesterol' | 'ldl_cholesterol' | 'triglycerides'
+  | 'non_hdl_cholesterol' | 'apob' | 'lpa'
   | 'ast' | 'alt' | 'ggt' | 'alkaline_phosphatase' | 'bilirubin_total'
   | 'creatinine' | 'bun' | 'egfr'
-  | 'hscrp' | 'esr'
-  | 'ferritin' | 'iron_saturation' | 'vitamin_d' | 'b12' | 'folate' | 'magnesium';
+  | 'hs_crp' | 'esr'
+  | 'ferritin' | 'iron_saturation' | 'vitamin_d_25_oh' | 'vitamin_b12' | 'folate' | 'magnesium';
 
 export type AmaniStatus =
   | 'optimal'
@@ -197,7 +197,7 @@ export interface LabReportContext {
 export interface Biomarker {
   id: string;
   lab_report_id: string;
-  name: BiomarkerName;
+  name: string;
   value: number;
   unit: string;
   reference_min: number | null;
@@ -206,7 +206,7 @@ export interface Biomarker {
 }
 
 export interface BiomarkerInput {
-  name: BiomarkerName;
+  name: string;
   value: number;
   unit: string;
   reference_min?: number;

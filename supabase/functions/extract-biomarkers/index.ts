@@ -10,6 +10,7 @@ const corsHeaders = {
 interface ExtractedBiomarker {
   name: string;
   value: number;
+  rawValue?: string;
   unit: string;
   reference_min: number | null;
   reference_max: number | null;
@@ -17,16 +18,38 @@ interface ExtractedBiomarker {
 }
 
 const SUPPORTED_BIOMARKERS = [
-  'estradiol','progesterone','lh','fsh','amh',
-  'testosterone_total','testosterone_free','dhea_s','cortisol','prolactin','insulin','shbg',
-  'tsh','free_t4','free_t3','reverse_t3','tpo_antibodies','tgab',
-  'glucose_fasting','hba1c',
-  'total_cholesterol','ldl','hdl','triglycerides','apob','lpA',
-  'alt','ast','ggt','total_bilirubin','albumin',
-  'creatinine','egfr','bun','uric_acid',
-  'ferritin','vitamin_d','b12','folate','magnesium','zinc','iron',
-  'hscrp','homocysteine'
+  'estradiol', 'progesterone', 'lh', 'fsh', 'amh',
+  'total_testosterone', 'free_testosterone', 'dheas', 'prolactin', 'fasting_insulin', 'shbg',
+  'tsh', 'free_t4', 'free_t3', 'total_t4', 'reverse_t3', 'tpo_antibodies', 'tg_antibodies',
+  'fasting_glucose', 'hemoglobin_a1c', 'c_peptide',
+  'total_cholesterol', 'ldl_cholesterol', 'hdl_cholesterol', 'triglycerides', 'non_hdl_cholesterol', 'apob', 'lpa',
+  'alt', 'ast', 'ggt', 'alkaline_phosphatase', 'bilirubin_total',
+  'creatinine', 'egfr', 'bun',
+  'hs_crp', 'esr',
+  'ferritin', 'iron_saturation', 'vitamin_d_25_oh', 'vitamin_b12', 'folate', 'magnesium',
 ];
+
+const SLUG_ALIASES: Record<string, string> = {
+  testosterone_total: 'total_testosterone',
+  testosterone_free: 'free_testosterone',
+  dhea_s: 'dheas',
+  insulin: 'fasting_insulin',
+  ldl: 'ldl_cholesterol',
+  hdl: 'hdl_cholesterol',
+  non_hdl: 'non_hdl_cholesterol',
+  lpA: 'lpa',
+  glucose_fasting: 'fasting_glucose',
+  hba1c: 'hemoglobin_a1c',
+  hscrp: 'hs_crp',
+  vitamin_d: 'vitamin_d_25_oh',
+  b12: 'vitamin_b12',
+  tgab: 'tg_antibodies',
+  total_bilirubin: 'bilirubin_total',
+};
+
+function normalizeName(name: string): string {
+  return SLUG_ALIASES[name] ?? name;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -84,97 +107,83 @@ Deno.serve(async (req: Request) => {
 
     const systemPrompt = `You are a medical lab data extraction specialist. Your task is to extract biomarker data from lab reports with EXTREME precision.
 
-CRITICAL DECIMAL PARSING RULES:
-- Parse decimal points EXACTLY as they appear (e.g., "2.1" = 2.1, NOT 21 or 210)
-- "0.9" = 0.9, NOT 9 or 90
-- If you see "TSH 2.1", the value is 2.1
-- If you see "Progesterone 0.9", the value is 0.9
+CRITICAL RULES:
+1. Parse decimal points EXACTLY as they appear (e.g., "2.1" = 2.1, NOT 21 or 210)
+2. For values like "<0.5" or "< 0.5", set value = 0.25 (half of the limit) and rawValue = "<0.5"
+3. For values like ">200", set value = 200 and rawValue = ">200"
+4. value field must be a NUMBER, never a string
+5. Extract units exactly as shown
+6. Reference ranges: look for patterns like "30–400", "0.4–4.0", null if absent
 
-SUPPORTED BIOMARKER NAME MAPPING (use these EXACT canonical names):
+CANONICAL BIOMARKER NAMES (use these EXACT slugs):
 Hormones:
 - "Estradiol", "E2", "Estrogen" → "estradiol"
 - "Progesterone" → "progesterone"
 - "LH", "Luteinizing Hormone" → "lh"
 - "FSH", "Follicle Stimulating Hormone" → "fsh"
 - "AMH", "Anti-Mullerian Hormone" → "amh"
-- "Testosterone Total", "Total Testosterone" → "testosterone_total"
-- "Testosterone Free", "Free Testosterone" → "testosterone_free"
-- "DHEA-S", "DHEA Sulfate" → "dhea_s"
-- "Cortisol", "AM Cortisol" → "cortisol"
+- "Testosterone, Total", "Total Testosterone" → "total_testosterone"
+- "Testosterone, Free", "Free Testosterone" → "free_testosterone"
+- "DHEA-S", "DHEA Sulfate", "DHEAS" → "dheas"
 - "Prolactin" → "prolactin"
-- "Insulin", "Fasting Insulin" → "insulin"
+- "Insulin", "Fasting Insulin" → "fasting_insulin"
 - "SHBG", "Sex Hormone Binding Globulin" → "shbg"
 
 Thyroid:
 - "TSH", "Thyroid Stimulating Hormone" → "tsh"
-- "Free T4", "FT4", "Free Thyroxine" → "free_t4"
-- "Free T3", "FT3", "Free Triiodothyronine" → "free_t3"
+- "Free T4", "FT4", "Free Thyroxine", "T4, Free" → "free_t4"
+- "Free T3", "FT3", "Free Triiodothyronine", "T3, Free" → "free_t3"
+- "T4 Total", "Total T4" → "total_t4"
 - "Reverse T3", "RT3" → "reverse_t3"
-- "TPO Antibodies", "Thyroid Peroxidase Antibodies", "Anti-TPO" → "tpo_antibodies"
-- "Thyroglobulin Antibodies", "TgAb" → "tgab"
+- "TPO Antibodies", "Thyroid Peroxidase Antibodies", "TPO Ab", "Anti-TPO" → "tpo_antibodies"
+- "Thyroglobulin Antibodies", "TgAb", "Thyroglobulin Ab" → "tg_antibodies"
 
 Metabolic:
-- "Glucose", "Fasting Glucose", "Blood Glucose" → "glucose_fasting"
-- "HbA1c", "A1C", "Hemoglobin A1c" → "hba1c"
+- "Glucose", "Fasting Glucose", "Glucose, Serum" → "fasting_glucose"
+- "HbA1c", "A1C", "Hemoglobin A1c" → "hemoglobin_a1c"
+- "C-Peptide" → "c_peptide"
 
-Lipids:
-- "Total Cholesterol", "Cholesterol" → "total_cholesterol"
-- "LDL", "LDL Cholesterol" → "ldl"
-- "HDL", "HDL Cholesterol" → "hdl"
+Cardiovascular/Lipids:
+- "Total Cholesterol", "Cholesterol, Total" → "total_cholesterol"
+- "LDL Cholesterol", "LDL Chol Calc", "LDL-C" → "ldl_cholesterol"
+- "HDL Cholesterol", "HDL Chol Direct", "HDL-C" → "hdl_cholesterol"
 - "Triglycerides" → "triglycerides"
+- "Non-HDL Cholesterol", "Non-HDL Chol" → "non_hdl_cholesterol"
 - "ApoB", "Apolipoprotein B" → "apob"
-- "Lp(a)", "Lipoprotein(a)" → "lpA"
+- "Lp(a)", "Lipoprotein(a)" → "lpa"
 
 Liver:
-- "ALT", "Alanine Aminotransferase", "SGPT" → "alt"
-- "AST", "Aspartate Aminotransferase", "SGOT" → "ast"
-- "GGT", "Gamma-Glutamyl Transferase" → "ggt"
-- "Total Bilirubin", "Bilirubin Total" → "total_bilirubin"
-- "Albumin" → "albumin"
+- "ALT", "Alanine Aminotransferase", "ALT (SGPT)", "SGPT" → "alt"
+- "AST", "Aspartate Aminotransferase", "AST (SGOT)", "SGOT" → "ast"
+- "GGT", "Gamma-Glutamyl Transferase", "GGT (Gamma Glutamyl Transpeptidase)" → "ggt"
+- "Alkaline Phosphatase", "Alk Phos", "ALP" → "alkaline_phosphatase"
+- "Total Bilirubin", "Bilirubin, Total" → "bilirubin_total"
 
 Kidney:
-- "Creatinine", "Serum Creatinine" → "creatinine"
-- "eGFR", "Estimated GFR" → "egfr"
-- "BUN", "Blood Urea Nitrogen" → "bun"
-- "Uric Acid" → "uric_acid"
-
-Nutrients:
-- "Ferritin", "Serum Ferritin" → "ferritin"
-- "Vitamin D", "25-OH Vitamin D", "25(OH)D" → "vitamin_d"
-- "Vitamin B12", "B12", "Cobalamin" → "b12"
-- "Folate", "Folic Acid", "RBC Folate" → "folate"
-- "Magnesium", "RBC Magnesium" → "magnesium"
-- "Zinc" → "zinc"
-- "Iron", "Serum Iron" → "iron"
+- "Creatinine", "Serum Creatinine", "Creatinine, Serum" → "creatinine"
+- "eGFR", "Estimated GFR", "eGFR Non-Afr. American", "GFR Estimated Non-African American" → "egfr"
+- "BUN", "Blood Urea Nitrogen", "Urea Nitrogen" → "bun"
 
 Inflammation:
-- "hs-CRP", "High Sensitivity CRP", "hsCRP" → "hscrp"
-- "Homocysteine" → "homocysteine"
+- "hs-CRP", "High Sensitivity CRP", "hsCRP", "C-Reactive Protein, Cardiac" → "hs_crp"
+- "ESR", "Sed Rate", "Sedimentation Rate" → "esr"
 
-ONLY extract biomarkers from the above list. Ignore anything not in this list.
+Nutrients:
+- "Ferritin", "Ferritin, Serum" → "ferritin"
+- "Iron Saturation", "Iron, % Saturation", "Transferrin Saturation" → "iron_saturation"
+- "Vitamin D, 25-Hydroxy", "25-OH Vitamin D", "Vitamin D (25-OH)" → "vitamin_d_25_oh"
+- "Vitamin B12", "B12", "Vitamin B12, Serum" → "vitamin_b12"
+- "Folate", "Folic Acid", "Folate, Serum" → "folate"
+- "Magnesium", "Magnesium, Serum" → "magnesium"
 
-VALUE EXTRACTION RULES:
-- Extract ONLY the numeric value (e.g., from "240 pg/mL" extract 240)
-- value field must be a NUMBER, not a string
-- Never include units in the value field
-- Extract decimals precisely as shown
+ONLY extract biomarkers from the above list. Return ONLY a JSON object with a "biomarkers" array.
 
-UNIT EXTRACTION RULES:
-- Extract the unit exactly as shown in the report
+CONFIDENCE:
+- high: value + unit + reference range all extracted
+- medium: value + unit, no reference range
+- low: value only, unit unclear`;
 
-REFERENCE RANGE EXTRACTION:
-- Look for patterns like "30–400", "0.4–4.0", "15-150"
-- reference_min and reference_max should be numbers
-- If no reference range is found, use null for both
-
-CONFIDENCE LEVELS:
-- high: Clear value, unit, and reference range all extracted
-- medium: Value and unit extracted, but no reference range
-- low: Value extracted but unit is unclear or ambiguous
-
-Return ONLY a JSON array of extracted biomarkers. Return empty array [] if none found.`;
-
-    const userPrompt = `Extract all biomarker data from this lab report text:\n\n${text}\n\nRemember: Parse decimals EXACTLY as shown, use canonical biomarker names, return values as numbers.`;
+    const userPrompt = `Extract all biomarker data from this lab report text:\n\n${text}\n\nReturn JSON: { "biomarkers": [...] }`;
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -188,7 +197,7 @@ Return ONLY a JSON array of extracted biomarkers. Return empty array [] if none 
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        max_tokens: 2500,
+        max_tokens: 3000,
         temperature: 0.1,
         response_format: { type: "json_object" }
       }),
@@ -217,7 +226,14 @@ Return ONLY a JSON array of extracted biomarkers. Return empty array [] if none 
       biomarkers = [];
     }
 
-    const validatedBiomarkers = applySanityChecks(biomarkers.filter(b => SUPPORTED_BIOMARKERS.includes(b.name)));
+    const normalizedBiomarkers = biomarkers.map(b => ({
+      ...b,
+      name: normalizeName(b.name),
+    }));
+
+    const validatedBiomarkers = applySanityChecks(
+      normalizedBiomarkers.filter(b => SUPPORTED_BIOMARKERS.includes(b.name))
+    );
 
     await supabaseAdmin.from("audit_events").insert({
       user_id: user.id,
@@ -283,11 +299,11 @@ function applySanityChecks(biomarkers: ExtractedBiomarker[]): ExtractedBiomarker
     if (marker.name === 'estradiol' && marker.value > 5000) marker.confidence = 'low';
     if (marker.name === 'progesterone' && marker.value > 100) marker.confidence = 'low';
     if (marker.name === 'ferritin' && marker.value > 10000) marker.confidence = 'low';
-    if (marker.name === 'vitamin_d' && marker.value > 500) marker.confidence = 'low';
+    if (marker.name === 'vitamin_d_25_oh' && marker.value > 500) marker.confidence = 'low';
     if (marker.name === 'free_t4' && marker.value > 10) marker.confidence = 'low';
-    if (marker.name === 'glucose_fasting' && marker.value > 600) marker.confidence = 'low';
+    if (marker.name === 'fasting_glucose' && marker.value > 600) marker.confidence = 'low';
     if (marker.name === 'total_cholesterol' && marker.value > 1000) marker.confidence = 'low';
-    if (marker.name === 'hba1c' && marker.value > 20) marker.confidence = 'low';
+    if (marker.name === 'hemoglobin_a1c' && marker.value > 20) marker.confidence = 'low';
     if (marker.name === 'egfr' && marker.value > 200) marker.confidence = 'low';
     if (marker.value <= 0) marker.confidence = 'low';
     if (marker.reference_min !== null && marker.reference_max !== null) {

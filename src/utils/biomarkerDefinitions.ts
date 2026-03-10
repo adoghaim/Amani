@@ -10,18 +10,18 @@ import type {
 
 export const BIOMARKER_CATEGORY_MAP: Record<BiomarkerName, BiomarkerCategory> = {
   estradiol: 'hormones', progesterone: 'hormones', fsh: 'hormones', lh: 'hormones',
-  testosterone_total: 'hormones', testosterone_free: 'hormones', shbg: 'hormones',
-  dhea_s: 'hormones', prolactin: 'hormones', amh: 'hormones',
+  total_testosterone: 'hormones', free_testosterone: 'hormones', shbg: 'hormones',
+  dheas: 'hormones', prolactin: 'hormones', amh: 'hormones',
   tsh: 'thyroid', free_t3: 'thyroid', free_t4: 'thyroid', total_t4: 'thyroid',
-  reverse_t3: 'thyroid', tpo_antibodies: 'thyroid', tgab: 'thyroid',
-  glucose_fasting: 'metabolic', hba1c: 'metabolic', insulin: 'metabolic', c_peptide: 'metabolic',
-  total_cholesterol: 'lipids', hdl: 'lipids', ldl: 'lipids', triglycerides: 'lipids',
-  non_hdl: 'lipids', apob: 'lipids', lpa: 'lipids',
+  reverse_t3: 'thyroid', tpo_antibodies: 'thyroid', tg_antibodies: 'thyroid',
+  fasting_glucose: 'metabolic', hemoglobin_a1c: 'metabolic', fasting_insulin: 'metabolic', c_peptide: 'metabolic',
+  total_cholesterol: 'lipids', hdl_cholesterol: 'lipids', ldl_cholesterol: 'lipids', triglycerides: 'lipids',
+  non_hdl_cholesterol: 'lipids', apob: 'lipids', lpa: 'lipids',
   ast: 'liver', alt: 'liver', ggt: 'liver', alkaline_phosphatase: 'liver', bilirubin_total: 'liver',
   creatinine: 'kidney', bun: 'kidney', egfr: 'kidney',
-  hscrp: 'inflammation', esr: 'inflammation',
-  ferritin: 'nutrients', iron_saturation: 'nutrients', vitamin_d: 'nutrients',
-  b12: 'nutrients', folate: 'nutrients', magnesium: 'nutrients',
+  hs_crp: 'inflammation', esr: 'inflammation',
+  ferritin: 'nutrients', iron_saturation: 'nutrients', vitamin_d_25_oh: 'nutrients',
+  vitamin_b12: 'nutrients', folate: 'nutrients', magnesium: 'nutrients',
 };
 
 interface OptimalRange {
@@ -79,10 +79,10 @@ export const BIOMARKER_RANGES: Record<BiomarkerName, BiomarkerRanges> = {
       luteal:     { optimal: { min: 2, max: 12 },  clinical: { min: 1, max: 20 } },
     },
   },
-  testosterone_total: { optimal: { min: 15, max: 70 },  clinical: { min: 10, max: 100 }, scoreWeight: 1.2 },
-  testosterone_free:  { optimal: { min: 1.0, max: 8.5 }, clinical: { min: 0.5, max: 10 }, scoreWeight: 1.3 },
+  total_testosterone: { optimal: { min: 15, max: 70 },  clinical: { min: 10, max: 100 }, scoreWeight: 1.2 },
+  free_testosterone:  { optimal: { min: 1.0, max: 8.5 }, clinical: { min: 0.5, max: 10 }, scoreWeight: 1.3 },
   shbg:               { optimal: { min: 40, max: 120 }, clinical: { min: 18, max: 200 }, scoreWeight: 1.0 },
-  dhea_s:             { optimal: { min: 65, max: 380 }, clinical: { min: 35, max: 430 }, scoreWeight: 1.0 },
+  dheas:              { optimal: { min: 65, max: 380 }, clinical: { min: 35, max: 430 }, scoreWeight: 1.0 },
   prolactin:          { optimal: { min: 3, max: 20 },   clinical: { min: 2, max: 29 },  scoreWeight: 1.3 },
   amh:                { optimal: { min: 1.0, max: 3.5 }, clinical: { min: 0.1, max: 6.0 }, scoreWeight: 1.5 },
   tsh:                { optimal: { min: 1.0, max: 2.5 }, clinical: { min: 0.4, max: 4.0 }, scoreWeight: 2.0 },
@@ -91,16 +91,16 @@ export const BIOMARKER_RANGES: Record<BiomarkerName, BiomarkerRanges> = {
   total_t4:           { optimal: { min: 5.5, max: 11.0 }, clinical: { min: 4.5, max: 12.0 }, scoreWeight: 1.0 },
   reverse_t3:         { optimal: { min: 10, max: 24 },  clinical: { min: 8, max: 25 }, scoreWeight: 1.0 },
   tpo_antibodies:     { optimal: { min: 0, max: 34 },   clinical: { min: 0, max: 35 }, scoreWeight: 1.8 },
-  tgab:               { optimal: { min: 0, max: 0.9 },  clinical: { min: 0, max: 1.0 }, scoreWeight: 1.5 },
-  glucose_fasting:    { optimal: { min: 72, max: 90 },  clinical: { min: 70, max: 99 }, scoreWeight: 1.8 },
-  hba1c:              { optimal: { min: 4.6, max: 5.4 }, clinical: { min: 4.0, max: 5.6 }, scoreWeight: 2.0 },
-  insulin:            { optimal: { min: 2, max: 10 },   clinical: { min: 1, max: 25 }, scoreWeight: 1.8 },
+  tg_antibodies:      { optimal: { min: 0, max: 0.9 },  clinical: { min: 0, max: 1.0 }, scoreWeight: 1.5 },
+  fasting_glucose:    { optimal: { min: 72, max: 90 },  clinical: { min: 70, max: 99 }, scoreWeight: 1.8 },
+  hemoglobin_a1c:     { optimal: { min: 4.6, max: 5.4 }, clinical: { min: 4.0, max: 5.6 }, scoreWeight: 2.0 },
+  fasting_insulin:    { optimal: { min: 2, max: 10 },   clinical: { min: 1, max: 25 }, scoreWeight: 1.8 },
   c_peptide:          { optimal: { min: 0.8, max: 3.1 }, clinical: { min: 0.5, max: 4.0 }, scoreWeight: 1.0 },
   total_cholesterol:  { optimal: { min: 160, max: 200 }, clinical: { min: 100, max: 239 }, scoreWeight: 1.2 },
-  hdl:                { optimal: { min: 60, max: 90 },  clinical: { min: 50, max: 100 }, scoreWeight: 1.5, higherIsBetter: true },
-  ldl:                { optimal: { min: 60, max: 100 }, clinical: { min: 0, max: 129 }, scoreWeight: 1.5 },
+  hdl_cholesterol:    { optimal: { min: 60, max: 90 },  clinical: { min: 50, max: 100 }, scoreWeight: 1.5, higherIsBetter: true },
+  ldl_cholesterol:    { optimal: { min: 60, max: 100 }, clinical: { min: 0, max: 129 }, scoreWeight: 1.5 },
   triglycerides:      { optimal: { min: 60, max: 100 }, clinical: { min: 0, max: 149 }, scoreWeight: 1.5 },
-  non_hdl:            { optimal: { min: 80, max: 130 }, clinical: { min: 0, max: 159 }, scoreWeight: 1.2 },
+  non_hdl_cholesterol:{ optimal: { min: 80, max: 130 }, clinical: { min: 0, max: 159 }, scoreWeight: 1.2 },
   apob:               { optimal: { min: 55, max: 90 },  clinical: { min: 40, max: 120 }, scoreWeight: 1.8 },
   lpa:                { optimal: { min: 0, max: 75 },   clinical: { min: 0, max: 125 }, scoreWeight: 1.3 },
   ast:                { optimal: { min: 10, max: 25 },  clinical: { min: 10, max: 40 }, scoreWeight: 1.3 },
@@ -111,30 +111,30 @@ export const BIOMARKER_RANGES: Record<BiomarkerName, BiomarkerRanges> = {
   creatinine:         { optimal: { min: 0.5, max: 0.9 }, clinical: { min: 0.5, max: 1.1 }, scoreWeight: 1.5 },
   bun:                { optimal: { min: 7, max: 18 },   clinical: { min: 6, max: 20 }, scoreWeight: 1.2 },
   egfr:               { optimal: { min: 90, max: 120 }, clinical: { min: 60, max: 120 }, scoreWeight: 1.8, higherIsBetter: true },
-  hscrp:              { optimal: { min: 0, max: 1.0 },  clinical: { min: 0, max: 3.0 }, scoreWeight: 1.8 },
+  hs_crp:             { optimal: { min: 0, max: 1.0 },  clinical: { min: 0, max: 3.0 }, scoreWeight: 1.8 },
   esr:                { optimal: { min: 0, max: 15 },   clinical: { min: 0, max: 20 }, scoreWeight: 1.2 },
   ferritin:           { optimal: { min: 30, max: 150 }, clinical: { min: 13, max: 150 }, scoreWeight: 1.8 },
   iron_saturation:    { optimal: { min: 25, max: 40 },  clinical: { min: 15, max: 50 }, scoreWeight: 1.3 },
-  vitamin_d:          { optimal: { min: 50, max: 80 },  clinical: { min: 30, max: 100 }, scoreWeight: 1.8 },
-  b12:                { optimal: { min: 400, max: 900 }, clinical: { min: 200, max: 900 }, scoreWeight: 1.5 },
+  vitamin_d_25_oh:    { optimal: { min: 50, max: 80 },  clinical: { min: 30, max: 100 }, scoreWeight: 1.8 },
+  vitamin_b12:        { optimal: { min: 400, max: 900 }, clinical: { min: 200, max: 900 }, scoreWeight: 1.5 },
   folate:             { optimal: { min: 10, max: 20 },  clinical: { min: 5, max: 20 }, scoreWeight: 1.3 },
   magnesium:          { optimal: { min: 5.2, max: 6.5 }, clinical: { min: 4.2, max: 6.8 }, scoreWeight: 1.3 },
 };
 
 export const BIOMARKER_DISPLAY: Record<BiomarkerName, string> = {
   estradiol: 'Estradiol (E2)', progesterone: 'Progesterone', fsh: 'FSH', lh: 'LH',
-  testosterone_total: 'Total Testosterone', testosterone_free: 'Free Testosterone',
-  shbg: 'SHBG', dhea_s: 'DHEA-S', prolactin: 'Prolactin', amh: 'AMH',
+  total_testosterone: 'Total Testosterone', free_testosterone: 'Free Testosterone',
+  shbg: 'SHBG', dheas: 'DHEA-S', prolactin: 'Prolactin', amh: 'AMH',
   tsh: 'TSH', free_t3: 'Free T3', free_t4: 'Free T4', total_t4: 'Total T4',
-  reverse_t3: 'Reverse T3', tpo_antibodies: 'TPO Antibodies', tgab: 'TgAb',
-  glucose_fasting: 'Fasting Glucose', hba1c: 'HbA1c', insulin: 'Fasting Insulin', c_peptide: 'C-Peptide',
-  total_cholesterol: 'Total Cholesterol', hdl: 'HDL', ldl: 'LDL', triglycerides: 'Triglycerides',
-  non_hdl: 'Non-HDL', apob: 'ApoB', lpa: 'Lp(a)',
+  reverse_t3: 'Reverse T3', tpo_antibodies: 'TPO Antibodies', tg_antibodies: 'TgAb',
+  fasting_glucose: 'Fasting Glucose', hemoglobin_a1c: 'HbA1c', fasting_insulin: 'Fasting Insulin', c_peptide: 'C-Peptide',
+  total_cholesterol: 'Total Cholesterol', hdl_cholesterol: 'HDL', ldl_cholesterol: 'LDL', triglycerides: 'Triglycerides',
+  non_hdl_cholesterol: 'Non-HDL', apob: 'ApoB', lpa: 'Lp(a)',
   ast: 'AST', alt: 'ALT', ggt: 'GGT', alkaline_phosphatase: 'Alkaline Phosphatase', bilirubin_total: 'Bilirubin',
   creatinine: 'Creatinine', bun: 'BUN', egfr: 'eGFR',
-  hscrp: 'hs-CRP', esr: 'ESR',
-  ferritin: 'Ferritin', iron_saturation: 'Iron Saturation', vitamin_d: 'Vitamin D',
-  b12: 'Vitamin B12', folate: 'Folate', magnesium: 'Magnesium',
+  hs_crp: 'hs-CRP', esr: 'ESR',
+  ferritin: 'Ferritin', iron_saturation: 'Iron Saturation', vitamin_d_25_oh: 'Vitamin D',
+  vitamin_b12: 'Vitamin B12', folate: 'Folate', magnesium: 'Magnesium',
 };
 
 export function computeAmaniStatus(
@@ -244,7 +244,7 @@ export function computeHealthScores(
   };
 
   for (const b of biomarkers) {
-    const name = 'biomarker_name' in b ? b.biomarker_name : b.name;
+    const name = ('biomarker_name' in b ? b.biomarker_name : b.name) as BiomarkerName;
     const value = b.value;
     const cat = BIOMARKER_CATEGORY_MAP[name];
     if (!cat) continue;
@@ -297,7 +297,7 @@ export function computeHealthScores(
 export const RECOMMENDED_LABS: Record<BiomarkerCategory, { name: BiomarkerName; reason: string }[]> = {
   hormones: [
     { name: 'amh', reason: 'Ovarian reserve assessment' },
-    { name: 'testosterone_free', reason: 'Androgen bioavailability' },
+    { name: 'free_testosterone', reason: 'Androgen bioavailability' },
     { name: 'prolactin', reason: 'Cycle disruption evaluation' },
   ],
   thyroid: [
@@ -306,14 +306,14 @@ export const RECOMMENDED_LABS: Record<BiomarkerCategory, { name: BiomarkerName; 
     { name: 'tpo_antibodies', reason: 'Autoimmune thyroid screening' },
   ],
   metabolic: [
-    { name: 'insulin', reason: 'Insulin resistance assessment' },
+    { name: 'fasting_insulin', reason: 'Insulin resistance assessment' },
     { name: 'c_peptide', reason: 'Pancreatic insulin production' },
-    { name: 'hba1c', reason: 'Long-term glucose control' },
+    { name: 'hemoglobin_a1c', reason: 'Long-term glucose control' },
   ],
   lipids: [
     { name: 'apob', reason: 'Particle burden assessment' },
     { name: 'lpa', reason: 'Genetic cardiovascular risk' },
-    { name: 'hscrp', reason: 'Vascular inflammation' },
+    { name: 'hs_crp', reason: 'Vascular inflammation' },
   ],
   liver: [
     { name: 'ggt', reason: 'Liver/biliary marker' },
@@ -325,12 +325,12 @@ export const RECOMMENDED_LABS: Record<BiomarkerCategory, { name: BiomarkerName; 
   ],
   inflammation: [
     { name: 'esr', reason: 'Broad inflammatory marker' },
-    { name: 'hscrp', reason: 'Cardiovascular inflammation risk' },
+    { name: 'hs_crp', reason: 'Cardiovascular inflammation risk' },
   ],
   nutrients: [
     { name: 'iron_saturation', reason: 'Iron transport status' },
-    { name: 'vitamin_d', reason: 'Immune and hormone function' },
-    { name: 'b12', reason: 'Neurological function' },
+    { name: 'vitamin_d_25_oh', reason: 'Immune and hormone function' },
+    { name: 'vitamin_b12', reason: 'Neurological function' },
     { name: 'magnesium', reason: 'Enzyme and hormone support' },
   ],
 };

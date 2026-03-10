@@ -6,11 +6,20 @@ import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import type { BiomarkerName, Symptom, BiomarkerInput, LabReportContext } from '../types';
+import { useBiomarkerCatalog } from '../hooks/useBiomarkerCatalog';
+import type { Symptom, LabReportContext } from '../types';
 import type { ExtractedBiomarker } from '../utils/biomarkerParser';
 import { extractTextFromPDF } from '../utils/pdfExtractor';
 import { parseBiomarkersFromText, validateExtractedBiomarkers } from '../utils/biomarkerParser';
 import { Upload, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
+
+interface BiomarkerEntry {
+  name: string;
+  value: number;
+  unit: string;
+  reference_min?: number;
+  reference_max?: number;
+}
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
   { value: 'fatigue', label: 'Fatigue' },
@@ -25,20 +34,9 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
   { value: 'hot_flashes', label: 'Hot flashes' },
 ];
 
-const BIOMARKERS: { value: BiomarkerName; label: string; commonUnits: string[] }[] = [
-  { value: 'estradiol', label: 'Estradiol', commonUnits: ['pg/mL', 'pmol/L'] },
-  { value: 'progesterone', label: 'Progesterone', commonUnits: ['ng/mL', 'nmol/L'] },
-  { value: 'lh', label: 'LH', commonUnits: ['mIU/mL', 'IU/L'] },
-  { value: 'fsh', label: 'FSH', commonUnits: ['mIU/mL', 'IU/L'] },
-  { value: 'amh', label: 'AMH', commonUnits: ['ng/mL', 'pmol/L'] },
-  { value: 'tsh', label: 'TSH', commonUnits: ['mIU/L', 'μIU/mL'] },
-  { value: 'free_t4', label: 'Free T4', commonUnits: ['ng/dL', 'pmol/L'] },
-  { value: 'ferritin', label: 'Ferritin', commonUnits: ['ng/mL', 'μg/L'] },
-  { value: 'vitamin_d', label: 'Vitamin D', commonUnits: ['ng/mL', 'nmol/L'] },
-];
-
 export function NewReport() {
   const { user } = useAuth();
+  const { catalog } = useBiomarkerCatalog();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -53,7 +51,10 @@ export function NewReport() {
   const [postpartum, setPostpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
   const [extractedBiomarkers, setExtractedBiomarkers] = useState<ExtractedBiomarker[]>([]);
-  const [biomarkers, setBiomarkers] = useState<BiomarkerInput[]>([]);
+  const [biomarkers, setBiomarkers] = useState<BiomarkerEntry[]>([]);
+
+  const defaultSlug = catalog.length > 0 ? catalog[0].slug : 'estradiol';
+  const defaultUnit = catalog.length > 0 ? catalog[0].unit : '';
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
@@ -108,7 +109,7 @@ export function NewReport() {
 
       try {
         const text = await extractTextFromPDF(file);
-        console.log('Extracted text from PDF:', text.substring(0, 500));
+        console.log('Extracted text from PDF (first 1000 chars):', text.substring(0, 1000));
         console.log('Total text length:', text.length);
 
         if (text.trim().length > 0) {
@@ -134,7 +135,13 @@ export function NewReport() {
             if (data.biomarkers && data.biomarkers.length > 0) {
               setExtractedBiomarkers(data.biomarkers);
             } else {
-              console.warn('No biomarkers found by AI extraction');
+              console.warn('No biomarkers found by AI extraction, falling back to local parser');
+              const parsed = parseBiomarkersFromText(text);
+              const validated = validateExtractedBiomarkers(parsed);
+              console.log('Local parser results:', validated);
+              if (validated.length > 0) {
+                setExtractedBiomarkers(validated);
+              }
             }
           } else {
             console.error('AI extraction failed, falling back to local parser');
@@ -166,10 +173,10 @@ export function NewReport() {
 
   const handleProceedToStep3 = () => {
     if (extractedBiomarkers.length > 0) {
-      const convertedBiomarkers: BiomarkerInput[] = extractedBiomarkers.map((eb) => ({
+      const convertedBiomarkers: BiomarkerEntry[] = extractedBiomarkers.map((eb) => ({
         name: eb.name,
         value: eb.value,
-        unit: eb.unit,
+        unit: eb.unit ?? '',
         reference_min: eb.reference_min,
         reference_max: eb.reference_max,
       }));
@@ -191,14 +198,14 @@ export function NewReport() {
   const addExtractedBiomarker = () => {
     setExtractedBiomarkers([
       ...extractedBiomarkers,
-      { name: 'estradiol', value: 0, unit: 'pg/mL', confidence: 'low' },
+      { name: defaultSlug, value: 0, unit: defaultUnit, confidence: 'low' },
     ]);
   };
 
   const addBiomarker = () => {
     setBiomarkers([
       ...biomarkers,
-      { name: 'estradiol', value: 0, unit: 'pg/mL' },
+      { name: defaultSlug, value: 0, unit: defaultUnit },
     ]);
   };
 
@@ -206,9 +213,14 @@ export function NewReport() {
     setBiomarkers(biomarkers.filter((_, i) => i !== index));
   };
 
-  const updateBiomarker = (index: number, field: keyof BiomarkerInput, value: string | number) => {
+  const updateBiomarker = (index: number, field: keyof BiomarkerEntry, value: string | number) => {
     const updated = [...biomarkers];
-    updated[index] = { ...updated[index], [field]: value };
+    if (field === 'name') {
+      const entry = catalog.find(b => b.slug === value);
+      updated[index] = { ...updated[index], name: value as string, unit: entry?.unit ?? updated[index].unit };
+    } else {
+      updated[index] = { ...updated[index], [field]: value };
+    }
     setBiomarkers(updated);
   };
 
@@ -604,96 +616,98 @@ export function NewReport() {
             )}
 
             <div className="space-y-6">
-              {biomarkers.map((biomarker, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Biomarker
-                      </label>
-                      <select
-                        value={biomarker.name}
-                        onChange={(e) => updateBiomarker(index, 'name', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                      >
-                        {BIOMARKERS.map((b) => (
-                          <option key={b.value} value={b.value}>
-                            {b.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+              {biomarkers.map((biomarker, index) => {
+                const catalogEntry = catalog.find(b => b.slug === biomarker.name);
+                return (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Biomarker
+                        </label>
+                        <select
+                          value={biomarker.name}
+                          onChange={(e) => updateBiomarker(index, 'name', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
+                        >
+                          {!catalogEntry && (
+                            <option value={biomarker.name}>{biomarker.name} (unknown)</option>
+                          )}
+                          {catalog.map((b) => (
+                            <option key={b.slug} value={b.slug}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Value
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={biomarker.value}
-                        onChange={(e) => updateBiomarker(index, 'value', parseFloat(e.target.value))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                      />
-                    </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Value
+                        </label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={biomarker.value}
+                          onChange={(e) => updateBiomarker(index, 'value', parseFloat(e.target.value))}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Unit
-                      </label>
-                      <select
-                        value={biomarker.unit}
-                        onChange={(e) => updateBiomarker(index, 'unit', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                      >
-                        {BIOMARKERS.find((b) => b.value === biomarker.name)?.commonUnits.map((unit) => (
-                          <option key={unit} value={unit}>
-                            {unit}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Unit
+                        </label>
+                        <input
+                          type="text"
+                          value={biomarker.unit}
+                          onChange={(e) => updateBiomarker(index, 'unit', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
+                          placeholder={catalogEntry?.unit ?? ''}
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Reference Min (optional)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={biomarker.reference_min || ''}
-                        onChange={(e) => updateBiomarker(index, 'reference_min', parseFloat(e.target.value))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                        placeholder="Optional"
-                      />
-                    </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Reference Min (optional)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={biomarker.reference_min || ''}
+                          onChange={(e) => updateBiomarker(index, 'reference_min', parseFloat(e.target.value))}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
+                          placeholder="Optional"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Reference Max (optional)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={biomarker.reference_max || ''}
-                        onChange={(e) => updateBiomarker(index, 'reference_max', parseFloat(e.target.value))}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
-                        placeholder="Optional"
-                      />
-                    </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Reference Max (optional)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={biomarker.reference_max || ''}
+                          onChange={(e) => updateBiomarker(index, 'reference_max', parseFloat(e.target.value))}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme-primary"
+                          placeholder="Optional"
+                        />
+                      </div>
 
-                    <div className="flex items-end">
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => removeBiomarker(index)}
-                      >
-                        Remove
-                      </Button>
+                      <div className="flex items-end">
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => removeBiomarker(index)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               <Button variant="secondary" onClick={addBiomarker}>
                 Add Biomarker
