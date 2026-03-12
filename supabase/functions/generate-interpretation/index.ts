@@ -103,6 +103,8 @@ async function processInterpretation(
         lab_report_id: reportId,
         json_output: interpretationJson,
         interpretation_source: interpretationSource,
+        generated_at: new Date().toISOString(),
+        disclaimer_version: "1.0",
       }, { onConflict: "lab_report_id" });
 
     if (upsertError) throw new Error("Failed to save interpretation");
