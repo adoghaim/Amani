@@ -265,8 +265,8 @@ export function ReportView() {
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
 
-      const session = await supabase.auth.getSession();
-      const accessToken = session.data.session?.access_token ?? '';
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      const accessToken = refreshed?.session?.access_token ?? '';
       const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
       const fnRes = await fetch(fnUrl, {
         method: 'POST',
