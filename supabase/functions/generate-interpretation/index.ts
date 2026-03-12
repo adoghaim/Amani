@@ -177,7 +177,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    await processInterpretation(supabase, openaiApiKey, reportId, authUser.id);
+    const timeoutMs = 55000;
+    const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
+    await Promise.race([
+      processInterpretation(supabase, openaiApiKey, reportId, authUser.id),
+      timeoutPromise,
+    ]);
 
     return new Response(
       JSON.stringify({ success: true }),
