@@ -402,6 +402,21 @@ CONFIDENCE:
       rawItems = [];
     }
 
+    for (const item of rawItems) {
+      if ((item.value_numeric === 0 || item.value_numeric == null) && item.value_text) {
+        const comparatorMatch = String(item.value_text).match(/^([<>]=?)\s*(\d+(?:\.\d+)?)/);
+        if (comparatorMatch) {
+          const threshold = parseFloat(comparatorMatch[2]);
+          const op = comparatorMatch[1];
+          if (op.startsWith('<')) {
+            item.value_numeric = threshold / 2;
+          } else {
+            item.value_numeric = threshold;
+          }
+        }
+      }
+    }
+
     const reportAnalytes: ReportAnalyte[] = rawItems
       .filter(item => typeof item.value_numeric === 'number' && !isNaN(item.value_numeric))
       .map(item => {
