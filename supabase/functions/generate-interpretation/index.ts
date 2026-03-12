@@ -272,7 +272,7 @@ async function callOpenAIWithRetry(
   report: LabReportData,
   biomarkers: BiomarkerData[],
   reportItems: ReportItemData[],
-  maxOutputTokens = 2200,
+  maxOutputTokens = 4000,
   attemptNumber = 1
 ): Promise<any> {
   const systemPrompt = `You are Amani, a women's health AI assistant. You provide clear, educational interpretations of lab results with cycle awareness. You NEVER diagnose, alarm, or replace medical advice.
@@ -366,7 +366,18 @@ You must respond with ONLY a valid JSON object matching this exact structure:
     }
 
     const openaiData = await openaiResponse.json();
-    const content = openaiData.choices[0].message.content;
+    const choice = openaiData.choices[0];
+    const content = choice.message.content;
+    const finishReason = choice.finish_reason;
+
+    if (finishReason === "length") {
+      console.warn("[generate-interpretation] Response truncated (finish_reason=length), retrying with higher token limit");
+      if (attemptNumber === 1) {
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, 6000, 2);
+      }
+      console.error("[generate-interpretation] Still truncated on retry — falling back to demo");
+      throw new Error("OpenAI response truncated even with increased token limit");
+    }
 
     try {
       const parsedJson = JSON.parse(content);
@@ -383,16 +394,19 @@ You must respond with ONLY a valid JSON object matching this exact structure:
 
       return parsedJson;
     } catch (parseError) {
-      console.error("[generate-interpretation] Failed to parse JSON, content:", content);
-      if (maxOutputTokens > 1500) {
-        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, 1500, attemptNumber);
+      console.error("[generate-interpretation] Failed to parse JSON response from OpenAI");
+      if (attemptNumber === 1) {
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, maxOutputTokens, 2);
       }
       throw new Error("Invalid JSON response from OpenAI");
     }
-  } catch (error) {
-    if (maxOutputTokens > 1500) {
+  } catch (error: any) {
+    if (error?.message?.startsWith("OpenAI API error") || error?.message?.startsWith("OpenAI response truncated") || error?.message?.startsWith("Invalid JSON")) {
+      throw error;
+    }
+    if (attemptNumber === 1) {
       try {
-        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, 1500, attemptNumber);
+        return await callOpenAIWithRetry(apiKey, prompt, report, biomarkers, reportItems, maxOutputTokens, 2);
       } catch (retryError) {
         console.error("[generate-interpretation] Retry also failed:", retryError);
         throw retryError;
