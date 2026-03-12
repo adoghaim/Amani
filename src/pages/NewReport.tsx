@@ -30,6 +30,7 @@ export function NewReport() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [aiRefining, setAiRefining] = useState(false);
   const [error, setError] = useState('');
 
   const [file, setFile] = useState<File | null>(null);
@@ -89,52 +90,40 @@ export function NewReport() {
         console.log('[NewReport] Extracted PDF text length:', text.length);
 
         if (text.trim().length > 0) {
+          const localItems = parseAllReportItems(text, true);
+          const localCov = {
+            total_detected: localItems.length,
+            total_core: localItems.filter(i => i.is_core_biomarker).length,
+            total_extended: localItems.filter(i => !i.is_core_biomarker).length,
+            needs_review: localItems.filter(i => i.needs_review).length,
+          };
+          setReportItems(localItems);
+          setCoverage(localCov);
+
           const { data: { session: extractSession } } = await supabase.auth.getSession();
-          if (!extractSession) {
-            window.location.href = '/login';
-            return;
-          }
-
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-biomarkers`;
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${extractSession.access_token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            console.log('[NewReport] AI extraction result:', data.coverage, data.items?.length, 'items');
-
-            if (data.items && data.items.length > 0) {
-              setReportItems(data.items);
-              setCoverage(data.coverage ?? null);
-            } else {
-              console.warn('[NewReport] AI returned no items, falling back to local parser');
-              const items = parseAllReportItems(text, true);
-              const cov = {
-                total_detected: items.length,
-                total_core: items.filter(i => i.is_core_biomarker).length,
-                total_extended: items.filter(i => !i.is_core_biomarker).length,
-                needs_review: items.filter(i => i.needs_review).length,
-              };
-              setReportItems(items);
-              setCoverage(cov);
-            }
-          } else {
-            console.error('[NewReport] AI extraction failed, falling back to local parser');
-            const items = parseAllReportItems(text, true);
-            const cov = {
-              total_detected: items.length,
-              total_core: items.filter(i => i.is_core_biomarker).length,
-              total_extended: items.filter(i => !i.is_core_biomarker).length,
-              needs_review: items.filter(i => i.needs_review).length,
-            };
-            setReportItems(items);
-            setCoverage(cov);
+          if (extractSession) {
+            setAiRefining(true);
+            const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-biomarkers`;
+            fetch(apiUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${extractSession.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ text }),
+            }).then(async response => {
+              if (!response.ok) return;
+              const data = await response.json();
+              console.log('[NewReport] AI extraction result:', data.coverage, data.items?.length, 'items');
+              if (data.items && data.items.length > 0) {
+                setReportItems(data.items);
+                setCoverage(data.coverage ?? null);
+              }
+            }).catch(err => {
+              console.error('[NewReport] AI extraction background error:', err);
+            }).finally(() => {
+              setAiRefining(false);
+            });
           }
         }
       } catch (err) {
@@ -462,6 +451,13 @@ export function NewReport() {
         {step === 3 && (
           <Card>
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Review & Submit</h2>
+
+            {aiRefining && (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2.5 rounded-lg mb-4 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <span>AI is refining extracted values in the background — results will update automatically.</span>
+              </div>
+            )}
 
             {coverage && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 mt-2">
