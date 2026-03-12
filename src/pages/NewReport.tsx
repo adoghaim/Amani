@@ -268,22 +268,12 @@ export function NewReport() {
         }
       }
 
-      const { data: { session: interpSession } } = await supabase.auth.getSession();
-      const interpToken = interpSession?.access_token;
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
-
       try {
-        const interpResponse = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${interpToken ?? ''}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ reportId: reportData.id }),
+        const { error: interpError } = await supabase.functions.invoke('generate-interpretation', {
+          body: { reportId: reportData.id },
         });
-        if (!interpResponse.ok) {
-          const errText = await interpResponse.text().catch(() => '');
-          console.error('[NewReport] generate-interpretation returned error:', interpResponse.status, errText);
+        if (interpError) {
+          console.error('[NewReport] generate-interpretation error:', interpError.message);
           await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
         }
       } catch (interpErr) {

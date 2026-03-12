@@ -265,20 +265,13 @@ export function ReportView() {
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
 
-      const { data: { session: regenSession } } = await supabase.auth.getSession();
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${regenSession?.access_token ?? ''}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ reportId }),
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('generate-interpretation', {
+        body: { reportId },
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error ?? `Server error ${res.status}`);
+      if (fnError) {
+        const msg = (fnError as any)?.context?.error ?? fnError.message ?? 'Server error';
+        throw new Error(msg);
       }
 
       await fetchReport();
