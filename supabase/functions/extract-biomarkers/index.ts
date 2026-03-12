@@ -112,6 +112,11 @@ function normalizeRawName(rawName: string): string[] {
     candidates.add('THYROID PEROXIDASE ANTIBODIES');
     candidates.add('TPO THYROID PEROXIDASE ANTIBODIES');
     candidates.add('THYROID PEROXIDASE (TPO) AB');
+    candidates.add('THYROID PEROXIDASE (TPO) ANTIBODIES');
+    candidates.add('THYROID PEROXIDASE ANTIBODY');
+    candidates.add('TPO AB');
+    candidates.add('TPO ANTIBODIES');
+    candidates.add('ANTI-TPO');
   }
 
   if (upper.includes('T3 UPTAKE') || upper.includes('T-UPTAKE')) {

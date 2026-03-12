@@ -138,9 +138,11 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   {
     canonical: 'tpo_antibodies',
     patterns: [
-      'thyroid peroxidase antibodies', 'thyroid peroxidase (tpo) ab', 'thyroid peroxidase (tpo) antibody',
+      'thyroid peroxidase (tpo) antibodies', 'thyroid peroxidase antibodies',
+      'thyroid peroxidase (tpo) ab', 'thyroid peroxidase (tpo) antibody',
       'thyroid peroxidase antibody', 'tpo antibodies', 'tpo antibody', 'anti-tpo', 'tpo ab', 'tpo ab igg',
       'antithyroid peroxidase', 'thyroid peroxidase ab', 'tpo (thyroid peroxidase antibody)',
+      'thyroid peroxidase (tpo)', 'peroxidase (tpo) antibodies',
     ],
     commonUnits: ['IU/mL', 'U/mL', 'kIU/L', 'IU/ml'],
   },
