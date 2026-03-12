@@ -165,7 +165,17 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    await checkAndIncrementRateLimit(supabase, authUser.id, "generate-interpretation", 20);
+    try {
+      await checkAndIncrementRateLimit(supabase, authUser.id, "generate-interpretation", 20);
+    } catch (rateLimitError: any) {
+      if (rateLimitError?.message === "RATE_LIMIT_EXCEEDED") {
+        return new Response(
+          JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      console.warn("[generate-interpretation] Rate limit check failed (non-fatal):", rateLimitError?.message);
+    }
 
     const body = await req.json();
     const reportId: string = body.reportId;
