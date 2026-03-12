@@ -430,6 +430,15 @@ CONFIDENCE:
 
         const { analyte, matchedVia } = resolveCanonicalByLabel(rawName, gptSlug, analyteMap, synonymMap);
 
+        if (rawName.toUpperCase().includes('TPO') || rawName.toUpperCase().includes('THYROID PEROX')) {
+          console.log('[TPO DEBUG] raw_name:', JSON.stringify(rawName), '| gptSlug:', gptSlug, '| matched analyte:', analyte?.slug ?? 'NONE', '| via:', matchedVia);
+          const candidates = normalizeRawName(rawName);
+          console.log('[TPO DEBUG] candidates:', candidates);
+          for (const c of candidates) {
+            console.log('[TPO DEBUG] synonymMap.get(', JSON.stringify(c), ')=', synonymMap.get(c) ?? 'MISS');
+          }
+        }
+
         const canonicalSlug = analyte?.slug ?? null;
         const isCore = canonicalSlug ? CORE_BIOMARKER_SLUGS.has(canonicalSlug) : false;
         const category = canonicalSlug ? (CORE_BIOMARKER_CATEGORIES[canonicalSlug] ?? analyte?.category ?? null) : null;
