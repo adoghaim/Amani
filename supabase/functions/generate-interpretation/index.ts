@@ -70,13 +70,36 @@ async function processInterpretation(
 
     console.log("[generate-interpretation] Report found, status:", report.status);
 
-    const [{ data: biomarkers }, { data: reportItems }] = await Promise.all([
+    const [{ data: biomarkers }, { data: reportItems }, { data: reportAnalytes }] = await Promise.all([
       supabase.from("biomarkers").select("*").eq("lab_report_id", reportId),
       supabase.from("report_items").select("*").eq("lab_report_id", reportId).order("raw_name"),
+      supabase.from("report_analytes").select("*").eq("lab_report_id", reportId).order("raw_name"),
     ]);
 
     const biomarkersList = (biomarkers ?? []) as BiomarkerData[];
-    const reportItemsList = (reportItems ?? []) as ReportItemData[];
+
+    let reportItemsList: ReportItemData[];
+    if (reportAnalytes && reportAnalytes.length > 0) {
+      reportItemsList = (reportAnalytes as any[]).map((a: any) => ({
+        id: a.id,
+        raw_name: a.raw_name,
+        canonical_slug: a.canonical_slug ?? null,
+        category: null,
+        value_numeric: a.value_numeric ?? 0,
+        value_text: a.raw_value_text ?? null,
+        unit: a.unit ?? null,
+        raw_reference_range: a.raw_reference_range ?? null,
+        normalized_reference_min: a.normalized_min ?? null,
+        normalized_reference_max: a.normalized_max ?? null,
+        reference_operator: a.normalized_operator ?? null,
+        reference_operator_value: a.normalized_operator_value ?? null,
+        confidence_score: a.confidence_score ?? "low",
+        needs_review: a.needs_review ?? false,
+        is_core_biomarker: a.is_core ?? false,
+      })) as ReportItemData[];
+    } else {
+      reportItemsList = (reportItems ?? []) as ReportItemData[];
+    }
     const labReport = report as LabReportData;
 
     console.log(`[generate-interpretation] report_id=${reportId} biomarkers=${biomarkersList.length} report_items=${reportItemsList.length} openai=${openaiApiKey ? "yes" : "no"}`);

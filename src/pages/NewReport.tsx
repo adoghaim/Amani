@@ -6,7 +6,7 @@ import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Symptom, LabReportContext } from '../types';
+import type { Symptom, LabReportContext, ReportAnalyte } from '../types';
 import type { ReportItem } from '../utils/biomarkerParser';
 import { extractTextFromPDF } from '../utils/pdfExtractor';
 import { parseAllReportItems } from '../utils/biomarkerParser';
@@ -42,6 +42,7 @@ export function NewReport() {
   const [postpartum, setPostpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
   const [reportItems, setReportItems] = useState<ReportItem[]>([]);
+  const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [coverage, setCoverage] = useState<{ total_detected: number; total_core: number; total_extended: number; needs_review: number } | null>(null);
 
   useEffect(() => {
@@ -118,6 +119,9 @@ export function NewReport() {
               if (data.items && data.items.length > 0) {
                 setReportItems(data.items);
                 setCoverage(data.coverage ?? null);
+              }
+              if (data.analytes && data.analytes.length > 0) {
+                setReportAnalytes(data.analytes);
               }
             }).catch(err => {
               console.error('[NewReport] AI extraction background error:', err);
@@ -265,6 +269,58 @@ export function NewReport() {
           if (biomarkerError) {
             console.error('[NewReport] Failed to save core biomarkers:', biomarkerError);
           }
+        }
+      }
+
+      const analytesToSave = reportAnalytes.length > 0
+        ? reportAnalytes.filter(a => a.value_numeric != null && (a.value_numeric ?? 0) >= 0 && (a.value_numeric ?? 0) <= 100000)
+        : itemsToSave.map(item => ({
+            lab_report_id: reportData.id,
+            raw_name: item.raw_name,
+            raw_value_text: item.value_text ?? null,
+            value_numeric: item.value_numeric,
+            unit: item.unit ?? null,
+            raw_reference_range: item.raw_reference_range ?? null,
+            normalized_min: item.normalized_reference_min ?? null,
+            normalized_max: item.normalized_reference_max ?? null,
+            normalized_operator: item.reference_operator ?? null,
+            normalized_operator_value: item.reference_operator_value ?? null,
+            source_snippet: item.source_snippet ?? null,
+            confidence_score: item.confidence_score,
+            canonical_analyte_id: null,
+            canonical_slug: item.canonical_slug ?? null,
+            parse_status: item.canonical_slug ? 'partial' : 'unmapped',
+            needs_review: item.needs_review ?? false,
+            is_core: item.is_core_biomarker ?? false,
+          } as any));
+
+      if (analytesToSave.length > 0) {
+        const analyteInserts = (reportAnalytes.length > 0 ? analytesToSave : analytesToSave).map((a: any) => ({
+          lab_report_id: reportData.id,
+          raw_name: a.raw_name,
+          raw_value_text: a.raw_value_text ?? null,
+          value_numeric: a.value_numeric,
+          unit: a.unit ?? null,
+          raw_reference_range: a.raw_reference_range ?? null,
+          normalized_min: a.normalized_min ?? null,
+          normalized_max: a.normalized_max ?? null,
+          normalized_operator: a.normalized_operator ?? null,
+          normalized_operator_value: a.normalized_operator_value ?? null,
+          source_snippet: a.source_snippet ?? null,
+          confidence_score: a.confidence_score ?? 'low',
+          canonical_analyte_id: a.canonical_analyte_id ?? null,
+          canonical_slug: a.canonical_slug ?? null,
+          parse_status: a.parse_status ?? 'unmapped',
+          needs_review: a.needs_review ?? false,
+          is_core: a.is_core ?? false,
+        }));
+
+        const { error: analyteError } = await supabase
+          .from('report_analytes')
+          .insert(analyteInserts);
+
+        if (analyteError) {
+          console.error('[NewReport] Failed to save report_analytes:', analyteError);
         }
       }
 

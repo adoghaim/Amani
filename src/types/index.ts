@@ -362,3 +362,38 @@ export interface CyclePrediction {
   cycleLength: number;
   periodLength: number;
 }
+
+export interface CanonicalAnalyte {
+  id: string;
+  slug: string;
+  display_name: string;
+  category: string;
+  subcategory: string | null;
+  unit: string | null;
+  is_core: boolean;
+  is_ratio: boolean;
+  affects_scoring: boolean;
+  affects_recommendations: boolean;
+}
+
+export interface ReportAnalyte {
+  id: string;
+  lab_report_id: string;
+  raw_name: string;
+  raw_value_text: string | null;
+  value_numeric: number | null;
+  unit: string | null;
+  raw_reference_range: string | null;
+  normalized_min: number | null;
+  normalized_max: number | null;
+  normalized_operator: string | null;
+  normalized_operator_value: number | null;
+  source_snippet: string | null;
+  confidence_score: 'high' | 'medium' | 'low';
+  canonical_analyte_id: string | null;
+  canonical_slug: string | null;
+  parse_status: 'mapped' | 'partial' | 'unmapped';
+  needs_review: boolean;
+  is_core: boolean;
+  created_at: string;
+}

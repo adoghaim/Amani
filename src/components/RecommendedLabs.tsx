@@ -4,11 +4,12 @@ import { CATEGORY_DISPLAY } from '../types';
 import type { BiomarkerCategory, BiomarkerName } from '../types';
 
 interface Props {
-  presentBiomarkers: BiomarkerName[];
+  presentBiomarkers: string[];
   activeCategory?: BiomarkerCategory | null;
 }
 
 export function RecommendedLabs({ presentBiomarkers, activeCategory }: Props) {
+  const presentSet = new Set(presentBiomarkers);
   const categories = activeCategory
     ? [activeCategory]
     : (Object.keys(RECOMMENDED_LABS) as BiomarkerCategory[]);
@@ -17,7 +18,7 @@ export function RecommendedLabs({ presentBiomarkers, activeCategory }: Props) {
 
   for (const cat of categories) {
     const recs = RECOMMENDED_LABS[cat] ?? [];
-    const missingItems = recs.filter(r => !presentBiomarkers.includes(r.name));
+    const missingItems = recs.filter(r => !presentSet.has(r.name));
     if (missingItems.length > 0) {
       missing.push({ category: cat, items: missingItems });
     }

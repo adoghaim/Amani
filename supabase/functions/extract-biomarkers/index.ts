@@ -7,26 +7,42 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-interface ComparatorRange {
-  operator: string;
-  value: number;
-  raw: string;
+interface CanonicalAnalyte {
+  id: string;
+  slug: string;
+  display_name: string;
+  category: string;
+  subcategory: string | null;
+  unit: string | null;
+  is_core: boolean;
+  is_ratio: boolean;
+  affects_scoring: boolean;
+  affects_recommendations: boolean;
 }
 
-interface ReportItem {
+interface AnalyteSynonym {
+  canonical_analyte_id: string;
+  synonym_text: string;
+}
+
+interface ReportAnalyte {
   raw_name: string;
-  canonical_slug: string | null;
-  category: string | null;
+  raw_value_text: string | null;
   value_numeric: number;
-  value_text: string | null;
   unit: string | null;
   raw_reference_range: string | null;
-  normalized_reference_min: number | null;
-  normalized_reference_max: number | null;
-  reference_operator: string | null;
-  reference_operator_value: number | null;
+  normalized_min: number | null;
+  normalized_max: number | null;
+  normalized_operator: string | null;
+  normalized_operator_value: number | null;
+  source_snippet: string | null;
   confidence_score: "high" | "medium" | "low";
-  is_core_biomarker: boolean;
+  canonical_analyte_id: string | null;
+  canonical_slug: string | null;
+  parse_status: "mapped" | "partial" | "unmapped";
+  needs_review: boolean;
+  is_core: boolean;
+  category: string | null;
 }
 
 const CORE_BIOMARKER_SLUGS = new Set([
@@ -57,26 +73,72 @@ const CORE_BIOMARKER_CATEGORIES: Record<string, string> = {
   vitamin_b12: 'nutrients', folate: 'nutrients', magnesium: 'nutrients',
 };
 
-const SLUG_ALIASES: Record<string, string> = {
-  testosterone_total: 'total_testosterone',
-  testosterone_free: 'free_testosterone',
-  dhea_s: 'dheas',
-  insulin: 'fasting_insulin',
-  ldl: 'ldl_cholesterol',
-  hdl: 'hdl_cholesterol',
-  non_hdl: 'non_hdl_cholesterol',
-  lpA: 'lpa',
-  glucose_fasting: 'fasting_glucose',
-  hba1c: 'hemoglobin_a1c',
-  hscrp: 'hs_crp',
-  vitamin_d: 'vitamin_d_25_oh',
-  b12: 'vitamin_b12',
-  tgab: 'tg_antibodies',
-  total_bilirubin: 'bilirubin_total',
-};
+async function loadCanonicalRegistry(supabaseAdmin: any): Promise<{
+  analyteMap: Map<string, CanonicalAnalyte>;
+  synonymMap: Map<string, string>;
+}> {
+  const [{ data: analytes }, { data: synonyms }] = await Promise.all([
+    supabaseAdmin.from("canonical_analytes").select("*"),
+    supabaseAdmin.from("analyte_synonyms").select("canonical_analyte_id, synonym_text"),
+  ]);
 
-function normalizeName(name: string): string {
-  return SLUG_ALIASES[name] ?? name;
+  const analyteMap = new Map<string, CanonicalAnalyte>();
+  for (const a of (analytes ?? [])) {
+    analyteMap.set(a.id, a);
+  }
+
+  const synonymMap = new Map<string, string>();
+  for (const s of (synonyms ?? [])) {
+    synonymMap.set(s.synonym_text.toUpperCase(), s.canonical_analyte_id);
+  }
+
+  return { analyteMap, synonymMap };
+}
+
+function resolveCanonicalByLabel(
+  rawName: string,
+  gptSlug: string | null,
+  analyteMap: Map<string, CanonicalAnalyte>,
+  synonymMap: Map<string, string>
+): { analyte: CanonicalAnalyte | null; matchedVia: "synonym" | "slug" | "none" } {
+  const normalized = rawName.toUpperCase().trim();
+
+  const synonymId = synonymMap.get(normalized);
+  if (synonymId) {
+    const analyte = analyteMap.get(synonymId) ?? null;
+    return { analyte, matchedVia: "synonym" };
+  }
+
+  if (gptSlug) {
+    for (const a of analyteMap.values()) {
+      if (a.slug === gptSlug) return { analyte: a, matchedVia: "slug" };
+    }
+    const SLUG_ALIASES: Record<string, string> = {
+      testosterone_total: 'total_testosterone',
+      testosterone_free: 'free_testosterone',
+      dhea_s: 'dheas',
+      insulin: 'fasting_insulin',
+      ldl: 'ldl_cholesterol',
+      hdl: 'hdl_cholesterol',
+      non_hdl: 'non_hdl_cholesterol',
+      lpA: 'lpa',
+      glucose_fasting: 'fasting_glucose',
+      hba1c: 'hemoglobin_a1c',
+      hscrp: 'hs_crp',
+      vitamin_d: 'vitamin_d_25_oh',
+      b12: 'vitamin_b12',
+      tgab: 'tg_antibodies',
+      total_bilirubin: 'bilirubin_total',
+    };
+    const aliased = SLUG_ALIASES[gptSlug];
+    if (aliased) {
+      for (const a of analyteMap.values()) {
+        if (a.slug === aliased) return { analyte: a, matchedVia: "slug" };
+      }
+    }
+  }
+
+  return { analyte: null, matchedVia: "none" };
 }
 
 Deno.serve(async (req: Request) => {
@@ -133,6 +195,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const { analyteMap, synonymMap } = await loadCanonicalRegistry(supabaseAdmin);
+
     const systemPrompt = `You are a medical lab data extraction specialist. Extract EVERY lab test result from the report — not just a fixed set.
 
 CRITICAL RULES:
@@ -144,8 +208,9 @@ CRITICAL RULES:
 6. value_numeric must always be a NUMBER, never a string
 7. Extract units exactly as shown; use null if not present
 8. Preserve reference ranges exactly as shown in raw_reference_range
+9. raw_name must be the EXACT label as printed on the report — do not normalize or abbreviate
 
-CANONICAL SLUG MAPPING (use these slugs when the test matches, null otherwise):
+CANONICAL SLUG MAPPING (use these slugs when the test EXACTLY matches, null otherwise):
 Hormones: estradiol, progesterone, lh, fsh, amh, total_testosterone, free_testosterone, dheas, prolactin, fasting_insulin, shbg
 Thyroid: tsh, free_t4, free_t3, total_t4, reverse_t3, tpo_antibodies, tg_antibodies
 Metabolic: fasting_glucose, hemoglobin_a1c, c_peptide
@@ -154,22 +219,54 @@ Liver: alt, ast, ggt, alkaline_phosphatase, bilirubin_total
 Kidney: creatinine, egfr, bun
 Inflammation: hs_crp, esr
 Nutrients: ferritin, iron_saturation, vitamin_d_25_oh, vitamin_b12, folate, magnesium
+Extended: wbc, rbc, hemoglobin, hematocrit, mcv, mch, mchc, rdw, platelets, mpv, neutrophils, lymphocytes, monocytes, eosinophils, basophils, sodium, potassium, chloride, co2, calcium, total_protein, albumin, globulin, chol_hdl_ratio, bun_creatinine_ratio, albumin_globulin_ratio, t3_uptake, free_thyroxine_index, total_t3, serum_iron, tibc, uibc
 
-ALIAS MAPPING:
-"Testosterone, Total" → total_testosterone, "Testosterone, Free" → free_testosterone
-"DHEA-S", "DHEA Sulfate" → dheas, "Insulin", "Fasting Insulin" → fasting_insulin
-"TSH" → tsh, "Free T4", "T4, Free" → free_t4, "Free T3", "T3, Free" → free_t3
-"Glucose", "Glucose, Serum" → fasting_glucose, "HbA1c", "A1C" → hemoglobin_a1c
-"LDL Chol Calc", "LDL-C" → ldl_cholesterol, "HDL Chol Direct" → hdl_cholesterol
-"ALT (SGPT)", "SGPT" → alt, "AST (SGOT)", "SGOT" → ast
-"Creatinine, Serum" → creatinine, "eGFR", "GFR Estimated" → egfr
-"hs-CRP", "C-Reactive Protein, Cardiac" → hs_crp
-"Ferritin, Serum" → ferritin, "Iron, % Saturation" → iron_saturation
-"Vitamin D, 25-Hydroxy", "Vitamin D (25-OH)" → vitamin_d_25_oh
-"Vitamin B12, Serum" → vitamin_b12, "Folate, Serum" → folate, "Magnesium, Serum" → magnesium
-"Bilirubin, Total" → bilirubin_total, "Urea Nitrogen (BUN)", "Blood Urea Nitrogen" → bun
-"TPO Ab", "TPO Antibody", "TPO (Thyroid Peroxidase Antibody)", "Thyroid Peroxidase Antibodies", "Thyroid Peroxidase Antibody", "Thyroid Peroxidase (TPO) Ab" → tpo_antibodies
-"T4 (Thyroxine)", "T4, Serum", "Thyroxine" → total_t4 (if not labeled as "Free T4")
+ALIAS MAPPING — use these to set canonical_slug:
+"Testosterone, Total" → total_testosterone
+"Testosterone, Free" → free_testosterone
+"DHEA-S", "DHEA Sulfate" → dheas
+"Insulin", "Fasting Insulin" → fasting_insulin
+"TSH", "TSH, 3rd Generation" → tsh
+"Free T4", "T4, Free", "Thyroxine, Free" → free_t4
+"Free T3", "T3, Free", "Triiodothyronine, Free" → free_t3
+"T4 (Thyroxine)", "T4, Serum", "Thyroxine (T4)" → total_t4 (ONLY if NOT labeled as "Free T4")
+"T3 Uptake", "T3 Uptake, Serum" → t3_uptake (NOT free_t3 — these are different tests)
+"FTI", "Free Thyroxine Index", "T7" → free_thyroxine_index
+"TPO Ab", "TPO Antibody", "Thyroid Peroxidase Antibodies", "Thyroid Peroxidase (TPO) Ab", "TPO (Thyroid Peroxidase Antibody)" → tpo_antibodies
+"TgAb", "Thyroglobulin Antibodies" → tg_antibodies
+"Glucose", "Glucose, Serum" → fasting_glucose
+"HbA1c", "A1C", "Glycohemoglobin" → hemoglobin_a1c
+"LDL-Cholesterol", "LDL Cholesterol", "LDL Chol Calc", "LDL-C" → ldl_cholesterol
+"HDL Cholesterol", "HDL Chol Direct", "HDL-C" → hdl_cholesterol
+"Cholesterol, Total" → total_cholesterol (NOT ldl_cholesterol)
+"Chol/HDLC Ratio", "Chol/HDLC", "Cholesterol/HDL Ratio" → chol_hdl_ratio
+"Non HDL Cholesterol", "Non-HDL Cholesterol", "Non-HDL-C" → non_hdl_cholesterol
+"ALT (SGPT)", "SGPT" → alt
+"AST (SGOT)", "SGOT" → ast
+"Alkaline Phosphatase", "Alk Phos" → alkaline_phosphatase
+"Bilirubin, Total", "Total Bilirubin" → bilirubin_total
+"Creatinine, Serum" → creatinine
+"eGFR", "GFR Estimated" → egfr
+"BUN", "Urea Nitrogen (BUN)", "Blood Urea Nitrogen" → bun
+"BUN/Creatinine Ratio" → bun_creatinine_ratio
+"Albumin/Globulin Ratio", "A/G Ratio" → albumin_globulin_ratio
+"hs-CRP", "C-Reactive Protein, Cardiac", "High Sensitivity CRP" → hs_crp
+"Ferritin, Serum" → ferritin
+"Iron, % Saturation", "Iron Saturation", "Transferrin Saturation" → iron_saturation
+"Iron", "Serum Iron", "Iron, Serum" → serum_iron (NOT iron_saturation)
+"TIBC", "Total Iron Binding Capacity" → tibc
+"UIBC" → uibc
+"Vitamin D, 25-Hydroxy", "Vitamin D (25-OH)", "25-OH Vitamin D" → vitamin_d_25_oh
+"Vitamin B12, Serum", "Vitamin B12" → vitamin_b12
+"Folate, Serum" → folate
+"Magnesium, Serum" → magnesium
+"WBC", "White Blood Cells" → wbc
+"RBC", "Red Blood Cell Count", "Red Blood Cells" → rbc
+"Hemoglobin", "HGB", "Hgb" → hemoglobin
+"Hematocrit", "HCT" → hematocrit
+"Platelet Count", "Platelets", "PLT" → platelets
+"MPV", "Mean Platelet Volume" → mpv
+"RDW", "RDW-CV", "Red Cell Distribution Width" → rdw
 
 REFERENCE RANGE FORMATS - preserve exactly in raw_reference_range:
 - Min-max: "65-99" → normalized_reference_min: 65, normalized_reference_max: 99, reference_operator: null
@@ -178,27 +275,11 @@ REFERENCE RANGE FORMATS - preserve exactly in raw_reference_range:
 - Comparator: ">= 60" → reference_operator: ">=", reference_operator_value: 60
 - Comparator: "<= 9" → reference_operator: "<=", reference_operator_value: 9
 
-EXTENDED ITEMS — extract ALL of these too, with canonical_slug = null, category = null:
-
-CBC: WBC (White Blood Cells), RBC (Red Blood Cells), Hemoglobin (Hgb), Hematocrit (Hct), MCV, MCH, MCHC, RDW (Red Cell Distribution Width), Platelet Count (PLT), Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils
-
-CMP electrolytes & proteins: Sodium (Na), Potassium (K), Chloride (Cl), CO2 (Carbon Dioxide / Bicarbonate), Calcium, Total Protein, Albumin, Globulin, A/G Ratio, BUN/Creatinine Ratio
-
-Thyroid extras: T3 Uptake, Free Thyroxine Index (FTI / T7), Total T3 (Triiodothyronine, Total)
-
-Iron panel: Serum Iron, TIBC (Total Iron Binding Capacity), UIBC (Unsaturated Iron Binding Capacity)
-
-Lipid extras: Cholesterol/HDL Ratio
-
-Any other test on the report with a numeric value — do NOT skip any item.
-
-IMPORTANT: For all CBC/CMP/iron/thyroid-extra items above: set canonical_slug = null (they are not in the core panel).
-
 Return ONLY a JSON object: { "items": [...] }
 
 Each item has these fields:
 {
-  "raw_name": string,         // test name exactly as on report
+  "raw_name": string,         // test name EXACTLY as on report
   "canonical_slug": string | null,
   "value_numeric": number,
   "value_text": string | null,
@@ -261,39 +342,55 @@ CONFIDENCE:
       rawItems = [];
     }
 
-    const items: ReportItem[] = rawItems
+    const reportAnalytes: ReportAnalyte[] = rawItems
       .filter(item => typeof item.value_numeric === 'number' && !isNaN(item.value_numeric))
       .map(item => {
-        const rawSlug = item.canonical_slug ?? item.name ?? null;
-        const normalizedSlug = rawSlug ? normalizeName(rawSlug) : null;
-        const canonicalSlug = normalizedSlug && CORE_BIOMARKER_SLUGS.has(normalizedSlug) ? normalizedSlug : null;
-        const isCore = canonicalSlug !== null;
-        const category = canonicalSlug ? (CORE_BIOMARKER_CATEGORIES[canonicalSlug] ?? null) : null;
+        const rawName = item.raw_name ?? item.name ?? 'Unknown';
+        const gptSlug = item.canonical_slug ?? null;
+
+        const { analyte, matchedVia } = resolveCanonicalByLabel(rawName, gptSlug, analyteMap, synonymMap);
+
+        const canonicalSlug = analyte?.slug ?? null;
+        const isCore = canonicalSlug ? CORE_BIOMARKER_SLUGS.has(canonicalSlug) : false;
+        const category = canonicalSlug ? (CORE_BIOMARKER_CATEGORIES[canonicalSlug] ?? analyte?.category ?? null) : null;
+
+        let parseStatus: "mapped" | "partial" | "unmapped" = "unmapped";
+        if (analyte) {
+          parseStatus = matchedVia === "synonym" ? "mapped" : "partial";
+        }
+
+        const needsReview = item.confidence_score === 'low' || !item.unit;
 
         return {
-          raw_name: item.raw_name ?? item.name ?? 'Unknown',
-          canonical_slug: canonicalSlug,
-          category,
+          raw_name: rawName,
+          raw_value_text: item.value_text ?? null,
           value_numeric: typeof item.value_numeric === 'number' ? item.value_numeric : parseFloat(item.value_numeric),
-          value_text: item.value_text ?? null,
           unit: item.unit ?? null,
           raw_reference_range: item.raw_reference_range ?? null,
-          normalized_reference_min: item.normalized_reference_min ?? null,
-          normalized_reference_max: item.normalized_reference_max ?? null,
-          reference_operator: item.reference_operator ?? null,
-          reference_operator_value: item.reference_operator_value ?? null,
+          normalized_min: item.normalized_reference_min ?? null,
+          normalized_max: item.normalized_reference_max ?? null,
+          normalized_operator: item.reference_operator ?? null,
+          normalized_operator_value: item.reference_operator_value ?? null,
+          source_snippet: null,
           confidence_score: item.confidence_score ?? 'low',
-          is_core_biomarker: isCore,
-        };
+          canonical_analyte_id: analyte?.id ?? null,
+          canonical_slug: canonicalSlug,
+          parse_status: parseStatus,
+          needs_review: needsReview,
+          is_core: isCore,
+          category,
+        } as ReportAnalyte;
       });
 
-    const validatedItems = applySanityChecks(items);
+    const validatedAnalytes = applySanityChecks(reportAnalytes);
 
     const coverage = {
-      total_detected: validatedItems.length,
-      total_core: validatedItems.filter(i => i.is_core_biomarker).length,
-      total_extended: validatedItems.filter(i => !i.is_core_biomarker).length,
-      needs_review: validatedItems.filter(i => i.confidence_score === 'low' || !i.unit).length,
+      total_detected: validatedAnalytes.length,
+      total_core: validatedAnalytes.filter(i => i.is_core).length,
+      total_extended: validatedAnalytes.filter(i => !i.is_core).length,
+      needs_review: validatedAnalytes.filter(i => i.needs_review).length,
+      total_mapped: validatedAnalytes.filter(i => i.parse_status === 'mapped').length,
+      total_unmapped: validatedAnalytes.filter(i => i.parse_status === 'unmapped').length,
     };
 
     await supabaseAdmin.from("audit_events").insert({
@@ -302,8 +399,26 @@ CONFIDENCE:
       metadata: { ...coverage },
     }).then(() => {});
 
+    const legacyItems = validatedAnalytes.map(a => ({
+      raw_name: a.raw_name,
+      canonical_slug: a.canonical_slug,
+      category: a.category,
+      value_numeric: a.value_numeric,
+      value_text: a.raw_value_text,
+      unit: a.unit,
+      raw_reference_range: a.raw_reference_range,
+      normalized_reference_min: a.normalized_min,
+      normalized_reference_max: a.normalized_max,
+      reference_operator: a.normalized_operator,
+      reference_operator_value: a.normalized_operator_value,
+      confidence_score: a.confidence_score,
+      needs_review: a.needs_review,
+      is_core_biomarker: a.is_core,
+      source_snippet: a.source_snippet,
+    }));
+
     return new Response(
-      JSON.stringify({ items: validatedItems, coverage }),
+      JSON.stringify({ items: legacyItems, analytes: validatedAnalytes, coverage }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
@@ -353,9 +468,10 @@ async function checkAndIncrementRateLimit(
   }
 }
 
-function applySanityChecks(items: ReportItem[]): ReportItem[] {
+function applySanityChecks(items: ReportAnalyte[]): ReportAnalyte[] {
   return items.map(item => {
     const b = { ...item };
+    if (!b.value_numeric) return b;
     if (b.canonical_slug === 'tsh' && b.value_numeric > 50) b.confidence_score = 'low';
     if (b.canonical_slug === 'estradiol' && b.value_numeric > 5000) b.confidence_score = 'low';
     if (b.canonical_slug === 'progesterone' && b.value_numeric > 100) b.confidence_score = 'low';
@@ -367,6 +483,7 @@ function applySanityChecks(items: ReportItem[]): ReportItem[] {
     if (b.canonical_slug === 'hemoglobin_a1c' && b.value_numeric > 20) b.confidence_score = 'low';
     if (b.canonical_slug === 'egfr' && b.value_numeric > 200) b.confidence_score = 'low';
     if (b.value_numeric <= 0) b.confidence_score = 'low';
+    if (b.confidence_score === 'low') b.needs_review = true;
     return b;
   });
 }
