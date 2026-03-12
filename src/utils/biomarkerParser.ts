@@ -679,9 +679,9 @@ function layeredParse(text: string, debug = false): ExtractedBiomarker[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (isSectionHeader(line)) continue;
 
     const bp = matchBiomarkerLabel(line);
+    if (!bp && isSectionHeader(line)) continue;
     if (!bp) continue;
 
     const windowSize = 6;
