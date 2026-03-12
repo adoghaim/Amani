@@ -267,7 +267,7 @@ export function ReportView() {
 
       const { data: { session: regenSession } } = await supabase.auth.getSession();
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
-      await fetch(apiUrl, {
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${regenSession?.access_token ?? ''}`,
@@ -276,7 +276,13 @@ export function ReportView() {
         body: JSON.stringify({ reportId }),
       });
 
-      setTimeout(() => { fetchReport(); setRegenerating(false); }, 3000);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error ?? `Server error ${res.status}`);
+      }
+
+      await fetchReport();
+      setRegenerating(false);
     } catch {
       setError('Failed to regenerate report');
       setRegenerating(false);

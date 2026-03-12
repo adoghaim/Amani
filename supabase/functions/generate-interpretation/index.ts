@@ -52,19 +52,23 @@ async function processInterpretation(
   reportId: string,
   userId: string
 ): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
   try {
+    console.log("[generate-interpretation] Starting processInterpretation for", reportId);
+
     const { data: report, error: reportError } = await supabase
       .from("lab_reports")
       .select("*")
       .eq("id", reportId)
-      .eq("user_id", userId)
       .maybeSingle();
 
-    if (reportError || !report) {
-      throw new Error("Report not found");
+    if (reportError) {
+      throw new Error(`Report fetch error: ${reportError.message}`);
     }
+    if (!report) {
+      throw new Error("Report not found: " + reportId);
+    }
+
+    console.log("[generate-interpretation] Report found, status:", report.status);
 
     const [{ data: biomarkers }, { data: reportItems }] = await Promise.all([
       supabase.from("biomarkers").select("*").eq("lab_report_id", reportId),
@@ -172,11 +176,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    EdgeRuntime.waitUntil(processInterpretation(supabase, openaiApiKey, reportId, authUser.id));
+    await processInterpretation(supabase, openaiApiKey, reportId, authUser.id);
 
     return new Response(
-      JSON.stringify({ queued: true }),
-      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ done: true }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("[generate-interpretation] Fatal error:", error?.message ?? error);
