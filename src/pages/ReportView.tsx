@@ -122,6 +122,22 @@ export function ReportView() {
     fetchReport();
   }, [reportId]);
 
+  useEffect(() => {
+    if (!report || report.status !== 'processing') return;
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('lab_reports')
+        .select('status')
+        .eq('id', reportId)
+        .maybeSingle();
+      if (data && data.status !== 'processing') {
+        clearInterval(interval);
+        fetchReport();
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [report?.status, reportId]);
+
   const fetchReport = async () => {
     const { data: reportData, error: reportError } = await supabase
       .from('lab_reports')
@@ -305,8 +321,8 @@ export function ReportView() {
         <Card>
           <div className="text-center py-12">
             <Clock className="w-16 h-16 text-[#C97C8B] mx-auto mb-4 animate-pulse" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Processing your report</h2>
-            <p className="text-gray-600">This usually takes 30–60 seconds. You can refresh this page to check status.</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Generating your AI analysis</h2>
+            <p className="text-gray-600">This usually takes 15–30 seconds. This page will update automatically.</p>
           </div>
         </Card>
       </Layout>
