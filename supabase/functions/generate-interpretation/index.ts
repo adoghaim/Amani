@@ -97,6 +97,7 @@ async function processInterpretation(
       interpretationSource = "demo";
     }
 
+    console.log("[generate-interpretation] Attempting upsert for report:", reportId);
     const { error: upsertError } = await supabase
       .from("interpretations")
       .upsert({
@@ -107,15 +108,20 @@ async function processInterpretation(
         disclaimer_version: "1.0",
       }, { onConflict: "lab_report_id" });
 
-    if (upsertError) throw new Error("Failed to save interpretation");
+    if (upsertError) {
+      console.error("[generate-interpretation] Upsert error:", JSON.stringify(upsertError));
+      throw new Error(`Failed to save interpretation: ${upsertError.message}`);
+    }
 
-    await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
+    console.log("[generate-interpretation] Upsert succeeded, updating status to ready");
+    const { error: statusError } = await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
+    if (statusError) console.error("[generate-interpretation] Status update error:", JSON.stringify(statusError));
 
     await supabase.from("audit_events").insert({
       user_id: userId,
       event_type: "insights_generated",
       metadata: { report_id: reportId, source: interpretationSource },
-    });
+    }).catch((auditErr: any) => console.error("[generate-interpretation] Audit insert error:", auditErr?.message));
   } catch (err: any) {
     console.error("[generate-interpretation] Background processing error:", err?.message ?? err);
     await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId).catch(() => {});
