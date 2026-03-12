@@ -635,7 +635,7 @@ interface ParsedResult {
 }
 
 function extractValueFromWindow(lines: string[], preferredUnits: string[]): ParsedResult | null {
-  const cleanLines = lines.filter(l => !isNoiseLine(l));
+  const cleanLines = lines.filter(l => !NOISE_LINE_RE.test(l.trim()));
   if (cleanLines.length === 0) return null;
 
   const windowText = cleanLines.join(' ');
@@ -684,7 +684,7 @@ function layeredParse(text: string, debug = false): ExtractedBiomarker[] {
     const bp = matchBiomarkerLabel(line);
     if (!bp) continue;
 
-    const windowSize = 4;
+    const windowSize = 6;
     const windowLines = lines.slice(i, Math.min(i + windowSize, lines.length));
     const parsed = extractValueFromWindow(windowLines, bp.commonUnits);
 
@@ -780,7 +780,7 @@ export function parseBiomarkersFromText(text: string, debug = false): ExtractedB
         if (foundIndex === -1) break;
 
         const contextStart = Math.max(0, foundIndex - 20);
-        const contextEnd = Math.min(text.length, foundIndex + 300);
+        const contextEnd = Math.min(text.length, foundIndex + 500);
         const contextText = text.substring(contextStart, contextEnd);
 
         const extracted = extractBiomarkerFromContext(
