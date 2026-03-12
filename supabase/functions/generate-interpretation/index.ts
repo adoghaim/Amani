@@ -130,7 +130,6 @@ async function processInterpretation(
     const errMsg = err?.message ?? String(err);
     console.error("[generate-interpretation] Background processing error:", errMsg, err?.stack ?? "");
     await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId).catch(() => {});
-    throw err;
   }
 }
 
