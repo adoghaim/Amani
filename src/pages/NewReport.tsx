@@ -272,9 +272,35 @@ export function NewReport() {
         }
       }
 
-      const analytesToSave = reportAnalytes.length > 0
-        ? reportAnalytes.filter(a => a.value_numeric != null && a.value_numeric >= 0 && a.value_numeric <= 100000)
-        : itemsToSave.map(item => ({
+      const analyteIdBySlug = new Map<string, string>();
+      for (const a of reportAnalytes) {
+        if (a.canonical_slug && a.canonical_analyte_id) {
+          analyteIdBySlug.set(a.canonical_slug, a.canonical_analyte_id);
+        }
+      }
+
+      const missingSlugs = [...new Set(itemsToSave
+        .map(i => i.canonical_slug)
+        .filter((s): s is string => !!s && !analyteIdBySlug.has(s))
+      )];
+      if (missingSlugs.length > 0) {
+        const { data: caRows } = await supabase
+          .from('canonical_analytes' as any)
+          .select('id, slug')
+          .in('slug', missingSlugs);
+        if (caRows) {
+          for (const row of caRows as { id: string; slug: string }[]) {
+            analyteIdBySlug.set(row.slug, row.id);
+          }
+        }
+      }
+
+      if (itemsToSave.length > 0) {
+        const analyteInserts = itemsToSave.map(item => {
+          const slug = item.canonical_slug ?? null;
+          const canonicalAnalyteId = slug ? (analyteIdBySlug.get(slug) ?? null) : null;
+          const isCore = item.is_core_biomarker ?? false;
+          return {
             lab_report_id: reportData.id,
             raw_name: item.raw_name,
             raw_value_text: item.value_text ?? null,
@@ -286,34 +312,14 @@ export function NewReport() {
             normalized_operator: item.reference_operator ?? null,
             normalized_operator_value: item.reference_operator_value ?? null,
             source_snippet: item.source_snippet ?? null,
-            confidence_score: item.confidence_score,
-            canonical_analyte_id: null,
-            canonical_slug: item.canonical_slug ?? null,
-            parse_status: item.canonical_slug ? 'partial' : 'unmapped',
+            confidence_score: item.confidence_score ?? 'low',
+            canonical_analyte_id: canonicalAnalyteId,
+            canonical_slug: slug,
+            parse_status: canonicalAnalyteId ? 'mapped' : (slug ? 'partial' : 'unmapped'),
             needs_review: item.needs_review ?? false,
-            is_core: item.is_core_biomarker ?? false,
-          } as any));
-
-      if (analytesToSave.length > 0) {
-        const analyteInserts = (reportAnalytes.length > 0 ? analytesToSave : analytesToSave).map((a: any) => ({
-          lab_report_id: reportData.id,
-          raw_name: a.raw_name,
-          raw_value_text: a.raw_value_text ?? null,
-          value_numeric: a.value_numeric,
-          unit: a.unit ?? null,
-          raw_reference_range: a.raw_reference_range ?? null,
-          normalized_min: a.normalized_min ?? null,
-          normalized_max: a.normalized_max ?? null,
-          normalized_operator: a.normalized_operator ?? null,
-          normalized_operator_value: a.normalized_operator_value ?? null,
-          source_snippet: a.source_snippet ?? null,
-          confidence_score: a.confidence_score ?? 'low',
-          canonical_analyte_id: a.canonical_analyte_id ?? null,
-          canonical_slug: a.canonical_slug ?? null,
-          parse_status: a.parse_status ?? 'unmapped',
-          needs_review: a.needs_review ?? false,
-          is_core: a.is_core ?? false,
-        }));
+            is_core: isCore,
+          };
+        });
 
         const { error: analyteError } = await supabase
           .from('report_analytes')

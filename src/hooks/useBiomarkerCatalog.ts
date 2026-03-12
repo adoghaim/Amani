@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 export interface CatalogBiomarker {
+  id: string;
   slug: string;
   name: string;
   category: string;
@@ -38,7 +39,7 @@ export function useBiomarkerCatalog(): UseBiomarkerCatalogResult {
 
     supabase
       .from('biomarker_catalog')
-      .select('slug, name, category, subcategory, unit, sex_applicability, is_cycle_dependent, is_fasting_sensitive')
+      .select('id, slug, name, category, subcategory, unit, sex_applicability, is_cycle_dependent, is_fasting_sensitive')
       .order('category')
       .order('name')
       .then(({ data, error: fetchError }) => {
