@@ -259,12 +259,16 @@ CRITICAL RULES:
 1. Extract ALL tests on the report, including CBC components, CMP components, ratios, panels, and any other items
 2. Parse decimal points EXACTLY as shown (2.1 = 2.1, not 21)
 3. For "<0.5" set value_numeric = 0.25, value_text = "<0.5"
-4. For ">200" set value_numeric = 200, value_text = ">200"
-5. For "> OR = 60" set value_numeric = 60, value_text = "> OR = 60"
-6. value_numeric must always be a NUMBER, never a string
-7. Extract units exactly as shown; use null if not present
-8. Preserve reference ranges exactly as shown in raw_reference_range
-9. raw_name must be the EXACT label as printed on the report — do not normalize or abbreviate
+4. For "<9" or "< 9" set value_numeric = 4.5, value_text = "<9" (ALWAYS use half the threshold, NEVER 0)
+5. For "<10" set value_numeric = 5, value_text = "<10"
+6. For "<34" or "<35" set value_numeric = 17, value_text = "<34"
+7. For ">200" set value_numeric = 200, value_text = ">200"
+8. For "> OR = 60" set value_numeric = 60, value_text = "> OR = 60"
+9. CRITICAL: value_numeric must NEVER be 0 for a comparator result like "<9" — always use half the threshold
+10. value_numeric must always be a NUMBER, never a string
+11. Extract units exactly as shown; use null if not present
+12. Preserve reference ranges exactly as shown in raw_reference_range
+13. raw_name must be the EXACT label as printed on the report — do not normalize or abbreviate
 
 CANONICAL SLUG MAPPING (use these slugs when the test EXACTLY matches, null otherwise):
 Hormones: estradiol, progesterone, lh, fsh, amh, total_testosterone, free_testosterone, dheas, prolactin, fasting_insulin, shbg

@@ -221,7 +221,7 @@ export function NewReport() {
 
       if (reportError) throw reportError;
 
-      const itemsToSave = reportItems.filter(i => i.value_numeric > 0 && i.value_numeric <= 100000);
+      const itemsToSave = reportItems.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
 
       if (itemsToSave.length > 0) {
         const reportItemInserts = itemsToSave.map(item => ({
@@ -273,7 +273,7 @@ export function NewReport() {
       }
 
       const analytesToSave = reportAnalytes.length > 0
-        ? reportAnalytes.filter(a => a.value_numeric != null && (a.value_numeric ?? 0) >= 0 && (a.value_numeric ?? 0) <= 100000)
+        ? reportAnalytes.filter(a => a.value_numeric != null && a.value_numeric >= 0 && a.value_numeric <= 100000)
         : itemsToSave.map(item => ({
             lab_report_id: reportData.id,
             raw_name: item.raw_name,
