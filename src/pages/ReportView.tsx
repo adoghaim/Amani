@@ -265,13 +265,23 @@ export function ReportView() {
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
 
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('generate-interpretation', {
-        body: { reportId },
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token ?? '';
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
+      const fnRes = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ reportId }),
       });
 
-      if (fnError) {
-        const msg = (fnError as any)?.context?.error ?? fnError.message ?? 'Server error';
-        throw new Error(msg);
+      if (!fnRes.ok) {
+        const body = await fnRes.text();
+        console.error('[ReportView] edge function error', fnRes.status, body);
+        throw new Error(`Server error ${fnRes.status}: ${body}`);
       }
 
       await fetchReport();
