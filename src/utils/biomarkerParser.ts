@@ -642,29 +642,45 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
   const unit = detectUnit(windowText) ?? preferredUnits[0] ?? null;
   const referenceResult = detectReferenceRange(windowText) ?? undefined;
 
-  const prefixRe = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
-  const prefixMatch = windowText.match(prefixRe);
-  if (prefixMatch) {
-    const parsed = parseValueWithPrefix(prefixMatch[1].trim());
-    if (parsed) {
-      return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
-    }
-  }
-
   const knownRangeNumbers = new Set<string>();
   if (referenceResult?.min !== undefined) knownRangeNumbers.add(String(referenceResult.min));
   if (referenceResult?.max !== undefined) knownRangeNumbers.add(String(referenceResult.max));
   if (referenceResult?.comparator) knownRangeNumbers.add(String(referenceResult.comparator.value));
 
+  // Collect all plain numeric candidates (excluding known range numbers)
+  const numericCandidates: { value: number; rawValue: string }[] = [];
   for (const line of cleanLines) {
     const tokens = line.match(/\d+\.?\d*/g) ?? [];
     for (const tok of tokens) {
       if (knownRangeNumbers.has(tok)) continue;
       const v = parseFloat(tok);
       if (v >= 0 && v <= 100000) {
-        return { value: v, rawValue: tok, unit, referenceResult };
+        numericCandidates.push({ value: v, rawValue: tok });
       }
     }
+  }
+
+  // Check for a prefix value (<X or >X) — only use it if NO larger plain number exists
+  // in the window (which would be the real patient result)
+  const prefixRe = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
+  const prefixMatch = windowText.match(prefixRe);
+  if (prefixMatch) {
+    const prefixToken = prefixMatch[1].trim();
+    const prefixNumStr = prefixToken.replace(/^[<>]\s*/, '');
+    const prefixNum = parseFloat(prefixNumStr);
+    // Only treat as patient value if no larger integer candidate exists
+    const hasLargerPlainValue = numericCandidates.some(c => c.value > prefixNum && Number.isInteger(c.value));
+    if (!hasLargerPlainValue) {
+      const parsed = parseValueWithPrefix(prefixToken);
+      if (parsed) {
+        return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
+      }
+    }
+  }
+
+  if (numericCandidates.length > 0) {
+    const first = numericCandidates[0];
+    return { value: first.value, rawValue: first.rawValue, unit, referenceResult };
   }
 
   return null;
