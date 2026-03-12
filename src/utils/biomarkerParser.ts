@@ -547,7 +547,7 @@ function parseValueWithPrefix(text: string): { value: number; rawValue: string }
 function splitIntoLines(text: string): string[] {
   return text.split(/\r?\n/)
     .map(l => l.trim())
-    .filter(l => l.length > 0 && !isNoiseLine(l));
+    .filter(l => l.length > 0 && !NOISE_LINE_RE.test(l.trim()));
 }
 
 // ─── Layer 2: Section header detection ──────────────────────────────────────
