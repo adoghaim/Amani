@@ -124,7 +124,12 @@ export function ReportView() {
 
   useEffect(() => {
     if (!report || report.status !== 'processing') return;
+    let elapsed = 0;
+    const POLL_INTERVAL = 4000;
+    const TIMEOUT_MS = 120000;
+
     const interval = setInterval(async () => {
+      elapsed += POLL_INTERVAL;
       const { data } = await supabase
         .from('lab_reports')
         .select('status')
@@ -133,8 +138,14 @@ export function ReportView() {
       if (data && data.status !== 'processing') {
         clearInterval(interval);
         fetchReport();
+        return;
       }
-    }, 4000);
+      if (elapsed >= TIMEOUT_MS) {
+        clearInterval(interval);
+        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+        fetchReport();
+      }
+    }, POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [report?.status, reportId]);
 

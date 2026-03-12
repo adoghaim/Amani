@@ -52,6 +52,8 @@ async function processInterpretation(
   reportId: string,
   userId: string
 ): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
   try {
     const { data: report, error: reportError } = await supabase
       .from("lab_reports")
