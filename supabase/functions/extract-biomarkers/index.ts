@@ -95,18 +95,74 @@ async function loadCanonicalRegistry(supabaseAdmin: any): Promise<{
   return { analyteMap, synonymMap };
 }
 
+function normalizeRawName(rawName: string): string[] {
+  const upper = rawName.toUpperCase().trim();
+  const candidates = new Set<string>([upper]);
+
+  const stripped = upper
+    .replace(/[,\s]+(SERUM|PLASMA|WHOLE BLOOD|BLOOD|URINE|DIRECT|CALC|CALCULATED)$/i, '')
+    .trim();
+  if (stripped !== upper) candidates.add(stripped);
+
+  const noParens = upper.replace(/\s*\([^)]*\)/g, '').trim();
+  if (noParens !== upper) candidates.add(noParens);
+
+  if (upper.includes('TPO') || upper.includes('THYROID PEROXIDASE')) {
+    candidates.add('TPO ANTIBODY');
+    candidates.add('THYROID PEROXIDASE ANTIBODIES');
+    candidates.add('TPO THYROID PEROXIDASE ANTIBODIES');
+    candidates.add('THYROID PEROXIDASE (TPO) AB');
+  }
+
+  if (upper.includes('T3 UPTAKE') || upper.includes('T-UPTAKE')) {
+    candidates.add('T3 UPTAKE');
+  }
+
+  if (upper.startsWith('LDL') && !upper.includes('VLDL')) {
+    candidates.add('LDL-CHOLESTEROL');
+    candidates.add('LDL CHOLESTEROL');
+  }
+
+  if (upper.includes('CHOL') && upper.includes('HDL')) {
+    candidates.add('CHOL/HDLC RATIO');
+    candidates.add('CHOL/HDLC');
+  }
+
+  if (upper.includes('NON') && upper.includes('HDL')) {
+    candidates.add('NON HDL CHOLESTEROL');
+    candidates.add('NON-HDL CHOLESTEROL');
+  }
+
+  if (upper.includes('BUN') && upper.includes('CREATININE')) {
+    candidates.add('BUN/CREATININE RATIO');
+  }
+
+  if (upper.includes('ALBUMIN') && upper.includes('GLOBULIN')) {
+    candidates.add('ALBUMIN/GLOBULIN RATIO');
+  }
+
+  if (upper === 'RBC' || upper.includes('RED BLOOD CELL')) {
+    candidates.add('RBC');
+    candidates.add('RED BLOOD CELL COUNT');
+  }
+
+  return [...candidates];
+}
+
 function resolveCanonicalByLabel(
   rawName: string,
   gptSlug: string | null,
   analyteMap: Map<string, CanonicalAnalyte>,
   synonymMap: Map<string, string>
 ): { analyte: CanonicalAnalyte | null; matchedVia: "synonym" | "slug" | "none" } {
-  const normalized = rawName.toUpperCase().trim();
+  const candidates = normalizeRawName(rawName);
 
-  const synonymId = synonymMap.get(normalized);
-  if (synonymId) {
-    const analyte = analyteMap.get(synonymId) ?? null;
-    return { analyte, matchedVia: "synonym" };
+  for (const candidate of candidates) {
+    const synonymId = synonymMap.get(candidate);
+    if (synonymId) {
+      const analyte = analyteMap.get(synonymId) ?? null;
+      if (analyte) return { analyte, matchedVia: "synonym" };
+    }
   }
 
   if (gptSlug) {
