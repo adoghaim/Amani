@@ -46,94 +46,34 @@ interface LabReportData {
   };
 }
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
-
-  let supabase: any;
-  let reportId: string | null = null;
-  let user: any = null;
-
+async function processInterpretation(
+  supabase: any,
+  openaiApiKey: string | undefined,
+  reportId: string,
+  userId: string
+): Promise<void> {
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Missing or invalid Authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user: authUser }, error: userError } = await supabaseAuth.auth.getUser();
-    if (userError || !authUser) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    user = authUser;
-
-    supabase = createClient(supabaseUrl, supabaseKey);
-
-    await checkAndIncrementRateLimit(supabase, user.id, "generate-interpretation", 20);
-
-    const body = await req.json();
-    reportId = body.reportId;
-
-    if (!reportId) {
-      return new Response(
-        JSON.stringify({ error: "reportId is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const { data: report, error: reportError } = await supabase
       .from("lab_reports")
       .select("*")
       .eq("id", reportId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (reportError || !report) {
       throw new Error("Report not found");
     }
 
-    const { data: biomarkers, error: biomarkersError } = await supabase
-      .from("biomarkers")
-      .select("*")
-      .eq("lab_report_id", reportId);
-
-    if (biomarkersError) {
-      console.error("[generate-interpretation] Failed to fetch biomarkers:", biomarkersError);
-    }
-
-    const { data: reportItems, error: reportItemsError } = await supabase
-      .from("report_items")
-      .select("*")
-      .eq("lab_report_id", reportId)
-      .order("raw_name");
-
-    if (reportItemsError) {
-      console.error("[generate-interpretation] Failed to fetch report_items:", reportItemsError);
-    }
+    const [{ data: biomarkers }, { data: reportItems }] = await Promise.all([
+      supabase.from("biomarkers").select("*").eq("lab_report_id", reportId),
+      supabase.from("report_items").select("*").eq("lab_report_id", reportId).order("raw_name"),
+    ]);
 
     const biomarkersList = (biomarkers ?? []) as BiomarkerData[];
     const reportItemsList = (reportItems ?? []) as ReportItemData[];
+    const labReport = report as LabReportData;
 
     console.log(`[generate-interpretation] report_id=${reportId} biomarkers=${biomarkersList.length} report_items=${reportItemsList.length} openai=${openaiApiKey ? "yes" : "no"}`);
-
-    const labReport = report as LabReportData;
 
     let interpretationJson;
     let interpretationSource = "demo";
@@ -161,32 +101,72 @@ Deno.serve(async (req: Request) => {
         lab_report_id: reportId,
         json_output: interpretationJson,
         interpretation_source: interpretationSource,
-      }, {
-        onConflict: "lab_report_id",
-      });
+      }, { onConflict: "lab_report_id" });
 
-    if (upsertError) {
-      throw new Error("Failed to save interpretation");
-    }
+    if (upsertError) throw new Error("Failed to save interpretation");
 
-    const { error: updateError } = await supabase
-      .from("lab_reports")
-      .update({ status: "ready" })
-      .eq("id", reportId);
-
-    if (updateError) {
-      throw new Error("Failed to update report status");
-    }
+    await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
 
     await supabase.from("audit_events").insert({
-      user_id: user.id,
+      user_id: userId,
       event_type: "insights_generated",
       metadata: { report_id: reportId, source: interpretationSource },
-    }).then(() => {});
+    });
+  } catch (err: any) {
+    console.error("[generate-interpretation] Background processing error:", err?.message ?? err);
+    await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId).catch(() => {});
+  }
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user: authUser }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !authUser) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    await checkAndIncrementRateLimit(supabase, authUser.id, "generate-interpretation", 20);
+
+    const body = await req.json();
+    const reportId: string = body.reportId;
+
+    if (!reportId) {
+      return new Response(
+        JSON.stringify({ error: "reportId is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    EdgeRuntime.waitUntil(processInterpretation(supabase, openaiApiKey, reportId, authUser.id));
 
     return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ queued: true }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("[generate-interpretation] Fatal error:", error?.message ?? error);
@@ -196,14 +176,6 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    }
-
-    if (supabase && reportId) {
-      try {
-        await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
-      } catch (updateError) {
-        console.error("[generate-interpretation] Failed to set error status:", updateError);
-      }
     }
 
     return new Response(
