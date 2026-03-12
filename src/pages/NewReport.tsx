@@ -268,25 +268,24 @@ export function NewReport() {
         }
       }
 
-      try {
-        const { data: interpData, error: interpError } = await supabase.functions.invoke('generate-interpretation', {
-          body: { reportId: reportData.id },
-        });
-        if (interpError) {
-          console.error('[NewReport] generate-interpretation error:', interpError.message, interpData);
-          await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
-        }
-      } catch (interpErr) {
-        console.error('[NewReport] generate-interpretation network error:', interpErr);
-        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
-      }
-
       if (isSecondReport) {
         sessionStorage.setItem('showSecondLabComparison', 'true');
         window.location.href = '/app/tracker';
       } else {
         window.location.href = `/app/reports/${reportData.id}`;
       }
+
+      supabase.functions.invoke('generate-interpretation', {
+        body: { reportId: reportData.id },
+      }).then(({ error: interpError }) => {
+        if (interpError) {
+          console.error('[NewReport] generate-interpretation error:', interpError.message);
+          supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
+        }
+      }).catch((interpErr) => {
+        console.error('[NewReport] generate-interpretation network error:', interpErr);
+        supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);

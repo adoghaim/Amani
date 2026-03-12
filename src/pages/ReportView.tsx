@@ -265,15 +265,18 @@ export function ReportView() {
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
 
-      const { data: interpData, error: interpError } = await supabase.functions.invoke('generate-interpretation', {
+      supabase.functions.invoke('generate-interpretation', {
         body: { reportId },
+      }).then(({ data: interpData, error: interpError }) => {
+        if (interpError) {
+          const detail = interpData?.error ?? interpError.message;
+          console.error('[ReportView] edge function error', interpError, interpData);
+          supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+        }
+      }).catch((interpErr) => {
+        console.error('[ReportView] generate-interpretation network error:', interpErr);
+        supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       });
-
-      if (interpError) {
-        const detail = interpData?.error ?? interpError.message;
-        console.error('[ReportView] edge function error', interpError, interpData);
-        throw new Error(detail || interpError.message);
-      }
 
       await fetchReport();
       setRegenerating(false);
