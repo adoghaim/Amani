@@ -177,7 +177,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    EdgeRuntime.waitUntil(processInterpretation(supabase, openaiApiKey, reportId, authUser.id));
+    const processingPromise = processInterpretation(supabase, openaiApiKey, reportId, authUser.id);
+    try {
+      (EdgeRuntime as any).waitUntil(processingPromise);
+    } catch (_) {
+      processingPromise.catch(() => {});
+    }
 
     return new Response(
       JSON.stringify({ queued: true }),
