@@ -269,11 +269,11 @@ export function NewReport() {
       }
 
       try {
-        const { error: interpError } = await supabase.functions.invoke('generate-interpretation', {
+        const { data: interpData, error: interpError } = await supabase.functions.invoke('generate-interpretation', {
           body: { reportId: reportData.id },
         });
         if (interpError) {
-          console.error('[NewReport] generate-interpretation error:', interpError.message);
+          console.error('[NewReport] generate-interpretation error:', interpError.message, interpData);
           await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
         }
       } catch (interpErr) {

@@ -265,13 +265,14 @@ export function ReportView() {
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
 
-      const { error: interpError } = await supabase.functions.invoke('generate-interpretation', {
+      const { data: interpData, error: interpError } = await supabase.functions.invoke('generate-interpretation', {
         body: { reportId },
       });
 
       if (interpError) {
-        console.error('[ReportView] edge function error', interpError);
-        throw new Error(`Server error: ${interpError.message}`);
+        const detail = interpData?.error ?? interpError.message;
+        console.error('[ReportView] edge function error', interpError, interpData);
+        throw new Error(detail || interpError.message);
       }
 
       await fetchReport();
