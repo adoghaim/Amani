@@ -283,8 +283,9 @@ export function ReportView() {
 
       await fetchReport();
       setRegenerating(false);
-    } catch {
-      setError('Failed to regenerate report');
+    } catch (err: any) {
+      console.error('[ReportView] handleRegenerate error:', err?.message ?? err);
+      setError(err?.message ?? 'Failed to regenerate report');
       setRegenerating(false);
     }
   };

@@ -127,8 +127,10 @@ async function processInterpretation(
       metadata: { report_id: reportId, source: interpretationSource },
     }).catch((auditErr: any) => console.error("[generate-interpretation] Audit insert error:", auditErr?.message));
   } catch (err: any) {
-    console.error("[generate-interpretation] Background processing error:", err?.message ?? err);
+    const errMsg = err?.message ?? String(err);
+    console.error("[generate-interpretation] Background processing error:", errMsg, err?.stack ?? "");
     await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId).catch(() => {});
+    throw err;
   }
 }
 
