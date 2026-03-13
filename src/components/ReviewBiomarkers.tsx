@@ -97,6 +97,12 @@ function ItemCard({
           {item.source_snippet && (
             <p className="mt-3 text-xs text-gray-400 italic truncate">Source: "{item.source_snippet}"</p>
           )}
+          {item.parse_error && (
+            <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700 font-medium">{item.parse_error} — please correct the value below.</p>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Test name</label>
@@ -127,13 +133,15 @@ function ItemCard({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
+              <label className={`block text-xs font-medium mb-1 ${item.parse_error ? 'text-red-600' : 'text-gray-600'}`}>
+                Value{item.parse_error ? ' (likely incorrect)' : ''}
+              </label>
               <input
                 type="number"
                 step="0.001"
                 value={item.value_numeric}
                 onChange={e => onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value))}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${item.parse_error ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
               />
             </div>
 

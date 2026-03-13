@@ -490,15 +490,37 @@ function generatePrompt(report: LabReportData, biomarkers: BiomarkerData[], repo
       }).join("\n")
     : "No core biomarkers mapped";
 
-  const extendedItems = reportItems.filter(i => !i.is_core_biomarker);
-  const extendedText = extendedItems.length > 0
-    ? extendedItems.slice(0, 60).map((item) => {
+  // Limit items sent to AI to prevent prompt overflow and timeout.
+  // Priority: out-of-range > borderline > key hormones/metabolic > others. Max 20.
+  const KEY_SLUGS = new Set([
+    "estradiol","progesterone","lh","fsh","tsh","free_t4","free_t3","fasting_glucose",
+    "hemoglobin_a1c","total_cholesterol","ldl_cholesterol","hdl_cholesterol","triglycerides",
+    "creatinine","egfr","alt","ast","ferritin","vitamin_d_25_oh","vitamin_b12","hs_crp",
+  ]);
+
+  const allItems = [...reportItems];
+  const outOfRange = allItems.filter(i => classifyItem(i) === "out_of_range");
+  const borderline = allItems.filter(i => classifyItem(i) === "borderline");
+  const keyItems = allItems.filter(i => i.canonical_slug && KEY_SLUGS.has(i.canonical_slug) && classifyItem(i) === "in_range");
+  const others = allItems.filter(i => !outOfRange.includes(i) && !borderline.includes(i) && !keyItems.includes(i));
+
+  const prioritizedItems = [
+    ...outOfRange,
+    ...borderline,
+    ...keyItems,
+    ...others,
+  ].slice(0, 20);
+
+  const extendedText = prioritizedItems.length > 0
+    ? prioritizedItems.map((item) => {
         let text = `${item.raw_name}: ${item.value_text ?? item.value_numeric}${item.unit ? " " + item.unit : ""}`;
         if (item.raw_reference_range) text += ` (ref: ${item.raw_reference_range})`;
         else if (item.normalized_reference_min !== null && item.normalized_reference_max !== null) {
           text += ` (ref: ${item.normalized_reference_min}–${item.normalized_reference_max})`;
         }
-        if (item.needs_review) text += " [flagged for review]";
+        const status = classifyItem(item);
+        if (status === "out_of_range") text += " [OUT OF RANGE]";
+        else if (status === "borderline") text += " [borderline]";
         return text;
       }).join("\n")
     : "No additional lab items";

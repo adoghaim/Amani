@@ -34,6 +34,7 @@ export interface ReportItem {
   is_core_biomarker: boolean;
   needs_review: boolean;
   source_snippet: string | null;
+  parse_error?: string | null;
 }
 
 export interface ParserDebugInfo {
@@ -652,24 +653,55 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
 
   const labelLine = cleanLines[0];
   const valueLines = cleanLines.slice(1);
+
+  // CRITICAL: detect the reference range ONLY from the analyte's own block (label line + up to 2 more lines),
+  // NOT the full 10-line window. This prevents ranges from the NEXT analyte contaminating knownRangeNumbers.
+  const blockLines = cleanLines.slice(0, Math.min(3, cleanLines.length));
+  const blockText = blockLines.join(' ');
   const windowText = cleanLines.join(' ');
-  const unit = detectUnit(windowText) ?? preferredUnits[0] ?? null;
-  const referenceResult = detectReferenceRange(windowText) ?? undefined;
+
+  // For unit detection, scan the first 3 lines (same block)
+  const unit = detectUnit(blockText) ?? preferredUnits[0] ?? null;
+
+  // Reference range: first look within the label line itself (inline format like "ANALYTE 42 Reference Range: 65-99")
+  // If not found there, fall back to the 3-line block
+  const referenceResult = detectReferenceRange(labelLine) ?? detectReferenceRange(blockText) ?? undefined;
 
   const knownRangeNumbers = new Set<string>();
-  if (referenceResult?.min !== undefined) knownRangeNumbers.add(String(referenceResult.min));
-  if (referenceResult?.max !== undefined) knownRangeNumbers.add(String(referenceResult.max));
-  if (referenceResult?.comparator) knownRangeNumbers.add(String(referenceResult.comparator.value));
+  if (referenceResult?.min !== undefined) {
+    knownRangeNumbers.add(String(referenceResult.min));
+    // Also add reformatted versions to prevent decimal mismatch (e.g. "0.50" vs "0.5")
+    knownRangeNumbers.add(String(parseFloat(String(referenceResult.min))));
+  }
+  if (referenceResult?.max !== undefined) {
+    knownRangeNumbers.add(String(referenceResult.max));
+    knownRangeNumbers.add(String(parseFloat(String(referenceResult.max))));
+  }
+  if (referenceResult?.comparator) {
+    knownRangeNumbers.add(String(referenceResult.comparator.value));
+    knownRangeNumbers.add(String(parseFloat(String(referenceResult.comparator.value))));
+  }
+
+  // Numeric token regex: require digits after decimal point (e.g. "3.7" not "3.")
+  const NUM_RE = /(\d+\.\d+|\d+)/g;
 
   function collectCandidates(sourceLines: string[], skipLetterPrefixedDigits = false): { value: number; rawValue: string }[] {
     const candidates: { value: number; rawValue: string }[] = [];
     for (const line of sourceLines) {
-      const tokenRe = /\d+\.?\d*/g;
+      // Stop collecting once we hit a "Reference Range" or "Ref Range" marker
+      const refIdx = line.search(/\breference\s+range\b|\bref\s+range\b|\bref\.\s*range\b/i);
+      const searchLine = refIdx > 0 ? line.substring(0, refIdx) : line;
+
+      const tokenRe = new RegExp(NUM_RE.source, 'g');
       let m: RegExpExecArray | null;
-      while ((m = tokenRe.exec(line)) !== null) {
+      while ((m = tokenRe.exec(searchLine)) !== null) {
         const tok = m[0];
         if (knownRangeNumbers.has(tok)) continue;
-        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(line[m.index - 1])) continue;
+        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(searchLine[m.index - 1])) continue;
+        // Skip date-like tokens: when surrounded by slashes (e.g. "02" in "02/11/2024")
+        const after = searchLine[m.index + tok.length];
+        const before = m.index > 0 ? searchLine[m.index - 1] : '';
+        if (before === '/' || after === '/') continue;
         const v = parseFloat(tok);
         if (v >= 0 && v <= 100000) {
           candidates.push({ value: v, rawValue: tok });
@@ -678,11 +710,6 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
     }
     return candidates;
   }
-
-  // Check for a comparator reference (<X or >X) only in the reference range portion of the window
-  // (not as a patient value if there are real value-line candidates)
-  const prefixRe = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
-  const prefixMatch = windowText.match(prefixRe);
 
   // First try non-label lines for the patient value, skipping letter-prefixed digits (e.g. "T3" → 3)
   const valueCandidates = collectCandidates(valueLines, true);
@@ -695,7 +722,10 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
     return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
   }
 
-  // No value-line candidates — check if there's a comparator prefix (<X / >X) as the patient value
+  // No value-line candidates — check if there's a comparator prefix (<X / >X) as the patient value.
+  // Only look at the label line to avoid picking up comparators from other analytes' reference ranges.
+  const prefixRe = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
+  const prefixMatch = labelLine.match(prefixRe);
   if (prefixMatch) {
     const prefixToken = prefixMatch[1].trim();
     const parsed = parseValueWithPrefix(prefixToken);
@@ -706,6 +736,7 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
 
   // Fallback: check label line for inline value (e.g. "ANALYTE NAME 3.3 Reference Range: ...")
   // Skip letter-prefixed digits to avoid picking up numbers from analyte names (T3 → 3, T4 → 4, B12 → 12)
+  // Also skip date-component tokens (digits surrounded by slashes)
   const labelCandidates = collectCandidates([labelLine], true);
   if (labelCandidates.length > 0) {
     const decimalFirst = labelCandidates.find(c => !Number.isInteger(c.value));
@@ -936,6 +967,46 @@ function extractBiomarkerFromContext(
   };
 }
 
+// ─── Physiological plausibility bounds ─────────────────────────────────────
+// Values outside these ranges are physiologically impossible — flag as parse errors.
+
+const PHYSIOLOGICAL_BOUNDS: Record<string, { min: number; max: number }> = {
+  hdl_cholesterol:     { min: 5,   max: 200 },
+  ldl_cholesterol:     { min: 10,  max: 700 },
+  total_cholesterol:   { min: 50,  max: 1000 },
+  triglycerides:       { min: 10,  max: 5000 },
+  fasting_glucose:     { min: 30,  max: 600 },
+  egfr:                { min: 2,   max: 200 },
+  creatinine:          { min: 0.2, max: 30 },
+  tsh:                 { min: 0.001, max: 200 },
+  free_t4:             { min: 0.1, max: 10 },
+  free_t3:             { min: 0.5, max: 20 },
+  hemoglobin:          { min: 3,   max: 25 },
+  hematocrit:          { min: 10,  max: 70 },
+  wbc:                 { min: 0.5, max: 100 },
+  platelets:           { min: 10,  max: 2000 },
+  alt:                 { min: 1,   max: 10000 },
+  ast:                 { min: 1,   max: 10000 },
+  bun:                 { min: 1,   max: 300 },
+  sodium:              { min: 100, max: 180 },
+  potassium:           { min: 1,   max: 10 },
+  chloride:            { min: 70,  max: 140 },
+  co2:                 { min: 5,   max: 50 },
+  calcium:             { min: 4,   max: 20 },
+  ferritin:            { min: 1,   max: 10000 },
+  vitamin_d_25_oh:     { min: 1,   max: 300 },
+  vitamin_b12:         { min: 50,  max: 5000 },
+  hemoglobin_a1c:      { min: 2,   max: 20 },
+};
+
+function checkPhysiologicalBounds(slug: string, value: number): string | null {
+  const bounds = PHYSIOLOGICAL_BOUNDS[slug];
+  if (!bounds) return null;
+  if (value < bounds.min) return `Value ${value} is below physiological minimum ${bounds.min} for ${slug} — likely a parse error`;
+  if (value > bounds.max) return `Value ${value} exceeds physiological maximum ${bounds.max} for ${slug} — likely a parse error`;
+  return null;
+}
+
 // ─── Validate: keep no-unit entries at low confidence instead of dropping ────
 
 export function validateExtractedBiomarkers(
@@ -1029,6 +1100,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
     const slug = b.name;
     const isCore = CORE_SLUGS.has(slug);
     const ref = b.reference_comparator;
+    const parseError = checkPhysiologicalBounds(slug, b.value);
     return {
       raw_name: b.name,
       canonical_slug: isCore ? slug : null,
@@ -1041,10 +1113,11 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       normalized_reference_max: b.reference_max ?? null,
       reference_operator: ref?.operator ?? null,
       reference_operator_value: ref?.value ?? null,
-      confidence_score: b.confidence,
+      confidence_score: parseError ? 'low' : b.confidence,
       is_core_biomarker: isCore,
-      needs_review: b.confidence === 'low' || !b.unit,
+      needs_review: parseError ? true : (b.confidence === 'low' || !b.unit),
       source_snippet: b.rawText ?? null,
+      parse_error: parseError,
     };
   });
 }
