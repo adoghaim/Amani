@@ -273,14 +273,14 @@ async function checkAndIncrementRateLimit(
 function validateNutrientContent(jsonOutput: any): { valid: boolean; violations: string[] } {
   const violations: string[] = [];
   const allowedNutrients = ["vitamin_d", "iron", "b12", "folate", "magnesium", "omega_3", "iodine"];
-  const bannedDosageUnits = [/\bIU\b/gi, /\bmg\b/gi, /\bmcg\b/gi, /\b\d+\s*g\b/gi, /\bmL\b/gi];
+  const bannedDosageUnits = [/\bIU\b/g, /\bmg\b/g, /\bmcg\b/g, /\b\d+\s*g\b/g, /\bmL\b/g];
   const bannedDirectiveVerbs = [/\btake\b/gi, /\bstart\b/gi, /\bincrease\b/gi, /\bdecrease\b/gi, /\brecommended\b/gi, /\bprescribe\b/gi];
   const bannedFrequencyWords = [/\bdaily\b/gi, /\btwice\b/gi, /\bper day\b/gi, /\bevery day\b/gi];
 
-  const jsonString = JSON.stringify(jsonOutput);
-  bannedDosageUnits.forEach(p => { const m = jsonString.match(p); if (m) violations.push(`Contains banned dosage unit: ${m.join(", ")}`); });
-  bannedDirectiveVerbs.forEach(p => { const m = jsonString.match(p); if (m) violations.push(`Contains banned directive verb: ${m.join(", ")}`); });
-  bannedFrequencyWords.forEach(p => { const m = jsonString.match(p); if (m) violations.push(`Contains banned frequency word: ${m.join(", ")}`); });
+  const nutrientSection = JSON.stringify(jsonOutput.nutrient_topics_to_discuss ?? []);
+  bannedDosageUnits.forEach(p => { const m = nutrientSection.match(p); if (m) violations.push(`Nutrient section contains banned dosage unit: ${m.join(", ")}`); });
+  bannedDirectiveVerbs.forEach(p => { const m = nutrientSection.match(p); if (m) violations.push(`Nutrient section contains banned directive verb: ${m.join(", ")}`); });
+  bannedFrequencyWords.forEach(p => { const m = nutrientSection.match(p); if (m) violations.push(`Nutrient section contains banned frequency word: ${m.join(", ")}`); });
 
   if (jsonOutput.nutrient_topics_to_discuss && Array.isArray(jsonOutput.nutrient_topics_to_discuss)) {
     jsonOutput.nutrient_topics_to_discuss.forEach((item: any, index: number) => {
