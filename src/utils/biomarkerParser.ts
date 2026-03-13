@@ -758,9 +758,11 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
   }
 
   // No value-line candidates — check if there's a comparator prefix (<X / >X) as the patient value.
-  // Only look at the label line to avoid picking up comparators from other analytes' reference ranges.
+  // Only look at the portion BEFORE "Reference Range" to avoid treating "<200" in "Reference Range: <200" as the value.
+  const refBoundaryIdx = labelLine.search(/\breference\s+range\b|\bref\s+range\b|\bref\.\s*range\b/i);
+  const labelLineBeforeRef = refBoundaryIdx > 0 ? labelLine.substring(0, refBoundaryIdx) : labelLine;
   const prefixRe = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
-  const prefixMatch = labelLine.match(prefixRe);
+  const prefixMatch = labelLineBeforeRef.match(prefixRe);
   if (prefixMatch) {
     const prefixToken = prefixMatch[1].trim();
     const parsed = parseValueWithPrefix(prefixToken);
