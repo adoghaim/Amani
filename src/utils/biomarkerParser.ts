@@ -508,10 +508,18 @@ function normalizeToCatalogSlug(slug: string): string {
 const NOISE_LINE_RE = /^(?:\d{1,2}\/\d{1,2}\/\d{2,4}|page\s+\d|copyright|\d{4}-\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
 const CHART_AXIS_RE = /^\d+\.?\d*\s*$/;
 const PAGE_FOOTER_RE = /\([A-Z]{2,}\d+[A-Z]*\)\s+\d+\s*\/\s*\d+/;
+const QUEST_HISTORY_RE = /^From\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s+To\s+\d{1,2}\/\d{1,2}\/\d{2,4}/i;
+const CHART_DATE_AXIS_RE = /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*['']?\s*\d{2,4}/i;
 
 function isNoiseLine(line: string): boolean {
   const t = line.trim();
-  return NOISE_LINE_RE.test(t) || CHART_AXIS_RE.test(t);
+  return (
+    NOISE_LINE_RE.test(t) ||
+    CHART_AXIS_RE.test(t) ||
+    QUEST_HISTORY_RE.test(t) ||
+    CHART_DATE_AXIS_RE.test(t) ||
+    PAGE_FOOTER_RE.test(t)
+  );
 }
 
 // ─── Comparator reference range detection ───────────────────────────────────
@@ -587,7 +595,7 @@ function parseValueWithPrefix(text: string): { value: number; rawValue: string }
 function splitIntoLines(text: string): string[] {
   return text.split(/\r?\n/)
     .map(l => l.trim())
-    .filter(l => l.length > 0 && !NOISE_LINE_RE.test(l.trim()));
+    .filter(l => l.length > 0 && !isNoiseLine(l.trim()));
 }
 
 // ─── Layer 2: Section header detection ──────────────────────────────────────
@@ -675,7 +683,7 @@ interface ParsedResult {
 }
 
 function extractValueFromWindow(lines: string[], preferredUnits: string[]): ParsedResult | null {
-  const cleanLines = lines.filter(l => !NOISE_LINE_RE.test(l.trim()) && !PAGE_FOOTER_RE.test(l.trim()));
+  const cleanLines = lines.filter(l => !isNoiseLine(l.trim()));
   if (cleanLines.length === 0) return null;
 
   const labelLine = cleanLines[0];
@@ -791,7 +799,10 @@ function layeredParse(text: string, debug = false, collectBlocks?: AnalyteBlockD
     if (!bp) continue;
 
     const windowSize = 10;
-    const windowLines = lines.slice(i, Math.min(i + windowSize, lines.length));
+    const rawWindow = lines.slice(i, Math.min(i + windowSize, lines.length));
+    // Truncate window at the start of the NEXT analyte label to prevent cross-contamination
+    const nextAnalyteOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l) !== null);
+    const windowLines = nextAnalyteOffset >= 0 ? rawWindow.slice(0, nextAnalyteOffset + 1) : rawWindow;
     const parsed = extractValueFromWindow(windowLines, bp.commonUnits);
 
     const canonical = normalizeToCatalogSlug(bp.canonical);
@@ -1317,7 +1328,9 @@ export function parseAllReportItemsWithDebug(
       if (!bp && isSectionHeader(line)) continue;
       if (!bp) continue;
       const windowSize = 10;
-      const windowLines = lines.slice(i, Math.min(i + windowSize, lines.length));
+      const rawWindow = lines.slice(i, Math.min(i + windowSize, lines.length));
+      const nextAnalyteOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l) !== null);
+      const windowLines = nextAnalyteOffset >= 0 ? rawWindow.slice(0, nextAnalyteOffset + 1) : rawWindow;
       const parsed = extractValueFromWindow(windowLines, bp.commonUnits);
       const canonical = normalizeToCatalogSlug(bp.canonical);
       const snippetText = windowLines.join(' ').substring(0, 200);
