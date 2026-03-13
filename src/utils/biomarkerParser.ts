@@ -37,6 +37,33 @@ export interface ReportItem {
   parse_error?: string | null;
 }
 
+export interface AnalyteBlockDebug {
+  blockIndex: number;
+  lineIndex: number;
+  rawLabel: string;
+  canonical: string;
+  blockSnippet: string;
+  parsedValue: number | null;
+  parsedRawValue: string | null;
+  parsedUnit: string | null;
+  parsedRefRaw: string | null;
+  parsedRefMin: number | null;
+  parsedRefMax: number | null;
+  parsedRefOperator: string | null;
+  parsedRefOperatorValue: number | null;
+  confidence: 'high' | 'medium' | 'low' | 'miss' | 'reject';
+  parseError: string | null;
+  missReason: string | null;
+  matchedPattern: string | null;
+}
+
+export interface ParserDebugOutput {
+  rawText: string;
+  pageCount: number;
+  analyteBlocks: AnalyteBlockDebug[];
+  totalLinesScanned: number;
+}
+
 export interface ParserDebugInfo {
   matchedLabel: string;
   chosenValue: number;
@@ -750,10 +777,11 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
 
 // ─── Layer 6: Main layered parse ────────────────────────────────────────────
 
-function layeredParse(text: string, debug = false): ExtractedBiomarker[] {
+function layeredParse(text: string, debug = false, collectBlocks?: AnalyteBlockDebug[]): ExtractedBiomarker[] {
   const lines = splitIntoLines(text);
   const results = new Map<string, ExtractedBiomarker>();
   const debugLog: string[] = [];
+  let blockIndex = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -767,15 +795,58 @@ function layeredParse(text: string, debug = false): ExtractedBiomarker[] {
     const parsed = extractValueFromWindow(windowLines, bp.commonUnits);
 
     const canonical = normalizeToCatalogSlug(bp.canonical);
-    const snippetText = windowLines.join(' ').substring(0, 150);
+    const snippetText = windowLines.join(' ').substring(0, 200);
+    const matchedPattern = bp.patterns.find(p => line.toLowerCase().includes(p)) ?? bp.patterns[0];
 
     if (!parsed) {
       if (debug) debugLog.push(`[MISS] ${canonical} | label="${line}" | no value found in window: "${snippetText}"`);
+      if (collectBlocks) {
+        collectBlocks.push({
+          blockIndex: blockIndex++,
+          lineIndex: i,
+          rawLabel: line,
+          canonical,
+          blockSnippet: snippetText,
+          parsedValue: null,
+          parsedRawValue: null,
+          parsedUnit: null,
+          parsedRefRaw: null,
+          parsedRefMin: null,
+          parsedRefMax: null,
+          parsedRefOperator: null,
+          parsedRefOperatorValue: null,
+          confidence: 'miss',
+          parseError: null,
+          missReason: 'No numeric value found in lookahead window',
+          matchedPattern,
+        });
+      }
       continue;
     }
 
     if (parsed.value < 0 || parsed.value > 100000) {
       if (debug) debugLog.push(`[REJECT] ${canonical} | value=${parsed.value} out of bounds`);
+      if (collectBlocks) {
+        collectBlocks.push({
+          blockIndex: blockIndex++,
+          lineIndex: i,
+          rawLabel: line,
+          canonical,
+          blockSnippet: snippetText,
+          parsedValue: parsed.value,
+          parsedRawValue: parsed.rawValue ?? null,
+          parsedUnit: parsed.unit,
+          parsedRefRaw: parsed.referenceResult?.raw ?? null,
+          parsedRefMin: parsed.referenceResult?.min ?? null,
+          parsedRefMax: parsed.referenceResult?.max ?? null,
+          parsedRefOperator: parsed.referenceResult?.comparator?.operator ?? null,
+          parsedRefOperatorValue: parsed.referenceResult?.comparator?.value ?? null,
+          confidence: 'reject',
+          parseError: `Value ${parsed.value} out of bounds (0–100000)`,
+          missReason: 'Value out of global bounds',
+          matchedPattern,
+        });
+      }
       continue;
     }
 
@@ -790,6 +861,8 @@ function layeredParse(text: string, debug = false): ExtractedBiomarker[] {
         ? 'medium'
         : 'low';
 
+    const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
+
     const debugInfo: ParserDebugInfo | undefined = debug ? {
       matchedLabel: line,
       chosenValue: parsed.value,
@@ -797,6 +870,28 @@ function layeredParse(text: string, debug = false): ExtractedBiomarker[] {
       referenceRangeText: ref?.raw ?? null,
       sourceSnippet: snippetText,
     } : undefined;
+
+    if (collectBlocks) {
+      collectBlocks.push({
+        blockIndex: blockIndex++,
+        lineIndex: i,
+        rawLabel: line,
+        canonical,
+        blockSnippet: snippetText,
+        parsedValue: parsed.value,
+        parsedRawValue: parsed.rawValue ?? null,
+        parsedUnit: parsed.unit,
+        parsedRefRaw: ref?.raw ?? null,
+        parsedRefMin: ref?.min ?? null,
+        parsedRefMax: ref?.max ?? null,
+        parsedRefOperator: ref?.comparator?.operator ?? null,
+        parsedRefOperatorValue: ref?.comparator?.value ?? null,
+        confidence,
+        parseError: physBoundsError,
+        missReason: null,
+        matchedPattern,
+      });
+    }
 
     const existing = results.get(canonical);
     if (!existing || confidenceRank(confidence) > confidenceRank(existing.confidence)) {
@@ -1196,4 +1291,150 @@ export function parseAllReportItems(text: string, debug = false): ReportItem[] {
   }
 
   return [...coreItems, ...extendedItems];
+}
+
+// ─── Debug-instrumented variant ───────────────────────────────────────────────
+//
+// Returns both the parsed items AND structured debug output for the pipeline
+// visualizer page. Call this instead of parseAllReportItems when you need
+// intermediate state for debugging.
+
+export function parseAllReportItemsWithDebug(
+  text: string,
+  fileName = 'unknown'
+): { items: ReportItem[]; debug: ParserDebugOutput } {
+  const analyteBlocks: AnalyteBlockDebug[] = [];
+  const lines = splitIntoLines(text);
+
+  // Run layered parse with block collection
+  const coreExtracted = (() => {
+    // Run layered parse collecting blocks
+    const results = new Map<string, ExtractedBiomarker>();
+    let blockIndex = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const bp = matchBiomarkerLabel(line);
+      if (!bp && isSectionHeader(line)) continue;
+      if (!bp) continue;
+      const windowSize = 10;
+      const windowLines = lines.slice(i, Math.min(i + windowSize, lines.length));
+      const parsed = extractValueFromWindow(windowLines, bp.commonUnits);
+      const canonical = normalizeToCatalogSlug(bp.canonical);
+      const snippetText = windowLines.join(' ').substring(0, 200);
+      const matchedPattern = bp.patterns.find(p => line.toLowerCase().includes(p)) ?? bp.patterns[0];
+
+      if (!parsed) {
+        analyteBlocks.push({
+          blockIndex: blockIndex++, lineIndex: i, rawLabel: line, canonical,
+          blockSnippet: snippetText, parsedValue: null, parsedRawValue: null,
+          parsedUnit: null, parsedRefRaw: null, parsedRefMin: null, parsedRefMax: null,
+          parsedRefOperator: null, parsedRefOperatorValue: null,
+          confidence: 'miss', parseError: null,
+          missReason: 'No numeric value found in lookahead window', matchedPattern,
+        });
+        continue;
+      }
+      if (parsed.value < 0 || parsed.value > 100000) {
+        analyteBlocks.push({
+          blockIndex: blockIndex++, lineIndex: i, rawLabel: line, canonical,
+          blockSnippet: snippetText, parsedValue: parsed.value,
+          parsedRawValue: parsed.rawValue ?? null, parsedUnit: parsed.unit,
+          parsedRefRaw: parsed.referenceResult?.raw ?? null,
+          parsedRefMin: parsed.referenceResult?.min ?? null,
+          parsedRefMax: parsed.referenceResult?.max ?? null,
+          parsedRefOperator: parsed.referenceResult?.comparator?.operator ?? null,
+          parsedRefOperatorValue: parsed.referenceResult?.comparator?.value ?? null,
+          confidence: 'reject', parseError: `Value ${parsed.value} out of bounds`,
+          missReason: 'Value out of global bounds', matchedPattern,
+        });
+        continue;
+      }
+      const ref = parsed.referenceResult;
+      const hasMinMax = ref?.min !== undefined && ref?.max !== undefined;
+      const hasComparator = !!ref?.comparator;
+      const confidence: 'high' | 'medium' | 'low' =
+        (hasMinMax || hasComparator) && parsed.unit ? 'high' : parsed.unit ? 'medium' : 'low';
+      const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
+      analyteBlocks.push({
+        blockIndex: blockIndex++, lineIndex: i, rawLabel: line, canonical,
+        blockSnippet: snippetText, parsedValue: parsed.value,
+        parsedRawValue: parsed.rawValue ?? null, parsedUnit: parsed.unit,
+        parsedRefRaw: ref?.raw ?? null,
+        parsedRefMin: ref?.min ?? null, parsedRefMax: ref?.max ?? null,
+        parsedRefOperator: ref?.comparator?.operator ?? null,
+        parsedRefOperatorValue: ref?.comparator?.value ?? null,
+        confidence, parseError: physBoundsError, missReason: null, matchedPattern,
+      });
+      const existing = results.get(canonical);
+      if (!existing || confidenceRank(confidence) > confidenceRank(existing.confidence)) {
+        results.set(canonical, {
+          name: canonical, value: parsed.value, rawValue: parsed.rawValue,
+          unit: parsed.unit, reference_min: ref?.min, reference_max: ref?.max,
+          reference_comparator: ref?.comparator, reference_text_raw: ref?.raw,
+          confidence, rawText: snippetText,
+        });
+      }
+    }
+    return Array.from(results.values());
+  })();
+
+  const coreItems = convertExtractedToReportItems(coreExtracted);
+  const coreRawNames = new Set(coreItems.map(i => i.raw_name.toLowerCase()));
+
+  const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  const extendedItems: ReportItem[] = [];
+  for (const line of rawLines) {
+    if (SKIP_LINES_RE.test(line)) continue;
+    if (line.length > 120) continue;
+    const m = line.match(LABEL_VALUE_RE);
+    if (!m) continue;
+    const rawName = m[1].trim();
+    const rawValueStr = m[2].trim();
+    const rawUnit = m[3]?.trim() ?? null;
+    if (coreRawNames.has(rawName.toLowerCase())) continue;
+    if (rawName.split(' ').length > 8) continue;
+    let valueNumeric: number;
+    let valueText: string | null = null;
+    if (/^</.test(rawValueStr)) {
+      const n = parseFloat(rawValueStr.replace(/[^0-9.]/g, ''));
+      if (isNaN(n)) continue;
+      valueNumeric = n * 0.5; valueText = rawValueStr;
+    } else if (/^>/.test(rawValueStr)) {
+      const n = parseFloat(rawValueStr.replace(/[^0-9.]/g, ''));
+      if (isNaN(n)) continue;
+      valueNumeric = n; valueText = rawValueStr;
+    } else {
+      valueNumeric = parseFloat(rawValueStr);
+      if (isNaN(valueNumeric)) continue;
+    }
+    if (valueNumeric < 0 || valueNumeric > 100000) continue;
+    const ref = detectReferenceRange(line);
+    const confidence: 'high' | 'medium' | 'low' =
+      rawUnit && ref ? 'high' : rawUnit ? 'medium' : 'low';
+    extendedItems.push({
+      raw_name: rawName, canonical_slug: null, category: null,
+      value_numeric: valueNumeric, value_text: valueText, unit: rawUnit,
+      raw_reference_range: ref?.raw ?? null,
+      normalized_reference_min: ref?.min ?? null,
+      normalized_reference_max: ref?.max ?? null,
+      reference_operator: ref?.comparator?.operator ?? null,
+      reference_operator_value: ref?.comparator?.value ?? null,
+      confidence_score: confidence, is_core_biomarker: false,
+      needs_review: confidence === 'low',
+      source_snippet: line.substring(0, 120),
+    });
+  }
+
+  // Estimate page count from page markers in text
+  const pageCount = Math.max(1, (text.match(/\bpage\s+\d+\b/gi) ?? []).length || 1);
+
+  return {
+    items: [...coreItems, ...extendedItems],
+    debug: {
+      rawText: text,
+      pageCount,
+      analyteBlocks,
+      totalLinesScanned: lines.length,
+    },
+  };
 }

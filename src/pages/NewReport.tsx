@@ -7,9 +7,9 @@ import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { Symptom, LabReportContext, ReportAnalyte } from '../types';
-import type { ReportItem } from '../utils/biomarkerParser';
+import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF } from '../utils/pdfExtractor';
-import { parseAllReportItems } from '../utils/biomarkerParser';
+import { parseAllReportItems, parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
@@ -44,6 +44,7 @@ export function NewReport() {
   const [reportItems, setReportItems] = useState<ReportItem[]>([]);
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [coverage, setCoverage] = useState<{ total_detected: number; total_core: number; total_extended: number; needs_review: number } | null>(null);
+  const [parserDebug, setParserDebug] = useState<ParserDebugOutput | null>(null);
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
@@ -91,7 +92,8 @@ export function NewReport() {
         console.log('[NewReport] Extracted PDF text length:', text.length);
 
         if (text.trim().length > 0) {
-          const localItems = parseAllReportItems(text, true);
+          const { items: localItems, debug: debugOut } = parseAllReportItemsWithDebug(text, file.name);
+          setParserDebug(debugOut);
           const localCov = {
             total_detected: localItems.length,
             total_core: localItems.filter(i => i.is_core_biomarker).length,
@@ -220,6 +222,23 @@ export function NewReport() {
         .single();
 
       if (reportError) throw reportError;
+
+      // Save parser debug record (non-blocking, best-effort)
+      if (parserDebug) {
+        supabase.from('parser_debug').insert({
+          report_id: reportData.id,
+          user_id: user.id,
+          raw_text: parserDebug.rawText,
+          page_count: parserDebug.pageCount,
+          file_name: file?.name ?? null,
+          analyte_blocks_json: parserDebug.analyteBlocks as unknown as never,
+          parsed_candidates_json: [] as unknown as never,
+          mapping_debug_json: [] as unknown as never,
+          ai_input_json: [] as unknown as never,
+        }).then(({ error: dbgErr }) => {
+          if (dbgErr) console.warn('[NewReport] parser_debug save failed (non-fatal):', dbgErr.message);
+        });
+      }
 
       const itemsToSave = reportItems.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
 
