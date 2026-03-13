@@ -79,7 +79,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'total_testosterone',
-    patterns: ['testosterone, total, ms', 'testosterone, total', 'total testosterone', 'testosterone total', 'testosterone serum', 'testosterone,total'],
+    patterns: ['testosterone, total, ms', 'testosterone, total', 'total testosterone', 'testosterone total', 'testosterone serum', 'testosterone,total', 'testosterone, total ms'],
     commonUnits: ['ng/dL', 'nmol/L', 'ng/dl'],
   },
   {
@@ -113,22 +113,27 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
     commonUnits: ['mIU/L', 'μIU/mL', 'uiu/ml', 'miu/l', 'uIU/ml', 'IU/L'],
   },
   {
+    canonical: 'total_t4',
+    patterns: [
+      't4 (thyroxine), total', 'total t4', 't4 total', 't4, total', 'thyroxine total', 'thyroxine, total',
+      't4 (thyroxine)', 'thyroxine (t4)', 't4, serum', 'serum t4',
+    ],
+    commonUnits: ['mcg/dL', 'ug/dL', 'nmol/L'],
+  },
+  {
+    canonical: 'free_thyroxine_index',
+    patterns: ['free t4 index (t7)', 'free thyroxine index (t7)', 'free t4 index', 'free thyroxine index', 'fti', 't7'],
+    commonUnits: [''],
+  },
+  {
     canonical: 'free_t4',
-    patterns: ['t4, free', 'free t4', 'free thyroxine', 't4 free', 'ft4', 'free t 4', 't4,free'],
+    patterns: ['t4, free', 'free t4', 'free thyroxine', 't4 free', 'ft4', 'free t 4', 't4,free', 't4 free (direct)'],
     commonUnits: ['ng/dL', 'pmol/L', 'ng/dl', 'ug/dl', 'μg/dL'],
   },
   {
     canonical: 'free_t3',
     patterns: ['t3, free', 'free t3', 'free triiodothyronine', 't3 free', 'ft3', 'free t 3', 't3,free'],
     commonUnits: ['pg/mL', 'pmol/L', 'pg/ml'],
-  },
-  {
-    canonical: 'total_t4',
-    patterns: [
-      'total t4', 't4 total', 't4, total', 'thyroxine total', 'thyroxine, total',
-      't4 (thyroxine)', 'thyroxine (t4)', 't4, serum', 'serum t4',
-    ],
-    commonUnits: ['mcg/dL', 'ug/dL', 'nmol/L'],
   },
   {
     canonical: 'reverse_t3',
@@ -188,8 +193,13 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'non_hdl_cholesterol',
-    patterns: ['non-hdl cholesterol', 'non hdl cholesterol', 'non-hdl chol'],
+    patterns: ['non-hdl cholesterol', 'non hdl cholesterol', 'non-hdl chol', 'non hdl chol'],
     commonUnits: ['mg/dL', 'mmol/L', 'mg/dl'],
+  },
+  {
+    canonical: 'chol_hdl_ratio',
+    patterns: ['chol/hdlc ratio', 'chol/hdl ratio', 'cholesterol/hdl ratio', 'cholesterol hdl ratio', 'chol hdl ratio', 'total chol/hdl'],
+    commonUnits: ['ratio', ''],
   },
   {
     canonical: 'apob',
@@ -329,6 +339,11 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
     commonUnits: ['x10E3/uL', 'K/uL', '10^3/uL', 'thou/uL'],
   },
   {
+    canonical: 'mpv',
+    patterns: ['mpv', 'mean platelet volume'],
+    commonUnits: ['fL', 'fl'],
+  },
+  {
     canonical: 'neutrophils',
     patterns: ['neutrophils', 'neutrophils (%)', 'neut %', 'neutrophil %', 'neutrophils absolute', 'neutrophils (abs)', 'abs. neutrophils', 'absolute neutrophils'],
     commonUnits: ['%', 'x10E3/uL', 'K/uL'],
@@ -396,13 +411,13 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
     commonUnits: ['g/dL', 'g/L', 'g/dl'],
   },
   {
-    canonical: 'ag_ratio',
-    patterns: ['a/g ratio', 'albumin/globulin ratio', 'a:g ratio', 'ag ratio'],
+    canonical: 'albumin_globulin_ratio',
+    patterns: ['albumin/globulin ratio', 'a/g ratio', 'a:g ratio', 'ag ratio', 'albumin globulin ratio'],
     commonUnits: ['ratio', ''],
   },
   {
     canonical: 'bun_creatinine_ratio',
-    patterns: ['bun/creatinine ratio', 'bun/creat ratio', 'urea/creat ratio', 'bun:creatinine'],
+    patterns: ['bun/creatinine ratio', 'bun/creat ratio', 'urea/creat ratio', 'bun:creatinine', 'bun creatinine ratio'],
     commonUnits: ['ratio', ''],
   },
 
@@ -411,11 +426,6 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
     canonical: 't3_uptake',
     patterns: ['t3 uptake', 't-3 uptake', 't3 resin uptake', 't3ru', 'triiodothyronine uptake'],
     commonUnits: ['%'],
-  },
-  {
-    canonical: 'free_thyroxine_index',
-    patterns: ['free thyroxine index', 'fti', 't7', 't4 free index'],
-    commonUnits: [''],
   },
   {
     canonical: 'total_t3',
@@ -458,6 +468,7 @@ const CATALOG_SLUG_ALIASES: Record<string, string> = {
   b12: 'vitamin_b12',
   tgab: 'tg_antibodies',
   total_bilirubin: 'bilirubin_total',
+  ag_ratio: 'albumin_globulin_ratio',
 };
 
 function normalizeToCatalogSlug(slug: string): string {
@@ -468,6 +479,7 @@ function normalizeToCatalogSlug(slug: string): string {
 
 const NOISE_LINE_RE = /^(?:\d{1,2}\/\d{1,2}\/\d{2,4}|page\s+\d|copyright|\d{4}-\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
 const CHART_AXIS_RE = /^\d+\.?\d*\s*$/;
+const PAGE_FOOTER_RE = /\([A-Z]{2,}\d+[A-Z]*\)\s+\d+\s*\/\s*\d+/;
 
 function isNoiseLine(line: string): boolean {
   const t = line.trim();
@@ -635,9 +647,11 @@ interface ParsedResult {
 }
 
 function extractValueFromWindow(lines: string[], preferredUnits: string[]): ParsedResult | null {
-  const cleanLines = lines.filter(l => !NOISE_LINE_RE.test(l.trim()));
+  const cleanLines = lines.filter(l => !NOISE_LINE_RE.test(l.trim()) && !PAGE_FOOTER_RE.test(l.trim()));
   if (cleanLines.length === 0) return null;
 
+  const labelLine = cleanLines[0];
+  const valueLines = cleanLines.slice(1);
   const windowText = cleanLines.join(' ');
   const unit = detectUnit(windowText) ?? preferredUnits[0] ?? null;
   const referenceResult = detectReferenceRange(windowText) ?? undefined;
@@ -647,29 +661,33 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
   if (referenceResult?.max !== undefined) knownRangeNumbers.add(String(referenceResult.max));
   if (referenceResult?.comparator) knownRangeNumbers.add(String(referenceResult.comparator.value));
 
-  // Collect all plain numeric candidates (excluding known range numbers)
-  const numericCandidates: { value: number; rawValue: string }[] = [];
-  for (const line of cleanLines) {
-    const tokens = line.match(/\d+\.?\d*/g) ?? [];
-    for (const tok of tokens) {
-      if (knownRangeNumbers.has(tok)) continue;
-      const v = parseFloat(tok);
-      if (v >= 0 && v <= 100000) {
-        numericCandidates.push({ value: v, rawValue: tok });
+  function collectCandidates(sourceLines: string[]): { value: number; rawValue: string }[] {
+    const candidates: { value: number; rawValue: string }[] = [];
+    for (const line of sourceLines) {
+      const tokens = line.match(/\d+\.?\d*/g) ?? [];
+      for (const tok of tokens) {
+        if (knownRangeNumbers.has(tok)) continue;
+        const v = parseFloat(tok);
+        if (v >= 0 && v <= 100000) {
+          candidates.push({ value: v, rawValue: tok });
+        }
       }
     }
+    return candidates;
   }
 
-  // Check for a prefix value (<X or >X) — only use it if NO larger plain number exists
-  // in the window (which would be the real patient result)
+  // Check for a prefix value (<X or >X) in the whole window
   const prefixRe = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
   const prefixMatch = windowText.match(prefixRe);
+
+  // First try non-label lines for the patient value
+  const valueCandidates = collectCandidates(valueLines);
+
   if (prefixMatch) {
     const prefixToken = prefixMatch[1].trim();
     const prefixNumStr = prefixToken.replace(/^[<>]\s*/, '');
     const prefixNum = parseFloat(prefixNumStr);
-    // Only treat as patient value if no larger integer candidate exists
-    const hasLargerPlainValue = numericCandidates.some(c => c.value > prefixNum && Number.isInteger(c.value));
+    const hasLargerPlainValue = valueCandidates.some(c => c.value > prefixNum && Number.isInteger(c.value));
     if (!hasLargerPlainValue) {
       const parsed = parseValueWithPrefix(prefixToken);
       if (parsed) {
@@ -678,9 +696,21 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
     }
   }
 
-  if (numericCandidates.length > 0) {
-    const first = numericCandidates[0];
+  if (valueCandidates.length > 0) {
+    const first = valueCandidates[0];
     return { value: first.value, rawValue: first.rawValue, unit, referenceResult };
+  }
+
+  // Fallback: check label line for inline value (e.g. "ANALYTE NAME 3.3 Reference Range: ...")
+  // Extract candidates from the label line, but skip tokens that are part of short all-uppercase analyte name tokens
+  const labelCandidates = collectCandidates([labelLine]);
+  if (labelCandidates.length > 0) {
+    // If the label line has a decimal or a number followed by a unit, prefer the first decimal
+    const decimalFirst = labelCandidates.find(c => !Number.isInteger(c.value));
+    if (decimalFirst) return { value: decimalFirst.value, rawValue: decimalFirst.rawValue, unit, referenceResult };
+    // Otherwise use the largest value (not a single digit from a name like "T3", "T4")
+    const largeEnough = labelCandidates.find(c => c.value >= 10);
+    if (largeEnough) return { value: largeEnough.value, rawValue: largeEnough.rawValue, unit, referenceResult };
   }
 
   return null;
@@ -700,7 +730,7 @@ function layeredParse(text: string, debug = false): ExtractedBiomarker[] {
     if (!bp && isSectionHeader(line)) continue;
     if (!bp) continue;
 
-    const windowSize = 6;
+    const windowSize = 10;
     const windowLines = lines.slice(i, Math.min(i + windowSize, lines.length));
     const parsed = extractValueFromWindow(windowLines, bp.commonUnits);
 
@@ -934,31 +964,63 @@ export function getCatalogSlug(legacyName: string): string {
 // ─── Core biomarker metadata for ReportItem conversion ───────────────────────
 
 const CORE_SLUGS = new Set([
+  // hormones
   'estradiol','progesterone','lh','fsh','amh','total_testosterone','free_testosterone',
   'dheas','prolactin','fasting_insulin','shbg',
-  'tsh','free_t4','free_t3','total_t4','reverse_t3','tpo_antibodies','tg_antibodies',
+  // thyroid
+  'tsh','free_t4','free_t3','total_t4','total_t3','reverse_t3','tpo_antibodies','tg_antibodies',
+  't3_uptake','free_thyroxine_index',
+  // metabolic
   'fasting_glucose','hemoglobin_a1c','c_peptide',
-  'total_cholesterol','ldl_cholesterol','hdl_cholesterol','triglycerides','non_hdl_cholesterol','apob','lpa',
+  'calcium','sodium','potassium','chloride','co2',
+  // lipids
+  'total_cholesterol','ldl_cholesterol','hdl_cholesterol','triglycerides','non_hdl_cholesterol',
+  'apob','lpa','chol_hdl_ratio',
+  // liver
   'alt','ast','ggt','alkaline_phosphatase','bilirubin_total',
-  'creatinine','egfr','bun',
+  'albumin','globulin','total_protein','albumin_globulin_ratio',
+  // kidney
+  'creatinine','egfr','bun','bun_creatinine_ratio',
+  // inflammation
   'hs_crp','esr',
+  // nutrients / iron
   'ferritin','iron_saturation','vitamin_d_25_oh','vitamin_b12','folate','magnesium',
+  'serum_iron','tibc','uibc',
+  // CBC
+  'wbc','rbc','hemoglobin','hematocrit','mcv','mch','mchc','rdw','platelets','mpv',
+  'neutrophils','lymphocytes','monocytes','eosinophils','basophils',
 ]);
 
 const CORE_CATEGORIES: Record<string, string> = {
+  // hormones
   estradiol:'hormones',progesterone:'hormones',lh:'hormones',fsh:'hormones',amh:'hormones',
   total_testosterone:'hormones',free_testosterone:'hormones',dheas:'hormones',prolactin:'hormones',
   fasting_insulin:'hormones',shbg:'hormones',
-  tsh:'thyroid',free_t4:'thyroid',free_t3:'thyroid',total_t4:'thyroid',reverse_t3:'thyroid',
-  tpo_antibodies:'thyroid',tg_antibodies:'thyroid',
+  // thyroid
+  tsh:'thyroid',free_t4:'thyroid',free_t3:'thyroid',total_t4:'thyroid',total_t3:'thyroid',
+  reverse_t3:'thyroid',tpo_antibodies:'thyroid',tg_antibodies:'thyroid',
+  t3_uptake:'thyroid',free_thyroxine_index:'thyroid',
+  // metabolic
   fasting_glucose:'metabolic',hemoglobin_a1c:'metabolic',c_peptide:'metabolic',
+  calcium:'metabolic',sodium:'metabolic',potassium:'metabolic',chloride:'metabolic',co2:'metabolic',
+  // lipids
   total_cholesterol:'lipids',ldl_cholesterol:'lipids',hdl_cholesterol:'lipids',triglycerides:'lipids',
-  non_hdl_cholesterol:'lipids',apob:'lipids',lpa:'lipids',
+  non_hdl_cholesterol:'lipids',apob:'lipids',lpa:'lipids',chol_hdl_ratio:'lipids',
+  // liver
   alt:'liver',ast:'liver',ggt:'liver',alkaline_phosphatase:'liver',bilirubin_total:'liver',
-  creatinine:'kidney',egfr:'kidney',bun:'kidney',
+  albumin:'liver',globulin:'liver',total_protein:'liver',albumin_globulin_ratio:'liver',
+  // kidney
+  creatinine:'kidney',egfr:'kidney',bun:'kidney',bun_creatinine_ratio:'kidney',
+  // inflammation
   hs_crp:'inflammation',esr:'inflammation',
+  // nutrients
   ferritin:'nutrients',iron_saturation:'nutrients',vitamin_d_25_oh:'nutrients',
   vitamin_b12:'nutrients',folate:'nutrients',magnesium:'nutrients',
+  serum_iron:'nutrients',tibc:'nutrients',uibc:'nutrients',
+  // CBC / blood
+  wbc:'blood',rbc:'blood',hemoglobin:'blood',hematocrit:'blood',mcv:'blood',mch:'blood',
+  mchc:'blood',rdw:'blood',platelets:'blood',mpv:'blood',
+  neutrophils:'blood',lymphocytes:'blood',monocytes:'blood',eosinophils:'blood',basophils:'blood',
 };
 
 export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): ReportItem[] {
