@@ -661,12 +661,15 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
   if (referenceResult?.max !== undefined) knownRangeNumbers.add(String(referenceResult.max));
   if (referenceResult?.comparator) knownRangeNumbers.add(String(referenceResult.comparator.value));
 
-  function collectCandidates(sourceLines: string[]): { value: number; rawValue: string }[] {
+  function collectCandidates(sourceLines: string[], skipLetterPrefixedDigits = false): { value: number; rawValue: string }[] {
     const candidates: { value: number; rawValue: string }[] = [];
     for (const line of sourceLines) {
-      const tokens = line.match(/\d+\.?\d*/g) ?? [];
-      for (const tok of tokens) {
+      const tokenRe = /\d+\.?\d*/g;
+      let m: RegExpExecArray | null;
+      while ((m = tokenRe.exec(line)) !== null) {
+        const tok = m[0];
         if (knownRangeNumbers.has(tok)) continue;
+        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(line[m.index - 1])) continue;
         const v = parseFloat(tok);
         if (v >= 0 && v <= 100000) {
           candidates.push({ value: v, rawValue: tok });
@@ -676,39 +679,37 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
     return candidates;
   }
 
-  // Check for a prefix value (<X or >X) in the whole window
+  // Check for a comparator reference (<X or >X) only in the reference range portion of the window
+  // (not as a patient value if there are real value-line candidates)
   const prefixRe = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
   const prefixMatch = windowText.match(prefixRe);
 
-  // First try non-label lines for the patient value
-  const valueCandidates = collectCandidates(valueLines);
+  // First try non-label lines for the patient value, skipping letter-prefixed digits (e.g. "T3" → 3)
+  const valueCandidates = collectCandidates(valueLines, true);
 
+  // If there are valid non-range candidates in value lines, use those — they are more reliable than <X prefix
+  if (valueCandidates.length > 0) {
+    // Prefer decimals (more specific), otherwise first candidate
+    const decimal = valueCandidates.find(c => !Number.isInteger(c.value));
+    const best = decimal ?? valueCandidates[0];
+    return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
+  }
+
+  // No value-line candidates — check if there's a comparator prefix (<X / >X) as the patient value
   if (prefixMatch) {
     const prefixToken = prefixMatch[1].trim();
-    const prefixNumStr = prefixToken.replace(/^[<>]\s*/, '');
-    const prefixNum = parseFloat(prefixNumStr);
-    const hasLargerPlainValue = valueCandidates.some(c => c.value > prefixNum && Number.isInteger(c.value));
-    if (!hasLargerPlainValue) {
-      const parsed = parseValueWithPrefix(prefixToken);
-      if (parsed) {
-        return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
-      }
+    const parsed = parseValueWithPrefix(prefixToken);
+    if (parsed) {
+      return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
     }
   }
 
-  if (valueCandidates.length > 0) {
-    const first = valueCandidates[0];
-    return { value: first.value, rawValue: first.rawValue, unit, referenceResult };
-  }
-
   // Fallback: check label line for inline value (e.g. "ANALYTE NAME 3.3 Reference Range: ...")
-  // Extract candidates from the label line, but skip tokens that are part of short all-uppercase analyte name tokens
-  const labelCandidates = collectCandidates([labelLine]);
+  // Skip letter-prefixed digits to avoid picking up numbers from analyte names (T3 → 3, T4 → 4, B12 → 12)
+  const labelCandidates = collectCandidates([labelLine], true);
   if (labelCandidates.length > 0) {
-    // If the label line has a decimal or a number followed by a unit, prefer the first decimal
     const decimalFirst = labelCandidates.find(c => !Number.isInteger(c.value));
     if (decimalFirst) return { value: decimalFirst.value, rawValue: decimalFirst.rawValue, unit, referenceResult };
-    // Otherwise use the largest value (not a single digit from a name like "T3", "T4")
     const largeEnough = labelCandidates.find(c => c.value >= 10);
     if (largeEnough) return { value: largeEnough.value, rawValue: largeEnough.rawValue, unit, referenceResult };
   }
