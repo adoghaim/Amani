@@ -770,15 +770,57 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
     return candidates;
   }
 
+  // ─── Candidate scoring: prefer values near the midpoint of the detected reference range ───
+  // This replaces the old "prefer decimal" heuristic which caused decimals like 3.7 to beat
+  // integers like 137 when both appeared in the same window.
+  function scoreCandidate(v: number): number {
+    if (referenceResult?.min !== undefined && referenceResult?.max !== undefined) {
+      const mid = (referenceResult.min + referenceResult.max) / 2;
+      const spread = (referenceResult.max - referenceResult.min) || 1;
+      // Normalised distance from midpoint: 0 = perfect, higher = worse
+      return Math.abs(v - mid) / spread;
+    }
+    if (referenceResult?.comparator) {
+      const op = referenceResult.comparator.operator;
+      const threshold = referenceResult.comparator.value;
+      // For ">" or ">=" operators (higher is better / normal), penalise values below threshold
+      if (op === '>' || op === '>=' || op === '> OR =') {
+        return v >= threshold ? 0 : 1 + (threshold - v) / (threshold || 1);
+      }
+      // For "<" or "<=" operators, penalise values above threshold
+      if (op === '<' || op === '<=' || op === '< OR =') {
+        return v <= threshold ? 0 : 1 + (v - threshold) / (threshold || 1);
+      }
+    }
+    // No reference range available — prefer values >= 1 and non-trivially small
+    return v < 1 ? 1 : 0;
+  }
+
+  function pickBest(candidates: { value: number; rawValue: string }[]): { value: number; rawValue: string } | null {
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+
+    // When a reference range is known, always prefer the candidate closest to its midpoint.
+    if (referenceResult?.min !== undefined && referenceResult?.max !== undefined) {
+      return candidates.slice().sort((a, b) => scoreCandidate(a.value) - scoreCandidate(b.value))[0];
+    }
+
+    // No reference range: prefer the FIRST candidate from the value lines (positionally closest to the label).
+    // If there are multiple and they differ in magnitude by more than 10x, prefer the larger one
+    // (avoids picking chart-axis noise like 3.7 over a real value of 137).
+    const first = candidates[0];
+    const largest = candidates.slice().sort((a, b) => b.value - a.value)[0];
+    if (largest.value > first.value * 10) return largest;
+    return first;
+  }
+
   // First try non-label lines for the patient value, skipping letter-prefixed digits (e.g. "T3" → 3)
   const valueCandidates = collectCandidates(valueLines, true);
 
-  // If there are valid non-range candidates in value lines, use those — they are more reliable than <X prefix
+  // If there are valid non-range candidates in value lines, use scored selection
   if (valueCandidates.length > 0) {
-    // Prefer decimals (more specific), otherwise first candidate
-    const decimal = valueCandidates.find(c => !Number.isInteger(c.value));
-    const best = decimal ?? valueCandidates[0];
-    return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
+    const best = pickBest(valueCandidates);
+    if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
   }
 
   // No value-line candidates — check if there's a comparator prefix (<X / >X) as the patient value.
@@ -795,15 +837,12 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
     }
   }
 
-  // Fallback: check label line for inline value (e.g. "ANALYTE NAME 3.3 Reference Range: ...")
+  // Fallback: check label line for inline value (e.g. "ANALYTE NAME 137 Reference Range: ...")
   // Skip letter-prefixed digits to avoid picking up numbers from analyte names (T3 → 3, T4 → 4, B12 → 12)
-  // Also skip date-component tokens (digits surrounded by slashes)
   const labelCandidates = collectCandidates([labelLine], true);
   if (labelCandidates.length > 0) {
-    const decimalFirst = labelCandidates.find(c => !Number.isInteger(c.value));
-    if (decimalFirst) return { value: decimalFirst.value, rawValue: decimalFirst.rawValue, unit, referenceResult };
-    const largeEnough = labelCandidates.find(c => c.value >= 10);
-    if (largeEnough) return { value: largeEnough.value, rawValue: largeEnough.rawValue, unit, referenceResult };
+    const best = pickBest(labelCandidates);
+    if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
   }
 
   return null;

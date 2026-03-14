@@ -13,29 +13,10 @@ import { QuickHighlights } from '../components/QuickHighlights';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
+import { classifyLabValue } from '../utils/classifyLabValue';
 import { CATEGORY_DISPLAY } from '../types';
 import type { LabReport, Biomarker, AIInterpretation, BiomarkerCategory, BiomarkerName, ReportAnalyte } from '../types';
 import { RefreshCw, Trash2, Copy, Clock, AlertCircle, ChevronDown, ChevronRight, Microscope } from 'lucide-react';
-
-interface ReportItem {
-  id: string;
-  lab_report_id: string;
-  raw_name: string;
-  canonical_slug: string | null;
-  category: string | null;
-  value_numeric: number;
-  value_text: string | null;
-  unit: string | null;
-  raw_reference_range: string | null;
-  normalized_reference_min: number | null;
-  normalized_reference_max: number | null;
-  reference_operator: string | null;
-  reference_operator_value: number | null;
-  confidence_score: 'high' | 'medium' | 'low';
-  needs_review: boolean;
-  is_core_biomarker: boolean;
-  created_at: string;
-}
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
@@ -57,38 +38,6 @@ const CORE_BIOMARKER_CATEGORIES_UI: Record<string, string> = {
   serum_iron: 'Nutrients (Iron)', tibc: 'Nutrients (Iron)', uibc: 'Nutrients (Iron)',
 };
 
-function formatRefRange(item: ReportItem): string {
-  if (item.raw_reference_range) return item.raw_reference_range;
-  if (item.normalized_reference_min != null && item.normalized_reference_max != null) {
-    return `${item.normalized_reference_min} – ${item.normalized_reference_max}`;
-  }
-  if (item.reference_operator && item.reference_operator_value != null) {
-    return `${item.reference_operator} ${item.reference_operator_value}`;
-  }
-  return '—';
-}
-
-function labStatusFromItem(item: ReportItem): 'in_range' | 'out_of_range' | 'borderline' | 'unknown' {
-  const v = item.value_numeric;
-  if (item.normalized_reference_min != null && item.normalized_reference_max != null) {
-    const range = item.normalized_reference_max - item.normalized_reference_min;
-    const buf = range * 0.08;
-    if (v < item.normalized_reference_min - buf || v > item.normalized_reference_max + buf) return 'out_of_range';
-    if (v < item.normalized_reference_min || v > item.normalized_reference_max) return 'borderline';
-    return 'in_range';
-  }
-  if (item.reference_operator && item.reference_operator_value != null) {
-    const val = item.reference_operator_value;
-    if (item.reference_operator === '<' || item.reference_operator === '<=' || item.reference_operator === '< OR =') {
-      return v <= val ? 'in_range' : 'out_of_range';
-    }
-    if (item.reference_operator === '>' || item.reference_operator === '>=' || item.reference_operator === '> OR =') {
-      return v >= val ? 'in_range' : 'out_of_range';
-    }
-  }
-  return 'unknown';
-}
-
 const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   in_range:    { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'In range' },
   out_of_range:{ bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500',     label: 'Out of range' },
@@ -96,52 +45,14 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; labe
   unknown:     { bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400',    label: 'No range' },
 };
 
-function ExtendedItemRow({ item }: { item: ReportItem }) {
-  const status = labStatusFromItem(item);
-  const style = STATUS_STYLE[status];
-  return (
-    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">{item.raw_name}</p>
-        {item.raw_reference_range && (
-          <p className="text-xs text-gray-400">Ref: {formatRefRange(item)}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <span className="text-sm font-semibold text-gray-900 tabular-nums">
-          {item.value_text ?? item.value_numeric}
-          {item.unit && <span className="text-gray-500 font-normal ml-1 text-xs">{item.unit}</span>}
-        </span>
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-          {style.label}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function labStatusFromAnalyte(a: ReportAnalyte): 'in_range' | 'out_of_range' | 'borderline' | 'unknown' {
-  const v = a.value_numeric;
-  if (v == null) return 'unknown';
-  if (a.normalized_min != null && a.normalized_max != null) {
-    const range = a.normalized_max - a.normalized_min;
-    const buf = range * 0.08;
-    if (v < a.normalized_min - buf || v > a.normalized_max + buf) return 'out_of_range';
-    if (v < a.normalized_min || v > a.normalized_max) return 'borderline';
-    return 'in_range';
-  }
-  if (a.normalized_operator && a.normalized_operator_value != null) {
-    const val = a.normalized_operator_value;
-    const op = a.normalized_operator;
-    if (op === '<' || op === '<=' || op === '< OR =') return v <= val ? 'in_range' : 'out_of_range';
-    if (op === '>' || op === '>=' || op === '> OR =') return v >= val ? 'in_range' : 'out_of_range';
-  }
-  return 'unknown';
-}
-
 function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
-  const status = labStatusFromAnalyte(analyte);
+  const status = classifyLabValue(
+    analyte.value_numeric,
+    analyte.normalized_min,
+    analyte.normalized_max,
+    analyte.normalized_operator,
+    analyte.normalized_operator_value
+  );
   const style = STATUS_STYLE[status];
   const displayName = analyte.canonical_slug
     ? analyte.canonical_slug.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -178,7 +89,6 @@ export function ReportView() {
   const { userProfile } = useAuth();
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
-  const [extendedItems, setExtendedItems] = useState<ReportItem[]>([]);
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -248,17 +158,6 @@ export function ReportView() {
       setBiomarkers(biomarkersData as Biomarker[]);
     }
 
-    const { data: reportItemsData } = await supabase
-      .from('report_items')
-      .select('*')
-      .eq('lab_report_id', reportId)
-      .eq('is_core_biomarker', false)
-      .order('raw_name');
-
-    if (reportItemsData) {
-      setExtendedItems(reportItemsData as ReportItem[]);
-    }
-
     const { data: analytesData } = await supabase
       .from('report_analytes')
       .select('*')
@@ -320,24 +219,10 @@ export function ReportView() {
     const fromAnalytes = reportAnalytes
       .filter(a => a.canonical_slug)
       .map(a => a.canonical_slug as string);
-    const fromExtended = extendedItems
-      .filter(i => i.canonical_slug)
-      .map(i => i.canonical_slug as string);
-    return [...new Set([...fromBiomarkers, ...fromAnalytes, ...fromExtended])];
-  }, [biomarkers, reportAnalytes, extendedItems]);
-
-  const extendedByCategory = useMemo(() => {
-    const groups: Record<string, ReportItem[]> = {};
-    for (const item of extendedItems) {
-      const key = item.category ?? 'Other';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
-    }
-    return groups;
-  }, [extendedItems]);
+    return [...new Set([...fromBiomarkers, ...fromAnalytes])];
+  }, [biomarkers, reportAnalytes]);
 
   const analytesForDisplay = useMemo(() => {
-    if (reportAnalytes.length === 0) return null;
     const nonCore = reportAnalytes.filter(a => !a.is_core);
     const groups: Record<string, ReportAnalyte[]> = {};
     for (const a of nonCore) {
@@ -353,9 +238,8 @@ export function ReportView() {
   }, [reportAnalytes]);
 
   const totalAnalyteCount = useMemo(() => {
-    if (reportAnalytes.length > 0) return reportAnalytes.filter(a => !a.is_core).length;
-    return extendedItems.length;
-  }, [reportAnalytes, extendedItems]);
+    return reportAnalytes.filter(a => !a.is_core).length;
+  }, [reportAnalytes]);
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
@@ -470,9 +354,9 @@ export function ReportView() {
             )}
             <div className="flex gap-3 mt-2">
               <span className="text-xs text-gray-500">{biomarkers.length} core biomarkers</span>
-              {(reportAnalytes.length > 0 || extendedItems.length > 0) && (
+              {reportAnalytes.length > 0 && (
                 <span className="text-xs text-blue-500">
-                  {reportAnalytes.length > 0 ? reportAnalytes.length : extendedItems.length} total analytes
+                  {reportAnalytes.length} total analytes
                 </span>
               )}
               {reportAnalytes.filter(a => a.parse_status === 'unmapped').length > 0 && (
@@ -613,7 +497,7 @@ export function ReportView() {
             </div>
           )}
 
-          {extendedItems.length > 0 && (
+          {totalAnalyteCount > 0 && (
             <Card>
               <button
                 className="flex items-center justify-between w-full text-left"
@@ -633,35 +517,20 @@ export function ReportView() {
 
               {showExtended && (
                 <div className="mt-4 space-y-6">
-                  {analytesForDisplay
-                    ? Object.entries(analytesForDisplay)
-                        .sort(([a], [b]) => a === 'Unmapped' ? 1 : b === 'Unmapped' ? -1 : a.localeCompare(b))
-                        .map(([cat, items]) => (
-                          <div key={cat}>
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-                              {cat}
-                            </h3>
-                            <div className="divide-y divide-gray-100">
-                              {items.map(item => (
-                                <AnalyteRow key={item.id} analyte={item} />
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                    : Object.entries(extendedByCategory)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([cat, items]) => (
-                          <div key={cat}>
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-                              {cat}
-                            </h3>
-                            <div className="divide-y divide-gray-100">
-                              {items.map(item => (
-                                <ExtendedItemRow key={item.id} item={item} />
-                              ))}
-                            </div>
-                          </div>
-                        ))
+                  {Object.entries(analytesForDisplay)
+                    .sort(([a], [b]) => a === 'Unmapped' ? 1 : b === 'Unmapped' ? -1 : a.localeCompare(b))
+                    .map(([cat, items]) => (
+                      <div key={cat}>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                          {cat}
+                        </h3>
+                        <div className="divide-y divide-gray-100">
+                          {items.map(item => (
+                            <AnalyteRow key={item.id} analyte={item} />
+                          ))}
+                        </div>
+                      </div>
+                    ))
                   }
                 </div>
               )}

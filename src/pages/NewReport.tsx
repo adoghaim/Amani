@@ -243,33 +243,7 @@ export function NewReport() {
       const itemsToSave = reportItems.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
 
       if (itemsToSave.length > 0) {
-        const reportItemInserts = itemsToSave.map(item => ({
-          lab_report_id: reportData.id,
-          raw_name: item.raw_name,
-          canonical_slug: item.canonical_slug,
-          category: item.category,
-          value_numeric: item.value_numeric,
-          value_text: item.value_text,
-          unit: item.unit,
-          raw_reference_range: item.raw_reference_range,
-          normalized_reference_min: item.normalized_reference_min,
-          normalized_reference_max: item.normalized_reference_max,
-          reference_operator: item.reference_operator,
-          reference_operator_value: item.reference_operator_value,
-          confidence_score: item.confidence_score,
-          needs_review: item.needs_review,
-          is_core_biomarker: item.is_core_biomarker,
-          source_snippet: item.source_snippet,
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('report_items')
-          .insert(reportItemInserts);
-
-        if (itemsError) {
-          console.error('[NewReport] Failed to save report_items:', itemsError);
-        }
-
+        // ── Core biomarkers (biomarkers table) ──────────────────────────────
         const coreItems = itemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
           const biomarkerInserts = coreItems.map(item => ({
@@ -287,34 +261,35 @@ export function NewReport() {
 
           if (biomarkerError) {
             console.error('[NewReport] Failed to save core biomarkers:', biomarkerError);
+            throw new Error(`Failed to save biomarkers: ${biomarkerError.message}`);
           }
         }
-      }
 
-      const analyteIdBySlug = new Map<string, string>();
-      for (const a of reportAnalytes) {
-        if (a.canonical_slug && a.canonical_analyte_id) {
-          analyteIdBySlug.set(a.canonical_slug, a.canonical_analyte_id);
-        }
-      }
-
-      const missingSlugs = [...new Set(itemsToSave
-        .map(i => i.canonical_slug)
-        .filter((s): s is string => !!s && !analyteIdBySlug.has(s))
-      )];
-      if (missingSlugs.length > 0) {
-        const { data: caRows } = await supabase
-          .from('canonical_analytes' as any)
-          .select('id, slug')
-          .in('slug', missingSlugs);
-        if (caRows) {
-          for (const row of caRows as { id: string; slug: string }[]) {
-            analyteIdBySlug.set(row.slug, row.id);
+        // ── Resolve canonical analyte IDs ────────────────────────────────────
+        const analyteIdBySlug = new Map<string, string>();
+        for (const a of reportAnalytes) {
+          if (a.canonical_slug && a.canonical_analyte_id) {
+            analyteIdBySlug.set(a.canonical_slug, a.canonical_analyte_id);
           }
         }
-      }
 
-      if (itemsToSave.length > 0) {
+        const missingSlugs = [...new Set(itemsToSave
+          .map(i => i.canonical_slug)
+          .filter((s): s is string => !!s && !analyteIdBySlug.has(s))
+        )];
+        if (missingSlugs.length > 0) {
+          const { data: caRows } = await supabase
+            .from('canonical_analytes' as any)
+            .select('id, slug')
+            .in('slug', missingSlugs);
+          if (caRows) {
+            for (const row of caRows as { id: string; slug: string }[]) {
+              analyteIdBySlug.set(row.slug, row.id);
+            }
+          }
+        }
+
+        // ── All analytes (report_analytes — single source of truth) ──────────
         const analyteInserts = itemsToSave.map(item => {
           const slug = item.canonical_slug ?? null;
           const canonicalAnalyteId = slug ? (analyteIdBySlug.get(slug) ?? null) : null;
@@ -346,6 +321,7 @@ export function NewReport() {
 
         if (analyteError) {
           console.error('[NewReport] Failed to save report_analytes:', analyteError);
+          throw new Error(`Failed to save analytes: ${analyteError.message}`);
         }
       }
 
@@ -368,7 +344,9 @@ export function NewReport() {
         supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const msg = err instanceof Error ? err.message : 'An error occurred';
+      console.error('[NewReport] handleSubmit failed:', msg);
+      setError(msg);
       setLoading(false);
     }
   };
