@@ -110,7 +110,7 @@ export const BIOMARKER_RANGES: Record<BiomarkerName, BiomarkerRanges> = {
   bilirubin_total:    { optimal: { min: 0.3, max: 1.0 }, clinical: { min: 0.2, max: 1.2 }, scoreWeight: 1.0 },
   creatinine:         { optimal: { min: 0.5, max: 0.9 }, clinical: { min: 0.5, max: 1.1 }, scoreWeight: 1.5 },
   bun:                { optimal: { min: 7, max: 18 },   clinical: { min: 6, max: 20 }, scoreWeight: 1.2 },
-  egfr:               { optimal: { min: 90, max: 120 }, clinical: { min: 60, max: 120 }, scoreWeight: 1.8, higherIsBetter: true },
+  egfr:               { optimal: { min: 90, max: 200 }, clinical: { min: 60, max: 200 }, scoreWeight: 1.8, higherIsBetter: true },
   hs_crp:             { optimal: { min: 0, max: 1.0 },  clinical: { min: 0, max: 3.0 }, scoreWeight: 1.8 },
   esr:                { optimal: { min: 0, max: 15 },   clinical: { min: 0, max: 20 }, scoreWeight: 1.2 },
   ferritin:           { optimal: { min: 30, max: 150 }, clinical: { min: 13, max: 150 }, scoreWeight: 1.8 },
@@ -162,18 +162,19 @@ export function computeAmaniStatus(
 
   const borderlineBuffer = 0.15;
 
+  if (optMax !== null && value > optMax) {
+    if (ranges.higherIsBetter) return 'optimal';
+    const threshold = optMax * (1 + borderlineBuffer);
+    if (clinMax !== null && value > clinMax) return 'out_of_range_high';
+    if (threshold !== undefined && value <= threshold) return 'borderline_high';
+    return 'out_of_range_high';
+  }
+
   if (optMin !== null && value < optMin) {
     const threshold = optMin * (1 - borderlineBuffer);
     if (clinMin !== null && value < clinMin) return 'out_of_range_low';
     if (threshold !== undefined && value >= threshold) return 'borderline_low';
     return 'out_of_range_low';
-  }
-
-  if (optMax !== null && value > optMax) {
-    const threshold = optMax * (1 + borderlineBuffer);
-    if (clinMax !== null && value > clinMax) return 'out_of_range_high';
-    if (threshold !== undefined && value <= threshold) return 'borderline_high';
-    return 'out_of_range_high';
   }
 
   return 'normal';
