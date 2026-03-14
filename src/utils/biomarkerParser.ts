@@ -698,28 +698,55 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
   // NOT the full 10-line window. This prevents ranges from the NEXT analyte contaminating knownRangeNumbers.
   const blockLines = cleanLines.slice(0, Math.min(3, cleanLines.length));
   const blockText = blockLines.join(' ');
-  const windowText = cleanLines.join(' ');
 
   // For unit detection, scan the first 3 lines (same block)
   const unit = detectUnit(blockText) ?? preferredUnits[0] ?? null;
 
   // Reference range: first look within the label line itself (inline format like "ANALYTE 42 Reference Range: 65-99")
-  // If not found there, fall back to the 3-line block
-  const referenceResult = detectReferenceRange(labelLine) ?? detectReferenceRange(blockText) ?? undefined;
+  // If not found there, scan the full window (supports multi-line reference tables like hormone phase ranges).
+  // We stop at the first range found for scoring purposes.
+  const windowText = cleanLines.join(' ');
+  const referenceResult = detectReferenceRange(labelLine) ?? detectReferenceRange(blockText) ?? detectReferenceRange(windowText) ?? undefined;
 
   const knownRangeNumbers = new Set<string>();
-  if (referenceResult?.min !== undefined) {
-    knownRangeNumbers.add(String(referenceResult.min));
-    // Also add reformatted versions to prevent decimal mismatch (e.g. "0.50" vs "0.5")
-    knownRangeNumbers.add(String(parseFloat(String(referenceResult.min))));
+
+  function addRangeNumber(v: number | string) {
+    knownRangeNumbers.add(String(v));
+    knownRangeNumbers.add(String(parseFloat(String(v))));
   }
-  if (referenceResult?.max !== undefined) {
-    knownRangeNumbers.add(String(referenceResult.max));
-    knownRangeNumbers.add(String(parseFloat(String(referenceResult.max))));
+
+  if (referenceResult?.min !== undefined) addRangeNumber(referenceResult.min);
+  if (referenceResult?.max !== undefined) addRangeNumber(referenceResult.max);
+  if (referenceResult?.comparator) addRangeNumber(referenceResult.comparator.value);
+
+  // Scan the FULL window for ALL min-max range pairs and add every boundary number to knownRangeNumbers.
+  // This is critical for labs with multi-phase reference tables (e.g. FSH, Estradiol, Progesterone)
+  // where each phase (Follicular, Luteal, Postmenopausal, etc.) has its own range.
+  // Without this, range boundary values like 116.3 (Postmenopausal FSH max) get picked as the patient value.
+  const ALL_RANGE_RE = /(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/g;
+  let rm: RegExpExecArray | null;
+  while ((rm = ALL_RANGE_RE.exec(windowText)) !== null) {
+    const lo = parseFloat(rm[1]);
+    const hi = parseFloat(rm[2]);
+    if (!isNaN(lo) && !isNaN(hi) && lo < hi) {
+      addRangeNumber(lo);
+      addRangeNumber(hi);
+    }
   }
-  if (referenceResult?.comparator) {
-    knownRangeNumbers.add(String(referenceResult.comparator.value));
-    knownRangeNumbers.add(String(parseFloat(String(referenceResult.comparator.value))));
+  // Also add any comparator-style reference values found in lines that mention "phase", "range", "trimester", etc.
+  const PHASE_LINE_RE = /\b(?:phase|trimester|menopausal|menopaus|pregnancy|pregnant|follicular|luteal|ovulatory|peak|male|female|adult|child|infant)\b/i;
+  for (const vLine of valueLines) {
+    if (!PHASE_LINE_RE.test(vLine)) continue;
+    const compRe = /[<>]=?\s*(\d+\.?\d*)/g;
+    let cm: RegExpExecArray | null;
+    while ((cm = compRe.exec(vLine)) !== null) {
+      addRangeNumber(parseFloat(cm[1]));
+    }
+    const numRe2 = /(\d+\.?\d*)/g;
+    let nm: RegExpExecArray | null;
+    while ((nm = numRe2.exec(vLine)) !== null) {
+      addRangeNumber(parseFloat(nm[1]));
+    }
   }
 
   // Pre-exclude comparator values (<X / >X) that appear inside prose footnote lines.
@@ -817,7 +844,44 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
   // First try non-label lines for the patient value, skipping letter-prefixed digits (e.g. "T3" → 3)
   const valueCandidates = collectCandidates(valueLines, true);
 
-  // If there are valid non-range candidates in value lines, use scored selection
+  // Before using plain numeric candidates, check if any value line contains a comparator-style
+  // patient result (<X or >X) on a line that is NOT a reference/phase line.
+  // Example: Hone format renders current value as "<0.5" on a history row alongside older readings.
+  const COMPARATOR_VALUE_RE = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
+  for (const vLine of valueLines) {
+    const trimmed = vLine.trim();
+    if (PHASE_LINE_RE.test(trimmed)) continue;
+    if (/\breference\s+range\b|\bref\s+range\b/i.test(trimmed)) continue;
+    const cm2 = trimmed.match(COMPARATOR_VALUE_RE);
+    if (cm2) {
+      const prefixToken = cm2[1].trim();
+      const parsed = parseValueWithPrefix(prefixToken);
+      if (parsed) {
+        return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
+      }
+    }
+  }
+
+  // Also collect label-line candidates (inline values like "TSH 2.03 Reference Range: 0.4-4")
+  const labelCandidates = collectCandidates([labelLine], true);
+
+  // When BOTH label-line and value-line candidates exist, score them together.
+  // Label-line values (the current result printed next to the analyte name) are typically
+  // more reliable than value-line values which may include historical readings on Hone reports.
+  // To give label candidates priority in tie-breaking, run pickBest separately and return the
+  // label candidate if it scores no worse than the best value-line candidate.
+  if (labelCandidates.length > 0 && valueCandidates.length > 0 && referenceResult) {
+    const bestLabel = pickBest(labelCandidates)!;
+    const bestValue = pickBest(valueCandidates)!;
+    const labelScore = scoreCandidate(bestLabel.value);
+    const valueScore = scoreCandidate(bestValue.value);
+    if (labelScore <= valueScore) {
+      return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
+    }
+    return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
+  }
+
+  // If there are valid non-range candidates in value lines only, use scored selection
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
     if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
@@ -837,9 +901,7 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
     }
   }
 
-  // Fallback: check label line for inline value (e.g. "ANALYTE NAME 137 Reference Range: ...")
-  // Skip letter-prefixed digits to avoid picking up numbers from analyte names (T3 → 3, T4 → 4, B12 → 12)
-  const labelCandidates = collectCandidates([labelLine], true);
+  // Fallback: label line only (no value-line candidates found)
   if (labelCandidates.length > 0) {
     const best = pickBest(labelCandidates);
     if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
