@@ -173,7 +173,20 @@ export function extractValueFromWindow(
   // Value lines after the label often only carry reference annotations or history columns.
   const labelCandidates = collectCandidates([labelLine], true);
 
-  // PRIORITY 1: label-line numeric value wins when scoring agrees.
+  // PRIORITY 1a: comparator prefix on the label line takes highest precedence.
+  // e.g. "PROGESTERONE <0.5 ng/mL <0.5 8.4 14.2 22.3 Reference Ranges..."
+  // The <0.5 immediately after the analyte name IS the patient result; the plain
+  // numbers that follow are historical values from prior draws.
+  const refBoundaryIdx0 = labelLine.search(/\breference\s+range|\bref\s+range|\bref\.\s*range/i);
+  const labelLineBeforeRef0 = refBoundaryIdx0 > 0 ? labelLine.substring(0, refBoundaryIdx0) : labelLine;
+  const prefixRe0 = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
+  const prefixMatch0 = labelLineBeforeRef0.match(prefixRe0);
+  if (prefixMatch0) {
+    const parsed0 = parseValueWithPrefix(prefixMatch0[1].trim());
+    if (parsed0) return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult };
+  }
+
+  // PRIORITY 1b: label-line numeric value wins when scoring agrees.
   // This prevents reference-annotation comparators on value lines (e.g. "<200", "<150", "<9")
   // from overriding the actual patient result on the label line.
   if (labelCandidates.length > 0) {
@@ -218,16 +231,6 @@ export function extractValueFromWindow(
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
     if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
-  }
-
-  // PRIORITY 4: comparator prefix on the label line itself (e.g. "PROGESTERONE <0.5 Reference Range:…").
-  const refBoundaryIdx = labelLine.search(/\breference\s+range\b|\bref\s+range\b|\bref\.\s*range\b/i);
-  const labelLineBeforeRef = refBoundaryIdx > 0 ? labelLine.substring(0, refBoundaryIdx) : labelLine;
-  const prefixRe = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
-  const prefixMatch = labelLineBeforeRef.match(prefixRe);
-  if (prefixMatch) {
-    const parsed = parseValueWithPrefix(prefixMatch[1].trim());
-    if (parsed) return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
   }
 
   if (ambiguousComparator) {
