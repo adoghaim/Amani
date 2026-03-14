@@ -627,14 +627,15 @@ function isSectionHeader(line: string): boolean {
 // ─── Layer 3: Biomarker label matching ──────────────────────────────────────
 
 function matchBiomarkerLabel(line: string): BiomarkerPattern | null {
-  const lineLower = line.toLowerCase().trim();
+  const lineLower = line.toLowerCase().trim().replace(/-/g, ' ');
   for (const bp of BIOMARKER_PATTERNS) {
     const sortedPatterns = [...bp.patterns].sort((a, b) => b.length - a.length);
     for (const p of sortedPatterns) {
-      if (lineLower === p || lineLower.startsWith(p + ' ') || lineLower.startsWith(p + ',')) {
+      const pNorm = p.replace(/-/g, ' ');
+      if (lineLower === pNorm || lineLower.startsWith(pNorm + ' ') || lineLower.startsWith(pNorm + ',')) {
         return bp;
       }
-      if (lineLower.includes(p) && p.length > 5) {
+      if (lineLower.includes(pNorm) && pNorm.length > 5) {
         return bp;
       }
     }
