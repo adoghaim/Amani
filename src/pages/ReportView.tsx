@@ -16,7 +16,11 @@ import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY } from '../utils/biomarkerDef
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { CATEGORY_DISPLAY } from '../types';
 import type { LabReport, Biomarker, AIInterpretation, BiomarkerCategory, BiomarkerName, ReportAnalyte } from '../types';
-import { RefreshCw, Trash2, Copy, Clock, AlertCircle, ChevronDown, ChevronRight, Microscope } from 'lucide-react';
+import {
+  RefreshCw, Trash2, Copy, Clock, AlertCircle, ChevronDown, ChevronRight,
+  Microscope, Sparkles, Heart, Leaf, Moon, Stethoscope, CalendarDays,
+  MessageSquare, ArrowRight, CheckCircle2, Loader2, Info, FlaskConical
+} from 'lucide-react';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
@@ -45,6 +49,13 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; labe
   unknown:     { bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400',    label: 'No range' },
 };
 
+const STATUS_ICON_STYLE: Record<string, { bg: string; border: string; dot: string; badge: string; badgeText: string }> = {
+  in_range:    { bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-500', badge: 'bg-emerald-100', badgeText: 'text-emerald-700' },
+  out_of_range:{ bg: 'bg-red-50',     border: 'border-red-200',     dot: 'bg-red-500',     badge: 'bg-red-100',     badgeText: 'text-red-700' },
+  borderline:  { bg: 'bg-amber-50',   border: 'border-amber-200',   dot: 'bg-amber-400',   badge: 'bg-amber-100',   badgeText: 'text-amber-700' },
+  unknown:     { bg: 'bg-gray-50',    border: 'border-gray-200',    dot: 'bg-gray-400',    badge: 'bg-gray-100',    badgeText: 'text-gray-500' },
+};
+
 function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
   const status = classifyLabValue(
     analyte.value_numeric,
@@ -54,9 +65,6 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
     analyte.normalized_operator_value
   );
   const style = STATUS_STYLE[status];
-  const displayName = analyte.canonical_slug
-    ? analyte.canonical_slug.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-    : null;
   return (
     <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors">
       <div className="min-w-0 flex-1">
@@ -84,6 +92,72 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
   );
 }
 
+function SummaryBullet({ text, index }: { text: string; index: number }) {
+  return (
+    <div className="flex items-start gap-3 p-4 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+      <div className="w-6 h-6 rounded-full bg-[#C97C8B]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <span className="text-xs font-bold text-[#C97C8B]">{index + 1}</span>
+      </div>
+      <p className="text-gray-700 leading-relaxed text-sm">{text}</p>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle?: string }) {
+  return (
+    <div className="flex items-start gap-3 mb-5">
+      <div className="w-9 h-9 rounded-xl bg-[#C97C8B]/10 flex items-center justify-center flex-shrink-0">
+        <div className="text-[#C97C8B]">{icon}</div>
+      </div>
+      <div>
+        <h2 className="text-base font-semibold text-[#2A1F23]">{title}</h2>
+        {subtitle && <p className="text-xs text-[#7A6570] mt-0.5">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function CycleContextCard({ ctx }: { ctx: AIInterpretation['cycle_context'] }) {
+  const confColor = ctx.confidence === 'high' ? 'text-emerald-600 bg-emerald-50' :
+    ctx.confidence === 'medium' ? 'text-amber-600 bg-amber-50' : 'text-gray-500 bg-gray-100';
+
+  const phaseColors: Record<string, string> = {
+    menstrual: 'from-red-50 to-rose-50 border-red-100',
+    follicular: 'from-sky-50 to-blue-50 border-sky-100',
+    ovulatory: 'from-yellow-50 to-amber-50 border-yellow-100',
+    luteal: 'from-violet-50 to-purple-50 border-[#e0d5f5]',
+    unknown: 'from-gray-50 to-slate-50 border-gray-100',
+  };
+  const gradClass = phaseColors[ctx.estimated_cycle_phase] ?? phaseColors.unknown;
+
+  return (
+    <Card>
+      <SectionHeader icon={<CalendarDays className="w-4 h-4" />} title="Cycle Context" subtitle="How your cycle may influence these results" />
+      <div className={`rounded-xl bg-gradient-to-br ${gradClass} border p-4 mb-4`}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">Phase</p>
+            <p className="font-semibold text-gray-800 capitalize">{ctx.estimated_cycle_phase.replace(/_/g, ' ')}</p>
+          </div>
+          {ctx.estimated_cycle_day && (
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Cycle Day</p>
+              <p className="font-semibold text-gray-800">{ctx.estimated_cycle_day}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">Confidence</p>
+            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${confColor}`}>
+              {ctx.confidence}
+            </span>
+          </div>
+        </div>
+      </div>
+      <p className="text-sm text-gray-600 leading-relaxed">{ctx.explanation}</p>
+    </Card>
+  );
+}
+
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
   const { userProfile } = useAuth();
@@ -96,6 +170,7 @@ export function ReportView() {
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showExtended, setShowExtended] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchReport();
@@ -104,7 +179,7 @@ export function ReportView() {
   useEffect(() => {
     if (!report || report.status !== 'processing') return;
     let elapsed = 0;
-    const POLL_INTERVAL = 4000;
+    const POLL_INTERVAL = 3000;
     const TIMEOUT_MS = 120000;
 
     const interval = setInterval(async () => {
@@ -140,43 +215,22 @@ export function ReportView() {
       setLoading(false);
       return;
     }
-
     if (!reportData) {
       setError('Report not found');
       setLoading(false);
       return;
     }
-
     setReport(reportData as LabReport);
 
-    const { data: biomarkersData } = await supabase
-      .from('biomarkers')
-      .select('*')
-      .eq('lab_report_id', reportId);
+    const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
+      supabase.from('biomarkers').select('*').eq('lab_report_id', reportId),
+      supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
+      supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
+    ]);
 
-    if (biomarkersData) {
-      setBiomarkers(biomarkersData as Biomarker[]);
-    }
-
-    const { data: analytesData } = await supabase
-      .from('report_analytes')
-      .select('*')
-      .eq('lab_report_id', reportId)
-      .order('raw_name');
-
-    if (analytesData) {
-      setReportAnalytes(analytesData as ReportAnalyte[]);
-    }
-
-    const { data: interpretationData } = await supabase
-      .from('interpretations')
-      .select('*')
-      .eq('lab_report_id', reportId)
-      .maybeSingle();
-
-    if (interpretationData) {
-      setInterpretation(interpretationData.json_output as AIInterpretation);
-    }
+    if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
+    if (analytesData) setReportAnalytes(analytesData as ReportAnalyte[]);
+    if (interpretationData) setInterpretation(interpretationData.json_output as AIInterpretation);
 
     setLoading(false);
   };
@@ -216,9 +270,7 @@ export function ReportView() {
 
   const presentBiomarkerNames = useMemo(() => {
     const fromBiomarkers = biomarkers.map(b => b.name);
-    const fromAnalytes = reportAnalytes
-      .filter(a => a.canonical_slug)
-      .map(a => a.canonical_slug as string);
+    const fromAnalytes = reportAnalytes.filter(a => a.canonical_slug).map(a => a.canonical_slug as string);
     return [...new Set([...fromBiomarkers, ...fromAnalytes])];
   }, [biomarkers, reportAnalytes]);
 
@@ -237,41 +289,33 @@ export function ReportView() {
     return groups;
   }, [reportAnalytes]);
 
-  const totalAnalyteCount = useMemo(() => {
-    return reportAnalytes.filter(a => !a.is_core).length;
-  }, [reportAnalytes]);
+  const totalAnalyteCount = useMemo(() => reportAnalytes.filter(a => !a.is_core).length, [reportAnalytes]);
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
     if (userProfile?.subscription_status !== 'active' && !isTrialActive()) return;
-
     setRegenerating(true);
     setError('');
-
     try {
       await supabase.from('interpretations').delete().eq('lab_report_id', reportId);
       await supabase.from('lab_reports').update({
         status: 'processing',
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
-
-      supabase.functions.invoke('generate-interpretation', {
-        body: { reportId },
-      }).then(({ data: interpData, error: interpError }) => {
-        if (interpError) {
-          const detail = interpData?.error ?? interpError.message;
-          console.error('[ReportView] edge function error', interpError, interpData);
+      supabase.functions.invoke('generate-interpretation', { body: { reportId } })
+        .then(({ data: interpData, error: interpError }) => {
+          if (interpError) {
+            console.error('[ReportView] edge function error', interpError, interpData);
+            supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+          }
+        })
+        .catch((err) => {
+          console.error('[ReportView] generate-interpretation network error:', err);
           supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-        }
-      }).catch((interpErr) => {
-        console.error('[ReportView] generate-interpretation network error:', interpErr);
-        supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-      });
-
+        });
       await fetchReport();
       setRegenerating(false);
     } catch (err: any) {
-      console.error('[ReportView] handleRegenerate error:', err?.message ?? err);
       setError(err?.message ?? 'Failed to regenerate report');
       setRegenerating(false);
     }
@@ -283,7 +327,11 @@ export function ReportView() {
     if (!error) window.location.href = '/app';
   };
 
-  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const isTrialActive = () => {
     if (!userProfile) return false;
@@ -320,44 +368,31 @@ export function ReportView() {
     );
   }
 
-  if (report.status === 'processing' || regenerating) {
-    return (
-      <Layout>
-        <Card>
-          <div className="text-center py-12">
-            <Clock className="w-16 h-16 text-[#C97C8B] mx-auto mb-4 animate-pulse" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Generating your AI analysis</h2>
-            <p className="text-gray-600">This usually takes 15–30 seconds. This page will update automatically.</p>
-          </div>
-        </Card>
-      </Layout>
-    );
-  }
-
   const canRegenerate = report.regeneration_count < 3 && (userProfile?.subscription_status === 'active' || isTrialActive());
   const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
   const hasError = report.status === 'error';
+  const isProcessing = report.status === 'processing' || regenerating;
 
   return (
     <Layout>
       <div className="max-w-4xl mx-auto">
+
+        {/* Header */}
         <div className="flex justify-between items-start mb-6">
           <div>
             <h1 className="text-2xl font-bold text-[#2A1F23] mb-1">
               Lab Report — {formatDate(report.report_date)}
             </h1>
-            <p className="text-sm text-[#7A6570]">Generated on {formatDate(report.upload_date)}</p>
-            {cyclePhase && (
-              <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 border border-rose-200 text-rose-700 capitalize">
-                {cyclePhase.replace(/_/g, ' ')} phase
-              </span>
-            )}
-            <div className="flex gap-3 mt-2">
+            <p className="text-sm text-[#7A6570]">Uploaded {formatDate(report.upload_date)}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {cyclePhase && (
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 border border-rose-200 text-rose-700 capitalize">
+                  {cyclePhase.replace(/_/g, ' ')} phase
+                </span>
+              )}
               <span className="text-xs text-gray-500">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
-                <span className="text-xs text-blue-500">
-                  {reportAnalytes.length} total analytes
-                </span>
+                <span className="text-xs text-blue-500">{reportAnalytes.length} total analytes</span>
               )}
               {reportAnalytes.filter(a => a.parse_status === 'unmapped').length > 0 && (
                 <span className="text-xs text-amber-500">
@@ -386,40 +421,61 @@ export function ReportView() {
           </div>
         )}
 
-        {!interpretation && !hasError && (
-          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-6">
-            <Clock className="w-5 h-5 shrink-0 text-amber-500 animate-pulse" />
-            <p className="text-sm font-medium">
-              AI summary is still generating — your lab data is shown below. Refresh in a moment to see the full interpretation.
-            </p>
-          </div>
-        )}
-
-        {hasError && !interpretation && (
-          <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-4 rounded-xl mb-6">
-            <AlertCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium mb-1">AI summary could not be generated</p>
-              <p className="text-sm text-red-700">Your lab data is shown below. {canRegenerate ? 'You can try regenerating above.' : ''}</p>
-            </div>
-          </div>
-        )}
-
         <div className="space-y-6">
-          {interpretation && (
+
+          {/* AI Summary — processing state */}
+          {isProcessing && (
             <Card>
-              <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Summary</h2>
-              <ul className="space-y-2">
-                {interpretation.summary_bullets.map((bullet, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="text-[#C97C8B] mt-1 shrink-0">•</span>
-                    <span className="text-gray-700">{bullet}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="flex items-center gap-4 py-2">
+                <div className="w-10 h-10 rounded-xl bg-[#C97C8B]/10 flex items-center justify-center flex-shrink-0">
+                  <Loader2 className="w-5 h-5 text-[#C97C8B] animate-spin" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#2A1F23]">Generating your AI analysis</h2>
+                  <p className="text-sm text-[#7A6570] mt-0.5">This usually takes 15–30 seconds. Your lab data is shown below.</p>
+                </div>
+              </div>
+              <div className="mt-4 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-[#C97C8B] rounded-full animate-pulse" style={{ width: '60%' }} />
+              </div>
             </Card>
           )}
 
+          {/* AI Summary — error state (no interpretation) */}
+          {hasError && !interpretation && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-4 rounded-xl">
+              <AlertCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium mb-1">AI summary could not be generated</p>
+                <p className="text-sm text-red-700">Your lab data is shown below. {canRegenerate ? 'Try regenerating above.' : ''}</p>
+              </div>
+            </div>
+          )}
+
+          {/* AI Summary — ready */}
+          {interpretation && !isProcessing && (
+            <div className="rounded-2xl overflow-hidden border border-[#e8dce0] shadow-sm">
+              {/* Summary header */}
+              <div className="bg-gradient-to-r from-[#2A1F23] to-[#4a3040] px-6 py-5">
+                <div className="flex items-center gap-3 mb-1">
+                  <Sparkles className="w-5 h-5 text-[#E8B4BD]" />
+                  <h2 className="text-lg font-semibold text-white">AI Summary</h2>
+                </div>
+                <p className="text-[#c4adb2] text-xs">Educational interpretation — not medical advice</p>
+              </div>
+
+              {/* Summary bullets */}
+              <div className="bg-white px-6 py-5">
+                <div className="space-y-3">
+                  {interpretation.summary_bullets.map((bullet, i) => (
+                    <SummaryBullet key={i} text={bullet} index={i} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick highlights + System dashboard */}
           {biomarkers.length > 0 && (
             <QuickHighlights
               biomarkers={biomarkers.map(b => ({
@@ -443,9 +499,9 @@ export function ReportView() {
           )}
 
           {insightFlags.length > 0 && <InsightFlagsPanel flags={insightFlags} />}
-
           {derivedMetrics.length > 0 && <DerivedMetricsPanel metrics={derivedMetrics} />}
 
+          {/* Core Biomarkers */}
           {biomarkers.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -464,7 +520,6 @@ export function ReportView() {
                   {filteredCategories.reduce((a, g) => a + g.items.length, 0)} shown
                 </span>
               </div>
-
               <div className="space-y-8">
                 {filteredCategories.map(({ category, items }) => (
                   <div key={category}>
@@ -498,6 +553,7 @@ export function ReportView() {
             </div>
           )}
 
+          {/* Full Lab Panel */}
           {totalAnalyteCount > 0 && (
             <Card>
               <button
@@ -506,180 +562,204 @@ export function ReportView() {
               >
                 <div className="flex items-center gap-2">
                   <Microscope className="w-5 h-5 text-blue-500" />
-                  <h2 className="text-lg font-semibold text-[#2A1F23]">
-                    Full Lab Panel
-                  </h2>
+                  <h2 className="text-lg font-semibold text-[#2A1F23]">Full Lab Panel</h2>
                   <span className="text-sm text-blue-500 font-normal">({totalAnalyteCount} items)</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {showExtended ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
-                </div>
+                {showExtended ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
               </button>
-
               {showExtended && (
                 <div className="mt-4 space-y-6">
                   {Object.entries(analytesForDisplay)
                     .sort(([a], [b]) => a === 'Unmapped' ? 1 : b === 'Unmapped' ? -1 : a.localeCompare(b))
                     .map(([cat, items]) => (
                       <div key={cat}>
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-                          {cat}
-                        </h3>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{cat}</h3>
                         <div className="divide-y divide-gray-100">
-                          {items.map(item => (
-                            <AnalyteRow key={item.id} analyte={item} />
-                          ))}
+                          {items.map(item => <AnalyteRow key={item.id} analyte={item} />)}
                         </div>
                       </div>
-                    ))
-                  }
+                    ))}
                 </div>
               )}
             </Card>
           )}
 
-          <RecommendedLabs
-            presentBiomarkers={presentBiomarkerNames}
-            activeCategory={activeCategory}
-          />
+          <RecommendedLabs presentBiomarkers={presentBiomarkerNames} activeCategory={activeCategory} />
 
+          {/* AI deep-dive sections — only when interpretation is available */}
           {interpretation && (
             <>
-              <Card>
-                <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Cycle Context</h2>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <span className="font-medium">Estimated Cycle Day:</span>
-                    <span>{interpretation.cycle_context.estimated_cycle_day || 'Unknown'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <span className="font-medium">Estimated Phase:</span>
-                    <span className="capitalize">{interpretation.cycle_context.estimated_cycle_phase}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <span className="font-medium">Confidence:</span>
-                    <span className="capitalize">{interpretation.cycle_context.confidence}</span>
-                  </div>
-                  <p className="text-gray-700 mt-2">{interpretation.cycle_context.explanation}</p>
-                </div>
-              </Card>
+              {/* Cycle Context */}
+              <CycleContextCard ctx={interpretation.cycle_context} />
 
-              <Card>
-                <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Lifestyle Considerations</h2>
-                <div className="space-y-4">
-                  {interpretation.supportive_considerations.nutrition.length > 0 && (
-                    <div>
-                      <h3 className="font-medium text-gray-900 mb-2">Nutrition</h3>
-                      <ul className="space-y-1">
-                        {interpretation.supportive_considerations.nutrition.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2 text-gray-700">
-                            <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {interpretation.supportive_considerations.sleep_stress.length > 0 && (
-                    <div>
-                      <h3 className="font-medium text-gray-900 mb-2">Sleep & Stress</h3>
-                      <ul className="space-y-1">
-                        {interpretation.supportive_considerations.sleep_stress.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2 text-gray-700">
-                            <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {interpretation.supportive_considerations.lifestyle.length > 0 && (
-                    <div>
-                      <h3 className="font-medium text-gray-900 mb-2">Lifestyle</h3>
-                      <ul className="space-y-1">
-                        {interpretation.supportive_considerations.lifestyle.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2 text-gray-700">
-                            <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              {interpretation.nutrient_topics_to_discuss?.length > 0 && (
+              {/* Lifestyle Considerations */}
+              {(interpretation.supportive_considerations.nutrition.length > 0 ||
+                interpretation.supportive_considerations.sleep_stress.length > 0 ||
+                interpretation.supportive_considerations.lifestyle.length > 0) && (
                 <Card>
-                  <h2 className="text-lg font-semibold text-[#2A1F23] mb-2">
-                    Nutrient topics to discuss with your clinician
-                  </h2>
-                  <p className="text-sm text-gray-600 mb-4 italic">
-                    Conversation starters only — your clinician can advise what's appropriate for you.
-                  </p>
+                  <SectionHeader
+                    icon={<Leaf className="w-4 h-4" />}
+                    title="Supportive Considerations"
+                    subtitle="General lifestyle topics that often come up alongside these results"
+                  />
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {interpretation.supportive_considerations.nutrition.length > 0 && (
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Heart className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Nutrition</span>
+                        </div>
+                        <ul className="space-y-2">
+                          {interpretation.supportive_considerations.nutrition.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <ArrowRight className="w-3 h-3 text-emerald-500 mt-1 flex-shrink-0" />
+                              <span className="text-xs text-gray-700 leading-relaxed">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {interpretation.supportive_considerations.sleep_stress.length > 0 && (
+                      <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Moon className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Sleep & Stress</span>
+                        </div>
+                        <ul className="space-y-2">
+                          {interpretation.supportive_considerations.sleep_stress.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <ArrowRight className="w-3 h-3 text-blue-500 mt-1 flex-shrink-0" />
+                              <span className="text-xs text-gray-700 leading-relaxed">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {interpretation.supportive_considerations.lifestyle.length > 0 && (
+                      <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Lifestyle</span>
+                        </div>
+                        <ul className="space-y-2">
+                          {interpretation.supportive_considerations.lifestyle.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <ArrowRight className="w-3 h-3 text-amber-500 mt-1 flex-shrink-0" />
+                              <span className="text-xs text-gray-700 leading-relaxed">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {/* Nutrient topics */}
+              {interpretation.nutrient_topics_to_discuss?.filter(t => t.nutrient).length > 0 && (
+                <Card>
+                  <SectionHeader
+                    icon={<FlaskConical className="w-4 h-4" />}
+                    title="Nutrient Topics to Discuss"
+                    subtitle="Conversation starters only — your clinician can advise what's appropriate for you"
+                  />
                   <div className="space-y-4">
-                    {interpretation.nutrient_topics_to_discuss
-                      .filter(t => t.nutrient)
-                      .map((topic, i) => (
-                        <div key={i} className="border-l-4 border-[#C97C8B] pl-4 py-2">
-                          <h3 className="font-medium text-gray-900 mb-1 capitalize">
+                    {interpretation.nutrient_topics_to_discuss.filter(t => t.nutrient).map((topic, i) => (
+                      <div key={i} className="rounded-xl border border-[#e8dce0] bg-rose-50/30 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full bg-[#C97C8B]" />
+                          <h3 className="font-semibold text-[#2A1F23] capitalize text-sm">
                             {topic.nutrient.replace(/_/g, ' ')}
                           </h3>
-                          <p className="text-sm text-gray-700 mb-1">
-                            <span className="font-medium">Why this came up:</span> {topic.why_it_came_up}
-                          </p>
-                          <p className="text-gray-700 text-sm">{topic.discussion_prompt}</p>
                         </div>
-                      ))}
+                        <p className="text-xs text-gray-500 mb-2 leading-relaxed">
+                          <span className="font-medium text-gray-700">Why this came up: </span>
+                          {topic.why_it_came_up}
+                        </p>
+                        <p className="text-sm text-gray-700 leading-relaxed italic">{topic.discussion_prompt}</p>
+                      </div>
+                    ))}
                   </div>
                 </Card>
               )}
 
+              {/* Questions for Doctor */}
               <Card>
-                <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-lg font-semibold text-[#2A1F23]">Questions to Ask Your Doctor</h2>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                <div className="flex items-start justify-between mb-5">
+                  <SectionHeader
+                    icon={<MessageSquare className="w-4 h-4" />}
+                    title="Questions to Ask Your Doctor"
+                    subtitle="Copy and bring to your next appointment"
+                  />
+                  <button
                     onClick={() => copyToClipboard(interpretation.questions_for_doctor.join('\n'))}
+                    className="flex items-center gap-1.5 text-xs text-[#C97C8B] hover:text-[#a05a6a] font-medium transition-colors mt-1"
                   >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copy
-                  </Button>
+                    {copied ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy all
+                      </>
+                    )}
+                  </button>
                 </div>
-                <ul className="space-y-2">
+                <div className="space-y-2">
                   {interpretation.questions_for_doctor.map((q, i) => (
-                    <li key={i} className="flex items-start gap-2 text-gray-700">
-                      <span className="text-[#C97C8B] mt-1">•</span><span>{q}</span>
-                    </li>
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <span className="text-xs font-bold text-[#C97C8B] bg-[#C97C8B]/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {i + 1}
+                      </span>
+                      <p className="text-sm text-gray-700 leading-relaxed">{q}</p>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </Card>
 
+              {/* Suggested Follow-ups */}
               {interpretation.suggested_followups_to_discuss.length > 0 && (
                 <Card>
-                  <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Suggested Follow-ups to Discuss</h2>
-                  <ul className="space-y-2">
+                  <SectionHeader
+                    icon={<Stethoscope className="w-4 h-4" />}
+                    title="Suggested Follow-ups to Discuss"
+                  />
+                  <div className="space-y-2">
                     {interpretation.suggested_followups_to_discuss.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-gray-700">
-                        <span className="text-[#C97C8B] mt-1">•</span><span>{item}</span>
-                      </li>
+                      <div key={i} className="flex items-start gap-3">
+                        <CheckCircle2 className="w-4 h-4 text-[#C97C8B] flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-gray-700 leading-relaxed">{item}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </Card>
               )}
 
+              {/* When to Seek Care */}
               <Card className="bg-amber-50 border-amber-200">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">When to Seek Care</h2>
+                <SectionHeader
+                  icon={<AlertCircle className="w-4 h-4" />}
+                  title="When to Seek Care"
+                  subtitle="Signs that warrant contacting a provider promptly"
+                />
                 <ul className="space-y-2">
                   {interpretation.safety_notes.map((note, i) => (
-                    <li key={i} className="flex items-start gap-2 text-gray-700">
-                      <span className="text-amber-600 mt-1">•</span><span>{note}</span>
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="text-amber-500 mt-1 flex-shrink-0">•</span>
+                      <span className="text-sm text-gray-700 leading-relaxed">{note}</span>
                     </li>
                   ))}
                 </ul>
               </Card>
 
-              <Card className="bg-gray-50">
-                <p className="text-sm text-gray-700 italic">{interpretation.disclaimer}</p>
-              </Card>
+              {/* Disclaimer */}
+              <div className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-4">
+                <Info className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-500 leading-relaxed italic">{interpretation.disclaimer}</p>
+              </div>
             </>
           )}
         </div>
