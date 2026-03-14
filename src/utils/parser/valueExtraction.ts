@@ -159,7 +159,35 @@ export function extractValueFromWindow(
 
   const valueCandidates = collectCandidates(valueLines, true);
 
+  // Collect label-line candidates early so we can give them priority when they exist.
+  // The label line in most Quest/LabCorp/Hone formats carries the current patient result
+  // directly next to the analyte name (e.g. "CHOLESTEROL, TOTAL 157 Reference Range: <200").
+  // Value lines after the label often only carry reference annotations or history columns.
+  const labelCandidates = collectCandidates([labelLine], true);
+
+  // PRIORITY 1: label-line numeric value wins when scoring agrees.
+  // This prevents reference-annotation comparators on value lines (e.g. "<200", "<150", "<9")
+  // from overriding the actual patient result on the label line.
+  if (labelCandidates.length > 0) {
+    if (valueCandidates.length === 0 || !referenceResult) {
+      const best = pickBest(labelCandidates);
+      if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
+    } else {
+      const bestLabel = pickBest(labelCandidates)!;
+      const bestValue = pickBest(valueCandidates)!;
+      if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
+        return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
+      }
+      return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
+    }
+  }
+
+  // PRIORITY 2: check value lines for a comparator-style patient result (<X or >X).
+  // Only do this after label candidates fail, and skip tokens whose numeric part
+  // is already a known range boundary (meaning it IS the reference, not the result).
+  // We also collect ambiguous comparators (value == range boundary) for use as last resort.
   const COMPARATOR_VALUE_RE = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
+  let ambiguousComparator: { value: number; rawValue: string } | null = null;
   for (const vLine of valueLines) {
     const trimmed = vLine.trim();
     if (PHASE_LINE_RE.test(trimmed)) continue;
@@ -167,30 +195,24 @@ export function extractValueFromWindow(
     const cm2 = trimmed.match(COMPARATOR_VALUE_RE);
     if (cm2) {
       const parsed = parseValueWithPrefix(cm2[1].trim());
-      if (parsed) return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
+      if (parsed) {
+        const rawNum = cm2[1].trim().replace(/^[<>]=?\s*/, '');
+        if (knownRangeNumbers.has(rawNum) || knownRangeNumbers.has(String(parseFloat(rawNum)))) {
+          ambiguousComparator ??= parsed;
+          continue;
+        }
+        return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
+      }
     }
   }
 
-  const labelCandidates = collectCandidates([labelLine], true);
-
-  const preferInline = adapter?.preferInlineValue ?? false;
-
-  if (labelCandidates.length > 0 && valueCandidates.length > 0 && referenceResult) {
-    const bestLabel = pickBest(labelCandidates)!;
-    const bestValue = pickBest(valueCandidates)!;
-    const labelScore = scoreCandidate(bestLabel.value);
-    const valueScore = scoreCandidate(bestValue.value);
-    if (preferInline ? labelScore <= valueScore : labelScore <= valueScore) {
-      return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
-    }
-    return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
-  }
-
+  // PRIORITY 3: plain numeric candidates from value lines.
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
     if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
   }
 
+  // PRIORITY 4: comparator prefix on the label line itself (e.g. "PROGESTERONE <0.5 Reference Range:…").
   const refBoundaryIdx = labelLine.search(/\breference\s+range\b|\bref\s+range\b|\bref\.\s*range\b/i);
   const labelLineBeforeRef = refBoundaryIdx > 0 ? labelLine.substring(0, refBoundaryIdx) : labelLine;
   const prefixRe = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
@@ -200,9 +222,8 @@ export function extractValueFromWindow(
     if (parsed) return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
   }
 
-  if (labelCandidates.length > 0) {
-    const best = pickBest(labelCandidates);
-    if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
+  if (ambiguousComparator) {
+    return { value: ambiguousComparator.value, rawValue: ambiguousComparator.rawValue, unit, referenceResult };
   }
 
   return null;

@@ -19,7 +19,8 @@ export type BiomarkerCategory =
   | 'liver'
   | 'kidney'
   | 'inflammation'
-  | 'nutrients';
+  | 'nutrients'
+  | 'blood';
 
 export const CATEGORY_DISPLAY: Record<BiomarkerCategory, { label: string; shortLabel: string }> = {
   hormones:    { label: 'Hormones & Reproductive', shortLabel: 'Hormones' },
@@ -30,6 +31,7 @@ export const CATEGORY_DISPLAY: Record<BiomarkerCategory, { label: string; shortL
   kidney:      { label: 'Kidney',                  shortLabel: 'Kidney' },
   inflammation:{ label: 'Inflammation & Autoimmune', shortLabel: 'Inflammation' },
   nutrients:   { label: 'Nutrients & Deficiency',  shortLabel: 'Nutrients' },
+  blood:       { label: 'Blood & Hematology',      shortLabel: 'Blood' },
 };
 
 export type BiomarkerName =
@@ -44,7 +46,14 @@ export type BiomarkerName =
   | 'ast' | 'alt' | 'ggt' | 'alkaline_phosphatase' | 'bilirubin_total'
   | 'creatinine' | 'bun' | 'egfr'
   | 'hs_crp' | 'esr'
-  | 'ferritin' | 'iron_saturation' | 'vitamin_d_25_oh' | 'vitamin_b12' | 'folate' | 'magnesium';
+  | 'ferritin' | 'iron_saturation' | 'vitamin_d_25_oh' | 'vitamin_b12' | 'folate' | 'magnesium'
+  | 'free_thyroxine_index' | 'chol_hdl_ratio'
+  | 'globulin' | 'albumin' | 'total_protein' | 'albumin_globulin_ratio'
+  | 'bun_creatinine_ratio' | 'serum_iron' | 'tibc' | 'uibc'
+  | 'wbc' | 'rbc' | 'hemoglobin' | 'hematocrit' | 'mcv' | 'mch' | 'mchc' | 'rdw' | 'platelets' | 'mpv'
+  | 'neutrophils' | 'lymphocytes' | 'monocytes' | 'eosinophils' | 'basophils'
+  | 'sodium' | 'potassium' | 'chloride' | 'co2' | 'calcium'
+  | 't3_uptake' | 'total_t3';
 
 export type AmaniStatus =
   | 'optimal'

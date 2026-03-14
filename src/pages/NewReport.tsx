@@ -546,9 +546,11 @@ export function NewReport() {
               <ReviewBiomarkers
                 items={reportItems}
                 onUpdate={(index, field, value) => {
-                  const updated = [...reportItems];
-                  updated[index] = { ...updated[index], [field]: value } as ReportItem;
-                  setReportItems(updated);
+                  setReportItems(prev => {
+                    const updated = [...prev];
+                    updated[index] = { ...updated[index], [field]: value } as ReportItem;
+                    return updated;
+                  });
                 }}
                 onRemove={index => setReportItems(reportItems.filter((_, i) => i !== index))}
                 onAddNew={() => setReportItems([...reportItems, {
