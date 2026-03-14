@@ -250,6 +250,7 @@ export function NewReport() {
             lab_report_id: reportData.id,
             name: item.canonical_slug!,
             value: item.value_numeric,
+            raw_value_text: item.value_text ?? null,
             unit: item.unit ?? '',
             reference_min: item.normalized_reference_min ?? null,
             reference_max: item.normalized_reference_max ?? null,

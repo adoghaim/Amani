@@ -13,6 +13,7 @@ import type { BiomarkerName, CyclePhase, AmaniStatus } from '../types';
 interface BiomarkerCardProps {
   name: BiomarkerName;
   value: number;
+  rawValueText?: string | null;
   unit: string;
   labRefMin?: number | null;
   labRefMax?: number | null;
@@ -136,6 +137,7 @@ function DualStatusSection({
 export function BiomarkerCard({
   name,
   value,
+  rawValueText,
   unit,
   labRefMin,
   labRefMax,
@@ -167,7 +169,7 @@ export function BiomarkerCard({
   }
 
   const displayName = BIOMARKER_DISPLAY[name] ?? name.replace(/_/g, ' ');
-  const formattedValue = value % 1 === 0 ? value.toString() : value.toFixed(1);
+  const formattedValue = rawValueText ?? (value % 1 === 0 ? value.toString() : value.toFixed(2));
 
   const hasTrend = historicalValues && historicalValues.length >= 2;
   const trendDir = hasTrend

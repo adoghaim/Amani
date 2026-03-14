@@ -208,6 +208,7 @@ export interface Biomarker {
   lab_report_id: string;
   name: string;
   value: number;
+  raw_value_text: string | null;
   unit: string;
   reference_min: number | null;
   reference_max: number | null;

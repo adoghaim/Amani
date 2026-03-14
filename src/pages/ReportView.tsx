@@ -479,6 +479,7 @@ export function ReportView() {
                             key={b.id}
                             name={b.name}
                             value={b.value}
+                            rawValueText={b.raw_value_text}
                             unit={b.unit}
                             labRefMin={b.reference_min}
                             labRefMax={b.reference_max}

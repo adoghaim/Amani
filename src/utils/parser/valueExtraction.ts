@@ -37,7 +37,15 @@ export function extractValueFromWindow(
 
   if (adapter?.historyLine.historyLinePattern) {
     const histRe = adapter.historyLine.historyLinePattern;
-    valueLines = valueLines.filter(l => !histRe.test(l));
+    const dateLines = valueLines.filter(l => histRe.test(l));
+    const nonDateLines = valueLines.filter(l => !histRe.test(l));
+    if (nonDateLines.length > 0) {
+      valueLines = nonDateLines;
+    } else if (dateLines.length > 0) {
+      valueLines = [dateLines[dateLines.length - 1]];
+    } else {
+      valueLines = [];
+    }
   }
 
   const blockLines = cleanLines.slice(0, Math.min(3, cleanLines.length));
@@ -224,6 +232,23 @@ export function extractValueFromWindow(
 
   if (ambiguousComparator) {
     return { value: ambiguousComparator.value, rawValue: ambiguousComparator.rawValue, unit, referenceResult };
+  }
+
+  // PRIORITY 5: fallback — scan raw (unfiltered) lines for a standalone numeric value.
+  // This catches cases where a value like "115" appears alone on a line and was stripped
+  // by the chart-axis noise filter, but is actually the patient result.
+  const STANDALONE_NUM_RE = /^(<?\s*\d+\.?\d*)\s*$/;
+  for (const rawLine of lines.slice(1)) {
+    const trimmed = rawLine.trim();
+    if (trimmed.length === 0) continue;
+    const sm = trimmed.match(STANDALONE_NUM_RE);
+    if (!sm) continue;
+    const parsed = parseValueWithPrefix(sm[1]);
+    if (!parsed) continue;
+    if (knownRangeNumbers.has(sm[1]) || knownRangeNumbers.has(String(parseFloat(sm[1])))) continue;
+    if (parsed.value > 0 && parsed.value <= 100000) {
+      return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
+    }
   }
 
   return null;
