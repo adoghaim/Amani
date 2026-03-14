@@ -290,6 +290,7 @@ export function computeHealthScores(
     kidney:      { penalty: 0, weight: 0, count: 0 },
     inflammation:{ penalty: 0, weight: 0, count: 0 },
     nutrients:   { penalty: 0, weight: 0, count: 0 },
+    blood:       { penalty: 0, weight: 0, count: 0 },
   };
 
   for (const b of biomarkers) {
