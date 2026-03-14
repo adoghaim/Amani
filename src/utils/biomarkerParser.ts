@@ -510,6 +510,7 @@ const CHART_AXIS_RE = /^\d+\.?\d*\s*$/;
 const PAGE_FOOTER_RE = /\([A-Z]{2,}\d+[A-Z]*\)\s+\d+\s*\/\s*\d+/;
 const QUEST_HISTORY_RE = /^From\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s+To\s+\d{1,2}\/\d{1,2}\/\d{2,4}/i;
 const CHART_DATE_AXIS_RE = /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*['']?\s*\d{2,4}/i;
+const PROSE_FOOTNOTE_RE = /\b(?:for\s+patients|for\s+primary|is\s+now\s+calculated|using\s+the|providing\s+better|validated\s+novel|than\s+the\s+friedewald|better\s+accuracy|treating\s+to\s+a|considered\s+a\s+therapeutic|risk\s+factors?|prevention|calculation,\s+which)\b/i;
 
 function isNoiseLine(line: string): boolean {
   const t = line.trim();
@@ -518,7 +519,8 @@ function isNoiseLine(line: string): boolean {
     CHART_AXIS_RE.test(t) ||
     QUEST_HISTORY_RE.test(t) ||
     CHART_DATE_AXIS_RE.test(t) ||
-    PAGE_FOOTER_RE.test(t)
+    PAGE_FOOTER_RE.test(t) ||
+    PROSE_FOOTNOTE_RE.test(t)
   );
 }
 
@@ -715,6 +717,23 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
   if (referenceResult?.comparator) {
     knownRangeNumbers.add(String(referenceResult.comparator.value));
     knownRangeNumbers.add(String(parseFloat(String(referenceResult.comparator.value))));
+  }
+
+  // Pre-exclude comparator values (<X / >X) that appear inside prose footnote lines.
+  // A line is "prose-like" if it contains common English words AND the <X token is not the first token.
+  // This prevents LDL footnotes like "<70 mg/dL for patients with CHD" from being treated as result values.
+  const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|primary|prevention|factor|method|equation|accuracy)\b/i;
+  const COMPARATOR_TOKEN_RE = /[<>]=?\s*(\d+\.?\d*)/g;
+  for (const vLine of valueLines) {
+    const trimmed = vLine.trim();
+    if (!PROSE_WORDS_RE.test(trimmed)) continue;
+    const re2 = new RegExp(COMPARATOR_TOKEN_RE.source, 'g');
+    let cm: RegExpExecArray | null;
+    while ((cm = re2.exec(trimmed)) !== null) {
+      const v = cm[1];
+      knownRangeNumbers.add(v);
+      knownRangeNumbers.add(String(parseFloat(v)));
+    }
   }
 
   // Numeric token regex: require digits after decimal point (e.g. "3.7" not "3.")
