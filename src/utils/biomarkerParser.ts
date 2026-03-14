@@ -508,9 +508,10 @@ function normalizeToCatalogSlug(slug: string): string {
 const NOISE_LINE_RE = /^(?:\d{1,2}\/\d{1,2}\/\d{2,4}|page\s+\d|copyright|\d{4}-\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
 const CHART_AXIS_RE = /^\d+\.?\d*\s*$/;
 const PAGE_FOOTER_RE = /\([A-Z]{2,}\d+[A-Z]*\)\s+\d+\s*\/\s*\d+/;
-const QUEST_HISTORY_RE = /^From\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s+To\s+\d{1,2}\/\d{1,2}\/\d{2,4}/i;
+const QUEST_HISTORY_RE = /\bFrom\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s+To\s+\d{1,2}\/\d{1,2}\/\d{2,4}/i;
 const CHART_DATE_AXIS_RE = /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*['']?\s*\d{2,4}/i;
-const PROSE_FOOTNOTE_RE = /\b(?:for\s+patients|for\s+primary|is\s+now\s+calculated|using\s+the|providing\s+better|validated\s+novel|than\s+the\s+friedewald|better\s+accuracy|treating\s+to\s+a|considered\s+a\s+therapeutic|risk\s+factors?|prevention|calculation,\s+which)\b/i;
+const CITATION_LINE_RE = /\b(?:et\s+al|jama|nejm|doi:|pubmed|pmid|http[s]?:\/\/|\(\s*http)/i;
+const PROSE_FOOTNOTE_RE = /\b(?:for\s+patients|for\s+primary|is\s+now\s+calculated|providing\s+better|validated\s+novel|friedewald|better\s+accuracy|treating\s+to\s+a|considered\s+a\s+therapeutic|risk\s+factors?|prevention|calculation,\s+which|desirable\s+range)\b/i;
 
 function isNoiseLine(line: string): boolean {
   const t = line.trim();
@@ -520,6 +521,7 @@ function isNoiseLine(line: string): boolean {
     QUEST_HISTORY_RE.test(t) ||
     CHART_DATE_AXIS_RE.test(t) ||
     PAGE_FOOTER_RE.test(t) ||
+    CITATION_LINE_RE.test(t) ||
     PROSE_FOOTNOTE_RE.test(t)
   );
 }
@@ -756,6 +758,8 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
         const after = searchLine[m.index + tok.length];
         const before = m.index > 0 ? searchLine[m.index - 1] : '';
         if (before === '/' || after === '/') continue;
+        // Skip year-like 4-digit numbers (e.g. 2013, 2024, 1998) — never valid biomarker values
+        if (/^(?:19|20)\d{2}$/.test(tok)) continue;
         const v = parseFloat(tok);
         if (v >= 0 && v <= 100000) {
           candidates.push({ value: v, rawValue: tok });
