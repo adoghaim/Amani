@@ -53,8 +53,10 @@ export function computeParseStatus(params: {
   if (value_numeric <= 0)       return 'parse_error';
   if (canonical_slug === null)  return 'unmapped';
 
+  const UNITLESS_SLUGS = new Set(['free_thyroxine_index', 'chol_hdl_ratio', 'albumin_globulin_ratio', 'bun_creatinine_ratio', 't3_uptake']);
+  const isUnitless = unit === null && UNITLESS_SLUGS.has(canonical_slug ?? '');
   const isCoreWithoutRange = is_core_biomarker && raw_reference_range === null;
-  if (parse_confidence === 'low' || unit === null || isCoreWithoutRange) return 'needs_review';
+  if (parse_confidence === 'low' || (unit === null && !isUnitless) || isCoreWithoutRange) return 'needs_review';
   if (parse_confidence === 'medium') return 'partial';
 
   return 'mapped';
@@ -127,7 +129,7 @@ export function layeredParse(
     const hasComparator = !!ref?.comparator;
 
     const confidence: 'high' | 'medium' | 'low' =
-      (hasMinMax || hasComparator) && parsed.unit ? 'high' : parsed.unit ? 'medium' : 'low';
+      (hasMinMax || hasComparator) ? 'high' : parsed.unit ? 'medium' : 'low';
 
     const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
 
@@ -486,7 +488,7 @@ export function parseAllReportItemsWithDebug(
       const hasMinMax     = ref?.min !== undefined && ref?.max !== undefined;
       const hasComparator = !!ref?.comparator;
       const confidence: 'high' | 'medium' | 'low' =
-        (hasMinMax || hasComparator) && parsed.unit ? 'high' : parsed.unit ? 'medium' : 'low';
+        (hasMinMax || hasComparator) ? 'high' : parsed.unit ? 'medium' : 'low';
       const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
 
       analyteBlocks.push({

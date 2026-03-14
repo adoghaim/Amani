@@ -167,7 +167,7 @@ export const BIOMARKER_DISPLAY: Record<BiomarkerName, string> = {
   shbg: 'SHBG', dheas: 'DHEA-S', prolactin: 'Prolactin', amh: 'AMH',
   tsh: 'TSH', free_t3: 'Free T3', free_t4: 'Free T4', total_t4: 'Total T4',
   reverse_t3: 'Reverse T3', tpo_antibodies: 'TPO Antibodies', tg_antibodies: 'TgAb',
-  free_thyroxine_index: 'Free T4 Index', t3_uptake: 'T3 Uptake', total_t3: 'Total T3',
+  free_thyroxine_index: 'Free T4 Index (T7)', t3_uptake: 'T3 Uptake', total_t3: 'Total T3',
   fasting_glucose: 'Fasting Glucose', hemoglobin_a1c: 'HbA1c', fasting_insulin: 'Fasting Insulin', c_peptide: 'C-Peptide',
   total_cholesterol: 'Total Cholesterol', hdl_cholesterol: 'HDL', ldl_cholesterol: 'LDL', triglycerides: 'Triglycerides',
   non_hdl_cholesterol: 'Non-HDL Cholesterol', apob: 'ApoB', lpa: 'Lp(a)', chol_hdl_ratio: 'Chol/HDL Ratio',
