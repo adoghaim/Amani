@@ -226,7 +226,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'chol_hdl_ratio',
-    patterns: ['chol/hdlc ratio', 'chol/hdl ratio', 'cholesterol/hdl ratio', 'cholesterol hdl ratio', 'chol hdl ratio', 'total chol/hdl'],
+    patterns: ['chol/hdlc ratio', 'chol/hdl ratio', 'cholesterol/hdl ratio', 'cholesterol hdl ratio', 'chol hdl ratio', 'total chol/hdl', 'chol/hdlc', 'total cholesterol/hdl'],
     commonUnits: ['ratio', ''],
   },
   {
@@ -445,7 +445,7 @@ const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'bun_creatinine_ratio',
-    patterns: ['bun/creatinine ratio', 'bun/creat ratio', 'urea/creat ratio', 'bun:creatinine', 'bun creatinine ratio'],
+    patterns: ['bun/creatinine ratio', 'bun/creat ratio', 'urea/creat ratio', 'bun:creatinine', 'bun creatinine ratio', 'bun/creatinine', 'blood urea nitrogen/creatinine ratio'],
     commonUnits: ['ratio', ''],
   },
 
@@ -753,7 +753,7 @@ function extractValueFromWindow(lines: string[], preferredUnits: string[]): Pars
       let m: RegExpExecArray | null;
       while ((m = tokenRe.exec(searchLine)) !== null) {
         const tok = m[0];
-        if (knownRangeNumbers.has(tok)) continue;
+        if (knownRangeNumbers.has(tok) || knownRangeNumbers.has(String(parseFloat(tok)))) continue;
         if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(searchLine[m.index - 1])) continue;
         // Skip date-like tokens: when surrounded by slashes (e.g. "02" in "02/11/2024")
         const after = searchLine[m.index + tok.length];
