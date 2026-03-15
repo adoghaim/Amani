@@ -301,17 +301,10 @@ export function ReportView() {
         status: 'processing',
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
-      supabase.functions.invoke('generate-interpretation', { body: { reportId } })
-        .then(({ data: interpData, error: interpError }) => {
-          if (interpError) {
-            console.error('[ReportView] edge function returned error', interpError, interpData);
-          }
-          fetchReport();
-        })
-        .catch((err) => {
-          console.error('[ReportView] generate-interpretation network error:', err);
-          fetchReport();
-        });
+      const { error: interpError } = await supabase.functions.invoke('generate-interpretation', { body: { reportId } });
+      if (interpError) {
+        console.error('[ReportView] edge function error:', interpError);
+      }
       await fetchReport();
       setRegenerating(false);
     } catch (err: any) {
