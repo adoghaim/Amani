@@ -223,15 +223,34 @@ export interface BiomarkerInput {
   reference_max?: number;
 }
 
+export interface AITopFinding {
+  biomarker_slug: string;
+  title: string;
+  status: 'monitor' | 'discuss' | 'reassuring';
+  explanation: string;
+}
+
+export interface AIPatternSignal {
+  title: string;
+  confidence: 'low' | 'medium' | 'high';
+  explanation: string;
+  related_biomarkers: string[];
+}
+
 export interface AIInterpretation {
+  headline: string;
   summary_bullets: string[];
+  top_findings: AITopFinding[];
+  pattern_signals: AIPatternSignal[];
   cycle_context: {
     estimated_cycle_day: number | null;
     estimated_cycle_phase: CyclePhase;
     confidence: 'low' | 'medium' | 'high';
     explanation: string;
   };
-  biomarkers: {
+  questions_for_doctor: string[];
+  disclaimer: string;
+  biomarkers?: {
     name: string;
     user_value: string;
     unit: string;
@@ -242,20 +261,18 @@ export interface AIInterpretation {
     common_non_alarm_reasons: string[];
     when_clinicians_follow_up: string[];
   }[];
-  nutrient_topics_to_discuss: {
-    nutrient: 'vitamin_d' | 'iron' | 'b12' | 'folate' | 'magnesium' | 'omega_3' | 'iodine';
+  nutrient_topics_to_discuss?: {
+    nutrient: string;
     why_it_came_up: string;
     discussion_prompt: string;
   }[];
-  supportive_considerations: {
+  supportive_considerations?: {
     nutrition: string[];
     sleep_stress: string[];
     lifestyle: string[];
   };
-  questions_for_doctor: string[];
-  suggested_followups_to_discuss: string[];
-  safety_notes: string[];
-  disclaimer: string;
+  suggested_followups_to_discuss?: string[];
+  safety_notes?: string[];
 }
 
 export interface User {

@@ -27,8 +27,10 @@ export function computeDerivedMetrics(biomarkers: AnyBiomarker[]): ComputedDeriv
   const m = buildMap(biomarkers);
   const results: ComputedDerivedMetric[] = [];
 
-  if (m['glucose_fasting'] !== undefined && m['insulin'] !== undefined) {
-    const val = parseFloat(((m['glucose_fasting'] * m['insulin']) / 405).toFixed(2));
+  const glucose = m['fasting_glucose'];
+  const insulin = m['fasting_insulin'];
+  if (glucose !== undefined && insulin !== undefined) {
+    const val = parseFloat(((glucose * insulin) / 405).toFixed(2));
     let status: ComputedDerivedMetric['status'] = 'optimal';
     let interp = '';
     if (val < 1.0) {
@@ -50,8 +52,10 @@ export function computeDerivedMetrics(biomarkers: AnyBiomarker[]): ComputedDeriv
     });
   }
 
-  if (m['triglycerides'] !== undefined && m['hdl'] !== undefined && m['hdl'] > 0) {
-    const val = parseFloat((m['triglycerides'] / m['hdl']).toFixed(2));
+  const trig = m['triglycerides'];
+  const hdl = m['hdl_cholesterol'];
+  if (trig !== undefined && hdl !== undefined && hdl > 0) {
+    const val = parseFloat((trig / hdl).toFixed(2));
     let status: ComputedDerivedMetric['status'] = 'optimal';
     let interp = '';
     if (val < 2.0) {
@@ -70,8 +74,9 @@ export function computeDerivedMetrics(biomarkers: AnyBiomarker[]): ComputedDeriv
     });
   }
 
-  if (m['total_cholesterol'] !== undefined && m['hdl'] !== undefined) {
-    const val = parseFloat((m['total_cholesterol'] - m['hdl']).toFixed(1));
+  const totalChol = m['total_cholesterol'];
+  if (totalChol !== undefined && hdl !== undefined) {
+    const val = parseFloat((totalChol - hdl).toFixed(1));
     let status: ComputedDerivedMetric['status'] = 'optimal';
     let interp = '';
     if (val <= 130) {
@@ -90,8 +95,10 @@ export function computeDerivedMetrics(biomarkers: AnyBiomarker[]): ComputedDeriv
     });
   }
 
-  if (m['testosterone_total'] !== undefined && m['shbg'] !== undefined && m['shbg'] > 0) {
-    const val = parseFloat(((m['testosterone_total'] / m['shbg']) * 100).toFixed(2));
+  const tt = m['total_testosterone'];
+  const shbg = m['shbg'];
+  if (tt !== undefined && shbg !== undefined && shbg > 0) {
+    const val = parseFloat(((tt / shbg) * 100).toFixed(2));
     let status: ComputedDerivedMetric['status'] = 'optimal';
     let interp = '';
     if (val <= 5.0) {
@@ -110,8 +117,10 @@ export function computeDerivedMetrics(biomarkers: AnyBiomarker[]): ComputedDeriv
     });
   }
 
-  if (m['free_t3'] !== undefined && m['free_t4'] !== undefined && m['free_t4'] > 0) {
-    const val = parseFloat((m['free_t3'] / m['free_t4']).toFixed(3));
+  const ft3 = m['free_t3'];
+  const ft4 = m['free_t4'];
+  if (ft3 !== undefined && ft4 !== undefined && ft4 > 0) {
+    const val = parseFloat((ft3 / ft4).toFixed(3));
     let status: ComputedDerivedMetric['status'] = 'unknown';
     let interp = '';
     if (val >= 0.2 && val <= 0.3) {
@@ -166,13 +175,13 @@ export const INSIGHT_RULES: {
     rule_id: 'insulin_resistance_pattern',
     severity: 'discuss',
     title: 'Metabolic / Insulin Resistance Pattern',
-    biomarkers_involved: ['glucose_fasting', 'insulin', 'triglycerides', 'hdl'],
+    biomarkers_involved: ['fasting_glucose', 'fasting_insulin', 'triglycerides', 'hdl_cholesterol'],
     check: (m) => {
       let signals = 0;
-      if (m['glucose_fasting'] !== undefined && m['glucose_fasting'] > 90) signals++;
-      if (m['insulin'] !== undefined && m['insulin'] > 10) signals++;
+      if (m['fasting_glucose'] !== undefined && m['fasting_glucose'] > 90) signals++;
+      if (m['fasting_insulin'] !== undefined && m['fasting_insulin'] > 10) signals++;
       if (m['triglycerides'] !== undefined && m['triglycerides'] > 100) signals++;
-      if (m['hdl'] !== undefined && m['hdl'] < 60) signals++;
+      if (m['hdl_cholesterol'] !== undefined && m['hdl_cholesterol'] < 60) signals++;
       if (signals >= 3) {
         return 'Three or more metabolic markers are outside optimal ranges. Clinicians commonly evaluate combinations of fasting glucose, insulin, triglycerides, and HDL together as they can reflect overall metabolic and insulin sensitivity. This cluster pattern may be worth a focused conversation with your provider.';
       }
@@ -215,10 +224,10 @@ export const INSIGHT_RULES: {
     rule_id: 'possible_pcos_pattern',
     severity: 'discuss',
     title: 'Possible PCOS-Related Pattern',
-    biomarkers_involved: ['testosterone_total', 'dhea_s', 'shbg', 'lh', 'fsh'],
+    biomarkers_involved: ['total_testosterone', 'dheas', 'shbg', 'lh', 'fsh'],
     check: (m) => {
-      const highTT = m['testosterone_total'] !== undefined && m['testosterone_total'] > 70;
-      const highDhea = m['dhea_s'] !== undefined && m['dhea_s'] > 380;
+      const highTT = m['total_testosterone'] !== undefined && m['total_testosterone'] > 70;
+      const highDhea = m['dheas'] !== undefined && m['dheas'] > 380;
       const lowShbg = m['shbg'] !== undefined && m['shbg'] < 40;
       const lhFshRatioHigh = m['lh'] !== undefined && m['fsh'] !== undefined && m['fsh'] > 0 && (m['lh'] / m['fsh']) > 2;
       const signals = [highTT, highDhea, lowShbg, lhFshRatioHigh].filter(Boolean).length;
@@ -246,12 +255,12 @@ export const INSIGHT_RULES: {
     rule_id: 'cardiovascular_risk_cluster',
     severity: 'discuss',
     title: 'Cardiovascular Risk Cluster',
-    biomarkers_involved: ['ldl', 'apob', 'hscrp', 'lpa'],
+    biomarkers_involved: ['ldl_cholesterol', 'apob', 'hs_crp', 'lpa'],
     check: (m) => {
       let signals = 0;
-      if (m['ldl'] !== undefined && m['ldl'] > 100) signals++;
+      if (m['ldl_cholesterol'] !== undefined && m['ldl_cholesterol'] > 100) signals++;
       if (m['apob'] !== undefined && m['apob'] > 90) signals++;
-      if (m['hscrp'] !== undefined && m['hscrp'] > 1.0) signals++;
+      if (m['hs_crp'] !== undefined && m['hs_crp'] > 1.0) signals++;
       if (m['lpa'] !== undefined && m['lpa'] > 75) signals++;
       if (signals >= 2) {
         return 'Two or more cardiovascular risk markers are outside the optimal range. LDL, ApoB, hs-CRP, and Lp(a) are commonly evaluated together when assessing cardiovascular health. This combination may be worth a dedicated conversation with your provider, especially if you have a family history of heart disease.';
@@ -278,13 +287,25 @@ export const INSIGHT_RULES: {
     rule_id: 'vitamin_d_deficiency',
     severity: 'caution',
     title: 'Vitamin D Below Optimal',
-    biomarkers_involved: ['vitamin_d'],
+    biomarkers_involved: ['vitamin_d_25_oh'],
     check: (m) => {
-      if (m['vitamin_d'] !== undefined && m['vitamin_d'] < 30) {
+      if (m['vitamin_d_25_oh'] !== undefined && m['vitamin_d_25_oh'] < 30) {
         return 'Vitamin D is below 30 ng/mL, which is generally considered deficient. Vitamin D plays a role in immune function, bone health, mood regulation, and hormone signaling. This is commonly discussed with a provider, particularly if you have limited sun exposure or related symptoms.';
       }
-      if (m['vitamin_d'] !== undefined && m['vitamin_d'] < 50) {
+      if (m['vitamin_d_25_oh'] !== undefined && m['vitamin_d_25_oh'] < 50) {
         return 'Vitamin D is within the clinical reference range but below the Amani optimal threshold of 50 ng/mL. Vitamin D plays a role in immune function, hormone signaling, and mood regulation. Some clinicians target higher levels. This may be worth discussing with your provider.';
+      }
+      return null;
+    },
+  },
+  {
+    rule_id: 'low_hba1c_pattern',
+    severity: 'caution',
+    title: 'Elevated HbA1c',
+    biomarkers_involved: ['hemoglobin_a1c'],
+    check: (m) => {
+      if (m['hemoglobin_a1c'] !== undefined && m['hemoglobin_a1c'] >= 5.7) {
+        return 'HbA1c is at or above 5.7%, which some guidelines classify as prediabetes range. This reflects average blood sugar over the prior 2–3 months. Worth discussing with your provider alongside fasting glucose and any metabolic symptoms.';
       }
       return null;
     },
@@ -317,16 +338,18 @@ export function getMissingKeyBiomarkers(
   category?: string
 ): string[] {
   const KEY_BIOMARKERS: Record<string, string[]> = {
-    hormones: ['estradiol', 'progesterone', 'fsh', 'lh', 'testosterone_total', 'shbg', 'amh'],
+    hormones: ['estradiol', 'progesterone', 'fsh', 'lh', 'total_testosterone', 'shbg', 'amh'],
     thyroid: ['tsh', 'free_t3', 'free_t4', 'tpo_antibodies'],
-    metabolic: ['glucose_fasting', 'hba1c', 'insulin'],
-    lipids: ['total_cholesterol', 'hdl', 'ldl', 'triglycerides', 'apob'],
+    metabolic: ['fasting_glucose', 'hemoglobin_a1c', 'fasting_insulin'],
+    lipids: ['total_cholesterol', 'hdl_cholesterol', 'ldl_cholesterol', 'triglycerides', 'apob'],
     liver: ['alt', 'ast'],
     kidney: ['creatinine', 'egfr'],
-    inflammation: ['hscrp'],
-    nutrients: ['ferritin', 'vitamin_d', 'b12'],
+    inflammation: ['hs_crp'],
+    nutrients: ['ferritin', 'vitamin_d_25_oh', 'vitamin_b12'],
   };
 
   const target = category ? KEY_BIOMARKERS[category] ?? [] : Object.values(KEY_BIOMARKERS).flat();
   return target.filter(b => !presentNames.includes(b));
 }
+
+import type { CyclePhase } from '../types';

@@ -1,11 +1,11 @@
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertCircle, TrendingUp } from 'lucide-react';
+import { BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
+import type { AITopFinding, BiomarkerName, CyclePhase } from '../types';
 import {
   computeAmaniStatus,
   amaniStatusToVariant,
   STATUS_PILL_CONFIG,
-  BIOMARKER_DISPLAY,
 } from '../utils/biomarkerDefinitions';
-import type { BiomarkerName, CyclePhase } from '../types';
 
 interface BiomarkerEntry {
   name: BiomarkerName;
@@ -18,97 +18,127 @@ interface BiomarkerEntry {
 interface Props {
   biomarkers: BiomarkerEntry[];
   cyclePhase?: CyclePhase | null;
+  topFindings?: AITopFinding[];
 }
 
-interface Highlight {
-  name: BiomarkerName;
-  value: number;
-  unit: string;
-  variant: ReturnType<typeof amaniStatusToVariant>;
-  priority: number;
-}
+const FINDING_STATUS_STYLE = {
+  discuss: {
+    bg: 'bg-red-50',
+    border: 'border-red-100',
+    dot: 'bg-red-500',
+    text: 'text-red-700',
+    badge: 'bg-red-100 text-red-700',
+    label: 'Discuss',
+  },
+  monitor: {
+    bg: 'bg-amber-50',
+    border: 'border-amber-100',
+    dot: 'bg-amber-400',
+    text: 'text-amber-700',
+    badge: 'bg-amber-100 text-amber-700',
+    label: 'Monitor',
+  },
+  reassuring: {
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-100',
+    dot: 'bg-emerald-500',
+    text: 'text-emerald-700',
+    badge: 'bg-emerald-100 text-emerald-700',
+    label: 'Reassuring',
+  },
+};
 
-export function QuickHighlights({ biomarkers, cyclePhase }: Props) {
+export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) {
+  if (topFindings && topFindings.length > 0) {
+    const flagged = topFindings.filter(f => f.status !== 'reassuring');
+    if (flagged.length === 0) return null;
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <AlertCircle className="w-4 h-4 text-[#2A1F23]" />
+          <h2 className="text-base font-semibold text-[#2A1F23]">Focus Now</h2>
+          <span className="text-xs text-[#9A8A90] ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
+        </div>
+        <div className="space-y-2">
+          {flagged.map((finding, i) => {
+            const style = FINDING_STATUS_STYLE[finding.status];
+            const displayName = BIOMARKER_DISPLAY[finding.biomarker_slug as BiomarkerName]
+              ?? finding.title;
+            return (
+              <div
+                key={i}
+                className={`rounded-xl border p-4 ${style.bg} ${style.border}`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-0.5 ${style.dot}`} />
+                    <span className="text-sm font-semibold text-[#2A1F23]">{displayName}</span>
+                  </div>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${style.badge}`}>
+                    {style.label}
+                  </span>
+                </div>
+                <p className={`text-xs leading-relaxed ml-4 ${style.text}`}>{finding.explanation}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   if (biomarkers.length === 0) return null;
 
-  const highlights: Highlight[] = biomarkers.map(b => {
-    const status = computeAmaniStatus(b.name, b.value, cyclePhase);
-    const variant = amaniStatusToVariant(status);
-    let priority = 0;
-    if (variant === 'out_of_range') priority = 3;
-    else if (variant === 'borderline_high' || variant === 'borderline_low') priority = 2;
-    else if (variant === 'normal') priority = 1;
-    return { name: b.name, value: b.value, unit: b.unit, variant, priority };
-  });
-
-  const flagged = highlights
+  const flagged = biomarkers
+    .map(b => {
+      const status = computeAmaniStatus(b.name, b.value, cyclePhase);
+      const variant = amaniStatusToVariant(status);
+      let priority = 0;
+      if (variant === 'out_of_range') priority = 3;
+      else if (variant === 'borderline_high' || variant === 'borderline_low') priority = 2;
+      return { ...b, variant, priority };
+    })
     .filter(h => h.priority >= 2)
     .sort((a, b) => b.priority - a.priority)
     .slice(0, 5);
 
-  const optimal = highlights.filter(h => h.variant === 'optimal').slice(0, 3);
-
-  if (flagged.length === 0 && optimal.length === 0) return null;
+  if (flagged.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E9D6DA] p-6">
-      <h2 className="text-lg font-semibold text-[#2A1F23] mb-4">Quick Highlights</h2>
-
-      {flagged.length > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <span className="text-sm font-semibold text-[#2A1F23]">Worth reviewing</span>
-          </div>
-          <div className="space-y-2">
-            {flagged.map(h => {
-              const pill = STATUS_PILL_CONFIG[h.variant];
-              const displayName = BIOMARKER_DISPLAY[h.name] ?? h.name.replace(/_/g, ' ');
-              const formatted = h.value % 1 === 0 ? h.value.toString() : h.value.toFixed(1);
-              return (
-                <div
-                  key={h.name}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${pill.bg} ${pill.border}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${pill.dot}`} />
-                    <span className="text-sm font-medium text-[#2A1F23]">{displayName}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-[#2A1F23]">{formatted} <span className="font-normal text-xs text-[#7A6570]">{h.unit}</span></span>
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${pill.bg} ${pill.text} ${pill.border}`}>
-                      {pill.label}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {optimal.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle className="w-4 h-4 text-emerald-500" />
-            <span className="text-sm font-semibold text-[#2A1F23]">Looking great</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {optimal.map(h => {
-              const displayName = BIOMARKER_DISPLAY[h.name] ?? h.name.replace(/_/g, ' ');
-              return (
-                <span
-                  key={h.name}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-700"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  {displayName}
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-1">
+        <AlertCircle className="w-4 h-4 text-[#2A1F23]" />
+        <h2 className="text-base font-semibold text-[#2A1F23]">Focus Now</h2>
+        <span className="text-xs text-[#9A8A90] ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
+      </div>
+      <div className="space-y-2">
+        {flagged.map(h => {
+          const pill = STATUS_PILL_CONFIG[h.variant];
+          const displayName = BIOMARKER_DISPLAY[h.name] ?? h.name.replace(/_/g, ' ');
+          const formatted = h.value % 1 === 0 ? h.value.toString() : h.value.toFixed(1);
+          return (
+            <div
+              key={h.name}
+              className={`flex items-center justify-between px-4 py-3 rounded-xl border ${pill.bg} ${pill.border}`}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pill.dot}`} />
+                <span className="text-sm font-medium text-[#2A1F23]">{displayName}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-sm font-bold text-[#2A1F23] tabular-nums">
+                  {formatted}
+                  <span className="font-normal text-xs text-[#7A6570] ml-1">{h.unit}</span>
                 </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pill.bg} ${pill.text} border ${pill.border}`}>
+                  {pill.label}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
