@@ -180,7 +180,7 @@ export function ReportView() {
     if (!report || report.status !== 'processing') return;
     let elapsed = 0;
     const POLL_INTERVAL = 3000;
-    const TIMEOUT_MS = 120000;
+    const TIMEOUT_MS = 35000;
 
     const interval = setInterval(async () => {
       elapsed += POLL_INTERVAL;
@@ -196,6 +196,7 @@ export function ReportView() {
       }
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
+        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
         fetchReport();
       }
     }, POLL_INTERVAL);
@@ -301,14 +302,22 @@ export function ReportView() {
         status: 'processing',
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
-      const { error: interpError } = await supabase.functions.invoke('generate-interpretation', { body: { reportId } });
+
+      const { data: fnData, error: interpError } = await supabase.functions.invoke('generate-interpretation', { body: { reportId } });
       if (interpError) {
         console.error('[ReportView] edge function error:', interpError);
+        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+      } else if (!fnData?.success) {
+        console.error('[ReportView] edge function returned failure:', fnData);
+        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       }
+
       await fetchReport();
       setRegenerating(false);
     } catch (err: any) {
-      setError(err?.message ?? 'Failed to regenerate report');
+      console.error('[ReportView] regenerate error:', err);
+      await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+      await fetchReport();
       setRegenerating(false);
     }
   };
