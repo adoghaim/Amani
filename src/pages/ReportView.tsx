@@ -230,7 +230,28 @@ export function ReportView() {
 
     if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
     if (analytesData) setReportAnalytes(analytesData as ReportAnalyte[]);
-    if (interpretationData) setInterpretation(interpretationData.json_output as AIInterpretation);
+    if (interpretationData) {
+      const raw = interpretationData.json_output as AIInterpretation;
+      const normalized: AIInterpretation = {
+        ...raw,
+        summary_bullets: Array.isArray(raw.summary_bullets) ? raw.summary_bullets : [],
+        biomarkers: Array.isArray(raw.biomarkers) ? raw.biomarkers : [],
+        suggested_followups_to_discuss: Array.isArray(raw.suggested_followups_to_discuss)
+          ? raw.suggested_followups_to_discuss
+          : raw.suggested_followups_to_discuss
+            ? [raw.suggested_followups_to_discuss as unknown as string]
+            : [],
+        safety_notes: Array.isArray(raw.safety_notes) ? raw.safety_notes : [],
+        questions_for_doctor: Array.isArray(raw.questions_for_doctor) ? raw.questions_for_doctor : [],
+        nutrient_topics_to_discuss: Array.isArray(raw.nutrient_topics_to_discuss) ? raw.nutrient_topics_to_discuss : [],
+        supportive_considerations: {
+          nutrition: Array.isArray(raw.supportive_considerations?.nutrition) ? raw.supportive_considerations.nutrition : [],
+          sleep_stress: Array.isArray(raw.supportive_considerations?.sleep_stress) ? raw.supportive_considerations.sleep_stress : [],
+          lifestyle: Array.isArray(raw.supportive_considerations?.lifestyle) ? raw.supportive_considerations.lifestyle : [],
+        },
+      };
+      setInterpretation(normalized);
+    }
 
     setLoading(false);
   };

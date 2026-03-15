@@ -211,8 +211,8 @@ async function tryOpenAI(apiKey: string, report: LabReportData, analytes: Analyt
 Total panel: ${analytes.length} analytes. Key values (${selected.length}):
 ${labLines}
 
-Return ONLY valid JSON matching this schema exactly:
-{"summary_bullets":["3-4 strings"],"cycle_context":{"estimated_cycle_day":number|null,"estimated_cycle_phase":"menstrual"|"follicular"|"ovulatory"|"luteal"|"unknown","confidence":"low"|"medium"|"high","explanation":"string"},"biomarkers":[{"name":"string","user_value":"string","unit":"string","reference_range":"string","status_label":"in_range"|"borderline"|"out_of_range"|"unknown","plain_english_meaning":"string","timing_notes":"string","common_non_alarm_reasons":["string"],"when_clinicians_follow_up":["string"]}],"nutrient_topics_to_discuss":[],"supportive_considerations":{"nutrition":["string"],"sleep_stress":["string"],"lifestyle":["string"]},"questions_for_doctor":["3-4 strings"],"suggested_followups_to_discuss":["string"],"safety_notes":["string"],"disclaimer":"string"}`;
+Return ONLY valid JSON matching this schema exactly. EVERY field marked as array MUST be an array, never a string:
+{"summary_bullets":["string","string"],"cycle_context":{"estimated_cycle_day":number|null,"estimated_cycle_phase":"menstrual"|"follicular"|"ovulatory"|"luteal"|"unknown","confidence":"low"|"medium"|"high","explanation":"string"},"biomarkers":[{"name":"string","user_value":"string","unit":"string","reference_range":"string","status_label":"in_range"|"borderline"|"out_of_range"|"unknown","plain_english_meaning":"string","timing_notes":"string","common_non_alarm_reasons":["string"],"when_clinicians_follow_up":["string"]}],"nutrient_topics_to_discuss":[],"supportive_considerations":{"nutrition":["string"],"sleep_stress":["string"],"lifestyle":["string"]},"questions_for_doctor":["string","string"],"suggested_followups_to_discuss":["string","string"],"safety_notes":["string"],"disclaimer":"string"}`;
 
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), 25000);
