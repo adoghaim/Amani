@@ -158,7 +158,7 @@ async function processInterpretation(
   } catch (err: any) {
     const errMsg = err?.message ?? String(err);
     console.error("[generate-interpretation] Background processing error:", errMsg, err?.stack ?? "", JSON.stringify({ reportId, userId }));
-    await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId).catch(() => {});
+    await supabase.from("lab_reports").update({ status: "error", context: { _last_error: errMsg } }).eq("id", reportId).catch(() => {});
   }
 }
 
@@ -405,23 +405,31 @@ You must respond with ONLY a valid JSON object matching this exact structure:
 }`;
 
   try {
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: maxOutputTokens,
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    let openaiResponse: Response;
+    try {
+      openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: maxOutputTokens,
+          temperature: 0.7,
+          response_format: { type: "json_object" },
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
