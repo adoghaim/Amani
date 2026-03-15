@@ -57,7 +57,7 @@ function classifyAnalyte(a: AnalyteData): "in_range" | "out_of_range" | "borderl
 function generateFallbackInterpretation(report: LabReportData, analytes: AnalyteData[]) {
   const cyclePhase = report.estimated_cycle_phase || "unknown";
   const cycleDay = report.estimated_cycle_day;
-  const symptoms = report.context.top_symptoms ?? [];
+  const symptoms = report.context?.top_symptoms ?? [];
 
   const outOfRange = analytes.filter(a => classifyAnalyte(a) === "out_of_range");
   const borderline = analytes.filter(a => classifyAnalyte(a) === "borderline");
@@ -86,7 +86,7 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
     summaryBullets.push("No values stood out as significantly outside reference ranges — this serves as a useful baseline for tracking trends.");
   }
 
-  if (report.context.postpartum === "yes") {
+  if (report.context?.postpartum === "yes") {
     summaryBullets.push("Postpartum hormonal shifts can affect thyroid, iron, and mood-related markers — timing of this panel relative to delivery is helpful context for your provider.");
   }
 
@@ -198,10 +198,10 @@ async function tryOpenAI(apiKey: string, report: LabReportData, analytes: Analyt
   }).join("\n");
 
   const ctx: string[] = [];
-  if (report.context.birth_control === "yes") ctx.push("on birth control");
-  if (report.context.pregnant === "yes") ctx.push("pregnant");
-  if (report.context.postpartum === "yes") ctx.push("postpartum");
-  if (report.context.top_symptoms?.length) ctx.push(`symptoms: ${report.context.top_symptoms.slice(0, 3).join(", ")}`);
+  if (report.context?.birth_control === "yes") ctx.push("on birth control");
+  if (report.context?.pregnant === "yes") ctx.push("pregnant");
+  if (report.context?.postpartum === "yes") ctx.push("postpartum");
+  if (report.context?.top_symptoms?.length) ctx.push(`symptoms: ${report.context.top_symptoms.slice(0, 3).join(", ")}`);
 
   const cycleInfo = report.estimated_cycle_day && report.estimated_cycle_phase
     ? `Day ${report.estimated_cycle_day}, ${report.estimated_cycle_phase}`
@@ -215,7 +215,7 @@ Return ONLY valid JSON matching this schema exactly:
 {"summary_bullets":["3-4 strings"],"cycle_context":{"estimated_cycle_day":number|null,"estimated_cycle_phase":"menstrual"|"follicular"|"ovulatory"|"luteal"|"unknown","confidence":"low"|"medium"|"high","explanation":"string"},"biomarkers":[{"name":"string","user_value":"string","unit":"string","reference_range":"string","status_label":"in_range"|"borderline"|"out_of_range"|"unknown","plain_english_meaning":"string","timing_notes":"string","common_non_alarm_reasons":["string"],"when_clinicians_follow_up":["string"]}],"nutrient_topics_to_discuss":[],"supportive_considerations":{"nutrition":["string"],"sleep_stress":["string"],"lifestyle":["string"]},"questions_for_doctor":["3-4 strings"],"suggested_followups_to_discuss":["string"],"safety_notes":["string"],"disclaimer":"string"}`;
 
   const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 15000);
+  const tid = setTimeout(() => controller.abort(), 25000);
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -235,7 +235,8 @@ Return ONLY valid JSON matching this schema exactly:
     });
     clearTimeout(tid);
     if (!res.ok) {
-      console.warn("[generate-interpretation] OpenAI status:", res.status);
+      const errBody = await res.text().catch(() => "");
+      console.warn("[generate-interpretation] OpenAI status:", res.status, errBody);
       return null;
     }
     const data = await res.json();
@@ -254,34 +255,18 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  let reportId: string | null = null;
+
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Missing Authorization" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-
-    const supabaseAuth = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceKey);
-
     const body = await req.json();
-    const reportId = body?.reportId;
+    reportId = body?.reportId ?? null;
+
     if (!reportId || typeof reportId !== "string") {
       return new Response(JSON.stringify({ error: "reportId is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -292,11 +277,10 @@ Deno.serve(async (req: Request) => {
       .from("lab_reports")
       .select("id, user_id")
       .eq("id", reportId)
-      .eq("user_id", user.id)
       .maybeSingle();
 
     if (!reportCheck) {
-      return new Response(JSON.stringify({ error: "Report not found or access denied" }), {
+      return new Response(JSON.stringify({ error: "Report not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -316,7 +300,7 @@ Deno.serve(async (req: Request) => {
       .order("raw_name");
 
     const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
-    console.log(`[generate-interpretation] ${analytes.length} analytes, report ${reportId}`);
+    console.log(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
 
     let interpretationJson: any;
     let source = "demo";
@@ -331,12 +315,24 @@ Deno.serve(async (req: Request) => {
       } else {
         console.log("[generate-interpretation] OpenAI failed, using fallback");
         interpretationJson = generateFallbackInterpretation(report as LabReportData, analytes);
+        source = "fallback";
       }
     } else {
       console.log("[generate-interpretation] Using fallback (no key or no analytes)");
       interpretationJson = report
         ? generateFallbackInterpretation(report as LabReportData, analytes)
-        : { summary_bullets: ["Report data unavailable."], cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" }, biomarkers: [], nutrient_topics_to_discuss: [], supportive_considerations: { nutrition: [], sleep_stress: [], lifestyle: [] }, questions_for_doctor: [], suggested_followups_to_discuss: [], safety_notes: [], disclaimer: "Educational use only." };
+        : {
+            summary_bullets: ["Report data unavailable."],
+            cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" },
+            biomarkers: [],
+            nutrient_topics_to_discuss: [],
+            supportive_considerations: { nutrition: [], sleep_stress: [], lifestyle: [] },
+            questions_for_doctor: [],
+            suggested_followups_to_discuss: [],
+            safety_notes: [],
+            disclaimer: "Educational use only.",
+          };
+      source = "fallback";
     }
 
     const { error: upsertError } = await supabase
@@ -358,15 +354,20 @@ Deno.serve(async (req: Request) => {
     }
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
-    console.log("[generate-interpretation] Done — status ready, source:", source);
+    console.log("[generate-interpretation] Done — status: ready, source:", source);
 
     return new Response(JSON.stringify({ success: true, source }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err: any) {
-    console.error("[generate-interpretation] Fatal:", err?.message ?? err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    console.error("[generate-interpretation] Fatal error:", err?.message ?? err);
+    if (reportId) {
+      try {
+        await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
+      } catch (_) {}
+    }
+    return new Response(JSON.stringify({ error: "Internal server error", detail: err?.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
