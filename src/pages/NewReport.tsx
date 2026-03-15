@@ -10,7 +10,7 @@ import type { Symptom, LabReportContext, ReportAnalyte } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF } from '../utils/pdfExtractor';
 import { parseAllReportItems, parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
-import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
+import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
   { value: 'fatigue', label: 'Fatigue' },
@@ -45,10 +45,13 @@ export function NewReport() {
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [coverage, setCoverage] = useState<{ total_detected: number; total_core: number; total_extended: number; needs_review: number } | null>(null);
   const [parserDebug, setParserDebug] = useState<ParserDebugOutput | null>(null);
+  const [periodAutoFilled, setPeriodAutoFilled] = useState(false);
+  const [fetchingPeriod, setFetchingPeriod] = useState(false);
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
       if (!user || !reportDate) return;
+      setFetchingPeriod(true);
       try {
         const { data: events } = await supabase
           .from('cycle_events')
@@ -61,11 +64,13 @@ export function NewReport() {
           .maybeSingle();
         if (events && !lastPeriodDate) {
           setLastPeriodDate(events.event_date);
+          setPeriodAutoFilled(true);
         }
       } catch {}
+      setFetchingPeriod(false);
     };
     fetchMostRecentCycleEvent();
-  }, [reportDate, user, lastPeriodDate]);
+  }, [reportDate, user]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -427,12 +432,30 @@ export function NewReport() {
           <Card>
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">Add Context</h2>
             <div className="space-y-6">
-              <Input
-                label="Last period start date (optional)"
-                type="date"
-                value={lastPeriodDate}
-                onChange={e => setLastPeriodDate(e.target.value)}
-              />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Last period start date <span className="text-gray-400 font-normal">(optional)</span></label>
+                  {fetchingPeriod && (
+                    <span className="flex items-center gap-1 text-xs text-gray-400">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Looking up tracker...
+                    </span>
+                  )}
+                  {periodAutoFilled && !fetchingPeriod && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <CheckCircle className="w-3 h-3" /> Auto-filled from tracker
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  value={lastPeriodDate}
+                  onChange={e => { setLastPeriodDate(e.target.value); setPeriodAutoFilled(false); }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                />
+                {!lastPeriodDate && !fetchingPeriod && (
+                  <p className="mt-1 text-xs text-gray-400">No period start logged in your tracker — you can enter it manually above</p>
+                )}
+              </div>
 
               <Input
                 label="Average cycle length (days)"
