@@ -326,13 +326,6 @@ export function NewReport() {
         }
       }
 
-      if (isSecondReport) {
-        sessionStorage.setItem('showSecondLabComparison', 'true');
-        window.location.href = '/app/tracker';
-      } else {
-        window.location.href = `/app/reports/${reportData.id}`;
-      }
-
       supabase.functions.invoke('generate-interpretation', {
         body: { reportId: reportData.id },
       }).then(({ error: interpError }) => {
@@ -344,6 +337,13 @@ export function NewReport() {
         console.error('[NewReport] generate-interpretation network error:', interpErr);
         supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
       });
+
+      if (isSecondReport) {
+        sessionStorage.setItem('showSecondLabComparison', 'true');
+        window.location.href = '/app/tracker';
+      } else {
+        window.location.href = `/app/reports/${reportData.id}`;
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
       console.error('[NewReport] handleSubmit failed:', msg);
