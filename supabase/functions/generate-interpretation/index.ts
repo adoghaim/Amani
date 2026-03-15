@@ -36,71 +36,22 @@ interface LabReportData {
 }
 
 function classifyAnalyte(a: AnalyteData): "in_range" | "out_of_range" | "borderline" | "unknown" {
-  const v = a.value_numeric;
+  const v = Number(a.value_numeric);
   if (a.normalized_min !== null && a.normalized_max !== null) {
-    const buf = (a.normalized_max - a.normalized_min) * 0.08;
-    if (v < a.normalized_min - buf || v > a.normalized_max + buf) return "out_of_range";
-    if (v < a.normalized_min || v > a.normalized_max) return "borderline";
+    const min = Number(a.normalized_min);
+    const max = Number(a.normalized_max);
+    const buf = (max - min) * 0.08;
+    if (v < min - buf || v > max + buf) return "out_of_range";
+    if (v < min || v > max) return "borderline";
     return "in_range";
   }
   if (a.normalized_operator && a.normalized_operator_value !== null) {
-    const val = a.normalized_operator_value;
+    const val = Number(a.normalized_operator_value);
     const op = a.normalized_operator;
     if (op === "<" || op === "<=" || op === "< OR =") return v <= val ? "in_range" : "out_of_range";
     if (op === ">" || op === ">=" || op === "> OR =") return v >= val ? "in_range" : "out_of_range";
   }
   return "unknown";
-}
-
-function buildPrompt(report: LabReportData, analytes: AnalyteData[]): string {
-  const cycleInfo = report.estimated_cycle_day && report.estimated_cycle_phase
-    ? `Cycle Day ${report.estimated_cycle_day}, ${report.estimated_cycle_phase} phase`
-    : "Cycle information not provided";
-
-  const ctx: string[] = [];
-  if (report.context.birth_control === "yes") ctx.push("on birth control");
-  if (report.context.pregnant === "yes") ctx.push("pregnant");
-  if (report.context.postpartum === "yes") ctx.push("postpartum");
-  if (report.context.top_symptoms?.length) ctx.push(`symptoms: ${report.context.top_symptoms.join(", ")}`);
-
-  const KEY_SLUGS = new Set([
-    "estradiol","progesterone","lh","fsh","tsh","free_t4","free_t3",
-    "fasting_glucose","hemoglobin_a1c","total_cholesterol","ldl_cholesterol",
-    "hdl_cholesterol","triglycerides","creatinine","egfr","alt","ast",
-    "ferritin","vitamin_d_25_oh","vitamin_b12","hs_crp","tpo_antibodies",
-    "hemoglobin","shbg","total_testosterone","dhea_s",
-  ]);
-
-  const outOfRange = analytes.filter(a => classifyAnalyte(a) === "out_of_range");
-  const borderline = analytes.filter(a => classifyAnalyte(a) === "borderline");
-  const keyOther = analytes.filter(a =>
-    a.canonical_slug && KEY_SLUGS.has(a.canonical_slug) &&
-    !outOfRange.includes(a) && !borderline.includes(a)
-  );
-
-  const selected = [...outOfRange, ...borderline, ...keyOther].slice(0, 15);
-
-  const labLines = selected.map(a => {
-    const val = a.raw_value_text ?? String(a.value_numeric);
-    let line = `${a.raw_name}: ${val}${a.unit ? " " + a.unit : ""}`;
-    if (a.raw_reference_range) line += ` (ref: ${a.raw_reference_range})`;
-    else if (a.normalized_min !== null && a.normalized_max !== null) line += ` (ref: ${a.normalized_min}–${a.normalized_max})`;
-    const status = classifyAnalyte(a);
-    if (status === "out_of_range") line += " [OUT OF RANGE]";
-    else if (status === "borderline") line += " [BORDERLINE]";
-    return line;
-  }).join("\n");
-
-  return `Interpret these lab results for a women's health context.
-
-Report date: ${report.report_date}
-${cycleInfo}${ctx.length ? "\nContext: " + ctx.join(", ") : ""}
-Total analytes in panel: ${analytes.length}
-
-KEY LAB VALUES (${selected.length} selected — prioritized by clinical significance):
-${labLines}
-
-Provide educational interpretation. Reference specific biomarker names and values. Not medical advice.`;
 }
 
 function generateFallbackInterpretation(report: LabReportData, analytes: AnalyteData[]) {
@@ -111,9 +62,9 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
   const outOfRange = analytes.filter(a => classifyAnalyte(a) === "out_of_range");
   const borderline = analytes.filter(a => classifyAnalyte(a) === "borderline");
   const topFindings = [...outOfRange, ...borderline].slice(0, 5);
+  const totalFlagged = outOfRange.length + borderline.length;
 
   const summaryBullets: string[] = [];
-  const totalFlagged = outOfRange.length + borderline.length;
 
   if (totalFlagged === 0) {
     summaryBullets.push(`Your ${analytes.length}-item panel shows values largely within typical reference ranges across all systems tested.`);
@@ -133,6 +84,10 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
     summaryBullets.push(`Values worth discussing with your provider: ${names}${more}.`);
   } else {
     summaryBullets.push("No values stood out as significantly outside reference ranges — this serves as a useful baseline for tracking trends.");
+  }
+
+  if (report.context.postpartum === "yes") {
+    summaryBullets.push("Postpartum hormonal shifts can affect thyroid, iron, and mood-related markers — timing of this panel relative to delivery is helpful context for your provider.");
   }
 
   const biomarkerInterpretations = analytes.filter(a => a.is_core).slice(0, 20).map(a => {
@@ -169,28 +124,6 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
     };
   });
 
-  const nutrientTopics: any[] = [];
-  const NUTRIENT_MAP: Record<string, string> = {
-    ferritin: "iron", iron: "iron", vitamin_d: "vitamin_d", vitamin_b12: "b12",
-    b12: "b12", folate: "folate", magnesium: "magnesium",
-  };
-  const seen = new Set<string>();
-  for (const a of analytes) {
-    if (nutrientTopics.length >= 2) break;
-    const status = classifyAnalyte(a);
-    if (status !== "out_of_range" && status !== "borderline") continue;
-    const slug = (a.canonical_slug ?? a.raw_name).toLowerCase();
-    const nutrient = Object.entries(NUTRIENT_MAP).find(([k]) => slug.includes(k))?.[1];
-    if (nutrient && !seen.has(nutrient)) {
-      seen.add(nutrient);
-      nutrientTopics.push({
-        nutrient,
-        why_it_came_up: `${a.raw_name} was ${status === "out_of_range" ? "outside" : "near the edge of"} the reference range.`,
-        discussion_prompt: `You may want to ask your provider whether your ${nutrient.replace(/_/g, " ")} level warrants further evaluation given your full history.`,
-      });
-    }
-  }
-
   const questions: string[] = [
     "What do these results mean in the context of my full health history and current symptoms?",
     "Are there any values you'd recommend retesting — and if so, at what point in my cycle?",
@@ -214,7 +147,7 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
         : "Without cycle timing information, hormone level interpretation is limited.",
     },
     biomarkers: biomarkerInterpretations,
-    nutrient_topics_to_discuss: nutrientTopics,
+    nutrient_topics_to_discuss: [],
     supportive_considerations: {
       nutrition: ["Balanced meals with adequate protein, healthy fats, and complex carbohydrates support overall hormone production."],
       sleep_stress: ["Quality sleep of 7–9 hours supports hormonal rhythm and cortisol regulation."],
@@ -237,208 +170,82 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
   };
 }
 
-function sanitizeNutrients(json: any): any {
-  const allowed = new Set(["vitamin_d","iron","b12","folate","magnesium","omega_3","iodine"]);
-  const banned = [/\bIU\b/g,/\bmg\b/g,/\bmcg\b/g,/\b\d+\s*g\b/g,/\btake\b/gi,/\bstart\b/gi,/\bincrease\b/gi,/\bdecrease\b/gi,/\bdaily\b/gi,/\btwice\b/gi,/\bper day\b/gi];
-  const fallback = "Some clinicians may discuss options. Ask your provider what's appropriate for you.";
-  if (!Array.isArray(json.nutrient_topics_to_discuss)) return json;
-  return {
-    ...json,
-    nutrient_topics_to_discuss: json.nutrient_topics_to_discuss
-      .filter((i: any) => !i.nutrient || allowed.has(i.nutrient))
-      .map((i: any) => {
-        const str = JSON.stringify(i);
-        return banned.some(p => p.test(str)) ? { ...i, discussion_prompt: fallback } : i;
-      }),
-  };
-}
+async function tryOpenAI(apiKey: string, report: LabReportData, analytes: AnalyteData[]): Promise<any | null> {
+  const KEY_SLUGS = new Set([
+    "estradiol","progesterone","lh","fsh","tsh","free_t4","free_t3",
+    "fasting_glucose","hemoglobin_a1c","total_cholesterol","ldl_cholesterol",
+    "hdl_cholesterol","triglycerides","creatinine","egfr","alt","ast",
+    "ferritin","vitamin_d_25_oh","vitamin_b12","hs_crp","tpo_antibodies",
+    "hemoglobin","shbg","total_testosterone","dhea_s",
+  ]);
 
-async function callOpenAI(apiKey: string, prompt: string): Promise<any> {
-  const systemPrompt = `You are Amani, a women's health AI assistant. Provide clear, specific, educational lab interpretations with cycle awareness. NEVER diagnose or replace medical advice.
+  const outOfRange = analytes.filter(a => classifyAnalyte(a) === "out_of_range");
+  const borderline = analytes.filter(a => classifyAnalyte(a) === "borderline");
+  const keyOther = analytes.filter(a =>
+    a.canonical_slug && KEY_SLUGS.has(a.canonical_slug) &&
+    !outOfRange.includes(a) && !borderline.includes(a)
+  );
+  const selected = [...outOfRange, ...borderline, ...keyOther].slice(0, 12);
 
-LANGUAGE: Avoid "healthy","normal","indicates","confirms","abnormal","concerning". Use "may","can","often","suggests","consistent with". Out-of-range: "outside typical reference range".
-CONTEXT: Only mention postpartum if postpartum is in the context. Only mention pregnancy if pregnant is in the context.
-NUTRIENTS: Only if tied to a specific lab value or symptom. No dosages/frequencies/brands. Consultative phrasing only. Allowed: vitamin_d, iron, b12, folate, magnesium, omega_3, iodine.
-DATA: user_value must never include units. For comparators like "<0.5" use that exact string.
+  const labLines = selected.map(a => {
+    const val = a.raw_value_text ?? String(a.value_numeric);
+    let line = `${a.raw_name}: ${val}${a.unit ? " " + a.unit : ""}`;
+    if (a.raw_reference_range) line += ` (ref: ${a.raw_reference_range})`;
+    const status = classifyAnalyte(a);
+    if (status === "out_of_range") line += " [OUT]";
+    else if (status === "borderline") line += " [BORDERLINE]";
+    return line;
+  }).join("\n");
 
-Respond with ONLY valid JSON:
-{
-  "summary_bullets": ["3-5 specific bullets referencing actual values"],
-  "cycle_context": {"estimated_cycle_day": number|null, "estimated_cycle_phase": "menstrual"|"follicular"|"ovulatory"|"luteal"|"unknown", "confidence": "low"|"medium"|"high", "explanation": "string"},
-  "biomarkers": [{"name":"string","user_value":"string","unit":"string","reference_range":"string","status_label":"in_range"|"borderline"|"out_of_range"|"unknown","plain_english_meaning":"string","timing_notes":"string","common_non_alarm_reasons":["string"],"when_clinicians_follow_up":["string"]}],
-  "nutrient_topics_to_discuss": [{"nutrient":"vitamin_d"|"iron"|"b12"|"folate"|"magnesium"|"omega_3"|"iodine","why_it_came_up":"string","discussion_prompt":"string"}],
-  "supportive_considerations": {"nutrition":["string"],"sleep_stress":["string"],"lifestyle":["string"]},
-  "questions_for_doctor": ["3-5 specific questions referencing actual biomarker names"],
-  "suggested_followups_to_discuss": ["string"],
-  "safety_notes": ["string"],
-  "disclaimer": "string"
-}`;
+  const ctx: string[] = [];
+  if (report.context.birth_control === "yes") ctx.push("on birth control");
+  if (report.context.pregnant === "yes") ctx.push("pregnant");
+  if (report.context.postpartum === "yes") ctx.push("postpartum");
+  if (report.context.top_symptoms?.length) ctx.push(`symptoms: ${report.context.top_symptoms.slice(0, 3).join(", ")}`);
+
+  const cycleInfo = report.estimated_cycle_day && report.estimated_cycle_phase
+    ? `Day ${report.estimated_cycle_day}, ${report.estimated_cycle_phase}`
+    : "cycle info not provided";
+
+  const prompt = `Women's health lab interpretation. Date: ${report.report_date}. Cycle: ${cycleInfo}.${ctx.length ? " Context: " + ctx.join(", ") + "." : ""}
+Total panel: ${analytes.length} analytes. Key values (${selected.length}):
+${labLines}
+
+Return ONLY valid JSON matching this schema exactly:
+{"summary_bullets":["3-4 strings"],"cycle_context":{"estimated_cycle_day":number|null,"estimated_cycle_phase":"menstrual"|"follicular"|"ovulatory"|"luteal"|"unknown","confidence":"low"|"medium"|"high","explanation":"string"},"biomarkers":[{"name":"string","user_value":"string","unit":"string","reference_range":"string","status_label":"in_range"|"borderline"|"out_of_range"|"unknown","plain_english_meaning":"string","timing_notes":"string","common_non_alarm_reasons":["string"],"when_clinicians_follow_up":["string"]}],"nutrient_topics_to_discuss":[],"supportive_considerations":{"nutrition":["string"],"sleep_stress":["string"],"lifestyle":["string"]},"questions_for_doctor":["3-4 strings"],"suggested_followups_to_discuss":["string"],"safety_notes":["string"],"disclaimer":"string"}`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  const tid = setTimeout(() => controller.abort(), 15000);
 
-  let res: Response;
   try {
-    res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
-        max_tokens: 1200,
-        temperature: 0.5,
+        messages: [
+          { role: "system", content: "You are a women's health AI. Respond ONLY with the JSON object requested. No markdown. Educational use only — not medical advice." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 1000,
+        temperature: 0.4,
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,
     });
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI error ${res.status}: ${err.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Empty response from OpenAI");
-
-  try {
+    clearTimeout(tid);
+    if (!res.ok) {
+      console.warn("[generate-interpretation] OpenAI status:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
     return JSON.parse(content);
-  } catch {
-    const match = content.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error("Could not parse OpenAI JSON response");
-  }
-}
-
-async function checkRateLimit(supabase: any, userId: string): Promise<void> {
-  try {
-    const now = new Date();
-    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-
-    const { data: rows } = await supabase
-      .from("rate_limits")
-      .select("id, count")
-      .eq("user_id", userId)
-      .eq("endpoint", "generate-interpretation")
-      .gte("window_start", windowStart.toISOString())
-      .order("window_start", { ascending: false })
-      .limit(1);
-
-    const existing = rows?.[0] ?? null;
-
-    if (existing) {
-      if (existing.count >= 20) throw new Error("RATE_LIMIT_EXCEEDED");
-      await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
-    } else {
-      await supabase.from("rate_limits").insert({
-        user_id: userId,
-        endpoint: "generate-interpretation",
-        window_start: windowStart.toISOString(),
-        count: 1,
-      });
-    }
-  } catch (err: any) {
-    if (err?.message === "RATE_LIMIT_EXCEEDED") throw err;
-    console.warn("[generate-interpretation] Rate limit check failed (non-fatal):", err?.message);
-  }
-}
-
-async function processInterpretation(
-  supabase: any,
-  openaiApiKey: string | undefined,
-  reportId: string,
-  userId: string
-): Promise<void> {
-  try {
-    console.log("[generate-interpretation] Starting for", reportId);
-
-    const { data: report, error: reportError } = await supabase
-      .from("lab_reports")
-      .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context, status")
-      .eq("id", reportId)
-      .maybeSingle();
-
-    if (reportError) throw new Error(`Report fetch error: ${reportError.message}`);
-    if (!report) throw new Error("Report not found: " + reportId);
-
-    const { data: rawAnalytes, error: analytesError } = await supabase
-      .from("report_analytes")
-      .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
-      .eq("lab_report_id", reportId)
-      .order("raw_name");
-
-    if (analytesError) console.warn("[generate-interpretation] analytes fetch error:", analytesError.message);
-
-    const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
-    console.log(`[generate-interpretation] ${analytes.length} analytes loaded`);
-
-    let interpretationJson: any;
-    let source = "demo";
-
-    if (openaiApiKey && analytes.length > 0) {
-      try {
-        const prompt = buildPrompt(report as LabReportData, analytes);
-        console.log(`[generate-interpretation] Prompt chars: ${prompt.length}, calling OpenAI...`);
-        interpretationJson = await callOpenAI(openaiApiKey, prompt);
-        interpretationJson = sanitizeNutrients(interpretationJson);
-        source = "ai";
-        console.log("[generate-interpretation] OpenAI success");
-      } catch (err: any) {
-        console.error("[generate-interpretation] OpenAI failed:", err?.message ?? String(err), "— using fallback");
-        interpretationJson = generateFallbackInterpretation(report as LabReportData, analytes);
-        source = "demo";
-      }
-    } else {
-      console.log("[generate-interpretation] No OpenAI key or no analytes — using fallback");
-      interpretationJson = generateFallbackInterpretation(report as LabReportData, analytes);
-      source = "demo";
-    }
-
-    const { error: upsertError } = await supabase
-      .from("interpretations")
-      .upsert({
-        lab_report_id: reportId,
-        json_output: interpretationJson,
-        interpretation_source: source,
-        generated_at: new Date().toISOString(),
-        disclaimer_version: "1.0",
-      }, { onConflict: "lab_report_id" });
-
-    if (upsertError) throw new Error(`Upsert failed: ${upsertError.message}`);
-
-    const { error: statusError } = await supabase
-      .from("lab_reports")
-      .update({ status: "ready" })
-      .eq("id", reportId);
-
-    if (statusError) console.error("[generate-interpretation] Status update error:", statusError.message);
-    else console.log("[generate-interpretation] Done — status set to ready");
-
-    await supabase.from("audit_events").insert({
-      user_id: userId,
-      event_type: "insights_generated",
-      metadata: { report_id: reportId, source },
-    }).catch((e: any) => console.error("[generate-interpretation] Audit error:", e?.message));
-
-  } catch (err: any) {
-    const msg = err?.message ?? String(err);
-    console.error("[generate-interpretation] Fatal error:", msg);
-
-    const { data: existing } = await supabase
-      .from("lab_reports")
-      .select("context")
-      .eq("id", reportId)
-      .maybeSingle()
-      .catch(() => ({ data: null }));
-
-    const existingCtx = (existing?.context && typeof existing.context === "object") ? existing.context : {};
-    await supabase.from("lab_reports").update({
-      status: "error",
-      context: { ...existingCtx, _last_error: msg },
-    }).eq("id", reportId).catch(() => {});
+  } catch (e: any) {
+    clearTimeout(tid);
+    console.warn("[generate-interpretation] OpenAI failed:", e?.message);
+    return null;
   }
 }
 
@@ -457,10 +264,11 @@ Deno.serve(async (req: Request) => {
 
     const token = authHeader.replace("Bearer ", "");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseAuth = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
@@ -470,18 +278,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    try {
-      await checkRateLimit(supabase, user.id);
-    } catch (e: any) {
-      if (e?.message === "RATE_LIMIT_EXCEEDED") {
-        return new Response(JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw e;
-    }
+    const supabase = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json();
     const reportId = body?.reportId;
@@ -491,14 +288,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: report, error: reportCheckError } = await supabase
+    const { data: reportCheck } = await supabase
       .from("lab_reports")
       .select("id, user_id")
       .eq("id", reportId)
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (reportCheckError || !report) {
+    if (!reportCheck) {
       return new Response(JSON.stringify({ error: "Report not found or access denied" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -506,14 +303,69 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from("lab_reports").update({ status: "processing" }).eq("id", reportId);
 
-    EdgeRuntime.waitUntil(processInterpretation(supabase, openaiApiKey, reportId, user.id));
+    const { data: report } = await supabase
+      .from("lab_reports")
+      .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")
+      .eq("id", reportId)
+      .maybeSingle();
 
-    return new Response(JSON.stringify({ success: true, message: "Processing started" }), {
+    const { data: rawAnalytes } = await supabase
+      .from("report_analytes")
+      .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
+      .eq("lab_report_id", reportId)
+      .order("raw_name");
+
+    const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
+    console.log(`[generate-interpretation] ${analytes.length} analytes, report ${reportId}`);
+
+    let interpretationJson: any;
+    let source = "demo";
+
+    if (openaiApiKey && analytes.length > 0 && report) {
+      console.log("[generate-interpretation] Trying OpenAI...");
+      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes);
+      if (aiResult) {
+        interpretationJson = aiResult;
+        source = "ai";
+        console.log("[generate-interpretation] OpenAI succeeded");
+      } else {
+        console.log("[generate-interpretation] OpenAI failed, using fallback");
+        interpretationJson = generateFallbackInterpretation(report as LabReportData, analytes);
+      }
+    } else {
+      console.log("[generate-interpretation] Using fallback (no key or no analytes)");
+      interpretationJson = report
+        ? generateFallbackInterpretation(report as LabReportData, analytes)
+        : { summary_bullets: ["Report data unavailable."], cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" }, biomarkers: [], nutrient_topics_to_discuss: [], supportive_considerations: { nutrition: [], sleep_stress: [], lifestyle: [] }, questions_for_doctor: [], suggested_followups_to_discuss: [], safety_notes: [], disclaimer: "Educational use only." };
+    }
+
+    const { error: upsertError } = await supabase
+      .from("interpretations")
+      .upsert({
+        lab_report_id: reportId,
+        json_output: interpretationJson,
+        interpretation_source: source,
+        generated_at: new Date().toISOString(),
+        disclaimer_version: "1.0",
+      }, { onConflict: "lab_report_id" });
+
+    if (upsertError) {
+      console.error("[generate-interpretation] Upsert error:", upsertError.message);
+      await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
+      return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
+    console.log("[generate-interpretation] Done — status ready, source:", source);
+
+    return new Response(JSON.stringify({ success: true, source }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err: any) {
-    console.error("[generate-interpretation] Request error:", err?.message ?? err);
+    console.error("[generate-interpretation] Fatal:", err?.message ?? err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
