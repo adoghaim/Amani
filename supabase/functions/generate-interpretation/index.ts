@@ -157,8 +157,23 @@ async function processInterpretation(
     }).catch((auditErr: any) => console.error("[generate-interpretation] Audit insert error:", auditErr?.message));
   } catch (err: any) {
     const errMsg = err?.message ?? String(err);
-    console.error("[generate-interpretation] Background processing error:", errMsg, err?.stack ?? "", JSON.stringify({ reportId, userId }));
-    await supabase.from("lab_reports").update({ status: "error", context: { _last_error: errMsg } }).eq("id", reportId).catch(() => {});
+    const errStack = err?.stack ?? "";
+    console.error("[generate-interpretation] Background processing error:", errMsg, errStack, JSON.stringify({ reportId, userId }));
+
+    const { data: existing } = await supabase.from("lab_reports").select("context").eq("id", reportId).maybeSingle().catch(() => ({ data: null }));
+    const existingContext = (existing?.context && typeof existing.context === "object") ? existing.context : {};
+
+    await supabase.from("lab_reports").update({
+      status: "error",
+      context: { ...existingContext, _last_error: errMsg, _error_stack: errStack.slice(0, 500) }
+    }).eq("id", reportId).catch(() => {});
+
+    await supabase.from("parser_debug").insert({
+      lab_report_id: reportId,
+      stage: "generate-interpretation-error",
+      input: { reportId, userId },
+      output: { error: errMsg, stack: errStack.slice(0, 2000) },
+    }).catch(() => {});
   }
 }
 
