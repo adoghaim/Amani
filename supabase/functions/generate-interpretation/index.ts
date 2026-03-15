@@ -214,12 +214,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const timeoutMs = 55000;
-    const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
-    await Promise.race([
-      processInterpretation(supabase, openaiApiKey, reportId, authUser.id),
-      timeoutPromise,
-    ]);
+    const processingPromise = processInterpretation(supabase, openaiApiKey, reportId, authUser.id);
+    EdgeRuntime.waitUntil(processingPromise);
+
+    await processingPromise;
 
     return new Response(
       JSON.stringify({ success: true }),
