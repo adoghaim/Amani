@@ -113,12 +113,14 @@ async function processInterpretation(
 
     if (openaiApiKey) {
       try {
+        console.log("[generate-interpretation] Calling OpenAI...");
         const prompt = generatePrompt(labReport, biomarkersList, reportItemsList);
+        console.log("[generate-interpretation] Prompt length chars:", prompt.length);
         interpretationJson = await callOpenAIWithRetry(openaiApiKey, prompt, labReport, biomarkersList, reportItemsList);
         interpretationSource = "ai";
         console.log("[generate-interpretation] AI mode succeeded");
-      } catch (openaiError) {
-        console.error("[generate-interpretation] OpenAI failed, falling back to demo:", openaiError);
+      } catch (openaiError: any) {
+        console.error("[generate-interpretation] OpenAI failed:", openaiError?.message ?? String(openaiError), "— falling back to demo");
         interpretationJson = generateDemoInterpretation(labReport, biomarkersList, reportItemsList);
         interpretationSource = "demo";
       }
