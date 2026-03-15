@@ -196,7 +196,6 @@ export function ReportView() {
       }
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
-        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
         fetchReport();
       }
     }, POLL_INTERVAL);
