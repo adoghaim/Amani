@@ -305,13 +305,13 @@ export function ReportView() {
       supabase.functions.invoke('generate-interpretation', { body: { reportId } })
         .then(({ data: interpData, error: interpError }) => {
           if (interpError) {
-            console.error('[ReportView] edge function error', interpError, interpData);
-            supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+            console.error('[ReportView] edge function returned error', interpError, interpData);
           }
+          fetchReport();
         })
         .catch((err) => {
           console.error('[ReportView] generate-interpretation network error:', err);
-          supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+          fetchReport();
         });
       await fetchReport();
       setRegenerating(false);

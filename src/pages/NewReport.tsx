@@ -336,11 +336,9 @@ export function NewReport() {
       }).then(({ error: interpError }) => {
         if (interpError) {
           console.error('[NewReport] generate-interpretation error:', interpError.message);
-          supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
         }
       }).catch((interpErr) => {
         console.error('[NewReport] generate-interpretation network error:', interpErr);
-        supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportData.id);
       });
 
       if (isSecondReport) {
