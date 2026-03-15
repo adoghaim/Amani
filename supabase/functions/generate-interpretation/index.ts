@@ -314,27 +314,35 @@ Respond with ONLY valid JSON:
 }
 
 async function checkRateLimit(supabase: any, userId: string): Promise<void> {
-  const windowStart = new Date();
-  windowStart.setHours(0, 0, 0, 0);
+  try {
+    const now = new Date();
+    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-  const { data } = await supabase
-    .from("rate_limits")
-    .select("id, count")
-    .eq("user_id", userId)
-    .eq("endpoint", "generate-interpretation")
-    .gte("window_start", windowStart.toISOString())
-    .maybeSingle();
+    const { data: rows } = await supabase
+      .from("rate_limits")
+      .select("id, count")
+      .eq("user_id", userId)
+      .eq("endpoint", "generate-interpretation")
+      .gte("window_start", windowStart.toISOString())
+      .order("window_start", { ascending: false })
+      .limit(1);
 
-  if (data) {
-    if (data.count >= 20) throw new Error("RATE_LIMIT_EXCEEDED");
-    await supabase.from("rate_limits").update({ count: data.count + 1 }).eq("id", data.id);
-  } else {
-    await supabase.from("rate_limits").insert({
-      user_id: userId,
-      endpoint: "generate-interpretation",
-      window_start: windowStart.toISOString(),
-      count: 1,
-    });
+    const existing = rows?.[0] ?? null;
+
+    if (existing) {
+      if (existing.count >= 20) throw new Error("RATE_LIMIT_EXCEEDED");
+      await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
+    } else {
+      await supabase.from("rate_limits").insert({
+        user_id: userId,
+        endpoint: "generate-interpretation",
+        window_start: windowStart.toISOString(),
+        count: 1,
+      });
+    }
+  } catch (err: any) {
+    if (err?.message === "RATE_LIMIT_EXCEEDED") throw err;
+    console.warn("[generate-interpretation] Rate limit check failed (non-fatal):", err?.message);
   }
 }
 
