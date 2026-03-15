@@ -442,50 +442,44 @@ export function ReportView() {
           )}
 
           {/* AI Summary — error state (no interpretation) */}
-          {hasError && !interpretation && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-amber-200 bg-amber-100/60 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-200 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-5 h-5 text-amber-700" />
+          {hasError && !interpretation && (() => {
+            const hasData = biomarkers.length > 0 || reportAnalytes.length > 0;
+            const likelyReason = !hasData
+              ? { label: 'No lab values were extracted from this file', detail: 'The PDF may be image-based or scanned. Text-based PDFs work best. You can delete this report and re-upload a cleaner copy, or enter values manually.' }
+              : { label: 'The AI analysis timed out or hit an error', detail: 'Your lab data was parsed successfully — this was a server-side issue with the summary generation. Retrying usually fixes it.' };
+            return (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-red-900">AI summary failed</p>
+                    <p className="text-sm text-red-700 mt-0.5">{likelyReason.label}</p>
+                    <p className="text-xs text-red-600 mt-1.5 leading-relaxed">{likelyReason.detail}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-amber-900">AI summary could not be generated</p>
-                  <p className="text-xs text-amber-700 mt-0.5">Your lab data is available below — the summary is a bonus layer on top</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                <p className="text-sm font-medium text-amber-900">Things to check:</p>
-                <ul className="space-y-2">
-                  {[
-                    'The PDF may have been scanned or image-based — text extraction can fail on low-quality scans',
-                    'No biomarker values were detected — make sure the report contains numeric lab results',
-                    'A temporary service error may have occurred — try regenerating below',
-                  ].map((tip, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-sm text-amber-800">
-                      <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
-                {canRegenerate && (
-                  <div className="pt-2 flex items-center gap-3 flex-wrap">
-                    <button
-                      onClick={handleRegenerate}
-                      disabled={regenerating}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-amber-700 text-white text-sm font-semibold rounded-xl hover:bg-amber-800 transition-colors disabled:opacity-60"
-                    >
-                      <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
-                      {regenerating ? 'Retrying...' : `Retry AI summary (${3 - report.regeneration_count} left)`}
-                    </button>
-                    <span className="text-xs text-amber-700">Your biomarker data below is unaffected</span>
+                {hasData && (
+                  <div className="flex items-center gap-2 text-xs text-red-600 bg-red-100/60 rounded-lg px-3 py-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                    <span>{reportAnalytes.length > 0 ? reportAnalytes.length : biomarkers.length} lab values detected — your data is intact below</span>
                   </div>
                 )}
-                {!canRegenerate && report.regeneration_count >= 3 && (
-                  <p className="text-xs text-amber-700 pt-1">You have used all 3 regeneration attempts for this report. Your lab data is still fully visible below.</p>
+                {canRegenerate ? (
+                  <button
+                    onClick={handleRegenerate}
+                    disabled={regenerating}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+                    {regenerating ? 'Retrying...' : `Retry summary (${3 - report.regeneration_count} of 3 left)`}
+                  </button>
+                ) : (
+                  <p className="text-xs text-red-600">All 3 retry attempts used. Your lab data is fully visible below.</p>
                 )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* AI Summary — ready */}
           {interpretation && !isProcessing && (
