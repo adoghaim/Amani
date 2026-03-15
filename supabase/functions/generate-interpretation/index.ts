@@ -498,9 +498,9 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from("lab_reports").update({ status: "processing" }).eq("id", reportId);
 
-    EdgeRuntime.waitUntil(processInterpretation(supabase, openaiApiKey, reportId, user.id));
+    await processInterpretation(supabase, openaiApiKey, reportId, user.id);
 
-    return new Response(JSON.stringify({ success: true, message: "Processing started" }), {
+    return new Response(JSON.stringify({ success: true, message: "Processing complete" }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
