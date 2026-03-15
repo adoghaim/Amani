@@ -216,13 +216,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const processingPromise = processInterpretation(supabase, openaiApiKey, reportId, authUser.id);
-    EdgeRuntime.waitUntil(processingPromise);
-
-    await processingPromise;
+    EdgeRuntime.waitUntil(processInterpretation(supabase, openaiApiKey, reportId, authUser.id));
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, message: "Processing started" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
