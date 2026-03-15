@@ -14,6 +14,7 @@ import { Tracker } from './pages/Tracker'
 import { Billing } from './pages/Billing'
 import { Settings } from './pages/Settings'
 import { ParserDebugger } from './pages/ParserDebugger'
+import { Reports } from './pages/Reports'
 import { Loading } from './components/Loading'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -46,6 +47,7 @@ function App() {
         <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/app/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
         <Route path="/app/new" element={<ProtectedRoute><NewReport /></ProtectedRoute>} />
+        <Route path="/app/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/app/reports/:id" element={<ProtectedRoute><ReportView /></ProtectedRoute>} />
         <Route path="/app/tracker" element={<ProtectedRoute><Tracker /></ProtectedRoute>} />
         <Route path="/app/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />

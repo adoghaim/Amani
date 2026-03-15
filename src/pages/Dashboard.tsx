@@ -474,8 +474,8 @@ export function Dashboard() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-[#2A1F23]">Recent Lab Reports</h2>
-              <a href="/app/tracker" className="flex items-center gap-1 text-sm text-[#C97C8B] hover:text-[#A85C6D] font-medium transition-colors">
-                View timeline <ArrowRight className="w-4 h-4" />
+              <a href="/app/reports" className="flex items-center gap-1 text-sm text-[#C97C8B] hover:text-[#A85C6D] font-medium transition-colors">
+                View all <ArrowRight className="w-4 h-4" />
               </a>
             </div>
 
@@ -532,7 +532,7 @@ export function Dashboard() {
 
             {reports.length > 6 && (
               <div className="mt-3 text-center">
-                <a href="/app/tracker" className="text-sm text-[#C97C8B] hover:text-[#A85C6D] font-medium transition-colors">
+                <a href="/app/reports" className="text-sm text-[#C97C8B] hover:text-[#A85C6D] font-medium transition-colors">
                   View all {reports.length} lab reports
                 </a>
               </div>

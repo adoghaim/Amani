@@ -24,6 +24,9 @@ export function Layout({ children }: LayoutProps) {
               <a href="/app" className="text-theme-muted-text hover:text-theme-primary transition-colors">
                 Dashboard
               </a>
+              <a href="/app/reports" className="text-theme-muted-text hover:text-theme-primary transition-colors">
+                Reports
+              </a>
               <a href="/app/tracker" className="text-theme-muted-text hover:text-theme-primary transition-colors">
                 Tracker
               </a>
