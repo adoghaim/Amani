@@ -285,8 +285,8 @@ Respond with ONLY valid JSON:
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
-        max_tokens: 1800,
-        temperature: 0.6,
+        max_tokens: 1200,
+        temperature: 0.5,
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,
@@ -506,9 +506,9 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from("lab_reports").update({ status: "processing" }).eq("id", reportId);
 
-    await processInterpretation(supabase, openaiApiKey, reportId, user.id);
+    EdgeRuntime.waitUntil(processInterpretation(supabase, openaiApiKey, reportId, user.id));
 
-    return new Response(JSON.stringify({ success: true, message: "Processing complete" }), {
+    return new Response(JSON.stringify({ success: true, message: "Processing started" }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
