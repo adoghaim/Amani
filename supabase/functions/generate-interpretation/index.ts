@@ -564,6 +564,7 @@ STYLE RULES
   - "may indicate"
   - "suggests possible"
   - "further evaluation may be necessary"
+  - "clinical significance depends on..."
 - Be specific and grounded in the actual lab values
 - Do not repeat the same idea across sections
 - Do not include generic wellness advice unless directly tied to findings
@@ -576,6 +577,23 @@ PRIORITIZATION
 - Identify ONE primary concern if present
 - Then list up to 2–3 secondary findings
 - Do not treat all abnormalities equally
+
+-----------------------------------
+
+KEY FINDINGS — "FOCUS NOW" RULES
+
+Each item in key_findings must:
+- Answer WHY this specific result matters for this patient
+- Answer WHAT DIRECTION it points (e.g., trending low, pushing above range, within healthy zone)
+- Avoid repetitive phrasing across items
+- Avoid vague filler like "clinical significance depends on symptoms" or "may warrant further testing"
+- Be grounded in the actual numeric value, not just the flag
+
+Good example:
+"Your ferritin came back at 9 ng/mL, which is below the typical threshold for adequate iron storage. At this level, energy and focus are often the first things to take a hit, and it can also affect thyroid function if left unaddressed."
+
+Bad example:
+"Ferritin is low. Clinical significance depends on symptoms. Further evaluation may be necessary."
 
 -----------------------------------
 
@@ -596,28 +614,42 @@ STRUCTURED FACTS (derived before this call — use to ground your response):
 
 -----------------------------------
 
-WHAT TO DO NEXT (IMPORTANT)
+WHAT YOU CAN DO NOW (IMPORTANT)
 
-Include 3–5 practical, non-prescriptive suggestions in what_to_do_next.
+Populate the what_you_can_do_now field with 3–5 practical wellness suggestions tied directly to the flagged biomarkers.
 
-These can include:
-- follow-up labs
-- lifestyle adjustments
-- general supplement categories (NOT prescriptions)
+Each suggestion must be:
+- Safe and non-prescriptive
+- Framed as a supportive action, not medical advice
+- Specific to what was found in these labs, not generic health tips
 
-DO:
-- "You could consider increasing intake of selenium-rich foods like Brazil nuts"
-- "Some people explore vitamin D supplementation if levels are low"
+Categories to draw from (use only what applies):
+- Nutrition: foods rich in relevant micronutrients (e.g., "leafy greens for folate", "Brazil nuts for selenium")
+- Lifestyle: movement, sleep quality, stress management — only if a marker supports it
+- Supplements: mention ONLY widely accepted, generally safe options (e.g., vitamin D, magnesium, omega-3s) — never suggest doses
 
 DO NOT:
-- prescribe doses
-- give medical instructions
-- present anything as treatment
+- Prescribe medications or dosages
+- Make disease claims
+- Repeat suggestions from what_to_do_next verbatim
 
-Use supportive, optional, non-directive language like:
-- "you could consider"
-- "it may be helpful to"
-- "some people explore"
+Tone: simple, warm, human — not clinical. Write as if a knowledgeable friend is giving a heads-up.
+
+Examples:
+- "Adding foods like salmon, walnuts, or flaxseed can support the omega-3 balance your results hint at."
+- "Some people find that magnesium-rich foods like dark chocolate or pumpkin seeds help with sleep and energy — both relevant given what's showing here."
+- "If your vitamin D is on the lower end, getting 15–20 minutes of midday sun a few times a week is a gentle place to start."
+
+-----------------------------------
+
+WHAT TO DO NEXT
+
+Populate what_to_do_next with 3–5 action-oriented next steps, focused on:
+- Follow-up labs to consider
+- Conversations to have with a provider
+- Timing of retesting
+
+Keep this distinct from what_you_can_do_now — this section is about next steps, not daily habits.
 
 -----------------------------------
 
@@ -655,6 +687,7 @@ Required schema:
       "related_biomarkers": ["string"]
     }
   ],
+  "what_you_can_do_now": ["string"],
   "what_to_do_next": ["string"],
   "questions_for_doctor": ["string"],
   "cycle_context": "string",
