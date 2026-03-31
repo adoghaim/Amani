@@ -85,10 +85,6 @@ function displayVal(a: AnalyteData): string {
   return `${a.raw_value_text ?? String(a.value_numeric)}${a.unit ? " " + a.unit : ""}`;
 }
 
-function hasSlug(analytes: AnalyteData[], ...slugs: string[]): AnalyteData | undefined {
-  return analytes.find(a => a.canonical_slug && slugs.includes(a.canonical_slug));
-}
-
 function getBySlug(analytes: AnalyteData[], s: string): AnalyteData | undefined {
   return analytes.find(a => a.canonical_slug === s);
 }
