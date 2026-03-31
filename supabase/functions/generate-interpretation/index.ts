@@ -137,7 +137,7 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
     patterns.push({
       title: "Thyroid Autoimmunity Pattern",
       confidence,
-      explanation: `Elevated thyroid antibodies${tpoHigh && tgHigh ? " (both TPO and thyroglobulin)" : tpoHigh ? " (TPO)" : " (thyroglobulin)"}${thyroidFunctionAbnormal ? " alongside abnormal thyroid function markers" : ""} can indicate an autoimmune process affecting the thyroid. This pattern is worth evaluating with your provider, especially if you have symptoms like fatigue, hair changes, or temperature sensitivity.`,
+      explanation: `Elevated thyroid antibodies${tpoHigh && tgHigh ? " (both TPO and thyroglobulin)" : tpoHigh ? " (TPO)" : " (thyroglobulin)"}${thyroidFunctionAbnormal ? " alongside thyroid function markers that are outside their reference range" : ""} can be seen in autoimmune thyroid conditions. This combination is worth evaluating in context with your provider, particularly if you're experiencing symptoms like fatigue, hair changes, or temperature sensitivity.`,
       related_biomarkers: related,
     });
   } else if (isAbnormal("tsh") || isAbnormal("free_t4") || isAbnormal("free_t3")) {
@@ -173,7 +173,7 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
     patterns.push({
       title: "Glucose Regulation Pattern",
       confidence: irSignals >= 3 ? "medium" : "low",
-      explanation: `${irSignals} markers associated with glucose regulation show variation — ${[glucoseAbnormal && "fasting glucose", hba1cAbnormal && "HbA1c", insulinHigh && "fasting insulin", trigsHigh && "triglycerides", hdlLow && "HDL"].filter(Boolean).join(", ")}. Together, these can reflect early changes in how the body processes sugar and insulin. This pattern is worth discussing with your provider, particularly if you have PCOS, family history of metabolic conditions, or symptoms like fatigue after meals.`,
+      explanation: `${irSignals} markers associated with glucose regulation are outside their reference ranges — ${[glucoseAbnormal && "fasting glucose", hba1cAbnormal && "HbA1c", insulinHigh && "fasting insulin", trigsHigh && "triglycerides", hdlLow && "HDL"].filter(Boolean).join(", ")}. Together, these may reflect variation in how the body is currently processing sugar and insulin. This pattern is worth discussing in context with your provider, particularly if you have a history of PCOS or metabolic conditions.`,
       related_biomarkers: related,
     });
   } else if (irSignals === 1 && (glucoseAbnormal || hba1cAbnormal)) {
@@ -181,7 +181,7 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
     patterns.push({
       title: "Fasting Glucose Elevation",
       confidence: "low",
-      explanation: `A single elevated fasting glucose or HbA1c marker warrants attention but is not diagnostic on its own. Confirm with a repeat test and discuss with your provider in context of your diet, activity, and family history.`,
+      explanation: `A single elevated fasting glucose or HbA1c marker can sometimes suggest early variation in glucose regulation, but is not meaningful in isolation. A repeat test and conversation with your provider — in context of your full health history — will clarify whether any follow-up is warranted.`,
       related_biomarkers: related,
     });
   }
@@ -203,7 +203,7 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
     patterns.push({
       title: "Lipid Pattern Worth Monitoring",
       confidence: lipidSignals >= 3 ? "medium" : "low",
-      explanation: `Several lipid markers are outside optimal ranges: ${[ldlHigh && "LDL", totalCholHigh && "total cholesterol", apobHigh && "ApoB", trigsHigh && "triglycerides", hdlLow && "low HDL"].filter(Boolean).join(", ")}. Estrogen naturally modulates lipid metabolism, so cycle timing and hormonal context matter here. A cardiovascular risk conversation with your provider is appropriate.`,
+      explanation: `${[ldlHigh && "LDL", totalCholHigh && "total cholesterol", apobHigh && "ApoB", trigsHigh && "triglycerides", hdlLow && "HDL"].filter(Boolean).join(", ")} ${lipidSignals === 1 ? "is" : "are"} outside reference range. Because estrogen modulates lipid metabolism, values can shift across the cycle and with hormonal changes — so context matters. Your provider can help assess whether this pattern warrants closer tracking over time.`,
       related_biomarkers: related,
     });
   }
@@ -231,7 +231,7 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
       patterns.push({
         title: "Reproductive Hormone Variation",
         confidence: hormoneAbnormal >= 3 ? "medium" : "low",
-        explanation: `${hormoneAbnormal} reproductive hormones fall outside expected ranges for the ${phaseLabel} phase (day ${cycleDay ?? "?"}). Hormone levels are highly phase-dependent, and a single draw rarely tells the full story — but this pattern may be worth tracking across cycles or repeating at a different phase for comparison.`,
+        explanation: `${hormoneAbnormal} reproductive hormones are outside their reference ranges for the ${phaseLabel} phase (day ${cycleDay ?? "?"}). Hormone levels are highly phase-dependent and a single draw rarely tells the full story — this may simply reflect normal individual variation, but it can be worth repeating at a different phase or tracking across cycles to see if a pattern holds.`,
         related_biomarkers: related,
       });
     }
@@ -240,7 +240,7 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
       patterns.push({
         title: "Low Ovarian Reserve Signal",
         confidence: "low",
-        explanation: `AMH (anti-Müllerian hormone) is below the lower reference limit, which can be an early signal of diminished ovarian reserve. This is not a fertility diagnosis, but it is worth discussing with a reproductive endocrinologist if family planning is relevant to you.`,
+        explanation: `AMH (anti-Müllerian hormone) is below the lower reference limit. AMH values vary between labs and across the cycle, and a single reading below range doesn't tell a complete story on its own. If fertility or ovarian function is relevant to you, this is worth reviewing with your provider alongside FSH and a full cycle context.`,
         related_biomarkers: ["amh", "fsh"],
       });
     }
@@ -265,14 +265,14 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
     patterns.push({
       title: "Nutrient Depletion Pattern",
       confidence: nutrientSignals >= 3 ? "medium" : "low",
-      explanation: `Multiple nutrient markers are below optimal ranges — ${[ferritinLow && "ferritin", vitDLow && "vitamin D", b12Low && "B12", hgbLow && "hemoglobin"].filter(Boolean).join(", ")}. Nutrient insufficiencies often cluster together and can contribute to fatigue, mood changes, and hormonal disruption. Targeted repletion should be guided by your provider based on severity.`,
+      explanation: `${[ferritinLow && "Ferritin", vitDLow && "vitamin D", b12Low && "B12", hgbLow && "hemoglobin"].filter(Boolean).join(", ")} ${nutrientSignals === 1 ? "is" : "are"} below their reference ranges. Nutrient markers often cluster, and low levels across several can sometimes be associated with fatigue, mood changes, or hormonal variability. How and whether to address these depends on severity and your full clinical picture — your provider can help prioritize.`,
       related_biomarkers: related,
     });
   } else if (ferritinLow && hgbLow) {
     patterns.push({
       title: "Iron-Deficiency Signal",
       confidence: "medium",
-      explanation: `Both ferritin and hemoglobin are below their reference ranges, which is consistent with iron-deficiency anemia — particularly common in women with heavier cycles. Confirmation with a full iron panel and clinical correlation is appropriate before supplementing.`,
+      explanation: `Both ferritin and hemoglobin are below their reference ranges, which can sometimes be seen alongside iron insufficiency — a pattern that's relatively common in women, particularly those with heavier cycles. A full iron panel and clinical context would help clarify the picture before any next steps.`,
       related_biomarkers: ["ferritin", "hemoglobin", "serum_iron", "tibc"],
     });
   }
@@ -452,21 +452,27 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
   });
 
   const questions: string[] = [];
+
   if (top_out_of_range.length > 0) {
-    questions.push(`My ${top_out_of_range[0].raw_name} came back ${displayVal(top_out_of_range[0])} — can you walk me through what that means given my full picture?`);
-  }
-  if (day && phase !== "unknown") {
-    questions.push(`These labs were drawn on day ${day} of my cycle. Would repeating any of these at a different phase give us more information?`);
+    questions.push(`My ${top_out_of_range[0].raw_name} came back ${displayVal(top_out_of_range[0])} — can you help me understand what that means in the context of my full history?`);
+  } else if (top_borderline.length > 0) {
+    questions.push(`My ${top_borderline[0].raw_name} is near the edge of the reference range at ${displayVal(top_borderline[0])} — is that something to monitor or retest?`);
   } else {
-    questions.push("Which of these markers would benefit most from being retested at a specific point in my cycle?");
+    questions.push("Are there any values on this panel that you'd want to track over time, even if they're currently in range?");
   }
+
   if (matched_patterns.length > 0) {
-    questions.push(`Based on the ${matched_patterns[0].title.toLowerCase()}, is there anything you'd want to rule out or track more closely?`);
+    questions.push(`The pattern analysis flagged a possible ${matched_patterns[0].title.toLowerCase()} — is there anything you'd want to evaluate or rule out based on these results?`);
+  } else if (facts.missing_followup_labs.length > 0) {
+    questions.push(`Would adding ${facts.missing_followup_labs[0].split(" (")[0]} to my next draw give us more useful information?`);
   } else {
-    questions.push("Are there any markers on this panel you'd want to recheck in 3–6 months to assess trends?");
+    questions.push("Are there any markers not on this panel that you'd recommend adding to get a more complete picture?");
   }
-  if (facts.missing_followup_labs.length > 0) {
-    questions.push(`Would it be helpful to add ${facts.missing_followup_labs[0].split(" (")[0]} to my next draw?`);
+
+  if (day && phase !== "unknown") {
+    questions.push(`These labs were drawn on day ${day} of my cycle. Would retesting any of these at a different phase change how we interpret them?`);
+  } else {
+    questions.push("Which markers on this panel are most sensitive to cycle timing, and when would be the best phase to retest them?");
   }
 
   const cycleExplanation = day && phase !== "unknown"
@@ -484,7 +490,7 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
       confidence: day ? "medium" as const : "low" as const,
       explanation: cycleExplanation,
     },
-    questions_for_doctor: questions.slice(0, 4),
+    questions_for_doctor: questions.slice(0, 3),
     disclaimer:
       "This report is for educational purposes only and does not constitute medical advice. All results should be reviewed with your healthcare provider in the context of your full health history, symptoms, and clinical presentation.",
   };
@@ -496,18 +502,27 @@ async function tryOpenAI(apiKey: string, report: LabReportData, analytes: Analyt
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
 
-  const keyInRange = analytes.filter(a =>
+  const patternSlugs = new Set(matched_patterns.flatMap(p => p.related_biomarkers));
+
+  const patternSupportingInRange = analytes.filter(a =>
+    a.canonical_slug &&
+    patternSlugs.has(a.canonical_slug) &&
+    classifyAnalyte(a) === "in_range"
+  );
+
+  const remainingHighValue = analytes.filter(a =>
     a.canonical_slug &&
     HIGH_VALUE_SLUGS.has(a.canonical_slug) &&
     classifyAnalyte(a) === "in_range" &&
-    !reassuring_in_range.includes(a)
+    !patternSlugs.has(a.canonical_slug)
   );
 
   const selected = [
     ...top_out_of_range,
     ...top_borderline,
+    ...patternSupportingInRange,
     ...reassuring_in_range,
-    ...keyInRange,
+    ...remainingHighValue,
   ].filter((a, i, arr) => arr.indexOf(a) === i).slice(0, 16);
 
   const labLines = selected.map(a => {
@@ -555,7 +570,7 @@ INSTRUCTIONS:
 3. Top findings: Up to 5. Prioritize out-of-range then borderline. Use canonical_slug as biomarker_slug. Status: "discuss", "monitor", or "reassuring". Explanation: 2–3 sentences, specific to this patient's result and cycle context.
 4. Pattern signals: Use the pre-analyzed candidates above as evidence. Adjust or omit if data doesn't support them. Do NOT fabricate new patterns not supported by the lab values. Up to 3 patterns.
 5. Cycle context: 2–3 sentences grounded in the cycle_notes above.
-6. Questions for doctor: 3–4 specific questions referencing actual result values and the patient's context. Not generic.
+6. Questions for doctor: exactly 3 specific questions referencing actual result values and the patient's context. Not generic.
 7. Tone: calm, intelligent, clinical, direct. No alarmism. No wellness fluff. No generic advice.
 8. Do NOT mention lifestyle, diet, sleep, or supplements unless a specific marker directly warrants it.
 
