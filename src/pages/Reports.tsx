@@ -172,14 +172,23 @@ export function Reports() {
     if (!user) return;
     setLoading(true);
     try {
-      const [reportsRes, biomarkersRes, analytesRes] = await Promise.all([
-        supabase.from('lab_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false }),
-        supabase.from('biomarkers').select('lab_report_id').eq('user_id', user.id),
-        supabase.from('report_analytes').select('lab_report_id').eq('user_id', user.id),
-      ]);
+      const reportsRes = await supabase
+        .from('lab_reports')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('report_date', { ascending: false });
 
       const fetchedReports = reportsRes.data ?? [];
       setReports(fetchedReports as LabReport[]);
+
+      const reportIds = fetchedReports.map(r => r.id);
+
+      const [biomarkersRes, analytesRes] = reportIds.length > 0
+        ? await Promise.all([
+            supabase.from('biomarkers').select('lab_report_id').in('lab_report_id', reportIds),
+            supabase.from('report_analytes').select('lab_report_id').in('lab_report_id', reportIds),
+          ])
+        : [{ data: [] }, { data: [] }];
 
       const bCounts: Record<string, number> = {};
       for (const b of (biomarkersRes.data ?? [])) {
