@@ -580,6 +580,25 @@ PRIORITIZATION
 
 -----------------------------------
 
+HEADLINE RULES
+
+The headline is the first thing the user reads. It must:
+- Name the actual markers or systems that stand out, not a count
+- Sound like a human summary, not a lab report
+- Be 1 sentence, conversational, and specific
+
+Good examples:
+- "Your thyroid markers stand out, and your glucose is running slightly elevated."
+- "Iron storage looks low, and your vitamin D is worth addressing soon."
+- "Most of your panel looks solid — your lipids are the one area to keep an eye on."
+
+Bad examples:
+- "3 values outside range"
+- "Your lab results show some abnormalities"
+- "Several biomarkers require attention"
+
+-----------------------------------
+
 KEY FINDINGS — "FOCUS NOW" RULES
 
 Each item in key_findings must:
