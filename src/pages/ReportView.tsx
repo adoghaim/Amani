@@ -12,7 +12,7 @@ import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
 import { QuickHighlights } from '../components/QuickHighlights';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
-import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
+import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY, RECOMMENDED_LABS } from '../utils/biomarkerDefinitions';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { CATEGORY_DISPLAY } from '../types';
 import type {
@@ -247,6 +247,13 @@ export function ReportView() {
   }, [reportAnalytes]);
 
   const totalAnalyteCount = useMemo(() => reportAnalytes.filter(a => !a.is_core).length, [reportAnalytes]);
+
+  const hasRecommendedLabs = useMemo(() => {
+    const presentSet = new Set(presentBiomarkerNames);
+    return (Object.keys(RECOMMENDED_LABS) as BiomarkerCategory[]).some(cat =>
+      (RECOMMENDED_LABS[cat] ?? []).some(r => !presentSet.has(r.name))
+    );
+  }, [presentBiomarkerNames]);
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
@@ -598,27 +605,29 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── G. Recommended Labs (accordion) ─────────────────── */}
-          <div className="rounded-2xl border border-gray-200 overflow-hidden">
-            <button
-              className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-gray-50 transition-colors"
-              onClick={() => setShowRecommendedLabs(v => !v)}
-            >
-              <div className="flex items-center gap-2.5">
-                <Stethoscope className="w-4 h-4 text-[#7A6570]" />
-                <span className="text-sm font-semibold text-[#2A1F23]">Recommended Labs</span>
-              </div>
-              {showRecommendedLabs
-                ? <ChevronDown className="w-4 h-4 text-gray-400" />
-                : <ChevronRight className="w-4 h-4 text-gray-400" />
-              }
-            </button>
-            {showRecommendedLabs && (
-              <div className="border-t border-gray-100">
-                <RecommendedLabs presentBiomarkers={presentBiomarkerNames} activeCategory={activeCategory} />
-              </div>
-            )}
-          </div>
+          {/* ── G. Recommended Labs (accordion — only when there are suggestions) */}
+          {hasRecommendedLabs && (
+            <div className="rounded-2xl border border-gray-200 overflow-hidden">
+              <button
+                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-gray-50 transition-colors"
+                onClick={() => setShowRecommendedLabs(v => !v)}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Stethoscope className="w-4 h-4 text-[#7A6570]" />
+                  <span className="text-sm font-semibold text-[#2A1F23]">Recommended Labs</span>
+                </div>
+                {showRecommendedLabs
+                  ? <ChevronDown className="w-4 h-4 text-gray-400" />
+                  : <ChevronRight className="w-4 h-4 text-gray-400" />
+                }
+              </button>
+              {showRecommendedLabs && (
+                <div className="border-t border-gray-100 px-5 pb-5 pt-3">
+                  <RecommendedLabs presentBiomarkers={presentBiomarkerNames} activeCategory={activeCategory} />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Cycle context + Questions for doctor ─────────────── */}
           {interpretation && !isProcessing && (
