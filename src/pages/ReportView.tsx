@@ -22,7 +22,7 @@ import type {
 import {
   RefreshCw, Trash2, Copy, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, Stethoscope, CalendarDays, MessageSquare,
-  CheckCircle2, Loader2, Info, Activity,
+  CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle,
 } from 'lucide-react';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
@@ -100,6 +100,12 @@ function normalizeInterpretation(raw: any): AIInterpretation {
     ...raw,
     headline: typeof raw.headline === 'string' ? raw.headline : '',
     summary_bullets: Array.isArray(raw.summary_bullets) ? raw.summary_bullets : [],
+    primary_concern: raw.primary_concern && typeof raw.primary_concern === 'object'
+      ? raw.primary_concern
+      : undefined,
+    key_findings: Array.isArray(raw.key_findings) ? raw.key_findings : undefined,
+    what_you_can_do_now: Array.isArray(raw.what_you_can_do_now) ? raw.what_you_can_do_now : undefined,
+    what_to_do_next: Array.isArray(raw.what_to_do_next) ? raw.what_to_do_next : undefined,
     top_findings: Array.isArray(raw.top_findings) ? raw.top_findings : [],
     pattern_signals: Array.isArray(raw.pattern_signals) ? raw.pattern_signals : [],
     questions_for_doctor: Array.isArray(raw.questions_for_doctor) ? raw.questions_for_doctor : [],
@@ -430,7 +436,7 @@ export function ReportView() {
           {interpretation && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-[#e8dce0] shadow-sm">
               <div className="bg-[#2A1F23] px-6 py-5">
-                <div className="flex items-center gap-2.5 mb-2">
+                <div className="flex items-center gap-2.5 mb-3">
                   <Sparkles className="w-4 h-4 text-[#E8B4BD]" />
                   <span className="text-xs font-medium text-[#c4adb2] uppercase tracking-widest">Amani Analysis</span>
                 </div>
@@ -440,8 +446,37 @@ export function ReportView() {
                   </h2>
                 )}
               </div>
-              <div className="bg-white px-6 py-5">
-                {interpretation.summary_bullets.length > 0 && (
+
+              {/* Primary Concern — most important finding, always first */}
+              {interpretation.primary_concern && (
+                <div className="border-b border-[#f0e6ea] bg-[#fdf7f8] px-6 py-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#C97C8B]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertTriangle className="w-4 h-4 text-[#C97C8B]" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#C97C8B] uppercase tracking-widest mb-1">
+                        Top Priority
+                      </p>
+                      <p className="text-sm font-semibold text-[#2A1F23] mb-1.5">
+                        {interpretation.primary_concern.title}
+                      </p>
+                      <p className="text-sm text-[#4A3A40] leading-relaxed mb-2">
+                        {interpretation.primary_concern.summary}
+                      </p>
+                      {interpretation.primary_concern.why_it_matters && (
+                        <p className="text-xs text-[#7A6570] leading-relaxed border-l-2 border-[#C97C8B]/30 pl-3">
+                          {interpretation.primary_concern.why_it_matters}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summary bullets fallback when no primary_concern */}
+              {!interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
+                <div className="bg-white px-6 py-5">
                   <ul className="space-y-3">
                     {interpretation.summary_bullets.map((bullet, i) => (
                       <li key={i} className="flex items-start gap-3">
@@ -450,25 +485,90 @@ export function ReportView() {
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* ── C. Focus Now (top findings) ─────────────────────── */}
-          {(interpretation?.top_findings?.length || 0) > 0 || biomarkers.length > 0 ? (
-            <QuickHighlights
-              biomarkers={biomarkers.map(b => ({
-                name: b.name,
-                value: b.value,
-                unit: b.unit,
-                labRefMin: b.reference_min,
-                labRefMax: b.reference_max,
-              }))}
-              cyclePhase={cyclePhase}
-              topFindings={interpretation?.top_findings}
-            />
-          ) : null}
+          {/* ── C. Focus Now (key findings) ─────────────────────── */}
+          {interpretation && !isProcessing && (interpretation.key_findings?.length ?? 0) > 0 && (() => {
+            const flagged = interpretation.key_findings!.filter(f => f.status !== 'reassuring');
+            if (flagged.length === 0) return null;
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertCircle className="w-4 h-4 text-[#2A1F23]" />
+                  <h2 className="text-base font-semibold text-[#2A1F23]">Focus Now</h2>
+                  <span className="text-xs text-[#9A8A90] ml-auto">
+                    {flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {flagged.map((finding, i) => {
+                    const isAttention = finding.status === 'attention';
+                    const style = isAttention
+                      ? { bg: 'bg-red-50', border: 'border-red-100', dot: 'bg-red-500', text: 'text-red-700', badge: 'bg-red-100 text-red-700', label: 'Attention' }
+                      : { bg: 'bg-amber-50', border: 'border-amber-100', dot: 'bg-amber-400', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700', label: 'Monitor' };
+                    return (
+                      <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
+                        <div className="flex items-start justify-between gap-3 mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
+                            <span className="text-sm font-semibold text-[#2A1F23]">{finding.title}</span>
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${style.badge}`}>
+                            {style.label}
+                          </span>
+                        </div>
+                        <p className={`text-xs leading-relaxed ml-4 ${style.text}`}>{finding.explanation}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Fallback to QuickHighlights if no key_findings from AI */}
+          {(!interpretation || (interpretation.key_findings?.length ?? 0) === 0) && (
+            ((interpretation?.top_findings?.length || 0) > 0 || biomarkers.length > 0) ? (
+              <QuickHighlights
+                biomarkers={biomarkers.map(b => ({
+                  name: b.name,
+                  value: b.value,
+                  unit: b.unit,
+                  labRefMin: b.reference_min,
+                  labRefMax: b.reference_max,
+                }))}
+                cyclePhase={cyclePhase}
+                topFindings={interpretation?.top_findings}
+              />
+            ) : null
+          )}
+
+          {/* ── C2. What You Can Do Now ──────────────────────────── */}
+          {interpretation && !isProcessing && (interpretation.what_you_can_do_now?.length ?? 0) > 0 && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 overflow-hidden">
+              <div className="px-5 py-4 border-b border-emerald-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                    <Lightbulb className="w-4 h-4 text-emerald-700" />
+                  </div>
+                  <h2 className="text-sm font-bold text-emerald-900">What You Can Do Now</h2>
+                </div>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {interpretation.what_you_can_do_now!.map((tip, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-xs font-bold text-emerald-800">{i + 1}</span>
+                    </div>
+                    <p className="text-sm text-emerald-900 leading-relaxed">{tip}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── D. Pattern Signals ──────────────────────────────── */}
           {(interpretation?.pattern_signals?.length ?? 0) > 0 && (

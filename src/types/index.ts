@@ -226,8 +226,21 @@ export interface BiomarkerInput {
 export interface AITopFinding {
   biomarker_slug: string;
   title: string;
-  status: 'monitor' | 'discuss' | 'reassuring';
+  status: 'monitor' | 'discuss' | 'reassuring' | 'attention';
   explanation: string;
+}
+
+export interface AIKeyFinding {
+  biomarker_slug: string;
+  title: string;
+  status: 'monitor' | 'attention' | 'reassuring';
+  explanation: string;
+}
+
+export interface AIPrimaryConcern {
+  title: string;
+  summary: string;
+  why_it_matters: string;
 }
 
 export interface AIPatternSignal {
@@ -240,6 +253,10 @@ export interface AIPatternSignal {
 export interface AIInterpretation {
   headline: string;
   summary_bullets: string[];
+  primary_concern?: AIPrimaryConcern;
+  key_findings?: AIKeyFinding[];
+  what_you_can_do_now?: string[];
+  what_to_do_next?: string[];
   top_findings: AITopFinding[];
   pattern_signals: AIPatternSignal[];
   cycle_context: {
