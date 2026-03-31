@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface AnalyteData {
   id: string;
   raw_name: string;
@@ -35,7 +37,28 @@ interface LabReportData {
   };
 }
 
-function classifyAnalyte(a: AnalyteData): "in_range" | "out_of_range" | "borderline" | "unknown" {
+type AnalyteStatus = "in_range" | "out_of_range" | "borderline" | "unknown";
+
+interface PatternCandidate {
+  title: string;
+  confidence: "low" | "medium" | "high";
+  explanation: string;
+  related_biomarkers: string[];
+}
+
+interface ReportFacts {
+  top_out_of_range: AnalyteData[];
+  top_borderline: AnalyteData[];
+  reassuring_in_range: AnalyteData[];
+  matched_patterns: PatternCandidate[];
+  missing_followup_labs: string[];
+  cycle_notes: string;
+  context_notes: string[];
+}
+
+// ─── Classification ───────────────────────────────────────────────────────────
+
+function classifyAnalyte(a: AnalyteData): AnalyteStatus {
   const v = Number(a.value_numeric);
   if (a.normalized_min !== null && a.normalized_max !== null) {
     const min = Number(a.normalized_min);
@@ -54,163 +77,489 @@ function classifyAnalyte(a: AnalyteData): "in_range" | "out_of_range" | "borderl
   return "unknown";
 }
 
-function generateFallbackInterpretation(report: LabReportData, analytes: AnalyteData[]) {
-  const cyclePhase = report.estimated_cycle_phase || "unknown";
-  const cycleDay = report.estimated_cycle_day;
-  const symptoms = report.context?.top_symptoms ?? [];
+function slug(a: AnalyteData): string {
+  return a.canonical_slug ?? a.raw_name.toLowerCase().replace(/\s+/g, "_");
+}
 
+function displayVal(a: AnalyteData): string {
+  return `${a.raw_value_text ?? String(a.value_numeric)}${a.unit ? " " + a.unit : ""}`;
+}
+
+function hasSlug(analytes: AnalyteData[], ...slugs: string[]): AnalyteData | undefined {
+  return analytes.find(a => a.canonical_slug && slugs.includes(a.canonical_slug));
+}
+
+function getBySlug(analytes: AnalyteData[], s: string): AnalyteData | undefined {
+  return analytes.find(a => a.canonical_slug === s);
+}
+
+// ─── Pattern Detection ────────────────────────────────────────────────────────
+
+function detectPatterns(analytes: AnalyteData[], report: LabReportData): PatternCandidate[] {
+  const patterns: PatternCandidate[] = [];
+  const statusMap = new Map<string, AnalyteStatus>();
+  for (const a of analytes) {
+    if (a.canonical_slug) statusMap.set(a.canonical_slug, classifyAnalyte(a));
+  }
+
+  const isAbnormal = (s: string) =>
+    statusMap.get(s) === "out_of_range" || statusMap.get(s) === "borderline";
+  const isLow = (a: AnalyteData | undefined) => {
+    if (!a || a.normalized_min === null) return false;
+    return Number(a.value_numeric) < Number(a.normalized_min);
+  };
+  const isHigh = (a: AnalyteData | undefined) => {
+    if (!a) return false;
+    if (a.normalized_max !== null) return Number(a.value_numeric) > Number(a.normalized_max);
+    if (a.normalized_operator === "<" && a.normalized_operator_value !== null)
+      return Number(a.value_numeric) > Number(a.normalized_operator_value);
+    return false;
+  };
+
+  // ── Thyroid autoimmunity ──────────────────────────────────────────────────
+  const tpo = getBySlug(analytes, "tpo_antibodies");
+  const tgAb = getBySlug(analytes, "tg_antibodies");
+  const tsh = getBySlug(analytes, "tsh");
+  const ft4 = getBySlug(analytes, "free_t4");
+  const ft3 = getBySlug(analytes, "free_t3");
+
+  const tpoHigh = tpo && isHigh(tpo);
+  const tgHigh = tgAb && isHigh(tgAb);
+  const thyroidFunctionAbnormal = isAbnormal("tsh") || isAbnormal("free_t4") || isAbnormal("free_t3");
+
+  if (tpoHigh || tgHigh) {
+    const related = ["tpo_antibodies", "tg_antibodies", "tsh", "free_t4", "free_t3"].filter(s =>
+      analytes.some(a => a.canonical_slug === s)
+    );
+    const confidence: "low" | "medium" | "high" =
+      (tpoHigh && tgHigh && thyroidFunctionAbnormal) ? "high" :
+      (tpoHigh || tgHigh) && thyroidFunctionAbnormal ? "medium" : "low";
+    patterns.push({
+      title: "Thyroid Autoimmunity Pattern",
+      confidence,
+      explanation: `Elevated thyroid antibodies${tpoHigh && tgHigh ? " (both TPO and thyroglobulin)" : tpoHigh ? " (TPO)" : " (thyroglobulin)"}${thyroidFunctionAbnormal ? " alongside abnormal thyroid function markers" : ""} can indicate an autoimmune process affecting the thyroid. This pattern is worth evaluating with your provider, especially if you have symptoms like fatigue, hair changes, or temperature sensitivity.`,
+      related_biomarkers: related,
+    });
+  } else if (isAbnormal("tsh") || isAbnormal("free_t4") || isAbnormal("free_t3")) {
+    const related = ["tsh", "free_t4", "free_t3"].filter(s => analytes.some(a => a.canonical_slug === s));
+    const allThreeAbnormal = isAbnormal("tsh") && (isAbnormal("free_t4") || isAbnormal("free_t3"));
+    patterns.push({
+      title: "Thyroid Function Variation",
+      confidence: allThreeAbnormal ? "medium" : "low",
+      explanation: `One or more thyroid function markers are outside their reference range. Thyroid hormones affect energy, metabolism, mood, and menstrual regularity, so this is worth a closer look in conjunction with your symptoms and full thyroid panel.`,
+      related_biomarkers: related,
+    });
+  }
+
+  // ── Insulin resistance / glucose dysregulation ───────────────────────────
+  const glucose = getBySlug(analytes, "fasting_glucose");
+  const hba1c = getBySlug(analytes, "hemoglobin_a1c");
+  const insulin = getBySlug(analytes, "fasting_insulin");
+  const triglycerides = getBySlug(analytes, "triglycerides");
+  const hdl = getBySlug(analytes, "hdl_cholesterol");
+
+  const glucoseAbnormal = isAbnormal("fasting_glucose");
+  const hba1cAbnormal = isAbnormal("hemoglobin_a1c");
+  const insulinHigh = insulin && isHigh(insulin);
+  const trigsHigh = triglycerides && isHigh(triglycerides);
+  const hdlLow = hdl && isLow(hdl);
+
+  const irSignals = [glucoseAbnormal, hba1cAbnormal, insulinHigh, trigsHigh, hdlLow].filter(Boolean).length;
+
+  if (irSignals >= 2) {
+    const related = ["fasting_glucose", "hemoglobin_a1c", "fasting_insulin", "triglycerides", "hdl_cholesterol"].filter(s =>
+      analytes.some(a => a.canonical_slug === s)
+    );
+    patterns.push({
+      title: "Glucose Regulation Pattern",
+      confidence: irSignals >= 3 ? "medium" : "low",
+      explanation: `${irSignals} markers associated with glucose regulation show variation — ${[glucoseAbnormal && "fasting glucose", hba1cAbnormal && "HbA1c", insulinHigh && "fasting insulin", trigsHigh && "triglycerides", hdlLow && "HDL"].filter(Boolean).join(", ")}. Together, these can reflect early changes in how the body processes sugar and insulin. This pattern is worth discussing with your provider, particularly if you have PCOS, family history of metabolic conditions, or symptoms like fatigue after meals.`,
+      related_biomarkers: related,
+    });
+  } else if (irSignals === 1 && (glucoseAbnormal || hba1cAbnormal)) {
+    const related = ["fasting_glucose", "hemoglobin_a1c"].filter(s => analytes.some(a => a.canonical_slug === s));
+    patterns.push({
+      title: "Fasting Glucose Elevation",
+      confidence: "low",
+      explanation: `A single elevated fasting glucose or HbA1c marker warrants attention but is not diagnostic on its own. Confirm with a repeat test and discuss with your provider in context of your diet, activity, and family history.`,
+      related_biomarkers: related,
+    });
+  }
+
+  // ── Lipid pattern ─────────────────────────────────────────────────────────
+  const ldl = getBySlug(analytes, "ldl_cholesterol");
+  const totalChol = getBySlug(analytes, "total_cholesterol");
+  const apob = getBySlug(analytes, "apob");
+
+  const ldlHigh = ldl && isHigh(ldl);
+  const totalCholHigh = totalChol && isHigh(totalChol);
+  const apobHigh = apob && isHigh(apob);
+  const lipidSignals = [ldlHigh, totalCholHigh, apobHigh, trigsHigh, hdlLow].filter(Boolean).length;
+
+  if (lipidSignals >= 2) {
+    const related = ["ldl_cholesterol", "total_cholesterol", "hdl_cholesterol", "triglycerides", "apob"].filter(s =>
+      analytes.some(a => a.canonical_slug === s)
+    );
+    patterns.push({
+      title: "Lipid Pattern Worth Monitoring",
+      confidence: lipidSignals >= 3 ? "medium" : "low",
+      explanation: `Several lipid markers are outside optimal ranges: ${[ldlHigh && "LDL", totalCholHigh && "total cholesterol", apobHigh && "ApoB", trigsHigh && "triglycerides", hdlLow && "low HDL"].filter(Boolean).join(", ")}. Estrogen naturally modulates lipid metabolism, so cycle timing and hormonal context matter here. A cardiovascular risk conversation with your provider is appropriate.`,
+      related_biomarkers: related,
+    });
+  }
+
+  // ── Phase-aware reproductive hormone interpretation ───────────────────────
+  const phase = report.estimated_cycle_phase;
+  const cycleDay = report.estimated_cycle_day;
+  const onBC = report.context?.birth_control === "yes";
+  const pregnant = report.context?.pregnant === "yes";
+
+  if (!onBC && !pregnant && phase && phase !== "unknown") {
+    const estradiol = getBySlug(analytes, "estradiol");
+    const progesterone = getBySlug(analytes, "progesterone");
+    const lh = getBySlug(analytes, "lh");
+    const fsh = getBySlug(analytes, "fsh");
+    const amh = getBySlug(analytes, "amh");
+
+    const hormoneAbnormal = [estradiol, progesterone, lh, fsh].filter(a => a && isAbnormal(a.canonical_slug!)).length;
+
+    if (hormoneAbnormal >= 2) {
+      const related = ["estradiol", "progesterone", "lh", "fsh", "amh"].filter(s =>
+        analytes.some(a => a.canonical_slug === s)
+      );
+      const phaseLabel = phase === "luteal" ? "luteal" : phase === "follicular" ? "follicular" : phase === "ovulatory" ? "ovulatory" : phase;
+      patterns.push({
+        title: "Reproductive Hormone Variation",
+        confidence: hormoneAbnormal >= 3 ? "medium" : "low",
+        explanation: `${hormoneAbnormal} reproductive hormones fall outside expected ranges for the ${phaseLabel} phase (day ${cycleDay ?? "?"}). Hormone levels are highly phase-dependent, and a single draw rarely tells the full story — but this pattern may be worth tracking across cycles or repeating at a different phase for comparison.`,
+        related_biomarkers: related,
+      });
+    }
+
+    if (amh && isLow(amh)) {
+      patterns.push({
+        title: "Low Ovarian Reserve Signal",
+        confidence: "low",
+        explanation: `AMH (anti-Müllerian hormone) is below the lower reference limit, which can be an early signal of diminished ovarian reserve. This is not a fertility diagnosis, but it is worth discussing with a reproductive endocrinologist if family planning is relevant to you.`,
+        related_biomarkers: ["amh", "fsh"],
+      });
+    }
+  }
+
+  // ── Iron / nutrient depletion ─────────────────────────────────────────────
+  const ferritin = getBySlug(analytes, "ferritin");
+  const vitD = getBySlug(analytes, "vitamin_d_25_oh");
+  const b12 = getBySlug(analytes, "vitamin_b12");
+  const hgb = getBySlug(analytes, "hemoglobin");
+
+  const ferritinLow = ferritin && isLow(ferritin);
+  const vitDLow = vitD && isLow(vitD);
+  const b12Low = b12 && isLow(b12);
+  const hgbLow = hgb && isLow(hgb);
+  const nutrientSignals = [ferritinLow, vitDLow, b12Low, hgbLow].filter(Boolean).length;
+
+  if (nutrientSignals >= 2) {
+    const related = ["ferritin", "vitamin_d_25_oh", "vitamin_b12", "hemoglobin", "serum_iron"].filter(s =>
+      analytes.some(a => a.canonical_slug === s)
+    );
+    patterns.push({
+      title: "Nutrient Depletion Pattern",
+      confidence: nutrientSignals >= 3 ? "medium" : "low",
+      explanation: `Multiple nutrient markers are below optimal ranges — ${[ferritinLow && "ferritin", vitDLow && "vitamin D", b12Low && "B12", hgbLow && "hemoglobin"].filter(Boolean).join(", ")}. Nutrient insufficiencies often cluster together and can contribute to fatigue, mood changes, and hormonal disruption. Targeted repletion should be guided by your provider based on severity.`,
+      related_biomarkers: related,
+    });
+  } else if (ferritinLow && hgbLow) {
+    patterns.push({
+      title: "Iron-Deficiency Signal",
+      confidence: "medium",
+      explanation: `Both ferritin and hemoglobin are below their reference ranges, which is consistent with iron-deficiency anemia — particularly common in women with heavier cycles. Confirmation with a full iron panel and clinical correlation is appropriate before supplementing.`,
+      related_biomarkers: ["ferritin", "hemoglobin", "serum_iron", "tibc"],
+    });
+  }
+
+  return patterns.slice(0, 3);
+}
+
+// ─── Missing Follow-up Labs ───────────────────────────────────────────────────
+
+function computeMissingFollowupLabs(analytes: AnalyteData[], report: LabReportData): string[] {
+  const present = new Set(analytes.map(a => a.canonical_slug).filter(Boolean));
+  const missing: string[] = [];
+
+  const has = (...slugs: string[]) => slugs.some(s => present.has(s));
+
+  if (has("tsh") && !has("free_t4", "free_t3")) {
+    missing.push("Free T4 and Free T3 (TSH alone is incomplete for thyroid function assessment)");
+  }
+  if (has("tpo_antibodies", "tg_antibodies") && !has("tsh")) {
+    missing.push("TSH (to pair with the antibody markers already present)");
+  }
+  if (has("fasting_glucose", "hemoglobin_a1c") && !has("fasting_insulin")) {
+    missing.push("Fasting insulin (would complete a glucose dysregulation assessment)");
+  }
+  if (has("ldl_cholesterol", "total_cholesterol") && !has("apob")) {
+    missing.push("ApoB (a more precise cardiovascular risk marker than LDL alone)");
+  }
+  if (has("estradiol", "progesterone") && !has("lh", "fsh")) {
+    missing.push("LH and FSH (would provide a more complete reproductive hormone picture)");
+  }
+  if (has("ferritin") && !has("serum_iron", "tibc")) {
+    missing.push("Serum iron and TIBC (to characterize iron status more fully)");
+  }
+  if (!has("vitamin_d_25_oh") && !has("vitamin_b12")) {
+    missing.push("Vitamin D and B12 (commonly deficient and clinically impactful for women)");
+  }
+  if (has("hemoglobin") && !has("ferritin")) {
+    missing.push("Ferritin (often low before hemoglobin drops — the earliest iron marker)");
+  }
+  if (!has("hs_crp") && !has("esr")) {
+    missing.push("hs-CRP (a sensitive inflammatory marker absent from this panel)");
+  }
+
+  return missing.slice(0, 5);
+}
+
+// ─── Pre-LLM Report Facts ─────────────────────────────────────────────────────
+
+const HIGH_VALUE_SLUGS = new Set([
+  "estradiol", "progesterone", "lh", "fsh", "tsh", "free_t4", "free_t3",
+  "fasting_glucose", "hemoglobin_a1c", "total_cholesterol", "ldl_cholesterol",
+  "hdl_cholesterol", "triglycerides", "creatinine", "egfr", "alt", "ast",
+  "ferritin", "vitamin_d_25_oh", "vitamin_b12", "hs_crp", "tpo_antibodies",
+  "hemoglobin", "shbg", "total_testosterone", "dheas", "fasting_insulin",
+  "amh", "prolactin", "apob", "tg_antibodies", "serum_iron",
+]);
+
+function computeReportFacts(analytes: AnalyteData[], report: LabReportData): ReportFacts {
   const outOfRange = analytes.filter(a => classifyAnalyte(a) === "out_of_range");
   const borderline = analytes.filter(a => classifyAnalyte(a) === "borderline");
-  const topFlagged = [...outOfRange, ...borderline].slice(0, 5);
-  const totalFlagged = outOfRange.length + borderline.length;
+  const inRange = analytes.filter(a => classifyAnalyte(a) === "in_range");
 
-  let headline = "";
-  if (totalFlagged === 0) {
-    headline = `Your ${analytes.length}-marker panel looks largely within range — a useful baseline for tracking.`;
-  } else if (outOfRange.length > 0) {
-    const firstName = outOfRange[0].raw_name;
-    headline = `${outOfRange.length} value${outOfRange.length > 1 ? "s" : ""} worth discussing — ${firstName} is the most notable.`;
+  const reassuring = inRange.filter(a =>
+    a.canonical_slug && HIGH_VALUE_SLUGS.has(a.canonical_slug)
+  ).slice(0, 6);
+
+  const phase = report.estimated_cycle_phase;
+  const day = report.estimated_cycle_day;
+  const onBC = report.context?.birth_control === "yes";
+  const pregnant = report.context?.pregnant === "yes";
+  const postpartum = report.context?.postpartum === "yes";
+
+  let cycleNotes = "";
+  if (pregnant) {
+    cycleNotes = "Patient is currently pregnant. Hormone and metabolic reference ranges differ significantly in pregnancy.";
+  } else if (postpartum) {
+    cycleNotes = "Patient is postpartum. Hormone levels may be suppressed or fluctuating as the body recovers.";
+  } else if (onBC) {
+    cycleNotes = "Patient is on hormonal birth control. Endogenous hormone levels — especially estradiol, progesterone, LH, and FSH — will be suppressed. SHBG is often elevated. Interpret hormone markers accordingly.";
+  } else if (phase && phase !== "unknown" && day) {
+    const phaseExpectations: Record<string, string> = {
+      menstrual: "Estradiol and progesterone are typically low. FSH begins rising. Spotting iron-related markers (ferritin, hemoglobin) here is valuable.",
+      follicular: "Estradiol is rising. Progesterone is low. FSH is moderately elevated. LH is baseline.",
+      ovulatory: "LH surge expected. Estradiol peaks just before ovulation. Progesterone beginning to rise.",
+      luteal: "Progesterone should be elevated (ideally above 5–10 ng/mL at mid-luteal). Estradiol has a secondary, smaller rise. LH and FSH are low.",
+    };
+    cycleNotes = `Labs drawn on day ${day} (${phase} phase). ${phaseExpectations[phase] ?? "Phase-specific hormone expectations apply."}`;
   } else {
-    headline = `${borderline.length} borderline result${borderline.length > 1 ? "s" : ""} worth keeping an eye on.`;
+    cycleNotes = "Cycle day is not known. Hormone values cannot be interpreted in phase context without this information.";
+  }
+
+  const contextNotes: string[] = [];
+  const symptoms = report.context?.top_symptoms ?? [];
+  if (symptoms.length > 0) {
+    contextNotes.push(`Reported symptoms: ${symptoms.slice(0, 4).join(", ")}.`);
+  }
+  if (postpartum) contextNotes.push("Postpartum status noted.");
+  if (pregnant) contextNotes.push("Currently pregnant.");
+  if (onBC) contextNotes.push("On hormonal birth control.");
+
+  return {
+    top_out_of_range: outOfRange.slice(0, 6),
+    top_borderline: borderline.slice(0, 5),
+    reassuring_in_range: reassuring,
+    matched_patterns: detectPatterns(analytes, report),
+    missing_followup_labs: computeMissingFollowupLabs(analytes, report),
+    cycle_notes: cycleNotes,
+    context_notes: contextNotes,
+  };
+}
+
+// ─── Fallback Interpretation ──────────────────────────────────────────────────
+
+function generateFallbackInterpretation(report: LabReportData, analytes: AnalyteData[]) {
+  const facts = computeReportFacts(analytes, report);
+  const { top_out_of_range, top_borderline, matched_patterns } = facts;
+  const totalFlagged = top_out_of_range.length + top_borderline.length;
+  const phase = report.estimated_cycle_phase ?? "unknown";
+  const day = report.estimated_cycle_day;
+
+  let headline: string;
+  if (totalFlagged === 0) {
+    headline = `Your ${analytes.length}-marker panel is within reference ranges — a solid baseline to build from.`;
+  } else if (top_out_of_range.length > 0) {
+    const firstName = top_out_of_range[0].raw_name;
+    headline = `${top_out_of_range.length} value${top_out_of_range.length > 1 ? "s" : ""} outside reference range — ${firstName} is the most notable finding.`;
+  } else {
+    const firstName = top_borderline[0].raw_name;
+    headline = `${top_borderline.length} borderline result${top_borderline.length > 1 ? "s" : ""} — including ${firstName} — worth keeping an eye on.`;
   }
 
   const summaryBullets: string[] = [];
 
   if (totalFlagged === 0) {
-    summaryBullets.push(`All ${analytes.length} markers are within their reference ranges.`);
+    summaryBullets.push(`All ${analytes.length} markers reviewed are within their reference ranges.`);
+  } else {
+    const parts: string[] = [];
+    if (top_out_of_range.length > 0) parts.push(`${top_out_of_range.length} out of range`);
+    if (top_borderline.length > 0) parts.push(`${top_borderline.length} borderline`);
+    summaryBullets.push(`Of ${analytes.length} analytes reviewed: ${parts.join(", ")}.`);
+  }
+
+  if (day && phase !== "unknown") {
+    summaryBullets.push(
+      `These labs were drawn on cycle day ${day} (${phase} phase). Reproductive hormones — especially estradiol, progesterone, LH, and FSH — are highly phase-dependent, so timing context matters when interpreting them.`
+    );
   } else {
     summaryBullets.push(
-      `${outOfRange.length} value${outOfRange.length !== 1 ? "s" : ""} outside reference range, ${borderline.length} borderline.`
+      `Cycle timing isn't available for this report. Adding your last period date would allow hormone markers like estradiol, progesterone, and LH to be interpreted in their proper cycle context.`
     );
   }
 
-  if (cycleDay && cyclePhase !== "unknown") {
+  if (facts.context_notes.length > 0) {
+    summaryBullets.push(facts.context_notes.join(" "));
+  } else if (facts.matched_patterns.length > 0) {
     summaryBullets.push(
-      `Drawn on cycle day ${cycleDay} (${cyclePhase} phase). Hormone values — especially estradiol, progesterone, LH, and FSH — vary significantly by phase.`
-    );
-  } else {
-    summaryBullets.push(
-      "Adding your last period date would help contextualize hormone markers like estradiol, progesterone, LH, and FSH."
+      `Pattern analysis identified ${facts.matched_patterns.length} potential signal${facts.matched_patterns.length > 1 ? "s" : ""} — including ${facts.matched_patterns[0].title.toLowerCase()}. These are observations, not diagnoses.`
     );
   }
 
-  if (symptoms.length > 0) {
-    summaryBullets.push(
-      `You reported ${symptoms.slice(0, 3).join(", ")}. Bring this symptom history to your provider — context often changes how labs are interpreted.`
-    );
-  }
-
+  const topFlagged = [...top_out_of_range, ...top_borderline].slice(0, 5);
   const top_findings = topFlagged.map(a => {
     const status = classifyAnalyte(a);
-    const val = a.raw_value_text ?? String(a.value_numeric);
-    const slug = a.canonical_slug ?? a.raw_name.toLowerCase().replace(/\s+/g, "_");
-    let explanation = `Your ${a.raw_name} result was ${val}${a.unit ? " " + a.unit : ""}.`;
+    const val = displayVal(a);
+    let explanation = `Your ${a.raw_name} result was ${val}.`;
     if (status === "out_of_range") {
-      explanation += " This is outside the reference range — worth discussing with your provider.";
-    } else if (status === "borderline") {
-      explanation += " This is near the edge of the reference range — worth monitoring.";
+      explanation += " This falls outside the reference range. The clinical significance depends on your full history, symptoms, and cycle context.";
+    } else {
+      explanation += " This sits near the edge of the reference range — worth noting and potentially retesting to assess the trend.";
     }
     return {
-      biomarker_slug: slug,
+      biomarker_slug: slug(a),
       title: a.raw_name,
       status: status === "out_of_range" ? "discuss" as const : "monitor" as const,
       explanation,
     };
   });
 
-  const questions: string[] = [
-    "What do these results mean given my full health history and current symptoms?",
-    "Are there any values you'd recommend retesting — and if so, at what point in my cycle?",
-  ];
-  if (topFlagged.length > 0) {
-    questions.push(`Can you walk me through the ${topFlagged[0].raw_name} result and what it might mean?`);
+  const questions: string[] = [];
+  if (top_out_of_range.length > 0) {
+    questions.push(`My ${top_out_of_range[0].raw_name} came back ${displayVal(top_out_of_range[0])} — can you walk me through what that means given my full picture?`);
   }
-  questions.push("How does my cycle timing affect how we interpret hormone markers on this panel?");
+  if (day && phase !== "unknown") {
+    questions.push(`These labs were drawn on day ${day} of my cycle. Would repeating any of these at a different phase give us more information?`);
+  } else {
+    questions.push("Which of these markers would benefit most from being retested at a specific point in my cycle?");
+  }
+  if (matched_patterns.length > 0) {
+    questions.push(`Based on the ${matched_patterns[0].title.toLowerCase()}, is there anything you'd want to rule out or track more closely?`);
+  } else {
+    questions.push("Are there any markers on this panel you'd want to recheck in 3–6 months to assess trends?");
+  }
+  if (facts.missing_followup_labs.length > 0) {
+    questions.push(`Would it be helpful to add ${facts.missing_followup_labs[0].split(" (")[0]} to my next draw?`);
+  }
+
+  const cycleExplanation = day && phase !== "unknown"
+    ? `Labs drawn on cycle day ${day} during the ${phase} phase. Hormone values on this panel should be read with that timing in mind.`
+    : "Cycle timing was not available for this report. Providing your last period date with future reports will enable more precise hormone interpretation.";
 
   return {
     headline,
-    summary_bullets: summaryBullets,
+    summary_bullets: summaryBullets.slice(0, 3),
     top_findings,
-    pattern_signals: [],
+    pattern_signals: matched_patterns,
     cycle_context: {
-      estimated_cycle_day: cycleDay,
-      estimated_cycle_phase: cyclePhase,
-      confidence: cycleDay ? "medium" : "low",
-      explanation: cycleDay
-        ? `Based on your cycle information, you may be in the ${cyclePhase} phase around day ${cycleDay}. Hormone levels vary naturally across each phase.`
-        : "Without a period date, hormone level interpretation is limited.",
+      estimated_cycle_day: day,
+      estimated_cycle_phase: phase,
+      confidence: day ? "medium" as const : "low" as const,
+      explanation: cycleExplanation,
     },
-    questions_for_doctor: questions,
+    questions_for_doctor: questions.slice(0, 4),
     disclaimer:
-      "This report is for educational purposes only and does not constitute medical advice. Discuss all results with your healthcare provider in the context of your full health history.",
+      "This report is for educational purposes only and does not constitute medical advice. All results should be reviewed with your healthcare provider in the context of your full health history, symptoms, and clinical presentation.",
   };
 }
 
-async function tryOpenAI(apiKey: string, report: LabReportData, analytes: AnalyteData[]): Promise<any | null> {
-  const outOfRange = analytes.filter(a => classifyAnalyte(a) === "out_of_range");
-  const borderline = analytes.filter(a => classifyAnalyte(a) === "borderline");
+// ─── OpenAI Call ──────────────────────────────────────────────────────────────
 
-  const HIGH_VALUE_SLUGS = new Set([
-    "estradiol", "progesterone", "lh", "fsh", "tsh", "free_t4", "free_t3",
-    "fasting_glucose", "hemoglobin_a1c", "total_cholesterol", "ldl_cholesterol",
-    "hdl_cholesterol", "triglycerides", "creatinine", "egfr", "alt", "ast",
-    "ferritin", "vitamin_d_25_oh", "vitamin_b12", "hs_crp", "tpo_antibodies",
-    "hemoglobin", "shbg", "total_testosterone", "dheas", "fasting_insulin",
-  ]);
+async function tryOpenAI(apiKey: string, report: LabReportData, analytes: AnalyteData[]): Promise<any | null> {
+  const facts = computeReportFacts(analytes, report);
+  const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
 
   const keyInRange = analytes.filter(a =>
     a.canonical_slug &&
     HIGH_VALUE_SLUGS.has(a.canonical_slug) &&
-    !outOfRange.includes(a) &&
-    !borderline.includes(a)
+    classifyAnalyte(a) === "in_range" &&
+    !reassuring_in_range.includes(a)
   );
 
-  const selected = [...outOfRange, ...borderline, ...keyInRange].slice(0, 14);
+  const selected = [
+    ...top_out_of_range,
+    ...top_borderline,
+    ...reassuring_in_range,
+    ...keyInRange,
+  ].filter((a, i, arr) => arr.indexOf(a) === i).slice(0, 16);
 
   const labLines = selected.map(a => {
-    const val = a.raw_value_text ?? String(a.value_numeric);
-    const slug = a.canonical_slug ? ` [${a.canonical_slug}]` : "";
-    let line = `${a.raw_name}${slug}: ${val}${a.unit ? " " + a.unit : ""}`;
+    const val = displayVal(a);
+    const s = a.canonical_slug ? ` [${a.canonical_slug}]` : "";
+    let line = `${a.raw_name}${s}: ${val}`;
     if (a.raw_reference_range) line += ` (ref: ${a.raw_reference_range})`;
-    const status = classifyAnalyte(a);
-    if (status === "out_of_range") line += " ← OUT OF RANGE";
-    else if (status === "borderline") line += " ← BORDERLINE";
+    const st = classifyAnalyte(a);
+    if (st === "out_of_range") line += " ← OUT OF RANGE";
+    else if (st === "borderline") line += " ← BORDERLINE";
     return line;
   }).join("\n");
 
-  const ctx: string[] = [];
-  if (report.context?.birth_control === "yes") ctx.push("on hormonal birth control");
-  if (report.context?.pregnant === "yes") ctx.push("currently pregnant");
-  if (report.context?.postpartum === "yes") ctx.push("postpartum");
-  if (report.context?.top_symptoms?.length) {
-    ctx.push(`reported symptoms: ${report.context.top_symptoms.slice(0, 4).join(", ")}`);
-  }
+  const patternBlock = matched_patterns.length > 0
+    ? `\nDETERMINISTIC PATTERN CANDIDATES (pre-analyzed — use as starting evidence, not final conclusions):\n` +
+      matched_patterns.map(p =>
+        `- ${p.title} [confidence: ${p.confidence}]: ${p.explanation} (markers: ${p.related_biomarkers.join(", ")})`
+      ).join("\n")
+    : "";
 
-  const cycleInfo = report.estimated_cycle_day && report.estimated_cycle_phase
-    ? `Day ${report.estimated_cycle_day} of cycle — ${report.estimated_cycle_phase} phase`
-    : "cycle day unknown";
+  const missingBlock = missing_followup_labs.length > 0
+    ? `\nABSENT FOLLOW-UP LABS WORTH NOTING:\n${missing_followup_labs.map(m => `- ${m}`).join("\n")}`
+    : "";
 
-  const prompt = `You are Amani's clinical interpretation engine. Your role is to interpret women's lab results with precision, cycle awareness, and clinical nuance. You do not over-diagnose. You do not generate generic wellness advice. You flag what matters and contextualize it clearly.
+  const prompt = `You are Amani's clinical interpretation engine. Your role is to produce a structured, cycle-aware interpretation of a woman's lab results. You are precise, grounded in the data provided, and do not over-diagnose or generate unsupported conclusions.
 
 PATIENT CONTEXT:
 - Report date: ${report.report_date}
-- Cycle: ${cycleInfo}
-${ctx.length ? "- " + ctx.join("\n- ") : ""}
+- Cycle: ${cycle_notes}
+${context_notes.length ? "- " + context_notes.join("\n- ") : ""}
 
 LAB PANEL: ${analytes.length} total analytes. Key values shown below:
 ${labLines}
+${patternBlock}
+${missingBlock}
+
+STRUCTURED FACTS (derived before this call — use to ground your response):
+- Out-of-range markers: ${top_out_of_range.length > 0 ? top_out_of_range.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none"}
+- Borderline markers: ${top_borderline.length > 0 ? top_borderline.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none"}
+- Clinically important in-range markers: ${reassuring_in_range.length > 0 ? reassuring_in_range.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none notable"}
 
 INSTRUCTIONS:
-1. Write a single-sentence headline that captures the most important clinical finding or reassurance. Be specific, not generic.
-2. Write exactly 3 summary bullets. Each should be a specific, clinically grounded observation — not lifestyle advice. Reference actual values when helpful.
-3. Identify up to 5 top findings (prioritize out-of-range and borderline). For each, use the canonical_slug as biomarker_slug when available. Status must be "discuss", "monitor", or "reassuring". Explanation should be 1–3 sentences, specific to this patient's result and cycle context.
-4. Identify up to 3 pattern signals — multi-marker patterns that suggest a clinical theme (e.g., possible insulin resistance, thyroid autoimmunity). Only include if genuinely supported by the data. Each must have confidence level.
-5. Write 3 specific, actionable questions for a doctor visit. These should reference the patient's actual results.
-6. Summarize the cycle context in 1–2 sentences based on the data.
-7. Do NOT generate nutrition, sleep, or exercise advice unless a specific lab value directly necessitates it.
-8. Tone: calm, intelligent, direct. Not alarmist. Not chatty. Not generic.
+1. Headline: One specific sentence capturing the most meaningful finding or reassurance. Reference actual values. Not generic.
+2. Summary bullets: Exactly 3 clinically grounded observations. Not lifestyle advice. Reference actual lab values.
+3. Top findings: Up to 5. Prioritize out-of-range then borderline. Use canonical_slug as biomarker_slug. Status: "discuss", "monitor", or "reassuring". Explanation: 2–3 sentences, specific to this patient's result and cycle context.
+4. Pattern signals: Use the pre-analyzed candidates above as evidence. Adjust or omit if data doesn't support them. Do NOT fabricate new patterns not supported by the lab values. Up to 3 patterns.
+5. Cycle context: 2–3 sentences grounded in the cycle_notes above.
+6. Questions for doctor: 3–4 specific questions referencing actual result values and the patient's context. Not generic.
+7. Tone: calm, intelligent, clinical, direct. No alarmism. No wellness fluff. No generic advice.
+8. Do NOT mention lifestyle, diet, sleep, or supplements unless a specific marker directly warrants it.
 
-Return ONLY a valid JSON object. No markdown. No preamble. Every array field MUST be an array, never a string.
+Return ONLY a valid JSON object. No markdown. No code blocks. No preamble. Every array field MUST be an array.
 
 Required schema:
 {
@@ -243,7 +592,7 @@ Required schema:
 }`;
 
   const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 25000);
+  const tid = setTimeout(() => controller.abort(), 28000);
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -254,27 +603,31 @@ Required schema:
         messages: [
           {
             role: "system",
-            content: "You are Amani's clinical engine. Return ONLY the JSON object. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
+            content: "You are Amani's clinical interpretation engine. Return ONLY valid JSON. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
           },
           { role: "user", content: prompt },
         ],
-        max_tokens: 1400,
-        temperature: 0.3,
+        max_tokens: 1800,
+        temperature: 0.25,
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,
     });
     clearTimeout(tid);
+
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
       console.warn("[generate-interpretation] OpenAI status:", res.status, errBody);
       return null;
     }
+
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content;
     if (!content) return null;
+
     const parsed = JSON.parse(content);
     if (typeof parsed.headline !== "string") return null;
+    if (!Array.isArray(parsed.summary_bullets)) return null;
     return parsed;
   } catch (e: any) {
     clearTimeout(tid);
@@ -282,6 +635,8 @@ Required schema:
     return null;
   }
 }
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -354,13 +709,13 @@ Deno.serve(async (req: Request) => {
       interpretationJson = report
         ? generateFallbackInterpretation(report as LabReportData, analytes)
         : {
-            headline: "Report data unavailable.",
+            headline: "Lab data could not be loaded for this report.",
             summary_bullets: [],
             top_findings: [],
             pattern_signals: [],
             cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" },
             questions_for_doctor: [],
-            disclaimer: "Educational use only.",
+            disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
           };
     }
 
