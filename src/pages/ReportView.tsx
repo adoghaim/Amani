@@ -138,9 +138,25 @@ export function ReportView() {
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
   const [showRecommendedLabs, setShowRecommendedLabs] = useState(false);
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
+  const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => { fetchReport(); }, [reportId]);
+
+  useEffect(() => {
+    if (biomarkers.length === 0 || categoriesInitialized) return;
+    const toCollapse = new Set<BiomarkerCategory>();
+    for (const cat of CATEGORY_ORDER) {
+      const items = sortedGroupedBiomarkers[cat];
+      if (!items || items.length === 0) continue;
+      const hasFlagged = items.some(b => b.flagged === 'out_of_range' || b.flagged === 'borderline');
+      if (!hasFlagged) toCollapse.add(cat);
+    }
+    setCollapsedCategories(toCollapse);
+    setCategoriesInitialized(true);
+  }, [biomarkers, sortedGroupedBiomarkers, categoriesInitialized]);
 
   useEffect(() => {
     if (!report || report.status !== 'processing') return;
@@ -570,50 +586,12 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── D. Pattern Signals ──────────────────────────────── */}
-          {(interpretation?.pattern_signals?.length ?? 0) > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Activity className="w-4 h-4 text-[#2A1F23]" />
-                <h2 className="text-base font-semibold text-[#2A1F23]">Pattern Signals</h2>
-              </div>
-              <div className="space-y-3">
-                {interpretation!.pattern_signals!.map((signal, i) => {
-                  const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low;
-                  return (
-                    <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <p className="text-sm font-semibold text-[#2A1F23]">{signal.title}</p>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${style.bg} ${style.text} ${style.border}`}>
-                          {style.label}
-                        </span>
-                      </div>
-                      <p className={`text-xs leading-relaxed mb-2 ${style.text}`}>{signal.explanation}</p>
-                      {signal.related_biomarkers?.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {signal.related_biomarkers.map((slug, j) => (
-                            <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-[#7A6570]">
-                              {BIOMARKER_DISPLAY[slug as BiomarkerName] ?? slug.replace(/_/g, ' ')}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Rule-based flags (always shown if present) */}
-          {insightFlags.length > 0 && <InsightFlagsPanel flags={insightFlags} />}
-
-          {/* ── E. Core Biomarkers ──────────────────────────────── */}
+          {/* ── D. Core Biomarkers ──────────────────────────────── */}
           {biomarkers.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-[#2A1F23]">
-                  Core Biomarkers
+                  Your Lab Results
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-[#C97C8B]">
                       — {CATEGORY_DISPLAY[activeCategory].label}
@@ -635,41 +613,125 @@ export function ReportView() {
                 activeCategory={activeCategory}
               />
 
-              <div className="mt-6 space-y-8">
-                {filteredCategories.map(({ category, items }) => (
-                  <div key={category}>
-                    <h3 className="text-xs font-bold text-[#9A8A90] uppercase tracking-widest mb-3">
-                      {CATEGORY_DISPLAY[category].label}
-                    </h3>
-                    <div className="space-y-2">
-                      {items.map(b => {
-                        const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
-                        return (
-                          <BiomarkerCard
-                            key={b.id}
-                            name={b.name}
-                            value={b.value}
-                            rawValueText={b.raw_value_text}
-                            unit={b.unit}
-                            labRefMin={b.reference_min}
-                            labRefMax={b.reference_max}
-                            cyclePhase={cyclePhase}
-                            plainEnglishMeaning={interp?.plain_english_meaning}
-                            timingNotes={interp?.timing_notes}
-                            commonNonAlarmReasons={interp?.common_non_alarm_reasons}
-                            whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
-                          />
-                        );
-                      })}
+              <div className="mt-5 space-y-2">
+                {filteredCategories.map(({ category, items }) => {
+                  const flaggedCount = items.filter(b => b.flagged === 'out_of_range' || b.flagged === 'borderline').length;
+                  const isCollapsed = collapsedCategories.has(category);
+                  const toggleCollapsed = () => {
+                    setCollapsedCategories(prev => {
+                      const next = new Set(prev);
+                      if (next.has(category)) next.delete(category);
+                      else next.add(category);
+                      return next;
+                    });
+                  };
+                  return (
+                    <div key={category} className="rounded-xl border border-gray-200 overflow-hidden">
+                      <button
+                        onClick={toggleCollapsed}
+                        className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-sm font-semibold text-[#2A1F23]">
+                            {CATEGORY_DISPLAY[category].label}
+                          </span>
+                          {flaggedCount > 0 && (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                              {flaggedCount} flagged
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-[#9A8A90]">{items.length}</span>
+                          {isCollapsed
+                            ? <ChevronRight className="w-4 h-4 text-gray-400" />
+                            : <ChevronDown className="w-4 h-4 text-gray-400" />
+                          }
+                        </div>
+                      </button>
+                      {!isCollapsed && (
+                        <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-2">
+                          {items.map(b => {
+                            const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
+                            return (
+                              <BiomarkerCard
+                                key={b.id}
+                                name={b.name}
+                                value={b.value}
+                                rawValueText={b.raw_value_text}
+                                unit={b.unit}
+                                labRefMin={b.reference_min}
+                                labRefMax={b.reference_max}
+                                cyclePhase={cyclePhase}
+                                plainEnglishMeaning={interp?.plain_english_meaning}
+                                timingNotes={interp?.timing_notes}
+                                commonNonAlarmReasons={interp?.common_non_alarm_reasons}
+                                whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Derived metrics */}
-          {derivedMetrics.length > 0 && <DerivedMetricsPanel metrics={derivedMetrics} />}
+          {/* ── E. More Details (Pattern Signals, Flags, Derived) ── */}
+          {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
+            <div className="rounded-2xl border border-gray-200 overflow-hidden">
+              <button
+                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-gray-50 transition-colors"
+                onClick={() => setShowMoreDetails(v => !v)}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Activity className="w-4 h-4 text-[#7A6570]" />
+                  <span className="text-sm font-semibold text-[#2A1F23]">Patterns & Insights</span>
+                  <span className="text-xs text-[#9A8A90]">signals, flags, derived metrics</span>
+                </div>
+                {showMoreDetails
+                  ? <ChevronDown className="w-4 h-4 text-gray-400" />
+                  : <ChevronRight className="w-4 h-4 text-gray-400" />
+                }
+              </button>
+              {showMoreDetails && (
+                <div className="border-t border-gray-100 px-5 py-5 space-y-6">
+                  {(interpretation?.pattern_signals?.length ?? 0) > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold text-[#9A8A90] uppercase tracking-widest">Pattern Signals</p>
+                      {interpretation!.pattern_signals!.map((signal, i) => {
+                        const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low;
+                        return (
+                          <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <p className="text-sm font-semibold text-[#2A1F23]">{signal.title}</p>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${style.bg} ${style.text} ${style.border}`}>
+                                {style.label}
+                              </span>
+                            </div>
+                            <p className={`text-xs leading-relaxed mb-2 ${style.text}`}>{signal.explanation}</p>
+                            {signal.related_biomarkers?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {signal.related_biomarkers.map((slug, j) => (
+                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-[#7A6570]">
+                                    {BIOMARKER_DISPLAY[slug as BiomarkerName] ?? slug.replace(/_/g, ' ')}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {insightFlags.length > 0 && <InsightFlagsPanel flags={insightFlags} />}
+                  {derivedMetrics.length > 0 && <DerivedMetricsPanel metrics={derivedMetrics} />}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── F. Full Lab Panel (accordion) ───────────────────── */}
           {totalAnalyteCount > 0 && (
