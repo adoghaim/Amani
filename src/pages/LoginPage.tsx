@@ -1,4 +1,4 @@
-import React from 'react'
+// removed
 import { LoginForm } from '../components/auth/LoginForm'
 import { Link, useNavigate } from 'react-router-dom'
 import { Heart, ArrowLeft } from 'lucide-react'

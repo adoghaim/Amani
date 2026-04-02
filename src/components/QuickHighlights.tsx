@@ -1,4 +1,4 @@
-import { AlertCircle, TrendingUp } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
 import type { AITopFinding, BiomarkerName, CyclePhase } from '../types';
 import {
@@ -46,6 +46,14 @@ const FINDING_STATUS_STYLE = {
     badge: 'bg-emerald-100 text-emerald-700',
     label: 'Reassuring',
   },
+  attention: {
+    bg: 'bg-orange-50',
+    border: 'border-orange-100',
+    dot: 'bg-orange-500',
+    text: 'text-orange-700',
+    badge: 'bg-orange-100 text-orange-700',
+    label: 'Needs Attention',
+  },
 };
 
 export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) {
@@ -56,9 +64,9 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 mb-1">
-          <AlertCircle className="w-4 h-4 text-[#2A1F23]" />
-          <h2 className="text-base font-semibold text-[#2A1F23]">Focus Now</h2>
-          <span className="text-xs text-[#9A8A90] ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
+          <AlertCircle className="w-4 h-4 text-theme-text" />
+          <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
+          <span className="text-xs text-theme-muted-text-3 ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
         </div>
         <div className="space-y-2">
           {flagged.map((finding, i) => {
@@ -73,7 +81,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-0.5 ${style.dot}`} />
-                    <span className="text-sm font-semibold text-[#2A1F23]">{displayName}</span>
+                    <span className="text-sm font-semibold text-theme-text">{displayName}</span>
                   </div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${style.badge}`}>
                     {style.label}
@@ -108,9 +116,9 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
-        <AlertCircle className="w-4 h-4 text-[#2A1F23]" />
-        <h2 className="text-base font-semibold text-[#2A1F23]">Focus Now</h2>
-        <span className="text-xs text-[#9A8A90] ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
+        <AlertCircle className="w-4 h-4 text-theme-text" />
+        <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
+        <span className="text-xs text-theme-muted-text-3 ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
       </div>
       <div className="space-y-2">
         {flagged.map(h => {
@@ -124,12 +132,12 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
             >
               <div className="flex items-center gap-2.5">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pill.dot}`} />
-                <span className="text-sm font-medium text-[#2A1F23]">{displayName}</span>
+                <span className="text-sm font-medium text-theme-text">{displayName}</span>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-sm font-bold text-[#2A1F23] tabular-nums">
+                <span className="text-sm font-bold text-theme-text tabular-nums">
                   {formatted}
-                  <span className="font-normal text-xs text-[#7A6570] ml-1">{h.unit}</span>
+                  <span className="font-normal text-xs text-theme-muted-text-2 ml-1">{h.unit}</span>
                 </span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pill.bg} ${pill.text} border ${pill.border}`}>
                   {pill.label}

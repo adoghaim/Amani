@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { Symptom, LabReportContext, ReportAnalyte } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF } from '../utils/pdfExtractor';
-import { parseAllReportItems, parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
+import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [

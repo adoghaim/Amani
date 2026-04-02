@@ -383,4 +383,8 @@ export const RECOMMENDED_LABS: Record<BiomarkerCategory, { name: BiomarkerName; 
     { name: 'vitamin_b12', reason: 'Neurological function' },
     { name: 'magnesium', reason: 'Enzyme and hormone support' },
   ],
+  blood: [
+    { name: 'hemoglobin', reason: 'Anemia screening' },
+    { name: 'wbc', reason: 'Immune status' },
+  ],
 };

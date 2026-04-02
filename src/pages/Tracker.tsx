@@ -69,7 +69,7 @@ export function Tracker() {
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
-  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarMonth] = useState(new Date());
 
   const [showInsightsModal, setShowInsightsModal] = useState(false);
   const [insightsData, setInsightsData] = useState<any>(null);

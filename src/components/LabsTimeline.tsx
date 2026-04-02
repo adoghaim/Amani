@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
 import { LabReport, Biomarker, Intervention } from '../types';
 import { Card } from './Card';

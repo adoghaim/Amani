@@ -18,7 +18,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { LabReport } from '../types';
 
-type SortKey = 'report_date' | 'created_at' | 'status';
+type SortKey = 'report_date' | 'status';
 type SortDir = 'asc' | 'desc';
 
 function formatDate(dateStr: string) {
@@ -103,21 +103,21 @@ function DeleteModal({ report, onConfirm, onCancel, deleting }: DeleteModalProps
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="px-6 py-5 border-b border-[#E9D6DA]">
+        <div className="px-6 py-5 border-b border-theme-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
               <AlertTriangle className="w-5 h-5 text-red-500" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-[#2A1F23]">Delete report?</h2>
-              <p className="text-sm text-[#6B5B60] mt-0.5">This cannot be undone.</p>
+              <h2 className="text-base font-semibold text-theme-text">Delete report?</h2>
+              <p className="text-sm text-theme-muted-text mt-0.5">This cannot be undone.</p>
             </div>
           </div>
         </div>
         <div className="px-6 py-4">
-          <p className="text-sm text-[#4A3A3E]">
+          <p className="text-sm text-theme-text-body">
             You are about to permanently delete the report from{' '}
-            <span className="font-semibold text-[#2A1F23]">{formatDate(report.report_date)}</span>
+            <span className="font-semibold text-theme-text">{formatDate(report.report_date)}</span>
             , including all biomarkers and AI insights. This action cannot be reversed.
           </p>
         </div>
@@ -125,7 +125,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting }: DeleteModalProps
           <button
             onClick={onCancel}
             disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-[#4A3A3E] bg-white border border-[#E9D6DA] rounded-xl hover:bg-[#F6ECEB] transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-theme-text-body bg-white border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -272,8 +272,8 @@ export function Reports() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-[#2A1F23]">Lab Reports</h1>
-            <p className="text-sm text-[#6B5B60] mt-1">
+            <h1 className="text-2xl font-bold text-theme-text">Lab Reports</h1>
+            <p className="text-sm text-theme-muted-text mt-1">
               {reports.length === 0
                 ? 'No reports yet'
                 : `${reports.length} report${reports.length !== 1 ? 's' : ''} total`}
@@ -281,7 +281,7 @@ export function Reports() {
           </div>
           <a
             href="/app/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#C97C8B] text-white text-sm font-semibold rounded-xl hover:bg-[#A85C6D] transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-theme-primary text-white text-sm font-semibold rounded-xl hover:bg-theme-primary-dark transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
             New report
@@ -289,17 +289,17 @@ export function Reports() {
         </div>
 
         {reports.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm px-6 py-20 text-center">
-            <div className="w-16 h-16 bg-[#F6ECEB] rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <TestTube2 className="w-8 h-8 text-[#C97C8B]" />
+          <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-6 py-20 text-center">
+            <div className="w-16 h-16 bg-theme-surface-2 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <TestTube2 className="w-8 h-8 text-theme-primary" />
             </div>
-            <h3 className="text-lg font-semibold text-[#2A1F23] mb-2">No lab reports yet</h3>
-            <p className="text-sm text-[#6B5B60] mb-6 max-w-xs mx-auto">
+            <h3 className="text-lg font-semibold text-theme-text mb-2">No lab reports yet</h3>
+            <p className="text-sm text-theme-muted-text mb-6 max-w-xs mx-auto">
               Upload your first lab report to start tracking your biomarkers and getting AI insights.
             </p>
             <a
               href="/app/new"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C97C8B] text-white text-sm font-semibold rounded-xl hover:bg-[#A85C6D] transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-theme-primary text-white text-sm font-semibold rounded-xl hover:bg-theme-primary-dark transition-colors"
             >
               <Plus className="w-4 h-4" />
               Upload first report
@@ -309,19 +309,19 @@ export function Reports() {
           <>
             <div className="flex flex-col sm:flex-row gap-3 mb-5">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8969C]" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted-text-4" />
                 <input
                   type="text"
                   placeholder="Search by date or cycle phase..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-[#E9D6DA] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23] placeholder:text-[#A8969C]"
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-theme-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text placeholder:text-theme-muted-text-4"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
-                className="px-3 py-2.5 text-sm border border-[#E9D6DA] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#4A3A3E] min-w-[140px]"
+                className="px-3 py-2.5 text-sm border border-theme-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text min-w-[140px]"
               >
                 <option value="all">All statuses</option>
                 <option value="ready">Ready</option>
@@ -331,54 +331,54 @@ export function Reports() {
             </div>
 
             {filtered.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm px-6 py-16 text-center">
-                <Search className="w-8 h-8 text-[#D4A8B0] mx-auto mb-3" />
-                <p className="text-sm font-medium text-[#4A3A3E]">No reports match your filters</p>
+              <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-6 py-16 text-center">
+                <Search className="w-8 h-8 text-theme-primary-faded mx-auto mb-3" />
+                <p className="text-sm font-medium text-theme-text-body">No reports match your filters</p>
                 <button
                   onClick={() => { setSearch(''); setStatusFilter('all'); }}
-                  className="mt-3 text-sm text-[#C97C8B] hover:underline"
+                  className="mt-3 text-sm text-theme-primary hover:underline"
                 >
                   Clear filters
                 </button>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
-                <div className="hidden sm:grid grid-cols-[1fr_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-[#F0E4E7] bg-[#FAF4F5]">
+              <div className="bg-white rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+                <div className="hidden sm:grid grid-cols-[1fr_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
                   <button
                     onClick={() => cycleSort('report_date')}
-                    className="text-left text-xs font-semibold text-[#6B5B60] uppercase tracking-wide hover:text-[#C97C8B] transition-colors"
+                    className="text-left text-xs font-semibold text-theme-muted-text uppercase tracking-wide hover:text-theme-primary transition-colors"
                   >
                     Report date <SortIcon col="report_date" />
                   </button>
                   <button
                     onClick={() => cycleSort('status')}
-                    className="text-left text-xs font-semibold text-[#6B5B60] uppercase tracking-wide hover:text-[#C97C8B] transition-colors"
+                    className="text-left text-xs font-semibold text-theme-muted-text uppercase tracking-wide hover:text-theme-primary transition-colors"
                   >
                     Status <SortIcon col="status" />
                   </button>
-                  <div className="text-xs font-semibold text-[#6B5B60] uppercase tracking-wide">Phase</div>
-                  <div className="text-xs font-semibold text-[#6B5B60] uppercase tracking-wide">Markers</div>
+                  <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Phase</div>
+                  <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Markers</div>
                   <div />
                 </div>
 
-                <div className="divide-y divide-[#F0E4E7]">
+                <div className="divide-y divide-theme-border-inner">
                   {filtered.map((report) => {
                     const markerCount = analyteCounts[report.id] ?? biomarkerCounts[report.id] ?? 0;
                     return (
                       <div
                         key={report.id}
-                        className="group grid grid-cols-1 sm:grid-cols-[1fr_120px_120px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-[#FAF4F5] transition-colors items-center"
+                        className="group grid grid-cols-1 sm:grid-cols-[1fr_120px_120px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
                       >
                         <a href={`/app/reports/${report.id}`} className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 bg-[#F6ECEB] rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-[#EDD8DC] transition-colors">
-                            <FileText className="w-4 h-4 text-[#C97C8B]" />
+                          <div className="w-9 h-9 bg-theme-surface-2 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-theme-surface-hover transition-colors">
+                            <FileText className="w-4 h-4 text-theme-primary" />
                           </div>
                           <div className="min-w-0">
-                            <div className="font-semibold text-sm text-[#2A1F23] truncate">
+                            <div className="font-semibold text-sm text-theme-text truncate">
                               {formatDate(report.report_date)}
                             </div>
-                            <div className="text-xs text-[#A8969C] mt-0.5">
-                              Uploaded {timeAgo(report.created_at ?? report.report_date)}
+                            <div className="text-xs text-theme-muted-text-4 mt-0.5">
+                              Uploaded {timeAgo(report.report_date)}
                             </div>
                           </div>
                         </a>
@@ -390,16 +390,16 @@ export function Reports() {
                         <a href={`/app/reports/${report.id}`} className="hidden sm:block">
                           <PhaseBadge phase={report.estimated_cycle_phase} />
                           {(!report.estimated_cycle_phase || report.estimated_cycle_phase === 'unknown') && (
-                            <span className="text-xs text-[#A8969C]">—</span>
+                            <span className="text-xs text-theme-muted-text-4">—</span>
                           )}
                         </a>
 
                         <a href={`/app/reports/${report.id}`} className="hidden sm:flex items-center gap-1">
-                          <span className="text-sm font-medium text-[#4A3A3E]">
+                          <span className="text-sm font-medium text-theme-text-body">
                             {markerCount > 0 ? markerCount : '—'}
                           </span>
                           {markerCount > 0 && (
-                            <span className="text-xs text-[#A8969C]">items</span>
+                            <span className="text-xs text-theme-muted-text-4">items</span>
                           )}
                         </a>
 
@@ -411,14 +411,14 @@ export function Reports() {
                           <div className="flex items-center gap-1">
                             <a
                               href={`/app/reports/${report.id}`}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#EDD8DC] text-[#A8969C] hover:text-[#C97C8B] transition-colors"
+                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-hover text-theme-muted-text-4 hover:text-theme-primary transition-colors"
                               title="View report"
                             >
                               <ArrowRight className="w-4 h-4" />
                             </a>
                             <button
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget(report); }}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#A8969C] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-theme-muted-text-4 hover:text-theme-danger transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                               title="Delete report"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -430,8 +430,8 @@ export function Reports() {
                   })}
                 </div>
 
-                <div className="px-5 py-3 border-t border-[#F0E4E7] bg-[#FAF4F5]">
-                  <p className="text-xs text-[#A8969C]">
+                <div className="px-5 py-3 border-t border-theme-border-inner bg-theme-background-tint">
+                  <p className="text-xs text-theme-muted-text-4">
                     Showing {filtered.length} of {reports.length} report{reports.length !== 1 ? 's' : ''}
                   </p>
                 </div>

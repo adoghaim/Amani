@@ -1,4 +1,4 @@
-import type { ParsedResult, RangeResult, SourceAdapter } from './types';
+import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine } from './textUtils';
 import { detectReferenceRange } from './rangeDetection';
 import { detectUnit } from './labelMatching';

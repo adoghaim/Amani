@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { Button } from '../ui/Button'
-import { StripeProduct } from '../../stripe-config'
+import { useState } from 'react'
+import { Button } from '../Button'
+import { StripeProduct, formatPrice } from '../../stripe-config'
 import { supabase } from '../../lib/supabase'
 
 interface PricingCardProps {
@@ -52,46 +52,45 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
     }
   }
 
-  const fmt = (price: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price)
+  const fmt = (price: number) => formatPrice(price, product.currency);
 
   const intervalLabel = product.interval === 'year' ? '/yr' : '/mo'
 
   return (
-    <div className={`relative rounded-2xl border-2 ${isPopular ? 'border-rose-400 shadow-xl' : 'border-gray-200 shadow-sm'} bg-white p-8 flex flex-col`}>
+    <div className={`relative rounded-2xl border-2 ${isPopular ? 'border-theme-primary shadow-xl' : 'border-theme-border shadow-sm'} bg-theme-surface p-8 flex flex-col`}>
       <div className="absolute -top-3 left-6">
-        <span className="bg-rose-500 text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide uppercase">
+        <span className="bg-theme-primary text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide uppercase">
           Founders Launch
         </span>
       </div>
 
       {isPopular && (
         <div className="absolute -top-3 right-6">
-          <span className="bg-gray-900 text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide">
+          <span className="bg-theme-text text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide">
             Best Value
           </span>
         </div>
       )}
 
       <div className="mt-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">
+        <h3 className="text-lg font-semibold text-theme-text mb-1">
           {product.name}
         </h3>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-theme-muted-text mb-6">
           {product.description}
         </p>
 
         <div className="mb-8">
           <div className="flex items-baseline gap-2">
-            <span className="text-sm text-gray-400 line-through">
+            <span className="text-sm text-theme-muted-text line-through">
               {fmt(product.beforePrice)}
             </span>
           </div>
           <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-4xl font-bold text-gray-900">
+            <span className="text-4xl font-bold text-theme-text">
               {fmt(product.price)}
             </span>
-            <span className="text-gray-500 text-sm">
+            <span className="text-theme-muted-text text-sm">
               {intervalLabel}
             </span>
           </div>
@@ -107,7 +106,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         </Button>
 
         {error && (
-          <p className="mt-3 text-sm text-red-600 text-center">{error}</p>
+          <p className="mt-3 text-sm text-theme-danger text-center">{error}</p>
         )}
       </div>
     </div>

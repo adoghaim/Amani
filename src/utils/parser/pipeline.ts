@@ -1,7 +1,6 @@
 import type {
   AnalyteBlockDebug,
   ExtractedBiomarker,
-  LabSource,
   ParseStatus,
   ParserDebugInfo,
   ParserDebugOutput,

@@ -26,27 +26,16 @@ const ConfidenceBadge = ({ confidence }: { confidence: 'high' | 'medium' | 'low'
   );
 };
 
-function formatRefRange(item: ReportItem): string {
-  if (item.raw_reference_range) return item.raw_reference_range;
-  if (item.normalized_reference_min != null && item.normalized_reference_max != null) {
-    return `${item.normalized_reference_min} – ${item.normalized_reference_max}`;
-  }
-  if (item.reference_operator && item.reference_operator_value != null) {
-    return `${item.reference_operator} ${item.reference_operator_value}`;
-  }
-  return '—';
-}
+
 
 function ItemCard({
   item,
-  index,
   globalIndex,
   onUpdate,
   onRemove,
   catalogSlugs,
 }: {
   item: ReportItem;
-  index: number;
   globalIndex: number;
   onUpdate: ReviewBiomarkersProps['onUpdate'];
   onRemove: ReviewBiomarkersProps['onRemove'];
@@ -241,11 +230,10 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
             {catalogLoading ? (
               <p className="text-sm text-gray-400">Loading catalog...</p>
             ) : (
-              coreItems.map(({ item, globalIndex }, localIdx) => (
+              coreItems.map(({ item, globalIndex }) => (
                 <ItemCard
                   key={globalIndex}
                   item={item}
-                  index={localIdx}
                   globalIndex={globalIndex}
                   onUpdate={onUpdate}
                   onRemove={onRemove}
@@ -273,11 +261,10 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
 
           {showExtended && (
             <div className="space-y-2">
-              {extendedItems.map(({ item, globalIndex }, localIdx) => (
+              {extendedItems.map(({ item, globalIndex }) => (
                 <ItemCard
                   key={globalIndex}
                   item={item}
-                  index={localIdx}
                   globalIndex={globalIndex}
                   onUpdate={onUpdate}
                   onRemove={onRemove}

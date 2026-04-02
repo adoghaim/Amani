@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { PricingCard } from '../components/pricing/PricingCard'
@@ -10,21 +9,21 @@ export function PricingPage() {
   const ordered = [yearly, monthly].filter(Boolean) as typeof stripeProducts
 
   return (
-    <div className="min-h-screen bg-gray-50 py-16">
+    <div className="min-h-screen bg-theme-background py-16">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
           to="/app"
-          className="inline-flex items-center text-gray-500 hover:text-gray-800 mb-10 transition-colors text-sm"
+          className="inline-flex items-center text-theme-muted-text hover:text-theme-text mb-10 transition-colors text-sm"
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back to Dashboard
         </Link>
 
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">
+          <h1 className="text-4xl font-bold text-theme-text mb-3">
             Choose your plan
           </h1>
-          <p className="text-gray-500 text-base">
+          <p className="text-theme-muted-text text-base">
             Founders Launch pricing available for a limited time.
           </p>
         </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
-import { Card } from '../components/Card';
+// Removed Card component import
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { BiomarkerSystemDashboard } from '../components/BiomarkerSystemDashboard';
@@ -360,19 +360,19 @@ export function ReportView() {
         {/* ── A. Header ──────────────────────────────────────────── */}
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-[#2A1F23] tracking-tight">
+            <h1 className="text-2xl font-bold text-theme-text tracking-tight">
               Lab Report — {formatDate(report.report_date)}
             </h1>
-            <p className="text-sm text-[#9A8A90] mt-1">Uploaded {formatDate(report.upload_date)}</p>
+            <p className="text-sm text-theme-muted-text-3 mt-1">Uploaded {formatDate(report.upload_date)}</p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {cyclePhase && (
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 border border-rose-200 text-rose-700 capitalize">
                   {cyclePhase.replace(/_/g, ' ')} phase
                 </span>
               )}
-              <span className="text-xs text-[#9A8A90]">{biomarkers.length} core biomarkers</span>
+              <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
-                <span className="text-xs text-[#9A8A90]">{reportAnalytes.length} total analytes</span>
+                <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
               )}
             </div>
           </div>
@@ -400,13 +400,13 @@ export function ReportView() {
 
           {/* ── Processing ──────────────────────────────────────── */}
           {isProcessing && (
-            <div className="rounded-2xl border border-[#e8dce0] bg-white px-6 py-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-[#C97C8B]/10 flex items-center justify-center flex-shrink-0">
-                <Loader2 className="w-5 h-5 text-[#C97C8B] animate-spin" />
+            <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-theme-primary/10 flex items-center justify-center flex-shrink-0">
+                <Loader2 className="w-5 h-5 text-theme-primary animate-spin" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[#2A1F23]">Generating your analysis</p>
-                <p className="text-xs text-[#9A8A90] mt-0.5">This usually takes 15–30 seconds.</p>
+                <p className="text-sm font-semibold text-theme-text">Generating your analysis</p>
+                <p className="text-xs text-theme-muted-text-3 mt-0.5">This usually takes 15–30 seconds.</p>
               </div>
             </div>
           )}
@@ -450,11 +450,11 @@ export function ReportView() {
 
           {/* ── B. Amani Summary ────────────────────────────────── */}
           {interpretation && !isProcessing && (
-            <div className="rounded-2xl overflow-hidden border border-[#e8dce0] shadow-sm">
-              <div className="bg-[#2A1F23] px-6 py-5">
+            <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
+              <div className="bg-theme-text px-6 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
-                  <Sparkles className="w-4 h-4 text-[#E8B4BD]" />
-                  <span className="text-xs font-medium text-[#c4adb2] uppercase tracking-widest">Amani Analysis</span>
+                  <Sparkles className="w-4 h-4 text-theme-primary-light" />
+                  <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani Analysis</span>
                 </div>
                 {interpretation.headline && (
                   <h2 className="text-lg font-semibold text-white leading-snug">
@@ -465,23 +465,23 @@ export function ReportView() {
 
               {/* Primary Concern — most important finding, always first */}
               {interpretation.primary_concern && (
-                <div className="border-b border-[#f0e6ea] bg-[#fdf7f8] px-6 py-5">
+                <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#C97C8B]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <AlertTriangle className="w-4 h-4 text-[#C97C8B]" />
+                    <div className="w-8 h-8 rounded-lg bg-theme-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertTriangle className="w-4 h-4 text-theme-primary" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#C97C8B] uppercase tracking-widest mb-1">
+                      <p className="text-xs font-bold text-theme-primary uppercase tracking-widest mb-1">
                         Top Priority
                       </p>
-                      <p className="text-sm font-semibold text-[#2A1F23] mb-1.5">
+                      <p className="text-sm font-semibold text-theme-text mb-1.5">
                         {interpretation.primary_concern.title}
                       </p>
-                      <p className="text-sm text-[#4A3A40] leading-relaxed mb-2">
+                      <p className="text-sm text-theme-text-body leading-relaxed mb-2">
                         {interpretation.primary_concern.summary}
                       </p>
                       {interpretation.primary_concern.why_it_matters && (
-                        <p className="text-xs text-[#7A6570] leading-relaxed border-l-2 border-[#C97C8B]/30 pl-3">
+                        <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/30 pl-3">
                           {interpretation.primary_concern.why_it_matters}
                         </p>
                       )}
@@ -496,8 +496,8 @@ export function ReportView() {
                   <ul className="space-y-3">
                     {interpretation.summary_bullets.map((bullet, i) => (
                       <li key={i} className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#C97C8B] flex-shrink-0 mt-2" />
-                        <p className="text-sm text-[#4A3A40] leading-relaxed">{bullet}</p>
+                        <span className="w-1.5 h-1.5 rounded-full bg-theme-primary flex-shrink-0 mt-2" />
+                        <p className="text-sm text-theme-text-body leading-relaxed">{bullet}</p>
                       </li>
                     ))}
                   </ul>
@@ -513,9 +513,9 @@ export function ReportView() {
             return (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertCircle className="w-4 h-4 text-[#2A1F23]" />
-                  <h2 className="text-base font-semibold text-[#2A1F23]">Focus Now</h2>
-                  <span className="text-xs text-[#9A8A90] ml-auto">
+                  <AlertCircle className="w-4 h-4 text-theme-text" />
+                  <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
+                  <span className="text-xs text-theme-muted-text-3 ml-auto">
                     {flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing
                   </span>
                 </div>
@@ -530,7 +530,7 @@ export function ReportView() {
                         <div className="flex items-start justify-between gap-3 mb-1.5">
                           <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
-                            <span className="text-sm font-semibold text-[#2A1F23]">{finding.title}</span>
+                            <span className="text-sm font-semibold text-theme-text">{finding.title}</span>
                           </div>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${style.badge}`}>
                             {style.label}
@@ -550,7 +550,7 @@ export function ReportView() {
             ((interpretation?.top_findings?.length || 0) > 0 || biomarkers.length > 0) ? (
               <QuickHighlights
                 biomarkers={biomarkers.map(b => ({
-                  name: b.name,
+                  name: b.name as BiomarkerName,
                   value: b.value,
                   unit: b.unit,
                   labRefMin: b.reference_min,
@@ -590,10 +590,10 @@ export function ReportView() {
           {biomarkers.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-[#2A1F23]">
+                <h2 className="text-base font-semibold text-theme-text">
                   Your Lab Results
                   {activeCategory && (
-                    <span className="ml-2 text-sm font-normal text-[#C97C8B]">
+                    <span className="ml-2 text-sm font-normal text-theme-primary">
                       — {CATEGORY_DISPLAY[activeCategory].label}
                       <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
                         clear
@@ -601,13 +601,13 @@ export function ReportView() {
                     </span>
                   )}
                 </h2>
-                <span className="text-xs text-[#9A8A90]">
+                <span className="text-xs text-theme-muted-text-3">
                   {filteredCategories.reduce((a, g) => a + g.items.length, 0)} markers
                 </span>
               </div>
 
               <BiomarkerSystemDashboard
-                biomarkers={biomarkers}
+                biomarkers={biomarkers as any}
                 cyclePhase={cyclePhase}
                 onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
                 activeCategory={activeCategory}
@@ -632,7 +632,7 @@ export function ReportView() {
                         className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-gray-50 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
-                          <span className="text-sm font-semibold text-[#2A1F23]">
+                          <span className="text-sm font-semibold text-theme-text">
                             {CATEGORY_DISPLAY[category].label}
                           </span>
                           {flaggedCount > 0 && (
@@ -642,7 +642,7 @@ export function ReportView() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs text-[#9A8A90]">{items.length}</span>
+                          <span className="text-xs text-theme-muted-text-3">{items.length}</span>
                           {isCollapsed
                             ? <ChevronRight className="w-4 h-4 text-gray-400" />
                             : <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -656,7 +656,7 @@ export function ReportView() {
                             return (
                               <BiomarkerCard
                                 key={b.id}
-                                name={b.name}
+                                name={b.name as BiomarkerName}
                                 value={b.value}
                                 rawValueText={b.raw_value_text}
                                 unit={b.unit}
@@ -687,9 +687,9 @@ export function ReportView() {
                 onClick={() => setShowMoreDetails(v => !v)}
               >
                 <div className="flex items-center gap-2.5">
-                  <Activity className="w-4 h-4 text-[#7A6570]" />
-                  <span className="text-sm font-semibold text-[#2A1F23]">Patterns & Insights</span>
-                  <span className="text-xs text-[#9A8A90]">signals, flags, derived metrics</span>
+                  <Activity className="w-4 h-4 text-theme-muted-text-2" />
+                  <span className="text-sm font-semibold text-theme-text">Patterns & Insights</span>
+                  <span className="text-xs text-theme-muted-text-3">signals, flags, derived metrics</span>
                 </div>
                 {showMoreDetails
                   ? <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -700,13 +700,13 @@ export function ReportView() {
                 <div className="border-t border-gray-100 px-5 py-5 space-y-6">
                   {(interpretation?.pattern_signals?.length ?? 0) > 0 && (
                     <div className="space-y-3">
-                      <p className="text-xs font-bold text-[#9A8A90] uppercase tracking-widest">Pattern Signals</p>
+                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern Signals</p>
                       {interpretation!.pattern_signals!.map((signal, i) => {
                         const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low;
                         return (
                           <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
                             <div className="flex items-start justify-between gap-3 mb-2">
-                              <p className="text-sm font-semibold text-[#2A1F23]">{signal.title}</p>
+                              <p className="text-sm font-semibold text-theme-text">{signal.title}</p>
                               <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${style.bg} ${style.text} ${style.border}`}>
                                 {style.label}
                               </span>
@@ -715,7 +715,7 @@ export function ReportView() {
                             {signal.related_biomarkers?.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {signal.related_biomarkers.map((slug, j) => (
-                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-[#7A6570]">
+                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-theme-muted-text-2">
                                     {BIOMARKER_DISPLAY[slug as BiomarkerName] ?? slug.replace(/_/g, ' ')}
                                   </span>
                                 ))}
@@ -741,9 +741,9 @@ export function ReportView() {
                 onClick={() => setShowFullPanel(v => !v)}
               >
                 <div className="flex items-center gap-2.5">
-                  <Microscope className="w-4 h-4 text-[#7A6570]" />
-                  <span className="text-sm font-semibold text-[#2A1F23]">Full Lab Panel</span>
-                  <span className="text-xs text-[#9A8A90]">({totalAnalyteCount} items)</span>
+                  <Microscope className="w-4 h-4 text-theme-muted-text-2" />
+                  <span className="text-sm font-semibold text-theme-text">Full Lab Panel</span>
+                  <span className="text-xs text-theme-muted-text-3">({totalAnalyteCount} items)</span>
                 </div>
                 {showFullPanel
                   ? <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -775,8 +775,8 @@ export function ReportView() {
                 onClick={() => setShowRecommendedLabs(v => !v)}
               >
                 <div className="flex items-center gap-2.5">
-                  <Stethoscope className="w-4 h-4 text-[#7A6570]" />
-                  <span className="text-sm font-semibold text-[#2A1F23]">Recommended Labs</span>
+                  <Stethoscope className="w-4 h-4 text-theme-muted-text-2" />
+                  <span className="text-sm font-semibold text-theme-text">Recommended Labs</span>
                 </div>
                 {showRecommendedLabs
                   ? <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -795,44 +795,44 @@ export function ReportView() {
           {interpretation && !isProcessing && (
             <>
               {interpretation.cycle_context && interpretation.cycle_context.estimated_cycle_phase !== 'unknown' && (
-                <div className="rounded-2xl border border-[#e8dce0] bg-white px-5 py-5">
+                <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
                   <div className="flex items-center gap-2.5 mb-3">
-                    <CalendarDays className="w-4 h-4 text-[#C97C8B]" />
-                    <h3 className="text-sm font-semibold text-[#2A1F23]">Cycle Context</h3>
+                    <CalendarDays className="w-4 h-4 text-theme-primary" />
+                    <h3 className="text-sm font-semibold text-theme-text">Cycle Context</h3>
                     <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[interpretation.cycle_context.confidence]}`}>
                       {interpretation.cycle_context.confidence} confidence
                     </span>
                   </div>
                   <div className="flex gap-4 mb-3">
                     <div>
-                      <p className="text-xs text-[#9A8A90]">Phase</p>
-                      <p className="text-sm font-semibold text-[#2A1F23] capitalize mt-0.5">
+                      <p className="text-xs text-theme-muted-text-3">Phase</p>
+                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
                         {interpretation.cycle_context.estimated_cycle_phase.replace(/_/g, ' ')}
                       </p>
                     </div>
                     {interpretation.cycle_context.estimated_cycle_day && (
                       <div>
-                        <p className="text-xs text-[#9A8A90]">Cycle Day</p>
-                        <p className="text-sm font-semibold text-[#2A1F23] mt-0.5">{interpretation.cycle_context.estimated_cycle_day}</p>
+                        <p className="text-xs text-theme-muted-text-3">Cycle Day</p>
+                        <p className="text-sm font-semibold text-theme-text mt-0.5">{interpretation.cycle_context.estimated_cycle_day}</p>
                       </div>
                     )}
                   </div>
                   {interpretation.cycle_context.explanation && (
-                    <p className="text-xs text-[#7A6570] leading-relaxed">{interpretation.cycle_context.explanation}</p>
+                    <p className="text-xs text-theme-muted-text-2 leading-relaxed">{interpretation.cycle_context.explanation}</p>
                   )}
                 </div>
               )}
 
               {interpretation.questions_for_doctor.length > 0 && (
-                <div className="rounded-2xl border border-[#e8dce0] bg-white px-5 py-5">
+                <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2.5">
-                      <MessageSquare className="w-4 h-4 text-[#C97C8B]" />
-                      <h3 className="text-sm font-semibold text-[#2A1F23]">Questions for Your Doctor</h3>
+                      <MessageSquare className="w-4 h-4 text-theme-primary" />
+                      <h3 className="text-sm font-semibold text-theme-text">Questions for Your Doctor</h3>
                     </div>
                     <button
                       onClick={() => copyToClipboard(interpretation.questions_for_doctor.join('\n'))}
-                      className="flex items-center gap-1.5 text-xs text-[#C97C8B] hover:text-[#a05a6a] font-medium transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-theme-primary hover:text-[#a05a6a] font-medium transition-colors"
                     >
                       {copied ? (
                         <><CheckCircle2 className="w-3.5 h-3.5" /> Copied</>
@@ -844,10 +844,10 @@ export function ReportView() {
                   <div className="space-y-2">
                     {interpretation.questions_for_doctor.map((q, i) => (
                       <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
-                        <span className="text-xs font-bold text-[#C97C8B] bg-[#C97C8B]/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-theme-primary bg-theme-primary/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
                           {i + 1}
                         </span>
-                        <p className="text-sm text-[#4A3A40] leading-relaxed">{q}</p>
+                        <p className="text-sm text-theme-text-body leading-relaxed">{q}</p>
                       </div>
                     ))}
                   </div>
@@ -860,7 +860,7 @@ export function ReportView() {
           {interpretation && (
             <div className="flex items-start gap-3 px-4 py-4">
               <Info className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-[#9A8A90] leading-relaxed italic">{interpretation.disclaimer}</p>
+              <p className="text-xs text-theme-muted-text-3 leading-relaxed italic">{interpretation.disclaimer}</p>
             </div>
           )}
 

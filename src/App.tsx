@@ -56,7 +56,7 @@ function App() {
         <Route path="/app/tracker" element={<ProtectedRoute><Tracker /></ProtectedRoute>} />
         <Route path="/app/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
         <Route path="/app/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-        <Route path="/app/debug/:id" element={<ProtectedRoute><ParserDebugger /></ProtectedRoute>} />
+        <Route path="/dev/parser/:id" element={<ProtectedRoute><ParserDebugger /></ProtectedRoute>} />
       </Routes>
     </Router>
   )

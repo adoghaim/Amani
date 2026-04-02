@@ -1,4 +1,4 @@
-import { X, AlertCircle, TrendingUp, TrendingDown, Minus, Sparkles, MessageSquare, ArrowRight, CheckCircle2, Info } from 'lucide-react';
+import { X, AlertCircle, TrendingUp, TrendingDown, Minus, Sparkles, ArrowRight, CheckCircle2, Info } from 'lucide-react';
 
 interface Insight {
   summary: string;

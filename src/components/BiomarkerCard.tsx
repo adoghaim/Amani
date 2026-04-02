@@ -88,13 +88,11 @@ function DualStatusSection({
   labRefMin,
   labRefMax,
   value,
-  unit,
 }: {
   amaniStatus: AmaniStatus;
   labRefMin?: number | null;
   labRefMax?: number | null;
   value: number;
-  unit: string;
 }) {
   const labStatus = computeLabStatus(value, labRefMin ?? null, labRefMax ?? null);
   const amaniVariant = amaniStatusToVariant(amaniStatus);
@@ -220,7 +218,6 @@ export function BiomarkerCard({
             labRefMin={labRefMin}
             labRefMax={labRefMax}
             value={value}
-            unit={unit}
           />
 
           {plainEnglishMeaning && (

@@ -1,3 +1,5 @@
+import React from 'react';
+
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
@@ -5,20 +7,22 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export function Input({ label, error, className = '', ...props }: InputProps) {
   return (
-    <div className="w-full">
+    <div className="w-full space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-theme-text mb-2">
+        <label className="block text-sm font-medium text-theme-text">
           {label}
         </label>
       )}
       <input
-        className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-theme-primary focus:border-transparent transition-all ${
-          error ? 'border-theme-danger' : 'border-theme-border'
+        className={`block w-full px-4 py-2 border rounded-xl shadow-sm bg-theme-surface text-theme-text placeholder-theme-muted-text focus:outline-none focus:ring-2 focus:ring-theme-primary focus:border-transparent transition-all sm:text-sm ${
+          error
+            ? 'border-theme-danger focus:ring-theme-danger'
+            : 'border-theme-border'
         } ${className}`}
         {...props}
       />
       {error && (
-        <p className="mt-1 text-sm text-theme-danger">{error}</p>
+        <p className="text-sm text-theme-danger">{error}</p>
       )}
     </div>
   );

@@ -21,8 +21,6 @@ import { CycleSummary } from '../components/CycleSummary';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
-import { Card } from '../components/Card';
-import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { LabReport, PeriodLog, Intervention, Biomarker, SymptomLog, FlowIntensity, DailySymptom } from '../types';
@@ -32,6 +30,8 @@ import {
   dateToKey,
   toDateOnly,
 } from '../utils/cyclePredictor';
+import { isTrialActive, getTrialDaysRemaining } from '../utils/subscription';
+import { formatDate } from '../utils/formatters';
 
 type NoteModalState = { open: boolean; defaultDate: string };
 
@@ -60,7 +60,7 @@ export function Dashboard() {
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
-  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarMonth] = useState(new Date());
 
   useEffect(() => {
     if (user) fetchData();
@@ -283,31 +283,9 @@ export function Dashboard() {
     setSymptomModalOpen(true);
   };
 
-  const isTrialActive = () => {
-    if (!userProfile) return false;
-    if (userProfile.subscription_status === 'active') return true;
-    if (userProfile.subscription_status === 'trial') {
-      const trialStart = new Date(userProfile.trial_start_date);
-      const daysSinceStart = Math.floor((new Date().getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
-      return daysSinceStart < 7;
-    }
-    return false;
-  };
-
-  const getTrialDaysRemaining = (): number | null => {
-    if (!userProfile || userProfile.subscription_status !== 'trial') return null;
-    const trialStart = new Date(userProfile.trial_start_date);
-    const daysSinceStart = Math.floor((new Date().getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
-    const remaining = 7 - daysSinceStart;
-    return remaining > 0 ? remaining : 0;
-  };
-
-  const canCreateReport = userProfile?.subscription_status === 'active' || isTrialActive();
-  const trialDaysRemaining = getTrialDaysRemaining();
+  const canCreateReport = userProfile?.subscription_status === 'active' || isTrialActive(userProfile);
+  const trialDaysRemaining = getTrialDaysRemaining(userProfile);
   const showTrialBanner = trialDaysRemaining !== null && trialDaysRemaining <= 3;
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -340,13 +318,13 @@ export function Dashboard() {
 
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#2A1F23]">Dashboard</h1>
-            <p className="text-sm text-[#6B5B60] mt-0.5">Your health overview at a glance</p>
+            <h1 className="text-2xl font-bold text-theme-text">Dashboard</h1>
+            <p className="text-sm text-theme-muted-text mt-0.5">Your health overview at a glance</p>
           </div>
           <a href="/app/new">
             <button
               disabled={!canCreateReport}
-              className="flex items-center gap-2 px-4 py-2 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
               New lab report
@@ -356,32 +334,32 @@ export function Dashboard() {
 
         {userProfile?.subscription_status !== 'active' && (
           <a href="/app/pricing" className="block mb-5">
-            <div className="flex items-center justify-between gap-4 bg-white border border-[#E9D6DA] rounded-xl px-5 py-4 hover:border-[#C97C8B] hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between gap-4 bg-white border border-theme-border rounded-xl px-5 py-4 hover:border-theme-primary hover:shadow-sm transition-all">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
                   Founders Launch
                 </span>
-                <span className="text-sm text-[#2A1F23] font-medium">
-                  <span className="text-[#A8969C] line-through mr-1.5">$19.99/mo</span>
+                <span className="text-sm text-theme-text font-medium">
+                  <span className="text-theme-muted-text-4 line-through mr-1.5">$19.99/mo</span>
                   $9.99/mo &nbsp;&middot;&nbsp;
-                  <span className="text-[#A8969C] line-through mr-1.5">$199.99/yr</span>
+                  <span className="text-theme-muted-text-4 line-through mr-1.5">$199.99/yr</span>
                   $99.99/yr
                 </span>
               </div>
-              <span className="text-sm font-medium text-[#C97C8B] shrink-0">View pricing &rarr;</span>
+              <span className="text-sm font-medium text-theme-primary shrink-0">View pricing &rarr;</span>
             </div>
           </a>
         )}
 
         {showTrialBanner && (
-          <div className="mb-5 bg-gradient-to-r from-[#F6ECEB] to-pink-50 border border-[#E9D6DA] rounded-2xl px-5 py-4">
-            <h3 className="text-base font-semibold text-[#2A1F23] mb-1">Keep your health timeline intact</h3>
-            <p className="text-sm text-[#6B5B60] mb-3">
+          <div className="mb-5 bg-gradient-to-r from-theme-surface-2 to-theme-background-tint border border-theme-border rounded-2xl px-5 py-4">
+            <h3 className="text-base font-semibold text-theme-text mb-1">Keep your health timeline intact</h3>
+            <p className="text-sm text-theme-muted-text mb-3">
               {trialDaysRemaining === 1 ? '1 day' : `${trialDaysRemaining} days`} left in your trial.
             </p>
             <a href="/app/billing">
-              <button className="px-4 py-2 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors">
+              <button className="px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors">
                 Continue tracking
               </button>
             </a>
@@ -398,19 +376,19 @@ export function Dashboard() {
         )}
 
         {showContextNudge && (
-          <div className="mb-5 bg-gradient-to-r from-[#F6ECEB] to-pink-50 border border-[#E9D6DA] rounded-2xl px-5 py-4 flex items-start justify-between gap-4">
+          <div className="mb-5 bg-gradient-to-r from-theme-surface-2 to-theme-background-tint border border-theme-border rounded-2xl px-5 py-4 flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h3 className="text-base font-semibold text-[#2A1F23] mb-1">Add context to your labs</h3>
-              <p className="text-sm text-[#6B5B60] mb-3">Tracking even one change helps explain future results.</p>
+              <h3 className="text-base font-semibold text-theme-text mb-1">Add context to your labs</h3>
+              <p className="text-sm text-theme-muted-text mb-3">Tracking even one change helps explain future results.</p>
               <div className="flex gap-3">
                 <button
                   onClick={openStartPeriod}
-                  className="px-3 py-1.5 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors"
+                  className="px-3 py-1.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors"
                 >
                   Add cycle start
                 </button>
                 <a href="/app/tracker">
-                  <button className="px-3 py-1.5 bg-[#F6ECEB] text-[#6B5B60] text-sm font-medium rounded-xl border border-[#E9D6DA] hover:bg-[#EED9D9] transition-colors">
+                  <button className="px-3 py-1.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl border border-theme-border hover:bg-theme-surface-hover transition-colors">
                     Add intervention
                   </button>
                 </a>
@@ -418,9 +396,9 @@ export function Dashboard() {
             </div>
             <button
               onClick={() => { sessionStorage.setItem('contextNudgeDismissed', 'true'); setShowContextNudge(false); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F6ECEB] transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
             >
-              <X className="w-4 h-4 text-[#6B5B60]" />
+              <X className="w-4 h-4 text-theme-muted-text" />
             </button>
           </div>
         )}
@@ -442,9 +420,9 @@ export function Dashboard() {
             initialMonth={calendarMonth}
           />
 
-          <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#E9D6DA]">
-              <h3 className="text-sm font-semibold text-[#2A1F23]">Quick log</h3>
+          <div className="bg-white rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-theme-border">
+              <h3 className="text-sm font-semibold text-theme-text">Quick log</h3>
             </div>
             <div className="px-5 py-4">
               <div className="flex flex-wrap gap-2">
@@ -473,20 +451,20 @@ export function Dashboard() {
 
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-[#2A1F23]">Recent Lab Reports</h2>
-              <a href="/app/reports" className="flex items-center gap-1 text-sm text-[#C97C8B] hover:text-[#A85C6D] font-medium transition-colors">
+              <h2 className="text-base font-semibold text-theme-text">Recent Lab Reports</h2>
+              <a href="/app/reports" className="flex items-center gap-1 text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
                 View all <ArrowRight className="w-4 h-4" />
               </a>
             </div>
 
             {reports.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm px-5 py-12 text-center">
-                <TestTube2 className="w-12 h-12 text-[#D4A8B0] mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-[#2A1F23] mb-1">No lab reports yet</h3>
-                <p className="text-sm text-[#6B5B60] mb-4">Upload your first lab report to get started.</p>
+              <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-5 py-12 text-center">
+                <TestTube2 className="w-12 h-12 text-theme-primary-faded mx-auto mb-3" />
+                <h3 className="text-base font-semibold text-theme-text mb-1">No lab reports yet</h3>
+                <p className="text-sm text-theme-muted-text mb-4">Upload your first lab report to get started.</p>
                 {canCreateReport && (
                   <a href="/app/new">
-                    <button className="inline-flex items-center gap-2 px-4 py-2 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors">
+                    <button className="inline-flex items-center gap-2 px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors">
                       <Plus className="w-4 h-4" />
                       New lab report
                     </button>
@@ -497,15 +475,15 @@ export function Dashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {reports.slice(0, 6).map((report) => (
                   <a key={report.id} href={`/app/reports/${report.id}`} className="block">
-                    <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm px-5 py-4 hover:shadow-md hover:border-[#C97C8B]/40 transition-all cursor-pointer border-l-4 border-l-[#C97C8B]">
+                    <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-5 py-4 hover:shadow-md hover:border-theme-primary/40 transition-all cursor-pointer border-l-4 border-l-theme-primary">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3 flex-1">
-                          <div className="bg-[#F6ECEB] p-2 rounded-lg">
-                            <FileText className="w-4 h-4 text-[#C97C8B]" />
+                          <div className="bg-theme-surface-2 p-2 rounded-lg">
+                            <FileText className="w-4 h-4 text-theme-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-[#2A1F23] text-sm">{formatDate(report.report_date)}</div>
-                            <div className="text-xs text-[#6B5B60] flex items-center gap-2 mt-1 flex-wrap">
+                            <div className="font-semibold text-theme-text text-sm">{formatDate(report.report_date)}</div>
+                            <div className="text-xs text-theme-muted-text flex items-center gap-2 mt-1 flex-wrap">
                               {getStatusIcon(report.status)}
                               <span>{getStatusText(report.status)}</span>
                               {report.estimated_cycle_phase !== 'unknown' && (
@@ -516,13 +494,13 @@ export function Dashboard() {
                               )}
                             </div>
                             {biomarkersByReport[report.id] && (
-                              <div className="text-xs text-[#A8969C] mt-1.5">
+                              <div className="text-xs text-theme-muted-text-4 mt-1.5">
                                 {biomarkersByReport[report.id].length} biomarkers
                               </div>
                             )}
                           </div>
                         </div>
-                        <ArrowRight className="w-4 h-4 text-[#A8969C] mt-0.5" />
+                        <ArrowRight className="w-4 h-4 text-theme-muted-text-4 mt-0.5" />
                       </div>
                     </div>
                   </a>
@@ -532,7 +510,7 @@ export function Dashboard() {
 
             {reports.length > 6 && (
               <div className="mt-3 text-center">
-                <a href="/app/reports" className="text-sm text-[#C97C8B] hover:text-[#A85C6D] font-medium transition-colors">
+                <a href="/app/reports" className="text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
                   View all {reports.length} lab reports
                 </a>
               </div>
@@ -561,34 +539,34 @@ export function Dashboard() {
       {noteModal.open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9D6DA]">
-              <h2 className="text-base font-semibold text-[#2A1F23]">Add note</h2>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
+              <h2 className="text-base font-semibold text-theme-text">Add note</h2>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F6ECEB] transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
               >
-                <X className="w-4 h-4 text-[#6B5B60]" />
+                <X className="w-4 h-4 text-theme-muted-text" />
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">Date</label>
+                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Date</label>
                 <input
                   type="date"
                   value={noteModal.defaultDate}
                   onChange={(e) => setNoteModal((prev) => ({ ...prev, defaultDate: e.target.value }))}
                   max={dateToKey(today)}
-                  className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23]"
+                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">Note</label>
+                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Note</label>
                 <textarea
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={4}
                   placeholder="Write a note..."
-                  className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23] resize-none placeholder:text-[#A8969C]"
+                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-4"
                 />
               </div>
             </div>
@@ -596,13 +574,13 @@ export function Dashboard() {
               <button
                 onClick={handleSaveNote}
                 disabled={savingNote || !noteText.trim()}
-                className="flex-1 py-2.5 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors disabled:opacity-50"
+                className="flex-1 py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
               >
                 {savingNote ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="flex-1 py-2.5 bg-[#F6ECEB] text-[#6B5B60] text-sm font-medium rounded-xl hover:bg-[#EED9D9] transition-colors"
+                className="flex-1 py-2.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl hover:bg-theme-surface-hover transition-colors"
               >
                 Cancel
               </button>
@@ -627,7 +605,7 @@ function QuickLogButton({
     'rose-light': 'bg-rose-100 text-rose-600 hover:bg-rose-200 border border-dashed border-rose-300',
     amber: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200',
     teal: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200',
-    neutral: 'bg-[#F6ECEB] text-[#6B5B60] hover:bg-[#EED9D9] border border-[#E9D6DA]',
+    neutral: 'bg-theme-surface-2 text-theme-muted-text hover:bg-theme-surface-hover border border-theme-border',
   };
   return (
     <button
