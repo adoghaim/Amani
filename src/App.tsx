@@ -32,7 +32,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const { loading } = useAuth()
+  const { loading, user } = useAuth()
 
   if (loading) {
     return <Loading />
