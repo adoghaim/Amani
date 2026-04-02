@@ -146,19 +146,6 @@ export function ReportView() {
   useEffect(() => { fetchReport(); }, [reportId]);
 
   useEffect(() => {
-    if (biomarkers.length === 0 || categoriesInitialized) return;
-    const toCollapse = new Set<BiomarkerCategory>();
-    for (const cat of CATEGORY_ORDER) {
-      const items = sortedGroupedBiomarkers[cat];
-      if (!items || items.length === 0) continue;
-      const hasFlagged = items.some(b => b.flagged === 'out_of_range' || b.flagged === 'borderline');
-      if (!hasFlagged) toCollapse.add(cat);
-    }
-    setCollapsedCategories(toCollapse);
-    setCategoriesInitialized(true);
-  }, [biomarkers, sortedGroupedBiomarkers, categoriesInitialized]);
-
-  useEffect(() => {
     if (!report || report.status !== 'processing') return;
     let elapsed = 0;
     const POLL_INTERVAL = 3000;
@@ -230,6 +217,19 @@ export function ReportView() {
     }
     return result;
   }, [groupedBiomarkers]);
+
+  useEffect(() => {
+    if (biomarkers.length === 0 || categoriesInitialized) return;
+    const toCollapse = new Set<BiomarkerCategory>();
+    for (const cat of CATEGORY_ORDER) {
+      const items = sortedGroupedBiomarkers[cat];
+      if (!items || items.length === 0) continue;
+      const hasFlagged = items.some(b => b.flagged === 'out_of_range' || b.flagged === 'borderline');
+      if (!hasFlagged) toCollapse.add(cat);
+    }
+    setCollapsedCategories(toCollapse);
+    setCategoriesInitialized(true);
+  }, [biomarkers, sortedGroupedBiomarkers, categoriesInitialized]);
 
   const interpMap = useMemo(() => {
     if (!interpretation?.biomarkers) return new Map<string, NonNullable<AIInterpretation['biomarkers']>[number]>();
