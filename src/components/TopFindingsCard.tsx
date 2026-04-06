@@ -25,13 +25,25 @@ interface Props {
 export function TopFindingsCard({ findings }: Props) {
   if (findings.length === 0) return null;
 
+  const outsideCount = findings.filter(f => f.status === 'out_of_range').length;
+  const borderlineCount = findings.filter(f => f.status === 'borderline').length;
+
+  let countLabel = '';
+  if (outsideCount > 0 && borderlineCount > 0) {
+    countLabel = `${outsideCount} outside optimal, ${borderlineCount} borderline`;
+  } else if (outsideCount > 0) {
+    countLabel = `${outsideCount} outside optimal range`;
+  } else {
+    countLabel = `${borderlineCount} borderline`;
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <AlertCircle className="w-4 h-4 text-theme-text" />
         <h2 className="text-base font-semibold text-theme-text">Top Findings</h2>
         <span className="text-xs text-theme-muted-text-3 ml-auto">
-          {findings.length} outside optimal range
+          {countLabel}
         </span>
       </div>
       <div className="space-y-2">

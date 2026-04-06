@@ -501,21 +501,29 @@ export function ReportView() {
                   <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani Analysis</span>
                 </div>
                 <h2 className="text-lg font-semibold text-white leading-snug">
-                  {insightSummary ? (() => {
-                    const outsideOptimal = insightSummary.topFindings.filter(f => f.status === 'out_of_range').length;
-                    const borderline = insightSummary.topFindings.filter(f => f.status === 'borderline').length;
-                    const topFinding = insightSummary.topFindings[0];
-                    if (outsideOptimal === 0 && borderline === 0) {
-                      return 'All measured values are within the Amani optimal range.';
-                    }
-                    if (outsideOptimal > 0 && borderline > 0) {
-                      return `${outsideOptimal} value${outsideOptimal !== 1 ? 's' : ''} outside optimal range, ${borderline} borderline${topFinding ? ` — ${topFinding.displayName} is the top priority` : ''}.`;
-                    }
-                    if (outsideOptimal > 0) {
-                      return `${outsideOptimal} value${outsideOptimal !== 1 ? 's' : ''} outside optimal range${topFinding ? ` — ${topFinding.displayName} is the top priority` : ''}.`;
-                    }
-                    return `${borderline} borderline value${borderline !== 1 ? 's' : ''} flagged${topFinding ? ` — ${topFinding.displayName} needs attention` : ''}.`;
-                  })() : (interpretation.headline ?? '')}
+                  {insightSummary
+                    ? (() => {
+                        const findings = insightSummary.topFindings;
+                        const outsideCount = findings.filter(f => f.status === 'out_of_range').length;
+                        const borderlineCount = findings.filter(f => f.status === 'borderline').length;
+                        const topOutside = findings.find(f => f.status === 'out_of_range');
+                        const topBorderline = findings.find(f => f.status === 'borderline');
+
+                        if (outsideCount === 0 && borderlineCount === 0) {
+                          return 'All measured values are within the Amani optimal range.';
+                        }
+                        if (outsideCount > 0 && borderlineCount > 0) {
+                          const name = topOutside?.displayName;
+                          return `${outsideCount} value${outsideCount !== 1 ? 's' : ''} outside optimal range, ${borderlineCount} borderline${name ? ` — ${name} is the top priority` : ''}.`;
+                        }
+                        if (outsideCount > 0) {
+                          const name = topOutside?.displayName;
+                          return `${outsideCount} value${outsideCount !== 1 ? 's' : ''} outside optimal range${name ? ` — ${name} is the top priority` : ''}.`;
+                        }
+                        const name = topBorderline?.displayName;
+                        return `${borderlineCount} borderline value${borderlineCount !== 1 ? 's' : ''} flagged${name ? ` — ${name} needs attention` : ''}.`;
+                      })()
+                    : (interpretation.headline ?? '')}
                 </h2>
               </div>
 
