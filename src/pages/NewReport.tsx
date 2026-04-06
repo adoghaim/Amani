@@ -10,6 +10,7 @@ import type { Symptom, LabReportContext, ReportAnalyte } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
+import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
@@ -325,7 +326,8 @@ export function NewReport() {
       // 4. Saving Data (Analytes & Biomarkers)
       console.log('[NewReport] Step: Saving analytes started');
       setSubmitStep('saving');
-      const itemsToSave = reportItems.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
+      const normalized = normalizeReportItems(reportItems);
+      const itemsToSave = normalized.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
 
       if (itemsToSave.length > 0) {
         // A. Core biomarkers
