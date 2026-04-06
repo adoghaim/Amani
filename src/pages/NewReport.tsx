@@ -170,10 +170,6 @@ export function NewReport() {
 
   const triggerAiRefinement = async (text: string) => {
     const { data: { session } } = await supabase.auth.getSession();
-    console.log('[AUTH DEBUG]', {
-      hasSession: !!session,
-      accessToken: session?.access_token?.slice(0, 20),
-    });
     if (!user || !session) return;
 
     setAiRefining(true);
