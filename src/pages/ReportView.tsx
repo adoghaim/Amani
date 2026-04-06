@@ -162,6 +162,7 @@ export function ReportView() {
   const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const interpPollingActive = useRef(false);
+  const interpRetryFired = useRef(false);
 
   useEffect(() => { fetchReport(); }, [reportId]);
 
@@ -169,7 +170,8 @@ export function ReportView() {
     if (!report || report.status !== 'processing') return;
     let elapsed = 0;
     const POLL_INTERVAL = 3000;
-    const TIMEOUT_MS = 35000;
+    // 90s: edge function can take up to 28s for OpenAI + DB writes + startup latency
+    const TIMEOUT_MS = 90000;
     const interval = setInterval(async () => {
       elapsed += POLL_INTERVAL;
       const { data } = await supabase
@@ -181,7 +183,8 @@ export function ReportView() {
       }
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
-        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+        // Edge function likely timed out — set ready so report is still viewable
+        await supabase.from('lab_reports').update({ status: 'ready' }).eq('id', reportId);
         fetchReport();
       }
     }, POLL_INTERVAL);
@@ -211,6 +214,39 @@ export function ReportView() {
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
         interpPollingActive.current = false;
+        // Guarded one-time retry: interpretation still missing after 60s
+        // This handles cases where the initial invocation was dropped silently
+        if (!interpRetryFired.current) {
+          interpRetryFired.current = true;
+          console.log('[ReportView] Interpretation missing after timeout — firing one-time retry');
+          supabase.functions.invoke('generate-interpretation', {
+            body: { reportId },
+          }).then(({ error: retryErr }) => {
+            if (retryErr) {
+              console.warn('[ReportView] Retry interpretation failed:', retryErr.message);
+              return;
+            }
+            // After retry fires, do a short follow-up poll to pick up the result
+            let retryElapsed = 0;
+            const RETRY_INTERVAL = 4000;
+            const RETRY_TIMEOUT = 60000;
+            const retryInterval = setInterval(async () => {
+              retryElapsed += RETRY_INTERVAL;
+              const { data: retryData } = await supabase
+                .from('interpretations')
+                .select('id, json_output')
+                .eq('lab_report_id', reportId)
+                .maybeSingle();
+              if (retryData?.json_output) {
+                clearInterval(retryInterval);
+                setInterpretation(normalizeInterpretation(retryData.json_output));
+              } else if (retryElapsed >= RETRY_TIMEOUT) {
+                clearInterval(retryInterval);
+                console.warn('[ReportView] Retry interpretation also did not produce a result.');
+              }
+            }, RETRY_INTERVAL);
+          }).catch(e => console.error('[ReportView] Retry interpretation exception:', e));
+        }
       }
     }, POLL_INTERVAL);
     return () => {
@@ -702,6 +738,14 @@ export function ReportView() {
               </div>
             );
           })()}
+
+          {/* ── AI loading indicator (ready but no interpretation yet) ─── */}
+          {report.status === 'ready' && !interpretation && !isProcessing && insightSummary && (
+            <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
+              <p className="text-sm text-theme-muted-text-2">AI summary is being generated — your lab data is ready below.</p>
+            </div>
+          )}
 
           {/* ── B. Amani Summary ────────────────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (

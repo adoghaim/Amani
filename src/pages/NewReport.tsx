@@ -461,8 +461,11 @@ export function NewReport() {
         }
       }
 
-      // 5. Interpretation (Non-blocking)
-      console.log('[NewReport] Step: Triggering interpretation (async)');
+      // 5. Interpretation (Non-blocking fire-and-forget)
+      // The edge function owns the status transition to 'ready'.
+      // Report stays 'processing' until generate-interpretation sets it to 'ready'.
+      // ReportView polls for this transition and then polls for the interpretation row.
+      console.log('[NewReport] Step: Triggering interpretation (async, keeps status=processing until done)');
       setSubmitStep('interpreting');
       supabase.functions.invoke('generate-interpretation', {
         body: { reportId: createdReportId },
@@ -470,15 +473,18 @@ export function NewReport() {
           Authorization: `Bearer ${session.access_token}`,
         },
       }).then(({ error: interpError }) => {
-        if (interpError) console.warn('[NewReport] Interpretation failed background:', interpError.message);
-      }).catch(e => console.error('[NewReport] Interpretation error background:', e));
+        if (interpError) {
+          console.warn('[NewReport] Interpretation invoke error:', interpError.message);
+          supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
+        }
+      }).catch(e => {
+        console.error('[NewReport] Interpretation invoke exception:', e);
+        supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
+      });
 
-      // FINAL REDIRECT
-      console.log('[NewReport] Submission complete. Redirecting...');
+      // FINAL REDIRECT — report is still 'processing', ReportView will poll
+      console.log('[NewReport] Submission complete. Redirecting to report view...');
       setSubmitStep('complete');
-      
-      // Update report status to ready (since interpreting is background)
-      await supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
 
       setTimeout(() => {
         if (isSecondReport) {
