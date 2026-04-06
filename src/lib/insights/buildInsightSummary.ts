@@ -238,8 +238,8 @@ function buildWatchSignals(
       : `${names.slice(0, 2).join(', ')} and ${names.length - 2} others`;
     signals.push({
       type: 'system',
-      title: `${systemLabel} — multiple markers outside optimal`,
-      description: `${listed} ${names.length === 1 ? 'is' : 'are'} each outside the optimal range. When several markers in the same system shift together, tracking them as a group over time can provide useful context.`,
+      title: `${systemLabel} — several markers shifted together`,
+      description: `${listed} ${names.length === 1 ? 'is' : 'are'} each outside their optimal range. When multiple markers in the same system move together, following them as a group over time may provide useful context.`,
       relatedBiomarkers: peers.map(p => p.key),
     });
   }
@@ -288,8 +288,8 @@ function buildWatchSignals(
     const systemLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
     signals.push({
       type: 'pattern',
-      title: `${systemLabel} — multiple markers changed together`,
-      description: `${systemNames} all showed notable changes since the last report. Coordinated shifts across related markers can sometimes reflect an underlying pattern worth following over time.`,
+      title: `${systemLabel} — related markers shifted since last report`,
+      description: `${systemNames} each changed since the previous panel. When related markers shift in the same period, it may be worth noting as context for future results.`,
       relatedBiomarkers: group.map(d => d.key),
     });
     break;
