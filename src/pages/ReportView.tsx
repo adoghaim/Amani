@@ -187,6 +187,30 @@ export function ReportView() {
     return () => clearInterval(interval);
   }, [report?.status, reportId]);
 
+  useEffect(() => {
+    if (!report || report.status !== 'ready' || interpretation !== null || loading) return;
+    let elapsed = 0;
+    const POLL_INTERVAL = 3000;
+    const TIMEOUT_MS = 60000;
+    const interval = setInterval(async () => {
+      elapsed += POLL_INTERVAL;
+      const { data } = await supabase
+        .from('interpretations')
+        .select('id, json_output')
+        .eq('lab_report_id', reportId)
+        .maybeSingle();
+      if (data?.json_output) {
+        clearInterval(interval);
+        setInterpretation(normalizeInterpretation(data.json_output));
+        return;
+      }
+      if (elapsed >= TIMEOUT_MS) {
+        clearInterval(interval);
+      }
+    }, POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [report?.status, report?.id, interpretation, loading, reportId]);
+
   const fetchReport = async () => {
     const { data: reportData, error: reportError } = await supabase
       .from('lab_reports').select('*').eq('id', reportId).maybeSingle();
