@@ -500,11 +500,23 @@ export function ReportView() {
                   <Sparkles className="w-4 h-4 text-theme-primary-light" />
                   <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani Analysis</span>
                 </div>
-                {interpretation.headline && (
-                  <h2 className="text-lg font-semibold text-white leading-snug">
-                    {interpretation.headline}
-                  </h2>
-                )}
+                <h2 className="text-lg font-semibold text-white leading-snug">
+                  {insightSummary ? (() => {
+                    const outsideOptimal = insightSummary.topFindings.filter(f => f.status === 'out_of_range').length;
+                    const borderline = insightSummary.topFindings.filter(f => f.status === 'borderline').length;
+                    const topFinding = insightSummary.topFindings[0];
+                    if (outsideOptimal === 0 && borderline === 0) {
+                      return 'All measured values are within the Amani optimal range.';
+                    }
+                    if (outsideOptimal > 0 && borderline > 0) {
+                      return `${outsideOptimal} value${outsideOptimal !== 1 ? 's' : ''} outside optimal range, ${borderline} borderline${topFinding ? ` — ${topFinding.displayName} is the top priority` : ''}.`;
+                    }
+                    if (outsideOptimal > 0) {
+                      return `${outsideOptimal} value${outsideOptimal !== 1 ? 's' : ''} outside optimal range${topFinding ? ` — ${topFinding.displayName} is the top priority` : ''}.`;
+                    }
+                    return `${borderline} borderline value${borderline !== 1 ? 's' : ''} flagged${topFinding ? ` — ${topFinding.displayName} needs attention` : ''}.`;
+                  })() : (interpretation.headline ?? '')}
+                </h2>
               </div>
 
               {/* Primary Concern — most important finding, always first */}
