@@ -51,6 +51,9 @@ export interface ReportConfidence {
   reasons: string[];
   coverageCount: number;
   totalCount: number;
+  normalizationRate: number;
+  parserQuality: 'high' | 'medium' | 'low' | 'unknown';
+  sourceFormat: 'text' | 'ocr' | 'manual' | 'unknown' | null;
 }
 
 export interface InsightSummary {
@@ -70,6 +73,7 @@ interface BiomarkerInput {
   labRefMax: number | null;
   parserConfidence?: 'high' | 'medium' | 'low' | null;
   normalizationStatus?: 'mapped' | 'partial' | 'unmapped' | null;
+  sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
 }
 
 function buildTopFindings(
@@ -324,20 +328,37 @@ function buildWatchSignals(
 function calculateConfidence(
   inputs: BiomarkerInput[],
   hasPreviousReport: boolean,
+  dominantSourceFormat: 'text' | 'ocr' | 'manual' | 'unknown' | null,
 ): ReportConfidence {
   if (inputs.length === 0) {
-    return { score: 0, label: 'low', reasons: ['No structured biomarker data available.'], coverageCount: 0, totalCount: 0 };
+    return {
+      score: 0, label: 'low',
+      reasons: ['No structured biomarker data available.'],
+      coverageCount: 0, totalCount: 0,
+      normalizationRate: 0, parserQuality: 'unknown', sourceFormat: dominantSourceFormat,
+    };
   }
 
   const reasons: string[] = [];
   let score = 0;
 
   // Factor 1: normalization quality (40 points)
-  const mappedCount = inputs.filter(b => b.normalizationStatus === 'mapped' || b.normalizationStatus == null).length;
-  const normRate = mappedCount / inputs.length;
+  // null means no telemetry available (old report) — counted as partial credit (0.5), not full mapped credit
+  const normWeightedCount = inputs.reduce((sum, b) => {
+    if (b.normalizationStatus === 'mapped') return sum + 1;
+    if (b.normalizationStatus == null) return sum + 0.5;
+    if (b.normalizationStatus === 'partial') return sum + 0.5;
+    return sum;
+  }, 0);
+  const normRate = normWeightedCount / inputs.length;
   const normPoints = Math.round(normRate * 40);
   score += normPoints;
-  if (normRate >= 0.85) {
+
+  const hasAnyTelemetry = inputs.some(b => b.normalizationStatus != null);
+  if (!hasAnyTelemetry) {
+    reasons.push('Some data-quality telemetry was not available for this report; normalization estimate based on coverage.');
+  } else if (normRate >= 0.85) {
+    const mappedCount = inputs.filter(b => b.normalizationStatus === 'mapped').length;
     reasons.push(`${mappedCount} of ${inputs.length} analytes successfully mapped.`);
   } else {
     reasons.push(`${Math.round(normRate * 100)}% of analytes mapped — some names may not have matched the Amani catalog.`);
@@ -345,6 +366,7 @@ function calculateConfidence(
 
   // Factor 2: parser confidence distribution (30 points)
   const withConfidence = inputs.filter(b => b.parserConfidence != null);
+  let parserQuality: ReportConfidence['parserQuality'] = 'unknown';
   if (withConfidence.length > 0) {
     const confScore = withConfidence.reduce((sum, b) => {
       if (b.parserConfidence === 'high') return sum + 3;
@@ -353,9 +375,10 @@ function calculateConfidence(
     }, 0) / (withConfidence.length * 3);
     const confPoints = Math.round(confScore * 30);
     score += confPoints;
-    if (confScore >= 0.8) {
+    parserQuality = confScore >= 0.75 ? 'high' : confScore >= 0.45 ? 'medium' : 'low';
+    if (confScore >= 0.75) {
       reasons.push('Extraction confidence is high across most analytes.');
-    } else if (confScore >= 0.5) {
+    } else if (confScore >= 0.45) {
       reasons.push('Extraction confidence is moderate — some values may have lower reliability.');
     } else {
       reasons.push('Extraction confidence is low — this panel may benefit from re-upload or manual review.');
@@ -381,12 +404,21 @@ function calculateConfidence(
     reasons.push('Prior report available — trend analysis and biggest changes are included.');
   }
 
+  // Factor 5: source format signal (no direct score impact — informational reason only)
+  if (dominantSourceFormat === 'ocr') {
+    score = Math.max(0, score - 5);
+    reasons.push('This report was OCR-processed, which can slightly reduce extraction certainty.');
+  }
+
   const clampedScore = Math.min(100, Math.max(0, score));
   const label: ReportConfidence['label'] =
     clampedScore >= 75 ? 'high' : clampedScore >= 45 ? 'medium' : 'low';
 
-  const usableCount2 = inputs.filter(b => b.value !== null && b.value !== undefined).length;
-  return { score: clampedScore, label, reasons, coverageCount: usableCount2, totalCount: inputs.length };
+  return {
+    score: clampedScore, label, reasons,
+    coverageCount: usableCount, totalCount: inputs.length,
+    normalizationRate: normRate, parserQuality, sourceFormat: dominantSourceFormat,
+  };
 }
 
 export function buildInsightSummary(
@@ -414,7 +446,19 @@ export function buildInsightSummary(
   const systemSummaries = groupBySystem(scored);
   const questionsForDoctor = buildDoctorQuestions(scored, deltas);
   const watchSignals = buildWatchSignals(scored, deltas);
-  const confidence = calculateConfidence(current, (previous?.length ?? 0) > 0);
+
+  const sourceCounts: Record<string, number> = {};
+  for (const b of current) {
+    const fmt = b.sourceFormat ?? 'unknown';
+    sourceCounts[fmt] = (sourceCounts[fmt] ?? 0) + 1;
+  }
+  const sortedSources = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]);
+  const topSource = sortedSources[0]?.[0];
+  const dominantSourceFormat = (topSource && topSource !== 'unknown')
+    ? (topSource as 'text' | 'ocr' | 'manual')
+    : null;
+
+  const confidence = calculateConfidence(current, (previous?.length ?? 0) > 0, dominantSourceFormat);
 
   return {
     topFindings,
