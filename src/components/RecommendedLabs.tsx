@@ -30,10 +30,10 @@ export function RecommendedLabs({ presentBiomarkers, activeCategory }: Props) {
     <div className="bg-white rounded-2xl border border-[#E9D6DA] p-6">
       <div className="flex items-center gap-2 mb-2">
         <FlaskConical className="w-5 h-5 text-[#C97C8B]" />
-        <h2 className="text-lg font-semibold text-[#2A1F23]">Recommended Labs</h2>
+        <h2 className="text-lg font-semibold text-[#2A1F23]">Labs to Consider Discussing</h2>
       </div>
       <p className="text-sm text-[#7A6570] mb-5">
-        These biomarkers weren't in your current panel. Adding them would give a more complete picture.
+        These labs are sometimes used for additional context and may be worth discussing with your provider, depending on your situation.
       </p>
 
       <div className="space-y-5">
@@ -62,7 +62,7 @@ export function RecommendedLabs({ presentBiomarkers, activeCategory }: Props) {
         ))}
       </div>
       <p className="text-xs text-[#9A8A90] mt-4 italic">
-        Discuss with your provider which tests are appropriate for your situation.
+        These are not recommendations — your provider is best placed to determine what's appropriate for your situation.
       </p>
     </div>
   );
