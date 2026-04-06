@@ -75,10 +75,17 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
     analyte.normalized_operator_value
   );
   const style = STATUS_STYLE[status];
+  const label = analyte.display_name || analyte.raw_name;
+  const isUnmapped = analyte.parse_status === 'unmapped';
   return (
     <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-gray-900 truncate">{analyte.raw_name}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-gray-900 truncate">{label}</p>
+          {isUnmapped && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">unmapped</span>
+          )}
+        </div>
         {analyte.raw_reference_range && (
           <p className="text-xs text-gray-400 mt-0.5">Ref: {analyte.raw_reference_range}</p>
         )}
@@ -629,7 +636,7 @@ export function ReportView() {
                           </span>
                           {flaggedCount > 0 && (
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                              {flaggedCount} flagged
+                              {flaggedCount} outside optimal
                             </span>
                           )}
                         </div>

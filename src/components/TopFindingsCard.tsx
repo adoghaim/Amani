@@ -6,7 +6,7 @@ const STATUS_STYLE: Record<string, {
 }> = {
   out_of_range: {
     bg: 'bg-red-50', border: 'border-red-100', dot: 'bg-red-500',
-    text: 'text-red-700', badge: 'bg-red-100 text-red-700', label: 'Out of Range',
+    text: 'text-red-700', badge: 'bg-red-100 text-red-700', label: 'Outside Optimal',
   },
   borderline: {
     bg: 'bg-amber-50', border: 'border-amber-100', dot: 'bg-amber-400',
@@ -31,7 +31,7 @@ export function TopFindingsCard({ findings }: Props) {
         <AlertCircle className="w-4 h-4 text-theme-text" />
         <h2 className="text-base font-semibold text-theme-text">Top Findings</h2>
         <span className="text-xs text-theme-muted-text-3 ml-auto">
-          {findings.length} item{findings.length !== 1 ? 's' : ''} flagged
+          {findings.length} outside optimal range
         </span>
       </div>
       <div className="space-y-2">

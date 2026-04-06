@@ -6,11 +6,12 @@ import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Symptom, LabReportContext, ReportAnalyte } from '../types';
+import type { Symptom, LabReportContext, ReportAnalyte, BiomarkerName } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
+import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
@@ -336,15 +337,24 @@ export function NewReport() {
         // A. Core biomarkers (scoring table — keyed by canonical_slug)
         const coreItems = itemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
-          const biomarkerInserts = coreItems.map(item => ({
-            lab_report_id: createdReportId!,
-            name: item.canonical_slug!,
-            value: item.value_numeric,
-            raw_value_text: item.value_text ?? null,
-            unit: item._normalized_unit ?? item.unit ?? '',
-            reference_min: item.normalized_reference_min ?? null,
-            reference_max: item.normalized_reference_max ?? null,
-          }));
+          const biomarkerInserts = coreItems.map(item => {
+            const slug = item.canonical_slug! as BiomarkerName;
+            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase);
+            let flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown' = 'in_range';
+            if (status === 'borderline_low' || status === 'borderline_high') flagged = 'borderline';
+            else if (status === 'out_of_range_low' || status === 'out_of_range_high') flagged = 'out_of_range';
+            else if (status === 'unknown') flagged = 'unknown';
+            return {
+              lab_report_id: createdReportId!,
+              name: slug,
+              value: item.value_numeric,
+              raw_value_text: item.value_text ?? null,
+              unit: item._normalized_unit ?? item.unit ?? '',
+              reference_min: item.normalized_reference_min ?? null,
+              reference_max: item.normalized_reference_max ?? null,
+              flagged,
+            };
+          });
 
           const { error: biomarkerError } = await supabase
             .from('biomarkers')

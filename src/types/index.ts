@@ -454,7 +454,9 @@ export interface ReportAnalyte {
   needs_review: boolean;
   is_core: boolean;
   
-  // Phase 4A Telemetry & Tracing
+  display_name?: string | null;
+  system_category?: string | null;
+  normalization_status?: 'mapped' | 'partial' | 'unmapped' | null;
   source_format?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
   parser_version?: string | null;
   unit_original?: string | null;
