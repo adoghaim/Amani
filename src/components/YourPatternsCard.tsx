@@ -25,7 +25,7 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
   const trendPatterns    = patterns.filter(p => p.type === 'trend');
   const baselinePatterns = patterns.filter(p => p.type === 'baseline');
 
-  const orderedPatterns = [...symptomPatterns, ...trendPatterns, ...baselinePatterns];
+  const orderedPatterns = [...symptomPatterns, ...trendPatterns, ...baselinePatterns].slice(0, 3);
 
   return (
     <div className="rounded-2xl border border-teal-100 bg-teal-50/40 overflow-hidden">
@@ -42,7 +42,7 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
           </div>
         </div>
         <span className="text-[11px] font-medium text-teal-600 bg-teal-100 px-2.5 py-1 rounded-full">
-          {patterns.length} insight{patterns.length !== 1 ? 's' : ''}
+          {orderedPatterns.length} insight{orderedPatterns.length !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -64,19 +64,19 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
 
       <div className="px-5 pb-4">
         <div className="flex items-center gap-3 flex-wrap">
-          {symptomPatterns.length > 0 && (
+          {orderedPatterns.some(p => p.type === 'symptom') && (
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${PATTERN_DOT.symptom}`} />
               <span className="text-[10px] text-teal-600">Symptom connection</span>
             </div>
           )}
-          {trendPatterns.length > 0 && (
+          {orderedPatterns.some(p => p.type === 'trend') && (
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${PATTERN_DOT.trend}`} />
               <span className="text-[10px] text-teal-600">Trend over time</span>
             </div>
           )}
-          {baselinePatterns.length > 0 && (
+          {orderedPatterns.some(p => p.type === 'baseline') && (
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${PATTERN_DOT.baseline}`} />
               <span className="text-[10px] text-teal-600">vs. your baseline</span>
