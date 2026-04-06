@@ -227,13 +227,29 @@ export function ReportView() {
   );
 
   const analyteTelemetryMap = useMemo(() => {
+    const CONFIDENCE_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const NORM_RANK: Record<string, number> = { mapped: 3, partial: 2, unmapped: 1 };
     const map = new Map<string, { parserConfidence: 'high' | 'medium' | 'low'; normalizationStatus: 'mapped' | 'partial' | 'unmapped' }>();
     for (const a of reportAnalytes) {
       if (!a.canonical_slug) continue;
-      map.set(a.canonical_slug, {
+      const incoming = {
         parserConfidence: a.confidence_score,
-        normalizationStatus: a.normalization_status ?? a.parse_status,
-      });
+        normalizationStatus: (a.normalization_status ?? a.parse_status) as 'mapped' | 'partial' | 'unmapped',
+      };
+      const existing = map.get(a.canonical_slug);
+      if (!existing) {
+        map.set(a.canonical_slug, incoming);
+      } else {
+        const incomingScore =
+          (CONFIDENCE_RANK[incoming.parserConfidence] ?? 0) +
+          (NORM_RANK[incoming.normalizationStatus] ?? 0);
+        const existingScore =
+          (CONFIDENCE_RANK[existing.parserConfidence] ?? 0) +
+          (NORM_RANK[existing.normalizationStatus] ?? 0);
+        if (incomingScore > existingScore) {
+          map.set(a.canonical_slug, incoming);
+        }
+      }
     }
     return map;
   }, [reportAnalytes]);
