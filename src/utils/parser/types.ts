@@ -43,6 +43,17 @@ export interface ReportItem {
   source_snippet: string | null;
   parse_error?: string | null;
   parse_status?: ParseStatus;
+  
+  // Phase 4A Telemetry & Tracing
+  source_format?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
+  parser_version?: string | null;
+  raw_biomarker_name?: string | null;
+  canonical_biomarker_name?: string | null;
+  unit_original?: string | null;
+  unit_normalized?: string | null;
+  normalization_status?: 'mapped' | 'partial' | 'unmapped' | null;
+  review_status?: 'pending' | 'reviewed' | 'edited_by_user' | null;
+  reviewed_by_user?: boolean | null;
 }
 
 export interface AnalyteBlockDebug {
@@ -132,4 +143,10 @@ export interface SourceAdapter {
   labelMatch: LabelMatchConfig;
   windowSize: number;
   preferInlineValue: boolean;
+}
+
+export interface ExtractionHeuristics {
+  score: number; // 0 to 1
+  isWeak: boolean;
+  reason?: string;
 }

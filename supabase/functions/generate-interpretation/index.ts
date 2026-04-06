@@ -777,7 +777,9 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-  const supabase = createClient(supabaseUrl, serviceKey);
+  try {
+    console.log("DEPLOYMENT VERIFIED: generate-interpretation v2.1 (explicit auth). Auth Header Present:", !!req.headers.get("Authorization"));
+    const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
 

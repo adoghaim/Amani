@@ -113,6 +113,19 @@ export interface LabResult {
   lab_status: LabStatus;
   cycle_phase: CyclePhase | null;
   extraction_confidence: 'high' | 'medium' | 'low' | null;
+  
+  // Phase 4A Telemetry & Tracing
+  source_format?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
+  parser_version?: string | null;
+  raw_biomarker_name?: string | null;
+  canonical_biomarker_name?: string | null;
+  unit_original?: string | null;
+  unit_normalized?: string | null;
+  normalization_status?: 'mapped' | 'partial' | 'unmapped' | null;
+  review_status?: 'pending' | 'reviewed' | 'edited_by_user' | null;
+  reviewed_by_user?: boolean | null;
+  source_snippet?: string | null;
+
   created_at: string;
 }
 
@@ -201,6 +214,7 @@ export interface LabReportContext {
   pregnant: 'yes' | 'no' | 'unsure';
   postpartum: 'yes' | 'no' | 'unsure';
   top_symptoms: Symptom[];
+  submission_mode?: 'standard' | 'compatibility';
 }
 
 export interface Biomarker {
@@ -439,5 +453,14 @@ export interface ReportAnalyte {
   parse_status: 'mapped' | 'partial' | 'unmapped';
   needs_review: boolean;
   is_core: boolean;
+  
+  // Phase 4A Telemetry & Tracing
+  source_format?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
+  parser_version?: string | null;
+  unit_original?: string | null;
+  unit_normalized?: string | null;
+  review_status?: 'pending' | 'reviewed' | 'edited_by_user' | null;
+  reviewed_by_user?: boolean | null;
+
   created_at: string;
 }

@@ -1,0 +1,10 @@
+project_id = "eyfvqdnczorscwveaadv"
+
+[functions.extract-biomarkers]
+verify_jwt = false
+
+[functions.parse-lab-report-ocr]
+verify_jwt = false
+
+[functions.generate-interpretation]
+verify_jwt = false

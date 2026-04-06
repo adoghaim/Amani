@@ -15,6 +15,7 @@ export type {
   HistoryLineConfig,
   RangeFormatConfig,
   LabelMatchConfig,
+  ExtractionHeuristics,
 } from './types';
 
 export {
@@ -27,6 +28,7 @@ export {
   checkPhysiologicalBounds,
   computeParseStatus,
   normalizeToCatalogSlug,
+  calculateExtractionHeuristics,
   CATALOG_SLUG_ALIASES,
 } from './pipeline';
 

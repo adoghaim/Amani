@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { Symptom, LabReportContext, ReportAnalyte } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
-import { extractTextFromPDF } from '../utils/pdfExtractor';
+import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 
@@ -47,6 +47,7 @@ export function NewReport() {
   const [parserDebug, setParserDebug] = useState<ParserDebugOutput | null>(null);
   const [periodAutoFilled, setPeriodAutoFilled] = useState(false);
   const [fetchingPeriod, setFetchingPeriod] = useState(false);
+  const [submitStep, setSubmitStep] = useState<'uploading' | 'creating' | 'saving' | 'interpreting' | 'complete' | null>(null);
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
@@ -88,64 +89,122 @@ export function NewReport() {
   const handleProceedFromStep1 = async () => {
     if (!file || !reportDate) return;
 
-    if (file.type === 'application/pdf') {
-      setExtracting(true);
-      setError('');
+    setExtracting(true);
+    setError('');
 
-      try {
+    try {
+      if (file.type === 'application/pdf') {
         const text = await extractTextFromPDF(file);
         console.log('[NewReport] Extracted PDF text length:', text.length);
 
-        if (text.trim().length > 0) {
-          const { items: localItems, debug: debugOut } = parseAllReportItemsWithDebug(text, file.name);
-          setParserDebug(debugOut);
-          const localCov = {
+        const { items: localItems, debug: debugOut, heuristics } = parseAllReportItemsWithDebug(text, file.name);
+        setParserDebug(debugOut);
+        
+        // ORCHESTRATION LOGIC: Check if extraction is "weak"
+        if (text.trim().length === 0 || heuristics.isWeak) {
+          console.log('[NewReport] Text extraction weak, triggering OCR fallback. Reason:', heuristics.reason);
+          const images = await convertPDFToImages(file);
+          await callOcrFallback(images);
+        } else {
+          // Normal flow: Use local results and trigger background "refinement"
+          setReportItems(localItems);
+          setCoverage({
             total_detected: localItems.length,
             total_core: localItems.filter(i => i.is_core_biomarker).length,
             total_extended: localItems.filter(i => !i.is_core_biomarker).length,
             needs_review: localItems.filter(i => i.needs_review).length,
-          };
-          setReportItems(localItems);
-          setCoverage(localCov);
-
-          const { data: { session: extractSession } } = await supabase.auth.getSession();
-          if (extractSession) {
-            setAiRefining(true);
-            const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-biomarkers`;
-            fetch(apiUrl, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${extractSession.access_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ text }),
-            }).then(async response => {
-              if (!response.ok) return;
-              const data = await response.json();
-              console.log('[NewReport] AI extraction result:', data.coverage, data.items?.length, 'items');
-              if (data.items && data.items.length > 0) {
-                setReportItems(data.items);
-                setCoverage(data.coverage ?? null);
-              }
-              if (data.analytes && data.analytes.length > 0) {
-                setReportAnalytes(data.analytes);
-              }
-            }).catch(err => {
-              console.error('[NewReport] AI extraction background error:', err);
-            }).finally(() => {
-              setAiRefining(false);
-            });
-          }
+          });
+          
+          await triggerAiRefinement(text);
         }
-      } catch (err) {
-        console.error('[NewReport] PDF extraction failed:', err);
-        setError('Failed to extract data from PDF. You can enter items manually.');
-      } finally {
-        setExtracting(false);
+      } else if (file.type.startsWith('image/')) {
+        // IMAGE FLOW: Direct OCR Fallback
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        await callOcrFallback([base64]);
       }
+    } catch (err) {
+      console.error('[NewReport] Extraction failed:', err);
+      setError('Failed to extract data. You can enter items manually.');
+    } finally {
+      setExtracting(false);
+      setStep(2);
     }
+  };
 
-    setStep(2);
+  const callOcrFallback = async (base64Images: string[]) => {
+    setAiRefining(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data, error: invokeError } = await supabase.functions.invoke('parse-lab-report-ocr', {
+        body: { base64Images },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (invokeError) throw new Error(`OCR fallback failed: ${invokeError.message}`);
+      
+      if (data.items && data.items.length > 0) {
+        setReportItems(data.items);
+        const cov = {
+          total_detected: data.items.length,
+          total_core: data.items.filter((i: ReportItem) => i.is_core_biomarker).length,
+          total_extended: data.items.filter((i: ReportItem) => !i.is_core_biomarker).length,
+          needs_review: data.items.filter((i: ReportItem) => i.needs_review).length,
+        };
+        setCoverage(cov);
+      }
+    } catch (err) {
+      console.error('[NewReport] OCR fallback error:', err);
+      setError('OCR extraction failed. Falling back to manual entry.');
+    } finally {
+      setAiRefining(false);
+    }
+  };
+
+  const triggerAiRefinement = async (text: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('[AUTH DEBUG]', {
+      hasSession: !!session,
+      accessToken: session?.access_token?.slice(0, 20),
+    });
+    if (!user || !session) return;
+
+    setAiRefining(true);
+    supabase.functions.invoke('extract-biomarkers', {
+      body: { text },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }).then(({ data, error: invokeError }) => {
+      if (invokeError) {
+        console.warn('[NewReport] AI extraction background warning:', invokeError.message);
+        return;
+      }
+      if (data.items && data.items.length > 0) {
+        setReportItems(data.items);
+        const cov = {
+          total_detected: data.items.length,
+          total_core: data.items.filter((i: ReportItem) => i.is_core_biomarker).length,
+          total_extended: data.items.filter((i: ReportItem) => !i.is_core_biomarker).length,
+          needs_review: data.items.filter((i: ReportItem) => i.needs_review).length,
+        };
+        setCoverage(cov);
+      }
+      if (data.analytes && data.analytes.length > 0) {
+        setReportAnalytes(data.analytes);
+      }
+    }).catch(err => {
+      console.error('[NewReport] AI extraction background network error:', err);
+    }).finally(() => {
+      setAiRefining(false);
+    });
   };
 
   const toggleSymptom = (symptom: Symptom) => {
@@ -179,18 +238,25 @@ export function NewReport() {
   };
 
   const handleSubmit = async () => {
-    if (!user) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!user || !session) return;
+    
     setLoading(true);
     setError('');
+    
+    let createdReportId: string | null = null;
 
     try {
+      // 0. Check for existing reports for logic later
       const { data: existingReports } = await supabase
         .from('lab_reports')
         .select('id')
         .eq('user_id', user.id);
-
       const isSecondReport = existingReports?.length === 1;
 
+      // 1. Uploading
+      console.log('[NewReport] Step: Uploading started');
+      setSubmitStep('uploading');
       let fileUrl = null;
       if (file) {
         const fileExt = file.name.split('.').pop();
@@ -198,16 +264,24 @@ export function NewReport() {
         const { error: uploadError } = await supabase.storage
           .from('lab-files')
           .upload(storagePath, file);
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('[NewReport] Upload failed:', uploadError);
+          throw new Error(`File upload failed: ${uploadError.message}`);
+        }
         fileUrl = storagePath;
+        console.log('[NewReport] Step: Uploading success');
       }
 
+      // 2. Creating Report Record
+      console.log('[NewReport] Step: Creating report record started');
+      setSubmitStep('creating');
       const { cycleDay, cyclePhase } = calculateCycleInfo();
       const context: LabReportContext = {
         birth_control: birthControl,
         pregnant,
         postpartum,
         top_symptoms: symptoms,
+        submission_mode: 'standard', // Default to current Phase 4A target
       };
 
       const { data: reportData, error: reportError } = await supabase
@@ -226,12 +300,19 @@ export function NewReport() {
         .select()
         .single();
 
-      if (reportError) throw reportError;
+      if (reportError) {
+        console.error('[NewReport] Report creation failed:', reportError);
+        throw new Error(`Failed to create report record: ${reportError.message}`);
+      }
+      createdReportId = reportData.id;
+      setStep(4); // Move to dedicated processing screen UI
+      console.log('[NewReport] Step: Creating report record success (ID:', createdReportId, ')');
 
-      // Save parser debug record (non-blocking, best-effort)
+      // 3. Saving parser debug (Non-blocking)
       if (parserDebug) {
+        console.log('[NewReport] Step: Saving parser debug (async)');
         supabase.from('parser_debug').insert({
-          report_id: reportData.id,
+          report_id: createdReportId,
           user_id: user.id,
           raw_text: parserDebug.rawText,
           page_count: parserDebug.pageCount,
@@ -241,18 +322,21 @@ export function NewReport() {
           mapping_debug_json: [] as unknown as never,
           ai_input_json: [] as unknown as never,
         }).then(({ error: dbgErr }) => {
-          if (dbgErr) console.warn('[NewReport] parser_debug save failed (non-fatal):', dbgErr.message);
+          if (dbgErr) console.warn('[NewReport] parser_debug save failed:', dbgErr.message);
         });
       }
 
+      // 4. Saving Data (Analytes & Biomarkers)
+      console.log('[NewReport] Step: Saving analytes started');
+      setSubmitStep('saving');
       const itemsToSave = reportItems.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
 
       if (itemsToSave.length > 0) {
-        // ── Core biomarkers (biomarkers table) ──────────────────────────────
+        // A. Core biomarkers
         const coreItems = itemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
           const biomarkerInserts = coreItems.map(item => ({
-            lab_report_id: reportData.id,
+            lab_report_id: createdReportId!,
             name: item.canonical_slug!,
             value: item.value_numeric,
             raw_value_text: item.value_text ?? null,
@@ -266,42 +350,30 @@ export function NewReport() {
             .insert(biomarkerInserts);
 
           if (biomarkerError) {
-            console.error('[NewReport] Failed to save core biomarkers:', biomarkerError);
-            throw new Error(`Failed to save biomarkers: ${biomarkerError.message}`);
+            console.error('[NewReport] Biomarkers save failed:', biomarkerError);
+            // We continue to analytes even if biomarkers table insert fails
           }
         }
 
-        // ── Resolve canonical analyte IDs ────────────────────────────────────
+        // B. Resolving Analyte IDs
         const analyteIdBySlug = new Map<string, string>();
         for (const a of reportAnalytes) {
           if (a.canonical_slug && a.canonical_analyte_id) {
             analyteIdBySlug.set(a.canonical_slug, a.canonical_analyte_id);
           }
         }
-
-        const missingSlugs = [...new Set(itemsToSave
-          .map(i => i.canonical_slug)
-          .filter((s): s is string => !!s && !analyteIdBySlug.has(s))
-        )];
+        const missingSlugs = [...new Set(itemsToSave.map(i => i.canonical_slug).filter((s): s is string => !!s && !analyteIdBySlug.has(s)))];
         if (missingSlugs.length > 0) {
-          const { data: caRows } = await supabase
-            .from('canonical_analytes' as any)
-            .select('id, slug')
-            .in('slug', missingSlugs);
-          if (caRows) {
-            for (const row of caRows as { id: string; slug: string }[]) {
-              analyteIdBySlug.set(row.slug, row.id);
-            }
-          }
+          const { data: caRows } = await supabase.from('canonical_analytes' as any).select('id, slug').in('slug', missingSlugs);
+          if (caRows) caRows.forEach((row: any) => analyteIdBySlug.set(row.slug, row.id));
         }
 
-        // ── All analytes (report_analytes — single source of truth) ──────────
+        // C. Bulk Analyte Insert
         const analyteInserts = itemsToSave.map(item => {
           const slug = item.canonical_slug ?? null;
           const canonicalAnalyteId = slug ? (analyteIdBySlug.get(slug) ?? null) : null;
-          const isCore = item.is_core_biomarker ?? false;
           return {
-            lab_report_id: reportData.id,
+            lab_report_id: createdReportId!,
             raw_name: item.raw_name,
             raw_value_text: item.value_text ?? null,
             value_numeric: item.value_numeric,
@@ -317,43 +389,107 @@ export function NewReport() {
             canonical_slug: slug,
             parse_status: canonicalAnalyteId ? 'mapped' : (slug ? 'partial' : 'unmapped'),
             needs_review: item.needs_review ?? false,
-            is_core: isCore,
+            is_core: item.is_core_biomarker ?? false,
+
+            // Phase 4A Telemetry (The points of failure if migration is missing)
+            source_format: item.source_format ?? 'unknown',
+            parser_version: item.parser_version ?? 'v1_manual',
+            unit_original: item.unit_original ?? item.unit,
+            unit_normalized: item.unit_normalized ?? item.unit,
+            review_status: item.review_status ?? 'pending',
+            reviewed_by_user: item.reviewed_by_user ?? false,
           };
         });
 
-        const { error: analyteError } = await supabase
-          .from('report_analytes')
-          .insert(analyteInserts);
-
+        const { error: analyteError } = await supabase.from('report_analytes').insert(analyteInserts);
+        
         if (analyteError) {
-          console.error('[NewReport] Failed to save report_analytes:', analyteError);
-          throw new Error(`Failed to save analytes: ${analyteError.message}`);
+          // Narrow detection: PGRST104 / 42703 (undefined_column) suggests the DB hasn't been migrated yet
+          const isMissingColumn = 
+            analyteError.code === '42703' || 
+            analyteError.message.includes('column') || 
+            analyteError.message.includes('schema cache');
+          
+          if (isMissingColumn) {
+            // Update report record to reflect Compatibility Mode
+            console.warn('[NewReport] Submission Compatibility Mode Triggered:');
+            console.warn('  - Reason: Missing telemetry columns in report_analytes (requires SQL migration).');
+            console.warn('  - Omitted fields: source_format, parser_version, unit_original, unit_normalized, review_status, reviewed_by_user');
+            
+            await supabase.from('lab_reports').update({ 
+              context: { ...context, submission_mode: 'compatibility' } 
+            }).eq('id', createdReportId);
+
+            // Retry with ONLY the original, mature columns
+            const safeInserts = analyteInserts.map(item => {
+              const { 
+                source_format, parser_version, unit_original, 
+                unit_normalized, review_status, reviewed_by_user, 
+                ...safeData 
+              } = item as any;
+              return safeData;
+            });
+
+            const { error: retryError } = await supabase.from('report_analytes').insert(safeInserts);
+            if (retryError) {
+              console.error('[NewReport] Submission failed even in Compatibility Mode:', retryError);
+              throw new Error(`Report creation failed: ${retryError.message}`);
+            }
+            console.log('[NewReport] Submission success (Compatibility Mode). All core data saved.');
+          } else {
+            // If it's a different error (RLS, validation, etc.), do NOT fallback. 
+            // We want to see the real failure.
+            console.error('[NewReport] Analyte save failed (primary path):', analyteError);
+            throw new Error(`Failed to save lab items: ${analyteError.message}`);
+          }
+        } else {
+          console.log('[NewReport] Step: Saving analytes success (Primary Path)');
         }
       }
 
+      // 5. Interpretation (Non-blocking)
+      console.log('[NewReport] Step: Triggering interpretation (async)');
+      setSubmitStep('interpreting');
       supabase.functions.invoke('generate-interpretation', {
-        body: { reportId: reportData.id },
+        body: { reportId: createdReportId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       }).then(({ error: interpError }) => {
-        if (interpError) {
-          console.error('[NewReport] generate-interpretation error:', interpError.message);
-        }
-      }).catch((interpErr) => {
-        console.error('[NewReport] generate-interpretation network error:', interpErr);
-      });
+        if (interpError) console.warn('[NewReport] Interpretation failed background:', interpError.message);
+      }).catch(e => console.error('[NewReport] Interpretation error background:', e));
 
-      if (isSecondReport) {
-        sessionStorage.setItem('showSecondLabComparison', 'true');
-        window.location.href = '/app/tracker';
-      } else {
-        window.location.href = `/app/reports/${reportData.id}`;
-      }
+      // FINAL REDIRECT
+      console.log('[NewReport] Submission complete. Redirecting...');
+      setSubmitStep('complete');
+      
+      // Update report status to ready (since interpreting is background)
+      await supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
+
+      setTimeout(() => {
+        if (isSecondReport) {
+          sessionStorage.setItem('showSecondLabComparison', 'true');
+          window.location.href = '/app/tracker';
+        } else {
+          window.location.href = `/app/reports/${createdReportId}`;
+        }
+      }, 500);
+
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
-      console.error('[NewReport] handleSubmit failed:', msg);
+      console.error('[NewReport] Submission failed at step:', submitStep, '-', msg);
       setError(msg);
       setLoading(false);
+      setStep(3); // Go back to review so they can try again or fix
+      setSubmitStep(null);
+      
+      // OPTIONAL: If report row was created but everything else failed, mark as error
+      if (createdReportId) {
+        supabase.from('lab_reports').update({ status: 'error' }).eq('id', createdReportId);
+      }
     }
   };
+
 
   const canProceedStep1 = file && reportDate;
 
@@ -590,7 +726,9 @@ export function NewReport() {
                   confidence_score: 'low',
                   is_core_biomarker: false,
                   needs_review: true,
-                  source_snippet: null,
+                  source_snippet: 'Manually added',
+                  source_format: 'manual',
+                  review_status: 'pending',
                 }])}
               />
             )}
@@ -602,6 +740,46 @@ export function NewReport() {
               <Button onClick={handleSubmit} disabled={loading}>
                 {loading ? 'Processing...' : 'Create Report'}
               </Button>
+            </div>
+          </Card>
+        )}
+
+        {step === 4 && (
+          <Card className="py-16 text-center">
+            <div className="flex flex-col items-center justify-center space-y-6">
+              <div className="relative">
+                <div className="w-20 h-20 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <CheckCircle className={`w-10 h-10 transition-all duration-1000 ${submitStep === 'complete' ? 'text-teal-600 opacity-100 scale-100' : 'text-gray-200 opacity-0 scale-50'}`} />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {submitStep === 'complete' ? 'All Done!' : 'Processing Your Report'}
+                </h2>
+                <p className="text-gray-500 max-w-sm mx-auto">
+                  {submitStep === 'uploading' && 'Uploading your files...'}
+                  {submitStep === 'creating' && 'Creating your report record...'}
+                  {submitStep === 'saving' && 'Standardizing your biomarkers...'}
+                  {submitStep === 'interpreting' && 'Generating your insights...'}
+                  {submitStep === 'complete' && 'Taking you to your results...'}
+                </p>
+              </div>
+
+              <div className="w-full max-w-xs bg-gray-100 h-1.5 rounded-full overflow-hidden mt-8">
+                <div 
+                  className="bg-teal-600 h-full transition-all duration-1000 ease-out" 
+                  style={{ 
+                    width: 
+                      submitStep === 'uploading' ? '25%' : 
+                      submitStep === 'creating' ? '50%' : 
+                      submitStep === 'saving' ? '75%' : 
+                      submitStep === 'interpreting' ? '90%' : 
+                      submitStep === 'complete' ? '100%' : '5%' 
+                  }} 
+                />
+              </div>
             </div>
           </Card>
         )}

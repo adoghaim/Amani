@@ -84,17 +84,24 @@ function ItemCard({
       {expanded && (
         <div className="px-4 pb-4 border-t border-gray-100 bg-white">
           {item.source_snippet && (
-            <p className="mt-3 text-xs text-gray-400 italic truncate">Source: "{item.source_snippet}"</p>
+            <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Raw Report Context</label>
+              <p className="text-sm font-mono text-slate-700 break-words leading-relaxed">
+                {item.source_snippet}
+              </p>
+            </div>
           )}
+          
           {item.parse_error && (
-            <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2">
               <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-red-700 font-medium">{item.parse_error} — please correct the value below.</p>
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Test name</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Test Label (on report)</label>
               <input
                 type="text"
                 value={item.raw_name}
@@ -104,13 +111,14 @@ function ItemCard({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Map to core biomarker</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Map to Amani Biomarker</label>
               <select
                 value={item.canonical_slug ?? ''}
                 onChange={e => {
                   const slug = e.target.value || null;
                   onUpdate(globalIndex, 'canonical_slug', slug);
                   onUpdate(globalIndex, 'is_core_biomarker', slug !== null);
+                  onUpdate(globalIndex, 'review_status', 'edited_by_user');
                 }}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
               >
@@ -123,13 +131,16 @@ function ItemCard({
 
             <div>
               <label className={`block text-xs font-medium mb-1 ${item.parse_error ? 'text-red-600' : 'text-gray-600'}`}>
-                Value{item.parse_error ? ' (likely incorrect)' : ''}
+                Value
               </label>
               <input
                 type="number"
                 step="0.001"
                 value={item.value_numeric}
-                onChange={e => onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value))}
+                onChange={e => {
+                  onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value));
+                  onUpdate(globalIndex, 'review_status', 'edited_by_user');
+                }}
                 className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${item.parse_error ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
               />
             </div>
@@ -151,37 +162,36 @@ function ItemCard({
                 type="text"
                 value={item.raw_reference_range ?? ''}
                 onChange={e => onUpdate(globalIndex, 'raw_reference_range', e.target.value || null)}
-                placeholder='e.g. "65-99" or "<200"'
+                placeholder='e.g. "65-99"'
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
               />
             </div>
+          </div>
 
-            {item.normalized_reference_min != null || item.normalized_reference_max != null ? (
-              <>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Ref min</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={item.normalized_reference_min ?? ''}
-                    onChange={e => onUpdate(globalIndex, 'normalized_reference_min', e.target.value ? parseFloat(e.target.value) : null)}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Ref max</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={item.normalized_reference_max ?? ''}
-                    onChange={e => onUpdate(globalIndex, 'normalized_reference_max', e.target.value ? parseFloat(e.target.value) : null)}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    placeholder="Optional"
-                  />
-                </div>
-              </>
-            ) : null}
+          <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
+            {item.review_status !== 'reviewed' && item.review_status !== 'edited_by_user' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs py-1 h-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdate(globalIndex, 'review_status', 'reviewed');
+                  onUpdate(globalIndex, 'reviewed_by_user', true);
+                  setExpanded(false);
+                }}
+              >
+                Mark as Correct
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-xs py-1 h-8 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              onClick={(e) => { e.stopPropagation(); onRemove(globalIndex); }}
+            >
+              Remove Item
+            </Button>
           </div>
         </div>
       )}

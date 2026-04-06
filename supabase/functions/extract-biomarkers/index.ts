@@ -208,6 +208,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    console.log("DEPLOYMENT VERIFIED: extract-biomarkers v2.1 (explicit auth). Auth Header Present:", !!req.headers.get("Authorization"));
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(
@@ -216,11 +217,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const token = authHeader.replace("Bearer ", "");
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
+      {
+        global: {
+          headers: { Authorization: req.headers.get("Authorization")! },
+        },
+      }
     );
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();

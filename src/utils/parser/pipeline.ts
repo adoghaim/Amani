@@ -6,6 +6,7 @@ import type {
   ParserDebugOutput,
   ReportItem,
   SourceAdapter,
+  ExtractionHeuristics,
 } from './types';
 import {
   BIOMARKER_PATTERNS,
@@ -22,8 +23,24 @@ import { detectReferenceRange } from './rangeDetection';
 import { matchBiomarkerLabel } from './labelMatching';
 import { extractValueFromWindow, parseValueWithPrefix } from './valueExtraction';
 
-export { normalizeToCatalogSlug };
+export { normalizeToCatalogSlug } from './patterns';
 export { CATALOG_SLUG_ALIASES };
+
+
+export function calculateExtractionHeuristics(items: ReportItem[], text: string): ExtractionHeuristics {
+  if (items.length === 0) return { score: 0, isWeak: true, reason: 'No items detected' };
+  
+  const lowConfCount = items.filter(i => i.confidence_score === 'low').length;
+  const lowConfRatio = lowConfCount / items.length;
+  
+  // If more than 70% of items are low confidence, it's weak
+  if (lowConfRatio > 0.7) return { score: 1 - lowConfRatio, isWeak: true, reason: 'High ratio of low-confidence items' };
+  
+  // If we detected very few items in a potentially long text
+  if (items.length < 3 && text.length > 1000) return { score: 0.2, isWeak: true, reason: 'Very few items detected in large text body' };
+
+  return { score: 1 - (lowConfRatio * 0.5), isWeak: false };
+}
 
 export function confidenceRank(c: 'high' | 'medium' | 'low'): number {
   return c === 'high' ? 2 : c === 'medium' ? 1 : 0;
@@ -345,6 +362,17 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       source_snippet: b.rawText ?? null,
       parse_error: parseError,
       parse_status: parseStatus,
+
+      // Phase 4A Telemetry
+      source_format: 'text',
+      parser_version: 'v1_text_layered',
+      raw_biomarker_name: b.name,
+      canonical_biomarker_name: isCore ? slug : null,
+      unit_original: b.unit,
+      unit_normalized: b.unit,
+      normalization_status: isCore ? 'mapped' : 'unmapped',
+      review_status: 'pending',
+      reviewed_by_user: false,
     };
   });
 }
@@ -413,6 +441,17 @@ function buildExtendedItems(
       needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error',
       source_snippet: line.substring(0, 120),
       parse_status: parseStatus,
+
+      // Phase 4A Telemetry
+      source_format: 'text',
+      parser_version: 'v1_text_extended',
+      raw_biomarker_name: rawName,
+      canonical_biomarker_name: null,
+      unit_original: rawUnit,
+      unit_normalized: rawUnit,
+      normalization_status: 'unmapped',
+      review_status: 'pending',
+      reviewed_by_user: false,
     });
   }
   return extendedItems;
@@ -431,7 +470,7 @@ export function parseAllReportItems(text: string, debug = false): ReportItem[] {
 export function parseAllReportItemsWithDebug(
   text: string,
   fileName = 'unknown',
-): { items: ReportItem[]; debug: ParserDebugOutput } {
+): { items: ReportItem[]; debug: ParserDebugOutput; heuristics: ExtractionHeuristics } {
   const source  = detectReportSource(text);
   const adapter = getAdapter(source);
   const analyteBlocks: AnalyteBlockDebug[] = [];
@@ -530,5 +569,6 @@ export function parseAllReportItemsWithDebug(
       totalLinesScanned: lines.length,
       detectedSource: source,
     },
+    heuristics: calculateExtractionHeuristics([...coreItems, ...extendedItems], text),
   };
 }
