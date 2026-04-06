@@ -148,7 +148,7 @@ export function ReportView() {
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
-  const [showRecommendedLabs, setShowRecommendedLabs] = useState(false);
+  const [showRecommendedLabs, setShowRecommendedLabs] = useState(true);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
@@ -546,7 +546,7 @@ export function ReportView() {
           })()}
 
           {/* ── B. Amani Summary ────────────────────────────────── */}
-          {interpretation && !isProcessing && (
+          {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
               <div className="bg-theme-text px-6 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
@@ -581,12 +581,12 @@ export function ReportView() {
                         const name = topBorderline?.displayName;
                         return `${borderlineCount} borderline value${borderlineCount !== 1 ? 's' : ''} flagged${name ? ` — ${name} needs attention` : ''}.`;
                       })()
-                    : (interpretation.headline ?? '')}
+                    : (interpretation?.headline ?? '')}
                 </h2>
               </div>
 
               {/* Primary Concern — most important finding, always first */}
-              {interpretation.primary_concern && (
+              {interpretation?.primary_concern && (
                 <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-lg bg-theme-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -612,8 +612,8 @@ export function ReportView() {
                 </div>
               )}
 
-              {/* Summary bullets fallback when no primary_concern */}
-              {!interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
+              {/* Summary bullets: show when no primary_concern (from AI) or when no AI interpretation at all */}
+              {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
                 <div className="bg-white px-6 py-5">
                   <ul className="space-y-3">
                     {interpretation.summary_bullets.map((bullet, i) => (
@@ -874,34 +874,43 @@ export function ReportView() {
           )}
 
           {/* ── Cycle context ─────────────────────────────────────── */}
-          {interpretation && !isProcessing && interpretation.cycle_context && interpretation.cycle_context.estimated_cycle_phase !== 'unknown' && (
-            <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
-              <div className="flex items-center gap-2.5 mb-3">
-                <CalendarDays className="w-4 h-4 text-theme-primary" />
-                <h3 className="text-sm font-semibold text-theme-text">Cycle Context</h3>
-                <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[interpretation.cycle_context.confidence]}`}>
-                  {interpretation.cycle_context.confidence} confidence
-                </span>
-              </div>
-              <div className="flex gap-4 mb-3">
-                <div>
-                  <p className="text-xs text-theme-muted-text-3">Phase</p>
-                  <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
-                    {interpretation.cycle_context.estimated_cycle_phase.replace(/_/g, ' ')}
-                  </p>
+          {!isProcessing && (() => {
+            const aiCycle = interpretation?.cycle_context;
+            const aiPhase = aiCycle?.estimated_cycle_phase;
+            const reportPhase = report.estimated_cycle_phase;
+            const resolvedPhase = (aiPhase && aiPhase !== 'unknown') ? aiPhase : (reportPhase && reportPhase !== 'unknown' ? reportPhase : null);
+            if (!resolvedPhase) return null;
+            return (
+              <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <CalendarDays className="w-4 h-4 text-theme-primary" />
+                  <h3 className="text-sm font-semibold text-theme-text">Cycle Context</h3>
+                  {aiCycle?.confidence && (
+                    <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[aiCycle.confidence]}`}>
+                      {aiCycle.confidence} confidence
+                    </span>
+                  )}
                 </div>
-                {interpretation.cycle_context.estimated_cycle_day && (
+                <div className="flex gap-4 mb-3">
                   <div>
-                    <p className="text-xs text-theme-muted-text-3">Cycle Day</p>
-                    <p className="text-sm font-semibold text-theme-text mt-0.5">{interpretation.cycle_context.estimated_cycle_day}</p>
+                    <p className="text-xs text-theme-muted-text-3">Phase</p>
+                    <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                      {resolvedPhase.replace(/_/g, ' ')}
+                    </p>
                   </div>
+                  {aiCycle?.estimated_cycle_day && (
+                    <div>
+                      <p className="text-xs text-theme-muted-text-3">Cycle Day</p>
+                      <p className="text-sm font-semibold text-theme-text mt-0.5">{aiCycle.estimated_cycle_day}</p>
+                    </div>
+                  )}
+                </div>
+                {aiCycle?.explanation && (
+                  <p className="text-xs text-theme-muted-text-2 leading-relaxed">{aiCycle.explanation}</p>
                 )}
               </div>
-              {interpretation.cycle_context.explanation && (
-                <p className="text-xs text-theme-muted-text-2 leading-relaxed">{interpretation.cycle_context.explanation}</p>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── Questions for Your Doctor (deterministic) ──────── */}
           {insightSummary && !isProcessing && insightSummary.questionsForDoctor.length > 0 && (
