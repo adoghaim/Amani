@@ -327,10 +327,13 @@ export function NewReport() {
       console.log('[NewReport] Step: Saving analytes started');
       setSubmitStep('saving');
       const normalized = normalizeReportItems(reportItems);
+      const mappedCount = normalized.filter(i => i.normalization_status === 'mapped').length;
+      const unmappedCount = normalized.filter(i => i.normalization_status === 'unmapped').length;
+      console.log(`[NewReport] Normalization: ${mappedCount} mapped, ${unmappedCount} unmapped out of ${normalized.length} total`);
       const itemsToSave = normalized.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
 
       if (itemsToSave.length > 0) {
-        // A. Core biomarkers
+        // A. Core biomarkers (scoring table — keyed by canonical_slug)
         const coreItems = itemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
           const biomarkerInserts = coreItems.map(item => ({
@@ -338,7 +341,7 @@ export function NewReport() {
             name: item.canonical_slug!,
             value: item.value_numeric,
             raw_value_text: item.value_text ?? null,
-            unit: item.unit ?? '',
+            unit: item._normalized_unit ?? item.unit ?? '',
             reference_min: item.normalized_reference_min ?? null,
             reference_max: item.normalized_reference_max ?? null,
           }));
@@ -349,9 +352,9 @@ export function NewReport() {
 
           if (biomarkerError) {
             console.error('[NewReport] Biomarkers save failed:', biomarkerError);
-            // We continue to analytes even if biomarkers table insert fails
           }
         }
+        console.log(`[NewReport] Core biomarkers to save: ${coreItems.length}`);
 
         // B. Resolving Analyte IDs
         const analyteIdBySlug = new Map<string, string>();
@@ -366,16 +369,17 @@ export function NewReport() {
           if (caRows) caRows.forEach((row: any) => analyteIdBySlug.set(row.slug, row.id));
         }
 
-        // C. Bulk Analyte Insert
+        // C. Bulk Analyte Insert (traceability table — preserves both raw and canonical)
         const analyteInserts = itemsToSave.map(item => {
           const slug = item.canonical_slug ?? null;
           const canonicalAnalyteId = slug ? (analyteIdBySlug.get(slug) ?? null) : null;
+          const isMapped = item.normalization_status === 'mapped';
           return {
             lab_report_id: createdReportId!,
-            raw_name: item.raw_name,
+            raw_name: item.raw_biomarker_name ?? item.raw_name,
             raw_value_text: item.value_text ?? null,
             value_numeric: item.value_numeric,
-            unit: item.unit ?? null,
+            unit: item._normalized_unit ?? item.unit ?? null,
             raw_reference_range: item.raw_reference_range ?? null,
             normalized_min: item.normalized_reference_min ?? null,
             normalized_max: item.normalized_reference_max ?? null,
@@ -385,15 +389,16 @@ export function NewReport() {
             confidence_score: item.confidence_score ?? 'low',
             canonical_analyte_id: canonicalAnalyteId,
             canonical_slug: slug,
-            parse_status: canonicalAnalyteId ? 'mapped' : (slug ? 'partial' : 'unmapped'),
+            parse_status: isMapped ? (canonicalAnalyteId ? 'mapped' : 'partial') : 'unmapped',
             needs_review: item.needs_review ?? false,
             is_core: item.is_core_biomarker ?? false,
-
-            // Phase 4A Telemetry (The points of failure if migration is missing)
+            display_name: item._display_name ?? null,
+            system_category: item._system_category ?? null,
+            normalization_status: item.normalization_status ?? 'unmapped',
             source_format: item.source_format ?? 'unknown',
             parser_version: item.parser_version ?? 'v1_manual',
             unit_original: item.unit_original ?? item.unit,
-            unit_normalized: item.unit_normalized ?? item.unit,
+            unit_normalized: item._normalized_unit ?? item.unit_normalized ?? item.unit,
             review_status: item.review_status ?? 'pending',
             reviewed_by_user: item.reviewed_by_user ?? false,
           };
@@ -412,18 +417,19 @@ export function NewReport() {
             // Update report record to reflect Compatibility Mode
             console.warn('[NewReport] Submission Compatibility Mode Triggered:');
             console.warn('  - Reason: Missing telemetry columns in report_analytes (requires SQL migration).');
-            console.warn('  - Omitted fields: source_format, parser_version, unit_original, unit_normalized, review_status, reviewed_by_user');
-            
-            await supabase.from('lab_reports').update({ 
-              context: { ...context, submission_mode: 'compatibility' } 
+            console.warn('  - Omitted fields: source_format, parser_version, unit_original, unit_normalized, review_status, reviewed_by_user, display_name, system_category, normalization_status');
+
+            await supabase.from('lab_reports').update({
+              context: { ...context, submission_mode: 'compatibility' }
             }).eq('id', createdReportId);
 
             // Retry with ONLY the original, mature columns
             const safeInserts = analyteInserts.map(item => {
-              const { 
-                source_format, parser_version, unit_original, 
-                unit_normalized, review_status, reviewed_by_user, 
-                ...safeData 
+              const {
+                source_format, parser_version, unit_original,
+                unit_normalized, review_status, reviewed_by_user,
+                display_name, system_category, normalization_status,
+                ...safeData
               } = item as any;
               return safeData;
             });

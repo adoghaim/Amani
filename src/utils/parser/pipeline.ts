@@ -380,6 +380,28 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
 const SKIP_LINES_RE = /^(?:test|result|reference|range|units?|flag|status|notes?|comments?|physician|patient|dob|date|page)/i;
 const LABEL_VALUE_RE = /^([A-Za-z][A-Za-z0-9,.()\-/%\s]{2,50}?)\s{2,}(<?>\s*\d+\.?\d*|>=?\s*\d+\.?\d*|<=?\s*\d+\.?\d*|\d+\.?\d*)(?:\s+([a-zA-Z%/]+[0-9]?))?/;
 
+function tryResolveExtendedSlug(rawName: string): { slug: string; category: string | null; isCore: boolean } | null {
+  const lower = rawName.toLowerCase().trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  const underscored = lower.replace(/ /g, '_');
+  const resolved = CATALOG_SLUG_ALIASES[underscored] ?? underscored;
+  if (CORE_SLUGS.has(resolved)) {
+    return { slug: resolved, category: CORE_CATEGORIES[resolved] ?? null, isCore: true };
+  }
+  if (CORE_SLUGS.has(lower.replace(/ /g, '_'))) {
+    const key = lower.replace(/ /g, '_');
+    return { slug: key, category: CORE_CATEGORIES[key] ?? null, isCore: true };
+  }
+  for (const bp of BIOMARKER_PATTERNS) {
+    for (const p of bp.patterns) {
+      if (p === lower || lower.includes(p)) {
+        const canonical = normalizeToCatalogSlug(bp.canonical);
+        return { slug: canonical, category: CORE_CATEGORIES[canonical] ?? null, isCore: CORE_SLUGS.has(canonical) };
+      }
+    }
+  }
+  return null;
+}
+
 function buildExtendedItems(
   text: string,
   coreRawNames: Set<string>,
@@ -414,42 +436,50 @@ function buildExtendedItems(
     }
     if (valueNumeric < 0 || valueNumeric > 100000) continue;
 
+    const resolved = tryResolveExtendedSlug(rawName);
+    const slug = resolved?.slug ?? null;
+    const isCore = resolved?.isCore ?? false;
+    const category = resolved?.category ?? null;
+    if (slug && coreRawNames.has(slug)) continue;
+
     const ref = detectReferenceRange(line);
     const confidence: 'high' | 'medium' | 'low' =
       rawUnit && ref ? 'high' : rawUnit ? 'medium' : 'low';
 
+    const physBoundsError = slug ? checkPhysiologicalBounds(slug, valueNumeric) : null;
+
     const parseStatus = computeParseStatus({
-      canonical_slug: null,
-      parse_confidence: confidence,
-      physBoundsError: null,
+      canonical_slug: slug,
+      parse_confidence: physBoundsError ? 'low' : confidence,
+      physBoundsError,
       value_numeric: valueNumeric,
       unit: rawUnit,
       raw_reference_range: ref?.raw ?? null,
-      is_core_biomarker: false,
+      is_core_biomarker: isCore,
     });
 
     extendedItems.push({
-      raw_name: rawName, canonical_slug: null, category: null,
+      raw_name: rawName, canonical_slug: slug, category,
       value_numeric: valueNumeric, value_text: valueText, unit: rawUnit,
       raw_reference_range: ref?.raw ?? null,
       normalized_reference_min: ref?.min ?? null,
       normalized_reference_max: ref?.max ?? null,
       reference_operator: ref?.comparator?.operator ?? null,
       reference_operator_value: ref?.comparator?.value ?? null,
-      confidence_score: confidence,
-      is_core_biomarker: false,
+      confidence_score: physBoundsError ? 'low' : confidence,
+      is_core_biomarker: isCore,
       needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error',
       source_snippet: line.substring(0, 120),
+      parse_error: physBoundsError,
       parse_status: parseStatus,
 
-      // Phase 4A Telemetry
       source_format: 'text',
       parser_version: 'v1_text_extended',
       raw_biomarker_name: rawName,
-      canonical_biomarker_name: null,
+      canonical_biomarker_name: slug,
       unit_original: rawUnit,
       unit_normalized: rawUnit,
-      normalization_status: 'unmapped',
+      normalization_status: slug ? 'mapped' : 'unmapped',
       review_status: 'pending',
       reviewed_by_user: false,
     });
