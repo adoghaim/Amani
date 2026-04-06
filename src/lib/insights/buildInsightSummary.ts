@@ -239,7 +239,7 @@ function buildWatchSignals(
     signals.push({
       type: 'system',
       title: `${systemLabel} — several markers shifted together`,
-      description: `${listed} ${names.length === 1 ? 'is' : 'are'} each outside their optimal range. When multiple markers in the same system move together, following them as a group over time may provide useful context.`,
+      description: `${listed} ${names.length === 1 ? 'is' : 'are'} each outside their optimal range. Tracking them as a group over time can help reveal whether this is a consistent pattern.`,
       relatedBiomarkers: peers.map(p => p.key),
     });
   }
@@ -253,7 +253,7 @@ function buildWatchSignals(
     signals.push({
       type: 'boundary',
       title: `${d.displayName} — range shifted since last report`,
-      description: `This result moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')} compared to the previous report. A single shift may or may not be meaningful — following it across future panels can help clarify the pattern.`,
+      description: `Moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')} since the last report. A single shift may not be meaningful — tracking it across future panels can help clarify the direction.`,
       relatedBiomarkers: [d.key],
     });
   }
@@ -268,7 +268,7 @@ function buildWatchSignals(
     signals.push({
       type: 'trend',
       title: `${d.displayName} — notable change from previous report`,
-      description: `This result has been ${dir}${pct} since the last panel, while remaining within the same range category. Watching it across future reports may help determine whether this is a consistent direction.`,
+      description: `Has been ${dir}${pct} since the last panel, while staying within the same range category. Worth tracking to see if this holds across future reports.`,
       relatedBiomarkers: [d.key],
     });
   }
@@ -289,7 +289,7 @@ function buildWatchSignals(
     signals.push({
       type: 'pattern',
       title: `${systemLabel} — related markers shifted since last report`,
-      description: `${systemNames} each changed since the previous panel. When related markers shift in the same period, it may be worth noting as context for future results.`,
+      description: `${systemNames} each shifted since the last panel. When related markers move together, it may be useful context to carry into future results.`,
       relatedBiomarkers: group.map(d => d.key),
     });
     break;
