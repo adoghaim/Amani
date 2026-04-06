@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
@@ -161,6 +161,7 @@ export function ReportView() {
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
   const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
+  const interpPollingActive = useRef(false);
 
   useEffect(() => { fetchReport(); }, [reportId]);
 
@@ -189,6 +190,8 @@ export function ReportView() {
 
   useEffect(() => {
     if (!report || report.status !== 'ready' || interpretation !== null || loading) return;
+    if (interpPollingActive.current) return;
+    interpPollingActive.current = true;
     let elapsed = 0;
     const POLL_INTERVAL = 3000;
     const TIMEOUT_MS = 60000;
@@ -201,14 +204,19 @@ export function ReportView() {
         .maybeSingle();
       if (data?.json_output) {
         clearInterval(interval);
+        interpPollingActive.current = false;
         setInterpretation(normalizeInterpretation(data.json_output));
         return;
       }
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
+        interpPollingActive.current = false;
       }
     }, POLL_INTERVAL);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      interpPollingActive.current = false;
+    };
   }, [report?.status, report?.id, interpretation, loading, reportId]);
 
   const fetchReport = async () => {
