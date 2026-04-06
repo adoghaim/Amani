@@ -2,26 +2,28 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
-// Removed Card component import
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { BiomarkerSystemDashboard } from '../components/BiomarkerSystemDashboard';
 import { BiomarkerCard } from '../components/BiomarkerCard';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
-import { QuickHighlights } from '../components/QuickHighlights';
+import { TopFindingsCard } from '../components/TopFindingsCard';
+import { BiggestChangesCard } from '../components/BiggestChangesCard';
+import { SystemSummaryCards } from '../components/SystemSummaryCards';
+import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY, RECOMMENDED_LABS } from '../utils/biomarkerDefinitions';
 import { classifyLabValue } from '../utils/classifyLabValue';
+import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { CATEGORY_DISPLAY } from '../types';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
   BiomarkerName, ReportAnalyte,
 } from '../types';
 import {
-  RefreshCw, Trash2, Copy, AlertCircle, ChevronDown, ChevronRight,
-  Microscope, Sparkles, Stethoscope, CalendarDays, MessageSquare,
+  RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
+  Microscope, Sparkles, Stethoscope, CalendarDays,
   CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle,
 } from 'lucide-react';
 
@@ -141,7 +143,7 @@ export function ReportView() {
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [previousBiomarkers, setPreviousBiomarkers] = useState<Biomarker[]>([]);
 
   useEffect(() => { fetchReport(); }, [reportId]);
 
@@ -186,6 +188,26 @@ export function ReportView() {
     if (interpretationData?.json_output) {
       setInterpretation(normalizeInterpretation(interpretationData.json_output));
     }
+
+    if (reportData.user_id) {
+      const { data: prevReportData } = await supabase
+        .from('lab_reports')
+        .select('id')
+        .eq('user_id', reportData.user_id)
+        .lt('report_date', reportData.report_date)
+        .order('report_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (prevReportData?.id) {
+        const { data: prevBioData } = await supabase
+          .from('biomarkers')
+          .select('*')
+          .eq('lab_report_id', prevReportData.id);
+        if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
+      }
+    }
+
     setLoading(false);
   };
 
@@ -194,6 +216,27 @@ export function ReportView() {
     () => evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
     [biomarkers, report]
   );
+
+  const insightSummary = useMemo(() => {
+    if (biomarkers.length === 0) return null;
+    const current = biomarkers.map(b => ({
+      key: b.name as BiomarkerName,
+      value: b.value,
+      unit: b.unit,
+      labRefMin: b.reference_min,
+      labRefMax: b.reference_max,
+    }));
+    const previous = previousBiomarkers.length > 0
+      ? previousBiomarkers.map(b => ({
+          key: b.name as BiomarkerName,
+          value: b.value,
+          unit: b.unit,
+          labRefMin: b.reference_min,
+          labRefMax: b.reference_max,
+        }))
+      : null;
+    return buildInsightSummary(current, previous, report?.estimated_cycle_phase);
+  }, [biomarkers, previousBiomarkers, report]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
@@ -305,12 +348,6 @@ export function ReportView() {
     if (!confirm('Delete this report? This cannot be undone.')) return;
     const { error } = await supabase.from('lab_reports').delete().eq('id', reportId);
     if (!error) window.location.href = '/app';
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const isTrialActive = () => {
@@ -506,60 +543,14 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── C. Focus Now (key findings) ─────────────────────── */}
-          {interpretation && !isProcessing && (interpretation.key_findings?.length ?? 0) > 0 && (() => {
-            const flagged = interpretation.key_findings!.filter(f => f.status !== 'reassuring');
-            if (flagged.length === 0) return null;
-            return (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertCircle className="w-4 h-4 text-theme-text" />
-                  <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
-                  <span className="text-xs text-theme-muted-text-3 ml-auto">
-                    {flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {flagged.map((finding, i) => {
-                    const isAttention = finding.status === 'attention';
-                    const style = isAttention
-                      ? { bg: 'bg-red-50', border: 'border-red-100', dot: 'bg-red-500', text: 'text-red-700', badge: 'bg-red-100 text-red-700', label: 'Attention' }
-                      : { bg: 'bg-amber-50', border: 'border-amber-100', dot: 'bg-amber-400', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700', label: 'Monitor' };
-                    return (
-                      <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
-                        <div className="flex items-start justify-between gap-3 mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
-                            <span className="text-sm font-semibold text-theme-text">{finding.title}</span>
-                          </div>
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${style.badge}`}>
-                            {style.label}
-                          </span>
-                        </div>
-                        <p className={`text-xs leading-relaxed ml-4 ${style.text}`}>{finding.explanation}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
+          {/* ── C. Top Findings (deterministic) ─────────────────── */}
+          {insightSummary && !isProcessing && (
+            <TopFindingsCard findings={insightSummary.topFindings} />
+          )}
 
-          {/* Fallback to QuickHighlights if no key_findings from AI */}
-          {(!interpretation || (interpretation.key_findings?.length ?? 0) === 0) && (
-            ((interpretation?.top_findings?.length || 0) > 0 || biomarkers.length > 0) ? (
-              <QuickHighlights
-                biomarkers={biomarkers.map(b => ({
-                  name: b.name as BiomarkerName,
-                  value: b.value,
-                  unit: b.unit,
-                  labRefMin: b.reference_min,
-                  labRefMax: b.reference_max,
-                }))}
-                cyclePhase={cyclePhase}
-                topFindings={interpretation?.top_findings}
-              />
-            ) : null
+          {/* ── C2. Biggest Changes (vs previous report) ─────────── */}
+          {insightSummary && !isProcessing && insightSummary.biggestChanges.length > 0 && (
+            <BiggestChangesCard changes={insightSummary.biggestChanges} />
           )}
 
           {/* ── C2. What You Can Do Now ──────────────────────────── */}
@@ -606,12 +597,13 @@ export function ReportView() {
                 </span>
               </div>
 
-              <BiomarkerSystemDashboard
-                biomarkers={biomarkers as any}
-                cyclePhase={cyclePhase}
-                onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
-                activeCategory={activeCategory}
-              />
+              {insightSummary && (
+                <SystemSummaryCards
+                  systems={insightSummary.systemSummaries}
+                  activeCategory={activeCategory}
+                  onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
+                />
+              )}
 
               <div className="mt-5 space-y-2">
                 {filteredCategories.map(({ category, items }) => {
@@ -791,69 +783,39 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── Cycle context + Questions for doctor ─────────────── */}
-          {interpretation && !isProcessing && (
-            <>
-              {interpretation.cycle_context && interpretation.cycle_context.estimated_cycle_phase !== 'unknown' && (
-                <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <CalendarDays className="w-4 h-4 text-theme-primary" />
-                    <h3 className="text-sm font-semibold text-theme-text">Cycle Context</h3>
-                    <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[interpretation.cycle_context.confidence]}`}>
-                      {interpretation.cycle_context.confidence} confidence
-                    </span>
-                  </div>
-                  <div className="flex gap-4 mb-3">
-                    <div>
-                      <p className="text-xs text-theme-muted-text-3">Phase</p>
-                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
-                        {interpretation.cycle_context.estimated_cycle_phase.replace(/_/g, ' ')}
-                      </p>
-                    </div>
-                    {interpretation.cycle_context.estimated_cycle_day && (
-                      <div>
-                        <p className="text-xs text-theme-muted-text-3">Cycle Day</p>
-                        <p className="text-sm font-semibold text-theme-text mt-0.5">{interpretation.cycle_context.estimated_cycle_day}</p>
-                      </div>
-                    )}
-                  </div>
-                  {interpretation.cycle_context.explanation && (
-                    <p className="text-xs text-theme-muted-text-2 leading-relaxed">{interpretation.cycle_context.explanation}</p>
-                  )}
+          {/* ── Cycle context ─────────────────────────────────────── */}
+          {interpretation && !isProcessing && interpretation.cycle_context && interpretation.cycle_context.estimated_cycle_phase !== 'unknown' && (
+            <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
+              <div className="flex items-center gap-2.5 mb-3">
+                <CalendarDays className="w-4 h-4 text-theme-primary" />
+                <h3 className="text-sm font-semibold text-theme-text">Cycle Context</h3>
+                <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[interpretation.cycle_context.confidence]}`}>
+                  {interpretation.cycle_context.confidence} confidence
+                </span>
+              </div>
+              <div className="flex gap-4 mb-3">
+                <div>
+                  <p className="text-xs text-theme-muted-text-3">Phase</p>
+                  <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                    {interpretation.cycle_context.estimated_cycle_phase.replace(/_/g, ' ')}
+                  </p>
                 </div>
+                {interpretation.cycle_context.estimated_cycle_day && (
+                  <div>
+                    <p className="text-xs text-theme-muted-text-3">Cycle Day</p>
+                    <p className="text-sm font-semibold text-theme-text mt-0.5">{interpretation.cycle_context.estimated_cycle_day}</p>
+                  </div>
+                )}
+              </div>
+              {interpretation.cycle_context.explanation && (
+                <p className="text-xs text-theme-muted-text-2 leading-relaxed">{interpretation.cycle_context.explanation}</p>
               )}
+            </div>
+          )}
 
-              {interpretation.questions_for_doctor.length > 0 && (
-                <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2.5">
-                      <MessageSquare className="w-4 h-4 text-theme-primary" />
-                      <h3 className="text-sm font-semibold text-theme-text">Questions for Your Doctor</h3>
-                    </div>
-                    <button
-                      onClick={() => copyToClipboard(interpretation.questions_for_doctor.join('\n'))}
-                      className="flex items-center gap-1.5 text-xs text-theme-primary hover:text-[#a05a6a] font-medium transition-colors"
-                    >
-                      {copied ? (
-                        <><CheckCircle2 className="w-3.5 h-3.5" /> Copied</>
-                      ) : (
-                        <><Copy className="w-3.5 h-3.5" /> Copy all</>
-                      )}
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {interpretation.questions_for_doctor.map((q, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
-                        <span className="text-xs font-bold text-theme-primary bg-theme-primary/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          {i + 1}
-                        </span>
-                        <p className="text-sm text-theme-text-body leading-relaxed">{q}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+          {/* ── Questions for Your Doctor (deterministic) ──────── */}
+          {insightSummary && !isProcessing && insightSummary.questionsForDoctor.length > 0 && (
+            <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} />
           )}
 
           {/* ── H. Disclaimer ───────────────────────────────────── */}
