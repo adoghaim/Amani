@@ -45,6 +45,8 @@ export interface ReportConfidence {
   score: number;
   label: 'low' | 'medium' | 'high';
   reasons: string[];
+  coverageCount: number;
+  totalCount: number;
 }
 
 export interface InsightSummary {
@@ -303,7 +305,7 @@ function calculateConfidence(
   hasPreviousReport: boolean,
 ): ReportConfidence {
   if (inputs.length === 0) {
-    return { score: 0, label: 'low', reasons: ['No structured biomarker data available.'] };
+    return { score: 0, label: 'low', reasons: ['No structured biomarker data available.'], coverageCount: 0, totalCount: 0 };
   }
 
   const reasons: string[] = [];
@@ -362,7 +364,8 @@ function calculateConfidence(
   const label: ReportConfidence['label'] =
     clampedScore >= 75 ? 'high' : clampedScore >= 45 ? 'medium' : 'low';
 
-  return { score: clampedScore, label, reasons };
+  const usableCount2 = inputs.filter(b => b.value !== null && b.value !== undefined).length;
+  return { score: clampedScore, label, reasons, coverageCount: usableCount2, totalCount: inputs.length };
 }
 
 export function buildInsightSummary(

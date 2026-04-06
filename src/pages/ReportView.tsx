@@ -226,15 +226,45 @@ export function ReportView() {
     [biomarkers, report]
   );
 
+  const analyteTelemetryMap = useMemo(() => {
+    const map = new Map<string, { parserConfidence: 'high' | 'medium' | 'low'; normalizationStatus: 'mapped' | 'partial' | 'unmapped' }>();
+    for (const a of reportAnalytes) {
+      if (!a.canonical_slug) continue;
+      map.set(a.canonical_slug, {
+        parserConfidence: a.confidence_score,
+        normalizationStatus: a.normalization_status ?? a.parse_status,
+      });
+    }
+    return map;
+  }, [reportAnalytes]);
+
+  const dominantSourceFormat = useMemo<'text' | 'ocr' | 'manual' | 'unknown' | null>(() => {
+    if (reportAnalytes.length === 0) return null;
+    const counts: Record<string, number> = {};
+    for (const a of reportAnalytes) {
+      const fmt = a.source_format ?? 'unknown';
+      counts[fmt] = (counts[fmt] ?? 0) + 1;
+    }
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const top = sorted[0]?.[0];
+    if (!top || top === 'unknown') return null;
+    return top as 'text' | 'ocr' | 'manual';
+  }, [reportAnalytes]);
+
   const insightSummary = useMemo(() => {
     if (biomarkers.length === 0) return null;
-    const current = biomarkers.map(b => ({
-      key: b.name as BiomarkerName,
-      value: b.value,
-      unit: b.unit,
-      labRefMin: b.reference_min,
-      labRefMax: b.reference_max,
-    }));
+    const current = biomarkers.map(b => {
+      const telemetry = analyteTelemetryMap.get(b.name);
+      return {
+        key: b.name as BiomarkerName,
+        value: b.value,
+        unit: b.unit,
+        labRefMin: b.reference_min,
+        labRefMax: b.reference_max,
+        parserConfidence: telemetry?.parserConfidence ?? null,
+        normalizationStatus: telemetry?.normalizationStatus ?? null,
+      };
+    });
     const previous = previousBiomarkers.length > 0
       ? previousBiomarkers.map(b => ({
           key: b.name as BiomarkerName,
@@ -245,7 +275,7 @@ export function ReportView() {
         }))
       : null;
     return buildInsightSummary(current, previous, report?.estimated_cycle_phase);
-  }, [biomarkers, previousBiomarkers, report]);
+  }, [biomarkers, previousBiomarkers, report, analyteTelemetryMap]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
@@ -419,6 +449,11 @@ export function ReportView() {
               <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
+              )}
+              {dominantSourceFormat && (
+                <span className="text-xs text-theme-muted-text-3 px-1.5 py-0.5 rounded border border-theme-border">
+                  Source: {dominantSourceFormat === 'ocr' ? 'OCR' : dominantSourceFormat.charAt(0).toUpperCase() + dominantSourceFormat.slice(1)}
+                </span>
               )}
             </div>
           </div>

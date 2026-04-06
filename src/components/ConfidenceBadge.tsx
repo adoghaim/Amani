@@ -51,6 +51,14 @@ export function ConfidenceBadge({ confidence }: Props) {
 
       {expanded && (
         <div className={`mt-2 rounded-xl border p-3 space-y-1.5 ${cfg.panel}`}>
+          {confidence.coverageCount > 0 && (
+            <div className="flex items-center justify-between pb-1.5 mb-0.5 border-b border-white/10">
+              <span className="text-[11px] text-white/50">Coverage</span>
+              <span className={`text-[11px] font-medium ${cfg.text}`}>
+                {confidence.coverageCount} of {confidence.totalCount} analytes recognized
+              </span>
+            </div>
+          )}
           {confidence.reasons.map((reason, i) => (
             <div key={i} className="flex items-start gap-2">
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${cfg.dot}`} />
@@ -58,7 +66,7 @@ export function ConfidenceBadge({ confidence }: Props) {
             </div>
           ))}
           <p className="text-[10px] text-white/40 pt-1">
-            Reflects how much of your report was successfully extracted and matched — not a measure of health certainty or diagnosis.
+            Reflects data quality and extraction coverage — not medical certainty or diagnosis.
           </p>
         </div>
       )}
