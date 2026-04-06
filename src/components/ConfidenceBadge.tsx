@@ -43,7 +43,7 @@ export function ConfidenceBadge({ confidence }: Props) {
         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${cfg.badge}`}
       >
         <ShieldCheck className="w-3 h-3" />
-        <span>Analysis confidence: {confidence.label}</span>
+        <span>Data quality: {confidence.label.charAt(0).toUpperCase() + confidence.label.slice(1)}</span>
         {expanded
           ? <ChevronUp className="w-3 h-3 opacity-70" />
           : <ChevronDown className="w-3 h-3 opacity-70" />}
@@ -58,7 +58,7 @@ export function ConfidenceBadge({ confidence }: Props) {
             </div>
           ))}
           <p className="text-[10px] text-white/40 pt-1">
-            Confidence reflects data quality and extraction coverage, not medical certainty.
+            Reflects extraction quality and coverage — not a measure of medical certainty.
           </p>
         </div>
       )}

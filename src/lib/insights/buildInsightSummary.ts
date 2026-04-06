@@ -238,8 +238,8 @@ function buildWatchSignals(
       : `${names.slice(0, 2).join(', ')} and ${names.length - 2} others`;
     signals.push({
       type: 'system',
-      title: `${systemLabel} pattern worth tracking`,
-      description: `${listed} ${names.length === 1 ? 'is' : 'are'} outside optimal ranges within the same system. Patterns across related markers may be more informative when tracked together over time.`,
+      title: `${systemLabel} — multiple markers outside optimal`,
+      description: `${listed} ${names.length === 1 ? 'is' : 'are'} each outside the optimal range. When several markers in the same system shift together, tracking them as a group over time can provide useful context.`,
       relatedBiomarkers: peers.map(p => p.key),
     });
   }
@@ -252,8 +252,8 @@ function buildWatchSignals(
     const bc = d.boundaryCrossing!;
     signals.push({
       type: 'boundary',
-      title: `${d.displayName} moved to a new range`,
-      description: `${d.displayName} shifted from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')} since the last report. Tracking this over time may help clarify whether this is a trend or a one-time shift.`,
+      title: `${d.displayName} — range shifted since last report`,
+      description: `This result moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')} compared to the previous report. A single shift may or may not be meaningful — following it across future panels can help clarify the pattern.`,
       relatedBiomarkers: [d.key],
     });
   }
@@ -267,8 +267,8 @@ function buildWatchSignals(
     const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
     signals.push({
       type: 'trend',
-      title: `${d.displayName} is trending ${d.trendDirection}`,
-      description: `${d.displayName} has been ${dir}${pct} since the previous report. Monitoring this result across future panels may help identify whether this is a meaningful pattern.`,
+      title: `${d.displayName} — notable change from previous report`,
+      description: `This result has been ${dir}${pct} since the last panel, while remaining within the same range category. Watching it across future reports may help determine whether this is a consistent direction.`,
       relatedBiomarkers: [d.key],
     });
   }
@@ -288,8 +288,8 @@ function buildWatchSignals(
     const systemLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
     signals.push({
       type: 'pattern',
-      title: `Shifts across ${systemLabel} markers`,
-      description: `${systemNames} all changed since the last report. When related markers shift together, the pattern may be more meaningful to track longitudinally.`,
+      title: `${systemLabel} — multiple markers changed together`,
+      description: `${systemNames} all showed notable changes since the last report. Coordinated shifts across related markers can sometimes reflect an underlying pattern worth following over time.`,
       relatedBiomarkers: group.map(d => d.key),
     });
     break;
