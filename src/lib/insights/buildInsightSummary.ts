@@ -12,6 +12,10 @@ export interface TopFinding {
   status: 'optimal' | 'borderline' | 'out_of_range';
   severity: number;
   fact: string;
+  trend?: {
+    direction: 'up' | 'down' | 'stable';
+    interpretation: 'improved' | 'worsened' | 'stable';
+  } | null;
 }
 
 export interface BiggestChange {
@@ -47,7 +51,12 @@ interface BiomarkerInput {
   labRefMax: number | null;
 }
 
-function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
+function buildTopFindings(
+  scored: ScoredBiomarker[],
+  deltas: BiomarkerDelta[] = [],
+): TopFinding[] {
+  const deltaMap = new Map(deltas.map(d => [d.key, d]));
+
   return scored
     .filter(s => s.concern > 0)
     .sort((a, b) => b.weightedConcern - a.weightedConcern)
@@ -57,6 +66,17 @@ function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
       const statusLabel = s.concern === 2 ? 'out_of_range' : 'borderline';
       const direction = s.amaniStatus.includes('high') ? 'high' : s.amaniStatus.includes('low') ? 'low' : '';
       const dirLabel = direction === 'high' ? 'above' : direction === 'low' ? 'below' : 'outside';
+      
+      const delta = deltaMap.get(s.key);
+      let trend: TopFinding['trend'] = null;
+      
+      if (delta) {
+        trend = {
+          direction: delta.trendDirection,
+          interpretation: delta.boundaryCrossing?.direction === 'improved' ? 'improved' : 
+                         delta.boundaryCrossing?.direction === 'worsened' ? 'worsened' : 'stable'
+        };
+      }
 
       return {
         key: s.key,
@@ -66,6 +86,7 @@ function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
         status: statusLabel as TopFinding['status'],
         severity: s.weightedConcern,
         fact: `${displayName} is ${dirLabel} the optimal range at ${s.value} ${s.unit}`,
+        trend,
       };
     });
 }
@@ -160,9 +181,6 @@ export function buildInsightSummary(
     scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
   );
 
-  const topFindings = buildTopFindings(scored);
-  const systemSummaries = groupBySystem(scored);
-
   let biggestChanges: BiggestChange[] = [];
   let deltas: BiomarkerDelta[] = [];
 
@@ -175,6 +193,8 @@ export function buildInsightSummary(
     biggestChanges = buildBiggestChanges(deltas);
   }
 
+  const topFindings = buildTopFindings(scored, deltas);
+  const systemSummaries = groupBySystem(scored);
   const questionsForDoctor = buildDoctorQuestions(scored, deltas);
 
   return {

@@ -22,6 +22,7 @@ import { splitIntoLines, isSectionHeader } from './textUtils';
 import { detectReferenceRange } from './rangeDetection';
 import { matchBiomarkerLabel } from './labelMatching';
 import { extractValueFromWindow, parseValueWithPrefix } from './valueExtraction';
+import { resolveAlias, getEntry } from '../../lib/biomarkers/dictionary';
 
 export { normalizeToCatalogSlug } from './patterns';
 export { CATALOG_SLUG_ALIASES };
@@ -399,6 +400,20 @@ function tryResolveExtendedSlug(rawName: string): { slug: string; category: stri
       }
     }
   }
+
+  // Final fallback: Clinical Dictionary
+  const resolvedDict = resolveAlias(rawName);
+  if (resolvedDict) {
+    const entry = getEntry(resolvedDict);
+    if (entry) {
+      return {
+        slug: entry.key,
+        category: entry.category,
+        isCore: true, // If it's in our clinical dictionary, we treat it as core for Phase 4B
+      };
+    }
+  }
+
   return null;
 }
 

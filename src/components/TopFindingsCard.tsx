@@ -1,4 +1,4 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { TopFinding } from '../lib/insights/buildInsightSummary';
 
 const STATUS_STYLE: Record<string, {
@@ -64,6 +64,13 @@ export function TopFindingsCard({ findings }: Props) {
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${style.badge}`}>
                     {style.label}
                   </span>
+                  {finding.trend && (
+                    <div title={`${finding.trend.interpretation} trend`} className="flex-shrink-0">
+                      {finding.trend.direction === 'up' && <TrendingUp className={`w-3.5 h-3.5 ${finding.trend.interpretation === 'improved' ? 'text-emerald-500' : 'text-rose-500'}`} />}
+                      {finding.trend.direction === 'down' && <TrendingDown className={`w-3.5 h-3.5 ${finding.trend.interpretation === 'improved' ? 'text-emerald-500' : 'text-rose-500'}`} />}
+                      {finding.trend.direction === 'stable' && <Minus className="w-3.5 h-3.5 text-gray-400" />}
+                    </div>
+                  )}
                 </div>
               </div>
               <p className={`text-xs leading-relaxed ml-4 ${style.text}`}>{finding.fact}</p>

@@ -1,5 +1,6 @@
 import type { BiomarkerPattern, SourceAdapter } from './types';
 import { BIOMARKER_PATTERNS } from './patterns';
+import { resolveAlias, getEntry } from '../../lib/biomarkers/dictionary';
 
 export const KNOWN_UNITS = [
   'pg/mL', 'pg/ml', 'ng/mL', 'ng/ml', 'ng/dL', 'ng/dl',
@@ -52,5 +53,24 @@ export function matchBiomarkerLabel(line: string, adapter?: SourceAdapter): Biom
       }
     }
   }
+
+  // Fallback: Check clinical dictionary alias map
+  const resolved = resolveAlias(lineLower);
+  if (resolved) {
+    // Check if we already have a pattern for this canonical slug
+    const existingPattern = BIOMARKER_PATTERNS.find(p => p.canonical === resolved);
+    if (existingPattern) return existingPattern;
+
+    // Otherwise, create a synthetic pattern for extraction context
+    const entry = getEntry(resolved);
+    if (entry) {
+      return {
+        canonical: resolved,
+        patterns: [resolved, ...entry.aliases],
+        commonUnits: [entry.defaultUnit],
+      };
+    }
+  }
+
   return null;
 }
