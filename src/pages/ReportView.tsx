@@ -18,7 +18,12 @@ import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMet
 import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY, RECOMMENDED_LABS } from '../utils/biomarkerDefinitions';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
-import { CATEGORY_DISPLAY } from '../types';
+import { buildPersonalInsights } from '../lib/insights/buildPersonalInsights';
+import { computeBaseline } from '../lib/personalization/baseline';
+import { analyzeTrend } from '../lib/personalization/trendAnalysis';
+import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
+import { YourPatternsCard } from '../components/YourPatternsCard';
+import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
   BiomarkerName, ReportAnalyte,
@@ -153,6 +158,9 @@ export function ReportView() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [previousBiomarkers, setPreviousBiomarkers] = useState<Biomarker[]>([]);
+  const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
+  const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
+  const [historicalReportCount, setHistoricalReportCount] = useState(0);
 
   useEffect(() => { fetchReport(); }, [reportId]);
 
@@ -179,6 +187,30 @@ export function ReportView() {
     return () => clearInterval(interval);
   }, [report?.status, reportId]);
 
+  useEffect(() => {
+    if (!report || report.status !== 'ready' || interpretation !== null || loading) return;
+    let elapsed = 0;
+    const POLL_INTERVAL = 3000;
+    const TIMEOUT_MS = 60000;
+    const interval = setInterval(async () => {
+      elapsed += POLL_INTERVAL;
+      const { data } = await supabase
+        .from('interpretations')
+        .select('id, json_output')
+        .eq('lab_report_id', reportId)
+        .maybeSingle();
+      if (data?.json_output) {
+        clearInterval(interval);
+        setInterpretation(normalizeInterpretation(data.json_output));
+        return;
+      }
+      if (elapsed >= TIMEOUT_MS) {
+        clearInterval(interval);
+      }
+    }, POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [report?.status, report?.id, interpretation, loading, reportId]);
+
   const fetchReport = async () => {
     const { data: reportData, error: reportError } = await supabase
       .from('lab_reports').select('*').eq('id', reportId).maybeSingle();
@@ -199,14 +231,37 @@ export function ReportView() {
     }
 
     if (reportData.user_id) {
-      const { data: prevReportData } = await supabase
-        .from('lab_reports')
-        .select('id')
-        .eq('user_id', reportData.user_id)
-        .lt('report_date', reportData.report_date)
-        .order('report_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const windowStart = new Date(reportData.report_date);
+      windowStart.setDate(windowStart.getDate() - PERSONALIZATION_THRESHOLDS.SYMPTOM_WINDOW_DAYS);
+      const windowEnd = new Date(reportData.report_date);
+      windowEnd.setDate(windowEnd.getDate() + PERSONALIZATION_THRESHOLDS.SYMPTOM_WINDOW_DAYS);
+
+      const [
+        { data: prevReportData },
+        { data: allReportsData },
+        { data: symptomLogsData },
+      ] = await Promise.all([
+        supabase
+          .from('lab_reports')
+          .select('id')
+          .eq('user_id', reportData.user_id)
+          .lt('report_date', reportData.report_date)
+          .order('report_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('lab_reports')
+          .select('id, report_date')
+          .eq('user_id', reportData.user_id)
+          .neq('id', reportId)
+          .order('report_date', { ascending: true }),
+        supabase
+          .from('symptom_logs')
+          .select('*')
+          .eq('user_id', reportData.user_id)
+          .gte('log_date', windowStart.toISOString().split('T')[0])
+          .lte('log_date', windowEnd.toISOString().split('T')[0]),
+      ]);
 
       if (prevReportData?.id) {
         const { data: prevBioData } = await supabase
@@ -214,6 +269,35 @@ export function ReportView() {
           .select('*')
           .eq('lab_report_id', prevReportData.id);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
+      }
+
+      if (symptomLogsData) {
+        setSymptomLogs(symptomLogsData as SymptomLog[]);
+      }
+
+      if (allReportsData && allReportsData.length > 0) {
+        setHistoricalReportCount(allReportsData.length);
+        const reportDateMap = new Map<string, string>();
+        for (const r of allReportsData) {
+          reportDateMap.set(r.id, r.report_date);
+        }
+
+        const allHistoricalIds = allReportsData.map(r => r.id);
+        const { data: allHistoricalBiomarkers } = await supabase
+          .from('biomarkers')
+          .select('name, value, lab_report_id')
+          .in('lab_report_id', allHistoricalIds);
+
+        if (allHistoricalBiomarkers) {
+          const histMap = new Map<string, { reportDate: string; value: number }[]>();
+          for (const b of allHistoricalBiomarkers) {
+            const reportDate = reportDateMap.get(b.lab_report_id);
+            if (!reportDate) continue;
+            if (!histMap.has(b.name)) histMap.set(b.name, []);
+            histMap.get(b.name)!.push({ reportDate, value: b.value });
+          }
+          setHistoricalBiomarkers(histMap);
+        }
       }
     }
 
@@ -266,6 +350,70 @@ export function ReportView() {
     if (!top || top === 'unknown') return null;
     return top as 'text' | 'ocr' | 'manual';
   }, [reportAnalytes]);
+
+  const personalInsights = useMemo<PersonalPattern[]>(() => {
+    if (biomarkers.length === 0 || historicalReportCount === 0) return [];
+    const currentBiomarkers = biomarkers.map(b => ({
+      name: b.name,
+      value: b.value,
+      flagged: b.flagged as 'out_of_range' | 'borderline' | 'in_range' | 'unknown',
+    }));
+    return buildPersonalInsights(
+      currentBiomarkers,
+      historicalBiomarkers,
+      symptomLogs,
+      report?.report_date ?? ''
+    );
+  }, [biomarkers, historicalBiomarkers, symptomLogs, historicalReportCount, report]);
+
+  const biomarkerPersonalizationMap = useMemo(() => {
+    const map = new Map<string, {
+      baselineStatus?: BaselineStatus;
+      baselineValue?: number;
+      trendDirection?: TrendDirection;
+      trendStrength?: TrendStrength;
+    }>();
+
+    if (historicalReportCount < PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) return map;
+
+    for (const b of biomarkers) {
+      const history = historicalBiomarkers.get(b.name);
+      if (!history || history.length === 0) continue;
+
+      const ordered = history
+        .sort((a, c) => a.reportDate.localeCompare(c.reportDate))
+        .map(h => h.value);
+
+      const entry: {
+        baselineStatus?: BaselineStatus;
+        baselineValue?: number;
+        trendDirection?: TrendDirection;
+        trendStrength?: TrendStrength;
+      } = {};
+
+      if (ordered.length >= PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) {
+        const baseline = computeBaseline(ordered, b.value);
+        if (baseline) {
+          entry.baselineStatus = baseline.baselineStatus;
+          entry.baselineValue = baseline.baselineValue;
+        }
+      }
+
+      if (ordered.length >= PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_TREND) {
+        const trend = analyzeTrend([...ordered, b.value]);
+        if (trend) {
+          entry.trendDirection = trend.trendDirection;
+          entry.trendStrength = trend.trendStrength;
+        }
+      }
+
+      if (Object.keys(entry).length > 0) {
+        map.set(b.name, entry);
+      }
+    }
+
+    return map;
+  }, [biomarkers, historicalBiomarkers, historicalReportCount]);
 
   const insightSummary = useMemo(() => {
     if (biomarkers.length === 0) return null;
@@ -628,6 +776,11 @@ export function ReportView() {
             </div>
           )}
 
+          {/* ── B2. Your Patterns (personalization) ─────────────── */}
+          {personalInsights.length > 0 && !isProcessing && (
+            <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
+          )}
+
           {/* ── C. Top Findings (deterministic) ─────────────────── */}
           {insightSummary && !isProcessing && (
             <TopFindingsCard findings={insightSummary.topFindings} />
@@ -735,6 +888,7 @@ export function ReportView() {
                         <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-2">
                           {items.map(b => {
                             const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
+                            const personalization = biomarkerPersonalizationMap.get(b.name);
                             return (
                               <BiomarkerCard
                                 key={b.id}
@@ -749,6 +903,10 @@ export function ReportView() {
                                 timingNotes={interp?.timing_notes}
                                 commonNonAlarmReasons={interp?.common_non_alarm_reasons}
                                 whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
+                                baselineStatus={personalization?.baselineStatus}
+                                baselineValue={personalization?.baselineValue}
+                                trendDirection={personalization?.trendDirection}
+                                trendStrength={personalization?.trendStrength}
                               />
                             );
                           })}

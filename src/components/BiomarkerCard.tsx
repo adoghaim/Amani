@@ -8,7 +8,7 @@ import {
   BIOMARKER_RANGES,
   BIOMARKER_DISPLAY,
 } from '../utils/biomarkerDefinitions';
-import type { BiomarkerName, CyclePhase, AmaniStatus } from '../types';
+import type { BiomarkerName, CyclePhase, AmaniStatus, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 
 interface BiomarkerCardProps {
@@ -24,6 +24,10 @@ interface BiomarkerCardProps {
   commonNonAlarmReasons?: string[];
   whenCliniciansFollowUp?: string[];
   historicalValues?: { date: string; value: number }[];
+  baselineStatus?: BaselineStatus;
+  baselineValue?: number;
+  trendDirection?: TrendDirection;
+  trendStrength?: TrendStrength;
 }
 
 function RangeBar({
@@ -146,6 +150,9 @@ export function BiomarkerCard({
   commonNonAlarmReasons,
   whenCliniciansFollowUp,
   historicalValues,
+  baselineStatus,
+  trendDirection,
+  trendStrength,
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -203,6 +210,20 @@ export function BiomarkerCard({
               <span className="text-xs text-[#9A8A90]">· lab ref: {labRefMin}–{labRefMax}</span>
             )}
           </div>
+          {(baselineStatus && baselineStatus !== 'insufficient_data' && baselineStatus !== 'near_baseline') || (trendDirection && trendDirection !== 'stable' && trendDirection !== 'fluctuating' && trendDirection !== 'insufficient_data' && trendStrength !== 'weak') ? (
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {baselineStatus && baselineStatus !== 'insufficient_data' && baselineStatus !== 'near_baseline' && (
+                <span className="text-[10px] text-teal-600 font-medium">
+                  {baselineStatus === 'above_baseline' ? 'Higher than your usual level' : 'Lower than your usual level'}
+                </span>
+              )}
+              {trendDirection && trendDirection !== 'stable' && trendDirection !== 'fluctuating' && trendDirection !== 'insufficient_data' && trendStrength !== 'weak' && (
+                <span className="text-[10px] text-sky-600 font-medium">
+                  Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
+                </span>
+              )}
+            </div>
+          ) : null}
           {(optMin !== null && optMax !== null) && (
             <RangeBar value={value} optMin={optMin} optMax={optMax} clinMin={labRefMin ?? clinMin} clinMax={labRefMax ?? clinMax} />
           )}
