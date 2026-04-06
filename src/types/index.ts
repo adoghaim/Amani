@@ -398,6 +398,65 @@ export interface NotificationPreferences {
 
 export type ReminderType = 'period' | 'fertile_window' | 'ovulation' | 'lab' | 'intervention';
 
+export type BaselineStatus =
+  | 'near_baseline'
+  | 'above_baseline'
+  | 'below_baseline'
+  | 'insufficient_data';
+
+export type TrendDirection =
+  | 'rising'
+  | 'falling'
+  | 'stable'
+  | 'fluctuating'
+  | 'insufficient_data';
+
+export type TrendStrength = 'weak' | 'moderate' | 'strong';
+
+export type PersonalPatternType = 'baseline' | 'trend' | 'symptom';
+
+export interface BaselineResult {
+  baselineValue: number;
+  deviationPercent: number;
+  baselineStatus: BaselineStatus;
+  reportsUsed: number;
+}
+
+export interface TrendResult {
+  trendDirection: TrendDirection;
+  trendStrength: TrendStrength;
+  consistencyScore: number;
+  reportsUsed: number;
+}
+
+export interface SymptomCorrelation {
+  symptom: string;
+  biomarker: string;
+  system: string;
+  relevanceLevel: 'high' | 'medium';
+}
+
+export interface PersonalPattern {
+  type: PersonalPatternType;
+  biomarker: string;
+  summary: string;
+  severity: 'info' | 'caution';
+  supportingData?: {
+    baselineResult?: BaselineResult;
+    trendResult?: TrendResult;
+    correlation?: SymptomCorrelation;
+  };
+}
+
+export const PERSONALIZATION_THRESHOLDS = {
+  MIN_REPORTS_FOR_BASELINE: 2,
+  MIN_REPORTS_FOR_TREND: 3,
+  MAX_PATTERNS_SHOWN: 4,
+  SYMPTOM_WINDOW_DAYS: 14,
+  DEVIATION_THRESHOLD_PERCENT: 10,
+  TREND_MIN_CHANGE_PERCENT: 8,
+} as const;
+
 export interface Reminder {
   id: string;
   user_id: string;
