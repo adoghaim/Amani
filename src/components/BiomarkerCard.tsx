@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, BookOpen } from 'lucide-react';
 import {
   computeAmaniStatus,
   computeLabStatus,
@@ -9,6 +9,7 @@ import {
   BIOMARKER_DISPLAY,
 } from '../utils/biomarkerDefinitions';
 import type { BiomarkerName, CyclePhase, AmaniStatus } from '../types';
+import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
@@ -219,6 +220,20 @@ export function BiomarkerCard({
             labRefMax={labRefMax}
             value={value}
           />
+
+          {(() => {
+            const explanation = getBiomarkerExplanation(name);
+            if (!explanation) return null;
+            return (
+              <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
+                <BookOpen className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Why this matters</p>
+                  <p className="text-xs text-blue-800 leading-relaxed">{explanation}</p>
+                </div>
+              </div>
+            );
+          })()}
 
           {plainEnglishMeaning && (
             <p className="text-sm text-[#4A3A40]">{plainEnglishMeaning}</p>

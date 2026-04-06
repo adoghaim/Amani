@@ -9,8 +9,10 @@ import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
 import { TopFindingsCard } from '../components/TopFindingsCard';
 import { BiggestChangesCard } from '../components/BiggestChangesCard';
+import { WhatToWatchCard } from '../components/WhatToWatchCard';
 import { SystemSummaryCards } from '../components/SystemSummaryCards';
 import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
+import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY, RECOMMENDED_LABS } from '../utils/biomarkerDefinitions';
@@ -499,6 +501,11 @@ export function ReportView() {
                 <div className="flex items-center gap-2.5 mb-3">
                   <Sparkles className="w-4 h-4 text-theme-primary-light" />
                   <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani Analysis</span>
+                  {insightSummary && (
+                    <div className="ml-auto">
+                      <ConfidenceBadge confidence={insightSummary.confidence} />
+                    </div>
+                  )}
                 </div>
                 <h2 className="text-lg font-semibold text-white leading-snug">
                   {insightSummary
@@ -580,7 +587,12 @@ export function ReportView() {
             <BiggestChangesCard changes={insightSummary.biggestChanges} />
           )}
 
-          {/* ── C2. What You Can Do Now ──────────────────────────── */}
+          {/* ── C3. What to Watch (deterministic signals) ────────── */}
+          {insightSummary && !isProcessing && insightSummary.watchSignals.length > 0 && (
+            <WhatToWatchCard signals={insightSummary.watchSignals} />
+          )}
+
+          {/* ── C4. What You Can Do Now ──────────────────────────── */}
           {interpretation && !isProcessing && (interpretation.what_you_can_do_now?.length ?? 0) > 0 && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 overflow-hidden">
               <div className="px-5 py-4 border-b border-emerald-100">
