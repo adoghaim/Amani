@@ -321,12 +321,13 @@ export function ReportView() {
   const analyteTelemetryMap = useMemo(() => {
     const CONFIDENCE_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
     const NORM_RANK: Record<string, number> = { mapped: 3, partial: 2, unmapped: 1 };
-    const map = new Map<string, { parserConfidence: 'high' | 'medium' | 'low'; normalizationStatus: 'mapped' | 'partial' | 'unmapped' }>();
+    const map = new Map<string, { parserConfidence: 'high' | 'medium' | 'low'; normalizationStatus: 'mapped' | 'partial' | 'unmapped'; sourceFormat: 'text' | 'ocr' | 'manual' | 'unknown' | null }>();
     for (const a of reportAnalytes) {
       if (!a.canonical_slug) continue;
       const incoming = {
         parserConfidence: a.confidence_score,
         normalizationStatus: (a.normalization_status ?? a.parse_status) as 'mapped' | 'partial' | 'unmapped',
+        sourceFormat: a.source_format ?? null,
       };
       const existing = map.get(a.canonical_slug);
       if (!existing) {
@@ -435,6 +436,7 @@ export function ReportView() {
         labRefMax: b.reference_max,
         parserConfidence: telemetry?.parserConfidence ?? null,
         normalizationStatus: telemetry?.normalizationStatus ?? null,
+        sourceFormat: telemetry?.sourceFormat ?? null,
       };
     });
     const previous = previousBiomarkers.length > 0

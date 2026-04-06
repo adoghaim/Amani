@@ -50,22 +50,42 @@ export function ConfidenceBadge({ confidence }: Props) {
       </button>
 
       {expanded && (
-        <div className={`mt-2 rounded-xl border p-3 space-y-1.5 ${cfg.panel}`}>
-          {confidence.coverageCount > 0 && (
-            <div className="flex items-center justify-between pb-1.5 mb-0.5 border-b border-white/10">
-              <span className="text-[11px] text-white/50">Coverage</span>
-              <span className={`text-[11px] font-medium ${cfg.text}`}>
-                {confidence.coverageCount} of {confidence.totalCount} analytes recognized
-              </span>
-            </div>
-          )}
-          {confidence.reasons.map((reason, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${cfg.dot}`} />
-              <p className={`text-xs leading-relaxed ${cfg.text}`}>{reason}</p>
-            </div>
-          ))}
-          <p className="text-[10px] text-white/40 pt-1">
+        <div className={`mt-2 rounded-xl border p-3 space-y-2 ${cfg.panel}`}>
+          <div className="space-y-1 pb-2 border-b border-white/10">
+            {confidence.coverageCount > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-white/50">Coverage</span>
+                <span className={`text-[11px] font-medium ${cfg.text}`}>
+                  {confidence.coverageCount} of {confidence.totalCount} analytes
+                </span>
+              </div>
+            )}
+            {confidence.normalizationRate !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-white/50">Normalization</span>
+                <span className={`text-[11px] font-medium ${cfg.text}`}>
+                  {Math.round(confidence.normalizationRate * 100)}% mapped
+                </span>
+              </div>
+            )}
+            {confidence.parserQuality && confidence.parserQuality !== 'unknown' && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-white/50">Parser quality</span>
+                <span className={`text-[11px] font-medium ${cfg.text}`}>
+                  {confidence.parserQuality.charAt(0).toUpperCase() + confidence.parserQuality.slice(1)}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {confidence.reasons.map((reason, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${cfg.dot}`} />
+                <p className={`text-xs leading-relaxed ${cfg.text}`}>{reason}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-white/40 pt-0.5">
             Reflects data quality and extraction coverage — not medical certainty or diagnosis.
           </p>
         </div>
