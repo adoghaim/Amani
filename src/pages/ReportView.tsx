@@ -218,34 +218,52 @@ export function ReportView() {
         // This handles cases where the initial invocation was dropped silently
         if (!interpRetryFired.current) {
           interpRetryFired.current = true;
-          console.log('[ReportView] Interpretation missing after timeout — firing one-time retry');
-          supabase.functions.invoke('generate-interpretation', {
-            body: { reportId },
-          }).then(({ error: retryErr }) => {
-            if (retryErr) {
-              console.warn('[ReportView] Retry interpretation failed:', retryErr.message);
-              return;
-            }
-            // After retry fires, do a short follow-up poll to pick up the result
-            let retryElapsed = 0;
-            const RETRY_INTERVAL = 4000;
-            const RETRY_TIMEOUT = 60000;
-            const retryInterval = setInterval(async () => {
-              retryElapsed += RETRY_INTERVAL;
-              const { data: retryData } = await supabase
+          console.log('[ReportView] Interpretation missing after timeout — checking before retry');
+          // Pre-retry existence check: only invoke if interpretation truly does not exist.
+          // Without this, retry would re-set status to 'processing' on a report that
+          // already has (or is about to have) an interpretation, causing a UX regression.
+          (async () => {
+            try {
+              const { data: preRetryData } = await supabase
                 .from('interpretations')
                 .select('id, json_output')
                 .eq('lab_report_id', reportId)
                 .maybeSingle();
-              if (retryData?.json_output) {
-                clearInterval(retryInterval);
-                setInterpretation(normalizeInterpretation(retryData.json_output));
-              } else if (retryElapsed >= RETRY_TIMEOUT) {
-                clearInterval(retryInterval);
-                console.warn('[ReportView] Retry interpretation also did not produce a result.');
+              if (preRetryData?.json_output) {
+                console.log('[ReportView] Interpretation found before retry — skipping invoke');
+                setInterpretation(normalizeInterpretation(preRetryData.json_output));
+                return;
               }
-            }, RETRY_INTERVAL);
-          }).catch(e => console.error('[ReportView] Retry interpretation exception:', e));
+              console.log('[ReportView] Interpretation confirmed missing — firing retry');
+              const { error: retryErr } = await supabase.functions.invoke('generate-interpretation', {
+                body: { reportId },
+              });
+              if (retryErr) {
+                console.warn('[ReportView] Retry interpretation failed:', retryErr.message);
+                return;
+              }
+              let retryElapsed = 0;
+              const RETRY_INTERVAL = 4000;
+              const RETRY_TIMEOUT = 60000;
+              const retryInterval = setInterval(async () => {
+                retryElapsed += RETRY_INTERVAL;
+                const { data: retryData } = await supabase
+                  .from('interpretations')
+                  .select('id, json_output')
+                  .eq('lab_report_id', reportId)
+                  .maybeSingle();
+                if (retryData?.json_output) {
+                  clearInterval(retryInterval);
+                  setInterpretation(normalizeInterpretation(retryData.json_output));
+                } else if (retryElapsed >= RETRY_TIMEOUT) {
+                  clearInterval(retryInterval);
+                  console.warn('[ReportView] Retry interpretation also did not produce a result.');
+                }
+              }, RETRY_INTERVAL);
+            } catch (e) {
+              console.error('[ReportView] Retry flow exception:', e);
+            }
+          })();
         }
       }
     }, POLL_INTERVAL);
