@@ -1,4 +1,4 @@
-import { Heart, Upload, MessageCircle, FileText } from 'lucide-react';
+import { Heart, Upload, MessageCircle, FileText, CheckCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 
 export function Landing() {
@@ -17,9 +17,9 @@ export function Landing() {
                   Log in
                 </Button>
               </a>
-              <a href="/pricing">
+              <a href="/signup">
                 <Button size="sm">
-                  Get started
+                  Start free trial
                 </Button>
               </a>
             </div>
@@ -28,6 +28,10 @@ export function Landing() {
       </nav>
 
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
+        <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-4 py-1.5 mb-6">
+          <CheckCircle className="w-4 h-4 text-emerald-600" />
+          <span className="text-emerald-700 text-sm font-semibold">7-day free trial — no credit card required to sign up</span>
+        </div>
         <h1 className="text-5xl md:text-6xl font-bold text-theme-text mb-4 leading-tight">
           Understand your lab results.
         </h1>
@@ -37,10 +41,10 @@ export function Landing() {
         <p className="text-lg text-theme-muted-text mb-10 max-w-3xl mx-auto">
           Amani helps you make sense of hormone labs in context, so you can have better conversations with your doctor.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="/pricing">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+          <a href="/signup">
             <Button size="lg" className="w-full sm:w-auto">
-              Get started
+              Start your free 7-day trial
             </Button>
           </a>
           <a href="/login">
@@ -49,6 +53,9 @@ export function Landing() {
             </Button>
           </a>
         </div>
+        <p className="text-sm text-theme-muted-text">
+          Free for 7 days, then $9.99/mo or $99.99/yr. Cancel anytime.
+        </p>
       </section>
 
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -116,33 +123,37 @@ export function Landing() {
             </div>
           </div>
 
-          <p className="text-sm text-theme-muted-text mb-6">
-            7-day free trial • Cancel anytime • Founders Launch pricing available for a limited time.
-          </p>
+          <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-4 py-1.5 mb-5">
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
+            <span className="text-emerald-700 text-sm font-semibold">7-day free trial included</span>
+          </div>
 
-          <ul className="text-left space-y-3 mb-8 max-w-md mx-auto">
+          <ul className="text-left space-y-3 mb-6 max-w-md mx-auto">
             <li className="flex items-start gap-2">
-              <span className="text-theme-primary mt-1">✓</span>
+              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
               <span className="text-theme-text">Unlimited lab report uploads</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-theme-primary mt-1">✓</span>
+              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
               <span className="text-theme-text">AI-powered educational explanations</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-theme-primary mt-1">✓</span>
+              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
               <span className="text-theme-text">Cycle-aware context</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-theme-primary mt-1">✓</span>
+              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
               <span className="text-theme-text">Questions to ask your doctor</span>
             </li>
           </ul>
-          <a href="/pricing">
-            <Button size="lg" className="w-full sm:w-auto">
-              Get started
+          <a href="/signup">
+            <Button size="lg" className="w-full sm:w-auto mb-3">
+              Start your free 7-day trial
             </Button>
           </a>
+          <p className="text-sm text-theme-muted-text">
+            Free for 7 days, then $9.99/mo or $99.99/yr. Cancel anytime.
+          </p>
         </div>
       </section>
 
