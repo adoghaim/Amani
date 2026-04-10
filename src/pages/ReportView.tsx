@@ -628,8 +628,11 @@ export function ReportView() {
     return false;
   };
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const formatDate = (d: string) => {
+    if (!d) return '—';
+    const base = d.length === 10 ? d + 'T12:00:00' : d;
+    return new Date(base).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  };
 
   if (loading) {
     return (

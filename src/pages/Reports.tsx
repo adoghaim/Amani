@@ -378,7 +378,7 @@ export function Reports() {
                               {formatDate(report.report_date)}
                             </div>
                             <div className="text-xs text-theme-muted-text-4 mt-0.5">
-                              Uploaded {timeAgo(report.report_date)}
+                              Uploaded {timeAgo(report.upload_date)}
                             </div>
                           </div>
                         </a>

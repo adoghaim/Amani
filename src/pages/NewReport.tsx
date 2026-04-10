@@ -49,6 +49,7 @@ export function NewReport() {
   const [parserDebug, setParserDebug] = useState<ParserDebugOutput | null>(null);
   const [periodAutoFilled, setPeriodAutoFilled] = useState(false);
   const [fetchingPeriod, setFetchingPeriod] = useState(false);
+  const [reportDateAutoDetected, setReportDateAutoDetected] = useState(false);
   const [submitStep, setSubmitStep] = useState<'uploading' | 'creating' | 'saving' | 'interpreting' | 'complete' | null>(null);
 
   useEffect(() => {
@@ -88,8 +89,34 @@ export function NewReport() {
     }
   };
 
+  const extractDateFromText = (text: string): string | null => {
+    const patterns = [
+      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+(\d{4}-\d{2}-\d{2})/i,
+      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+([A-Z][a-z]+ \d{1,2},? \d{4})/i,
+      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+(\d{1,2}-[A-Z][a-z]+-\d{4})/i,
+      /\bDate(?:\s+of(?:\s+Service)?)?[:\s]+(\d{1,2}\/\d{1,2}\/\d{2,4})/,
+      /\bDate[:\s]+(\d{4}-\d{2}-\d{2})/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const raw = match[1];
+        const parsed = new Date(raw);
+        if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= new Date().getFullYear() + 1) {
+          const y = parsed.getFullYear();
+          const m = String(parsed.getMonth() + 1).padStart(2, '0');
+          const d = String(parsed.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+      }
+    }
+    return null;
+  };
+
   const handleProceedFromStep1 = async () => {
-    if (!file || !reportDate) return;
+    if (!file) return;
 
     setExtracting(true);
     setError('');
@@ -98,6 +125,15 @@ export function NewReport() {
       if (file.type === 'application/pdf') {
         const text = await extractTextFromPDF(file);
         console.log('[NewReport] Extracted PDF text length:', text.length);
+
+        if (!reportDate && text.trim().length > 0) {
+          const detected = extractDateFromText(text);
+          if (detected) {
+            setReportDate(detected);
+            setReportDateAutoDetected(true);
+            console.log('[NewReport] Auto-detected report date from PDF:', detected);
+          }
+        }
 
         const { items: localItems, debug: debugOut, heuristics } = parseAllReportItemsWithDebug(text, file.name);
         setParserDebug(debugOut);
@@ -214,6 +250,11 @@ export function NewReport() {
   };
 
   const handleProceedToStep3 = () => {
+    if (!reportDate) {
+      setError('Please enter the report date before continuing.');
+      return;
+    }
+    setError('');
     setStep(3);
   };
 
@@ -511,7 +552,7 @@ export function NewReport() {
   };
 
 
-  const canProceedStep1 = file && reportDate;
+  const canProceedStep1 = !!file;
 
   return (
     <Layout>
@@ -561,13 +602,27 @@ export function NewReport() {
                 </div>
               </div>
 
-              <Input
-                label="Report date (required)"
-                type="date"
-                value={reportDate}
-                onChange={e => setReportDate(e.target.value)}
-                required
-              />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Report date <span className="text-gray-400 font-normal">(detected from your file when possible)</span>
+                  </label>
+                  {reportDateAutoDetected && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <CheckCircle className="w-3 h-3" /> Detected from report
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  value={reportDate}
+                  onChange={e => { setReportDate(e.target.value); setReportDateAutoDetected(false); }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                />
+                {!reportDate && !extracting && (
+                  <p className="mt-1 text-xs text-gray-400">Will be auto-detected from your PDF, or enter it manually above</p>
+                )}
+              </div>
 
               <div className="flex justify-end">
                 <Button onClick={handleProceedFromStep1} disabled={!canProceedStep1 || extracting}>
@@ -586,6 +641,45 @@ export function NewReport() {
           <Card>
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">Add Context</h2>
             <div className="space-y-6">
+              {!reportDate && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Report date <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      Not detected — please enter manually
+                    </span>
+                  </div>
+                  <input
+                    type="date"
+                    value={reportDate}
+                    onChange={e => setReportDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-400 text-gray-900"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">This is the date shown on your lab report, not today</p>
+                </div>
+              )}
+              {reportDate && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Report date
+                    </label>
+                    {reportDateAutoDetected && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <CheckCircle className="w-3 h-3" /> Detected from report
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={reportDate}
+                    onChange={e => { setReportDate(e.target.value); setReportDateAutoDetected(false); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                  />
+                </div>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium text-gray-700">Last period start date <span className="text-gray-400 font-normal">(optional)</span></label>
