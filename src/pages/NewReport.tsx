@@ -588,31 +588,31 @@ export function NewReport() {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Import from a lab portal</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
-                    onClick={() => setGuidedStep('choose')}
-                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-theme-primary hover:bg-theme-surface-2 transition-all text-left"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-100 transition-colors">
-                      <FlaskConical className="w-5 h-5 text-sky-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900">Import from Quest</p>
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">Upload an official report from MyQuest</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-theme-primary flex-shrink-0" />
-                  </button>
-
-                  <button
-                    onClick={() => { setChosenLab('labcorp'); startGuidedImport('labcorp'); }}
-                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-theme-primary hover:bg-theme-surface-2 transition-all text-left"
+                    onClick={() => startGuidedImport('quest')}
+                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
                   >
                     <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 transition-colors">
                       <FlaskConical className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">Import from Quest</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">Upload an official report from MyQuest</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-emerald-500 flex-shrink-0" />
+                  </button>
+
+                  <button
+                    onClick={() => startGuidedImport('labcorp')}
+                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-100 transition-colors">
+                      <FlaskConical className="w-5 h-5 text-sky-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-gray-900">Import from Labcorp</p>
                       <p className="text-xs text-gray-500 mt-0.5 truncate">Upload an official report from Labcorp Patient</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-theme-primary flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-sky-500 flex-shrink-0" />
                   </button>
                 </div>
               </div>
@@ -695,30 +695,30 @@ export function NewReport() {
             <div className="space-y-3 mb-8">
               <button
                 onClick={() => startGuidedImport('quest')}
-                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
-              >
-                <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                  <FlaskConical className="w-6 h-6 text-sky-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">Quest Diagnostics</p>
-                  <p className="text-sm text-gray-500 mt-0.5">Import from MyQuest portal</p>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-sky-500 transition-colors" />
-              </button>
-
-              <button
-                onClick={() => startGuidedImport('labcorp')}
                 className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
               >
                 <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
                   <FlaskConical className="w-6 h-6 text-emerald-600" />
                 </div>
                 <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900">Quest Diagnostics</p>
+                  <p className="text-sm text-gray-500 mt-0.5">Import from MyQuest portal</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+              </button>
+
+              <button
+                onClick={() => startGuidedImport('labcorp')}
+                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
+              >
+                <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                  <FlaskConical className="w-6 h-6 text-sky-600" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900">Labcorp</p>
                   <p className="text-sm text-gray-500 mt-0.5">Import from Labcorp Patient portal</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-sky-500 transition-colors" />
               </button>
             </div>
 
@@ -737,8 +737,8 @@ export function NewReport() {
             {chosenLab === 'quest' ? (
               <>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                    <FlaskConical className="w-6 h-6 text-sky-600" />
+                  <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <FlaskConical className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900">Import from Quest</h2>
@@ -754,7 +754,7 @@ export function NewReport() {
                     { num: 4, text: 'Come back here and upload it below' },
                   ].map(step => (
                     <li key={step.num} className="flex items-start gap-4">
-                      <span className="w-7 h-7 rounded-full bg-sky-100 text-sky-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
+                      <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
                       <span className="text-sm text-gray-700 pt-1">{step.text}</span>
                     </li>
                   ))}
@@ -765,7 +765,7 @@ export function NewReport() {
                     href={questPortalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-sky-300 text-sky-700 text-sm font-semibold hover:bg-sky-50 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 transition-colors"
                   >
                     Open MyQuest <ExternalLink className="w-4 h-4" />
                   </a>
@@ -786,8 +786,8 @@ export function NewReport() {
             ) : (
               <>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                    <FlaskConical className="w-6 h-6 text-emerald-600" />
+                  <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                    <FlaskConical className="w-6 h-6 text-sky-600" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900">Import from Labcorp</h2>
@@ -803,7 +803,7 @@ export function NewReport() {
                     { num: 4, text: 'Return here and upload it below' },
                   ].map(step => (
                     <li key={step.num} className="flex items-start gap-4">
-                      <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
+                      <span className="w-7 h-7 rounded-full bg-sky-100 text-sky-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
                       <span className="text-sm text-gray-700 pt-1">{step.text}</span>
                     </li>
                   ))}
@@ -814,7 +814,7 @@ export function NewReport() {
                     href={labcorpPortalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-sky-300 text-sky-700 text-sm font-semibold hover:bg-sky-50 transition-colors"
                   >
                     Open Labcorp <ExternalLink className="w-4 h-4" />
                   </a>
@@ -862,17 +862,17 @@ export function NewReport() {
             {effectiveSource !== 'unknown' && (
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border mb-6 ${
                 effectiveSource === 'quest'
-                  ? 'bg-sky-50 border-sky-200'
-                  : 'bg-emerald-50 border-emerald-200'
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-sky-50 border-sky-200'
               }`}>
-                <FlaskConical className={`w-4 h-4 flex-shrink-0 ${effectiveSource === 'quest' ? 'text-sky-600' : 'text-emerald-600'}`} />
+                <FlaskConical className={`w-4 h-4 flex-shrink-0 ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`} />
                 <div className="flex-1 min-w-0">
-                  <span className={`text-sm font-medium ${effectiveSource === 'quest' ? 'text-sky-800' : 'text-emerald-800'}`}>
+                  <span className={`text-sm font-medium ${effectiveSource === 'quest' ? 'text-emerald-800' : 'text-sky-800'}`}>
                     {detectedLabSource !== 'unknown' && labSource === detectedLabSource
                       ? `We detected this as a ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'} report`
                       : `Imported from ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'}`}
                   </span>
-                  <span className={`ml-2 text-xs ${effectiveSource === 'quest' ? 'text-sky-600' : 'text-emerald-600'}`}>
+                  <span className={`ml-2 text-xs ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`}>
                     {detectedLabSource !== 'unknown' ? 'Detected from report' : 'Selected by you'}
                   </span>
                 </div>

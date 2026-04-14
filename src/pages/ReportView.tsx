@@ -691,8 +691,8 @@ export function ReportView() {
               {resolvedLabSource !== 'unknown' && (
                 <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
                   resolvedLabSource === 'quest'
-                    ? 'text-sky-700 bg-sky-50 border-sky-200'
-                    : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : 'text-sky-700 bg-sky-50 border-sky-200'
                 }`}>
                   <FlaskConical className="w-3 h-3" />
                   Imported from {resolvedLabSource === 'quest' ? 'Quest' : 'Labcorp'}
