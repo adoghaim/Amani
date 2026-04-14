@@ -15,7 +15,8 @@ import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { detectLabSource } from '../utils/detectLabSource';
 import {
   Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle,
-  ExternalLink, FlaskConical, ChevronRight,
+  ExternalLink, FlaskConical, ChevronRight, ChevronDown, ChevronUp,
+  Calendar, Activity, Shield,
 } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
@@ -63,6 +64,7 @@ export function NewReport() {
   const [importMethod, setImportMethod] = useState<ImportMethod>('direct_upload');
   const [guidedStep, setGuidedStep] = useState<GuidedStep | null>(null);
   const [chosenLab, setChosenLab] = useState<'quest' | 'labcorp' | null>(null);
+  const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -551,6 +553,22 @@ export function NewReport() {
 
   const effectiveSource = labSource !== 'unknown' ? labSource : detectedLabSource;
 
+  const analysisConfidence = (() => {
+    if (!coverage) return null;
+    const { total_detected, needs_review } = coverage;
+    if (total_detected === 0) return null;
+    const reviewRatio = needs_review / total_detected;
+    if (reviewRatio < 0.1) return 'High';
+    if (reviewRatio < 0.3) return 'Medium';
+    return 'Low';
+  })();
+
+  const confidenceColors = {
+    High: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+    Medium: 'text-amber-700 bg-amber-50 border-amber-200',
+    Low: 'text-red-700 bg-red-50 border-red-200',
+  };
+
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
@@ -850,174 +868,272 @@ export function NewReport() {
           </div>
         )}
 
-        {/* ── STEP 2: Context (Review) ────────────────────────────────────── */}
+        {/* ── STEP 2: Amani Understanding (Smart Review) ──────────────────── */}
         {step === 2 && (
-          <Card>
-            <div className="mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-1">Review your report</h2>
-              <p className="text-sm text-gray-500">We found the report date, source, and lab markers below. Review anything you want before saving.</p>
-            </div>
+          <div className="space-y-4">
 
-            {/* Source detection banner */}
-            {effectiveSource !== 'unknown' && (
-              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border mb-6 ${
-                effectiveSource === 'quest'
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : 'bg-sky-50 border-sky-200'
-              }`}>
-                <FlaskConical className={`w-4 h-4 flex-shrink-0 ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`} />
-                <div className="flex-1 min-w-0">
-                  <span className={`text-sm font-medium ${effectiveSource === 'quest' ? 'text-emerald-800' : 'text-sky-800'}`}>
-                    {detectedLabSource !== 'unknown' && labSource === detectedLabSource
-                      ? `We detected this as a ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'} report`
-                      : `Imported from ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'}`}
-                  </span>
-                  <span className={`ml-2 text-xs ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`}>
-                    {detectedLabSource !== 'unknown' ? 'Detected from report' : 'Selected by you'}
-                  </span>
-                </div>
+            {/* ── Section 1: Amani Understanding ─────────────────────────── */}
+            <Card>
+              <div className="mb-5">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-1">Review your report</h2>
+                <p className="text-sm text-gray-500">
+                  We extracted your report details automatically — review anything below before saving.
+                </p>
               </div>
-            )}
 
-            <div className="space-y-6">
-              {!reportDate && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Report date <span className="text-red-500">*</span>
-                    </label>
-                    <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      Not detected — please enter manually
-                    </span>
+              {/* Source + detection message */}
+              {effectiveSource !== 'unknown' ? (
+                <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border mb-5 ${
+                  effectiveSource === 'quest' ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'
+                }`}>
+                  <FlaskConical className={`w-4 h-4 flex-shrink-0 mt-0.5 ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`} />
+                  <div>
+                    <p className={`text-sm font-semibold ${effectiveSource === 'quest' ? 'text-emerald-800' : 'text-sky-800'}`}>
+                      {detectedLabSource !== 'unknown' && labSource === detectedLabSource
+                        ? `We detected this as a ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'} report and extracted your results automatically`
+                        : `Imported from ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'}`}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`}>
+                      {detectedLabSource !== 'unknown' ? 'Detected from report' : 'Selected by you'}
+                    </p>
                   </div>
-                  <input
-                    type="date"
-                    value={reportDate}
-                    onChange={e => setReportDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-400 text-gray-900"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">This is the date shown on your lab report, not today</p>
                 </div>
-              )}
-              {reportDate && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700">Report date</label>
-                    {reportDateAutoDetected && (
-                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        <CheckCircle className="w-3 h-3" /> Detected from report
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="date"
-                    value={reportDate}
-                    onChange={e => { setReportDate(e.target.value); setReportDateAutoDetected(false); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
-                  />
+              ) : (
+                <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-gray-200 bg-gray-50 mb-5">
+                  <CheckCircle className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-600 font-medium">We extracted your report details automatically — review anything below before saving</p>
                 </div>
               )}
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-gray-700">Last period start date <span className="text-gray-400 font-normal">(optional)</span></label>
-                  {fetchingPeriod && (
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Looking up tracker...
+              {/* Report date */}
+              <div className="mb-5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    Report date {!reportDate && <span className="text-red-500">*</span>}
+                  </label>
+                  {reportDateAutoDetected && reportDate && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <CheckCircle className="w-3 h-3" /> Detected from report
                     </span>
                   )}
-                  {periodAutoFilled && !fetchingPeriod && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      <CheckCircle className="w-3 h-3" /> Based on your tracker history
+                  {!reportDate && (
+                    <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      Not detected — enter manually
                     </span>
                   )}
                 </div>
                 <input
                   type="date"
-                  value={lastPeriodDate}
-                  onChange={e => { setLastPeriodDate(e.target.value); setPeriodAutoFilled(false); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                  value={reportDate}
+                  onChange={e => { setReportDate(e.target.value); setReportDateAutoDetected(false); }}
+                  className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 text-gray-900 ${
+                    !reportDate
+                      ? 'border-amber-300 focus:ring-amber-200 focus:border-amber-400'
+                      : 'border-gray-300 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B]'
+                  }`}
                 />
-                {!lastPeriodDate && !fetchingPeriod && (
-                  <p className="mt-1 text-xs text-gray-400">No period start logged in your tracker — you can enter it manually above</p>
+                {!reportDate && (
+                  <p className="mt-1 text-xs text-gray-400">This is the date shown on your lab report, not today</p>
                 )}
               </div>
 
-              <Input
-                label="Average cycle length (days)"
-                type="number"
-                value={cycleLength}
-                onChange={e => setCycleLength(e.target.value)}
-                min="21"
-                max="45"
-              />
-
-              {(['birth_control', 'pregnant', 'postpartum'] as const).map(field => {
-                const labels: Record<string, string> = {
-                  birth_control: 'Are you currently using birth control?',
-                  pregnant: 'Are you currently pregnant?',
-                  postpartum: 'Are you postpartum?',
-                };
-                const setters: Record<string, (v: 'yes' | 'no' | 'unsure') => void> = {
-                  birth_control: setBirthControl,
-                  pregnant: setPregnant,
-                  postpartum: setPostpartum,
-                };
-                const values: Record<string, string> = {
-                  birth_control: birthControl,
-                  pregnant,
-                  postpartum,
-                };
-                return (
-                  <div key={field}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">{labels[field]}</label>
-                    <div className="flex gap-4">
-                      {['yes', 'no', 'unsure'].map(opt => (
-                        <button
-                          key={opt}
-                          onClick={() => setters[field](opt as 'yes' | 'no' | 'unsure')}
-                          className={`px-4 py-2 rounded-lg border-2 transition-colors ${values[field] === opt ? 'border-teal-600 bg-theme-surface-2 text-theme-text' : 'border-gray-300 hover:border-gray-400'}`}
-                        >
-                          {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                        </button>
-                      ))}
+              {/* Marker count + confidence row */}
+              {coverage && (
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50">
+                    <Activity className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">
+                        {coverage.total_detected} marker{coverage.total_detected !== 1 ? 's' : ''} detected
+                      </p>
+                      {coverage.needs_review > 0 && (
+                        <p className="text-xs text-amber-600 mt-0.5">{coverage.needs_review} may need review</p>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Top symptoms (select up to 5)</label>
-                <div className="flex flex-wrap gap-2">
-                  {SYMPTOMS.map(symptom => (
-                    <button
-                      key={symptom.value}
-                      onClick={() => toggleSymptom(symptom.value)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${symptoms.includes(symptom.value) ? 'border-teal-600 bg-theme-surface-2 text-theme-text' : 'border-gray-300 hover:border-gray-400'}`}
-                      disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}
-                    >
-                      {symptom.label}
-                    </button>
-                  ))}
+                  {analysisConfidence && (
+                    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${confidenceColors[analysisConfidence as keyof typeof confidenceColors]}`}>
+                      <Shield className="w-4 h-4 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold">Confidence: {analysisConfidence}</p>
+                        <p className="text-xs mt-0.5 opacity-75">Based on report clarity</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* Partial parse warning */}
+              {coverage && coverage.needs_review > 0 && (
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 mb-5">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700">
+                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''} — you can still continue, Amani will use what it understood
+                  </p>
+                </div>
+              )}
+
+              {/* Expandable marker preview */}
+              {reportItems.length > 0 && (
+                <div className="border border-gray-200 rounded-xl overflow-hidden mb-2">
+                  <button
+                    onClick={() => setMarkerPreviewOpen(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                  >
+                    <span className="text-sm font-semibold text-gray-700">Preview detected markers</span>
+                    <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                      {reportItems.length} markers
+                      {markerPreviewOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </button>
+                  {markerPreviewOpen && (
+                    <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                      {reportItems.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50">
+                          <span className="text-sm text-gray-800 font-medium truncate max-w-[60%]">{item.raw_name}</span>
+                          <span className="text-sm text-gray-500 ml-2 flex-shrink-0">
+                            {item.value_numeric != null ? `${item.value_numeric}${item.unit ? ' ' + item.unit : ''}` : item.value_text || '—'}
+                            {item.needs_review && (
+                              <span className="ml-1.5 text-xs text-amber-500 font-medium">review</span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {aiRefining && (
+                <div className="flex items-center gap-2 text-xs text-gray-400 mt-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  AI is refining extracted values in the background...
+                </div>
+              )}
+            </Card>
+
+            {/* ── Section 2: Cycle Context ─────────────────────────────────── */}
+            <Card>
+              <div className="mb-5">
+                <h3 className="text-base font-semibold text-gray-900 mb-0.5">Cycle context <span className="text-gray-400 font-normal text-sm">(optional)</span></h3>
+                <p className="text-xs text-gray-500">This helps Amani interpret your results more accurately</p>
               </div>
 
-              <div className="flex justify-between">
-                <Button variant="secondary" onClick={() => setStep(1)}>
-                  <ArrowLeft className="w-5 h-5 mr-2" />Back
-                </Button>
-                <Button onClick={handleProceedToStep3}>
-                  Next<ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
+              <div className="space-y-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">Last period start</label>
+                    {fetchingPeriod && (
+                      <span className="flex items-center gap-1 text-xs text-gray-400">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Looking up tracker...
+                      </span>
+                    )}
+                    {periodAutoFilled && !fetchingPeriod && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <CheckCircle className="w-3 h-3" /> Auto-filled from your tracker
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={lastPeriodDate}
+                    onChange={e => { setLastPeriodDate(e.target.value); setPeriodAutoFilled(false); }}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                  />
+                  {!lastPeriodDate && !fetchingPeriod && (
+                    <p className="mt-1 text-xs text-gray-400">Add your last period start date for more accurate insights</p>
+                  )}
+                </div>
+
+                <Input
+                  label="Average cycle length (days)"
+                  type="number"
+                  value={cycleLength}
+                  onChange={e => setCycleLength(e.target.value)}
+                  min="21"
+                  max="45"
+                />
+
+                {(['birth_control', 'pregnant', 'postpartum'] as const).map(field => {
+                  const labels: Record<string, string> = {
+                    birth_control: 'Are you currently using birth control?',
+                    pregnant: 'Are you currently pregnant?',
+                    postpartum: 'Are you postpartum?',
+                  };
+                  const setters: Record<string, (v: 'yes' | 'no' | 'unsure') => void> = {
+                    birth_control: setBirthControl,
+                    pregnant: setPregnant,
+                    postpartum: setPostpartum,
+                  };
+                  const values: Record<string, string> = {
+                    birth_control: birthControl,
+                    pregnant,
+                    postpartum,
+                  };
+                  return (
+                    <div key={field}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{labels[field]}</label>
+                      <div className="flex gap-3">
+                        {['yes', 'no', 'unsure'].map(opt => (
+                          <button
+                            key={opt}
+                            onClick={() => setters[field](opt as 'yes' | 'no' | 'unsure')}
+                            className={`px-4 py-2 rounded-xl border-2 text-sm transition-colors ${values[field] === opt ? 'border-teal-600 bg-teal-50 text-teal-800 font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                          >
+                            {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            </Card>
+
+            {/* ── Section 3: Optional Context ──────────────────────────────── */}
+            <Card>
+              <div className="mb-4">
+                <h3 className="text-base font-semibold text-gray-900 mb-0.5">Any symptoms? <span className="text-gray-400 font-normal text-sm">(optional)</span></h3>
+                <p className="text-xs text-gray-500">Select up to 5 — helps Amani personalize your insights</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SYMPTOMS.map(symptom => (
+                  <button
+                    key={symptom.value}
+                    onClick={() => toggleSymptom(symptom.value)}
+                    className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
+                      symptoms.includes(symptom.value)
+                        ? 'border-[#C97C8B] bg-[#C97C8B]/10 text-[#C97C8B] font-medium'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                    disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}
+                  >
+                    {symptom.label}
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+            {/* ── Navigation ───────────────────────────────────────────────── */}
+            <div className="flex justify-between pt-1 pb-4">
+              <Button variant="secondary" onClick={() => setStep(1)}>
+                <ArrowLeft className="w-5 h-5 mr-2" />Back
+              </Button>
+              <Button onClick={handleProceedToStep3}>
+                Next <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* ── STEP 3: Review & Submit ─────────────────────────────────────── */}
         {step === 3 && (
           <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Review & Submit</h2>
+            <div className="mb-5">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-1">Confirm your markers</h2>
+              <p className="text-sm text-gray-500">Review what Amani found — edit, remove, or add anything before saving.</p>
+            </div>
 
             {aiRefining && (
               <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2.5 rounded-lg mb-4 text-sm">
@@ -1091,7 +1207,7 @@ export function NewReport() {
                 <ArrowLeft className="w-5 h-5 mr-2" />Back
               </Button>
               <Button onClick={handleSubmit} disabled={loading}>
-                {loading ? 'Processing...' : 'Save report'}
+                {loading ? 'Processing...' : 'Save and analyze'}
               </Button>
             </div>
           </Card>
