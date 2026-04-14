@@ -981,7 +981,7 @@ export function NewReport() {
                     onClick={() => setMarkerPreviewOpen(v => !v)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
                   >
-                    <span className="text-sm font-semibold text-gray-700">Preview detected markers</span>
+                    <span className="text-sm font-semibold text-gray-700">View detected markers</span>
                     <span className="flex items-center gap-1.5 text-xs text-gray-400">
                       {reportItems.length} markers
                       {markerPreviewOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1013,15 +1013,17 @@ export function NewReport() {
               )}
             </Card>
 
-            {/* ── Section 2: Cycle Context ─────────────────────────────────── */}
+            {/* ── Section 2: Cycle context + symptoms ──────────────────────── */}
             <Card>
-              <div className="mb-5">
-                <h3 className="text-base font-semibold text-gray-900 mb-0.5">Cycle context <span className="text-gray-400 font-normal text-sm">(optional)</span></h3>
-                <p className="text-xs text-gray-500">This helps Amani interpret your results more accurately</p>
-              </div>
-
-              <div className="space-y-5">
+              <div className="space-y-6">
+                {/* Cycle context */}
                 <div>
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold text-gray-900 mb-0.5">
+                      Cycle context <span className="text-gray-400 font-normal text-sm">(optional)</span>
+                    </h3>
+                    <p className="text-xs text-gray-500">This helps Amani interpret your results more accurately</p>
+                  </div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-sm font-medium text-gray-700">Last period start</label>
                     {fetchingPeriod && (
@@ -1046,83 +1048,48 @@ export function NewReport() {
                   )}
                 </div>
 
-                <Input
-                  label="Average cycle length (days)"
-                  type="number"
-                  value={cycleLength}
-                  onChange={e => setCycleLength(e.target.value)}
-                  min="21"
-                  max="45"
-                />
+                {/* Divider */}
+                <div className="border-t border-gray-100" />
 
-                {(['birth_control', 'pregnant', 'postpartum'] as const).map(field => {
-                  const labels: Record<string, string> = {
-                    birth_control: 'Are you currently using birth control?',
-                    pregnant: 'Are you currently pregnant?',
-                    postpartum: 'Are you postpartum?',
-                  };
-                  const setters: Record<string, (v: 'yes' | 'no' | 'unsure') => void> = {
-                    birth_control: setBirthControl,
-                    pregnant: setPregnant,
-                    postpartum: setPostpartum,
-                  };
-                  const values: Record<string, string> = {
-                    birth_control: birthControl,
-                    pregnant,
-                    postpartum,
-                  };
-                  return (
-                    <div key={field}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">{labels[field]}</label>
-                      <div className="flex gap-3">
-                        {['yes', 'no', 'unsure'].map(opt => (
-                          <button
-                            key={opt}
-                            onClick={() => setters[field](opt as 'yes' | 'no' | 'unsure')}
-                            className={`px-4 py-2 rounded-xl border-2 text-sm transition-colors ${values[field] === opt ? 'border-teal-600 bg-teal-50 text-teal-800 font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                          >
-                            {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
-            {/* ── Section 3: Optional Context ──────────────────────────────── */}
-            <Card>
-              <div className="mb-4">
-                <h3 className="text-base font-semibold text-gray-900 mb-0.5">Any symptoms? <span className="text-gray-400 font-normal text-sm">(optional)</span></h3>
-                <p className="text-xs text-gray-500">Select up to 5 — helps Amani personalize your insights</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {SYMPTOMS.map(symptom => (
-                  <button
-                    key={symptom.value}
-                    onClick={() => toggleSymptom(symptom.value)}
-                    className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
-                      symptoms.includes(symptom.value)
-                        ? 'border-[#C97C8B] bg-[#C97C8B]/10 text-[#C97C8B] font-medium'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
-                    disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}
-                  >
-                    {symptom.label}
-                  </button>
-                ))}
+                {/* Symptoms */}
+                <div>
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold text-gray-900 mb-0.5">
+                      Any symptoms? <span className="text-gray-400 font-normal text-sm">(optional)</span>
+                    </h3>
+                    <p className="text-xs text-gray-500">Select up to 5 — helps personalize your insights</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {SYMPTOMS.map(symptom => (
+                      <button
+                        key={symptom.value}
+                        onClick={() => toggleSymptom(symptom.value)}
+                        className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
+                          symptoms.includes(symptom.value)
+                            ? 'border-[#C97C8B] bg-[#C97C8B]/10 text-[#C97C8B] font-medium'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                        disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}
+                      >
+                        {symptom.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </Card>
 
             {/* ── Navigation ───────────────────────────────────────────────── */}
-            <div className="flex justify-between pt-1 pb-4">
-              <Button variant="secondary" onClick={() => setStep(1)}>
-                <ArrowLeft className="w-5 h-5 mr-2" />Back
-              </Button>
-              <Button onClick={handleProceedToStep3}>
-                Next <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
+            <div className="flex flex-col gap-3 pb-4">
+              <div className="flex justify-between">
+                <Button variant="secondary" onClick={() => setStep(1)}>
+                  <ArrowLeft className="w-5 h-5 mr-2" />Back
+                </Button>
+                <Button onClick={handleProceedToStep3}>
+                  Next <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </div>
+              <p className="text-xs text-center text-gray-400">You can always edit this later</p>
             </div>
           </div>
         )}
