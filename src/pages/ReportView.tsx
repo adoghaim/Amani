@@ -31,8 +31,10 @@ import type {
 import {
   RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, Stethoscope, CalendarDays,
-  CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle,
+  CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle, FlaskConical,
 } from 'lucide-react';
+import { detectLabSource } from '../utils/detectLabSource';
+import type { LabSource } from '../types';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
@@ -660,6 +662,11 @@ export function ReportView() {
   const hasError = report.status === 'error';
   const isProcessing = report.status === 'processing' || regenerating;
 
+  const resolvedLabSource: LabSource = (() => {
+    if (report.lab_source && report.lab_source !== 'unknown') return report.lab_source;
+    return 'unknown';
+  })();
+
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
@@ -680,6 +687,16 @@ export function ReportView() {
               <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
+              )}
+              {resolvedLabSource !== 'unknown' && (
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+                  resolvedLabSource === 'quest'
+                    ? 'text-sky-700 bg-sky-50 border-sky-200'
+                    : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                }`}>
+                  <FlaskConical className="w-3 h-3" />
+                  Imported from {resolvedLabSource === 'quest' ? 'Quest' : 'Labcorp'}
+                </span>
               )}
               {dominantSourceFormat && (
                 <span className="text-xs text-theme-muted-text-3 px-1.5 py-0.5 rounded border border-theme-border">

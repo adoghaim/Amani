@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -6,13 +6,17 @@ import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Symptom, LabReportContext, ReportAnalyte, BiomarkerName } from '../types';
+import type { Symptom, LabReportContext, ReportAnalyte, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
-import { Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { detectLabSource } from '../utils/detectLabSource';
+import {
+  Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle,
+  ExternalLink, FlaskConical, ChevronRight,
+} from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
   { value: 'fatigue', label: 'Fatigue' },
@@ -26,6 +30,8 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
   { value: 'low_libido', label: 'Low libido' },
   { value: 'hot_flashes', label: 'Hot flashes' },
 ];
+
+type GuidedStep = 'choose' | 'instructions' | 'upload';
 
 export function NewReport() {
   const { user } = useAuth();
@@ -51,6 +57,14 @@ export function NewReport() {
   const [fetchingPeriod, setFetchingPeriod] = useState(false);
   const [reportDateAutoDetected, setReportDateAutoDetected] = useState(false);
   const [submitStep, setSubmitStep] = useState<'uploading' | 'creating' | 'saving' | 'interpreting' | 'complete' | null>(null);
+
+  const [labSource, setLabSource] = useState<LabSource>('unknown');
+  const [detectedLabSource, setDetectedLabSource] = useState<LabSource>('unknown');
+  const [importMethod, setImportMethod] = useState<ImportMethod>('direct_upload');
+  const [guidedStep, setGuidedStep] = useState<GuidedStep | null>(null);
+  const [chosenLab, setChosenLab] = useState<'quest' | 'labcorp' | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
@@ -124,27 +138,28 @@ export function NewReport() {
     try {
       if (file.type === 'application/pdf') {
         const text = await extractTextFromPDF(file);
-        console.log('[NewReport] Extracted PDF text length:', text.length);
 
         if (!reportDate && text.trim().length > 0) {
           const detected = extractDateFromText(text);
           if (detected) {
             setReportDate(detected);
             setReportDateAutoDetected(true);
-            console.log('[NewReport] Auto-detected report date from PDF:', detected);
           }
+        }
+
+        const src = detectLabSource(text);
+        setDetectedLabSource(src);
+        if (labSource === 'unknown' && src !== 'unknown') {
+          setLabSource(src);
         }
 
         const { items: localItems, debug: debugOut, heuristics } = parseAllReportItemsWithDebug(text, file.name);
         setParserDebug(debugOut);
-        
-        // ORCHESTRATION LOGIC: Check if extraction is "weak"
+
         if (text.trim().length === 0 || heuristics.isWeak) {
-          console.log('[NewReport] Text extraction weak, triggering OCR fallback. Reason:', heuristics.reason);
           const images = await convertPDFToImages(file);
           await callOcrFallback(images);
         } else {
-          // Normal flow: Use local results and trigger background "refinement"
           setReportItems(localItems);
           setCoverage({
             total_detected: localItems.length,
@@ -152,11 +167,10 @@ export function NewReport() {
             total_extended: localItems.filter(i => !i.is_core_biomarker).length,
             needs_review: localItems.filter(i => i.needs_review).length,
           });
-          
+
           await triggerAiRefinement(text);
         }
       } else if (file.type.startsWith('image/')) {
-        // IMAGE FLOW: Direct OCR Fallback
         const reader = new FileReader();
         const base64 = await new Promise<string>((resolve) => {
           reader.onload = () => resolve(reader.result as string);
@@ -187,7 +201,7 @@ export function NewReport() {
       });
 
       if (invokeError) throw new Error(`OCR fallback failed: ${invokeError.message}`);
-      
+
       if (data.items && data.items.length > 0) {
         setReportItems(data.items);
         const cov = {
@@ -279,22 +293,19 @@ export function NewReport() {
   const handleSubmit = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!user || !session) return;
-    
+
     setLoading(true);
     setError('');
-    
+
     let createdReportId: string | null = null;
 
     try {
-      // 0. Check for existing reports for logic later
       const { data: existingReports } = await supabase
         .from('lab_reports')
         .select('id')
         .eq('user_id', user.id);
       const isSecondReport = existingReports?.length === 1;
 
-      // 1. Uploading
-      console.log('[NewReport] Step: Uploading started');
       setSubmitStep('uploading');
       let fileUrl = null;
       if (file) {
@@ -304,15 +315,11 @@ export function NewReport() {
           .from('lab-files')
           .upload(storagePath, file);
         if (uploadError) {
-          console.error('[NewReport] Upload failed:', uploadError);
           throw new Error(`File upload failed: ${uploadError.message}`);
         }
         fileUrl = storagePath;
-        console.log('[NewReport] Step: Uploading success');
       }
 
-      // 2. Creating Report Record
-      console.log('[NewReport] Step: Creating report record started');
       setSubmitStep('creating');
       const { cycleDay, cyclePhase } = calculateCycleInfo();
       const context: LabReportContext = {
@@ -320,7 +327,7 @@ export function NewReport() {
         pregnant,
         postpartum,
         top_symptoms: symptoms,
-        submission_mode: 'standard', // Default to current Phase 4A target
+        submission_mode: 'standard',
       };
 
       const { data: reportData, error: reportError } = await supabase
@@ -335,21 +342,19 @@ export function NewReport() {
           estimated_cycle_phase: cyclePhase,
           context,
           status: 'processing',
+          lab_source: labSource,
+          import_method: importMethod,
         })
         .select()
         .single();
 
       if (reportError) {
-        console.error('[NewReport] Report creation failed:', reportError);
         throw new Error(`Failed to create report record: ${reportError.message}`);
       }
       createdReportId = reportData.id;
-      setStep(4); // Move to dedicated processing screen UI
-      console.log('[NewReport] Step: Creating report record success (ID:', createdReportId, ')');
+      setStep(4);
 
-      // 3. Saving parser debug (Non-blocking)
       if (parserDebug) {
-        console.log('[NewReport] Step: Saving parser debug (async)');
         supabase.from('parser_debug').insert({
           report_id: createdReportId,
           user_id: user.id,
@@ -365,17 +370,11 @@ export function NewReport() {
         });
       }
 
-      // 4. Saving Data (Analytes & Biomarkers)
-      console.log('[NewReport] Step: Saving analytes started');
       setSubmitStep('saving');
       const normalized = normalizeReportItems(reportItems);
-      const mappedCount = normalized.filter(i => i.normalization_status === 'mapped').length;
-      const unmappedCount = normalized.filter(i => i.normalization_status === 'unmapped').length;
-      console.log(`[NewReport] Normalization: ${mappedCount} mapped, ${unmappedCount} unmapped out of ${normalized.length} total`);
       const itemsToSave = normalized.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
 
       if (itemsToSave.length > 0) {
-        // A. Core biomarkers (scoring table — keyed by canonical_slug)
         const coreItems = itemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
           const biomarkerInserts = coreItems.map(item => {
@@ -405,9 +404,7 @@ export function NewReport() {
             console.error('[NewReport] Biomarkers save failed:', biomarkerError);
           }
         }
-        console.log(`[NewReport] Core biomarkers to save: ${coreItems.length}`);
 
-        // B. Resolving Analyte IDs
         const analyteIdBySlug = new Map<string, string>();
         for (const a of reportAnalytes) {
           if (a.canonical_slug && a.canonical_analyte_id) {
@@ -420,7 +417,6 @@ export function NewReport() {
           if (caRows) caRows.forEach((row: any) => analyteIdBySlug.set(row.slug, row.id));
         }
 
-        // C. Bulk Analyte Insert (traceability table — preserves both raw and canonical)
         const analyteInserts = itemsToSave.map(item => {
           const slug = item.canonical_slug ?? null;
           const canonicalAnalyteId = slug ? (analyteIdBySlug.get(slug) ?? null) : null;
@@ -456,25 +452,19 @@ export function NewReport() {
         });
 
         const { error: analyteError } = await supabase.from('report_analytes').insert(analyteInserts);
-        
-        if (analyteError) {
-          // Narrow detection: PGRST104 / 42703 (undefined_column) suggests the DB hasn't been migrated yet
-          const isMissingColumn = 
-            analyteError.code === '42703' || 
-            analyteError.message.includes('column') || 
-            analyteError.message.includes('schema cache');
-          
-          if (isMissingColumn) {
-            // Update report record to reflect Compatibility Mode
-            console.warn('[NewReport] Submission Compatibility Mode Triggered:');
-            console.warn('  - Reason: Missing telemetry columns in report_analytes (requires SQL migration).');
-            console.warn('  - Omitted fields: source_format, parser_version, unit_original, unit_normalized, review_status, reviewed_by_user, display_name, system_category, normalization_status');
 
+        if (analyteError) {
+          const isMissingColumn =
+            analyteError.code === '42703' ||
+            analyteError.message.includes('column') ||
+            analyteError.message.includes('schema cache');
+
+          if (isMissingColumn) {
+            console.warn('[NewReport] Compatibility Mode triggered');
             await supabase.from('lab_reports').update({
               context: { ...context, submission_mode: 'compatibility' }
             }).eq('id', createdReportId);
 
-            // Retry with ONLY the original, mature columns
             const safeInserts = analyteInserts.map(item => {
               const {
                 source_format, parser_version, unit_original,
@@ -487,26 +477,14 @@ export function NewReport() {
 
             const { error: retryError } = await supabase.from('report_analytes').insert(safeInserts);
             if (retryError) {
-              console.error('[NewReport] Submission failed even in Compatibility Mode:', retryError);
               throw new Error(`Report creation failed: ${retryError.message}`);
             }
-            console.log('[NewReport] Submission success (Compatibility Mode). All core data saved.');
           } else {
-            // If it's a different error (RLS, validation, etc.), do NOT fallback. 
-            // We want to see the real failure.
-            console.error('[NewReport] Analyte save failed (primary path):', analyteError);
             throw new Error(`Failed to save lab items: ${analyteError.message}`);
           }
-        } else {
-          console.log('[NewReport] Step: Saving analytes success (Primary Path)');
         }
       }
 
-      // 5. Interpretation (Non-blocking fire-and-forget)
-      // The edge function owns the status transition to 'ready'.
-      // Report stays 'processing' until generate-interpretation sets it to 'ready'.
-      // ReportView polls for this transition and then polls for the interpretation row.
-      console.log('[NewReport] Step: Triggering interpretation (async, keeps status=processing until done)');
       setSubmitStep('interpreting');
       supabase.functions.invoke('generate-interpretation', {
         body: { reportId: createdReportId },
@@ -515,16 +493,12 @@ export function NewReport() {
         },
       }).then(({ error: interpError }) => {
         if (interpError) {
-          console.warn('[NewReport] Interpretation invoke error:', interpError.message);
           supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
         }
-      }).catch(e => {
-        console.error('[NewReport] Interpretation invoke exception:', e);
+      }).catch(() => {
         supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
       });
 
-      // FINAL REDIRECT — report is still 'processing', ReportView will poll
-      console.log('[NewReport] Submission complete. Redirecting to report view...');
       setSubmitStep('complete');
 
       setTimeout(() => {
@@ -538,21 +512,44 @@ export function NewReport() {
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
-      console.error('[NewReport] Submission failed at step:', submitStep, '-', msg);
       setError(msg);
       setLoading(false);
-      setStep(3); // Go back to review so they can try again or fix
+      setStep(3);
       setSubmitStep(null);
-      
-      // OPTIONAL: If report row was created but everything else failed, mark as error
+
       if (createdReportId) {
         supabase.from('lab_reports').update({ status: 'error' }).eq('id', createdReportId);
       }
     }
   };
 
+  const startGuidedImport = (lab: 'quest' | 'labcorp') => {
+    setChosenLab(lab);
+    setLabSource(lab);
+    setImportMethod('guided_portal_pdf');
+    setGuidedStep('instructions');
+  };
+
+  const handleGuidedUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      if (validTypes.includes(selectedFile.type)) {
+        setFile(selectedFile);
+        setError('');
+        setGuidedStep(null);
+      } else {
+        setError('Please upload a PDF or image file (JPG, PNG)');
+      }
+    }
+  };
 
   const canProceedStep1 = !!file;
+
+  const questPortalUrl = 'https://myquest.questdiagnostics.com/';
+  const labcorpPortalUrl = 'https://patient.labcorp.com/';
+
+  const effectiveSource = labSource !== 'unknown' ? labSource : detectedLabSource;
 
   return (
     <Layout>
@@ -578,14 +575,58 @@ export function NewReport() {
           </div>
         )}
 
-        {step === 1 && (
+        {/* ── STEP 1: Upload ─────────────────────────────────────────────── */}
+        {step === 1 && !guidedStep && (
           <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Upload Lab Results</h2>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-1">Upload your official report</h2>
+            <p className="text-sm text-gray-500 mb-6">Import directly from your lab portal, or upload any PDF or image.</p>
+
             <div className="space-y-6">
+
+              {/* Lab portal import options */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Lab file (PDF or image)</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-theme-primary transition-colors">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Import from a lab portal</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setGuidedStep('choose')}
+                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-theme-primary hover:bg-theme-surface-2 transition-all text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-100 transition-colors">
+                      <FlaskConical className="w-5 h-5 text-sky-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">Import from Quest</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">Upload an official report from MyQuest</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-theme-primary flex-shrink-0" />
+                  </button>
+
+                  <button
+                    onClick={() => { setChosenLab('labcorp'); startGuidedImport('labcorp'); }}
+                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-theme-primary hover:bg-theme-surface-2 transition-all text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 transition-colors">
+                      <FlaskConical className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">Import from Labcorp</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">Upload an official report from Labcorp Patient</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-theme-primary flex-shrink-0" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs text-gray-400 font-medium">or upload any file</span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+
+              {/* Generic file upload */}
+              <div>
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-theme-primary transition-colors">
+                  <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
@@ -594,14 +635,20 @@ export function NewReport() {
                     id="file-upload"
                   />
                   <label htmlFor="file-upload" className="cursor-pointer">
-                    <span className="text-theme-primary hover:text-theme-primary-dark font-medium">Choose a file</span>
+                    <span className="text-theme-primary hover:text-theme-primary-dark font-medium">Browse files</span>
                     <span className="text-gray-600"> or drag and drop</span>
                   </label>
-                  <p className="text-sm text-gray-500 mt-2">PDF, JPG, or PNG up to 10MB</p>
-                  {file && <p className="text-sm text-gray-900 mt-4 font-medium">Selected: {file.name}</p>}
+                  <p className="text-xs text-gray-400 mt-2">PDF, JPG, or PNG — Quest and Labcorp PDFs import best</p>
+                  {file && (
+                    <div className="mt-4 flex items-center justify-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      <span className="text-sm text-gray-900 font-medium truncate max-w-xs">{file.name}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {/* Report date */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium text-gray-700">
@@ -619,7 +666,7 @@ export function NewReport() {
                   onChange={e => { setReportDate(e.target.value); setReportDateAutoDetected(false); }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
                 />
-                {!reportDate && !extracting && (
+                {!reportDate && (
                   <p className="mt-1 text-xs text-gray-400">Will be auto-detected from your PDF, or enter it manually above</p>
                 )}
               </div>
@@ -627,7 +674,7 @@ export function NewReport() {
               <div className="flex justify-end">
                 <Button onClick={handleProceedFromStep1} disabled={!canProceedStep1 || extracting}>
                   {extracting ? (
-                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Extracting...</>
+                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Reading your report...</>
                   ) : (
                     <>Next<ArrowRight className="w-5 h-5 ml-2" /></>
                   )}
@@ -637,9 +684,201 @@ export function NewReport() {
           </Card>
         )}
 
+        {/* ── GUIDED: Choose source ───────────────────────────────────────── */}
+        {step === 1 && guidedStep === 'choose' && (
+          <Card>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-1">Import your lab results</h2>
+              <p className="text-sm text-gray-500">Bring in an official report from your lab portal.</p>
+            </div>
+
+            <div className="space-y-3 mb-8">
+              <button
+                onClick={() => startGuidedImport('quest')}
+                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
+              >
+                <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                  <FlaskConical className="w-6 h-6 text-sky-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900">Quest Diagnostics</p>
+                  <p className="text-sm text-gray-500 mt-0.5">Import from MyQuest portal</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-sky-500 transition-colors" />
+              </button>
+
+              <button
+                onClick={() => startGuidedImport('labcorp')}
+                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
+              >
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                  <FlaskConical className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900">Labcorp</p>
+                  <p className="text-sm text-gray-500 mt-0.5">Import from Labcorp Patient portal</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setGuidedStep(null)}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+          </Card>
+        )}
+
+        {/* ── GUIDED: Instructions ────────────────────────────────────────── */}
+        {step === 1 && guidedStep === 'instructions' && chosenLab && (
+          <Card>
+            {chosenLab === 'quest' ? (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                    <FlaskConical className="w-6 h-6 text-sky-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Import from Quest</h2>
+                    <p className="text-sm text-gray-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
+                  </div>
+                </div>
+
+                <ol className="space-y-4 mb-8">
+                  {[
+                    { num: 1, text: 'Open MyQuest in your browser or app' },
+                    { num: 2, text: 'Find the report you want to import' },
+                    { num: 3, text: 'Download the official PDF report' },
+                    { num: 4, text: 'Come back here and upload it below' },
+                  ].map(step => (
+                    <li key={step.num} className="flex items-start gap-4">
+                      <span className="w-7 h-7 rounded-full bg-sky-100 text-sky-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
+                      <span className="text-sm text-gray-700 pt-1">{step.text}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a
+                    href={questPortalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-sky-300 text-sky-700 text-sm font-semibold hover:bg-sky-50 transition-colors"
+                  >
+                    Open MyQuest <ExternalLink className="w-4 h-4" />
+                  </a>
+
+                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                    <Upload className="w-4 h-4" />
+                    Upload Quest PDF
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={handleGuidedUploadFile}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <FlaskConical className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Import from Labcorp</h2>
+                    <p className="text-sm text-gray-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
+                  </div>
+                </div>
+
+                <ol className="space-y-4 mb-8">
+                  {[
+                    { num: 1, text: 'Open Labcorp Patient in your browser or app' },
+                    { num: 2, text: 'Find the report you want to import' },
+                    { num: 3, text: 'Download the official report PDF' },
+                    { num: 4, text: 'Return here and upload it below' },
+                  ].map(step => (
+                    <li key={step.num} className="flex items-start gap-4">
+                      <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
+                      <span className="text-sm text-gray-700 pt-1">{step.text}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a
+                    href={labcorpPortalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 transition-colors"
+                  >
+                    Open Labcorp <ExternalLink className="w-4 h-4" />
+                  </a>
+
+                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                    <Upload className="w-4 h-4" />
+                    Upload Labcorp PDF
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={handleGuidedUploadFile}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            <div className="mt-6 pt-5 border-t border-gray-100">
+              <button
+                onClick={() => setGuidedStep('choose')}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {/* Show selected file + proceed button after guided upload */}
+        {step === 1 && guidedStep === null && file && chosenLab && (
+          <div className="mt-4">
+          </div>
+        )}
+
+        {/* ── STEP 2: Context (Review) ────────────────────────────────────── */}
         {step === 2 && (
           <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Add Context</h2>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-1">Review your report</h2>
+              <p className="text-sm text-gray-500">We found the report date, source, and lab markers below. Review anything you want before saving.</p>
+            </div>
+
+            {/* Source detection banner */}
+            {effectiveSource !== 'unknown' && (
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border mb-6 ${
+                effectiveSource === 'quest'
+                  ? 'bg-sky-50 border-sky-200'
+                  : 'bg-emerald-50 border-emerald-200'
+              }`}>
+                <FlaskConical className={`w-4 h-4 flex-shrink-0 ${effectiveSource === 'quest' ? 'text-sky-600' : 'text-emerald-600'}`} />
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm font-medium ${effectiveSource === 'quest' ? 'text-sky-800' : 'text-emerald-800'}`}>
+                    {detectedLabSource !== 'unknown' && labSource === detectedLabSource
+                      ? `We detected this as a ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'} report`
+                      : `Imported from ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'}`}
+                  </span>
+                  <span className={`ml-2 text-xs ${effectiveSource === 'quest' ? 'text-sky-600' : 'text-emerald-600'}`}>
+                    {detectedLabSource !== 'unknown' ? 'Detected from report' : 'Selected by you'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-6">
               {!reportDate && (
                 <div>
@@ -663,9 +902,7 @@ export function NewReport() {
               {reportDate && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Report date
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700">Report date</label>
                     {reportDateAutoDetected && (
                       <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                         <CheckCircle className="w-3 h-3" /> Detected from report
@@ -680,6 +917,7 @@ export function NewReport() {
                   />
                 </div>
               )}
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium text-gray-700">Last period start date <span className="text-gray-400 font-normal">(optional)</span></label>
@@ -690,7 +928,7 @@ export function NewReport() {
                   )}
                   {periodAutoFilled && !fetchingPeriod && (
                     <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      <CheckCircle className="w-3 h-3" /> Auto-filled from tracker
+                      <CheckCircle className="w-3 h-3" /> Based on your tracker history
                     </span>
                   )}
                 </div>
@@ -776,6 +1014,7 @@ export function NewReport() {
           </Card>
         )}
 
+        {/* ── STEP 3: Review & Submit ─────────────────────────────────────── */}
         {step === 3 && (
           <Card>
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Review & Submit</h2>
@@ -852,12 +1091,13 @@ export function NewReport() {
                 <ArrowLeft className="w-5 h-5 mr-2" />Back
               </Button>
               <Button onClick={handleSubmit} disabled={loading}>
-                {loading ? 'Processing...' : 'Create Report'}
+                {loading ? 'Processing...' : 'Save report'}
               </Button>
             </div>
           </Card>
         )}
 
+        {/* ── STEP 4: Processing ──────────────────────────────────────────── */}
         {step === 4 && (
           <Card className="py-16 text-center">
             <div className="flex flex-col items-center justify-center space-y-6">
@@ -867,31 +1107,31 @@ export function NewReport() {
                   <CheckCircle className={`w-10 h-10 transition-all duration-1000 ${submitStep === 'complete' ? 'text-teal-600 opacity-100 scale-100' : 'text-gray-200 opacity-0 scale-50'}`} />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {submitStep === 'complete' ? 'All Done!' : 'Processing Your Report'}
+                  {submitStep === 'complete' ? 'Report imported' : "We're reading your report"}
                 </h2>
                 <p className="text-gray-500 max-w-sm mx-auto">
-                  {submitStep === 'uploading' && 'Uploading your files...'}
-                  {submitStep === 'creating' && 'Creating your report record...'}
-                  {submitStep === 'saving' && 'Standardizing your biomarkers...'}
-                  {submitStep === 'interpreting' && 'Generating your insights...'}
-                  {submitStep === 'complete' && 'Taking you to your results...'}
+                  {submitStep === 'uploading' && 'Uploading your file...'}
+                  {submitStep === 'creating' && 'Detecting report date...'}
+                  {submitStep === 'saving' && 'Extracting lab markers...'}
+                  {submitStep === 'interpreting' && 'Organizing your results...'}
+                  {submitStep === 'complete' && 'Your results have been added to Amani and are ready to compare with your past reports.'}
                 </p>
               </div>
 
               <div className="w-full max-w-xs bg-gray-100 h-1.5 rounded-full overflow-hidden mt-8">
-                <div 
-                  className="bg-teal-600 h-full transition-all duration-1000 ease-out" 
-                  style={{ 
-                    width: 
-                      submitStep === 'uploading' ? '25%' : 
-                      submitStep === 'creating' ? '50%' : 
-                      submitStep === 'saving' ? '75%' : 
-                      submitStep === 'interpreting' ? '90%' : 
-                      submitStep === 'complete' ? '100%' : '5%' 
-                  }} 
+                <div
+                  className="bg-teal-600 h-full transition-all duration-1000 ease-out"
+                  style={{
+                    width:
+                      submitStep === 'uploading' ? '25%' :
+                      submitStep === 'creating' ? '50%' :
+                      submitStep === 'saving' ? '75%' :
+                      submitStep === 'interpreting' ? '90%' :
+                      submitStep === 'complete' ? '100%' : '5%'
+                  }}
                 />
               </div>
             </div>

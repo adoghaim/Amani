@@ -346,6 +346,9 @@ export interface Intervention {
   created_at: string;
 }
 
+export type LabSource = 'quest' | 'labcorp' | 'unknown';
+export type ImportMethod = 'guided_portal_pdf' | 'direct_upload' | 'manual';
+
 export interface LabReport {
   id: string;
   user_id: string;
@@ -360,6 +363,8 @@ export interface LabReport {
   context: LabReportContext;
   status: ReportStatus;
   regeneration_count: number;
+  lab_source: LabSource;
+  import_method: ImportMethod;
 }
 
 export interface PeriodLog {
