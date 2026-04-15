@@ -800,7 +800,6 @@ Required schema:
 
     const parsed = JSON.parse(content);
     if (typeof parsed.headline !== "string") return null;
-    if (!Array.isArray(parsed.summary_bullets)) return null;
     return parsed;
   } catch (e: any) {
     clearTimeout(tid);
