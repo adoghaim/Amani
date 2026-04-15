@@ -200,74 +200,65 @@ export function ReportView() {
     if (interpPollingActive.current) return;
     interpPollingActive.current = true;
     setInterpGaveUp(false);
-    let elapsed = 0;
-    const POLL_INTERVAL = 3000;
-    const TIMEOUT_MS = 60000;
-    const interval = setInterval(async () => {
-      elapsed += POLL_INTERVAL;
-      const { data } = await supabase
-        .from('interpretations')
-        .select('id, json_output')
-        .eq('lab_report_id', reportId)
-        .maybeSingle();
-      if (data?.json_output) {
-        clearInterval(interval);
-        interpPollingActive.current = false;
-        setInterpretation(normalizeInterpretation(data.json_output));
-        return;
-      }
-      if (elapsed >= TIMEOUT_MS) {
-        clearInterval(interval);
-        interpPollingActive.current = false;
+
+    (async () => {
+      try {
+        // Check DB first — interpretation may already exist
+        const { data: existing } = await supabase
+          .from('interpretations')
+          .select('id, json_output')
+          .eq('lab_report_id', reportId)
+          .maybeSingle();
+
+        if (existing?.json_output) {
+          interpPollingActive.current = false;
+          setInterpretation(normalizeInterpretation(existing.json_output));
+          return;
+        }
+
+        // Interpretation missing — invoke edge function immediately
         if (!interpRetryFired.current) {
           interpRetryFired.current = true;
-          (async () => {
-            try {
-              const { data: preRetryData } = await supabase
-                .from('interpretations')
-                .select('id, json_output')
-                .eq('lab_report_id', reportId)
-                .maybeSingle();
-              if (preRetryData?.json_output) {
-                setInterpretation(normalizeInterpretation(preRetryData.json_output));
-                return;
-              }
-              const { error: retryErr } = await supabase.functions.invoke('generate-interpretation', {
-                body: { reportId },
-              });
-              if (retryErr) {
-                setInterpGaveUp(true);
-                return;
-              }
-              let retryElapsed = 0;
-              const RETRY_INTERVAL = 4000;
-              const RETRY_TIMEOUT = 60000;
-              const retryInterval = setInterval(async () => {
-                retryElapsed += RETRY_INTERVAL;
-                const { data: retryData } = await supabase
-                  .from('interpretations')
-                  .select('id, json_output')
-                  .eq('lab_report_id', reportId)
-                  .maybeSingle();
-                if (retryData?.json_output) {
-                  clearInterval(retryInterval);
-                  setInterpretation(normalizeInterpretation(retryData.json_output));
-                } else if (retryElapsed >= RETRY_TIMEOUT) {
-                  clearInterval(retryInterval);
-                  setInterpGaveUp(true);
-                }
-              }, RETRY_INTERVAL);
-            } catch (e) {
-              setInterpGaveUp(true);
-            }
-          })();
-        } else {
-          setInterpGaveUp(true);
+          const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+            body: { reportId },
+          });
+          if (invokeErr) {
+            interpPollingActive.current = false;
+            setInterpGaveUp(true);
+            return;
+          }
         }
+
+        // Poll for result
+        let elapsed = 0;
+        const POLL_INTERVAL = 3000;
+        const TIMEOUT_MS = 60000;
+        const interval = setInterval(async () => {
+          elapsed += POLL_INTERVAL;
+          const { data } = await supabase
+            .from('interpretations')
+            .select('id, json_output')
+            .eq('lab_report_id', reportId)
+            .maybeSingle();
+          if (data?.json_output) {
+            clearInterval(interval);
+            interpPollingActive.current = false;
+            setInterpretation(normalizeInterpretation(data.json_output));
+            return;
+          }
+          if (elapsed >= TIMEOUT_MS) {
+            clearInterval(interval);
+            interpPollingActive.current = false;
+            setInterpGaveUp(true);
+          }
+        }, POLL_INTERVAL);
+      } catch (e) {
+        interpPollingActive.current = false;
+        setInterpGaveUp(true);
       }
-    }, POLL_INTERVAL);
+    })();
+
     return () => {
-      clearInterval(interval);
       interpPollingActive.current = false;
     };
   }, [report?.status, report?.id, interpretation, loading, reportId]);
