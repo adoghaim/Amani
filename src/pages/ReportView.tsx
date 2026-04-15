@@ -885,7 +885,16 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── C. Top Findings (deterministic, max 3) ───────────── */}
+          {/* ── C. What This Means (AI interpretation — primary conclusion) */}
+          {insightSummary && !isProcessing && (
+            <WhatThisMeansCard
+              aiText={interpretation?.overall_interpretation}
+              topFindings={insightSummary.topFindings}
+              biggestChanges={insightSummary.biggestChanges}
+            />
+          )}
+
+          {/* ── D. Top Findings (deterministic, max 3) ───────────── */}
           {insightSummary && !isProcessing && (
             <TopFindingsCard
               findings={insightSummary.topFindings}
@@ -899,26 +908,17 @@ export function ReportView() {
             />
           )}
 
-          {/* ── C2. Biggest Changes (vs previous report) ─────────── */}
+          {/* ── D2. Biggest Changes (vs previous report) ─────────── */}
           {insightSummary && !isProcessing && insightSummary.biggestChanges.length > 0 && (
             <BiggestChangesCard changes={insightSummary.biggestChanges} />
           )}
 
-          {/* ── B2. Your Patterns (personalization) ─────────────── */}
+          {/* ── D3. Your Patterns (personalization) ─────────────── */}
           {personalInsights.length > 0 && !isProcessing && (
             <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
           )}
 
-          {/* ── C5. What This Means (new connective section) ─────── */}
-          {insightSummary && !isProcessing && (
-            <WhatThisMeansCard
-              aiText={interpretation?.overall_interpretation}
-              topFindings={insightSummary.topFindings}
-              biggestChanges={insightSummary.biggestChanges}
-            />
-          )}
-
-          {/* ── C3. What to Watch ────────────────────────────────── */}
+          {/* ── D4. What to Watch ────────────────────────────────── */}
           {insightSummary && !isProcessing && insightSummary.watchSignals.length > 0 && (
             <WhatToWatchCard signals={insightSummary.watchSignals} />
           )}

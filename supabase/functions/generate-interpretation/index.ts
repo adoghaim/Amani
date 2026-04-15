@@ -680,26 +680,29 @@ Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_n
 
 SECTION 6 — OVERALL INTERPRETATION
 
-This is the "so what" section. It connects everything together.
+This section appears directly below the headline. It is the first prose the user reads. It must earn its position.
 
-Purpose: Give the user a clear, grounded sense of where they stand overall.
+Purpose: Give the user a clear, grounded sense of where they stand overall — interpreted, not just listed.
 
-Rules:
+Hard rules:
 - 2–3 sentences max
-- Must reference at least 1 specific biomarker or system by name
-- Must connect findings + trends (if trend data exists)
-- Describe the direction — is the picture improving, stable, mixed, or needs attention?
-- Keep non-diagnostic and non-alarming
+- First sentence must name the most important finding and include a directional statement (improving, stable, mixed, needs attention)
+- Section as a whole must include at least one specific biomarker name and at least one specific value, trend, or timeframe
+- Final sentence must be forward-looking: what to watch, what to track, or what direction things are heading
+- Do NOT use em dashes
+- Do NOT use filler phrases: "overall", "in general", "it is important to", "be sure to", "this suggests", "may want to consider"
 - Do NOT repeat content already in primary_concern or key_findings
+- Write in natural second person — "your ferritin" not "the ferritin level" — but do not force "you" into every clause
 
 GOOD examples:
-- "Your thyroid markers remain the main focus, while iron storage has steadily improved over recent draws. The overall picture is mixed but moving in a constructive direction."
-- "Vitamin D remains below optimal at 18 ng/mL, and it has been consistently low across your recent panels. The rest of your results are solid, which makes this the one area to address going forward."
-- "Your panel looks healthy overall — all key markers are within range. Ferritin has shown steady improvement, which is a meaningful positive shift."
+- "TPO Antibodies remain markedly elevated at 797 IU/mL, which is the defining finding on this panel. HDL is also below optimal, adding a second area worth attention. Both markers are worth tracking at your next draw to see whether the pattern holds."
+- "Ferritin has improved from 18 to 40 ng/mL since your last draw, which is a meaningful shift in the right direction. Vitamin D remains the one area that still needs support. The overall trajectory is positive."
+- "All key markers are within the optimal range on this panel. Ferritin has shown steady improvement across your last three reports, which is a notable positive trend to continue tracking."
 
 BAD examples (never write these):
-- "Overall, your results show some areas of concern and some areas of improvement." (too vague — no specific marker)
-- "These results suggest that further evaluation may be necessary." (banned phrasing)
+- "Overall, your results show some areas of concern and some areas of improvement." (no specific marker, no value, pure filler)
+- "These results suggest that further evaluation may be necessary." (banned phrasing, non-specific)
+- "It is important to monitor your thyroid health and maintain a healthy lifestyle." (generic, no data, no direction)
 
 -----------------------------------
 

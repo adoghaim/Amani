@@ -1,4 +1,4 @@
-import { BookOpen } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import type { TopFinding, BiggestChange } from '../lib/insights/buildInsightSummary';
 
 interface Props {
@@ -25,12 +25,12 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
 
   if (improved.length > 0 && outOfRange.length > 0) {
     const improvedName = improved[0].displayName;
-    return `${topName} remains the primary area to keep an eye on, while ${improvedName} has shown improvement since your last report. Overall, the picture is mixed but moving in a constructive direction.`;
+    return `${topName} remains the primary area to keep an eye on, while ${improvedName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
   }
 
   if (improved.length > 0 && borderline.length > 0 && outOfRange.length === 0) {
     const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
-    return `${topName} is near the edge of optimal range, though ${names} ${improved.length === 1 ? 'has' : 'have'} improved. Overall, the trend is positive.`;
+    return `${topName} is near the edge of optimal range, though ${names} ${improved.length === 1 ? 'has' : 'have'} improved. The overall trend is positive.`;
   }
 
   if (worsened.length > 0 && outOfRange.length > 0) {
@@ -39,36 +39,40 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
 
   if (outOfRange.length >= 2) {
     const names = outOfRange.slice(0, 2).map(f => f.displayName).join(' and ');
-    return `${names} are both outside optimal range. These are the two findings most worth discussing with your provider.`;
+    return `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
   }
 
   if (outOfRange.length === 1 && borderline.length > 0) {
     const borderName = borderline[0].displayName;
-    return `${topName} is outside optimal range and is the top priority. ${borderName} is borderline — worth monitoring but not urgent on its own.`;
+    return `${topName} is outside optimal range and is the top priority. ${borderName} is borderline — worth monitoring, but not urgent on its own.`;
   }
 
   if (outOfRange.length === 1) {
-    return `${topName} is the standout finding in this report. The rest of the panel is within range, which provides helpful context.`;
+    return `${topName} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.`;
   }
 
-  return `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops over time.`;
+  return `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops.`;
 }
 
 export function WhatThisMeansCard({ aiText, topFindings, biggestChanges }: Props) {
   const text = aiText ?? buildFallbackText(topFindings, biggestChanges);
+  const hasAI = !!aiText;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <BookOpen className="w-4 h-4 text-gray-500" />
+    <div className="rounded-2xl border border-theme-border-subtle bg-white overflow-hidden">
+      <div className="px-5 pt-5 pb-4">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-7 h-7 rounded-lg bg-theme-primary/10 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-4 h-4 text-theme-primary" />
           </div>
-          <h2 className="text-sm font-bold text-theme-text">What This Means</h2>
+          <h2 className="text-sm font-bold text-theme-text">Interpretation</h2>
+          {hasAI && (
+            <span className="ml-auto text-xs font-medium text-theme-muted-text-2 tracking-wide">
+              AI Analysis
+            </span>
+          )}
         </div>
-      </div>
-      <div className="px-5 py-4">
-        <p className="text-sm text-theme-text-body leading-relaxed">{text}</p>
+        <p className="text-[15px] text-theme-text leading-[1.7] font-normal">{text}</p>
       </div>
     </div>
   );
