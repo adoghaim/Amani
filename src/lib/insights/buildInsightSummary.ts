@@ -11,6 +11,9 @@ export interface TopFinding {
   unit: string;
   status: 'optimal' | 'borderline' | 'out_of_range';
   severity: number;
+  deviationMultiplier: number;
+  direction: 'high' | 'low' | 'unknown';
+  rangeLabel: string | null;
   fact: string;
 }
 
@@ -53,6 +56,7 @@ export interface ReportConfidence {
 }
 
 export interface InsightSummary {
+  primaryFinding: TopFinding | null;
   topFindings: TopFinding[];
   biggestChanges: BiggestChange[];
   systemSummaries: SystemGroup[];
@@ -72,10 +76,10 @@ interface BiomarkerInput {
   sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
 }
 
-function toTopFinding(s: ScoredBiomarker): TopFinding {
+function toTopFinding(s: ScoredBiomarker, rangeLabel: string | null = null): TopFinding {
   const displayName = getDisplayName(s.key);
   const statusLabel = s.concern === 2 ? 'out_of_range' : 'borderline';
-  const direction = s.amaniStatus.includes('high') ? 'high' : s.amaniStatus.includes('low') ? 'low' : '';
+  const direction: 'high' | 'low' | 'unknown' = s.amaniStatus.includes('high') ? 'high' : s.amaniStatus.includes('low') ? 'low' : 'unknown';
   const dirLabel = direction === 'high' ? 'above' : direction === 'low' ? 'below' : 'outside';
   return {
     key: s.key,
@@ -84,6 +88,9 @@ function toTopFinding(s: ScoredBiomarker): TopFinding {
     unit: s.unit,
     status: statusLabel as TopFinding['status'],
     severity: s.weightedConcern,
+    deviationMultiplier: s.deviationMultiplier,
+    direction,
+    rangeLabel,
     fact: `${displayName} is ${dirLabel} the optimal range at ${s.value} ${s.unit}`,
   };
 }
@@ -483,8 +490,17 @@ export function buildInsightSummary(
 
   const confidence = calculateConfidence(current, (previous?.length ?? 0) > 0, dominantSourceFormat);
 
+  const primaryFinding = topFindings.length > 0 && topFindings[0].status === 'out_of_range'
+    ? topFindings[0]
+    : null;
+
+  const secondaryFindings = primaryFinding
+    ? topFindings.slice(1)
+    : topFindings;
+
   return {
-    topFindings,
+    primaryFinding,
+    topFindings: secondaryFindings,
     biggestChanges,
     systemSummaries,
     questionsForDoctor,

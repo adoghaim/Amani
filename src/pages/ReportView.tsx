@@ -24,6 +24,7 @@ import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourPatternsCard } from '../components/YourPatternsCard';
 import { WhatThisMeansCard } from '../components/WhatThisMeansCard';
+import { PrimaryInsightCard } from '../components/PrimaryInsightCard';
 import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
@@ -885,17 +886,31 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── C. What This Means (AI interpretation — primary conclusion) */}
+          {/* ── C. What This Means (AI — narrative anchor) ───────── */}
           {insightSummary && !isProcessing && (
             <WhatThisMeansCard
               aiText={interpretation?.overall_interpretation}
-              topFindings={insightSummary.topFindings}
+              topFindings={insightSummary.primaryFinding
+                ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
+                : insightSummary.topFindings}
               biggestChanges={insightSummary.biggestChanges}
             />
           )}
 
-          {/* ── D. Top Findings (deterministic, max 3) ───────────── */}
-          {insightSummary && !isProcessing && (
+          {/* ── C2. Primary Finding (dominant single takeaway) ────── */}
+          {insightSummary?.primaryFinding && !isProcessing && (
+            <PrimaryInsightCard
+              finding={insightSummary.primaryFinding}
+              aiExplanation={
+                interpretation?.key_findings?.find(
+                  kf => kf.biomarker_slug === insightSummary.primaryFinding!.key
+                )?.explanation
+              }
+            />
+          )}
+
+          {/* ── D. Top Findings (secondary items, softer tone) ────── */}
+          {insightSummary && !isProcessing && insightSummary.topFindings.length > 0 && (
             <TopFindingsCard
               findings={insightSummary.topFindings}
               aiExplanations={
@@ -905,6 +920,7 @@ export function ReportView() {
                     )
                   : undefined
               }
+              isPrimary={false}
             />
           )}
 
