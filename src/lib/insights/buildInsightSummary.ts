@@ -76,7 +76,7 @@ function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
   return scored
     .filter(s => s.concern > 0)
     .sort((a, b) => b.weightedConcern - a.weightedConcern)
-    .slice(0, 6)
+    .slice(0, 3)
     .map(s => {
       const displayName = getDisplayName(s.key);
       const statusLabel = s.concern === 2 ? 'out_of_range' : 'borderline';
@@ -96,7 +96,7 @@ function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
 }
 
 function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
-  const biggest = getBiggestChanges(deltas, 5);
+  const biggest = getBiggestChanges(deltas, 5).filter(d => d.significance !== 'minor');
 
   return biggest.map(d => {
     let fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}`;

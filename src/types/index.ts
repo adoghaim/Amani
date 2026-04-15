@@ -271,6 +271,7 @@ export interface AIInterpretation {
   key_findings?: AIKeyFinding[];
   what_you_can_do_now?: string[];
   what_to_do_next?: string[];
+  overall_interpretation?: string;
   top_findings: AITopFinding[];
   pattern_signals: AIPatternSignal[];
   cycle_context: {

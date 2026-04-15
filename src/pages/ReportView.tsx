@@ -23,6 +23,7 @@ import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourPatternsCard } from '../components/YourPatternsCard';
+import { WhatThisMeansCard } from '../components/WhatThisMeansCard';
 import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
@@ -785,7 +786,7 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── B. Amani Summary ────────────────────────────────── */}
+          {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
               <div className="bg-theme-text px-6 py-5">
@@ -799,29 +800,44 @@ export function ReportView() {
                   )}
                 </div>
                 <h2 className="text-lg font-semibold text-white leading-snug">
-                  {insightSummary
-                    ? (() => {
-                        const findings = insightSummary.topFindings;
-                        const outsideCount = findings.filter(f => f.status === 'out_of_range').length;
-                        const borderlineCount = findings.filter(f => f.status === 'borderline').length;
-                        const topOutside = findings.find(f => f.status === 'out_of_range');
-                        const topBorderline = findings.find(f => f.status === 'borderline');
+                  {interpretation?.headline
+                    ? interpretation.headline
+                    : insightSummary
+                      ? (() => {
+                          const findings = insightSummary.topFindings;
+                          const outOfRange = findings.filter(f => f.status === 'out_of_range');
+                          const borderline = findings.filter(f => f.status === 'borderline');
+                          const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
 
-                        if (outsideCount === 0 && borderlineCount === 0) {
-                          return 'All measured values are within the Amani optimal range.';
-                        }
-                        if (outsideCount > 0 && borderlineCount > 0) {
-                          const name = topOutside?.displayName;
-                          return `${outsideCount} value${outsideCount !== 1 ? 's' : ''} outside optimal range, ${borderlineCount} borderline${name ? ` — ${name} is the top priority` : ''}.`;
-                        }
-                        if (outsideCount > 0) {
-                          const name = topOutside?.displayName;
-                          return `${outsideCount} value${outsideCount !== 1 ? 's' : ''} outside optimal range${name ? ` — ${name} is the top priority` : ''}.`;
-                        }
-                        const name = topBorderline?.displayName;
-                        return `${borderlineCount} borderline value${borderlineCount !== 1 ? 's' : ''} flagged${name ? ` — ${name} needs attention` : ''}.`;
-                      })()
-                    : (interpretation?.headline ?? '')}
+                          if (outOfRange.length === 0 && borderline.length === 0) {
+                            if (improved.length > 0) {
+                              const name = improved[0].displayName;
+                              return `All values are within optimal range, and ${name} has improved since your last draw.`;
+                            }
+                            return 'All measured values are within the Amani optimal range.';
+                          }
+
+                          const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
+                          const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
+
+                          if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
+                            return `${topName} is outside optimal range, while ${secondName} is borderline — these are the two areas worth focusing on.`;
+                          }
+                          if (outOfRange.length >= 2 && secondName) {
+                            return `${topName} and ${secondName} are both outside optimal range — these are your top priorities.`;
+                          }
+                          if (outOfRange.length === 1 && borderline.length === 0) {
+                            if (improved.length > 0) {
+                              return `${topName} is outside optimal range, though ${improved[0].displayName} has improved since your last report.`;
+                            }
+                            return `${topName} is outside optimal range and is the primary finding on this panel.`;
+                          }
+                          if (borderline.length >= 2 && secondName) {
+                            return `${topName} and ${secondName} are both borderline — worth monitoring but no urgent flags.`;
+                          }
+                          return `${topName} is borderline — worth keeping an eye on over time.`;
+                        })()
+                      : ''}
                 </h2>
               </div>
 
@@ -852,7 +868,7 @@ export function ReportView() {
                 </div>
               )}
 
-              {/* Summary bullets: show when no primary_concern (from AI) or when no AI interpretation at all */}
+              {/* Summary bullets: only when no primary_concern */}
               {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
                 <div className="bg-white px-6 py-5">
                   <ul className="space-y-3">
@@ -868,14 +884,18 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── B2. Your Patterns (personalization) ─────────────── */}
-          {personalInsights.length > 0 && !isProcessing && (
-            <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
-          )}
-
-          {/* ── C. Top Findings (deterministic) ─────────────────── */}
+          {/* ── C. Top Findings (deterministic, max 3) ───────────── */}
           {insightSummary && !isProcessing && (
-            <TopFindingsCard findings={insightSummary.topFindings} />
+            <TopFindingsCard
+              findings={insightSummary.topFindings}
+              aiExplanations={
+                interpretation?.key_findings
+                  ? Object.fromEntries(
+                      interpretation.key_findings.map(kf => [kf.biomarker_slug, kf.explanation])
+                    )
+                  : undefined
+              }
+            />
           )}
 
           {/* ── C2. Biggest Changes (vs previous report) ─────────── */}
@@ -883,12 +903,26 @@ export function ReportView() {
             <BiggestChangesCard changes={insightSummary.biggestChanges} />
           )}
 
-          {/* ── C3. What to Watch (deterministic signals) ────────── */}
+          {/* ── B2. Your Patterns (personalization) ─────────────── */}
+          {personalInsights.length > 0 && !isProcessing && (
+            <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
+          )}
+
+          {/* ── C5. What This Means (new connective section) ─────── */}
+          {insightSummary && !isProcessing && (
+            <WhatThisMeansCard
+              aiText={interpretation?.overall_interpretation}
+              topFindings={insightSummary.topFindings}
+              biggestChanges={insightSummary.biggestChanges}
+            />
+          )}
+
+          {/* ── C3. What to Watch ────────────────────────────────── */}
           {insightSummary && !isProcessing && insightSummary.watchSignals.length > 0 && (
             <WhatToWatchCard signals={insightSummary.watchSignals} />
           )}
 
-          {/* ── C4. What You Can Do Now ──────────────────────────── */}
+          {/* ── C4. Next Steps ───────────────────────────────────── */}
           {interpretation && !isProcessing && (interpretation.what_you_can_do_now?.length ?? 0) > 0 && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 overflow-hidden">
               <div className="px-5 py-4 border-b border-emerald-100">
@@ -896,7 +930,7 @@ export function ReportView() {
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <Lightbulb className="w-4 h-4 text-emerald-700" />
                   </div>
-                  <h2 className="text-sm font-bold text-emerald-900">What You Can Do Now</h2>
+                  <h2 className="text-sm font-bold text-emerald-900">Next Steps</h2>
                 </div>
               </div>
               <div className="px-5 py-4 space-y-3">

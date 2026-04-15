@@ -559,6 +559,15 @@ CORE TONE RULES (non-negotiable)
   - "further evaluation may be necessary"
   - "suggests possible"
   - "warrants monitoring"
+  - "suggests that"
+  - "indicates that"
+  - "it is important to note"
+  - "you may want to consider"
+  - "it appears that"
+- Instead, use direct statements:
+  - "Vitamin D remains low" not "Vitamin D may indicate a deficiency"
+  - "TSH has improved" not "TSH suggests improvement"
+  - "Ferritin is below optimal at 12 ng/mL" not "Ferritin indicates possible low iron"
 - Be specific to the actual values — not just the flags
 - Do NOT repeat the same point across sections
 - Keep every explanation to 1–2 sentences max
@@ -659,6 +668,38 @@ SECTION 5 — WHAT TO DO NEXT
 
 Keep this completely distinct from "What You Can Do Now" — no overlap.
 
+Examples of good next steps:
+- "Continue monitoring vitamin D levels — retest in 2–3 months to see if the trend holds."
+- "Consider retesting thyroid markers at a different cycle phase for a clearer picture."
+- "Track how your energy and sleep align with these results over the next few weeks."
+
+Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_now.
+
+-----------------------------------
+
+SECTION 6 — OVERALL INTERPRETATION
+
+This is the "so what" section. It connects everything together.
+
+Purpose: Give the user a clear, grounded sense of where they stand overall.
+
+Rules:
+- 2–3 sentences max
+- Must reference at least 1 specific biomarker or system by name
+- Must connect findings + trends (if trend data exists)
+- Describe the direction — is the picture improving, stable, mixed, or needs attention?
+- Keep non-diagnostic and non-alarming
+- Do NOT repeat content already in primary_concern or key_findings
+
+GOOD examples:
+- "Your thyroid markers remain the main focus, while iron storage has steadily improved over recent draws. The overall picture is mixed but moving in a constructive direction."
+- "Vitamin D remains below optimal at 18 ng/mL, and it has been consistently low across your recent panels. The rest of your results are solid, which makes this the one area to address going forward."
+- "Your panel looks healthy overall — all key markers are within range. Ferritin has shown steady improvement, which is a meaningful positive shift."
+
+BAD examples (never write these):
+- "Overall, your results show some areas of concern and some areas of improvement." (too vague — no specific marker)
+- "These results suggest that further evaluation may be necessary." (banned phrasing)
+
 -----------------------------------
 
 PATIENT CONTEXT:
@@ -702,20 +743,21 @@ Required schema:
     {
       "biomarker_slug": "string",
       "title": "string",
-      "status": "monitor" | "attention" | "reassuring",
+      "status": "monitor or attention or reassuring",
       "explanation": "string"
     }
   ],
   "pattern_signals": [
     {
       "title": "string",
-      "confidence": "emerging" | "moderate" | "strong",
+      "confidence": "emerging or moderate or strong",
       "explanation": "string",
       "related_biomarkers": ["string"]
     }
   ],
   "what_you_can_do_now": ["string"],
   "what_to_do_next": ["string"],
+  "overall_interpretation": "string",
   "questions_for_doctor": ["string"],
   "cycle_context": "string",
   "disclaimer": "string"
@@ -737,7 +779,7 @@ Required schema:
           },
           { role: "user", content: prompt },
         ],
-        max_tokens: 1800,
+        max_tokens: 2200,
         temperature: 0.25,
         response_format: { type: "json_object" },
       }),
@@ -777,9 +819,8 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-  try {
-    console.log("DEPLOYMENT VERIFIED: generate-interpretation v2.1 (explicit auth). Auth Header Present:", !!req.headers.get("Authorization"));
-    const supabase = createClient(supabaseUrl, serviceKey);
+  console.log("DEPLOYMENT VERIFIED: generate-interpretation v2.2. Auth Header Present:", !!req.headers.get("Authorization"));
+  const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
 
