@@ -164,6 +164,7 @@ export function ReportView() {
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
   const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
+  const [interpGaveUp, setInterpGaveUp] = useState(false);
   const interpPollingActive = useRef(false);
   const interpRetryFired = useRef(false);
 
@@ -198,6 +199,7 @@ export function ReportView() {
     if (!report || report.status !== 'ready' || interpretation !== null || loading) return;
     if (interpPollingActive.current) return;
     interpPollingActive.current = true;
+    setInterpGaveUp(false);
     let elapsed = 0;
     const POLL_INTERVAL = 3000;
     const TIMEOUT_MS = 60000;
@@ -217,14 +219,8 @@ export function ReportView() {
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
         interpPollingActive.current = false;
-        // Guarded one-time retry: interpretation still missing after 60s
-        // This handles cases where the initial invocation was dropped silently
         if (!interpRetryFired.current) {
           interpRetryFired.current = true;
-          console.log('[ReportView] Interpretation missing after timeout — checking before retry');
-          // Pre-retry existence check: only invoke if interpretation truly does not exist.
-          // Without this, retry would re-set status to 'processing' on a report that
-          // already has (or is about to have) an interpretation, causing a UX regression.
           (async () => {
             try {
               const { data: preRetryData } = await supabase
@@ -233,16 +229,14 @@ export function ReportView() {
                 .eq('lab_report_id', reportId)
                 .maybeSingle();
               if (preRetryData?.json_output) {
-                console.log('[ReportView] Interpretation found before retry — skipping invoke');
                 setInterpretation(normalizeInterpretation(preRetryData.json_output));
                 return;
               }
-              console.log('[ReportView] Interpretation confirmed missing — firing retry');
               const { error: retryErr } = await supabase.functions.invoke('generate-interpretation', {
                 body: { reportId },
               });
               if (retryErr) {
-                console.warn('[ReportView] Retry interpretation failed:', retryErr.message);
+                setInterpGaveUp(true);
                 return;
               }
               let retryElapsed = 0;
@@ -260,13 +254,15 @@ export function ReportView() {
                   setInterpretation(normalizeInterpretation(retryData.json_output));
                 } else if (retryElapsed >= RETRY_TIMEOUT) {
                   clearInterval(retryInterval);
-                  console.warn('[ReportView] Retry interpretation also did not produce a result.');
+                  setInterpGaveUp(true);
                 }
               }, RETRY_INTERVAL);
             } catch (e) {
-              console.error('[ReportView] Retry flow exception:', e);
+              setInterpGaveUp(true);
             }
           })();
+        } else {
+          setInterpGaveUp(true);
         }
       }
     }, POLL_INTERVAL);
@@ -786,7 +782,7 @@ export function ReportView() {
           })()}
 
           {/* ── AI loading indicator (ready but no interpretation yet) ─── */}
-          {report.status === 'ready' && !interpretation && !isProcessing && insightSummary && (
+          {report.status === 'ready' && !interpretation && !isProcessing && !interpGaveUp && insightSummary && (
             <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
               <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>
