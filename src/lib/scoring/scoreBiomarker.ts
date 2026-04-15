@@ -1,5 +1,5 @@
 import type { BiomarkerName, CyclePhase, AmaniStatus, LabStatus } from '../../types';
-import { getRangesForPhase, getScoreWeight, getImportance } from '../biomarkers/dictionary';
+import { getEntry, getRangesForPhase, getScoreWeight, getImportance } from '../biomarkers/dictionary';
 
 export type ConcernLevel = 0 | 1 | 2;
 
