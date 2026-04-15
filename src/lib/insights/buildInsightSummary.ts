@@ -1,5 +1,5 @@
 import type { BiomarkerName, CyclePhase } from '../../types';
-import { getDisplayName, getCategory } from '../biomarkers/dictionary';
+import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
 import { scoreBiomarker, type ScoredBiomarker } from '../scoring/scoreBiomarker';
 import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta } from '../scoring/compareReports';
@@ -72,27 +72,70 @@ interface BiomarkerInput {
   sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
 }
 
-function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
-  return scored
-    .filter(s => s.concern > 0)
-    .sort((a, b) => b.weightedConcern - a.weightedConcern)
-    .slice(0, 3)
-    .map(s => {
-      const displayName = getDisplayName(s.key);
-      const statusLabel = s.concern === 2 ? 'out_of_range' : 'borderline';
-      const direction = s.amaniStatus.includes('high') ? 'high' : s.amaniStatus.includes('low') ? 'low' : '';
-      const dirLabel = direction === 'high' ? 'above' : direction === 'low' ? 'below' : 'outside';
+function toTopFinding(s: ScoredBiomarker): TopFinding {
+  const displayName = getDisplayName(s.key);
+  const statusLabel = s.concern === 2 ? 'out_of_range' : 'borderline';
+  const direction = s.amaniStatus.includes('high') ? 'high' : s.amaniStatus.includes('low') ? 'low' : '';
+  const dirLabel = direction === 'high' ? 'above' : direction === 'low' ? 'below' : 'outside';
+  return {
+    key: s.key,
+    displayName,
+    value: s.value,
+    unit: s.unit,
+    status: statusLabel as TopFinding['status'],
+    severity: s.weightedConcern,
+    fact: `${displayName} is ${dirLabel} the optimal range at ${s.value} ${s.unit}`,
+  };
+}
 
-      return {
-        key: s.key,
-        displayName,
-        value: s.value,
-        unit: s.unit,
-        status: statusLabel as TopFinding['status'],
-        severity: s.weightedConcern,
-        fact: `${displayName} is ${dirLabel} the optimal range at ${s.value} ${s.unit}`,
-      };
-    });
+function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
+  const abnormal = scored.filter(s => s.concern > 0);
+  const ranked = [...abnormal].sort((a, b) => b.weightedConcern - a.weightedConcern);
+
+  const top3 = ranked.slice(0, 3);
+
+  const EXTREME_RATIO_THRESHOLD = 3;
+  const mustInclude = abnormal.filter(s => {
+    if (s.concern < 2) return false;
+    if (getImportance(s.key) !== 'critical') return false;
+    if (s.deviationMultiplier < EXTREME_RATIO_THRESHOLD) return false;
+    return !top3.some(t => t.key === s.key);
+  });
+
+  if (mustInclude.length === 0) {
+    return top3.map(toTopFinding);
+  }
+
+  const criticalInTop3 = top3.filter(s => s.concern === 2 && getImportance(s.key) === 'critical');
+  if (criticalInTop3.length >= 3) {
+    return top3.map(toTopFinding);
+  }
+
+  const result: ScoredBiomarker[] = [...top3];
+  for (const m of mustInclude) {
+    if (result.length >= 3) {
+      const weakestIdx = result.reduce((minIdx, s, idx, arr) => {
+        const minS = arr[minIdx];
+        const isMinCritical = minS.concern === 2 && getImportance(minS.key) === 'critical';
+        const isCurrCritical = s.concern === 2 && getImportance(s.key) === 'critical';
+        if (isMinCritical && !isCurrCritical) return idx;
+        if (!isMinCritical && isCurrCritical) return minIdx;
+        return s.weightedConcern < minS.weightedConcern ? idx : minIdx;
+      }, 0);
+
+      const weakest = result[weakestIdx];
+      const weakestIsCritical = weakest.concern === 2 && getImportance(weakest.key) === 'critical';
+      if (!weakestIsCritical || m.weightedConcern > weakest.weightedConcern) {
+        result[weakestIdx] = m;
+      }
+    } else {
+      result.push(m);
+    }
+  }
+
+  return result
+    .sort((a, b) => b.weightedConcern - a.weightedConcern)
+    .map(toTopFinding);
 }
 
 function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
@@ -105,7 +148,7 @@ function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
     }
     if (d.boundaryCrossing) {
       const bcDir = d.boundaryCrossing.direction === 'improved' ? 'improved' : 'moved';
-      fact += ` — ${bcDir} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}`;
+      fact += `. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
     }
 
     return {
@@ -195,7 +238,7 @@ function buildDoctorQuestions(
     const dir = d.trendDirection === 'up' ? 'increased' : 'decreased';
     const pct = d.percentDelta !== null ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)` : '';
     questions.push({
-      text: `Is the ${name} change I'm seeing — it ${dir} from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — something I should continue monitoring?`,
+      text: `My ${name} ${dir} from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}. Is this something I should continue monitoring?`,
       relatedBiomarker: d.key,
     });
   }
@@ -244,7 +287,7 @@ function buildWatchSignals(
       : `${names.slice(0, 2).join(', ')} and ${names.length - 2} others`;
     signals.push({
       type: 'system',
-      title: `${systemLabel} — several markers shifted together`,
+      title: `${systemLabel}: several markers shifted together`,
       description: `${listed} ${names.length === 1 ? 'is' : 'are'} each outside their optimal range. Tracking them as a group over time can help reveal whether this is a consistent pattern.`,
       relatedBiomarkers: peers.map(p => p.key),
     });
@@ -258,8 +301,8 @@ function buildWatchSignals(
     const bc = d.boundaryCrossing!;
     signals.push({
       type: 'boundary',
-      title: `${d.displayName} — range shifted since last report`,
-      description: `Moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')} since the last report. A single shift may not be meaningful — tracking it across future panels can help clarify the direction.`,
+      title: `${d.displayName}: range shifted since last report`,
+      description: `Moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')} since the last report. A single shift may not be meaningful. Tracking it across future panels can help clarify the direction.`,
       relatedBiomarkers: [d.key],
     });
   }
@@ -273,7 +316,7 @@ function buildWatchSignals(
     const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
     signals.push({
       type: 'trend',
-      title: `${d.displayName} — notable change from previous report`,
+      title: `${d.displayName}: notable change from previous report`,
       description: `Has been ${dir}${pct} since the last panel, while staying within the same range category. Worth tracking to see if this holds across future reports.`,
       relatedBiomarkers: [d.key],
     });
@@ -294,7 +337,7 @@ function buildWatchSignals(
     const systemLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
     signals.push({
       type: 'pattern',
-      title: `${systemLabel} — related markers shifted since last report`,
+      title: `${systemLabel}: related markers shifted since last report`,
       description: `${systemNames} each shifted since the last panel. When related markers move together, it may be useful context to carry into future results.`,
       relatedBiomarkers: group.map(d => d.key),
     });
@@ -340,7 +383,7 @@ function calculateConfidence(
     const mappedCount = inputs.filter(b => b.normalizationStatus === 'mapped').length;
     reasons.push(`${mappedCount} of ${inputs.length} analytes successfully mapped.`);
   } else {
-    reasons.push(`${Math.round(normRate * 100)}% of analytes mapped — some names may not have matched the Amani catalog.`);
+    reasons.push(`${Math.round(normRate * 100)}% of analytes mapped. Some names may not have matched the Amani catalog.`);
   }
 
   // Factor 2: parser confidence distribution (30 points)
@@ -358,9 +401,9 @@ function calculateConfidence(
     if (confScore >= 0.75) {
       reasons.push('Extraction confidence is high across most analytes.');
     } else if (confScore >= 0.45) {
-      reasons.push('Extraction confidence is moderate — some values may have lower reliability.');
+      reasons.push('Extraction confidence is moderate. Some values may have lower reliability.');
     } else {
-      reasons.push('Extraction confidence is low — this panel may benefit from re-upload or manual review.');
+      reasons.push('Extraction confidence is low. This panel may benefit from re-upload or manual review.');
     }
   } else {
     score += 20;
@@ -374,13 +417,13 @@ function calculateConfidence(
   if (usableCount >= 10) {
     reasons.push(`${usableCount} analytes with usable values provide good coverage for insights.`);
   } else {
-    reasons.push(`${usableCount} analyte${usableCount !== 1 ? 's' : ''} with usable values — more markers improve insight depth.`);
+    reasons.push(`${usableCount} analyte${usableCount !== 1 ? 's' : ''} with usable values. More markers improve insight depth.`);
   }
 
   // Factor 4: comparison context bonus (10 points)
   if (hasPreviousReport) {
     score += 10;
-    reasons.push('Prior report available — trend analysis and biggest changes are included.');
+    reasons.push('Prior report available. Trend analysis and biggest changes are included.');
   }
 
   // Factor 5: source format signal (no direct score impact — informational reason only)

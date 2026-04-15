@@ -676,9 +676,16 @@ export function ReportView() {
         <div className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-2xl font-bold text-theme-text tracking-tight">
-              Lab Report — {formatDate(report.report_date)}
+              Lab Report: {formatDate(report.report_date)}
             </h1>
-            <p className="text-sm text-theme-muted-text-3 mt-1">Uploaded {formatDate(report.upload_date)}</p>
+            <p className="text-sm text-theme-muted-text-3 mt-1">
+              <span className="font-medium text-theme-muted-text-2">Lab date:</span> {formatDate(report.report_date)}
+              {report.upload_date && report.upload_date.split('T')[0] !== report.report_date && (
+                <span className="ml-2 text-theme-muted-text-3">
+                  (uploaded {formatDate(report.upload_date)})
+                </span>
+              )}
+            </p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {cyclePhase && (
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 border border-rose-200 text-rose-700 capitalize">
@@ -745,7 +752,7 @@ export function ReportView() {
           {hasError && !interpretation && (() => {
             const hasData = biomarkers.length > 0 || reportAnalytes.length > 0;
             const reason = !hasData
-              ? 'No lab values were extracted — the PDF may be image-based.'
+              ? 'No lab values were extracted. The PDF may be image-based.'
               : 'The AI analysis timed out or hit an error. Your lab data is intact below.';
             return (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-4">
@@ -759,7 +766,7 @@ export function ReportView() {
                 {hasData && (
                   <div className="flex items-center gap-2 text-xs text-red-600 bg-red-100/60 rounded-lg px-3 py-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                    <span>{reportAnalytes.length || biomarkers.length} lab values detected — your data is intact below</span>
+                    <span>{reportAnalytes.length || biomarkers.length} lab values detected. Your data is intact below.</span>
                   </div>
                 )}
                 {canRegenerate ? (
@@ -782,7 +789,7 @@ export function ReportView() {
           {report.status === 'ready' && !interpretation && !isProcessing && insightSummary && (
             <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
-              <p className="text-sm text-theme-muted-text-2">AI summary is being generated — your lab data is ready below.</p>
+              <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>
             </div>
           )}
 
@@ -821,10 +828,10 @@ export function ReportView() {
                           const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
 
                           if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
-                            return `${topName} is outside optimal range, while ${secondName} is borderline — these are the two areas worth focusing on.`;
+                            return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
                           }
                           if (outOfRange.length >= 2 && secondName) {
-                            return `${topName} and ${secondName} are both outside optimal range — these are your top priorities.`;
+                            return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
                           }
                           if (outOfRange.length === 1 && borderline.length === 0) {
                             if (improved.length > 0) {
@@ -833,9 +840,9 @@ export function ReportView() {
                             return `${topName} is outside optimal range and is the primary finding on this panel.`;
                           }
                           if (borderline.length >= 2 && secondName) {
-                            return `${topName} and ${secondName} are both borderline — worth monitoring but no urgent flags.`;
+                            return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;
                           }
-                          return `${topName} is borderline — worth keeping an eye on over time.`;
+                          return `${topName} is borderline. Worth keeping an eye on over time.`;
                         })()
                       : ''}
                 </h2>
@@ -954,7 +961,7 @@ export function ReportView() {
                   Your Lab Results
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-theme-primary">
-                      — {CATEGORY_DISPLAY[activeCategory].label}
+                      : {CATEGORY_DISPLAY[activeCategory].label}
                       <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
                         clear
                       </button>
