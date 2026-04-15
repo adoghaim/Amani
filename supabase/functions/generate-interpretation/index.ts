@@ -846,8 +846,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    await supabase.from("lab_reports").update({ status: "processing" }).eq("id", reportId);
-
     const { data: report } = await supabase
       .from("lab_reports")
       .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")

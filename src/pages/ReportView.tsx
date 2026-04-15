@@ -183,11 +183,18 @@ export function ReportView() {
       if (data && data.status !== 'processing') {
         clearInterval(interval);
         fetchReport();
+        const { data: interpData } = await supabase
+          .from('interpretations')
+          .select('id, json_output')
+          .eq('lab_report_id', reportId)
+          .maybeSingle();
+        if (interpData?.json_output) {
+          setInterpretation(normalizeInterpretation(interpData.json_output));
+        }
         return;
       }
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
-        // Edge function likely timed out — set ready so report is still viewable
         await supabase.from('lab_reports').update({ status: 'ready' }).eq('id', reportId);
         fetchReport();
       }
@@ -198,12 +205,15 @@ export function ReportView() {
   useEffect(() => {
     if (!report || report.status !== 'ready' || interpretation !== null || loading) return;
     if (interpPollingActive.current) return;
+
     interpPollingActive.current = true;
+    interpRetryFired.current = false;
     setInterpGaveUp(false);
+
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
 
     (async () => {
       try {
-        // Check DB first — interpretation may already exist
         const { data: existing } = await supabase
           .from('interpretations')
           .select('id, json_output')
@@ -216,24 +226,20 @@ export function ReportView() {
           return;
         }
 
-        // Interpretation missing — invoke edge function immediately
-        if (!interpRetryFired.current) {
-          interpRetryFired.current = true;
-          const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
-            body: { reportId },
-          });
-          if (invokeErr) {
-            interpPollingActive.current = false;
-            setInterpGaveUp(true);
-            return;
-          }
+        interpRetryFired.current = true;
+        const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+          body: { reportId },
+        });
+        if (invokeErr) {
+          interpPollingActive.current = false;
+          setInterpGaveUp(true);
+          return;
         }
 
-        // Poll for result
         let elapsed = 0;
         const POLL_INTERVAL = 3000;
-        const TIMEOUT_MS = 60000;
-        const interval = setInterval(async () => {
+        const TIMEOUT_MS = 90000;
+        pollInterval = setInterval(async () => {
           elapsed += POLL_INTERVAL;
           const { data } = await supabase
             .from('interpretations')
@@ -241,13 +247,13 @@ export function ReportView() {
             .eq('lab_report_id', reportId)
             .maybeSingle();
           if (data?.json_output) {
-            clearInterval(interval);
+            clearInterval(pollInterval!);
             interpPollingActive.current = false;
             setInterpretation(normalizeInterpretation(data.json_output));
             return;
           }
           if (elapsed >= TIMEOUT_MS) {
-            clearInterval(interval);
+            clearInterval(pollInterval!);
             interpPollingActive.current = false;
             setInterpGaveUp(true);
           }
@@ -259,6 +265,7 @@ export function ReportView() {
     })();
 
     return () => {
+      if (pollInterval) clearInterval(pollInterval);
       interpPollingActive.current = false;
     };
   }, [report?.status, report?.id, interpretation, loading, reportId]);
