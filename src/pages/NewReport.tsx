@@ -523,10 +523,8 @@ export function NewReport() {
 
       if (hasExistingReports) {
         sessionStorage.setItem('showSecondLabComparison', 'true');
-        setPendingNavigation('/app/tracker');
-      } else {
-        setPendingNavigation(`/app/reports/${createdReportId}`);
       }
+      setPendingNavigation(`/app/reports/${createdReportId}`);
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
