@@ -61,6 +61,7 @@ export function NewReport() {
   const [fetchingPeriod, setFetchingPeriod] = useState(false);
   const [reportDateAutoDetected, setReportDateAutoDetected] = useState(false);
   const [submitStep, setSubmitStep] = useState<'uploading' | 'creating' | 'saving' | 'interpreting' | 'complete' | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   const [labSource, setLabSource] = useState<LabSource>('unknown');
   const [detectedLabSource, setDetectedLabSource] = useState<LabSource>('unknown');
@@ -70,6 +71,12 @@ export function NewReport() {
   const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (pendingNavigation) {
+      navigate(pendingNavigation, { replace: true });
+    }
+  }, [pendingNavigation, navigate]);
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
@@ -514,9 +521,9 @@ export function NewReport() {
 
       if (hasExistingReports) {
         sessionStorage.setItem('showSecondLabComparison', 'true');
-        navigate('/app/tracker');
+        setPendingNavigation('/app/tracker');
       } else {
-        navigate(`/app/reports/${createdReportId}`);
+        setPendingNavigation(`/app/reports/${createdReportId}`);
       }
 
     } catch (err) {
