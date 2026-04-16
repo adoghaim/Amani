@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -36,6 +37,8 @@ type GuidedStep = 'choose' | 'instructions' | 'upload';
 
 export function NewReport() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const submittingRef = useRef(false);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -293,8 +296,14 @@ export function NewReport() {
   };
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const { data: { session } } = await supabase.auth.getSession();
-    if (!user || !session) return;
+    if (!user || !session) {
+      submittingRef.current = false;
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -306,7 +315,7 @@ export function NewReport() {
         .from('lab_reports')
         .select('id')
         .eq('user_id', user.id);
-      const isSecondReport = existingReports?.length === 1;
+      const hasExistingReports = (existingReports ?? []).length >= 1;
 
       setSubmitStep('uploading');
       let fileUrl = null;
@@ -354,7 +363,6 @@ export function NewReport() {
         throw new Error(`Failed to create report record: ${reportError.message}`);
       }
       createdReportId = reportData.id;
-      setStep(4);
 
       if (parserDebug) {
         supabase.from('parser_debug').insert({
@@ -487,6 +495,7 @@ export function NewReport() {
         }
       }
 
+      setStep(4);
       setSubmitStep('interpreting');
       supabase.functions.invoke('generate-interpretation', {
         body: { reportId: createdReportId },
@@ -503,14 +512,12 @@ export function NewReport() {
 
       setSubmitStep('complete');
 
-      setTimeout(() => {
-        if (isSecondReport) {
-          sessionStorage.setItem('showSecondLabComparison', 'true');
-          window.location.href = '/app/tracker';
-        } else {
-          window.location.href = `/app/reports/${createdReportId}`;
-        }
-      }, 500);
+      if (hasExistingReports) {
+        sessionStorage.setItem('showSecondLabComparison', 'true');
+        navigate('/app/tracker');
+      } else {
+        navigate(`/app/reports/${createdReportId}`);
+      }
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An error occurred';
@@ -518,6 +525,7 @@ export function NewReport() {
       setLoading(false);
       setStep(3);
       setSubmitStep(null);
+      submittingRef.current = false;
 
       if (createdReportId) {
         supabase.from('lab_reports').update({ status: 'error' }).eq('id', createdReportId);

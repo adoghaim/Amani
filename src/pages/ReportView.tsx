@@ -277,11 +277,19 @@ export function ReportView() {
     };
   }, [report?.status, report?.id, interpretation, reportId]);
 
-  const fetchReport = async () => {
+  const fetchReport = async (isRetry = false) => {
     const { data: reportData, error: reportError } = await supabase
       .from('lab_reports').select('*').eq('id', reportId).maybeSingle();
     if (reportError) { setError(`Failed to load: ${reportError.message}`); setLoading(false); return; }
-    if (!reportData) { setError('Report not found'); setLoading(false); return; }
+    if (!reportData) {
+      if (!isRetry) {
+        await new Promise(r => setTimeout(r, 1200));
+        return fetchReport(true);
+      }
+      setError('Report not found');
+      setLoading(false);
+      return;
+    }
     setReport(reportData as LabReport);
 
     const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
