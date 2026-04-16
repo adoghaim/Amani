@@ -845,25 +845,47 @@ export function ReportView() {
               {/* Primary Concern — most important finding, always first */}
               {interpretation?.primary_concern && (
                 <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-theme-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <AlertTriangle className="w-4 h-4 text-theme-primary" />
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertTriangle className="w-5 h-5 text-theme-primary" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-theme-primary uppercase tracking-widest mb-1">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
                         Top Priority
                       </p>
-                      <p className="text-sm font-semibold text-theme-text mb-1.5">
+                      <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                         {interpretation.primary_concern.title}
                       </p>
-                      <p className="text-sm text-theme-text-body leading-relaxed mb-2">
+                      <p className="text-sm text-theme-text-body leading-relaxed">
                         {interpretation.primary_concern.summary}
                       </p>
                       {interpretation.primary_concern.why_it_matters && (
-                        <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/30 pl-3">
+                        <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
                           {interpretation.primary_concern.why_it_matters}
                         </p>
                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback Top Priority from insightSummary when no AI primary_concern */}
+              {!interpretation?.primary_concern && insightSummary?.primaryFinding && (
+                <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertTriangle className="w-5 h-5 text-theme-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
+                        Top Priority
+                      </p>
+                      <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                        {insightSummary.primaryFinding.displayName}
+                      </p>
+                      <p className="text-sm text-theme-text-body leading-relaxed">
+                        {insightSummary.primaryFinding.fact}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -919,7 +941,39 @@ export function ReportView() {
                   fallback = `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops.`;
                 }
 
-                const text = aiText ?? fallback;
+                const rawText = aiText ?? fallback;
+
+                const headline = interpretation?.headline ?? '';
+                const normalizeForCompare = (s: string) =>
+                  s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+                const headlineNorm = normalizeForCompare(headline);
+
+                const splitSentences = (text: string): string[] =>
+                  text.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(Boolean) ?? [text];
+
+                const FILLER_PATTERNS = [
+                  /\bstand(s)? out as\b/i,
+                  /\bmost abnormal\b/i,
+                  /\bprimary (finding|concern|result)\b/i,
+                ];
+                const isFluff = (sentence: string): boolean =>
+                  FILLER_PATTERNS.some(p => p.test(sentence)) &&
+                  !/(direction|action|trend|monitor|track|discuss|follow|watch)/i.test(sentence);
+
+                const isDuplicateOfHeadline = (sentence: string): boolean => {
+                  if (!headlineNorm) return false;
+                  const sentNorm = normalizeForCompare(sentence);
+                  const headlineWords = headlineNorm.split(' ').filter(w => w.length > 4);
+                  if (headlineWords.length === 0) return false;
+                  const matchCount = headlineWords.filter(w => sentNorm.includes(w)).length;
+                  return matchCount / headlineWords.length >= 0.7;
+                };
+
+                const sentences = splitSentences(rawText);
+                const filtered = sentences.filter(s => !isDuplicateOfHeadline(s));
+                const strong = filtered.filter((s, i) => i === 0 || !isFluff(s));
+                const capped = strong.slice(0, 2).join(' ');
+                const text = capped || rawText;
 
                 return (
                   <div className="border-t border-theme-border-inner bg-white px-6 py-5">

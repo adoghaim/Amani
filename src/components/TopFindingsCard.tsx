@@ -6,21 +6,23 @@ const SECONDARY_STYLE: Record<string, {
   label: string; leftBar: string; iconBg: string; iconColor: string; nameColor: string;
 }> = {
   out_of_range: {
-    bg: 'bg-white', border: 'border-gray-200', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-red-50 text-red-600 border border-red-100', label: 'Outside Range',
-    leftBar: 'bg-red-300', iconBg: 'bg-red-50', iconColor: 'text-red-500',
+    bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
+    text: 'text-theme-text-body', badge: 'bg-red-50 text-red-500 border border-red-100', label: 'Outside Range',
+    leftBar: 'bg-red-200', iconBg: 'bg-red-50', iconColor: 'text-red-400',
   },
   borderline: {
-    bg: 'bg-white', border: 'border-gray-200', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-amber-50 text-amber-600 border border-amber-100', label: 'Borderline',
-    leftBar: 'bg-amber-200', iconBg: 'bg-amber-50', iconColor: 'text-amber-500',
+    bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
+    text: 'text-theme-text-body', badge: 'bg-amber-50 text-amber-500 border border-amber-100', label: 'Borderline',
+    leftBar: 'bg-amber-100', iconBg: 'bg-amber-50', iconColor: 'text-amber-400',
   },
   optimal: {
-    bg: 'bg-white', border: 'border-gray-200', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-emerald-50 text-emerald-600 border border-emerald-100', label: 'Optimal',
-    leftBar: 'bg-emerald-200', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500',
+    bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
+    text: 'text-theme-text-body', badge: 'bg-emerald-50 text-emerald-500 border border-emerald-100', label: 'Optimal',
+    leftBar: 'bg-emerald-100', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-400',
   },
 };
+
+const EXTREME_THRESHOLD = 3;
 
 interface Props {
   findings: TopFinding[];
@@ -31,22 +33,21 @@ interface Props {
 export function TopFindingsCard({ findings, aiExplanations, isPrimary = true }: Props) {
   if (findings.length === 0) return null;
 
-  const title = isPrimary ? 'Top Findings' : 'Other Findings';
+  const title = isPrimary ? 'Supporting Findings' : 'Supporting Findings';
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <List className="w-4 h-4 text-theme-muted-text-3" />
-        <h2 className="text-sm font-semibold text-theme-text">{title}</h2>
-        <span className="text-xs text-theme-muted-text-3 ml-auto">
-          {findings.length === 1 ? '1 item' : `${findings.length} items`}
-        </span>
+        <h2 className="text-sm font-medium text-theme-muted-text-2">{title}</h2>
       </div>
       <div className="space-y-2">
         {findings.map((finding) => {
           const style = SECONDARY_STYLE[finding.status] ?? SECONDARY_STYLE.borderline;
           const aiExplanation = aiExplanations?.[finding.key];
           const isLow = finding.direction === 'low';
+          const isExtreme = finding.deviationMultiplier >= EXTREME_THRESHOLD;
+          const extremeLabel = isLow ? 'Far below range' : 'Far above range';
 
           return (
             <div key={finding.key} className={`rounded-xl border overflow-hidden ${style.bg} ${style.border}`}>
@@ -66,9 +67,15 @@ export function TopFindingsCard({ findings, aiExplanations, isPrimary = true }: 
                         {finding.value}
                         <span className="font-normal text-xs text-theme-muted-text-2 ml-1">{finding.unit}</span>
                       </span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${style.badge}`}>
-                        {style.label}
-                      </span>
+                      {isExtreme ? (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-100">
+                          {extremeLabel}
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${style.badge}`}>
+                          {style.label}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <p className={`text-xs leading-relaxed ${style.text}`}>
