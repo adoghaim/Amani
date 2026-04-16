@@ -553,13 +553,23 @@ You are NOT diagnosing. You are translating numbers into meaning.
 CORE TONE RULES (non-negotiable)
 
 - Write like a knowledgeable friend, not a doctor writing a chart note
+- NEVER use em dashes (—). Use short, clear sentences instead.
 - NEVER use these phrases:
   - "clinical significance depends"
   - "may indicate"
   - "further evaluation may be necessary"
   - "suggests possible"
   - "warrants monitoring"
-- Be specific to the actual values — not just the flags
+  - "suggests that"
+  - "indicates that"
+  - "it is important to note"
+  - "you may want to consider"
+  - "it appears that"
+- Instead, use direct statements:
+  - "Vitamin D remains low" not "Vitamin D may indicate a deficiency"
+  - "TSH has improved" not "TSH suggests improvement"
+  - "Ferritin is below optimal at 12 ng/mL" not "Ferritin indicates possible low iron"
+- Be specific to the actual values, not just the flags
 - Do NOT repeat the same point across sections
 - Keep every explanation to 1–2 sentences max
 
@@ -659,6 +669,41 @@ SECTION 5 — WHAT TO DO NEXT
 
 Keep this completely distinct from "What You Can Do Now" — no overlap.
 
+Examples of good next steps:
+- "Continue monitoring vitamin D levels — retest in 2–3 months to see if the trend holds."
+- "Consider retesting thyroid markers at a different cycle phase for a clearer picture."
+- "Track how your energy and sleep align with these results over the next few weeks."
+
+Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_now.
+
+-----------------------------------
+
+SECTION 6 — OVERALL INTERPRETATION
+
+This section appears directly below the headline. It is the first prose the user reads. It must earn its position.
+
+Purpose: Give the user a clear, grounded sense of where they stand overall — interpreted, not just listed.
+
+Hard rules:
+- 2–3 sentences max
+- First sentence must name the most important finding and include a directional statement (improving, stable, mixed, needs attention)
+- Section as a whole must include at least one specific biomarker name and at least one specific value, trend, or timeframe
+- Final sentence must be forward-looking: what to watch, what to track, or what direction things are heading
+- Do NOT use em dashes
+- Do NOT use filler phrases: "overall", "in general", "it is important to", "be sure to", "this suggests", "may want to consider"
+- Do NOT repeat content already in primary_concern or key_findings
+- Write in natural second person — "your ferritin" not "the ferritin level" — but do not force "you" into every clause
+
+GOOD examples:
+- "TPO Antibodies remain markedly elevated at 797 IU/mL, which is the defining finding on this panel. HDL is also below optimal, adding a second area worth attention. Both markers are worth tracking at your next draw to see whether the pattern holds."
+- "Ferritin has improved from 18 to 40 ng/mL since your last draw, which is a meaningful shift in the right direction. Vitamin D remains the one area that still needs support. The overall trajectory is positive."
+- "All key markers are within the optimal range on this panel. Ferritin has shown steady improvement across your last three reports, which is a notable positive trend to continue tracking."
+
+BAD examples (never write these):
+- "Overall, your results show some areas of concern and some areas of improvement." (no specific marker, no value, pure filler)
+- "These results suggest that further evaluation may be necessary." (banned phrasing, non-specific)
+- "It is important to monitor your thyroid health and maintain a healthy lifestyle." (generic, no data, no direction)
+
 -----------------------------------
 
 PATIENT CONTEXT:
@@ -702,27 +747,28 @@ Required schema:
     {
       "biomarker_slug": "string",
       "title": "string",
-      "status": "monitor" | "attention" | "reassuring",
+      "status": "monitor or attention or reassuring",
       "explanation": "string"
     }
   ],
   "pattern_signals": [
     {
       "title": "string",
-      "confidence": "emerging" | "moderate" | "strong",
+      "confidence": "emerging or moderate or strong",
       "explanation": "string",
       "related_biomarkers": ["string"]
     }
   ],
   "what_you_can_do_now": ["string"],
   "what_to_do_next": ["string"],
+  "overall_interpretation": "string",
   "questions_for_doctor": ["string"],
   "cycle_context": "string",
   "disclaimer": "string"
 }`;
 
   const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 28000);
+  const tid = setTimeout(() => controller.abort(), 18000);
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -737,7 +783,7 @@ Required schema:
           },
           { role: "user", content: prompt },
         ],
-        max_tokens: 1800,
+        max_tokens: 2200,
         temperature: 0.25,
         response_format: { type: "json_object" },
       }),
@@ -757,7 +803,6 @@ Required schema:
 
     const parsed = JSON.parse(content);
     if (typeof parsed.headline !== "string") return null;
-    if (!Array.isArray(parsed.summary_bullets)) return null;
     return parsed;
   } catch (e: any) {
     clearTimeout(tid);
@@ -777,9 +822,8 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-  try {
-    console.log("DEPLOYMENT VERIFIED: generate-interpretation v2.1 (explicit auth). Auth Header Present:", !!req.headers.get("Authorization"));
-    const supabase = createClient(supabaseUrl, serviceKey);
+  console.log("DEPLOYMENT VERIFIED: generate-interpretation v2.2. Auth Header Present:", !!req.headers.get("Authorization"));
+  const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
 
@@ -804,8 +848,6 @@ Deno.serve(async (req: Request) => {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    await supabase.from("lab_reports").update({ status: "processing" }).eq("id", reportId);
 
     const { data: report } = await supabase
       .from("lab_reports")

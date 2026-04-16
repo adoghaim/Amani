@@ -42,21 +42,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let initializedFromSession = false;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      initializedFromSession = true;
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserProfile(session.user.id).then(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       (async () => {
+        if (event === 'TOKEN_REFRESHED') {
+          setUser(session?.user ?? null);
+          return;
+        }
+
         if (event === 'PASSWORD_RECOVERY') {
           setIsPasswordRecovery(true);
           setUser(session?.user ?? null);
+          if (!initializedFromSession) setLoading(false);
+          return;
+        }
+
+        if (event === 'SIGNED_IN') {
+          setUser(session?.user ?? null);
+          if (session?.user) {
+            await fetchUserProfile(session.user.id);
+          }
+          if (!initializedFromSession) setLoading(false);
+          return;
+        }
+
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setUserProfile(null);
           setLoading(false);
           return;
         }
+
         setUser(session?.user ?? null);
         if (session?.user) {
           await fetchUserProfile(session.user.id);
         } else {
           setUserProfile(null);
         }
-        setLoading(false);
+        if (!initializedFromSession) setLoading(false);
       })();
     });
 

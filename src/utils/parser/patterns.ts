@@ -142,7 +142,7 @@ export const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'non_hdl_cholesterol',
-    patterns: ['non-hdl cholesterol', 'non hdl cholesterol', 'non-hdl chol', 'non hdl chol'],
+    patterns: ['non-hdl cholesterol', 'non hdl cholesterol', 'non-hdl chol', 'non hdl chol', 'cholesterol, non-hdl', 'cholesterol, non hdl', 'non-hdl-c', 'non hdl-c'],
     commonUnits: ['mg/dL', 'mmol/L', 'mg/dl'],
   },
   {
@@ -182,7 +182,7 @@ export const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'bilirubin_total',
-    patterns: ['bilirubin, total', 'total bilirubin', 'bilirubin total', 'tbili', 'bilirubin,total'],
+    patterns: ['bilirubin, total', 'total bilirubin', 'bilirubin total', 'tbili', 'bilirubin,total', 'bilirubin'],
     commonUnits: ['mg/dL', 'umol/L', 'mg/dl'],
   },
   {
@@ -362,7 +362,7 @@ export const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'bun_creatinine_ratio',
-    patterns: ['bun/creatinine ratio', 'bun/creat ratio', 'urea/creat ratio', 'bun:creatinine', 'bun creatinine ratio', 'bun/creatinine', 'blood urea nitrogen/creatinine ratio'],
+    patterns: ['bun/creatinine ratio', 'bun/creat ratio', 'urea/creat ratio', 'bun:creatinine', 'bun creatinine ratio', 'bun/creatinine', 'blood urea nitrogen/creatinine ratio', 'bun/creat', 'bun / creatinine'],
     commonUnits: ['ratio', ''],
   },
   {

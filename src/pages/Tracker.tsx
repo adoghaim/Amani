@@ -69,7 +69,7 @@ export function Tracker() {
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
-  const [calendarMonth] = useState(new Date());
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   const [showInsightsModal, setShowInsightsModal] = useState(false);
   const [insightsData, setInsightsData] = useState<any>(null);
@@ -471,7 +471,8 @@ export function Tracker() {
             <TrackerCalendar
               dayMap={dayMap}
               onDayClick={handleDayClick}
-              initialMonth={calendarMonth}
+              currentMonth={calendarMonth}
+              onMonthChange={setCalendarMonth}
             />
 
             <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">

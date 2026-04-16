@@ -1,5 +1,5 @@
 import type { BiomarkerName, CyclePhase, AmaniStatus, LabStatus } from '../../types';
-import { getEntry, getRangesForPhase, getScoreWeight } from '../biomarkers/dictionary';
+import { getEntry, getRangesForPhase, getScoreWeight, getImportance } from '../biomarkers/dictionary';
 
 export type ConcernLevel = 0 | 1 | 2;
 
@@ -12,6 +12,7 @@ export interface ScoredBiomarker {
   concern: ConcernLevel;
   scoreWeight: number;
   weightedConcern: number;
+  deviationMultiplier: number;
 }
 
 export function computeAmaniStatus(
@@ -77,6 +78,45 @@ export function statusToConcern(status: AmaniStatus): ConcernLevel {
   return 0;
 }
 
+function computeDeviationMultiplier(
+  name: BiomarkerName,
+  value: number,
+  concern: ConcernLevel,
+  cyclePhase?: CyclePhase | null,
+): number {
+  if (concern === 0) return 1;
+
+  const ranges = getRangesForPhase(name, cyclePhase);
+  if (!ranges) return 1;
+
+  const importance = getImportance(name);
+  const isCritical = importance === 'critical';
+
+  const { optimal, clinical } = ranges;
+
+  const refMax = clinical.max ?? optimal.max;
+  const refMin = clinical.min ?? optimal.min;
+
+  let ratio = 1;
+
+  if (refMax !== null && value > refMax && refMax > 0) {
+    ratio = value / refMax;
+  } else if (refMin !== null && value < refMin && refMin > 0) {
+    ratio = refMin / value;
+  } else if (refMin !== null && value < refMin && refMin === 0) {
+    ratio = 1;
+  }
+
+  if (ratio <= 1.15) return 1;
+
+  const logBoost = Math.log2(ratio);
+  const cappedBoost = Math.min(logBoost, 4);
+
+  const criticalBonus = isCritical && ratio >= 3 ? 2 : isCritical && ratio >= 1.5 ? 1 : 0;
+
+  return 1 + cappedBoost + criticalBonus;
+}
+
 export function scoreBiomarker(
   name: BiomarkerName,
   value: number,
@@ -89,6 +129,7 @@ export function scoreBiomarker(
   const labStatus = computeLabStatus(value, labRefMin, labRefMax);
   const concern = statusToConcern(amaniStatus);
   const weight = getScoreWeight(name);
+  const deviationMultiplier = computeDeviationMultiplier(name, value, concern, cyclePhase);
 
   return {
     key: name,
@@ -98,6 +139,7 @@ export function scoreBiomarker(
     labStatus,
     concern,
     scoreWeight: weight,
-    weightedConcern: concern * weight,
+    weightedConcern: concern * weight * deviationMultiplier,
+    deviationMultiplier,
   };
 }

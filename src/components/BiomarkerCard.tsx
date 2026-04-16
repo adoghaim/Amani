@@ -30,6 +30,13 @@ interface BiomarkerCardProps {
   trendStrength?: TrendStrength;
 }
 
+function formatRangeLabel(n: number): string {
+  if (n >= 10000) return `${(n / 1000).toFixed(0)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  if (n % 1 === 0) return String(n);
+  return n < 10 ? n.toFixed(1) : n.toFixed(0);
+}
+
 function RangeBar({
   value,
   optMin,
@@ -45,8 +52,10 @@ function RangeBar({
 }) {
   if (optMin === null || optMax === null) return null;
 
-  const low = clinMin ?? optMin * 0.5;
-  const high = clinMax ?? optMax * 1.5;
+  const baseHigh = clinMax ?? optMax * 1.5;
+  const high = Math.max(baseHigh, value * 1.1);
+  const baseLow = clinMin ?? optMin * 0.5;
+  const low = value < baseLow ? Math.min(baseLow, value * 0.9) : baseLow;
   const span = high - low;
   if (span <= 0) return null;
 
@@ -57,6 +66,13 @@ function RangeBar({
   const clinLeft = clinMin !== null ? toPercent(clinMin) : 0;
   const clinWidth = clinMax !== null ? toPercent(clinMax) - clinLeft : 100 - clinLeft;
   const valuePos = toPercent(value);
+
+  const rangeMax = clinMax ?? optMax;
+  const isExtremeHigh = rangeMax !== null && rangeMax > 0 && value > rangeMax * 3;
+  const isExtremeLow = (clinMin !== null ? clinMin : optMin) !== null
+    && (clinMin ?? optMin)! > 0
+    && value < (clinMin ?? optMin)! / 3;
+  const isExtreme = isExtremeHigh || isExtremeLow;
 
   return (
     <div className="mt-3">
@@ -75,14 +91,19 @@ function RangeBar({
         />
       </div>
       <div className="flex justify-between text-[10px] text-[#9A8A90] mt-1">
-        <span>{clinMin ?? optMin}</span>
-        <div className="flex gap-3 text-center">
-          <span className="text-emerald-600">Opt: {optMin}–{optMax}</span>
+        <span>{formatRangeLabel(clinMin ?? optMin)}</span>
+        <div className="flex gap-3 text-center items-center">
+          <span className="text-emerald-600">Opt: {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}</span>
           {clinMin !== null && clinMax !== null && (
-            <span className="text-blue-500">Lab: {clinMin}–{clinMax}</span>
+            <span className="text-blue-500">Lab: {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}</span>
+          )}
+          {isExtreme && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-50 text-red-600 border border-red-200">
+              {isExtremeHigh ? 'Far above range' : 'Far below range'}
+            </span>
           )}
         </div>
-        <span>{clinMax ?? optMax}</span>
+        <span>{formatRangeLabel(high)}</span>
       </div>
     </div>
   );

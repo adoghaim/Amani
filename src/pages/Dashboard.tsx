@@ -60,7 +60,7 @@ export function Dashboard() {
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
-  const [calendarMonth] = useState(new Date());
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   useEffect(() => {
     if (user) fetchData();
@@ -417,7 +417,8 @@ export function Dashboard() {
           <TrackerCalendar
             dayMap={dayMap}
             onDayClick={handleDayClick}
-            initialMonth={calendarMonth}
+            currentMonth={calendarMonth}
+            onMonthChange={setCalendarMonth}
           />
 
           <div className="bg-white rounded-2xl border border-theme-border shadow-sm overflow-hidden">

@@ -23,6 +23,7 @@ import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourPatternsCard } from '../components/YourPatternsCard';
+import { PrimaryInsightCard } from '../components/PrimaryInsightCard';
 import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
@@ -31,8 +32,10 @@ import type {
 import {
   RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, Stethoscope, CalendarDays,
-  CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle,
+  CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle, FlaskConical,
 } from 'lucide-react';
+import { detectLabSource } from '../utils/detectLabSource';
+import type { LabSource } from '../types';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
@@ -161,6 +164,7 @@ export function ReportView() {
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
   const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
+  const [interpGaveUp, setInterpGaveUp] = useState(false);
   const interpPollingActive = useRef(false);
   const interpRetryFired = useRef(false);
 
@@ -179,11 +183,18 @@ export function ReportView() {
       if (data && data.status !== 'processing') {
         clearInterval(interval);
         fetchReport();
+        const { data: interpData } = await supabase
+          .from('interpretations')
+          .select('id, json_output')
+          .eq('lab_report_id', reportId)
+          .maybeSingle();
+        if (interpData?.json_output) {
+          setInterpretation(normalizeInterpretation(interpData.json_output));
+        }
         return;
       }
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
-        // Edge function likely timed out — set ready so report is still viewable
         await supabase.from('lab_reports').update({ status: 'ready' }).eq('id', reportId);
         fetchReport();
       }
@@ -192,92 +203,93 @@ export function ReportView() {
   }, [report?.status, reportId]);
 
   useEffect(() => {
-    if (!report || report.status !== 'ready' || interpretation !== null || loading) return;
+    if (!report || (report.status !== 'ready' && report.status !== 'error') || interpretation !== null) return;
     if (interpPollingActive.current) return;
+
     interpPollingActive.current = true;
-    let elapsed = 0;
-    const POLL_INTERVAL = 3000;
-    const TIMEOUT_MS = 60000;
-    const interval = setInterval(async () => {
-      elapsed += POLL_INTERVAL;
-      const { data } = await supabase
-        .from('interpretations')
-        .select('id, json_output')
-        .eq('lab_report_id', reportId)
-        .maybeSingle();
-      if (data?.json_output) {
-        clearInterval(interval);
-        interpPollingActive.current = false;
-        setInterpretation(normalizeInterpretation(data.json_output));
-        return;
-      }
-      if (elapsed >= TIMEOUT_MS) {
-        clearInterval(interval);
-        interpPollingActive.current = false;
-        // Guarded one-time retry: interpretation still missing after 60s
-        // This handles cases where the initial invocation was dropped silently
-        if (!interpRetryFired.current) {
-          interpRetryFired.current = true;
-          console.log('[ReportView] Interpretation missing after timeout — checking before retry');
-          // Pre-retry existence check: only invoke if interpretation truly does not exist.
-          // Without this, retry would re-set status to 'processing' on a report that
-          // already has (or is about to have) an interpretation, causing a UX regression.
-          (async () => {
-            try {
-              const { data: preRetryData } = await supabase
-                .from('interpretations')
-                .select('id, json_output')
-                .eq('lab_report_id', reportId)
-                .maybeSingle();
-              if (preRetryData?.json_output) {
-                console.log('[ReportView] Interpretation found before retry — skipping invoke');
-                setInterpretation(normalizeInterpretation(preRetryData.json_output));
-                return;
-              }
-              console.log('[ReportView] Interpretation confirmed missing — firing retry');
-              const { error: retryErr } = await supabase.functions.invoke('generate-interpretation', {
-                body: { reportId },
-              });
-              if (retryErr) {
-                console.warn('[ReportView] Retry interpretation failed:', retryErr.message);
-                return;
-              }
-              let retryElapsed = 0;
-              const RETRY_INTERVAL = 4000;
-              const RETRY_TIMEOUT = 60000;
-              const retryInterval = setInterval(async () => {
-                retryElapsed += RETRY_INTERVAL;
-                const { data: retryData } = await supabase
-                  .from('interpretations')
-                  .select('id, json_output')
-                  .eq('lab_report_id', reportId)
-                  .maybeSingle();
-                if (retryData?.json_output) {
-                  clearInterval(retryInterval);
-                  setInterpretation(normalizeInterpretation(retryData.json_output));
-                } else if (retryElapsed >= RETRY_TIMEOUT) {
-                  clearInterval(retryInterval);
-                  console.warn('[ReportView] Retry interpretation also did not produce a result.');
-                }
-              }, RETRY_INTERVAL);
-            } catch (e) {
-              console.error('[ReportView] Retry flow exception:', e);
-            }
-          })();
+    interpRetryFired.current = false;
+    setInterpGaveUp(false);
+
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data: existing } = await supabase
+          .from('interpretations')
+          .select('id, json_output')
+          .eq('lab_report_id', reportId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (existing?.json_output) {
+          interpPollingActive.current = false;
+          setInterpretation(normalizeInterpretation(existing.json_output));
+          return;
+        }
+
+        interpRetryFired.current = true;
+        const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+          body: { reportId },
+        });
+        if (cancelled) return;
+        if (invokeErr) {
+          interpPollingActive.current = false;
+          setInterpGaveUp(true);
+          return;
+        }
+
+        let elapsed = 0;
+        const POLL_INTERVAL = 3000;
+        const TIMEOUT_MS = 120000;
+        pollInterval = setInterval(async () => {
+          if (cancelled) { clearInterval(pollInterval!); return; }
+          elapsed += POLL_INTERVAL;
+          const { data } = await supabase
+            .from('interpretations')
+            .select('id, json_output')
+            .eq('lab_report_id', reportId)
+            .maybeSingle();
+          if (data?.json_output) {
+            clearInterval(pollInterval!);
+            interpPollingActive.current = false;
+            setInterpretation(normalizeInterpretation(data.json_output));
+            return;
+          }
+          if (elapsed >= TIMEOUT_MS) {
+            clearInterval(pollInterval!);
+            interpPollingActive.current = false;
+            setInterpGaveUp(true);
+          }
+        }, POLL_INTERVAL);
+      } catch (e) {
+        if (!cancelled) {
+          interpPollingActive.current = false;
+          setInterpGaveUp(true);
         }
       }
-    }, POLL_INTERVAL);
-    return () => {
-      clearInterval(interval);
-      interpPollingActive.current = false;
-    };
-  }, [report?.status, report?.id, interpretation, loading, reportId]);
+    })();
 
-  const fetchReport = async () => {
+    return () => {
+      cancelled = true;
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [report?.status, report?.id, interpretation, reportId]);
+
+  const fetchReport = async (isRetry = false) => {
     const { data: reportData, error: reportError } = await supabase
       .from('lab_reports').select('*').eq('id', reportId).maybeSingle();
     if (reportError) { setError(`Failed to load: ${reportError.message}`); setLoading(false); return; }
-    if (!reportData) { setError('Report not found'); setLoading(false); return; }
+    if (!reportData) {
+      if (!isRetry) {
+        await new Promise(r => setTimeout(r, 1200));
+        return fetchReport(true);
+      }
+      setError('Report not found');
+      setLoading(false);
+      return;
+    }
     setReport(reportData as LabReport);
 
     const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
@@ -628,8 +640,11 @@ export function ReportView() {
     return false;
   };
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const formatDate = (d: string) => {
+    if (!d) return '—';
+    const base = d.length === 10 ? d + 'T12:00:00' : d;
+    return new Date(base).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  };
 
   if (loading) {
     return (
@@ -657,6 +672,11 @@ export function ReportView() {
   const hasError = report.status === 'error';
   const isProcessing = report.status === 'processing' || regenerating;
 
+  const resolvedLabSource: LabSource = (() => {
+    if (report.lab_source && report.lab_source !== 'unknown') return report.lab_source;
+    return 'unknown';
+  })();
+
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
@@ -665,9 +685,16 @@ export function ReportView() {
         <div className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-2xl font-bold text-theme-text tracking-tight">
-              Lab Report — {formatDate(report.report_date)}
+              Lab Report: {formatDate(report.report_date)}
             </h1>
-            <p className="text-sm text-theme-muted-text-3 mt-1">Uploaded {formatDate(report.upload_date)}</p>
+            <p className="text-sm text-theme-muted-text-3 mt-1">
+              <span className="font-medium text-theme-muted-text-2">Lab date:</span> {formatDate(report.report_date)}
+              {report.upload_date && report.upload_date.split('T')[0] !== report.report_date && (
+                <span className="ml-2 text-theme-muted-text-3">
+                  (uploaded {formatDate(report.upload_date)})
+                </span>
+              )}
+            </p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {cyclePhase && (
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 border border-rose-200 text-rose-700 capitalize">
@@ -677,6 +704,16 @@ export function ReportView() {
               <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
+              )}
+              {resolvedLabSource !== 'unknown' && (
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+                  resolvedLabSource === 'quest'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : 'text-sky-700 bg-sky-50 border-sky-200'
+                }`}>
+                  <FlaskConical className="w-3 h-3" />
+                  Imported from {resolvedLabSource === 'quest' ? 'Quest' : 'Labcorp'}
+                </span>
               )}
               {dominantSourceFormat && (
                 <span className="text-xs text-theme-muted-text-3 px-1.5 py-0.5 rounded border border-theme-border">
@@ -721,10 +758,10 @@ export function ReportView() {
           )}
 
           {/* ── Error state ─────────────────────────────────────── */}
-          {hasError && !interpretation && (() => {
+          {hasError && !interpretation && interpGaveUp && (() => {
             const hasData = biomarkers.length > 0 || reportAnalytes.length > 0;
             const reason = !hasData
-              ? 'No lab values were extracted — the PDF may be image-based.'
+              ? 'No lab values were extracted. The PDF may be image-based.'
               : 'The AI analysis timed out or hit an error. Your lab data is intact below.';
             return (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-4">
@@ -738,7 +775,7 @@ export function ReportView() {
                 {hasData && (
                   <div className="flex items-center gap-2 text-xs text-red-600 bg-red-100/60 rounded-lg px-3 py-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                    <span>{reportAnalytes.length || biomarkers.length} lab values detected — your data is intact below</span>
+                    <span>{reportAnalytes.length || biomarkers.length} lab values detected. Your data is intact below.</span>
                   </div>
                 )}
                 {canRegenerate ? (
@@ -757,15 +794,15 @@ export function ReportView() {
             );
           })()}
 
-          {/* ── AI loading indicator (ready but no interpretation yet) ─── */}
-          {report.status === 'ready' && !interpretation && !isProcessing && insightSummary && (
+          {/* ── AI loading indicator (ready/error but no interpretation yet) ─── */}
+          {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && insightSummary && (
             <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
-              <p className="text-sm text-theme-muted-text-2">AI summary is being generated — your lab data is ready below.</p>
+              <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>
             </div>
           )}
 
-          {/* ── B. Amani Summary ────────────────────────────────── */}
+          {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
               <div className="bg-theme-text px-6 py-5">
@@ -779,51 +816,66 @@ export function ReportView() {
                   )}
                 </div>
                 <h2 className="text-lg font-semibold text-white leading-snug">
-                  {insightSummary
-                    ? (() => {
-                        const findings = insightSummary.topFindings;
-                        const outsideCount = findings.filter(f => f.status === 'out_of_range').length;
-                        const borderlineCount = findings.filter(f => f.status === 'borderline').length;
-                        const topOutside = findings.find(f => f.status === 'out_of_range');
-                        const topBorderline = findings.find(f => f.status === 'borderline');
+                  {interpretation?.headline
+                    ? interpretation.headline
+                    : insightSummary
+                      ? (() => {
+                          const findings = insightSummary.topFindings;
+                          const outOfRange = findings.filter(f => f.status === 'out_of_range');
+                          const borderline = findings.filter(f => f.status === 'borderline');
+                          const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
 
-                        if (outsideCount === 0 && borderlineCount === 0) {
-                          return 'All measured values are within the Amani optimal range.';
-                        }
-                        if (outsideCount > 0 && borderlineCount > 0) {
-                          const name = topOutside?.displayName;
-                          return `${outsideCount} value${outsideCount !== 1 ? 's' : ''} outside optimal range, ${borderlineCount} borderline${name ? ` — ${name} is the top priority` : ''}.`;
-                        }
-                        if (outsideCount > 0) {
-                          const name = topOutside?.displayName;
-                          return `${outsideCount} value${outsideCount !== 1 ? 's' : ''} outside optimal range${name ? ` — ${name} is the top priority` : ''}.`;
-                        }
-                        const name = topBorderline?.displayName;
-                        return `${borderlineCount} borderline value${borderlineCount !== 1 ? 's' : ''} flagged${name ? ` — ${name} needs attention` : ''}.`;
-                      })()
-                    : (interpretation?.headline ?? '')}
+                          if (outOfRange.length === 0 && borderline.length === 0) {
+                            if (improved.length > 0) {
+                              const name = improved[0].displayName;
+                              return `All values are within optimal range, and ${name} has improved since your last draw.`;
+                            }
+                            return 'All measured values are within the Amani optimal range.';
+                          }
+
+                          const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
+                          const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
+
+                          if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
+                            return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
+                          }
+                          if (outOfRange.length >= 2 && secondName) {
+                            return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
+                          }
+                          if (outOfRange.length === 1 && borderline.length === 0) {
+                            if (improved.length > 0) {
+                              return `${topName} is outside optimal range, though ${improved[0].displayName} has improved since your last report.`;
+                            }
+                            return `${topName} is outside optimal range and is the primary finding on this panel.`;
+                          }
+                          if (borderline.length >= 2 && secondName) {
+                            return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;
+                          }
+                          return `${topName} is borderline. Worth keeping an eye on over time.`;
+                        })()
+                      : ''}
                 </h2>
               </div>
 
               {/* Primary Concern — most important finding, always first */}
               {interpretation?.primary_concern && (
                 <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-theme-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <AlertTriangle className="w-4 h-4 text-theme-primary" />
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertTriangle className="w-5 h-5 text-theme-primary" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-theme-primary uppercase tracking-widest mb-1">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
                         Top Priority
                       </p>
-                      <p className="text-sm font-semibold text-theme-text mb-1.5">
+                      <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                         {interpretation.primary_concern.title}
                       </p>
-                      <p className="text-sm text-theme-text-body leading-relaxed mb-2">
+                      <p className="text-sm text-theme-text-body leading-relaxed">
                         {interpretation.primary_concern.summary}
                       </p>
                       {interpretation.primary_concern.why_it_matters && (
-                        <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/30 pl-3">
+                        <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
                           {interpretation.primary_concern.why_it_matters}
                         </p>
                       )}
@@ -832,7 +884,29 @@ export function ReportView() {
                 </div>
               )}
 
-              {/* Summary bullets: show when no primary_concern (from AI) or when no AI interpretation at all */}
+              {/* Fallback Top Priority from insightSummary when no AI primary_concern */}
+              {!interpretation?.primary_concern && insightSummary?.primaryFinding && (
+                <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertTriangle className="w-5 h-5 text-theme-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
+                        Top Priority
+                      </p>
+                      <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                        {insightSummary.primaryFinding.displayName}
+                      </p>
+                      <p className="text-sm text-theme-text-body leading-relaxed">
+                        {insightSummary.primaryFinding.fact}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summary bullets: only when no primary_concern */}
               {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
                 <div className="bg-white px-6 py-5">
                   <ul className="space-y-3">
@@ -845,30 +919,132 @@ export function ReportView() {
                   </ul>
                 </div>
               )}
+
+              {/* What This Means — narrative, unified inside the card */}
+              {insightSummary && (() => {
+                const aiText = interpretation?.overall_interpretation;
+                const topFindings = insightSummary.primaryFinding
+                  ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
+                  : insightSummary.topFindings;
+
+                const outOfRange = topFindings.filter(f => f.status === 'out_of_range');
+                const borderline = topFindings.filter(f => f.status === 'borderline');
+                const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
+                const worsened = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'worsened');
+
+                let fallback = '';
+                const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
+                if (outOfRange.length === 0 && borderline.length === 0) {
+                  if (improved.length > 0) {
+                    const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
+                    fallback = `Your panel looks solid overall, with ${names} showing improvement since your last draw. The trend is moving in a positive direction.`;
+                  } else {
+                    fallback = `All measured values are within optimal ranges. This is a useful baseline to track over time.`;
+                  }
+                } else if (improved.length > 0 && outOfRange.length > 0) {
+                  fallback = `${topName} remains the primary area to keep an eye on, while ${improved[0].displayName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
+                } else if (worsened.length > 0 && outOfRange.length > 0) {
+                  fallback = `${topName} is the priority finding here, and ${worsened[0].displayName} has shifted since your last draw. Tracking both at your next panel will help clarify the direction.`;
+                } else if (outOfRange.length >= 2) {
+                  const names = outOfRange.slice(0, 2).map(f => f.displayName).join(' and ');
+                  fallback = `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
+                } else if (outOfRange.length === 1 && borderline.length > 0) {
+                  fallback = `${topName} is outside optimal range and is the top priority. ${borderline[0].displayName} is borderline — worth monitoring, but not urgent on its own.`;
+                } else if (outOfRange.length === 1) {
+                  fallback = `${topName} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.`;
+                } else {
+                  fallback = `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops.`;
+                }
+
+                const rawText = aiText ?? fallback;
+
+                const headline = interpretation?.headline ?? '';
+                const normalizeForCompare = (s: string) =>
+                  s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+                const headlineNorm = normalizeForCompare(headline);
+
+                const splitSentences = (text: string): string[] =>
+                  text.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(Boolean) ?? [text];
+
+                const FILLER_PATTERNS = [
+                  /\bstand(s)? out as\b/i,
+                  /\bmost abnormal\b/i,
+                  /\bprimary (finding|concern|result)\b/i,
+                ];
+                const isFluff = (sentence: string): boolean =>
+                  FILLER_PATTERNS.some(p => p.test(sentence)) &&
+                  !/(direction|action|trend|monitor|track|discuss|follow|watch)/i.test(sentence);
+
+                const isDuplicateOfHeadline = (sentence: string): boolean => {
+                  if (!headlineNorm) return false;
+                  const sentNorm = normalizeForCompare(sentence);
+                  const headlineWords = headlineNorm.split(' ').filter(w => w.length > 4);
+                  if (headlineWords.length === 0) return false;
+                  const matchCount = headlineWords.filter(w => sentNorm.includes(w)).length;
+                  return matchCount / headlineWords.length >= 0.7;
+                };
+
+                const sentences = splitSentences(rawText);
+                const filtered = sentences.filter(s => !isDuplicateOfHeadline(s));
+                const strong = filtered.filter((s, i) => i === 0 || !isFluff(s));
+                const capped = strong.slice(0, 2).join(' ');
+                const text = capped || rawText;
+
+                return (
+                  <div className="border-t border-theme-border-inner bg-white px-6 py-5">
+                    <p className="text-xs font-medium text-theme-muted-text-2 uppercase tracking-widest mb-3">
+                      What This Means
+                    </p>
+                    <p className="text-[15px] text-theme-text-body leading-[1.7]">{text}</p>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
-          {/* ── B2. Your Patterns (personalization) ─────────────── */}
-          {personalInsights.length > 0 && !isProcessing && (
-            <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
+          {/* ── C2. Primary Finding (dominant single takeaway) ────── */}
+          {insightSummary?.primaryFinding && !isProcessing && (
+            <PrimaryInsightCard
+              finding={insightSummary.primaryFinding}
+              aiExplanation={
+                interpretation?.key_findings?.find(
+                  kf => kf.biomarker_slug === insightSummary.primaryFinding!.key
+                )?.explanation
+              }
+            />
           )}
 
-          {/* ── C. Top Findings (deterministic) ─────────────────── */}
-          {insightSummary && !isProcessing && (
-            <TopFindingsCard findings={insightSummary.topFindings} />
+          {/* ── D. Top Findings (secondary items, softer tone) ────── */}
+          {insightSummary && !isProcessing && insightSummary.topFindings.length > 0 && (
+            <TopFindingsCard
+              findings={insightSummary.topFindings}
+              aiExplanations={
+                interpretation?.key_findings
+                  ? Object.fromEntries(
+                      interpretation.key_findings.map(kf => [kf.biomarker_slug, kf.explanation])
+                    )
+                  : undefined
+              }
+              isPrimary={false}
+            />
           )}
 
-          {/* ── C2. Biggest Changes (vs previous report) ─────────── */}
+          {/* ── D2. Biggest Changes (vs previous report) ─────────── */}
           {insightSummary && !isProcessing && insightSummary.biggestChanges.length > 0 && (
             <BiggestChangesCard changes={insightSummary.biggestChanges} />
           )}
 
-          {/* ── C3. What to Watch (deterministic signals) ────────── */}
+          {/* ── D3. Your Patterns (personalization) ─────────────── */}
+          {personalInsights.length > 0 && !isProcessing && (
+            <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
+          )}
+
+          {/* ── D4. What to Watch ────────────────────────────────── */}
           {insightSummary && !isProcessing && insightSummary.watchSignals.length > 0 && (
             <WhatToWatchCard signals={insightSummary.watchSignals} />
           )}
 
-          {/* ── C4. What You Can Do Now ──────────────────────────── */}
+          {/* ── C4. Next Steps ───────────────────────────────────── */}
           {interpretation && !isProcessing && (interpretation.what_you_can_do_now?.length ?? 0) > 0 && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 overflow-hidden">
               <div className="px-5 py-4 border-b border-emerald-100">
@@ -876,7 +1052,7 @@ export function ReportView() {
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <Lightbulb className="w-4 h-4 text-emerald-700" />
                   </div>
-                  <h2 className="text-sm font-bold text-emerald-900">What You Can Do Now</h2>
+                  <h2 className="text-sm font-bold text-emerald-900">Next Steps</h2>
                 </div>
               </div>
               <div className="px-5 py-4 space-y-3">
@@ -900,7 +1076,7 @@ export function ReportView() {
                   Your Lab Results
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-theme-primary">
-                      — {CATEGORY_DISPLAY[activeCategory].label}
+                      : {CATEGORY_DISPLAY[activeCategory].label}
                       <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
                         clear
                       </button>

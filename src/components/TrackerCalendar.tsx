@@ -1,11 +1,11 @@
-import { useState } from 'react';
 import { ChevronLeft, ChevronRight, TestTube2, Pill, Zap } from 'lucide-react';
 import { DayInfo, DayState, dateToKey } from '../utils/cyclePredictor';
 
 interface TrackerCalendarProps {
   dayMap: Map<string, DayInfo>;
   onDayClick: (dateKey: string) => void;
-  initialMonth?: Date;
+  currentMonth: Date;
+  onMonthChange: (month: Date) => void;
 }
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -50,9 +50,7 @@ function getDayNumberClasses(info: DayInfo, isToday: boolean): string {
   return 'text-gray-700 text-sm';
 }
 
-export function TrackerCalendar({ dayMap, onDayClick, initialMonth }: TrackerCalendarProps) {
-  const [currentMonth, setCurrentMonth] = useState(initialMonth || new Date());
-
+export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChange }: TrackerCalendarProps) {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
   const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -60,8 +58,8 @@ export function TrackerCalendar({ dayMap, onDayClick, initialMonth }: TrackerCal
   const firstDay = new Date(year, month, 1).getDay();
   const todayKey = dateToKey(new Date());
 
-  const prevMonth = () => setCurrentMonth(new Date(year, month - 1));
-  const nextMonth = () => setCurrentMonth(new Date(year, month + 1));
+  const prevMonth = () => onMonthChange(new Date(year, month - 1));
+  const nextMonth = () => onMonthChange(new Date(year, month + 1));
 
   const cells: React.ReactNode[] = [];
   for (let i = 0; i < firstDay; i++) {

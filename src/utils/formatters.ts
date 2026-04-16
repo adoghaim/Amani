@@ -1,7 +1,3 @@
-/**
- * Format a date string for display.
- * Example: "2024-03-15" → "Mar 15, 2024"
- */
 export function formatDate(
   dateString: string,
   options?: Intl.DateTimeFormatOptions
@@ -12,10 +8,6 @@ export function formatDate(
   );
 }
 
-/**
- * Format a date string in long form.
- * Example: "2024-03-15" → "March 15, 2024"
- */
 export function formatDateLong(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'long',
@@ -23,3 +15,15 @@ export function formatDateLong(dateString: string): string {
     year: 'numeric',
   });
 }
+
+export function canonicalReportDate(
+  reportDate: string | null | undefined,
+  createdAt: string | null | undefined,
+): string {
+  if (reportDate && reportDate.trim().length > 0) return reportDate.trim();
+  if (createdAt && createdAt.trim().length > 0) {
+    return createdAt.trim().split('T')[0];
+  }
+  return new Date().toISOString().split('T')[0];
+}
+

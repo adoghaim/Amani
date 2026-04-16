@@ -11,6 +11,7 @@ import {
   XCircle,
   ChevronDown,
   AlertTriangle,
+  FlaskConical,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
@@ -377,8 +378,14 @@ export function Reports() {
                             <div className="font-semibold text-sm text-theme-text truncate">
                               {formatDate(report.report_date)}
                             </div>
-                            <div className="text-xs text-theme-muted-text-4 mt-0.5">
-                              Uploaded {timeAgo(report.report_date)}
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs text-theme-muted-text-4">Uploaded {timeAgo(report.upload_date)}</span>
+                              {(report as any).lab_source && (report as any).lab_source !== 'unknown' && (
+                                <span className="inline-flex items-center gap-0.5 text-[11px] text-theme-muted-text-4">
+                                  <FlaskConical className="w-2.5 h-2.5" />
+                                  {(report as any).lab_source === 'quest' ? 'Quest' : 'Labcorp'}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </a>
