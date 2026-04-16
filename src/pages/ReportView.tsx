@@ -203,7 +203,7 @@ export function ReportView() {
   }, [report?.status, reportId]);
 
   useEffect(() => {
-    if (!report || (report.status !== 'ready' && report.status !== 'error') || interpretation !== null || loading) return;
+    if (!report || (report.status !== 'ready' && report.status !== 'error') || interpretation !== null) return;
     if (interpPollingActive.current) return;
 
     interpPollingActive.current = true;
@@ -211,6 +211,7 @@ export function ReportView() {
     setInterpGaveUp(false);
 
     let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
 
     (async () => {
       try {
@@ -219,6 +220,8 @@ export function ReportView() {
           .select('id, json_output')
           .eq('lab_report_id', reportId)
           .maybeSingle();
+
+        if (cancelled) return;
 
         if (existing?.json_output) {
           interpPollingActive.current = false;
@@ -230,6 +233,7 @@ export function ReportView() {
         const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
           body: { reportId },
         });
+        if (cancelled) return;
         if (invokeErr) {
           interpPollingActive.current = false;
           setInterpGaveUp(true);
@@ -238,8 +242,9 @@ export function ReportView() {
 
         let elapsed = 0;
         const POLL_INTERVAL = 3000;
-        const TIMEOUT_MS = 90000;
+        const TIMEOUT_MS = 120000;
         pollInterval = setInterval(async () => {
+          if (cancelled) { clearInterval(pollInterval!); return; }
           elapsed += POLL_INTERVAL;
           const { data } = await supabase
             .from('interpretations')
@@ -259,16 +264,18 @@ export function ReportView() {
           }
         }, POLL_INTERVAL);
       } catch (e) {
-        interpPollingActive.current = false;
-        setInterpGaveUp(true);
+        if (!cancelled) {
+          interpPollingActive.current = false;
+          setInterpGaveUp(true);
+        }
       }
     })();
 
     return () => {
+      cancelled = true;
       if (pollInterval) clearInterval(pollInterval);
-      interpPollingActive.current = false;
     };
-  }, [report?.status, report?.id, interpretation, loading, reportId]);
+  }, [report?.status, report?.id, interpretation, reportId]);
 
   const fetchReport = async () => {
     const { data: reportData, error: reportError } = await supabase
