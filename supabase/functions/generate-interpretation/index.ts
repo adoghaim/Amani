@@ -768,7 +768,7 @@ Required schema:
 }`;
 
   const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 28000);
+  const tid = setTimeout(() => controller.abort(), 18000);
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {

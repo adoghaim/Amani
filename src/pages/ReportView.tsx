@@ -204,7 +204,7 @@ export function ReportView() {
   }, [report?.status, reportId]);
 
   useEffect(() => {
-    if (!report || report.status !== 'ready' || interpretation !== null || loading) return;
+    if (!report || (report.status !== 'ready' && report.status !== 'error') || interpretation !== null || loading) return;
     if (interpPollingActive.current) return;
 
     interpPollingActive.current = true;
@@ -744,7 +744,7 @@ export function ReportView() {
           )}
 
           {/* ── Error state ─────────────────────────────────────── */}
-          {hasError && !interpretation && (() => {
+          {hasError && !interpretation && interpGaveUp && (() => {
             const hasData = biomarkers.length > 0 || reportAnalytes.length > 0;
             const reason = !hasData
               ? 'No lab values were extracted. The PDF may be image-based.'
@@ -780,8 +780,8 @@ export function ReportView() {
             );
           })()}
 
-          {/* ── AI loading indicator (ready but no interpretation yet) ─── */}
-          {report.status === 'ready' && !interpretation && !isProcessing && !interpGaveUp && insightSummary && (
+          {/* ── AI loading indicator (ready/error but no interpretation yet) ─── */}
+          {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && insightSummary && (
             <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
               <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>
