@@ -62,6 +62,7 @@ export function NewReport() {
   const [reportDateAutoDetected, setReportDateAutoDetected] = useState(false);
   const [submitStep, setSubmitStep] = useState<'uploading' | 'creating' | 'saving' | 'interpreting' | 'complete' | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const navigationDoneRef = useRef(false);
 
   const [labSource, setLabSource] = useState<LabSource>('unknown');
   const [detectedLabSource, setDetectedLabSource] = useState<LabSource>('unknown');
@@ -73,10 +74,11 @@ export function NewReport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (pendingNavigation) {
-      navigate(pendingNavigation, { replace: true });
+    if (pendingNavigation && !navigationDoneRef.current) {
+      navigationDoneRef.current = true;
+      window.location.href = pendingNavigation;
     }
-  }, [pendingNavigation, navigate]);
+  }, [pendingNavigation]);
 
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
