@@ -2,7 +2,7 @@ import type { BiomarkerName, CyclePhase } from '../../types';
 import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
 import { scoreBiomarker, type ScoredBiomarker } from '../scoring/scoreBiomarker';
 import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
-import { compareReports, getBiggestChanges, type BiomarkerDelta } from '../scoring/compareReports';
+import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
 
 export interface TopFinding {
   key: BiomarkerName;
@@ -27,6 +27,8 @@ export interface BiggestChange {
   trendDirection: 'up' | 'down' | 'stable';
   significance: 'minor' | 'moderate' | 'significant';
   boundaryCrossing: { from: string; to: string; direction: string } | null;
+  trajectoryStatus: TrajectoryStatus;
+  distanceToNormalImprovement: number | null;
   fact: string;
 }
 
@@ -76,11 +78,35 @@ interface BiomarkerInput {
   sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
 }
 
-function toTopFinding(s: ScoredBiomarker, rangeLabel: string | null = null): TopFinding {
+function toTopFinding(
+  s: ScoredBiomarker,
+  rangeLabel: string | null = null,
+  delta?: BiomarkerDelta | null,
+): TopFinding {
   const displayName = getDisplayName(s.key);
   const statusLabel = s.concern === 2 ? 'out_of_range' : 'borderline';
   const direction: 'high' | 'low' | 'unknown' = s.amaniStatus.includes('high') ? 'high' : s.amaniStatus.includes('low') ? 'low' : 'unknown';
   const dirLabel = direction === 'high' ? 'above' : direction === 'low' ? 'below' : 'outside';
+
+  let fact = `${displayName} is ${dirLabel} the optimal range at ${s.value} ${s.unit}`;
+
+  if (delta && delta.significance !== 'minor') {
+    if (
+      delta.trajectoryStatus === 'improving_still_high' ||
+      delta.trajectoryStatus === 'improving_still_low'
+    ) {
+      const pct = delta.percentDelta !== null
+        ? ` (${Math.abs(delta.percentDelta)}% improvement)`
+        : '';
+      fact += `, though it has improved from ${delta.previousValue} ${s.unit} since the prior report${pct}.`;
+    } else if (
+      delta.trajectoryStatus === 'worsening_still_high' ||
+      delta.trajectoryStatus === 'worsening_still_low'
+    ) {
+      fact += `, and it has worsened from ${delta.previousValue} ${s.unit} since the prior report.`;
+    }
+  }
+
   return {
     key: s.key,
     displayName,
@@ -91,11 +117,11 @@ function toTopFinding(s: ScoredBiomarker, rangeLabel: string | null = null): Top
     deviationMultiplier: s.deviationMultiplier,
     direction,
     rangeLabel,
-    fact: `${displayName} is ${dirLabel} the optimal range at ${s.value} ${s.unit}`,
+    fact,
   };
 }
 
-function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
+function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerName, BiomarkerDelta>): TopFinding[] {
   const abnormal = scored.filter(s => s.concern > 0);
   const ranked = [...abnormal].sort((a, b) => b.weightedConcern - a.weightedConcern);
 
@@ -110,12 +136,12 @@ function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
   });
 
   if (mustInclude.length === 0) {
-    return top3.map(toTopFinding);
+    return top3.map(s => toTopFinding(s, null, deltaMap?.get(s.key)));
   }
 
   const criticalInTop3 = top3.filter(s => s.concern === 2 && getImportance(s.key) === 'critical');
   if (criticalInTop3.length >= 3) {
-    return top3.map(toTopFinding);
+    return top3.map(s => toTopFinding(s, null, deltaMap?.get(s.key)));
   }
 
   const result: ScoredBiomarker[] = [...top3];
@@ -142,20 +168,31 @@ function buildTopFindings(scored: ScoredBiomarker[]): TopFinding[] {
 
   return result
     .sort((a, b) => b.weightedConcern - a.weightedConcern)
-    .map(toTopFinding);
+    .map(s => toTopFinding(s, null, deltaMap?.get(s.key)));
 }
 
 function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
   const biggest = getBiggestChanges(deltas, 5).filter(d => d.significance !== 'minor');
 
   return biggest.map(d => {
-    let fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}`;
-    if (d.percentDelta !== null) {
-      fact += ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`;
-    }
-    if (d.boundaryCrossing) {
+    let fact: string;
+    const pct = d.percentDelta !== null
+      ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`
+      : '';
+
+    if (d.trajectoryStatus === 'improving_still_high') {
+      fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains elevated above the optimal range.`;
+    } else if (d.trajectoryStatus === 'improving_still_low') {
+      fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains below the optimal range.`;
+    } else if (d.trajectoryStatus === 'worsening_still_high') {
+      fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further above the optimal range.`;
+    } else if (d.trajectoryStatus === 'worsening_still_low') {
+      fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further below the optimal range.`;
+    } else if (d.boundaryCrossing) {
       const bcDir = d.boundaryCrossing.direction === 'improved' ? 'improved' : 'moved';
-      fact += `. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
+      fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
+    } else {
+      fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}.`;
     }
 
     return {
@@ -168,6 +205,8 @@ function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
       trendDirection: d.trendDirection,
       significance: d.significance,
       boundaryCrossing: d.boundaryCrossing,
+      trajectoryStatus: d.trajectoryStatus,
+      distanceToNormalImprovement: d.distanceToNormalImprovement,
       fact,
     };
   });
@@ -235,9 +274,32 @@ function buildDoctorQuestions(
     if (questions.length >= 5) break;
   }
 
-  // 3. Strong worsening trends (no boundary crossing)
+  // 3a. Improving but still abnormal — personalized encouraging question
+  const improvingAbnormal = deltas.filter(
+    d =>
+      d.significance !== 'minor' &&
+      d.boundaryCrossing === null &&
+      !used.has(d.key) &&
+      (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low'),
+  );
+  for (const d of improvingAbnormal.slice(0, 1)) {
+    used.add(d.key);
+    const name = d.displayName;
+    const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
+    questions.push({
+      text: `My ${name} dropped from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} and remains elevated. Is this rate of improvement clinically meaningful, and what should I aim for?`,
+      relatedBiomarker: d.key,
+    });
+  }
+
+  // 3b. Strong worsening trends (no boundary crossing)
   const worseningTrends = deltas.filter(
-    d => d.significance === 'significant' && d.boundaryCrossing === null && !used.has(d.key),
+    d =>
+      d.significance === 'significant' &&
+      d.boundaryCrossing === null &&
+      !used.has(d.key) &&
+      d.trajectoryStatus !== 'improving_still_high' &&
+      d.trajectoryStatus !== 'improving_still_low',
   );
   for (const d of worseningTrends.slice(0, 1)) {
     used.add(d.key);
@@ -314,9 +376,31 @@ function buildWatchSignals(
     });
   }
 
-  // Trend signal: worsening without a boundary crossing
+  // Improvement signal: markers improving but still outside optimal
+  const improvingStillAbnormal = deltas.filter(
+    d =>
+      d.significance !== 'minor' &&
+      d.boundaryCrossing === null &&
+      (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low'),
+  );
+  for (const d of improvingStillAbnormal.slice(0, 2)) {
+    const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
+    const dir = d.trajectoryStatus === 'improving_still_high' ? 'elevated' : 'low';
+    signals.push({
+      type: 'trend',
+      title: `${d.displayName}: improving from the prior report`,
+      description: `Moved from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — a meaningful step toward the optimal range. It remains ${dir}, so continued monitoring is worthwhile.`,
+      relatedBiomarkers: [d.key],
+    });
+  }
+
+  // Worsening trend signal: worsening without a boundary crossing
   const worseningTrends = deltas.filter(
-    d => d.significance === 'significant' && d.boundaryCrossing === null,
+    d =>
+      d.significance === 'significant' &&
+      d.boundaryCrossing === null &&
+      d.trajectoryStatus !== 'improving_still_high' &&
+      d.trajectoryStatus !== 'improving_still_low',
   );
   for (const d of worseningTrends.slice(0, 2)) {
     const dir = d.trendDirection === 'up' ? 'increasing' : 'decreasing';
@@ -459,11 +543,11 @@ export function buildInsightSummary(
     scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
   );
 
-  const topFindings = buildTopFindings(scored);
   const systemSummaries = groupBySystem(scored);
 
   let biggestChanges: BiggestChange[] = [];
   let deltas: BiomarkerDelta[] = [];
+  let deltaMap = new Map<BiomarkerName, BiomarkerDelta>();
 
   if (previous && previous.length > 0) {
     deltas = compareReports(
@@ -471,9 +555,11 @@ export function buildInsightSummary(
       current.map(b => ({ key: b.key, value: b.value, unit: b.unit })),
       cyclePhase,
     );
+    deltaMap = new Map(deltas.map(d => [d.key, d]));
     biggestChanges = buildBiggestChanges(deltas);
   }
 
+  const topFindings = buildTopFindings(scored, deltaMap);
   const questionsForDoctor = buildDoctorQuestions(scored, deltas);
   const watchSignals = buildWatchSignals(scored, deltas);
 

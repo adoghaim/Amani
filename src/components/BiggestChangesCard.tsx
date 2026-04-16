@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Minus, ArrowRight, Activity } from 'lucide-react';
 import type { BiggestChange } from '../lib/insights/buildInsightSummary';
+import type { TrajectoryStatus } from '../lib/scoring/compareReports';
 
 const BOUNDARY_CROSSING_STYLE: Record<string, {
   bg: string; border: string; text: string; badge: string; label: string;
@@ -11,6 +12,27 @@ const BOUNDARY_CROSSING_STYLE: Record<string, {
   worsened: {
     bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-700',
     badge: 'bg-red-100 text-red-700', label: 'Moved out of range',
+  },
+};
+
+const TRAJECTORY_STYLE: Record<string, {
+  bg: string; border: string; text: string; badge: string; label: string;
+}> = {
+  improving_still_high: {
+    bg: 'bg-teal-50', border: 'border-teal-100', text: 'text-teal-700',
+    badge: 'bg-teal-100 text-teal-700', label: 'Improving',
+  },
+  improving_still_low: {
+    bg: 'bg-teal-50', border: 'border-teal-100', text: 'text-teal-700',
+    badge: 'bg-teal-100 text-teal-700', label: 'Improving',
+  },
+  worsening_still_high: {
+    bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700',
+    badge: 'bg-orange-100 text-orange-700', label: 'Worsening',
+  },
+  worsening_still_low: {
+    bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700',
+    badge: 'bg-orange-100 text-orange-700', label: 'Worsening',
   },
 };
 
@@ -31,6 +53,40 @@ const SIGNIFICANCE_STYLE: Record<string, {
   },
 };
 
+function getChangeStyle(change: BiggestChange): {
+  bg: string; border: string; text: string; badge: string; label: string;
+} {
+  if (change.boundaryCrossing) {
+    return BOUNDARY_CROSSING_STYLE[change.boundaryCrossing.direction] ?? SIGNIFICANCE_STYLE.moderate;
+  }
+  if (change.trajectoryStatus && TRAJECTORY_STYLE[change.trajectoryStatus]) {
+    return TRAJECTORY_STYLE[change.trajectoryStatus];
+  }
+  return SIGNIFICANCE_STYLE[change.significance] ?? SIGNIFICANCE_STYLE.minor;
+}
+
+function getSubtitle(change: BiggestChange): string | null {
+  const ts = change.trajectoryStatus as TrajectoryStatus;
+  if (change.boundaryCrossing) {
+    const bc = change.boundaryCrossing;
+    const verb = bc.direction === 'improved' ? 'Improved' : 'Moved';
+    return `${verb} from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}`;
+  }
+  if (ts === 'improving_still_high') {
+    return 'Still elevated, but moving toward the optimal range';
+  }
+  if (ts === 'improving_still_low') {
+    return 'Still below optimal, but moving in the right direction';
+  }
+  if (ts === 'worsening_still_high') {
+    return 'Moving further above the optimal range';
+  }
+  if (ts === 'worsening_still_low') {
+    return 'Moving further below the optimal range';
+  }
+  return null;
+}
+
 function TrendIcon({ direction }: { direction: 'up' | 'down' | 'stable' }) {
   if (direction === 'up') return <TrendingUp className="w-4 h-4 text-rose-500" />;
   if (direction === 'down') return <TrendingDown className="w-4 h-4 text-sky-500" />;
@@ -43,6 +99,10 @@ function buildSummaryLine(changes: BiggestChange[]): string | null {
   const withBoundary = changes.filter(c => c.boundaryCrossing !== null);
   const improved = withBoundary.filter(c => c.boundaryCrossing?.direction === 'improved');
   const worsened = withBoundary.filter(c => c.boundaryCrossing?.direction === 'worsened');
+
+  const improvingAbnormal = changes.filter(
+    c => c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low',
+  );
 
   if (improved.length > 0 && worsened.length === 0) {
     if (improved.length === 1) {
@@ -59,6 +119,14 @@ function buildSummaryLine(changes: BiggestChange[]): string | null {
 
   if (improved.length > 0 && worsened.length > 0) {
     return `${improved[0].displayName} has improved while ${worsened[0].displayName} has moved in the opposite direction.`;
+  }
+
+  if (improvingAbnormal.length > 0 && worsened.length === 0) {
+    if (improvingAbnormal.length === 1) {
+      return `${improvingAbnormal[0].displayName} remains outside the optimal range but has improved since the prior report.`;
+    }
+    const names = improvingAbnormal.slice(0, 2).map(c => c.displayName).join(' and ');
+    return `${names} both remain outside the optimal range but have improved since the prior report.`;
   }
 
   const allUp = changes.every(c => c.trendDirection === 'up');
@@ -90,12 +158,8 @@ export function BiggestChangesCard({ changes }: Props) {
       </div>
       <div className="space-y-2">
         {changes.map(change => {
-          let style;
-          if (change.boundaryCrossing) {
-            style = BOUNDARY_CROSSING_STYLE[change.boundaryCrossing.direction] ?? SIGNIFICANCE_STYLE.moderate;
-          } else {
-            style = SIGNIFICANCE_STYLE[change.significance] ?? SIGNIFICANCE_STYLE.minor;
-          }
+          const style = getChangeStyle(change);
+          const subtitle = getSubtitle(change);
 
           return (
             <div key={change.key} className={`rounded-xl border overflow-hidden ${style.bg} ${style.border}`}>
@@ -114,14 +178,9 @@ export function BiggestChangesCard({ changes }: Props) {
                   </span>
                 )}
               </div>
-              {change.boundaryCrossing && (
+              {subtitle && (
                 <div className={`px-4 py-2 border-t ${style.border}`}>
-                  <p className={`text-xs ${style.text}`}>
-                    {change.boundaryCrossing.direction === 'improved' ? 'Improved' : 'Moved'} from{' '}
-                    <span className="font-semibold">{change.boundaryCrossing.from.replace(/_/g, ' ')}</span>
-                    {' '}to{' '}
-                    <span className="font-semibold">{change.boundaryCrossing.to.replace(/_/g, ' ')}</span>
-                  </p>
+                  <p className={`text-xs ${style.text}`}>{subtitle}</p>
                 </div>
               )}
             </div>
