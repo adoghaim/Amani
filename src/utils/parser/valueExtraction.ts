@@ -183,7 +183,14 @@ export function extractValueFromWindow(
   const prefixMatch0 = labelLineBeforeRef0.match(prefixRe0);
   if (prefixMatch0) {
     const parsed0 = parseValueWithPrefix(prefixMatch0[1].trim());
-    if (parsed0) return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult };
+    if (parsed0) {
+      const isRefComp = referenceResult?.comparator &&
+        referenceResult.comparator.value === parsed0.value &&
+        knownRangeNumbers.has(String(parsed0.value));
+      if (!isRefComp) {
+        return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult };
+      }
+    }
   }
 
   // PRIORITY 1b: label-line numeric value wins when scoring agrees.
@@ -231,10 +238,6 @@ export function extractValueFromWindow(
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
     if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
-  }
-
-  if (ambiguousComparator) {
-    return { value: ambiguousComparator.value, rawValue: ambiguousComparator.rawValue, unit, referenceResult };
   }
 
   // PRIORITY 5: fallback — scan raw (unfiltered) lines for a standalone numeric value.
