@@ -23,7 +23,6 @@ import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourPatternsCard } from '../components/YourPatternsCard';
-import { WhatThisMeansCard } from '../components/WhatThisMeansCard';
 import { PrimaryInsightCard } from '../components/PrimaryInsightCard';
 import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import type {
@@ -883,18 +882,55 @@ export function ReportView() {
                   </ul>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ── C. What This Means (AI — narrative anchor) ───────── */}
-          {insightSummary && !isProcessing && (
-            <WhatThisMeansCard
-              aiText={interpretation?.overall_interpretation}
-              topFindings={insightSummary.primaryFinding
-                ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
-                : insightSummary.topFindings}
-              biggestChanges={insightSummary.biggestChanges}
-            />
+              {/* What This Means — narrative, unified inside the card */}
+              {insightSummary && (() => {
+                const aiText = interpretation?.overall_interpretation;
+                const topFindings = insightSummary.primaryFinding
+                  ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
+                  : insightSummary.topFindings;
+
+                const outOfRange = topFindings.filter(f => f.status === 'out_of_range');
+                const borderline = topFindings.filter(f => f.status === 'borderline');
+                const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
+                const worsened = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'worsened');
+
+                let fallback = '';
+                const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
+                if (outOfRange.length === 0 && borderline.length === 0) {
+                  if (improved.length > 0) {
+                    const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
+                    fallback = `Your panel looks solid overall, with ${names} showing improvement since your last draw. The trend is moving in a positive direction.`;
+                  } else {
+                    fallback = `All measured values are within optimal ranges. This is a useful baseline to track over time.`;
+                  }
+                } else if (improved.length > 0 && outOfRange.length > 0) {
+                  fallback = `${topName} remains the primary area to keep an eye on, while ${improved[0].displayName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
+                } else if (worsened.length > 0 && outOfRange.length > 0) {
+                  fallback = `${topName} is the priority finding here, and ${worsened[0].displayName} has shifted since your last draw. Tracking both at your next panel will help clarify the direction.`;
+                } else if (outOfRange.length >= 2) {
+                  const names = outOfRange.slice(0, 2).map(f => f.displayName).join(' and ');
+                  fallback = `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
+                } else if (outOfRange.length === 1 && borderline.length > 0) {
+                  fallback = `${topName} is outside optimal range and is the top priority. ${borderline[0].displayName} is borderline — worth monitoring, but not urgent on its own.`;
+                } else if (outOfRange.length === 1) {
+                  fallback = `${topName} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.`;
+                } else {
+                  fallback = `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops.`;
+                }
+
+                const text = aiText ?? fallback;
+
+                return (
+                  <div className="border-t border-theme-border-inner bg-white px-6 py-5">
+                    <p className="text-xs font-medium text-theme-muted-text-2 uppercase tracking-widest mb-3">
+                      What This Means
+                    </p>
+                    <p className="text-[15px] text-theme-text-body leading-[1.7]">{text}</p>
+                  </div>
+                );
+              })()}
+            </div>
           )}
 
           {/* ── C2. Primary Finding (dominant single takeaway) ────── */}
