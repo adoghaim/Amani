@@ -978,10 +978,6 @@ export function ReportView() {
                   </div>
                 );
               })()}
-                    </div>
-                  </div>
-                );
-              })()}
 
               {/* Summary bullets: only when no primary_concern */}
               {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
