@@ -25,6 +25,7 @@ import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourPatternsCard } from '../components/YourPatternsCard';
 import { PrimaryInsightCard } from '../components/PrimaryInsightCard';
 import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import type { InsightSummary, BiggestChange } from '../lib/insights/buildInsightSummary';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
   BiomarkerName, ReportAnalyte,
@@ -75,6 +76,43 @@ const PATTERN_CONFIDENCE_STYLE: Record<string, { bg: string; text: string; borde
   medium: { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100',  label: 'Medium confidence' },
   low:    { bg: 'bg-gray-50',   text: 'text-gray-600',   border: 'border-gray-200',   label: 'Low confidence' },
 };
+
+interface OpeningContext {
+  primaryIsImproving: boolean;
+  primaryImprovingChange: BiggestChange | null;
+  anyWorsening: boolean;
+  worseningChange: BiggestChange | null;
+  anyBoundaryCrossImproved: boolean;
+}
+
+function getOpeningContext(summary: InsightSummary): OpeningContext {
+  const primaryKey = summary.primaryFinding?.key ?? null;
+
+  const primaryImprovingChange = primaryKey
+    ? (summary.biggestChanges.find(
+        c =>
+          c.key === primaryKey &&
+          (c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low') &&
+          c.significance !== 'minor',
+      ) ?? null)
+    : null;
+
+  const worseningChange =
+    summary.biggestChanges.find(
+      c =>
+        c.trajectoryStatus === 'worsening_still_high' ||
+        c.trajectoryStatus === 'worsening_still_low' ||
+        c.boundaryCrossing?.direction === 'worsened',
+    ) ?? null;
+
+  return {
+    primaryIsImproving: primaryImprovingChange !== null,
+    primaryImprovingChange,
+    anyWorsening: worseningChange !== null,
+    worseningChange,
+    anyBoundaryCrossImproved: summary.biggestChanges.some(c => c.boundaryCrossing?.direction === 'improved'),
+  };
+}
 
 function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
   const status = classifyLabValue(
@@ -517,27 +555,7 @@ export function ReportView() {
     return buildInsightSummary(current, previous, report?.estimated_cycle_phase);
   }, [biomarkers, previousBiomarkers, report, analyteTelemetryMap]);
 
-  const openingContext = useMemo(() => {
-    if (!insightSummary?.primaryFinding) return null;
-    const primaryChange = insightSummary.biggestChanges.find(c => c.key === insightSummary.primaryFinding!.key);
-    const primaryIsImproving = primaryChange && (
-      primaryChange.trajectoryStatus === 'improving_still_high' ||
-      primaryChange.trajectoryStatus === 'improving_still_low'
-    );
-    const anyWorsening = insightSummary.biggestChanges.filter(c => 
-      c.key !== insightSummary.primaryFinding!.key && 
-      (c.trajectoryStatus === 'worsening_still_high' || 
-       c.trajectoryStatus === 'worsening_still_low' || 
-       c.boundaryCrossing?.direction === 'worsened')
-    );
-    const primaryIsExtreme = insightSummary.primaryFinding.deviationMultiplier >= 3;
-    return {
-      primaryIsImproving: !!primaryIsImproving,
-      primaryChange,
-      primaryIsExtreme,
-      anyWorsening,
-    };
-  }, [insightSummary]);
+
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
@@ -842,31 +860,17 @@ export function ReportView() {
                     ? interpretation.headline
                     : insightSummary
                       ? (() => {
-                          const findings = insightSummary.topFindings;
-                          const outOfRange = findings.filter(f => f.status === 'out_of_range');
-                          const borderline = findings.filter(f => f.status === 'borderline');
-                          const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
+                          const allFindings = insightSummary.primaryFinding
+                            ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
+                            : insightSummary.topFindings;
+                          const outOfRange = allFindings.filter(f => f.status === 'out_of_range');
+                          const borderline = allFindings.filter(f => f.status === 'borderline');
 
-                          if (openingContext?.primaryIsImproving && openingContext.primaryChange) {
-                            const name = openingContext.primaryChange.displayName;
-                            const isExtreme = openingContext.primaryIsExtreme;
-                            const worseningNames = openingContext.anyWorsening.length > 0 
-                              ? openingContext.anyWorsening.slice(0, 2).map(c => c.displayName).join(' and ') 
-                              : null;
-
-                            if (!worseningNames) {
-                              if (isExtreme) {
-                                return `Your ${name} remains critically out of optimal range, but has improved meaningfully since your last report.`;
-                              }
-                              return `Your ${name} has improved meaningfully since your last report, though it remains outside the optimal range.`;
-                            } else {
-                              return `Your ${name} has improved from your prior report, though ${worseningNames} still deserve attention.`;
-                            }
-                          }
+                          const ctx = getOpeningContext(insightSummary);
 
                           if (outOfRange.length === 0 && borderline.length === 0) {
-                            if (improved.length > 0) {
-                              const name = improved[0].displayName;
+                            if (ctx.anyBoundaryCrossImproved) {
+                              const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
                               return `All values are within optimal range, and ${name} has improved since your last draw.`;
                             }
                             return 'All measured values are within the Amani optimal range.';
@@ -875,6 +879,18 @@ export function ReportView() {
                           const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
                           const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
 
+                          // Primary abnormal marker is improving — lead with both truths
+                          if (ctx.primaryIsImproving && ctx.primaryImprovingChange) {
+                            const ch = ctx.primaryImprovingChange;
+                            const pctStr = ch.percentDelta !== null ? ` (down ${Math.abs(ch.percentDelta)}%)` : '';
+                            const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}`;
+                            if (!ctx.anyWorsening) {
+                              return `${topName} remains elevated, but has improved ${valueStr} since your last report — a meaningful move in the right direction.`;
+                            }
+                            const worsenedName = ctx.worseningChange?.displayName;
+                            return `${topName} has improved ${valueStr} since your last report, though ${worsenedName ?? 'another marker'} still warrants attention.`;
+                          }
+
                           if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
                             return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
                           }
@@ -882,8 +898,9 @@ export function ReportView() {
                             return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
                           }
                           if (outOfRange.length === 1 && borderline.length === 0) {
-                            if (improved.length > 0) {
-                              return `${topName} is outside optimal range, though ${improved[0].displayName} has improved since your last report.`;
+                            if (ctx.anyBoundaryCrossImproved) {
+                              const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
+                              return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
                             }
                             return `${topName} is outside optimal range and is the primary finding on this panel.`;
                           }
@@ -924,28 +941,47 @@ export function ReportView() {
               )}
 
               {/* Fallback Top Priority from insightSummary when no AI primary_concern */}
-              {!interpretation?.primary_concern && insightSummary?.primaryFinding && (
-                <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <AlertTriangle className="w-5 h-5 text-theme-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                        Top Priority
-                      </p>
-                      <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                        {insightSummary.primaryFinding.displayName}
-                      </p>
-                      <p className="text-sm text-theme-text-body leading-relaxed">
-                        {openingContext?.primaryIsImproving && openingContext.primaryChange
-                          ? `Still outside optimal range, but improving from ${openingContext.primaryChange.previousValue} to ${openingContext.primaryChange.currentValue} ${openingContext.primaryChange.unit} since your prior report.`
-                          : insightSummary.primaryFinding.fact}
-                      </p>
+              {!interpretation?.primary_concern && insightSummary?.primaryFinding && (() => {
+                const ctx = getOpeningContext(insightSummary);
+                const isImproving = ctx.primaryIsImproving && ctx.primaryImprovingChange !== null;
+                const ch = ctx.primaryImprovingChange;
+                return (
+                  <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${isImproving ? 'bg-emerald-500/15' : 'bg-theme-primary/20'}`}>
+                        <AlertTriangle className={`w-5 h-5 ${isImproving ? 'text-emerald-600' : 'text-theme-primary'}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 ${isImproving ? 'text-emerald-600' : 'text-theme-primary'}`}>
+                          Top Priority
+                        </p>
+                        <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                          {insightSummary.primaryFinding.displayName}
+                        </p>
+                        {isImproving && ch ? (
+                          <>
+                            <p className="text-sm text-theme-text-body leading-relaxed">
+                              {insightSummary.primaryFinding.displayName} remains {insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low'} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but has improved from {ch.previousValue} {ch.unit} since your last report
+                              {ch.percentDelta !== null ? ` — a ${Math.abs(ch.percentDelta)}% improvement` : ''}.
+                            </p>
+                            <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3 mt-2.5">
+                              This improvement is meaningful, even though the value remains outside the optimal range. Continue tracking at your next panel.
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-theme-text-body leading-relaxed">
+                            {insightSummary.primaryFinding.fact}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Summary bullets: only when no primary_concern */}
               {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
@@ -972,33 +1008,29 @@ export function ReportView() {
                 const borderline = topFindings.filter(f => f.status === 'borderline');
                 const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
                 const worsened = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'worsened');
+                const ctx = getOpeningContext(insightSummary);
 
                 let fallback = '';
                 const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
-                
-                if (openingContext?.primaryIsImproving && openingContext.primaryChange) {
-                  const pc = openingContext.primaryChange;
-                  const pct = pc.percentDelta !== null ? ` (${Math.abs(pc.percentDelta)}%)` : '';
-                  const directionText = pc.previousValue > pc.currentValue ? 'decreased' : 'increased';
-                  
-                  fallback = `${pc.displayName} remains the primary finding, though it ${directionText} from ${pc.previousValue} to ${pc.currentValue} ${pc.unit}${pct} since your last report — a meaningful move in the right direction. `;
-                  
-                  if (openingContext.anyWorsening.length > 0) {
-                    const worstName = openingContext.anyWorsening[0].displayName;
-                    fallback += `However, ${worstName} has worsened, which is worth discussing with your provider. `;
-                  }
-                  
-                  if (outOfRange.length > 1) {
-                    fallback += `The rest of your panel shows some other out-of-range markers to monitor.`;
-                  } else {
-                    fallback += `The rest of your panel looks stable.`;
-                  }
-                } else if (outOfRange.length === 0 && borderline.length === 0) {
+                if (outOfRange.length === 0 && borderline.length === 0) {
                   if (improved.length > 0) {
                     const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
                     fallback = `Your panel looks solid overall, with ${names} showing improvement since your last draw. The trend is moving in a positive direction.`;
                   } else {
                     fallback = `All measured values are within optimal ranges. This is a useful baseline to track over time.`;
+                  }
+                } else if (ctx.primaryIsImproving && ctx.primaryImprovingChange) {
+                  const ch = ctx.primaryImprovingChange;
+                  const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'low' : 'elevated';
+                  const pctStr = ch.percentDelta !== null ? ` — a ${Math.abs(ch.percentDelta)}% improvement` : '';
+                  if (!ctx.anyWorsening) {
+                    fallback = `${topName} remains ${dirLabel}, though it has come down from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}. That movement is encouraging and worth continuing to track at your next panel.`;
+                    if (borderline.length > 0 && borderline[0].displayName !== topName) {
+                      fallback += ` ${borderline[0].displayName} is also borderline — worth monitoring but not urgent on its own.`;
+                    }
+                  } else {
+                    const worsenedName = ctx.worseningChange?.displayName ?? worsened[0]?.displayName;
+                    fallback = `${topName} has improved from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}, which is a meaningful step in the right direction. At the same time, ${worsenedName ?? 'another marker'} has shifted since your last draw and deserves attention alongside it.`;
                   }
                 } else if (improved.length > 0 && outOfRange.length > 0) {
                   fallback = `${topName} remains the primary area to keep an eye on, while ${improved[0].displayName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
