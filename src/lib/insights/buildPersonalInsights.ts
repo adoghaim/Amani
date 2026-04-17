@@ -69,6 +69,43 @@ function buildBaselinePatterns(
   return patterns;
 }
 
+const MARKERS_WHERE_HIGH_IS_BAD: ReadonlySet<string> = new Set([
+  'tsh', 'tpo_antibodies', 'tg_antibodies', 'reverse_t3',
+  'fasting_glucose', 'hemoglobin_a1c', 'fasting_insulin', 'c_peptide',
+  'total_cholesterol', 'ldl_cholesterol', 'triglycerides', 'non_hdl_cholesterol', 'apob', 'lpa',
+  'ast', 'alt', 'ggt', 'alkaline_phosphatase', 'bilirubin_total',
+  'creatinine', 'bun',
+  'hs_crp', 'esr',
+  'prolactin', 'shbg',
+]);
+
+const MARKERS_WHERE_LOW_IS_BAD: ReadonlySet<string> = new Set([
+  'ferritin', 'vitamin_d_25_oh', 'vitamin_b12', 'folate', 'magnesium',
+  'hemoglobin', 'hematocrit', 'rbc', 'iron_saturation',
+  'egfr', 'hdl_cholesterol', 'free_t3', 'free_t4',
+  'estradiol', 'progesterone', 'dheas', 'amh',
+  'albumin', 'total_protein', 'potassium',
+]);
+
+function getTrendInterpretation(
+  biomarkerName: string,
+  trendDirection: 'rising' | 'falling',
+  flagged: 'out_of_range' | 'borderline' | 'in_range' | 'unknown',
+): 'improving_still_abnormal' | 'worsening' | 'direction_only' {
+  const isAbnormal = flagged === 'out_of_range' || flagged === 'borderline';
+  if (!isAbnormal) return 'direction_only';
+
+  const highIsBad = MARKERS_WHERE_HIGH_IS_BAD.has(biomarkerName);
+  const lowIsBad = MARKERS_WHERE_LOW_IS_BAD.has(biomarkerName);
+
+  if (highIsBad && trendDirection === 'falling') return 'improving_still_abnormal';
+  if (highIsBad && trendDirection === 'rising') return 'worsening';
+  if (lowIsBad && trendDirection === 'rising') return 'improving_still_abnormal';
+  if (lowIsBad && trendDirection === 'falling') return 'worsening';
+
+  return 'direction_only';
+}
+
 function buildTrendPatterns(
   currentBiomarkers: CurrentBiomarker[],
   historicalData: Map<string, HistoricalEntry[]>
@@ -87,17 +124,34 @@ function buildTrendPatterns(
     const result = analyzeTrend(allValues);
     if (!result) continue;
     if (result.trendDirection === 'stable' || result.trendDirection === 'fluctuating' || result.trendDirection === 'insufficient_data') continue;
-
     if (result.trendStrength === 'weak') continue;
 
     const displayName = getDisplayLabel(biomarker.name);
-    const directionLabel = result.trendDirection === 'rising' ? 'trending upward' : 'trending downward';
+    const trendDir = result.trendDirection as 'rising' | 'falling';
+    const interpretation = getTrendInterpretation(biomarker.name, trendDir, biomarker.flagged);
+
+    let summary: string;
+    let severity: PersonalPattern['severity'];
+
+    if (interpretation === 'improving_still_abnormal') {
+      const dirLabel = trendDir === 'falling' ? 'coming down' : 'rising';
+      summary = `Your ${displayName} is ${dirLabel} across your recent reports — a positive direction, though it remains outside the optimal range. Continue tracking.`;
+      severity = 'info';
+    } else if (interpretation === 'worsening') {
+      const dirLabel = trendDir === 'rising' ? 'trending upward' : 'trending downward';
+      summary = `Your ${displayName} has been ${dirLabel} across your recent reports while remaining outside the optimal range. Worth bringing to your provider's attention.`;
+      severity = 'caution';
+    } else {
+      const dirLabel = trendDir === 'rising' ? 'trending upward' : 'trending downward';
+      summary = `Your ${displayName} has been ${dirLabel} across your recent reports. This may be worth tracking over time.`;
+      severity = result.trendStrength === 'strong' ? 'caution' : 'info';
+    }
 
     patterns.push({
       type: 'trend',
       biomarker: biomarker.name,
-      summary: `Your ${displayName} has been ${directionLabel} across your recent reports. This may be worth tracking over time.`,
-      severity: result.trendStrength === 'strong' ? 'caution' : 'info',
+      summary,
+      severity,
       supportingData: { trendResult: result },
     });
   }

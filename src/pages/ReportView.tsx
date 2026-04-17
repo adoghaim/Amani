@@ -365,7 +365,7 @@ export function ReportView() {
           .from('lab_reports')
           .select('id, report_date')
           .eq('user_id', reportData.user_id)
-          .neq('id', reportId)
+          .lt('report_date', reportData.report_date)
           .order('report_date', { ascending: true }),
         supabase
           .from('symptom_logs')
