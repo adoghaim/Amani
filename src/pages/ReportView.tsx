@@ -856,127 +856,153 @@ export function ReportView() {
                   )}
                 </div>
                 <h2 className="text-lg font-semibold text-white leading-snug">
-                  {interpretation?.headline
-                    ? interpretation.headline
-                    : insightSummary
-                      ? (() => {
-                          const allFindings = insightSummary.primaryFinding
-                            ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
-                            : insightSummary.topFindings;
-                          const outOfRange = allFindings.filter(f => f.status === 'out_of_range');
-                          const borderline = allFindings.filter(f => f.status === 'borderline');
+                  {(() => {
+                    const ctx = insightSummary ? getOpeningContext(insightSummary) : null;
+                    const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
+                    
+                    if (insightSummary) {
+                      const allFindings = insightSummary.primaryFinding ? [insightSummary.primaryFinding, ...insightSummary.topFindings] : insightSummary.topFindings;
+                      const outOfRange = allFindings.filter(f => f.status === 'out_of_range');
+                      const borderline = allFindings.filter(f => f.status === 'borderline');
+                      const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
+                      const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
 
-                          const ctx = getOpeningContext(insightSummary);
+                      // Force trajectory headline override if improving
+                      if (isImproving && ctx.primaryImprovingChange) {
+                        const ch = ctx.primaryImprovingChange;
+                        const pctStr = ch.percentDelta !== null ? ` (down ${Math.abs(ch.percentDelta)}%)` : '';
+                        const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}`;
+                        const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'remains low' : 'remains elevated';
+                        if (!ctx.anyWorsening) {
+                          return `${topName} ${dirLabel}, but has improved ${valueStr} since your last report — a meaningful move in the right direction.`;
+                        }
+                        const worsenedName = ctx.worseningChange?.displayName;
+                        return `${topName} has improved ${valueStr} since your last report, though ${worsenedName ?? 'another marker'} still warrants attention.`;
+                      }
 
-                          if (outOfRange.length === 0 && borderline.length === 0) {
-                            if (ctx.anyBoundaryCrossImproved) {
-                              const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                              return `All values are within optimal range, and ${name} has improved since your last draw.`;
-                            }
-                            return 'All measured values are within the Amani optimal range.';
-                          }
+                      // If AI headline available and no trajectory override, use AI headline
+                      if (interpretation?.headline) return interpretation.headline;
 
-                          const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
-                          const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
+                      // Fallbacks if no AI headline
+                      if (outOfRange.length === 0 && borderline.length === 0) {
+                        if (ctx.anyBoundaryCrossImproved) {
+                          const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
+                          return `All values are within optimal range, and ${name} has improved since your last draw.`;
+                        }
+                        return 'All measured values are within the Amani optimal range.';
+                      }
 
-                          // Primary abnormal marker is improving — lead with both truths
-                          if (ctx.primaryIsImproving && ctx.primaryImprovingChange) {
-                            const ch = ctx.primaryImprovingChange;
-                            const pctStr = ch.percentDelta !== null ? ` (down ${Math.abs(ch.percentDelta)}%)` : '';
-                            const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}`;
-                            if (!ctx.anyWorsening) {
-                              return `${topName} remains elevated, but has improved ${valueStr} since your last report — a meaningful move in the right direction.`;
-                            }
-                            const worsenedName = ctx.worseningChange?.displayName;
-                            return `${topName} has improved ${valueStr} since your last report, though ${worsenedName ?? 'another marker'} still warrants attention.`;
-                          }
-
-                          if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
-                            return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
-                          }
-                          if (outOfRange.length >= 2 && secondName) {
-                            return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
-                          }
-                          if (outOfRange.length === 1 && borderline.length === 0) {
-                            if (ctx.anyBoundaryCrossImproved) {
-                              const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                              return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
-                            }
-                            return `${topName} is outside optimal range and is the primary finding on this panel.`;
-                          }
-                          if (borderline.length >= 2 && secondName) {
-                            return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;
-                          }
-                          return `${topName} is borderline. Worth keeping an eye on over time.`;
-                        })()
-                      : ''}
+                      if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
+                        return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
+                      }
+                      if (outOfRange.length >= 2 && secondName) {
+                        return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
+                      }
+                      if (outOfRange.length === 1 && borderline.length === 0) {
+                        if (ctx.anyBoundaryCrossImproved) {
+                          const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
+                          return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
+                        }
+                        return `${topName} is outside optimal range and is the primary finding on this panel.`;
+                      }
+                      if (borderline.length >= 2 && secondName) {
+                        return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;
+                      }
+                      return `${topName} is borderline. Worth keeping an eye on over time.`;
+                    }
+                    return interpretation?.headline || '';
+                  })()}
                 </h2>
               </div>
 
-              {/* Primary Concern — most important finding, always first */}
-              {interpretation?.primary_concern && (
-                <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <AlertTriangle className="w-5 h-5 text-theme-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                        Top Priority
-                      </p>
-                      <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                        {interpretation.primary_concern.title}
-                      </p>
-                      <p className="text-sm text-theme-text-body leading-relaxed">
-                        {interpretation.primary_concern.summary}
-                      </p>
-                      {interpretation.primary_concern.why_it_matters && (
-                        <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
-                          {interpretation.primary_concern.why_it_matters}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Fallback Top Priority from insightSummary when no AI primary_concern */}
-              {!interpretation?.primary_concern && insightSummary?.primaryFinding && (() => {
-                const ctx = getOpeningContext(insightSummary);
-                const isImproving = ctx.primaryIsImproving && ctx.primaryImprovingChange !== null;
-                const ch = ctx.primaryImprovingChange;
-                return (
-                  <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                    <div className="flex items-start gap-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${isImproving ? 'bg-emerald-500/15' : 'bg-theme-primary/20'}`}>
-                        <AlertTriangle className={`w-5 h-5 ${isImproving ? 'text-emerald-600' : 'text-theme-primary'}`} />
+              {/* Top Priority — Override with Deterministic Logic if Improving */}
+              {(() => {
+                const ctx = insightSummary ? getOpeningContext(insightSummary) : null;
+                const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
+                const ch = ctx?.primaryImprovingChange;
+                
+                // 1. Deterministic Override Path
+                if (isImproving && ch && insightSummary?.primaryFinding) {
+                  return (
+                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-emerald-500/15">
+                          <AlertTriangle className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-emerald-600">
+                            Top Priority
+                          </p>
+                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                            {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
+                          </p>
+                          <p className="text-sm text-theme-text-body leading-relaxed">
+                            {insightSummary.primaryFinding.displayName} remains {insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low'} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but has improved from {ch.previousValue} {ch.unit} since your last report
+                            {ch.percentDelta !== null ? ` — a ${Math.abs(ch.percentDelta)}% improvement` : ''}.
+                          </p>
+                          <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3 mt-2.5">
+                            This improvement is meaningful, even though the value remains outside the optimal range. Continue tracking at your next panel.
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 ${isImproving ? 'text-emerald-600' : 'text-theme-primary'}`}>
-                          Top Priority
-                        </p>
-                        <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                          {insightSummary.primaryFinding.displayName}
-                        </p>
-                        {isImproving && ch ? (
-                          <>
-                            <p className="text-sm text-theme-text-body leading-relaxed">
-                              {insightSummary.primaryFinding.displayName} remains {insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low'} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but has improved from {ch.previousValue} {ch.unit} since your last report
-                              {ch.percentDelta !== null ? ` — a ${Math.abs(ch.percentDelta)}% improvement` : ''}.
+                    </div>
+                  );
+                }
+
+                // 2. Standard AI Path
+                if (interpretation?.primary_concern) {
+                  return (
+                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
+                            Top Priority
+                          </p>
+                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                            {interpretation.primary_concern.title}
+                          </p>
+                          <p className="text-sm text-theme-text-body leading-relaxed">
+                            {interpretation.primary_concern.summary}
+                          </p>
+                          {interpretation.primary_concern.why_it_matters && (
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
+                              {interpretation.primary_concern.why_it_matters}
                             </p>
-                            <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3 mt-2.5">
-                              This improvement is meaningful, even though the value remains outside the optimal range. Continue tracking at your next panel.
-                            </p>
-                          </>
-                        ) : (
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 3. Complete Fallback Path
+                if (insightSummary?.primaryFinding) {
+                  return (
+                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
+                            Top Priority
+                          </p>
+                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                            {insightSummary.primaryFinding.displayName}
+                          </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
                             {insightSummary.primaryFinding.fact}
                           </p>
-                        )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
+                  );
+                }
+                
+                return null;
               })()}
 
               {/* Summary bullets: only when no primary_concern */}
@@ -1043,39 +1069,47 @@ export function ReportView() {
                   fallback = `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops.`;
                 }
 
-                const rawText = aiText ?? fallback;
+                const isImproving = ctx.primaryIsImproving && ctx.primaryImprovingChange !== null;
+                let text = '';
 
-                const headline = interpretation?.headline ?? '';
-                const normalizeForCompare = (s: string) =>
-                  s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-                const headlineNorm = normalizeForCompare(headline);
+                if (isImproving) {
+                  // Direct override - skip AI completely
+                  text = fallback;
+                } else {
+                  // Use AI with fluff filtering
+                  const rawText = aiText ?? fallback;
+                  const headline = interpretation?.headline ?? '';
+                  const normalizeForCompare = (s: string) =>
+                    s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+                  const headlineNorm = normalizeForCompare(headline);
 
-                const splitSentences = (text: string): string[] =>
-                  text.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(Boolean) ?? [text];
+                  const splitSentences = (t: string): string[] =>
+                    t.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(Boolean) ?? [t];
 
-                const FILLER_PATTERNS = [
-                  /\bstand(s)? out as\b/i,
-                  /\bmost abnormal\b/i,
-                  /\bprimary (finding|concern|result)\b/i,
-                ];
-                const isFluff = (sentence: string): boolean =>
-                  FILLER_PATTERNS.some(p => p.test(sentence)) &&
-                  !/(direction|action|trend|monitor|track|discuss|follow|watch)/i.test(sentence);
+                  const FILLER_PATTERNS = [
+                    /\bstand(s)? out as\b/i,
+                    /\bmost abnormal\b/i,
+                    /\bprimary (finding|concern|result)\b/i,
+                  ];
+                  const isFluff = (sentence: string): boolean =>
+                    FILLER_PATTERNS.some(p => p.test(sentence)) &&
+                    !/(direction|action|trend|monitor|track|discuss|follow|watch)/i.test(sentence);
 
-                const isDuplicateOfHeadline = (sentence: string): boolean => {
-                  if (!headlineNorm) return false;
-                  const sentNorm = normalizeForCompare(sentence);
-                  const headlineWords = headlineNorm.split(' ').filter(w => w.length > 4);
-                  if (headlineWords.length === 0) return false;
-                  const matchCount = headlineWords.filter(w => sentNorm.includes(w)).length;
-                  return matchCount / headlineWords.length >= 0.7;
-                };
+                  const isDuplicateOfHeadline = (sentence: string): boolean => {
+                    if (!headlineNorm) return false;
+                    const sentNorm = normalizeForCompare(sentence);
+                    const headlineWords = headlineNorm.split(' ').filter(w => w.length > 4);
+                    if (headlineWords.length === 0) return false;
+                    const matchCount = headlineWords.filter(w => sentNorm.includes(w)).length;
+                    return matchCount / headlineWords.length >= 0.7;
+                  };
 
-                const sentences = splitSentences(rawText);
-                const filtered = sentences.filter(s => !isDuplicateOfHeadline(s));
-                const strong = filtered.filter((s, i) => i === 0 || !isFluff(s));
-                const capped = strong.slice(0, 2).join(' ');
-                const text = capped || rawText;
+                  const sentences = splitSentences(rawText);
+                  const filtered = sentences.filter(s => !isDuplicateOfHeadline(s));
+                  const strong = filtered.filter((s, i) => i === 0 || !isFluff(s));
+                  const capped = strong.slice(0, 2).join(' ');
+                  text = capped || rawText;
+                }
 
                 return (
                   <div className="border-t border-theme-border-inner bg-white px-6 py-5">
