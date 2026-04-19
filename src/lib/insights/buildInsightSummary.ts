@@ -186,45 +186,45 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
     .map(s => toTopFinding(s, null, deltaMap?.get(s.key)));
 }
 
+function deltaToChange(d: BiomarkerDelta): BiggestChange {
+  const pct = d.percentDelta !== null
+    ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`
+    : '';
+
+  let fact: string;
+  if (d.trajectoryStatus === 'improving_still_high') {
+    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains elevated above the optimal range.`;
+  } else if (d.trajectoryStatus === 'improving_still_low') {
+    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains below the optimal range.`;
+  } else if (d.trajectoryStatus === 'worsening_still_high') {
+    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further above the optimal range.`;
+  } else if (d.trajectoryStatus === 'worsening_still_low') {
+    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further below the optimal range.`;
+  } else if (d.boundaryCrossing) {
+    const bcDir = d.boundaryCrossing.direction === 'improved' ? 'improved' : 'moved';
+    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
+  } else {
+    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}.`;
+  }
+
+  return {
+    key: d.key,
+    displayName: d.displayName,
+    previousValue: d.previousValue,
+    currentValue: d.currentValue,
+    unit: d.unit,
+    percentDelta: d.percentDelta,
+    trendDirection: d.trendDirection,
+    significance: d.significance,
+    boundaryCrossing: d.boundaryCrossing,
+    trajectoryStatus: d.trajectoryStatus,
+    distanceToNormalImprovement: d.distanceToNormalImprovement,
+    fact,
+  };
+}
+
 function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
-  const biggest = getBiggestChanges(deltas, 5).filter(d => d.significance !== 'minor');
-
-  return biggest.map(d => {
-    let fact: string;
-    const pct = d.percentDelta !== null
-      ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`
-      : '';
-
-    if (d.trajectoryStatus === 'improving_still_high') {
-      fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains elevated above the optimal range.`;
-    } else if (d.trajectoryStatus === 'improving_still_low') {
-      fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains below the optimal range.`;
-    } else if (d.trajectoryStatus === 'worsening_still_high') {
-      fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further above the optimal range.`;
-    } else if (d.trajectoryStatus === 'worsening_still_low') {
-      fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further below the optimal range.`;
-    } else if (d.boundaryCrossing) {
-      const bcDir = d.boundaryCrossing.direction === 'improved' ? 'improved' : 'moved';
-      fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
-    } else {
-      fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}.`;
-    }
-
-    return {
-      key: d.key,
-      displayName: d.displayName,
-      previousValue: d.previousValue,
-      currentValue: d.currentValue,
-      unit: d.unit,
-      percentDelta: d.percentDelta,
-      trendDirection: d.trendDirection,
-      significance: d.significance,
-      boundaryCrossing: d.boundaryCrossing,
-      trajectoryStatus: d.trajectoryStatus,
-      distanceToNormalImprovement: d.distanceToNormalImprovement,
-      fact,
-    };
-  });
+  return getBiggestChanges(deltas, 5).map(deltaToChange);
 }
 
 function buildDoctorQuestions(
@@ -579,36 +579,35 @@ export function buildInsightSummary(
     ? topFindings[0].key
     : null;
 
-  if (primaryKey && biggestChanges.length > 0) {
-    const primaryDelta = deltaMap.get(primaryKey);
+  if (primaryKey) {
+    const primaryDelta = deltaMap.get(primaryKey) ??
+      [...deltaMap.values()].find(d => d.key.toLowerCase() === primaryKey.toLowerCase());
     const alreadyIncluded = biggestChanges.some(c => c.key === primaryKey);
-    const isMeaningful = primaryDelta &&
-      primaryDelta.significance !== 'minor' &&
-      (
-        primaryDelta.trajectoryStatus === 'improving_still_high' ||
-        primaryDelta.trajectoryStatus === 'improving_still_low' ||
-        primaryDelta.trajectoryStatus === 'worsening_still_high' ||
-        primaryDelta.trajectoryStatus === 'worsening_still_low' ||
-        primaryDelta.boundaryCrossing !== null
-      );
+    const isMeaningful = primaryDelta && (
+      primaryDelta.significance === 'significant' ||
+      primaryDelta.significance === 'moderate' ||
+      primaryDelta.boundaryCrossing !== null ||
+      primaryDelta.trajectoryStatus === 'improving_still_high' ||
+      primaryDelta.trajectoryStatus === 'improving_still_low' ||
+      primaryDelta.trajectoryStatus === 'worsening_still_high' ||
+      primaryDelta.trajectoryStatus === 'worsening_still_low' ||
+      (primaryDelta.distanceToNormalImprovement !== null && Math.abs(primaryDelta.distanceToNormalImprovement) >= 10)
+    );
 
     if (!alreadyIncluded && isMeaningful && primaryDelta) {
-      const injected = buildBiggestChanges([primaryDelta]);
-      if (injected.length > 0) {
-        const combined = [...biggestChanges, injected[0]];
-        const rankScore = (c: BiggestChange): number => {
-          const crossScore = c.boundaryCrossing ? 10 : 0;
-          const trajScore =
-            c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low' ? 6 :
-            c.trajectoryStatus === 'worsening_still_high' || c.trajectoryStatus === 'worsening_still_low' ? 5 : 0;
-          const sigScore = c.significance === 'significant' ? 3 : c.significance === 'moderate' ? 2 : 1;
-          const pctContrib = c.percentDelta !== null ? Math.min(5, Math.round(Math.abs(c.percentDelta) / 10)) : 0;
-          const distContrib = c.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(c.distanceToNormalImprovement) / 20)) : 0;
-          return crossScore + trajScore + sigScore + pctContrib + distContrib;
-        };
-        combined.sort((a, b) => rankScore(b) - rankScore(a));
-        biggestChanges = combined.slice(0, 5);
-      }
+      const rankScore = (c: BiggestChange): number => {
+        const crossScore = c.boundaryCrossing ? 10 : 0;
+        const trajScore =
+          c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low' ? 6 :
+          c.trajectoryStatus === 'worsening_still_high' || c.trajectoryStatus === 'worsening_still_low' ? 5 : 0;
+        const sigScore = c.significance === 'significant' ? 3 : c.significance === 'moderate' ? 2 : 1;
+        const pctContrib = c.percentDelta !== null ? Math.min(5, Math.round(Math.abs(c.percentDelta) / 10)) : 0;
+        const distContrib = c.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(c.distanceToNormalImprovement) / 20)) : 0;
+        return crossScore + trajScore + sigScore + pctContrib + distContrib;
+      };
+      const combined = [...biggestChanges, deltaToChange(primaryDelta)];
+      combined.sort((a, b) => rankScore(b) - rankScore(a));
+      biggestChanges = combined.slice(0, 5);
     }
   }
 
