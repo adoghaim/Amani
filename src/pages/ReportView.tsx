@@ -80,6 +80,11 @@ const PATTERN_CONFIDENCE_STYLE: Record<string, { bg: string; text: string; borde
 interface OpeningContext {
   primaryIsImproving: boolean;
   primaryImprovingChange: BiggestChange | null;
+  primaryIsWorsening: boolean;
+  primaryWorseningChange: BiggestChange | null;
+  primaryIsStableAbnormal: boolean;
+  primaryStableChange: BiggestChange | null;
+  primaryHasDelta: boolean;
   anyWorsening: boolean;
   worseningChange: BiggestChange | null;
   anyBoundaryCrossImproved: boolean;
@@ -97,6 +102,54 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
       ) ?? null)
     : null;
 
+  const primaryRawDelta = primaryKey ? summary.deltaMap.get(primaryKey) ?? null : null;
+
+  const primaryWorseningChange: BiggestChange | null = (() => {
+    if (!primaryKey || !primaryRawDelta) return null;
+    if (
+      primaryRawDelta.trajectoryStatus !== 'worsening_still_high' &&
+      primaryRawDelta.trajectoryStatus !== 'worsening_still_low'
+    ) return null;
+    const fromBiggest = summary.biggestChanges.find(c => c.key === primaryKey);
+    if (fromBiggest) return fromBiggest;
+    return {
+      key: primaryRawDelta.key,
+      displayName: primaryRawDelta.displayName,
+      previousValue: primaryRawDelta.previousValue,
+      currentValue: primaryRawDelta.currentValue,
+      unit: primaryRawDelta.unit,
+      percentDelta: primaryRawDelta.percentDelta,
+      trendDirection: primaryRawDelta.trendDirection,
+      significance: primaryRawDelta.significance,
+      boundaryCrossing: primaryRawDelta.boundaryCrossing,
+      trajectoryStatus: primaryRawDelta.trajectoryStatus,
+      distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
+      fact: '',
+    };
+  })();
+
+  const primaryStableChange: BiggestChange | null = (() => {
+    if (!primaryKey || !primaryRawDelta) return null;
+    if (primaryRawDelta.trajectoryStatus !== 'stable_abnormal') return null;
+    if (primaryRawDelta.previousValue === undefined || primaryRawDelta.currentValue === undefined) return null;
+    const fromBiggest = summary.biggestChanges.find(c => c.key === primaryKey);
+    if (fromBiggest) return fromBiggest;
+    return {
+      key: primaryRawDelta.key,
+      displayName: primaryRawDelta.displayName,
+      previousValue: primaryRawDelta.previousValue,
+      currentValue: primaryRawDelta.currentValue,
+      unit: primaryRawDelta.unit,
+      percentDelta: primaryRawDelta.percentDelta,
+      trendDirection: primaryRawDelta.trendDirection,
+      significance: primaryRawDelta.significance,
+      boundaryCrossing: primaryRawDelta.boundaryCrossing,
+      trajectoryStatus: primaryRawDelta.trajectoryStatus,
+      distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
+      fact: '',
+    };
+  })();
+
   const worseningChange =
     summary.biggestChanges.find(
       c =>
@@ -108,6 +161,11 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
   return {
     primaryIsImproving: primaryImprovingChange !== null,
     primaryImprovingChange,
+    primaryIsWorsening: primaryWorseningChange !== null,
+    primaryWorseningChange,
+    primaryIsStableAbnormal: primaryStableChange !== null,
+    primaryStableChange,
+    primaryHasDelta: primaryImprovingChange !== null || primaryWorseningChange !== null || primaryStableChange !== null,
     anyWorsening: worseningChange !== null,
     worseningChange,
     anyBoundaryCrossImproved: summary.biggestChanges.some(c => c.boundaryCrossing?.direction === 'improved'),
@@ -859,25 +917,40 @@ export function ReportView() {
                   {(() => {
                     const ctx = insightSummary ? getOpeningContext(insightSummary) : null;
                     const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
-                    
+                    const isWorsening = ctx?.primaryIsWorsening && ctx?.primaryWorseningChange !== null;
+                    const isStableAbnormal = ctx?.primaryIsStableAbnormal && ctx?.primaryStableChange !== null;
+
                     if (insightSummary) {
                       const allFindings = insightSummary.primaryFinding ? [insightSummary.primaryFinding, ...insightSummary.topFindings] : insightSummary.topFindings;
                       const outOfRange = allFindings.filter(f => f.status === 'out_of_range');
                       const borderline = allFindings.filter(f => f.status === 'borderline');
                       const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
                       const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
+                      const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'remains low' : 'remains elevated';
 
                       // Force trajectory headline override if improving
                       if (isImproving && ctx.primaryImprovingChange) {
                         const ch = ctx.primaryImprovingChange;
                         const pctStr = ch.percentDelta !== null ? ` (down ${Math.abs(ch.percentDelta)}%)` : '';
                         const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}`;
-                        const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'remains low' : 'remains elevated';
                         if (!ctx.anyWorsening) {
                           return `${topName} ${dirLabel}, but has improved ${valueStr} since your last report — a meaningful move in the right direction.`;
                         }
                         const worsenedName = ctx.worseningChange?.displayName;
                         return `${topName} has improved ${valueStr} since your last report, though ${worsenedName ?? 'another marker'} still warrants attention.`;
+                      }
+
+                      // Force trajectory headline override if primary is worsening
+                      if (isWorsening && ctx.primaryWorseningChange) {
+                        const ch = ctx.primaryWorseningChange;
+                        const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}`;
+                        return `${topName} ${dirLabel} and has worsened ${valueStr} since your last report — worth discussing with your provider.`;
+                      }
+
+                      // Force trajectory headline override if primary is stable abnormal
+                      if (isStableAbnormal && ctx.primaryStableChange) {
+                        const ch = ctx.primaryStableChange;
+                        return `${topName} ${dirLabel} and has not changed significantly from the prior report (${ch.previousValue} to ${ch.currentValue} ${ch.unit}).`;
                       }
 
                       // If AI headline available and no trajectory override, use AI headline
@@ -915,14 +988,17 @@ export function ReportView() {
                 </h2>
               </div>
 
-              {/* Top Priority — Override with Deterministic Logic if Improving */}
+              {/* Top Priority — Deterministic direction override for all trajectory states */}
               {(() => {
                 const ctx = insightSummary ? getOpeningContext(insightSummary) : null;
                 const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
-                const ch = ctx?.primaryImprovingChange;
-                
-                // 1. Deterministic Override Path
-                if (isImproving && ch && insightSummary?.primaryFinding) {
+                const isWorsening = ctx?.primaryIsWorsening && ctx?.primaryWorseningChange !== null;
+                const isStableAbnormal = ctx?.primaryIsStableAbnormal && ctx?.primaryStableChange !== null;
+
+                // 1a. Deterministic Override — Improving
+                if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
+                  const ch = ctx.primaryImprovingChange;
+                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -937,12 +1013,84 @@ export function ReportView() {
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} remains {insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low'} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but has improved from {ch.previousValue} {ch.unit} since your last report
+                            {insightSummary.primaryFinding.displayName} remains {dirWord} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but has improved from {ch.previousValue} {ch.unit} since your last report
                             {ch.percentDelta !== null ? ` — a ${Math.abs(ch.percentDelta)}% improvement` : ''}.
                           </p>
                           <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3 mt-2.5">
                             This improvement is meaningful, even though the value remains outside the optimal range. Continue tracking at your next panel.
                           </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 1b. Deterministic Override — Worsening
+                if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
+                  const ch = ctx.primaryWorseningChange;
+                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
+                  const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  return (
+                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-amber-500/15">
+                          <AlertTriangle className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-amber-600">
+                            Top Priority
+                          </p>
+                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                            {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
+                          </p>
+                          <p className="text-sm text-theme-text-body leading-relaxed">
+                            {insightSummary.primaryFinding.displayName} remains {dirWord} and has worsened from {ch.previousValue} to {ch.currentValue} {ch.unit} since your last report{ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : ''}.
+                          </p>
+                          {aiWhyItMatters ? (
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3 mt-2.5">
+                              {aiWhyItMatters}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3 mt-2.5">
+                              This trend is worth discussing with your provider at your next visit.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 1c. Deterministic Override — Stable Abnormal
+                if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
+                  const ch = ctx.primaryStableChange;
+                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
+                  const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  return (
+                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
+                            Top Priority
+                          </p>
+                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
+                            {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
+                          </p>
+                          <p className="text-sm text-theme-text-body leading-relaxed">
+                            {insightSummary.primaryFinding.displayName} remains {dirWord} and has not changed significantly from the prior report ({ch.previousValue} to {ch.currentValue} {ch.unit}).
+                          </p>
+                          {aiWhyItMatters ? (
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
+                              {aiWhyItMatters}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
+                              Continued tracking at your next panel will help clarify whether this is a persistent pattern.
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1001,7 +1149,7 @@ export function ReportView() {
                     </div>
                   );
                 }
-                
+
                 return null;
               })()}
 
@@ -1070,11 +1218,24 @@ export function ReportView() {
                 }
 
                 const isImproving = ctx.primaryIsImproving && ctx.primaryImprovingChange !== null;
+                const isWorsening = ctx.primaryIsWorsening && ctx.primaryWorseningChange !== null;
+                const isStableAbnormal = ctx.primaryIsStableAbnormal && ctx.primaryStableChange !== null;
                 let text = '';
 
                 if (isImproving) {
-                  // Direct override - skip AI completely
                   text = fallback;
+                } else if (isWorsening && ctx.primaryWorseningChange && insightSummary.primaryFinding) {
+                  const ch = ctx.primaryWorseningChange;
+                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
+                  const pctStr = ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : '';
+                  text = `${insightSummary.primaryFinding.displayName} remains ${dirWord} and has worsened from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr} since the prior report. This is worth discussing with your provider at your next visit.`;
+                  if (borderline.length > 0 && borderline[0].displayName !== insightSummary.primaryFinding.displayName) {
+                    text += ` ${borderline[0].displayName} is also borderline — worth monitoring alongside it.`;
+                  }
+                } else if (isStableAbnormal && ctx.primaryStableChange && insightSummary.primaryFinding) {
+                  const ch = ctx.primaryStableChange;
+                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
+                  text = `${insightSummary.primaryFinding.displayName} has remained ${dirWord} and has not changed significantly from the prior report (${ch.previousValue} to ${ch.currentValue} ${ch.unit}). Continued tracking is the right next step.`;
                 } else {
                   // Use AI with fluff filtering
                   const rawText = aiText ?? fallback;

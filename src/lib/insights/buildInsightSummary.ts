@@ -65,6 +65,7 @@ export interface InsightSummary {
   primaryFinding: TopFinding | null;
   topFindings: TopFinding[];
   biggestChanges: BiggestChange[];
+  deltaMap: Map<BiomarkerName, BiomarkerDelta>;
   systemSummaries: SystemGroup[];
   questionsForDoctor: DoctorQuestion[];
   watchSignals: WatchSignal[];
@@ -601,6 +602,7 @@ export function buildInsightSummary(
     primaryFinding,
     topFindings: secondaryFindings,
     biggestChanges,
+    deltaMap,
     systemSummaries,
     questionsForDoctor,
     watchSignals,
