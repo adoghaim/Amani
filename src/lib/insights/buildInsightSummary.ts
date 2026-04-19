@@ -605,9 +605,15 @@ export function buildInsightSummary(
         const distContrib = c.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(c.distanceToNormalImprovement) / 20)) : 0;
         return crossScore + trajScore + sigScore + pctContrib + distContrib;
       };
-      const combined = [...biggestChanges, deltaToChange(primaryDelta)];
-      combined.sort((a, b) => rankScore(b) - rankScore(a));
-      biggestChanges = combined.slice(0, 5);
+      const primaryChange = deltaToChange(primaryDelta);
+      let guaranteed = [...biggestChanges];
+      if (guaranteed.length >= 5) {
+        guaranteed.sort((a, b) => rankScore(a) - rankScore(b));
+        guaranteed = guaranteed.slice(1);
+      }
+      guaranteed.push(primaryChange);
+      guaranteed.sort((a, b) => rankScore(b) - rankScore(a));
+      biggestChanges = guaranteed;
     }
   }
 
