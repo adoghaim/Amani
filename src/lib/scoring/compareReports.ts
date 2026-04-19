@@ -261,8 +261,16 @@ export function getBiggestChanges(deltas: BiomarkerDelta[], limit = 5): Biomarke
         return 0;
       };
 
+      const magnitudeScore = (d: BiomarkerDelta): number => {
+        const pctContrib = d.percentDelta !== null ? Math.min(5, Math.round(Math.abs(d.percentDelta) / 10)) : 0;
+        const distContrib = d.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(d.distanceToNormalImprovement) / 20)) : 0;
+        return pctContrib + distContrib;
+      };
+
       const sigOrder: Record<SignificanceTier, number> = { significant: 3, moderate: 2, minor: 1 };
-      return (crossB + trajScore(b) + sigOrder[b.significance]) - (crossA + trajScore(a) + sigOrder[a.significance]);
+      const scoreA = crossA + trajScore(a) + sigOrder[a.significance] + magnitudeScore(a);
+      const scoreB = crossB + trajScore(b) + sigOrder[b.significance] + magnitudeScore(b);
+      return scoreB - scoreA;
     })
     .slice(0, limit);
 }

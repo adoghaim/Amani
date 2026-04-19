@@ -574,6 +574,44 @@ export function buildInsightSummary(
   }
 
   const topFindings = buildTopFindings(scored, deltaMap);
+
+  const primaryKey = topFindings.length > 0 && topFindings[0].status === 'out_of_range'
+    ? topFindings[0].key
+    : null;
+
+  if (primaryKey && biggestChanges.length > 0) {
+    const primaryDelta = deltaMap.get(primaryKey);
+    const alreadyIncluded = biggestChanges.some(c => c.key === primaryKey);
+    const isMeaningful = primaryDelta &&
+      primaryDelta.significance !== 'minor' &&
+      (
+        primaryDelta.trajectoryStatus === 'improving_still_high' ||
+        primaryDelta.trajectoryStatus === 'improving_still_low' ||
+        primaryDelta.trajectoryStatus === 'worsening_still_high' ||
+        primaryDelta.trajectoryStatus === 'worsening_still_low' ||
+        primaryDelta.boundaryCrossing !== null
+      );
+
+    if (!alreadyIncluded && isMeaningful && primaryDelta) {
+      const injected = buildBiggestChanges([primaryDelta]);
+      if (injected.length > 0) {
+        const combined = [...biggestChanges, injected[0]];
+        const rankScore = (c: BiggestChange): number => {
+          const crossScore = c.boundaryCrossing ? 10 : 0;
+          const trajScore =
+            c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low' ? 6 :
+            c.trajectoryStatus === 'worsening_still_high' || c.trajectoryStatus === 'worsening_still_low' ? 5 : 0;
+          const sigScore = c.significance === 'significant' ? 3 : c.significance === 'moderate' ? 2 : 1;
+          const pctContrib = c.percentDelta !== null ? Math.min(5, Math.round(Math.abs(c.percentDelta) / 10)) : 0;
+          const distContrib = c.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(c.distanceToNormalImprovement) / 20)) : 0;
+          return crossScore + trajScore + sigScore + pctContrib + distContrib;
+        };
+        combined.sort((a, b) => rankScore(b) - rankScore(a));
+        biggestChanges = combined.slice(0, 5);
+      }
+    }
+  }
+
   const questionsForDoctor = buildDoctorQuestions(scored, deltas);
   const watchSignals = buildWatchSignals(scored, deltas);
 
