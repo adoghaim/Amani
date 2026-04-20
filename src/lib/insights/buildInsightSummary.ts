@@ -34,6 +34,7 @@ export interface BiggestChange {
   trajectoryStatus: TrajectoryStatus;
   distanceToNormalImprovement: number | null;
   fact: string;
+  isFirstRecorded?: boolean;
 }
 
 export interface DoctorQuestion {
@@ -594,26 +595,54 @@ export function buildInsightSummary(
       (primaryDelta.distanceToNormalImprovement !== null && Math.abs(primaryDelta.distanceToNormalImprovement) >= 10)
     );
 
-    if (!alreadyIncluded && isMeaningful && primaryDelta) {
-      const rankScore = (c: BiggestChange): number => {
-        const crossScore = c.boundaryCrossing ? 10 : 0;
-        const trajScore =
-          c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low' ? 6 :
-          c.trajectoryStatus === 'worsening_still_high' || c.trajectoryStatus === 'worsening_still_low' ? 5 : 0;
-        const sigScore = c.significance === 'significant' ? 3 : c.significance === 'moderate' ? 2 : 1;
-        const pctContrib = c.percentDelta !== null ? Math.min(5, Math.round(Math.abs(c.percentDelta) / 10)) : 0;
-        const distContrib = c.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(c.distanceToNormalImprovement) / 20)) : 0;
-        return crossScore + trajScore + sigScore + pctContrib + distContrib;
-      };
-      const primaryChange = deltaToChange(primaryDelta);
+    const rankScore = (c: BiggestChange): number => {
+      const crossScore = c.boundaryCrossing ? 10 : 0;
+      const trajScore =
+        c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low' ? 6 :
+        c.trajectoryStatus === 'worsening_still_high' || c.trajectoryStatus === 'worsening_still_low' ? 5 : 0;
+      const sigScore = c.significance === 'significant' ? 3 : c.significance === 'moderate' ? 2 : 1;
+      const pctContrib = c.percentDelta !== null ? Math.min(5, Math.round(Math.abs(c.percentDelta) / 10)) : 0;
+      const distContrib = c.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(c.distanceToNormalImprovement) / 20)) : 0;
+      return crossScore + trajScore + sigScore + pctContrib + distContrib;
+    };
+
+    const guaranteeInsert = (entry: BiggestChange) => {
       let guaranteed = [...biggestChanges];
       if (guaranteed.length >= 5) {
         guaranteed.sort((a, b) => rankScore(a) - rankScore(b));
         guaranteed = guaranteed.slice(1);
       }
-      guaranteed.push(primaryChange);
+      guaranteed.push(entry);
       guaranteed.sort((a, b) => rankScore(b) - rankScore(a));
       biggestChanges = guaranteed;
+    };
+
+    if (!alreadyIncluded && isMeaningful && primaryDelta) {
+      guaranteeInsert(deltaToChange(primaryDelta));
+    } else if (!alreadyIncluded && !primaryDelta) {
+      // Primary marker exists in current report but has no previous value — first recorded result.
+      // Always surface it so users see their most critical out-of-range marker.
+      const primaryScored = scored.find(s => s.key === primaryKey);
+      if (primaryScored) {
+        const currentInput = current.find(b => b.key === primaryKey);
+        const unit = currentInput?.unit ?? '';
+        const firstRecordedChange: BiggestChange = {
+          key: primaryKey,
+          displayName: getDisplayName(primaryKey),
+          previousValue: 0,
+          currentValue: primaryScored.value,
+          unit,
+          percentDelta: null,
+          trendDirection: 'stable',
+          significance: 'significant',
+          boundaryCrossing: null,
+          trajectoryStatus: null,
+          distanceToNormalImprovement: null,
+          fact: `${getDisplayName(primaryKey)} is ${primaryScored.value} ${unit} — first result on record, currently out of range.`,
+          isFirstRecorded: true,
+        };
+        guaranteeInsert(firstRecordedChange);
+      }
     }
   }
 
