@@ -617,7 +617,7 @@ export function buildInsightSummary(
       biggestChanges = guaranteed;
     };
 
-    if (!alreadyIncluded && isMeaningful && primaryDelta) {
+    if (!alreadyIncluded && primaryDelta) {
       guaranteeInsert(deltaToChange(primaryDelta));
     } else if (!alreadyIncluded && !primaryDelta) {
       // Primary marker exists in current report but has no previous value — first recorded result.
