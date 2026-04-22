@@ -92,6 +92,7 @@ export function UploadReportScreen() {
   const [stage, setStage] = useState<UploadReportStage | null>(null);
   const [loadingDefaults, setLoadingDefaults] = useState(true);
   const [error, setError] = useState('');
+  const [manualAssistMessage, setManualAssistMessage] = useState('');
   const [portalHint, setPortalHint] = useState('');
   const [manualEntries, setManualEntries] = useState<ManualEntryDraft[]>([emptyManualEntry()]);
   const [catalog, setCatalog] = useState<CatalogBiomarker[]>([]);
@@ -158,6 +159,7 @@ export function UploadReportScreen() {
   const handlePickFile = async () => {
     setError('');
     setPortalHint('');
+    setManualAssistMessage('');
 
     const result = await DocumentPicker.getDocumentAsync({
       type: ['application/pdf', 'image/jpeg', 'image/png'],
@@ -513,6 +515,21 @@ export function UploadReportScreen() {
                 </View>
                 <FileText size={18} color={theme.colors.mutedText3} />
               </Pressable>
+
+              <Button
+                label="Can't read this file? Enter manually"
+                variant="outline"
+                onPress={() => {
+                  setMode('manual');
+                  setManualReviewStep(false);
+                  setError('');
+                  setManualAssistMessage(
+                    selectedFile
+                      ? `Switched to manual entry for ${selectedFile.name}. You can still submit this report without OCR.`
+                      : 'Switched to manual entry. Add biomarkers directly to continue.'
+                  );
+                }}
+              />
             </Card>
           </>
         ) : (

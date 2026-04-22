@@ -10,20 +10,28 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import {
+  ArrowDown,
+  ArrowUp,
   Calendar as CalendarIcon,
   ChevronRight,
   Droplets,
   History,
+  Minus,
   Plus,
   X,
 } from 'lucide-react-native';
 import {
+  Biomarker,
   buildDayMap,
   type DailySymptom,
   type FlowIntensity,
   formatDate,
   formatMonthDay,
+  type Intervention,
+  type InterventionCategory,
+  type LabReport,
   phaseDescription,
   type PeriodLog,
   type SymptomLog,
@@ -86,6 +94,20 @@ type TrackerTimelineItem =
       onPress: () => void;
     };
 
+const INTERVENTION_CATEGORIES: Array<{
+  value: InterventionCategory;
+  label: string;
+}> = [
+  { value: 'supplement', label: 'Supplement' },
+  { value: 'diet', label: 'Diet' },
+  { value: 'exercise', label: 'Exercise' },
+  { value: 'medication', label: 'Medication' },
+  { value: 'sleep', label: 'Sleep' },
+  { value: 'other', label: 'Other' },
+];
+
+const KEY_BIOMARKERS = ['ferritin', 'vitamin d', 'vitamin_d', 'tsh', 'hba1c', 'ldl', 'ldl-c'];
+
 function todayKey() {
   return dateToKey(new Date());
 }
@@ -128,13 +150,43 @@ function formatSymptomSummary(log: SymptomLog) {
   return `${log.symptoms.length} symptoms tracked`;
 }
 
+function formatInterventionWindow(intervention: Intervention) {
+  const start = formatDate(intervention.start_date, {
+    month: 'short',
+    day: 'numeric',
+  });
+
+  if (!intervention.end_date) {
+    return `${start} • Ongoing`;
+  }
+
+  const end = formatDate(intervention.end_date, { month: 'short', day: 'numeric' });
+  return `${start} - ${end}`;
+}
+
+function getInterventionCategoryColor(category: InterventionCategory) {
+  const colors: Record<InterventionCategory, string> = {
+    supplement: '#F2E8FF',
+    diet: '#E8F7EE',
+    exercise: '#E8F1FF',
+    medication: '#FFECEF',
+    sleep: '#ECEBFF',
+    other: theme.colors.surface2,
+  };
+  return colors[category];
+}
+
 export function TrackerScreen() {
   const { user, userProfile } = useAuth();
+  const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
   const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
+  const [reports, setReports] = useState<LabReport[]>([]);
+  const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
+  const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [labReportDates, setLabReportDates] = useState<string[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(
@@ -157,11 +209,38 @@ export function TrackerScreen() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<DailySymptom[]>([]);
   const [symptomNotes, setSymptomNotes] = useState('');
 
+  const [interventionModalOpen, setInterventionModalOpen] = useState(false);
+  const [editingIntervention, setEditingIntervention] = useState<Intervention | null>(null);
+  const [interventionTitle, setInterventionTitle] = useState('');
+  const [interventionCategory, setInterventionCategory] =
+    useState<InterventionCategory>('supplement');
+  const [interventionStartDate, setInterventionStartDate] = useState(todayKey());
+  const [interventionEndDate, setInterventionEndDate] = useState('');
+  const [interventionNotes, setInterventionNotes] = useState('');
+
+  const sortedReports = useMemo(
+    () =>
+      [...reports].sort(
+        (left, right) =>
+          new Date(left.report_date).getTime() - new Date(right.report_date).getTime()
+      ),
+    [reports]
+  );
+  const [baselineReportId, setBaselineReportId] = useState('');
+  const [followupReportId, setFollowupReportId] = useState('');
+
   useEffect(() => {
     if (user) {
       void fetchData();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (sortedReports.length >= 2 && (!baselineReportId || !followupReportId)) {
+      setBaselineReportId(sortedReports[sortedReports.length - 2].id);
+      setFollowupReportId(sortedReports[sortedReports.length - 1].id);
+    }
+  }, [sortedReports, baselineReportId, followupReportId]);
 
   const fetchData = async () => {
     if (!user) {
@@ -171,7 +250,7 @@ export function TrackerScreen() {
     try {
       setLoading(true);
 
-      const [periodRes, symptomRes, reportsRes] = await Promise.all([
+      const [periodRes, symptomRes, reportsRes, interventionsRes] = await Promise.all([
         supabase
           .from('period_logs')
           .select('*')
@@ -184,9 +263,14 @@ export function TrackerScreen() {
           .order('log_date', { ascending: false }),
         supabase
           .from('lab_reports')
-          .select('report_date')
+          .select('*')
           .eq('user_id', user.id)
           .order('report_date', { ascending: false }),
+        supabase
+          .from('interventions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('start_date', { ascending: false }),
       ]);
 
       if (periodRes.error) {
@@ -200,6 +284,9 @@ export function TrackerScreen() {
       if (reportsRes.error) {
         throw reportsRes.error;
       }
+      if (interventionsRes.error) {
+        throw interventionsRes.error;
+      }
 
       setPeriodLogs((periodRes.data ?? []) as PeriodLog[]);
       setSymptomLogs(
@@ -210,9 +297,37 @@ export function TrackerScreen() {
           })
         )
       );
-      setLabReportDates(
-        ((reportsRes.data ?? []) as Array<{ report_date: string }>).map((report) => report.report_date)
-      );
+      const fetchedReports = (reportsRes.data ?? []) as LabReport[];
+      setReports(fetchedReports);
+      setLabReportDates(fetchedReports.map((report) => report.report_date));
+      setInterventions((interventionsRes.data ?? []) as Intervention[]);
+
+      if (fetchedReports.length > 0) {
+        const reportIds = fetchedReports.map((report) => report.id);
+        const { data: biomarkerRows, error: biomarkersError } = await supabase
+          .from('biomarkers')
+          .select('*')
+          .in('lab_report_id', reportIds);
+
+        if (biomarkersError) {
+          throw biomarkersError;
+        }
+
+        const grouped = ((biomarkerRows ?? []) as Biomarker[]).reduce(
+          (accumulator, biomarker) => {
+            if (!accumulator[biomarker.lab_report_id]) {
+              accumulator[biomarker.lab_report_id] = [];
+            }
+            accumulator[biomarker.lab_report_id].push(biomarker);
+            return accumulator;
+          },
+          {} as Record<string, Biomarker[]>
+        );
+
+        setBiomarkersByReport(grouped);
+      } else {
+        setBiomarkersByReport({});
+      }
     } catch (fetchError) {
       console.error('Error fetching tracker data:', fetchError);
       setError(
@@ -249,6 +364,26 @@ export function TrackerScreen() {
     () => new Set(symptomLogs.map((log) => log.log_date)),
     [symptomLogs]
   );
+  const interventionActiveDateSet = useMemo(() => {
+    const set = new Set<string>();
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const dateKey = dateToKey(new Date(year, month, day));
+      const hasActiveIntervention = interventions.some(
+        (intervention) =>
+          intervention.start_date <= dateKey &&
+          (!intervention.end_date || intervention.end_date >= dateKey)
+      );
+      if (hasActiveIntervention) {
+        set.add(dateKey);
+      }
+    }
+
+    return set;
+  }, [interventions, calendarMonth]);
   const dayMap = useMemo(
     () =>
       buildDayMap(
@@ -258,9 +393,9 @@ export function TrackerScreen() {
         prediction,
         labDateSet,
         symptomDateSet,
-        new Set<string>()
+        interventionActiveDateSet
       ),
-    [calendarMonth, periodLogs, prediction, labDateSet, symptomDateSet]
+    [calendarMonth, periodLogs, prediction, labDateSet, symptomDateSet, interventionActiveDateSet]
   );
 
   const selectedPeriodLog = useMemo(
@@ -292,6 +427,7 @@ export function TrackerScreen() {
     selectedDayInfo.states.includes('fertile_window') ? 'Fertile window' : null,
     selectedSymptomLog ? formatSymptomSummary(selectedSymptomLog) : null,
     selectedDayInfo.hasLab ? 'Lab report' : null,
+    selectedDayInfo.hasIntervention ? 'Intervention active' : null,
   ].filter(Boolean) as string[];
 
   const selectedDayDescription = selectedSymptomLog
@@ -505,6 +641,144 @@ export function TrackerScreen() {
     }
   };
 
+  const openInterventionEditor = (intervention?: Intervention | null) => {
+    setError('');
+    setSuccess('');
+    setEditingIntervention(intervention ?? null);
+    setInterventionTitle(intervention?.title ?? '');
+    setInterventionCategory(intervention?.category ?? 'supplement');
+    setInterventionStartDate(intervention?.start_date ?? todayKey());
+    setInterventionEndDate(intervention?.end_date ?? '');
+    setInterventionNotes(intervention?.notes ?? '');
+    setInterventionModalOpen(true);
+  };
+
+  const closeInterventionEditor = () => {
+    setInterventionModalOpen(false);
+    setEditingIntervention(null);
+  };
+
+  const handleSaveIntervention = async () => {
+    if (!user) {
+      return;
+    }
+
+    if (!interventionTitle.trim()) {
+      setError('Add a title for the intervention.');
+      return;
+    }
+
+    if (!isIsoDate(interventionStartDate)) {
+      setError('Use YYYY-MM-DD for the intervention start date.');
+      return;
+    }
+
+    if (interventionEndDate && !isIsoDate(interventionEndDate)) {
+      setError('Use YYYY-MM-DD for the intervention end date.');
+      return;
+    }
+
+    if (interventionEndDate && interventionEndDate < interventionStartDate) {
+      setError('The intervention end date cannot be before the start date.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+
+      const payload = {
+        title: interventionTitle.trim(),
+        category: interventionCategory,
+        start_date: interventionStartDate,
+        end_date: interventionEndDate || null,
+        notes: interventionNotes.trim() || null,
+      };
+
+      if (editingIntervention) {
+        const { error: updateError } = await supabase
+          .from('interventions')
+          .update(payload)
+          .eq('id', editingIntervention.id);
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        const { error: insertError } = await supabase.from('interventions').insert({
+          user_id: user.id,
+          ...payload,
+        });
+        if (insertError) {
+          throw insertError;
+        }
+      }
+
+      setSuccess(
+        editingIntervention ? 'Intervention updated.' : 'Intervention added.'
+      );
+      closeInterventionEditor();
+      await fetchData();
+    } catch (saveError) {
+      console.error('Error saving intervention:', saveError);
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : 'Unable to save the intervention.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const compareRows = useMemo(() => {
+    if (!baselineReportId || !followupReportId) {
+      return [];
+    }
+    const baseline = biomarkersByReport[baselineReportId] ?? [];
+    const followup = biomarkersByReport[followupReportId] ?? [];
+
+    return baseline
+      .map((baseBiomarker) => {
+        const match = followup.find(
+          (candidate) =>
+            candidate.name.toLowerCase().trim() ===
+              baseBiomarker.name.toLowerCase().trim() &&
+            candidate.unit === baseBiomarker.unit
+        );
+        if (!match) {
+          return null;
+        }
+        const delta = match.value - baseBiomarker.value;
+        const percent = baseBiomarker.value
+          ? (delta / baseBiomarker.value) * 100
+          : 0;
+        return {
+          name: baseBiomarker.name,
+          baseline: baseBiomarker.value,
+          followup: match.value,
+          unit: match.unit,
+          delta,
+          percent,
+        };
+      })
+      .filter(Boolean) as Array<{
+      name: string;
+      baseline: number;
+      followup: number;
+      unit: string;
+      delta: number;
+      percent: number;
+    }>;
+  }, [baselineReportId, followupReportId, biomarkersByReport]);
+
+  const sortedInterventions = useMemo(
+    () =>
+      [...interventions].sort((left, right) =>
+        right.start_date.localeCompare(left.start_date)
+      ),
+    [interventions]
+  );
+
   if (loading && !refreshing) {
     return (
       <SafeAreaView style={styles.center} edges={['top', 'bottom']}>
@@ -648,7 +922,7 @@ export function TrackerScreen() {
           <TouchableOpacity
             activeOpacity={0.85}
             style={styles.actionButton}
-            onPress={() => setHistoryExpanded((current) => !current)}
+            onPress={() => openInterventionEditor()}
           >
             <View
               style={[
@@ -659,7 +933,7 @@ export function TrackerScreen() {
               <History size={20} color={theme.colors.primary} />
             </View>
             <Text variant="bodySm" weight="semibold">
-              {historyExpanded ? 'Collapse' : 'History'}
+              Add Intervention
             </Text>
           </TouchableOpacity>
         </View>
@@ -722,6 +996,248 @@ export function TrackerScreen() {
             />
           </View>
         </Card>
+
+        <View style={styles.sectionHeader}>
+          <Text variant="titleSm">Interventions</Text>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => openInterventionEditor()}>
+            <Text variant="bodySm" tone="primary" weight="semibold">
+              Add
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {sortedInterventions.length === 0 ? (
+          <Card style={styles.emptyHistoryCard}>
+            <Text variant="bodySm" tone="muted" style={styles.emptyHistoryText}>
+              No interventions yet. Add supplements, medications, or lifestyle changes.
+            </Text>
+          </Card>
+        ) : (
+          <View style={styles.logsList}>
+            {sortedInterventions.slice(0, 5).map((intervention) => (
+              <TouchableOpacity
+                key={intervention.id}
+                activeOpacity={0.85}
+                onPress={() => openInterventionEditor(intervention)}
+                style={styles.logItem}
+              >
+                <View
+                  style={[
+                    styles.logIcon,
+                    { backgroundColor: getInterventionCategoryColor(intervention.category) },
+                  ]}
+                >
+                  <History size={16} color={theme.colors.primaryDark} />
+                </View>
+                <View style={styles.logContent}>
+                  <Text variant="bodySm" weight="bold">
+                    {intervention.title}
+                  </Text>
+                  <Text variant="caption" tone="muted">
+                    {formatInterventionWindow(intervention)}
+                  </Text>
+                  <View style={styles.logBadge}>
+                    <Text variant="caption" tone="muted" weight="semibold">
+                      {intervention.category}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={16} color={theme.colors.mutedText3} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text variant="titleSm">Compare reports</Text>
+          <Text variant="caption" tone="muted">
+            Side-by-side biomarker changes.
+          </Text>
+        </View>
+
+        {sortedReports.length < 2 ? (
+          <Card style={styles.emptyHistoryCard}>
+            <Text variant="bodySm" tone="muted" style={styles.emptyHistoryText}>
+              Upload at least 2 reports to compare biomarker changes.
+            </Text>
+          </Card>
+        ) : (
+          <Card style={styles.compareCard}>
+            <View style={styles.compareSelectors}>
+              <View style={styles.compareColumn}>
+                <Text variant="caption" tone="muted" weight="bold">
+                  EARLIER
+                </Text>
+                {sortedReports.map((report) => (
+                  <Pressable
+                    key={`baseline-${report.id}`}
+                    style={[
+                      styles.reportChip,
+                      baselineReportId === report.id ? styles.reportChipSelected : null,
+                    ]}
+                    onPress={() => setBaselineReportId(report.id)}
+                  >
+                    <Text
+                      variant="caption"
+                      tone={baselineReportId === report.id ? 'inverse' : 'default'}
+                      weight="semibold"
+                    >
+                      {formatDate(report.report_date, { month: 'short', day: 'numeric', year: '2-digit' })}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.compareColumn}>
+                <Text variant="caption" tone="muted" weight="bold">
+                  LATER
+                </Text>
+                {sortedReports.map((report) => (
+                  <Pressable
+                    key={`followup-${report.id}`}
+                    style={[
+                      styles.reportChip,
+                      followupReportId === report.id ? styles.reportChipSelected : null,
+                    ]}
+                    onPress={() => setFollowupReportId(report.id)}
+                  >
+                    <Text
+                      variant="caption"
+                      tone={followupReportId === report.id ? 'inverse' : 'default'}
+                      weight="semibold"
+                    >
+                      {formatDate(report.report_date, { month: 'short', day: 'numeric', year: '2-digit' })}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {compareRows.slice(0, 8).map((row) => (
+              <View key={row.name} style={styles.compareRow}>
+                <View style={styles.compareTextColumn}>
+                  <Text variant="bodySm" weight="semibold">
+                    {row.name}
+                  </Text>
+                  <Text variant="caption" tone="muted">
+                    {row.baseline.toFixed(2)} → {row.followup.toFixed(2)} {row.unit}
+                  </Text>
+                </View>
+                {row.delta === 0 ? (
+                  <View style={styles.compareDelta}>
+                    <Minus size={14} color={theme.colors.mutedText3} />
+                    <Text variant="caption" tone="muted">
+                      0%
+                    </Text>
+                  </View>
+                ) : row.delta > 0 ? (
+                  <View style={styles.compareDelta}>
+                    <ArrowUp size={14} color={theme.colors.warning} />
+                    <Text variant="caption" tone="warning" weight="semibold">
+                      +{row.percent.toFixed(0)}%
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.compareDelta}>
+                    <ArrowDown size={14} color={theme.colors.success} />
+                    <Text variant="caption" tone="success" weight="semibold">
+                      {row.percent.toFixed(0)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </Card>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text variant="titleSm">Labs timeline</Text>
+          <Text variant="caption" tone="muted">
+            Trends over time with active interventions.
+          </Text>
+        </View>
+
+        {sortedReports.length === 0 ? (
+          <Card style={styles.emptyHistoryCard}>
+            <Text variant="bodySm" tone="muted" style={styles.emptyHistoryText}>
+              No lab reports yet.
+            </Text>
+          </Card>
+        ) : (
+          sortedReports.map((report, index) => {
+            const previousReport = index > 0 ? sortedReports[index - 1] : null;
+            const reportBiomarkers = biomarkersByReport[report.id] ?? [];
+            const previousBiomarkers = previousReport
+              ? biomarkersByReport[previousReport.id] ?? []
+              : [];
+            const activeDuringReport = interventions.filter(
+              (intervention) =>
+                intervention.start_date <= report.report_date &&
+                (!intervention.end_date || intervention.end_date >= report.report_date)
+            );
+
+            const highlights = KEY_BIOMARKERS.map((name) => {
+              const current = reportBiomarkers.find(
+                (entry) => entry.name.toLowerCase().trim() === name
+              );
+              if (!current || !previousReport) {
+                return null;
+              }
+              const previous = previousBiomarkers.find(
+                (entry) =>
+                  entry.name.toLowerCase().trim() === current.name.toLowerCase().trim()
+              );
+              if (!previous) {
+                return null;
+              }
+              const delta = current.value - previous.value;
+              return { name: current.name, delta, unit: current.unit };
+            }).filter(Boolean) as Array<{ name: string; delta: number; unit: string }>;
+
+            return (
+              <Card key={report.id} style={styles.timelineCard}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
+                >
+                  <Text variant="body" weight="bold">
+                    {formatDate(report.report_date, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </Text>
+                  {activeDuringReport.length > 0 ? (
+                    <View style={styles.badgeRow}>
+                      {activeDuringReport.slice(0, 3).map((intervention) => (
+                        <View key={intervention.id} style={styles.badge}>
+                          <Text variant="caption" tone="muted" weight="semibold">
+                            {intervention.title}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {highlights.slice(0, 3).map((item) => (
+                    <View key={item.name} style={styles.compareRow}>
+                      <Text variant="caption" tone="muted">
+                        {item.name}
+                      </Text>
+                      <Text
+                        variant="caption"
+                        tone={item.delta > 0 ? 'warning' : item.delta < 0 ? 'success' : 'muted'}
+                        weight="semibold"
+                      >
+                        {item.delta > 0 ? '+' : ''}
+                        {item.delta.toFixed(1)} {item.unit}
+                      </Text>
+                    </View>
+                  ))}
+                </TouchableOpacity>
+              </Card>
+            );
+          })
+        )}
 
         <View style={styles.sectionHeader}>
           <Text variant="titleSm">
@@ -970,6 +1486,112 @@ export function TrackerScreen() {
           </Card>
         </View>
       </Modal>
+
+      <Modal
+        animationType="slide"
+        presentationStyle="pageSheet"
+        transparent
+        visible={interventionModalOpen}
+        onRequestClose={closeInterventionEditor}
+      >
+        <View style={styles.modalRoot}>
+          <View style={styles.modalBackdrop} />
+          <Card style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderCopy}>
+                <Text variant="titleSm">
+                  {editingIntervention ? 'Edit intervention' : 'Add intervention'}
+                </Text>
+                <Text variant="bodySm" tone="muted">
+                  Track supplements, medications, and lifestyle changes.
+                </Text>
+              </View>
+              <Pressable onPress={closeInterventionEditor} style={styles.modalCloseButton}>
+                <X size={18} color={theme.colors.mutedText3} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Input
+                label="Title"
+                value={interventionTitle}
+                onChangeText={setInterventionTitle}
+                placeholder="e.g., Magnesium glycinate"
+              />
+
+              <View style={styles.formSection}>
+                <Text variant="label">Category</Text>
+                <View style={styles.chipGrid}>
+                  {INTERVENTION_CATEGORIES.map((option) => {
+                    const selected = option.value === interventionCategory;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => setInterventionCategory(option.value)}
+                        style={[styles.chip, selected ? styles.chipSelected : null]}
+                      >
+                        <Text
+                          variant="bodySm"
+                          tone={selected ? 'inverse' : 'default'}
+                          weight="semibold"
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <DateField
+                label="Start date"
+                value={interventionStartDate}
+                onChange={setInterventionStartDate}
+                maximumDate={new Date()}
+              />
+
+              <DateField
+                label="End date"
+                value={interventionEndDate}
+                onChange={setInterventionEndDate}
+                hint="Leave blank if this is ongoing."
+                allowClear
+                minimumDate={parseDateValue(interventionStartDate)}
+                maximumDate={new Date()}
+              />
+
+              <Input
+                label="Notes"
+                value={interventionNotes}
+                onChangeText={setInterventionNotes}
+                multiline
+                placeholder="Dose, timing, adherence, or any context..."
+              />
+
+              <View style={styles.modalActions}>
+                <Button
+                  label="Cancel"
+                  onPress={closeInterventionEditor}
+                  variant="ghost"
+                  style={styles.flexButton}
+                />
+                <Button
+                  label={editingIntervention ? 'Save changes' : 'Save intervention'}
+                  onPress={() => {
+                    void handleSaveIntervention();
+                  }}
+                  loading={saving}
+                  style={styles.flexButton}
+                />
+              </View>
+            </ScrollView>
+          </Card>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1109,6 +1731,7 @@ const styles = StyleSheet.create({
   },
   logsList: {
     gap: theme.spacing.sm,
+    marginBottom: theme.spacing.xl,
   },
   logItem: {
     flexDirection: 'row',
@@ -1137,6 +1760,50 @@ const styles = StyleSheet.create({
     borderRadius: theme.radii.pill,
     paddingHorizontal: theme.spacing.xs,
     paddingVertical: theme.spacing.xxs,
+  },
+  compareCard: {
+    marginBottom: theme.spacing.xl,
+    gap: theme.spacing.sm,
+  },
+  compareSelectors: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  compareColumn: {
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  reportChip: {
+    borderRadius: theme.radii.pill,
+    borderWidth: theme.borders.thin,
+    borderColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    backgroundColor: theme.colors.surface2,
+  },
+  reportChipSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  compareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: theme.borders.thin,
+    borderTopColor: theme.colors.borderSubtle,
+    paddingTop: theme.spacing.sm,
+  },
+  compareTextColumn: {
+    flex: 1,
+  },
+  compareDelta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xxs,
+  },
+  timelineCard: {
+    marginBottom: theme.spacing.sm,
   },
   modalRoot: {
     flex: 1,
