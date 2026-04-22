@@ -17,16 +17,40 @@ import {
   ExternalLink,
   FileText,
   FlaskConical,
+  Plus,
+  Sparkles,
   Upload,
+  X,
 } from 'lucide-react-native';
 import { Button, Card, DateField, Input, Notice, Text } from '../components';
 import { useAuth } from '../contexts/AuthContext';
-import { uploadAndProcessReport, type UploadReportStage } from '../lib/reportUpload';
+import {
+  uploadAndProcessReport,
+  uploadManualReport,
+  type UploadReportStage,
+} from '../lib/reportUpload';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
 
 const QUEST_URL = 'https://myquest.questdiagnostics.com/';
 const LABCORP_URL = 'https://patient.labcorp.com/';
+
+type EntryMode = 'upload' | 'manual';
+
+interface ManualEntryDraft {
+  id: string;
+  name: string;
+  value: string;
+  unit: string;
+  referenceMin: string;
+  referenceMax: string;
+}
+
+interface CatalogBiomarker {
+  slug: string;
+  name: string;
+  unit: string | null;
+}
 
 function parseDateValue(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -37,9 +61,25 @@ function parseDateValue(value: string) {
   return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
 
+function normalizeBiomarkerLabel(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function emptyManualEntry(): ManualEntryDraft {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: '',
+    value: '',
+    unit: '',
+    referenceMin: '',
+    referenceMax: '',
+  };
+}
+
 export function UploadReportScreen() {
   const navigation = useNavigation<any>();
   const { user, userProfile } = useAuth();
+  const [mode, setMode] = useState<EntryMode>('upload');
   const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [lastPeriodDate, setLastPeriodDate] = useState('');
@@ -51,6 +91,9 @@ export function UploadReportScreen() {
   const [loadingDefaults, setLoadingDefaults] = useState(true);
   const [error, setError] = useState('');
   const [portalHint, setPortalHint] = useState('');
+  const [manualEntries, setManualEntries] = useState<ManualEntryDraft[]>([emptyManualEntry()]);
+  const [manualReviewStep, setManualReviewStep] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogBiomarker[]>([]);
 
   const canUpload = useMemo(() => canCreateReport(userProfile), [userProfile]);
   const stageLabels: Record<UploadReportStage, string> = {
@@ -70,16 +113,23 @@ export function UploadReportScreen() {
       }
 
       try {
-        const { data } = await supabase
-          .from('period_logs')
-          .select('start_date')
-          .eq('user_id', user.id)
-          .order('start_date', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const [periodResult, catalogResult] = await Promise.all([
+          supabase
+            .from('period_logs')
+            .select('start_date')
+            .eq('user_id', user.id)
+            .order('start_date', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase.from('biomarker_catalog').select('slug, name, unit').order('name'),
+        ]);
 
-        if (!cancelled && data?.start_date) {
-          setLastPeriodDate(data.start_date);
+        if (!cancelled && periodResult.data?.start_date) {
+          setLastPeriodDate(periodResult.data.start_date);
+        }
+
+        if (!cancelled && catalogResult.data) {
+          setCatalog(catalogResult.data as CatalogBiomarker[]);
         }
       } catch (fetchError) {
         if (!cancelled) {
@@ -142,31 +192,108 @@ export function UploadReportScreen() {
     }
   };
 
+  const updateManualEntry = (id: string, field: keyof ManualEntryDraft, value: string) => {
+    setManualEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, [field]: value } : entry))
+    );
+  };
+
+  const manualPreview = useMemo(() => {
+    return manualEntries
+      .map((entry) => {
+        const numericValue = Number(entry.value);
+        if (!entry.name.trim() || !Number.isFinite(numericValue)) {
+          return null;
+        }
+
+        const normalizedName = normalizeBiomarkerLabel(entry.name);
+        const match =
+          catalog.find((item) => normalizeBiomarkerLabel(item.slug) === normalizedName)
+          ?? catalog.find((item) => normalizeBiomarkerLabel(item.name) === normalizedName);
+
+        return {
+          ...entry,
+          valueNumber: numericValue,
+          normalizedMin: entry.referenceMin.trim() ? Number(entry.referenceMin) : null,
+          normalizedMax: entry.referenceMax.trim() ? Number(entry.referenceMax) : null,
+          canonicalSlug: match?.slug ?? null,
+          canonicalName: match?.name ?? null,
+          defaultUnit: match?.unit ?? null,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  }, [catalog, manualEntries]);
+
+  const validateSharedFields = () => {
+    const cycleLengthValue = Number(cycleLength);
+    if (!Number.isInteger(cycleLengthValue) || cycleLengthValue < 21 || cycleLengthValue > 45) {
+      setError('Enter a cycle length between 21 and 45 days.');
+      return null;
+    }
+
+    if (lastPeriodDate && lastPeriodDate > reportDate) {
+      setError('Last period start cannot be after the report date.');
+      return null;
+    }
+
+    return cycleLengthValue;
+  };
+
   const handleSubmit = async () => {
     if (!user) {
       setError('Please sign in again before uploading.');
       return;
     }
 
-    if (!selectedFile) {
-      setError('Choose a PDF or image to continue.');
-      return;
-    }
-
-    const cycleLengthValue = Number(cycleLength);
-    if (!Number.isInteger(cycleLengthValue) || cycleLengthValue < 21 || cycleLengthValue > 45) {
-      setError('Enter a cycle length between 21 and 45 days.');
-      return;
-    }
-
-    if (lastPeriodDate && lastPeriodDate > reportDate) {
-      setError('Last period start cannot be after the report date.');
+    const cycleLengthValue = validateSharedFields();
+    if (!cycleLengthValue) {
       return;
     }
 
     setError('');
 
     try {
+      if (mode === 'manual') {
+        if (!manualReviewStep) {
+          if (manualPreview.length === 0) {
+            setError('Add at least one biomarker name and numeric value to continue.');
+            return;
+          }
+          setManualReviewStep(true);
+          return;
+        }
+
+        const result = await uploadManualReport({
+          user,
+          userProfile,
+          reportDate,
+          lastPeriodDate: lastPeriodDate || null,
+          cycleLength: cycleLengthValue,
+          labSource,
+          entries: manualPreview.map((entry) => ({
+            name: entry.name.trim(),
+            value: entry.valueNumber,
+            unit: entry.unit.trim() || entry.defaultUnit || null,
+            normalizedMin: Number.isFinite(entry.normalizedMin) ? entry.normalizedMin : null,
+            normalizedMax: Number.isFinite(entry.normalizedMax) ? entry.normalizedMax : null,
+            rawReferenceRange:
+              entry.referenceMin.trim() || entry.referenceMax.trim()
+                ? `${entry.referenceMin || '-'} - ${entry.referenceMax || '-'}`
+                : null,
+            canonicalSlug: entry.canonicalSlug,
+          })),
+          onStageChange: setStage,
+        });
+
+        navigation.replace('ReportDetail', { reportId: result.reportId });
+        return;
+      }
+
+      if (!selectedFile) {
+        setError('Choose a PDF or image to continue.');
+        return;
+      }
+
       const result = await uploadAndProcessReport({
         user,
         userProfile,
@@ -185,7 +312,12 @@ export function UploadReportScreen() {
 
       navigation.replace('ReportDetail', { reportId: result.reportId });
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to upload this report.');
+      const message = submitError instanceof Error ? submitError.message : 'Unable to upload this report.';
+      setError(message);
+      if (message.toLowerCase().includes('no biomarkers were detected')) {
+        setMode('manual');
+        setManualReviewStep(false);
+      }
     }
   };
 
@@ -199,10 +331,38 @@ export function UploadReportScreen() {
           <View style={styles.headerCopy}>
             <Text variant="titleSm">Upload Lab Report</Text>
             <Text variant="caption" tone="muted">
-              PDF and image uploads with mobile-native picking.
+              Upload a file or enter biomarkers manually.
             </Text>
           </View>
         </View>
+
+        <Card style={styles.modeCard}>
+          <Text variant="body" weight="bold">Choose entry method</Text>
+          <View style={styles.modeRow}>
+            <Pressable
+              onPress={() => {
+                setMode('upload');
+                setManualReviewStep(false);
+                setError('');
+              }}
+              style={[styles.modeButton, mode === 'upload' ? styles.modeButtonActive : null]}
+            >
+              <Upload size={18} color={theme.colors.primary} />
+              <Text variant="bodySm" weight="semibold">Upload + OCR</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setMode('manual');
+                setManualReviewStep(false);
+                setError('');
+              }}
+              style={[styles.modeButton, mode === 'manual' ? styles.modeButtonActive : null]}
+            >
+              <Sparkles size={18} color={theme.colors.primary} />
+              <Text variant="bodySm" weight="semibold">Manual entry</Text>
+            </Pressable>
+          </View>
+        </Card>
 
         {!canUpload ? (
           <View style={styles.blockedState}>
@@ -223,7 +383,7 @@ export function UploadReportScreen() {
           </Notice>
         ) : null}
 
-        {!stage && portalHint ? (
+        {!stage && portalHint && mode === 'upload' ? (
           <Notice tone="info" style={styles.notice}>
             {portalHint}
           </Notice>
@@ -235,88 +395,195 @@ export function UploadReportScreen() {
           </Notice>
         ) : null}
 
-        <Card style={styles.portalCard}>
-          <Text variant="body" weight="bold">
-            Import from an official portal
-          </Text>
-          <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
-            Quest and Labcorp PDFs usually produce the best extraction quality.
-          </Text>
-
-          <View style={styles.portalGrid}>
-            <Pressable
-              onPress={() => {
-                void openPortalBrowser('quest', QUEST_URL);
-              }}
-              style={[
-                styles.portalButton,
-                labSource === 'quest' ? styles.portalButtonActive : null,
-              ]}
-            >
-              <View style={styles.portalIcon}>
-                <FlaskConical size={18} color={theme.colors.success} />
-              </View>
-              <View style={styles.portalCopy}>
-                <Text variant="bodySm" weight="semibold">
-                  Quest Diagnostics
-                </Text>
-                <Text variant="caption" tone="muted">
-                  Open MyQuest
-                </Text>
-              </View>
-              <ExternalLink size={16} color={theme.colors.mutedText3} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                void openPortalBrowser('labcorp', LABCORP_URL);
-              }}
-              style={[
-                styles.portalButton,
-                labSource === 'labcorp' ? styles.portalButtonActive : null,
-              ]}
-            >
-              <View style={styles.portalIcon}>
-                <FlaskConical size={18} color={theme.colors.primary} />
-              </View>
-              <View style={styles.portalCopy}>
-                <Text variant="bodySm" weight="semibold">
-                  Labcorp
-                </Text>
-                <Text variant="caption" tone="muted">
-                  Open patient portal
-                </Text>
-              </View>
-              <ExternalLink size={16} color={theme.colors.mutedText3} />
-            </Pressable>
-          </View>
-        </Card>
-
-        <Card style={styles.uploadCard}>
-          <Text variant="body" weight="bold">
-            Choose file
-          </Text>
-          <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
-            Supported formats: PDF, JPG, and PNG.
-          </Text>
-
-          <Pressable onPress={handlePickFile} style={styles.filePicker}>
-            <View style={styles.filePickerIcon}>
-              <Upload size={24} color={theme.colors.primary} />
-            </View>
-            <View style={styles.filePickerCopy}>
-              <Text variant="body" weight="semibold">
-                {selectedFile ? selectedFile.name : 'Select report from device'}
+        {mode === 'upload' ? (
+          <>
+            <Card style={styles.portalCard}>
+              <Text variant="body" weight="bold">
+                Import from an official portal
               </Text>
-              <Text variant="caption" tone="muted">
-                {selectedFile
-                  ? `${selectedFile.mimeType ?? 'Document'}${selectedFile.size ? ` • ${(selectedFile.size / 1024 / 1024).toFixed(1)} MB` : ''}`
-                  : 'Tap to open the native file picker.'}
+              <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
+                Quest and Labcorp PDFs usually produce the best extraction quality.
               </Text>
-            </View>
-            <FileText size={18} color={theme.colors.mutedText3} />
-          </Pressable>
-        </Card>
+
+              <View style={styles.portalGrid}>
+                <Pressable
+                  onPress={() => {
+                    void openPortalBrowser('quest', QUEST_URL);
+                  }}
+                  style={[
+                    styles.portalButton,
+                    labSource === 'quest' ? styles.portalButtonActive : null,
+                  ]}
+                >
+                  <View style={styles.portalIcon}>
+                    <FlaskConical size={18} color={theme.colors.success} />
+                  </View>
+                  <View style={styles.portalCopy}>
+                    <Text variant="bodySm" weight="semibold">
+                      Quest Diagnostics
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      Open MyQuest
+                    </Text>
+                  </View>
+                  <ExternalLink size={16} color={theme.colors.mutedText3} />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    void openPortalBrowser('labcorp', LABCORP_URL);
+                  }}
+                  style={[
+                    styles.portalButton,
+                    labSource === 'labcorp' ? styles.portalButtonActive : null,
+                  ]}
+                >
+                  <View style={styles.portalIcon}>
+                    <FlaskConical size={18} color={theme.colors.primary} />
+                  </View>
+                  <View style={styles.portalCopy}>
+                    <Text variant="bodySm" weight="semibold">
+                      Labcorp
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      Open patient portal
+                    </Text>
+                  </View>
+                  <ExternalLink size={16} color={theme.colors.mutedText3} />
+                </Pressable>
+              </View>
+            </Card>
+
+            <Card style={styles.uploadCard}>
+              <Text variant="body" weight="bold">
+                Choose file
+              </Text>
+              <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
+                Supported formats: PDF, JPG, and PNG.
+              </Text>
+
+              <Pressable onPress={handlePickFile} style={styles.filePicker}>
+                <View style={styles.filePickerIcon}>
+                  <Upload size={24} color={theme.colors.primary} />
+                </View>
+                <View style={styles.filePickerCopy}>
+                  <Text variant="body" weight="semibold">
+                    {selectedFile ? selectedFile.name : 'Select report from device'}
+                  </Text>
+                  <Text variant="caption" tone="muted">
+                    {selectedFile
+                      ? `${selectedFile.mimeType ?? 'Document'}${selectedFile.size ? ` • ${(selectedFile.size / 1024 / 1024).toFixed(1)} MB` : ''}`
+                      : 'Tap to open the native file picker.'}
+                  </Text>
+                </View>
+                <FileText size={18} color={theme.colors.mutedText3} />
+              </Pressable>
+            </Card>
+          </>
+        ) : (
+          <Card>
+            {!manualReviewStep ? (
+              <>
+                <Text variant="body" weight="bold">Manual biomarkers</Text>
+                <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
+                  Enter results if extraction fails or if you prefer to review values before upload.
+                </Text>
+
+                <View style={styles.formGroup}>
+                  {manualEntries.map((entry, index) => (
+                    <View key={entry.id} style={styles.manualEntryCard}>
+                      <View style={styles.manualEntryHeader}>
+                        <Text variant="bodySm" weight="semibold">Biomarker {index + 1}</Text>
+                        {manualEntries.length > 1 ? (
+                          <Pressable
+                            onPress={() => setManualEntries((current) => current.filter((item) => item.id !== entry.id))}
+                          >
+                            <X size={18} color={theme.colors.mutedText} />
+                          </Pressable>
+                        ) : null}
+                      </View>
+
+                      <Input
+                        label="Name"
+                        value={entry.name}
+                        onChangeText={(value) => updateManualEntry(entry.id, 'name', value)}
+                        placeholder="e.g. Ferritin"
+                      />
+                      <Input
+                        label="Value"
+                        value={entry.value}
+                        onChangeText={(value) => updateManualEntry(entry.id, 'value', value)}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 48"
+                      />
+                      <Input
+                        label="Unit (optional)"
+                        value={entry.unit}
+                        onChangeText={(value) => updateManualEntry(entry.id, 'unit', value)}
+                        placeholder="e.g. ng/mL"
+                      />
+
+                      <View style={styles.inlineInputs}>
+                        <Input
+                          label="Ref min"
+                          value={entry.referenceMin}
+                          onChangeText={(value) => updateManualEntry(entry.id, 'referenceMin', value)}
+                          keyboardType="decimal-pad"
+                          placeholder="optional"
+                          containerStyle={styles.inlineInput}
+                        />
+                        <Input
+                          label="Ref max"
+                          value={entry.referenceMax}
+                          onChangeText={(value) => updateManualEntry(entry.id, 'referenceMax', value)}
+                          keyboardType="decimal-pad"
+                          placeholder="optional"
+                          containerStyle={styles.inlineInput}
+                        />
+                      </View>
+                    </View>
+                  ))}
+
+                  <Button
+                    label="Add biomarker"
+                    variant="outline"
+                    icon={<Plus size={16} color={theme.colors.primary} />}
+                    onPress={() => setManualEntries((current) => [...current, emptyManualEntry()])}
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                <Text variant="body" weight="bold">Review manual entries</Text>
+                <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
+                  We matched entries to core biomarkers when possible.
+                </Text>
+
+                <View style={styles.formGroup}>
+                  {manualPreview.map((entry) => (
+                    <View key={entry.id} style={styles.reviewRow}>
+                      <View style={styles.reviewRowCopy}>
+                        <Text variant="bodySm" weight="semibold">{entry.name}</Text>
+                        <Text variant="caption" tone="muted">
+                          {entry.valueNumber} {entry.unit || entry.defaultUnit || ''}
+                        </Text>
+                      </View>
+                      <Text variant="caption" tone={entry.canonicalSlug ? 'default' : 'muted'}>
+                        {entry.canonicalSlug ? `Mapped to ${entry.canonicalName}` : 'Saved as extended marker'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                <Button
+                  label="Back to edit"
+                  variant="outline"
+                  onPress={() => setManualReviewStep(false)}
+                />
+              </>
+            )}
+          </Card>
+        )}
 
         <Card>
           <Text variant="body" weight="bold">
@@ -355,15 +622,23 @@ export function UploadReportScreen() {
         </Card>
 
         <Button
-          label={stage ? stageLabels[stage] : 'Upload and Analyze'}
+          label={
+            stage
+              ? stageLabels[stage]
+              : mode === 'manual' && !manualReviewStep
+                ? 'Review Manual Entries'
+                : mode === 'manual'
+                  ? 'Save Manual Report'
+                  : 'Upload and Analyze'
+          }
           onPress={handleSubmit}
-          disabled={!canUpload || !selectedFile || loadingDefaults}
+          disabled={!canUpload || loadingDefaults || (mode === 'upload' && !selectedFile)}
           loading={Boolean(stage)}
           fullWidth
           style={styles.submitButton}
         />
 
-        {!selectedFile && !loadingDefaults ? (
+        {mode === 'upload' && !selectedFile && !loadingDefaults ? (
           <View style={styles.footerHint}>
             <ActivityIndicator size="small" color={theme.colors.background} style={styles.hiddenSpinner} />
             <Text variant="caption" tone="muted" style={styles.footerText}>
@@ -403,6 +678,29 @@ const styles = StyleSheet.create({
   },
   headerCopy: {
     flex: 1,
+  },
+  modeCard: {
+    gap: theme.spacing.sm,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+    borderWidth: theme.borders.thin,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.sm,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface2,
+  },
+  modeButtonActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.backgroundTint,
   },
   notice: {
     marginTop: -theme.spacing.xs,
@@ -472,6 +770,37 @@ const styles = StyleSheet.create({
   },
   formGroup: {
     gap: theme.spacing.md,
+  },
+  manualEntryCard: {
+    borderWidth: theme.borders.thin,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surface2,
+  },
+  manualEntryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  inlineInputs: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  inlineInput: {
+    flex: 1,
+  },
+  reviewRow: {
+    borderWidth: theme.borders.thin,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.surface2,
+    gap: theme.spacing.xs,
+  },
+  reviewRowCopy: {
+    gap: 2,
   },
   submitButton: {
     marginTop: theme.spacing.xs,
