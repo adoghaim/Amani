@@ -1,34 +1,85 @@
-# Amani - Women's Health Lab Interpretation Platform
+# Amani
 
-Amani is a supportive women's health AI assistant that provides calm, educational interpretations of lab results with cycle awareness.
+Amani is a women's health lab interpretation platform built as a TypeScript monorepo. The product combines a React web app, an Expo mobile app, shared domain utilities, and Supabase-backed database and edge functions.
 
-## Key Features
+## Monorepo Layout
 
-- Lab report PDF upload and biomarker extraction
-- AI-generated interpretations with menstrual cycle context
-- Secure authentication and data storage
-- Educational guidance while maintaining medical boundaries
+- `apps/web` - Vite + React web experience
+- `apps/mobile` - Expo React Native client
+- `packages/shared` - shared types, Supabase helpers, and utilities
+- `supabase/functions` - edge functions for extraction, interpretation, billing, and account actions
+- `supabase/migrations` - schema and data migrations
 
-## Important Guidelines
+## Local Development
 
-### Nutrient Discussion Rules
+Install dependencies from the repo root:
 
-Amani follows strict guidelines for discussing nutrients and supplements to maintain appropriate medical boundaries:
+```bash
+npm install
+```
 
-- **Only evidence-based**: Nutrients are mentioned only when directly tied to specific lab values or reported symptoms
-- **Consultative language**: All mentions use phrases like "Some clinicians may discuss..." or "You may want to ask your provider about..."
-- **No prescriptive advice**: Never includes dosages, frequencies, timing, or brands
-- **No alternative supplements**: Excludes herbal, adaptogenic, or hormone-modulating supplements
+Start the web app:
 
-For complete details, see [NUTRIENT_GUIDELINES.md](./NUTRIENT_GUIDELINES.md)
+```bash
+npm run dev:web
+```
 
-## Project Structure
+Start the mobile app:
 
-- `/src` - React frontend application
-- `/supabase/functions` - Edge functions for biomarker extraction and interpretation generation
-- `/supabase/migrations` - Database schema and migrations
+```bash
+npm run dev:mobile
+```
 
-## Documentation
+Build the web app:
 
-- [NUTRIENT_GUIDELINES.md](./NUTRIENT_GUIDELINES.md) - Detailed nutrient discussion rules and validation logic
-- [SETUP.md](./SETUP.md) - Setup and configuration instructions
+```bash
+npm run build:web
+```
+
+Quality checks for the web app:
+
+```bash
+npm run lint --workspace=@amani/web
+npm run typecheck --workspace=@amani/web
+```
+
+## Configuration
+
+Create `apps/web/.env` or `apps/web/.env.local` with:
+
+```bash
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_STRIPE_PUBLISHABLE_KEY=...
+```
+
+Set Supabase edge function secrets in the Supabase dashboard:
+
+- `OPENAI_API_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+
+The current mobile Supabase client still uses placeholders in `apps/mobile/src/lib/supabase.ts` and should be configured before shipping mobile auth flows.
+
+## Product Guardrails
+
+Amani is educational, not diagnostic. Features that generate explanations must stay calm, supportive, and medically bounded. Nutrient or supplement discussion must follow [NUTRIENT_GUIDELINES.md](./NUTRIENT_GUIDELINES.md).
+
+## Mobile Native Delivery
+
+From `apps/mobile`, native builds and store submissions now use EAS:
+
+```bash
+npm run eas:build:ios
+npm run eas:build:android
+npm run eas:submit:ios
+npm run eas:submit:android
+```
+
+EAS profiles live in `apps/mobile/eas.json`. Before production submission, set a real iOS bundle identifier, Android package name, and the required App Store Connect / Google Play credentials for the Expo project.
+
+## Additional Docs
+
+- [SETUP.md](./SETUP.md) - current setup notes and environment details
+- [NUTRIENT_GUIDELINES.md](./NUTRIENT_GUIDELINES.md) - AI safety rules for nutrient discussion
+- [skills.md](./skills.md) - build principles and implementation best practices for this app
