@@ -1,41 +1,58 @@
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './Button';
-import { Heart } from 'lucide-react';
+import {
+  Heart,
+  LayoutDashboard,
+  FileText,
+  CalendarDays,
+  CreditCard,
+  Settings,
+  LogOut,
+} from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
+
+const NAV_LINKS = [
+  { to: '/app',          label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/app/reports',  label: 'Reports',   icon: FileText },
+  { to: '/app/tracker',  label: 'Tracker',   icon: CalendarDays },
+  { to: '/app/billing',  label: 'Billing',   icon: CreditCard },
+  { to: '/app/settings', label: 'Settings',  icon: Settings },
+];
 
 export function Layout({ children }: LayoutProps) {
   const { signOut } = useAuth();
 
   return (
     <div className="min-h-screen bg-theme-background">
-      <nav className="bg-theme-surface border-b border-theme-border shadow-sm">
+      {/* ── Desktop top nav ──────────────────────────────────────────────── */}
+      <nav className="hidden sm:block bg-theme-surface border-b border-theme-border shadow-sm safe-top">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
               <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <a href="/app" className="text-xl font-semibold text-theme-text">
+              <NavLink to="/app" className="text-xl font-semibold text-theme-text">
                 Amani
-              </a>
+              </NavLink>
             </div>
             <div className="flex items-center gap-6">
-              <a href="/app" className="text-theme-muted-text hover:text-theme-primary transition-colors">
-                Dashboard
-              </a>
-              <a href="/app/reports" className="text-theme-muted-text hover:text-theme-primary transition-colors">
-                Reports
-              </a>
-              <a href="/app/tracker" className="text-theme-muted-text hover:text-theme-primary transition-colors">
-                Tracker
-              </a>
-              <a href="/app/billing" className="text-theme-muted-text hover:text-theme-primary transition-colors">
-                Billing
-              </a>
-              <a href="/app/settings" className="text-theme-muted-text hover:text-theme-primary transition-colors">
-                Settings
-              </a>
+              {NAV_LINKS.map(({ to, label, exact }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={exact}
+                  className={({ isActive }) =>
+                    isActive
+                      ? 'text-theme-primary font-medium transition-colors'
+                      : 'text-theme-muted-text hover:text-theme-primary transition-colors'
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
               <Button variant="ghost" size="sm" onClick={signOut}>
                 Sign Out
               </Button>
@@ -43,9 +60,56 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </nav>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+      {/* ── Mobile top bar ───────────────────────────────────────────────── */}
+      <header className="sm:hidden bg-theme-surface border-b border-theme-border shadow-sm safe-top">
+        <div className="flex items-center justify-between px-4 h-14">
+          <div className="flex items-center gap-2">
+            <Heart className="w-5 h-5 text-theme-primary fill-theme-primary" />
+            <span className="text-lg font-semibold text-theme-text">Amani</span>
+          </div>
+          <button
+            onClick={signOut}
+            aria-label="Sign out"
+            className="p-2 rounded-lg text-theme-muted-text hover:text-theme-text hover:bg-theme-background transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* ── Main content ─────────────────────────────────────────────────── */}
+      {/* Extra bottom padding on mobile so content clears the bottom nav */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 pb-24 sm:pb-10">
         {children}
       </main>
+
+      {/* ── Mobile bottom nav ────────────────────────────────────────────── */}
+      <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-theme-surface border-t border-theme-border safe-bottom z-50">
+        <div className="flex items-stretch h-16">
+          {NAV_LINKS.map(({ to, label, icon: Icon, exact }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={exact}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center flex-1 gap-0.5 text-[10px] font-medium transition-colors ${
+                  isActive
+                    ? 'text-theme-primary'
+                    : 'text-theme-muted-text'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.5]'}`} />
+                  {label}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }

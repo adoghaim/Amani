@@ -589,7 +589,7 @@ export function NewReport() {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">New Lab Report</h1>
 
-        <div className="flex items-center justify-center mb-8">
+        <div className="flex flex-col items-center mb-8 gap-3">
           <div className="flex items-center">
             {[1, 2, 3].map((s, idx) => (
               <div key={s} className="flex items-center">
@@ -600,6 +600,12 @@ export function NewReport() {
               </div>
             ))}
           </div>
+          {(extracting || aiRefining) && (
+            <div className="flex items-center gap-2 text-sm text-theme-primary font-medium animate-pulse">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {extracting ? 'Reading your report…' : 'Refining with AI…'}
+            </div>
+          )}
         </div>
 
         {error && (
@@ -658,27 +664,40 @@ export function NewReport() {
 
               {/* Generic file upload */}
               <div>
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-theme-primary transition-colors">
-                  <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <span className="text-theme-primary hover:text-theme-primary-dark font-medium">Browse files</span>
-                    <span className="text-gray-600"> or drag and drop</span>
-                  </label>
-                  <p className="text-xs text-gray-400 mt-2">PDF, JPG, or PNG — Quest and Labcorp PDFs import best</p>
-                  {file && (
-                    <div className="mt-4 flex items-center justify-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                      <span className="text-sm text-gray-900 font-medium truncate max-w-xs">{file.name}</span>
-                    </div>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none
+                    ${file
+                      ? 'border-emerald-400 bg-emerald-50/60'
+                      : 'border-gray-300 hover:border-theme-primary hover:bg-theme-background/60'
+                    }`}
+                >
+                  {file ? (
+                    <>
+                      <CheckCircle className="w-9 h-9 text-emerald-500" />
+                      <span className="text-sm font-semibold text-emerald-700 text-center px-4 break-all line-clamp-2">{file.name}</span>
+                      <span className="text-xs text-emerald-600">Tap to choose a different file</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-9 h-9 text-gray-400" />
+                      <div className="text-center px-4">
+                        <p className="text-sm font-medium text-gray-700">
+                          <span className="text-theme-primary">Choose a file</span>
+                          <span className="hidden sm:inline"> or drag and drop</span>
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">PDF, JPG, or PNG</p>
+                      </div>
+                    </>
                   )}
-                </div>
+                </label>
               </div>
 
               {/* Report date */}
