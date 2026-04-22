@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+import { openExternalUrl } from '../lib/native';
 
 export function Billing() {
   const { userProfile } = useAuth();
@@ -77,7 +78,7 @@ export function Billing() {
       }
 
       if (data.url) {
-        window.location.href = data.url;
+        await openExternalUrl(data.url);
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';

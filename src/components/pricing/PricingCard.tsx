@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../Button'
 import { StripeProduct, formatPrice } from '../../stripe-config'
 import { supabase } from '../../lib/supabase'
+import { openExternalUrl } from '../../lib/native'
 
 interface PricingCardProps {
   product: StripeProduct
@@ -20,6 +21,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
       const { data: { session } } = await supabase.auth.getSession()
 
       if (!session) {
+        // Internal route — use location for SPA navigation (no external browser needed)
         window.location.href = `/signup?redirect=${encodeURIComponent('/pricing')}`
         return
       }
@@ -41,7 +43,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
       const data = await response.json()
 
       if (data.url) {
-        window.location.href = data.url
+        await openExternalUrl(data.url)
       } else {
         setError(`Error (${response.status}): ${data.error || 'Unknown error'}`)
       }

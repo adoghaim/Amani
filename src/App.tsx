@@ -1,7 +1,8 @@
-import React, { Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import React, { Suspense, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
+import { isNative } from './lib/native'
 
 // Eagerly loaded — tiny pages used immediately on arrival
 import { Landing } from './pages/Landing'
@@ -67,9 +68,37 @@ function AppRoutes() {
   )
 }
 
+function AndroidBackHandler() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isNative()) return;
+
+    let handle: { remove: () => void } | null = null;
+
+    import('@capacitor/app').then(({ App: CapApp }) => {
+      CapApp.addListener('backButton', ({ canGoBack }) => {
+        // At root routes — exit the app rather than navigating back to a blank state
+        const rootRoutes = ['/app', '/login', '/signup', '/'];
+        if (rootRoutes.includes(location.pathname) || !canGoBack) {
+          CapApp.exitApp();
+        } else {
+          navigate(-1);
+        }
+      }).then(h => { handle = h; });
+    });
+
+    return () => { handle?.remove(); };
+  }, [location.pathname, navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <Router>
+      <AndroidBackHandler />
       <AppRoutes />
     </Router>
   )

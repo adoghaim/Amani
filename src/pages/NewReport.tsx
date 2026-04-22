@@ -14,10 +14,11 @@ import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { detectLabSource } from '../utils/detectLabSource';
+import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
 import {
   Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle,
   ExternalLink, FlaskConical, ChevronRight, ChevronDown, ChevronUp,
-  Calendar, Activity, Shield,
+  Calendar, Activity, Shield, Camera, WifiOff,
 } from 'lucide-react';
 
 const SYMPTOMS: { value: Symptom; label: string }[] = [
@@ -44,6 +45,8 @@ export function NewReport() {
   const [extracting, setExtracting] = useState(false);
   const [aiRefining, setAiRefining] = useState(false);
   const [error, setError] = useState('');
+  const [isOffline, setIsOffline] = useState(false);
+  const [cameraCapturing, setCameraCapturing] = useState(false);
 
   const [file, setFile] = useState<File | null>(null);
   const [reportDate, setReportDate] = useState('');
@@ -80,6 +83,12 @@ export function NewReport() {
     }
   }, [pendingNavigation]);
 
+  // Network awareness — show offline banner to prevent confusing upload failures
+  useEffect(() => {
+    getNetworkStatus().then(s => setIsOffline(!s.connected));
+    return onNetworkChange(s => setIsOffline(!s.connected));
+  }, []);
+
   useEffect(() => {
     const fetchMostRecentCycleEvent = async () => {
       if (!user || !reportDate) return;
@@ -114,6 +123,27 @@ export function NewReport() {
       } else {
         setError('Please upload a PDF or image file (JPG, PNG)');
       }
+    }
+  };
+
+  const handleCameraCapture = async () => {
+    setCameraCapturing(true);
+    setError('');
+    try {
+      const result = await captureLabPhoto();
+      if (!result.ok) {
+        if (!result.cancelled) setError(result.error || 'Camera capture failed');
+        return;
+      }
+      // Convert data-URL to a File so it flows through the existing pipeline
+      const res = await fetch(result.base64);
+      const blob = await res.blob();
+      const captured = new File([blob], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setFile(captured);
+    } catch (err: any) {
+      setError(err?.message || 'Camera capture failed');
+    } finally {
+      setCameraCapturing(false);
     }
   };
 
@@ -620,6 +650,14 @@ export function NewReport() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-1">Upload your official report</h2>
             <p className="text-sm text-gray-500 mb-6">Import directly from your lab portal, or upload any PDF or image.</p>
 
+            {/* Offline banner */}
+            {isOffline && (
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-4 text-sm">
+                <WifiOff className="w-4 h-4 shrink-0" />
+                <span>You're offline. Connect to the internet before uploading your report.</span>
+              </div>
+            )}
+
             <div className="space-y-6">
 
               {/* Lab portal import options */}
@@ -698,6 +736,21 @@ export function NewReport() {
                     </>
                   )}
                 </label>
+
+                {/* Camera capture — native only */}
+                {isNative() && (
+                  <button
+                    type="button"
+                    onClick={handleCameraCapture}
+                    disabled={cameraCapturing}
+                    className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 active:scale-[0.98] transition-all text-sm font-medium text-gray-700 disabled:opacity-50"
+                  >
+                    {cameraCapturing
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />Opening camera…</>
+                      : <><Camera className="w-4 h-4 text-gray-500" />Scan with Camera</>
+                    }
+                  </button>
+                )}
               </div>
 
               {/* Report date */}
@@ -724,7 +777,7 @@ export function NewReport() {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={handleProceedFromStep1} disabled={!canProceedStep1 || extracting}>
+                <Button onClick={handleProceedFromStep1} disabled={!canProceedStep1 || extracting || isOffline}>
                   {extracting ? (
                     <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Reading your report...</>
                   ) : (
