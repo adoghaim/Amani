@@ -239,37 +239,54 @@ export function compareReports(
 }
 
 export function getBiggestChanges(deltas: BiomarkerDelta[], limit = 5): BiomarkerDelta[] {
-  return [...deltas]
-    .filter(d => {
-      if (d.boundaryCrossing !== null) return true;
-      if (d.significance === 'minor') return false;
-      if (
-        d.trajectoryStatus === 'improving_still_high' ||
-        d.trajectoryStatus === 'improving_still_low' ||
-        d.trajectoryStatus === 'worsening_still_high' ||
-        d.trajectoryStatus === 'worsening_still_low'
-      ) return true;
-      return d.significance === 'significant' || d.significance === 'moderate';
-    })
+  console.log('getBiggestChanges inputs:', deltas.length, 'deltas');
+  const filtered = deltas.filter(d => {
+    // Keep it if it crossed a range boundary (e.g. from optimal to out_of_range)
+    if (d.boundaryCrossing !== null) return true;
+    
+    // Keep it if it is moving toward/away from normal but still abnormal
+    if (
+      d.trajectoryStatus === 'improving_still_high' ||
+      d.trajectoryStatus === 'improving_still_low' ||
+      d.trajectoryStatus === 'worsening_still_high' ||
+      d.trajectoryStatus === 'worsening_still_low'
+    ) return true;
+
+    // Keep it if it has a moderate or significant change magnitude
+    if (d.significance === 'significant' || d.significance === 'moderate') return true;
+
+    // Keep it if the percent change is notable (>= 10%) even if significance calculation was strict
+    if (d.percentDelta !== null && Math.abs(d.percentDelta) >= 10) return true;
+
+    return false;
+  });
+  console.log('Filtered deltas:', filtered.length);
+
+  return [...filtered]
     .sort((a, b) => {
-      const crossA = a.boundaryCrossing ? 10 : 0;
-      const crossB = b.boundaryCrossing ? 10 : 0;
+      // Priority: Boundary Crossings > Trajectory (Improving > Worsening) > Magnitude
+      const crossA = a.boundaryCrossing ? 20 : 0;
+      const crossB = b.boundaryCrossing ? 20 : 0;
 
       const trajScore = (d: BiomarkerDelta): number => {
-        if (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low') return 6;
-        if (d.trajectoryStatus === 'worsening_still_high' || d.trajectoryStatus === 'worsening_still_low') return 5;
+        if (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low') return 12;
+        if (d.trajectoryStatus === 'worsening_still_high' || d.trajectoryStatus === 'worsening_still_low') return 10;
+        if (d.trajectoryStatus === 'normalized') return 15;
+        if (d.trajectoryStatus === 'newly_abnormal') return 15;
         return 0;
       };
 
       const magnitudeScore = (d: BiomarkerDelta): number => {
-        const pctContrib = d.percentDelta !== null ? Math.min(5, Math.round(Math.abs(d.percentDelta) / 10)) : 0;
-        const distContrib = d.distanceToNormalImprovement !== null ? Math.min(3, Math.round(Math.abs(d.distanceToNormalImprovement) / 20)) : 0;
+        const pctContrib = d.percentDelta !== null ? Math.min(10, Math.round(Math.abs(d.percentDelta) / 5)) : 0;
+        const distContrib = d.distanceToNormalImprovement !== null ? Math.min(5, Math.round(Math.abs(d.distanceToNormalImprovement) / 10)) : 0;
         return pctContrib + distContrib;
       };
 
-      const sigOrder: Record<SignificanceTier, number> = { significant: 3, moderate: 2, minor: 1 };
+      const sigOrder: Record<SignificanceTier, number> = { significant: 5, moderate: 3, minor: 1 };
+      
       const scoreA = crossA + trajScore(a) + sigOrder[a.significance] + magnitudeScore(a);
       const scoreB = crossB + trajScore(b) + sigOrder[b.significance] + magnitudeScore(b);
+      
       return scoreB - scoreA;
     })
     .slice(0, limit);
