@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
@@ -760,7 +760,7 @@ export function ReportView() {
       <Layout>
         <div className="text-center py-12">
           <h1 className="text-xl font-bold text-gray-900 mb-4">Report not found</h1>
-          <a href="/app"><Button>Back to Dashboard</Button></a>
+          <Link to="/app"><Button>Back to Dashboard</Button></Link>
         </div>
       </Layout>
     );

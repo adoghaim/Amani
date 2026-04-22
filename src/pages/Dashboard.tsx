@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Droplets,
   Plus,
@@ -321,7 +321,7 @@ export function Dashboard() {
             <h1 className="text-2xl font-bold text-theme-text">Dashboard</h1>
             <p className="text-sm text-theme-muted-text mt-0.5">Your health overview at a glance</p>
           </div>
-          <a href="/app/new">
+          <Link to="/app/new">
             <button
               disabled={!canCreateReport}
               className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
@@ -329,11 +329,11 @@ export function Dashboard() {
               <Plus className="w-4 h-4" />
               New lab report
             </button>
-          </a>
+          </Link>
         </div>
 
         {userProfile?.subscription_status !== 'active' && (
-          <a href="/app/pricing" className="block mb-5">
+          <Link to="/app/pricing" className="block mb-5">
             <div className="flex items-center justify-between gap-4 bg-white border border-theme-border rounded-xl px-5 py-4 hover:border-theme-primary hover:shadow-sm transition-all">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide shrink-0">
@@ -349,7 +349,7 @@ export function Dashboard() {
               </div>
               <span className="text-sm font-medium text-theme-primary shrink-0">View pricing &rarr;</span>
             </div>
-          </a>
+          </Link>
         )}
 
         {showTrialBanner && (
@@ -358,11 +358,11 @@ export function Dashboard() {
             <p className="text-sm text-theme-muted-text mb-3">
               {trialDaysRemaining === 1 ? '1 day' : `${trialDaysRemaining} days`} left in your trial.
             </p>
-            <a href="/app/billing">
+            <Link to="/app/billing">
               <button className="px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors">
                 Continue tracking
               </button>
-            </a>
+            </Link>
           </div>
         )}
 
@@ -370,7 +370,7 @@ export function Dashboard() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-4 mb-5">
             <p className="text-sm text-yellow-800">
               Your trial has expired.{' '}
-              <a href="/app/pricing" className="text-yellow-900 underline font-medium">View pricing</a> to continue.
+              <Link to="/app/pricing" className="text-yellow-900 underline font-medium">View pricing</Link> to continue.
             </p>
           </div>
         )}
@@ -387,16 +387,17 @@ export function Dashboard() {
                 >
                   Add cycle start
                 </button>
-                <a href="/app/tracker">
+                <Link to="/app/tracker">
                   <button className="px-3 py-1.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl border border-theme-border hover:bg-theme-surface-hover transition-colors">
                     Add intervention
                   </button>
-                </a>
+                </Link>
               </div>
             </div>
             <button
               onClick={() => { sessionStorage.setItem('contextNudgeDismissed', 'true'); setShowContextNudge(false); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
+              aria-label="Dismiss"
+              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
             >
               <X className="w-4 h-4 text-theme-muted-text" />
             </button>
@@ -453,9 +454,9 @@ export function Dashboard() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-theme-text">Recent Lab Reports</h2>
-              <a href="/app/reports" className="flex items-center gap-1 text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
+              <Link to="/app/reports" className="flex items-center gap-1 text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
                 View all <ArrowRight className="w-4 h-4" />
-              </a>
+              </Link>
             </div>
 
             {reports.length === 0 ? (
@@ -464,18 +465,18 @@ export function Dashboard() {
                 <h3 className="text-base font-semibold text-theme-text mb-1">No lab reports yet</h3>
                 <p className="text-sm text-theme-muted-text mb-4">Upload your first lab report to get started.</p>
                 {canCreateReport && (
-                  <a href="/app/new">
+                  <Link to="/app/new">
                     <button className="inline-flex items-center gap-2 px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors">
                       <Plus className="w-4 h-4" />
                       New lab report
                     </button>
-                  </a>
+                  </Link>
                 )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {reports.slice(0, 6).map((report) => (
-                  <a key={report.id} href={`/app/reports/${report.id}`} className="block">
+                  <Link key={report.id} to={`/app/reports/${report.id}`} className="block">
                     <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-5 py-4 hover:shadow-md hover:border-theme-primary/40 transition-all cursor-pointer border-l-4 border-l-theme-primary">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3 flex-1">
@@ -504,16 +505,16 @@ export function Dashboard() {
                         <ArrowRight className="w-4 h-4 text-theme-muted-text-4 mt-0.5" />
                       </div>
                     </div>
-                  </a>
+                  </Link>
                 ))}
               </div>
             )}
 
             {reports.length > 6 && (
               <div className="mt-3 text-center">
-                <a href="/app/reports" className="text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
+                <Link to="/app/reports" className="text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
                   View all {reports.length} lab reports
-                </a>
+                </Link>
               </div>
             )}
           </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FileText,
   Plus,
@@ -280,13 +281,13 @@ export function Reports() {
                 : `${reports.length} report${reports.length !== 1 ? 's' : ''} total`}
             </p>
           </div>
-          <a
-            href="/app/new"
+          <Link
+            to="/app/new"
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-theme-primary text-white text-sm font-semibold rounded-xl hover:bg-theme-primary-dark transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
             New report
-          </a>
+          </Link>
         </div>
 
         {reports.length === 0 ? (
@@ -298,13 +299,13 @@ export function Reports() {
             <p className="text-sm text-theme-muted-text mb-6 max-w-xs mx-auto">
               Upload your first lab report to start tracking your biomarkers and getting AI insights.
             </p>
-            <a
-              href="/app/new"
+            <Link
+              to="/app/new"
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-theme-primary text-white text-sm font-semibold rounded-xl hover:bg-theme-primary-dark transition-colors"
             >
               <Plus className="w-4 h-4" />
               Upload first report
-            </a>
+            </Link>
           </div>
         ) : (
           <>
@@ -370,7 +371,7 @@ export function Reports() {
                         key={report.id}
                         className="group grid grid-cols-1 sm:grid-cols-[1fr_120px_120px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
                       >
-                        <a href={`/app/reports/${report.id}`} className="flex items-center gap-3 min-w-0">
+                        <Link to={`/app/reports/${report.id}`} className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 bg-theme-surface-2 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-theme-surface-hover transition-colors">
                             <FileText className="w-4 h-4 text-theme-primary" />
                           </div>
@@ -388,27 +389,27 @@ export function Reports() {
                               )}
                             </div>
                           </div>
-                        </a>
+                        </Link>
 
-                        <a href={`/app/reports/${report.id}`} className="hidden sm:block">
+                        <Link to={`/app/reports/${report.id}`} className="hidden sm:block">
                           <StatusBadge status={report.status} />
-                        </a>
+                        </Link>
 
-                        <a href={`/app/reports/${report.id}`} className="hidden sm:block">
+                        <Link to={`/app/reports/${report.id}`} className="hidden sm:block">
                           <PhaseBadge phase={report.estimated_cycle_phase} />
                           {(!report.estimated_cycle_phase || report.estimated_cycle_phase === 'unknown') && (
                             <span className="text-xs text-theme-muted-text-4">—</span>
                           )}
-                        </a>
+                        </Link>
 
-                        <a href={`/app/reports/${report.id}`} className="hidden sm:flex items-center gap-1">
+                        <Link to={`/app/reports/${report.id}`} className="hidden sm:flex items-center gap-1">
                           <span className="text-sm font-medium text-theme-text-body">
                             {markerCount > 0 ? markerCount : '—'}
                           </span>
                           {markerCount > 0 && (
                             <span className="text-xs text-theme-muted-text-4">items</span>
                           )}
-                        </a>
+                        </Link>
 
                         <div className="flex items-center justify-between sm:justify-end gap-2">
                           <div className="flex sm:hidden items-center gap-2 flex-wrap">
@@ -416,17 +417,17 @@ export function Reports() {
                             <PhaseBadge phase={report.estimated_cycle_phase} />
                           </div>
                           <div className="flex items-center gap-1">
-                            <a
-                              href={`/app/reports/${report.id}`}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-hover text-theme-muted-text-4 hover:text-theme-primary transition-colors"
-                              title="View report"
+                            <Link
+                              to={`/app/reports/${report.id}`}
+                              aria-label="View report"
+                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-hover text-theme-muted-text-4 hover:text-theme-primary transition-colors"
                             >
                               <ArrowRight className="w-4 h-4" />
-                            </a>
+                            </Link>
                             <button
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget(report); }}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-theme-muted-text-4 hover:text-theme-danger transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                              title="Delete report"
+                              aria-label="Delete report"
+                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-red-50 text-theme-muted-text-4 hover:text-theme-danger transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
