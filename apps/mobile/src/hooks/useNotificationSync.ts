@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import {
   getDefaultNotificationPreferences,
+  handleIncomingNotification,
   handleNotificationData,
   notifyForNewReadyReportsAsync,
   registerForPushNotificationsAsync,
@@ -29,6 +30,36 @@ async function fetchNotificationPreferencesAsync(userId: string) {
   }
 
   return data as NotificationPreferences;
+}
+
+async function syncPushTokenAsync(userId: string, token: string | null) {
+  const existing = await fetchNotificationPreferencesAsync(userId);
+  const nextToken = token?.trim() || null;
+
+  if (existing.expo_push_token === nextToken) {
+    return;
+  }
+
+  const payload = {
+    user_id: userId,
+    period_reminders: existing.period_reminders,
+    fertile_reminders: existing.fertile_reminders,
+    ovulation_reminders: existing.ovulation_reminders,
+    lab_reminders: existing.lab_reminders,
+    intervention_reminders: existing.intervention_reminders,
+    reminder_time: existing.reminder_time,
+    expo_push_token: nextToken,
+    push_token_updated_at: nextToken ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from('notification_preferences')
+    .upsert(payload, { onConflict: 'user_id' });
+
+  if (error) {
+    throw error;
+  }
 }
 
 async function fetchPeriodLogsAsync(userId: string) {
@@ -71,11 +102,13 @@ export function useNotificationSync() {
 
     const syncNotifications = async () => {
       try {
-        await registerForPushNotificationsAsync();
+        const pushToken = await registerForPushNotificationsAsync();
 
         if (!active) {
           return;
         }
+
+        await syncPushTokenAsync(user.id, pushToken);
 
         const [preferences, periodLogs, reports] = await Promise.all([
           fetchNotificationPreferencesAsync(user.id),
@@ -104,6 +137,10 @@ export function useNotificationSync() {
       handleNotificationData(response.notification.request.content.data);
     });
 
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      handleIncomingNotification(notification);
+    });
+
     const appStateSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void syncNotifications();
@@ -113,6 +150,7 @@ export function useNotificationSync() {
     return () => {
       active = false;
       responseSubscription.remove();
+      receivedSubscription.remove();
       appStateSubscription.remove();
     };
   }, [

@@ -287,6 +287,8 @@ export interface Database {
           lab_reminders: boolean
           intervention_reminders: boolean
           reminder_time: string | null
+          expo_push_token: string | null
+          push_token_updated_at: string | null
           created_at: string
           updated_at: string
         }
@@ -299,6 +301,8 @@ export interface Database {
           lab_reminders?: boolean
           intervention_reminders?: boolean
           reminder_time?: string | null
+          expo_push_token?: string | null
+          push_token_updated_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -311,6 +315,8 @@ export interface Database {
           lab_reminders?: boolean
           intervention_reminders?: boolean
           reminder_time?: string | null
+          expo_push_token?: string | null
+          push_token_updated_at?: string | null
           created_at?: string
           updated_at?: string
         }

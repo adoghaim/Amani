@@ -115,6 +115,8 @@ export function getDefaultNotificationPreferences(userId: string): NotificationP
     lab_reminders: true,
     intervention_reminders: true,
     reminder_time: DEFAULT_REMINDER_TIME,
+    expo_push_token: null,
+    push_token_updated_at: null,
     created_at: now,
     updated_at: now,
   };
@@ -172,6 +174,14 @@ export async function registerForPushNotificationsAsync() {
 
   await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
   return token;
+}
+
+export async function getStoredPushTokenAsync() {
+  return AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+}
+
+export async function clearStoredPushTokenAsync() {
+  await AsyncStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
 }
 
 export async function scheduleCycleReminderNotificationsAsync(
@@ -312,4 +322,10 @@ export function handleNotificationData(data: Record<string, unknown> | undefined
   if (kind === 'cycle-reminder' || kind === 'lab-ready') {
     navigate('Dashboard');
   }
+}
+
+export function handleIncomingNotification(
+  notification: Notifications.Notification
+) {
+  handleNotificationData(notification.request.content.data);
 }
