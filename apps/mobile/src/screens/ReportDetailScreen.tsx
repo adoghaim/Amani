@@ -10,7 +10,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { AlertTriangle, Beaker, ChevronDown, ChevronLeft, ChevronRight, Info, Sparkles } from 'lucide-react-native';
-import { type AIInterpretation, type Biomarker, type LabReport, formatDate } from '@amani/shared';
+import {
+  type AIInterpretation,
+  type Biomarker,
+  type LabReport,
+  type ReportAnalyte,
+  classifyLabValue,
+  formatDate,
+} from '@amani/shared';
 import { BiomarkerTrendChart, Button, Card, Notice, Text } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -63,6 +70,21 @@ function getFlagMeta(flagged: Biomarker['flagged']) {
   }
 }
 
+function getAnalyteFlagMeta(analyte: ReportAnalyte) {
+  const flagged = classifyLabValue(
+    analyte.value_numeric,
+    analyte.normalized_min,
+    analyte.normalized_max,
+    analyte.normalized_operator,
+    analyte.normalized_operator_value
+  );
+
+  return {
+    flagged,
+    ...getFlagMeta(flagged),
+  };
+}
+
 export function ReportDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
@@ -73,6 +95,7 @@ export function ReportDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
+  const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [trendSeries, setTrendSeries] = useState<TrendSeries[]>([]);
   const [panelExpanded, setPanelExpanded] = useState(false);
@@ -91,9 +114,10 @@ export function ReportDetailScreen() {
     try {
       setLoading(true);
 
-      const [reportRes, biomarkersRes, interpretationRes] = await Promise.all([
+      const [reportRes, biomarkersRes, analytesRes, interpretationRes] = await Promise.all([
         supabase.from('lab_reports').select('*').eq('id', reportId).maybeSingle(),
         supabase.from('biomarkers').select('*').eq('lab_report_id', reportId),
+        supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
         supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
       ]);
 
@@ -103,6 +127,7 @@ export function ReportDetailScreen() {
 
       const biomarkerRows = (biomarkersRes.data ?? []) as Biomarker[];
       setBiomarkers(biomarkerRows);
+      setReportAnalytes((analytesRes.data ?? []) as ReportAnalyte[]);
 
       if (interpretationRes.data?.json_output) {
         setInterpretation(interpretationRes.data.json_output as AIInterpretation);
@@ -232,6 +257,24 @@ export function ReportDetailScreen() {
       return a.name.localeCompare(b.name);
     });
   }, [biomarkers]);
+
+  const fullPanelAnalytes = useMemo(() => {
+    return [...reportAnalytes].sort((a, b) => {
+      const aStatus = getAnalyteFlagMeta(a).flagged;
+      const bStatus = getAnalyteFlagMeta(b).flagged;
+
+      if (aStatus === bStatus) {
+        return (a.display_name ?? a.raw_name).localeCompare(b.display_name ?? b.raw_name);
+      }
+      if (aStatus === 'out_of_range') return -1;
+      if (bStatus === 'out_of_range') return 1;
+      if (aStatus === 'borderline') return -1;
+      if (bStatus === 'borderline') return 1;
+      if (aStatus === 'in_range') return -1;
+      if (bStatus === 'in_range') return 1;
+      return (a.display_name ?? a.raw_name).localeCompare(b.display_name ?? b.raw_name);
+    });
+  }, [reportAnalytes]);
 
   if (loading && !refreshing) {
     return (
@@ -436,7 +479,7 @@ export function ReportDetailScreen() {
             </View>
             <View style={styles.fullPanelMeta}>
               <Text variant="caption" tone="muted">
-                {allMarkers.length} biomarkers
+                {fullPanelAnalytes.length > 0 ? `${fullPanelAnalytes.length} analytes` : `${allMarkers.length} biomarkers`}
               </Text>
               {panelExpanded ? (
                 <ChevronDown size={18} color={theme.colors.mutedText3} />
@@ -448,27 +491,44 @@ export function ReportDetailScreen() {
 
           {panelExpanded ? (
             <Card style={styles.panelCard}>
-              {allMarkers.map((marker, index) => {
-                const flagMeta = getFlagMeta(marker.flagged);
+              {(fullPanelAnalytes.length > 0 ? fullPanelAnalytes : allMarkers).map((item, index) => {
+                const isAnalyte = 'raw_name' in item;
+                const flagMeta = isAnalyte ? getAnalyteFlagMeta(item) : getFlagMeta(item.flagged);
+                const label = isAnalyte ? (item.display_name ?? item.raw_name) : formatBiomarkerName(item.name);
+                const valueText = isAnalyte
+                  ? (item.raw_value_text ?? item.value_numeric ?? '—')
+                  : item.value;
+                const unitText = item.unit ?? '';
+                const referenceText = isAnalyte
+                  ? (item.raw_reference_range ?? 'No range provided')
+                  : `${item.reference_min ?? '—'} to ${item.reference_max ?? '—'} ${item.unit}`;
+
                 return (
                   <View
-                    key={marker.id}
+                    key={item.id}
                     style={[
                       styles.panelRow,
-                      index !== allMarkers.length - 1 ? styles.panelRowBorder : null,
+                      index !== (fullPanelAnalytes.length > 0 ? fullPanelAnalytes.length : allMarkers.length) - 1
+                        ? styles.panelRowBorder
+                        : null,
                     ]}
                   >
                     <View style={styles.panelCopy}>
                       <Text variant="bodySm" weight="semibold">
-                        {formatBiomarkerName(marker.name)}
+                        {label}
                       </Text>
                       <Text variant="caption" tone="muted">
-                        {marker.reference_min ?? '—'} to {marker.reference_max ?? '—'} {marker.unit}
+                        {referenceText}
                       </Text>
+                      {isAnalyte && item.parse_status === 'unmapped' ? (
+                        <Text variant="caption" style={styles.unmappedLabel}>
+                          Unmapped
+                        </Text>
+                      ) : null}
                     </View>
                     <View style={styles.panelValue}>
                       <Text variant="bodySm" weight="bold">
-                        {marker.value} {marker.unit}
+                        {valueText} {unitText}
                       </Text>
                       <Text variant="caption" style={{ color: flagMeta.color }}>
                         {flagMeta.label}
@@ -682,6 +742,10 @@ const styles = StyleSheet.create({
   panelValue: {
     alignItems: 'flex-end',
     gap: theme.spacing.xxs,
+  },
+  unmappedLabel: {
+    color: theme.colors.mutedText3,
+    textTransform: 'uppercase',
   },
   disclaimer: {
     flexDirection: 'row',
