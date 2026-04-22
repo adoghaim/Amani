@@ -7,6 +7,47 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function formatReportDateForNotification(reportDate: string | null | undefined) {
+  if (!reportDate) return "your recent upload";
+  const parsed = new Date(reportDate);
+  if (Number.isNaN(parsed.getTime())) return "your recent upload";
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+async function triggerLabReadyPushNotification(params: {
+  supabaseUrl: string;
+  serviceKey: string;
+  userId: string;
+  reportId: string;
+  reportDate?: string | null;
+}) {
+  const payload = {
+    userId: params.userId,
+    title: "Lab results ready",
+    body: `Your lab report from ${formatReportDateForNotification(params.reportDate)} is ready to review.`,
+    kind: "lab-ready",
+    data: {
+      reportIds: [params.reportId],
+      target: "Dashboard",
+      managedBy: "amani",
+    },
+  };
+
+  const response = await fetch(`${params.supabaseUrl}/functions/v1/send-push-notification`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.serviceKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    console.error("[generate-interpretation] Failed to invoke send-push-notification:", detail);
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AnalyteData {
@@ -912,6 +953,13 @@ Deno.serve(async (req: Request) => {
     }
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
+    await triggerLabReadyPushNotification({
+      supabaseUrl,
+      serviceKey,
+      userId: reportCheck.user_id,
+      reportId,
+      reportDate: report?.report_date,
+    });
     console.log("[generate-interpretation] Done — status: ready, source:", source);
 
     return new Response(JSON.stringify({ success: true, source }), {
