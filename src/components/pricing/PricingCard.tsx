@@ -32,8 +32,8 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         },
         body: JSON.stringify({
           price_id: product.priceId,
-          success_url: `${window.location.origin}/success`,
-          cancel_url: `${window.location.origin}/app/pricing`,
+          success_url: `${import.meta.env.VITE_APP_URL || window.location.origin}/success`,
+          cancel_url: `${import.meta.env.VITE_APP_URL || window.location.origin}/app/pricing`,
           mode: product.mode
         })
       })
