@@ -23,6 +23,10 @@ import {
 import { type NotificationPreferences } from '@amani/shared';
 import { Button, Card, Input, Notice, Text } from '../components';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  clearStoredPushTokenAsync,
+  registerForPushNotificationsAsync,
+} from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
 
@@ -33,6 +37,8 @@ const DEFAULT_PREFS = {
   lab_reminders: true,
   intervention_reminders: true,
   reminder_time: '08:00',
+  expo_push_token: null,
+  push_token_updated_at: null,
 } as const;
 
 export function SettingsScreen() {
@@ -97,22 +103,25 @@ export function SettingsScreen() {
     setSaved(false);
   };
 
-  const savePrefs = async () => {
+  const savePrefs = async (nextPrefs?: NotificationPreferences) => {
     if (!user) {
       return;
     }
+    const prefsToSave = nextPrefs ?? prefs;
 
     try {
       setNotifSaving(true);
       setError('');
       const payload = {
         user_id: user.id,
-        period_reminders: prefs.period_reminders,
-        fertile_reminders: prefs.fertile_reminders,
-        ovulation_reminders: prefs.ovulation_reminders,
-        lab_reminders: prefs.lab_reminders,
-        intervention_reminders: prefs.intervention_reminders,
-        reminder_time: prefs.reminder_time || DEFAULT_PREFS.reminder_time,
+        period_reminders: prefsToSave.period_reminders,
+        fertile_reminders: prefsToSave.fertile_reminders,
+        ovulation_reminders: prefsToSave.ovulation_reminders,
+        lab_reminders: prefsToSave.lab_reminders,
+        intervention_reminders: prefsToSave.intervention_reminders,
+        reminder_time: prefsToSave.reminder_time || DEFAULT_PREFS.reminder_time,
+        expo_push_token: prefsToSave.expo_push_token,
+        push_token_updated_at: prefsToSave.push_token_updated_at,
         updated_at: new Date().toISOString(),
       };
 
@@ -144,6 +153,44 @@ export function SettingsScreen() {
     } finally {
       setNotifSaving(false);
     }
+  };
+
+  const savePrefsWithPushRegistration = async () => {
+    const remindersEnabled = [
+      prefs.period_reminders,
+      prefs.fertile_reminders,
+      prefs.ovulation_reminders,
+      prefs.lab_reminders,
+      prefs.intervention_reminders,
+    ].some(Boolean);
+
+    if (!remindersEnabled) {
+      const nextPrefs = {
+        ...prefs,
+        expo_push_token: null,
+        push_token_updated_at: null,
+      } as NotificationPreferences;
+      setNotifPrefs(nextPrefs);
+      await clearStoredPushTokenAsync();
+      await savePrefs(nextPrefs);
+      return;
+    }
+
+    const token = await registerForPushNotificationsAsync();
+    if (!token) {
+      Alert.alert(
+        'Notifications disabled',
+        'Enable notification permissions in system settings to receive reminders.'
+      );
+    }
+
+    const nextPrefs = {
+      ...prefs,
+      expo_push_token: token,
+      push_token_updated_at: token ? new Date().toISOString() : null,
+    } as NotificationPreferences;
+    setNotifPrefs(nextPrefs);
+    await savePrefs(nextPrefs);
   };
 
   const handleDeleteAccount = () => {
@@ -300,7 +347,7 @@ export function SettingsScreen() {
                 <Button
                   label={notifSaving ? 'Saving…' : saved ? 'Saved' : 'Save preferences'}
                   onPress={() => {
-                    void savePrefs();
+                    void savePrefsWithPushRegistration();
                   }}
                   loading={notifSaving}
                 />
