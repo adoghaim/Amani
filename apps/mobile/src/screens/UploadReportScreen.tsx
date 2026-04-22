@@ -90,6 +90,7 @@ export function UploadReportScreen() {
   const [stage, setStage] = useState<UploadReportStage | null>(null);
   const [loadingDefaults, setLoadingDefaults] = useState(true);
   const [error, setError] = useState('');
+  const [manualAssistMessage, setManualAssistMessage] = useState('');
   const [portalHint, setPortalHint] = useState('');
   const [manualEntries, setManualEntries] = useState<ManualEntryDraft[]>([emptyManualEntry()]);
   const [manualReviewStep, setManualReviewStep] = useState(false);
@@ -152,6 +153,7 @@ export function UploadReportScreen() {
   const handlePickFile = async () => {
     setError('');
     setPortalHint('');
+    setManualAssistMessage('');
 
     const result = await DocumentPicker.getDocumentAsync({
       type: ['application/pdf', 'image/jpeg', 'image/png'],
@@ -317,6 +319,11 @@ export function UploadReportScreen() {
       if (message.toLowerCase().includes('no biomarkers were detected')) {
         setMode('manual');
         setManualReviewStep(false);
+        setManualAssistMessage(
+          selectedFile
+            ? `We couldn't extract biomarkers from ${selectedFile.name}. Enter them manually below to continue.`
+            : "We couldn't extract biomarkers from your file. Enter them manually below to continue."
+        );
       }
     }
   };
@@ -344,6 +351,7 @@ export function UploadReportScreen() {
                 setMode('upload');
                 setManualReviewStep(false);
                 setError('');
+                setManualAssistMessage('');
               }}
               style={[styles.modeButton, mode === 'upload' ? styles.modeButtonActive : null]}
             >
@@ -355,6 +363,7 @@ export function UploadReportScreen() {
                 setMode('manual');
                 setManualReviewStep(false);
                 setError('');
+                setManualAssistMessage('');
               }}
               style={[styles.modeButton, mode === 'manual' ? styles.modeButtonActive : null]}
             >
@@ -392,6 +401,12 @@ export function UploadReportScreen() {
         {error ? (
           <Notice tone="error" style={styles.notice}>
             {error}
+          </Notice>
+        ) : null}
+
+        {!stage && manualAssistMessage ? (
+          <Notice tone="info" style={styles.notice}>
+            {manualAssistMessage}
           </Notice>
         ) : null}
 
@@ -478,6 +493,21 @@ export function UploadReportScreen() {
                 </View>
                 <FileText size={18} color={theme.colors.mutedText3} />
               </Pressable>
+
+              <Button
+                label="Can't read this file? Enter manually"
+                variant="outline"
+                onPress={() => {
+                  setMode('manual');
+                  setManualReviewStep(false);
+                  setError('');
+                  setManualAssistMessage(
+                    selectedFile
+                      ? `Switched to manual entry for ${selectedFile.name}. You can still submit this report without OCR.`
+                      : 'Switched to manual entry. Add biomarkers directly to continue.'
+                  );
+                }}
+              />
             </Card>
           </>
         ) : (
