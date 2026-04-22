@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -17,6 +18,7 @@ import { NotificationPreferences } from '../types';
 
 export function Settings() {
   const { user, userProfile } = useAuth();
+  const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -142,7 +144,7 @@ export function Settings() {
 
       await supabase.from('users').delete().eq('id', user!.id);
       await supabase.auth.signOut();
-      window.location.href = '/';
+      navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete data. Please try again.');
       setDeleting(false);

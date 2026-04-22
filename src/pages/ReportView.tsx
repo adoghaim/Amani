@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
@@ -243,6 +243,7 @@ function normalizeInterpretation(raw: any): AIInterpretation {
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
   const { userProfile } = useAuth();
+  const navigate = useNavigate();
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
@@ -724,7 +725,7 @@ export function ReportView() {
   const handleDelete = async () => {
     if (!confirm('Delete this report? This cannot be undone.')) return;
     const { error } = await supabase.from('lab_reports').delete().eq('id', reportId);
-    if (!error) window.location.href = '/app';
+    if (!error) navigate('/app', { replace: true });
   };
 
   const isTrialActive = () => {

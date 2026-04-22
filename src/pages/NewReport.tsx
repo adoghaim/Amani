@@ -76,7 +76,7 @@ export function NewReport() {
   useEffect(() => {
     if (pendingNavigation && !navigationDoneRef.current) {
       navigationDoneRef.current = true;
-      window.location.href = pendingNavigation;
+      navigate(pendingNavigation);
     }
   }, [pendingNavigation]);
 

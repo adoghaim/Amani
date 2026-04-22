@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CheckCircle } from 'lucide-react'
 import { Button } from '../components/Button'
 import { useSubscription } from '../hooks/useSubscription'
 
 export function SuccessPage() {
   const { refetch } = useSubscription()
+  const navigate = useNavigate()
 
   useEffect(() => {
     // Refetch subscription data after successful payment
@@ -32,7 +34,7 @@ export function SuccessPage() {
           </p>
           
           <Button
-            onClick={() => window.location.href = '/'}
+            onClick={() => navigate('/', { replace: true })}
             className="w-full"
           >
             Continue to Dashboard

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/Button';
@@ -10,6 +11,7 @@ type PageState = 'loading' | 'ready' | 'request';
 
 export function ResetPassword() {
   const { resetPassword } = useAuth();
+  const navigate = useNavigate();
   const [pageState, setPageState] = useState<PageState>('loading');
 
   const [password, setPassword] = useState('');
@@ -71,7 +73,7 @@ export function ResetPassword() {
       if (error) throw error;
       setSuccess(true);
       await supabase.auth.signOut();
-      setTimeout(() => { window.location.href = '/login'; }, 2000);
+      setTimeout(() => { navigate('/login', { replace: true }); }, 2000);
     } catch (err: any) {
       setError(err.message || 'Failed to reset password');
     } finally {
@@ -123,7 +125,7 @@ export function ResetPassword() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => window.location.href = '/login'}
+                  onClick={() => navigate('/login')}
                   className="w-full text-sm text-theme-muted-text hover:text-theme-text transition-colors"
                 >
                   Back to login
@@ -159,7 +161,7 @@ export function ResetPassword() {
 
                 <button
                   type="button"
-                  onClick={() => window.location.href = '/login'}
+                  onClick={() => navigate('/login')}
                   className="w-full text-sm text-theme-muted-text hover:text-theme-text transition-colors"
                 >
                   Back to login
