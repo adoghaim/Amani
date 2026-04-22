@@ -20,6 +20,16 @@ export interface UploadableReportFile {
   mimeType?: string | null;
 }
 
+export interface ManualBiomarkerInput {
+  name: string;
+  value: number;
+  unit?: string | null;
+  rawReferenceRange?: string | null;
+  normalizedMin?: number | null;
+  normalizedMax?: number | null;
+  canonicalSlug?: string | null;
+}
+
 interface ExtractedAnalyte {
   raw_name: string;
   raw_value_text: string | null;
@@ -318,6 +328,149 @@ export async function uploadAndProcessReport({
     return {
       reportId: createdReportId,
       extractedCount: extractedAnalytes.length,
+    };
+  } catch (error) {
+    if (createdReportId) {
+      await supabase.from('lab_reports').update({ status: 'error' satisfies ReportStatus }).eq('id', createdReportId);
+    }
+    throw error;
+  } finally {
+    onStageChange?.(null);
+  }
+}
+
+interface UploadManualReportInput {
+  user: AuthUser;
+  userProfile: User | null;
+  reportDate: string;
+  lastPeriodDate?: string | null;
+  cycleLength: number;
+  labSource?: 'quest' | 'labcorp' | 'unknown';
+  entries: ManualBiomarkerInput[];
+  onStageChange?: (stage: UploadReportStage | null) => void;
+}
+
+export async function uploadManualReport({
+  user,
+  userProfile,
+  reportDate,
+  lastPeriodDate = null,
+  cycleLength,
+  labSource = 'unknown',
+  entries,
+  onStageChange,
+}: UploadManualReportInput) {
+  if (!canCreateReport(userProfile)) {
+    throw new Error('An active subscription or trial is required to upload new lab reports.');
+  }
+
+  assertIsoDate(reportDate, 'Report date');
+  if (lastPeriodDate) {
+    assertIsoDate(lastPeriodDate, 'Last period date');
+  }
+
+  if (entries.length === 0) {
+    throw new Error('Add at least one biomarker to continue.');
+  }
+
+  let createdReportId: string | null = null;
+
+  try {
+    onStageChange?.('saving');
+
+    const { cycleDay, cyclePhase } = calculateCycleInfo(reportDate, lastPeriodDate);
+    const context: LabReportContext = {
+      birth_control: 'unsure',
+      pregnant: 'unsure',
+      postpartum: 'unsure',
+      top_symptoms: [],
+      submission_mode: 'standard',
+    };
+
+    const { data: reportRow, error: reportError } = await supabase
+      .from('lab_reports')
+      .insert({
+        user_id: user.id,
+        report_date: reportDate,
+        file_url: null,
+        last_period_start_date: lastPeriodDate,
+        average_cycle_length: cycleLength,
+        estimated_cycle_day: cycleDay,
+        estimated_cycle_phase: cyclePhase,
+        context,
+        status: 'processing' satisfies ReportStatus,
+        lab_source: labSource,
+        import_method: 'manual',
+      })
+      .select('id')
+      .single();
+
+    if (reportError || !reportRow) {
+      throw new Error(`Failed to create report: ${reportError?.message ?? 'Unknown error'}`);
+    }
+
+    createdReportId = reportRow.id as string;
+
+    const analyteRows = entries.map((entry) => ({
+      lab_report_id: createdReportId!,
+      raw_name: entry.name,
+      raw_value_text: String(entry.value),
+      value_numeric: entry.value,
+      unit: entry.unit ?? null,
+      raw_reference_range: entry.rawReferenceRange ?? null,
+      normalized_min: entry.normalizedMin ?? null,
+      normalized_max: entry.normalizedMax ?? null,
+      normalized_operator: null,
+      normalized_operator_value: null,
+      source_snippet: null,
+      confidence_score: 'high' as const,
+      canonical_analyte_id: null,
+      canonical_slug: entry.canonicalSlug ?? null,
+      parse_status: entry.canonicalSlug ? 'partial' as const : 'unmapped' as const,
+      needs_review: false,
+      is_core: Boolean(entry.canonicalSlug),
+      display_name: null,
+      system_category: null,
+      normalization_status: entry.canonicalSlug ? 'partial' : 'unmapped',
+      source_format: 'manual',
+      parser_version: null,
+      unit_original: entry.unit ?? null,
+      unit_normalized: entry.unit ?? null,
+      review_status: 'reviewed',
+      reviewed_by_user: true,
+    }));
+
+    const { error: analyteError } = await supabase.from('report_analytes').insert(analyteRows);
+    if (analyteError) {
+      throw new Error(`Failed to save analytes: ${analyteError.message}`);
+    }
+
+    const biomarkerRows = entries
+      .filter((entry) => Boolean(entry.canonicalSlug))
+      .map((entry) => ({
+        lab_report_id: createdReportId!,
+        name: entry.canonicalSlug!,
+        value: entry.value,
+        raw_value_text: String(entry.value),
+        unit: entry.unit ?? '',
+        reference_min: entry.normalizedMin ?? null,
+        reference_max: entry.normalizedMax ?? null,
+        flagged: classifyLabValue(entry.value, entry.normalizedMin ?? null, entry.normalizedMax ?? null, null, null),
+      }));
+
+    if (biomarkerRows.length > 0) {
+      const { error: biomarkerError } = await supabase.from('biomarkers').insert(biomarkerRows);
+      if (biomarkerError) {
+        throw new Error(`Failed to save biomarkers: ${biomarkerError.message}`);
+      }
+    }
+
+    onStageChange?.('interpreting');
+    void triggerInterpretation(createdReportId);
+
+    return {
+      reportId: createdReportId,
+      extractedCount: entries.length,
     };
   } catch (error) {
     if (createdReportId) {
