@@ -9,10 +9,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { AlertTriangle, Beaker, ChevronDown, ChevronLeft, ChevronRight, Info, Sparkles } from 'lucide-react-native';
+import { AlertTriangle, Beaker, ChevronDown, ChevronLeft, ChevronRight, Info, RefreshCw, Sparkles } from 'lucide-react-native';
 import {
   type AIInterpretation,
   type Biomarker,
+  computeDerivedMetrics,
+  evaluateInsightRules,
   type LabReport,
   type ReportAnalyte,
   classifyLabValue,
@@ -335,6 +337,12 @@ export function ReportDetailScreen() {
     });
   }, [reportAnalytes]);
 
+  const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
+  const insightFlags = useMemo(
+    () => evaluateInsightRules(biomarkers, interpretation?.cycle_context?.estimated_cycle_phase ?? null),
+    [biomarkers, interpretation?.cycle_context?.estimated_cycle_phase]
+  );
+
   if (loading && !refreshing) {
     return (
       <SafeAreaView style={styles.center} edges={['top', 'bottom']}>
@@ -545,6 +553,76 @@ export function ReportDetailScreen() {
           </View>
         ) : null}
 
+        {(insightFlags.length > 0 || interpretation?.pattern_signals?.length || derivedMetrics.length > 0) ? (
+          <View style={styles.section}>
+            <Text variant="titleSm" style={styles.sectionTitle}>
+              Advanced insights
+            </Text>
+
+            {insightFlags.length > 0 ? (
+              <Card style={styles.recommendationCard}>
+                <Text variant="body" weight="bold">
+                  Insight flags
+                </Text>
+                {insightFlags.map((flag) => (
+                  <View key={flag.rule_id} style={styles.contextRow}>
+                    <Text variant="bodySm" weight="semibold">
+                      {flag.title}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {flag.description}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+
+            {interpretation?.pattern_signals?.length ? (
+              <Card style={styles.recommendationCard}>
+                <Text variant="body" weight="bold">
+                  Pattern signals
+                </Text>
+                {interpretation.pattern_signals.map((signal) => (
+                  <View key={`${signal.title}-${signal.confidence}`} style={styles.contextRow}>
+                    <Text variant="bodySm" weight="semibold">
+                      {signal.title}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {signal.explanation}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+
+            {derivedMetrics.length > 0 ? (
+              <Card style={styles.recommendationCard}>
+                <Text variant="body" weight="bold">
+                  Derived metrics
+                </Text>
+                {derivedMetrics.map((metric) => (
+                  <View key={metric.name} style={styles.contextRow}>
+                    <View style={styles.derivedMetricHeader}>
+                      <Text variant="bodySm" weight="semibold">
+                        {metric.displayName}
+                      </Text>
+                      <Text variant="bodySm" weight="bold">
+                        {metric.value} {metric.unit}
+                      </Text>
+                    </View>
+                    <Text variant="caption" tone="muted">
+                      {metric.formulaNote}
+                    </Text>
+                    <Text variant="caption" tone="muted">
+                      {metric.interpretation}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+          </View>
+        ) : null}
+
         {interpretation?.what_you_can_do_now?.length ? (
           <View style={styles.section}>
             <Text variant="titleSm" style={styles.sectionTitle}>
@@ -563,6 +641,76 @@ export function ReportDetailScreen() {
                   </Text>
                 </View>
               ))}
+            </Card>
+          </View>
+        ) : null}
+
+        {interpretation?.questions_for_doctor?.length ? (
+          <View style={styles.section}>
+            <Text variant="titleSm" style={styles.sectionTitle}>
+              Doctor questions
+            </Text>
+            <Card style={styles.recommendationCard}>
+              {interpretation.questions_for_doctor.map((question, index) => (
+                <View key={`${question}-${index}`} style={styles.stepRow}>
+                  <View style={styles.stepNumber}>
+                    <Text variant="caption" weight="bold" tone="inverse">
+                      {index + 1}
+                    </Text>
+                  </View>
+                  <Text variant="bodySm" style={styles.stepText}>
+                    {question}
+                  </Text>
+                </View>
+              ))}
+            </Card>
+          </View>
+        ) : null}
+
+        {(interpretation?.supportive_considerations?.nutrition?.length ||
+          interpretation?.supportive_considerations?.sleep_stress?.length ||
+          interpretation?.supportive_considerations?.lifestyle?.length) ? (
+          <View style={styles.section}>
+            <Text variant="titleSm" style={styles.sectionTitle}>
+              Supportive considerations
+            </Text>
+            <Card style={styles.recommendationCard}>
+              {interpretation?.supportive_considerations?.nutrition?.length ? (
+                <View style={styles.contextRow}>
+                  <Text variant="bodySm" weight="semibold">
+                    Nutrition
+                  </Text>
+                  {interpretation.supportive_considerations.nutrition.map((item, index) => (
+                    <Text key={`nutrition-${index}`} variant="caption" tone="muted">
+                      • {item}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+              {interpretation?.supportive_considerations?.sleep_stress?.length ? (
+                <View style={styles.contextRow}>
+                  <Text variant="bodySm" weight="semibold">
+                    Sleep & stress
+                  </Text>
+                  {interpretation.supportive_considerations.sleep_stress.map((item, index) => (
+                    <Text key={`sleep-stress-${index}`} variant="caption" tone="muted">
+                      • {item}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+              {interpretation?.supportive_considerations?.lifestyle?.length ? (
+                <View style={styles.contextRow}>
+                  <Text variant="bodySm" weight="semibold">
+                    Lifestyle
+                  </Text>
+                  {interpretation.supportive_considerations.lifestyle.map((item, index) => (
+                    <Text key={`lifestyle-${index}`} variant="caption" tone="muted">
+                      • {item}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
             </Card>
           </View>
         ) : null}
@@ -807,6 +955,15 @@ const styles = StyleSheet.create({
   },
   stepText: {
     flex: 1,
+  },
+  contextRow: {
+    gap: theme.spacing.xxs,
+  },
+  derivedMetricHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
   },
   fullPanelButton: {
     flexDirection: 'row',
