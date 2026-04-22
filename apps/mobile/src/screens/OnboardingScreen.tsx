@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  AGE_RANGE_OPTIONS,
+  DEFAULT_CYCLE_LENGTH,
+  DEFAULT_PERIOD_LENGTH,
+  validateOnboardingProfile,
+} from '@amani/shared';
 import { Button, Card, Input, Notice, Text } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import { theme } from '../theme';
-
-const AGE_RANGE_OPTIONS = ['18-24', '25-34', '35-44', '45-54', '55+'] as const;
 
 interface OnboardingScreenProps {
   onSignOut: () => Promise<void>;
@@ -15,10 +19,14 @@ export function OnboardingScreen({ onSignOut }: OnboardingScreenProps) {
   const { completeOnboarding, userProfile } = useAuth();
   const [ageRange, setAgeRange] = useState(userProfile?.age_range ?? '');
   const [cycleLength, setCycleLength] = useState(
-    userProfile?.default_cycle_length ? String(userProfile.default_cycle_length) : '28'
+    userProfile?.default_cycle_length
+      ? String(userProfile.default_cycle_length)
+      : String(DEFAULT_CYCLE_LENGTH)
   );
   const [periodLength, setPeriodLength] = useState(
-    userProfile?.default_period_length ? String(userProfile.default_period_length) : '5'
+    userProfile?.default_period_length
+      ? String(userProfile.default_period_length)
+      : String(DEFAULT_PERIOD_LENGTH)
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,25 +42,21 @@ export function OnboardingScreen({ onSignOut }: OnboardingScreenProps) {
     const cycleValue = Number(cycleLength);
     const periodValue = Number(periodLength);
 
-    if (!selectedAge) {
-      setError('Choose your age range to continue.');
-      return;
-    }
+    const validation = validateOnboardingProfile({
+      ageRange: selectedAge,
+      cycleLength: cycleValue,
+      periodLength: periodValue,
+    });
 
-    if (!Number.isInteger(cycleValue) || cycleValue < 21 || cycleValue > 40) {
-      setError('Enter a typical cycle length between 21 and 40 days.');
-      return;
-    }
-
-    if (!Number.isInteger(periodValue) || periodValue < 2 || periodValue > 10) {
-      setError('Enter a typical period length between 2 and 10 days.');
+    if (!validation.valid) {
+      setError(validation.error ?? 'Please review your profile details.');
       return;
     }
 
     setLoading(true);
     try {
       await completeOnboarding({
-        ageRange: selectedAge,
+        ageRange,
         cycleLength: cycleValue,
         periodLength: periodValue,
       });

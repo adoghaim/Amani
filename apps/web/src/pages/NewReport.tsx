@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
-import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
@@ -37,7 +35,6 @@ type GuidedStep = 'choose' | 'instructions' | 'upload';
 
 export function NewReport() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const submittingRef = useRef(false);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -48,10 +45,10 @@ export function NewReport() {
   const [file, setFile] = useState<File | null>(null);
   const [reportDate, setReportDate] = useState('');
   const [lastPeriodDate, setLastPeriodDate] = useState('');
-  const [cycleLength, setCycleLength] = useState('28');
-  const [birthControl, setBirthControl] = useState<'yes' | 'no' | 'unsure'>('unsure');
-  const [pregnant, setPregnant] = useState<'yes' | 'no' | 'unsure'>('unsure');
-  const [postpartum, setPostpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
+  const [cycleLength] = useState('28');
+  const [birthControl] = useState<'yes' | 'no' | 'unsure'>('unsure');
+  const [pregnant] = useState<'yes' | 'no' | 'unsure'>('unsure');
+  const [postpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
   const [reportItems, setReportItems] = useState<ReportItem[]>([]);
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);

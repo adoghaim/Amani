@@ -15,14 +15,17 @@ export function LoginScreen({
   onShowSignup,
   onShowResetPassword,
 }: LoginScreenProps) {
-  const { signIn } = useAuth();
+  const { sendMagicLink, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleSubmit = async () => {
     setError('');
+    setSuccess('');
 
     if (!email.trim() || !password.trim()) {
       setError('Enter your email and password to continue.');
@@ -39,6 +42,26 @@ export function LoginScreen({
     }
   };
 
+  const handleMagicLink = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!email.trim()) {
+      setError('Enter your email address first.');
+      return;
+    }
+
+    setMagicLinkLoading(true);
+    try {
+      await sendMagicLink(email.trim());
+      setSuccess('Magic link sent. Open it on this device to continue in-app.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send a magic link right now.');
+    } finally {
+      setMagicLinkLoading(false);
+    }
+  };
+
   return (
     <AuthLayout
       title="Welcome back"
@@ -49,6 +72,7 @@ export function LoginScreen({
     >
       <View style={styles.form}>
         {error ? <Notice tone="error">{error}</Notice> : null}
+        {success ? <Notice tone="success">{success}</Notice> : null}
 
         <Input
           label="Email"
@@ -84,6 +108,14 @@ export function LoginScreen({
           label="Sign In"
           onPress={handleSubmit}
           loading={loading}
+          fullWidth
+        />
+
+        <Button
+          label="Email Me a Magic Link"
+          onPress={handleMagicLink}
+          loading={magicLinkLoading}
+          variant="secondary"
           fullWidth
         />
       </View>

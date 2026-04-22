@@ -53,13 +53,20 @@ VITE_SUPABASE_ANON_KEY=...
 VITE_STRIPE_PUBLISHABLE_KEY=...
 ```
 
+Create `apps/mobile/.env` from `apps/mobile/.env.example` with:
+
+```bash
+EXPO_PUBLIC_SUPABASE_URL=...
+EXPO_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+The mobile app now reads these values through `apps/mobile/app.config.ts` and `expo-constants`, so they no longer need to be hardcoded in the client. The Supabase anon key is public client config, but it should still come from environment-driven app config rather than source edits.
+
 Set Supabase edge function secrets in the Supabase dashboard:
 
 - `OPENAI_API_KEY`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
-
-The current mobile Supabase client still uses placeholders in `apps/mobile/src/lib/supabase.ts` and should be configured before shipping mobile auth flows.
 
 ## Product Guardrails
 

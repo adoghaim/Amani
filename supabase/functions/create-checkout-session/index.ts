@@ -8,6 +8,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const DEFAULT_PRICE_ID = "price_1T1XKd0qFZxXyzLUfmtmpqxx";
+const ALLOWED_PRICE_IDS = new Set([
+  "price_1T1XKd0qFZxXyzLUfmtmpqxx",
+  "price_1T1XLT0qFZxXyzLU9mGfg7Ba",
+]);
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -41,6 +47,12 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    const body = await req.json().catch(() => ({}));
+    const requestedPriceId =
+      typeof body.priceId === "string" && ALLOWED_PRICE_IDS.has(body.priceId)
+        ? body.priceId
+        : DEFAULT_PRICE_ID;
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
       apiVersion: "2024-11-20.acacia",
@@ -101,28 +113,26 @@ Deno.serve(async (req: Request) => {
     }
 
     const origin = req.headers.get("origin") || "http://localhost:5173";
+    const successUrl =
+      typeof body.successUrl === "string" && body.successUrl.length > 0
+        ? body.successUrl
+        : `${origin}/billing?success=true`;
+    const cancelUrl =
+      typeof body.cancelUrl === "string" && body.cancelUrl.length > 0
+        ? body.cancelUrl
+        : `${origin}/billing?canceled=true`;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "Amani Subscription",
-              description: "Monthly subscription to Amani",
-            },
-            unit_amount: 2400,
-            recurring: {
-              interval: "month",
-            },
-          },
+          price: requestedPriceId,
           quantity: 1,
         },
       ],
       mode: "subscription",
-      success_url: `${origin}/billing?success=true`,
-      cancel_url: `${origin}/billing?canceled=true`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         supabase_user_id: user.id,
       },

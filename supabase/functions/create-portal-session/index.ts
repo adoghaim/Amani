@@ -42,6 +42,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const body = await req.json().catch(() => ({}));
+
     const { data: profile } = await supabase
       .from("users")
       .select("stripe_customer_id, email")
@@ -70,10 +72,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const origin = req.headers.get("origin") || "http://localhost:5173";
+    const returnUrl =
+      typeof body.returnUrl === "string" && body.returnUrl.length > 0
+        ? body.returnUrl
+        : `${origin}/billing`;
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${origin}/billing`,
+      return_url: returnUrl,
     });
 
     return new Response(

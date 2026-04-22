@@ -87,7 +87,10 @@ export function useNotificationSync() {
           return;
         }
 
-        const prediction = computeCyclePrediction(periodLogs, userProfile);
+        const prediction =
+          periodLogs.length > 0
+            ? computeCyclePrediction(periodLogs, userProfile)
+            : null;
         await scheduleCycleReminderNotificationsAsync(prediction, preferences);
         await notifyForNewReadyReportsAsync(user.id, reports, preferences.lab_reminders);
       } catch (error) {

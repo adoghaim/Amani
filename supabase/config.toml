@@ -3,8 +3,20 @@ project_id = "eyfvqdnczorscwveaadv"
 [functions.extract-biomarkers]
 verify_jwt = false
 
+[functions.extract-lab-report]
+verify_jwt = false
+
 [functions.parse-lab-report-ocr]
 verify_jwt = false
 
 [functions.generate-interpretation]
+verify_jwt = false
+
+[functions.create-checkout-session]
+verify_jwt = false
+
+[functions.create-portal-session]
+verify_jwt = false
+
+[functions.delete-user-data]
 verify_jwt = false

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Button, Card, Text } from '../components';
@@ -8,15 +9,17 @@ import { theme } from '../theme';
 import {
   LabReport,
   PeriodLog,
+  canCreateReport,
   computeCyclePrediction,
   formatDate,
   formatMonthDay,
   phaseDescription,
 } from '@amani/shared';
-import { Plus, Upload, Droplets, ArrowRight } from 'lucide-react-native';
+import { Plus, Upload, Droplets, ArrowRight, Settings } from 'lucide-react-native';
 
 export function DashboardScreen() {
   const { user, userProfile } = useAuth();
+  const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<LabReport[]>([]);
   const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
@@ -43,8 +46,15 @@ export function DashboardScreen() {
     }
   };
 
-  const prediction = useMemo(() => computeCyclePrediction(periodLogs, userProfile), [periodLogs, userProfile]);
+  const prediction = useMemo(
+    () => (periodLogs.length > 0 ? computeCyclePrediction(periodLogs, userProfile) : null),
+    [periodLogs, userProfile]
+  );
   const greetingName = user?.email?.split('@')[0] ?? 'there';
+  const canUploadReports = canCreateReport(userProfile);
+  const needsFirstReport = reports.length === 0;
+  const needsFirstPeriodLog = periodLogs.length === 0;
+  const showGettingStarted = needsFirstReport || needsFirstPeriodLog;
   const cycleSummary = prediction
     ? prediction.currentPhase === 'menstrual'
       ? 'You are on your period'
@@ -72,10 +82,56 @@ export function DashboardScreen() {
               Your health overview at a glance
             </Text>
           </View>
-          <TouchableOpacity style={styles.iconButton}>
-            <Plus size={20} color={theme.colors.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Settings size={20} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => navigation.navigate(canUploadReports ? 'UploadReport' : 'Billing')}
+            >
+              <Plus size={20} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {showGettingStarted ? (
+          <Card style={styles.setupCard}>
+            <Text variant="titleSm">Finish your setup</Text>
+            <Text variant="bodySm" tone="muted" style={styles.setupCopy}>
+              {needsFirstReport && needsFirstPeriodLog
+                ? 'Upload your first report or log your first period to start personalizing the app.'
+                : needsFirstReport
+                  ? 'Upload your first lab report to unlock your biomarker timeline and analysis.'
+                  : 'Log your first period so Amani can start generating cycle-aware predictions.'}
+            </Text>
+
+            <View style={styles.setupActions}>
+              <Button
+                label={needsFirstReport ? (canUploadReports ? 'Upload report' : 'Manage plan') : 'View reports'}
+                onPress={() =>
+                  navigation.navigate(
+                    needsFirstReport
+                      ? canUploadReports
+                        ? 'UploadReport'
+                        : 'Billing'
+                      : 'ReportsList'
+                  )
+                }
+                style={styles.flexButton}
+              />
+              <Button
+                label={needsFirstPeriodLog ? 'Log period' : 'Open tracker'}
+                variant="outline"
+                onPress={() => navigation.navigate('Tracker')}
+                style={styles.flexButton}
+              />
+            </View>
+          </Card>
+        ) : null}
 
         {prediction && (
           <Card style={styles.todayCard}>
@@ -100,13 +156,13 @@ export function DashboardScreen() {
               <Button
                 label="Log Period"
                 variant="outline"
-                onPress={() => {}}
+                onPress={() => navigation.navigate('Tracker')}
                 style={styles.flexButton}
                 icon={<Droplets />}
               />
               <Button
-                label="Upload Labs"
-                onPress={() => {}}
+                label={canUploadReports ? 'Upload Labs' : 'Manage Plan'}
+                onPress={() => navigation.navigate(canUploadReports ? 'UploadReport' : 'Billing')}
                 style={styles.flexButton}
                 icon={<Upload />}
               />
@@ -116,7 +172,7 @@ export function DashboardScreen() {
 
         <View style={styles.sectionHeader}>
           <Text variant="titleSm">Recent Lab Reports</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('ReportsList')}>
             <Text variant="bodySm" tone="primary" weight="semibold">
               View all
             </Text>
@@ -132,15 +188,19 @@ export function DashboardScreen() {
               Upload your first report to start building your timeline and cycle-aware insights.
             </Text>
             <Button
-              label="Upload your first report"
-              onPress={() => {}}
+              label={canUploadReports ? 'Upload your first report' : 'Manage subscription'}
+              onPress={() => navigation.navigate(canUploadReports ? 'UploadReport' : 'Billing')}
               style={styles.uploadBtn}
               fullWidth
             />
           </Card>
         ) : (
           reports.slice(0, 3).map((report) => (
-            <TouchableOpacity key={report.id} activeOpacity={0.85}>
+            <TouchableOpacity
+              key={report.id}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}
+            >
               <Card style={styles.reportCard}>
                 <View style={styles.reportInfo}>
                   <Text variant="body" weight="semibold">
@@ -186,6 +246,10 @@ const styles = StyleSheet.create({
   subGreeting: {
     marginTop: theme.spacing.xxs,
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
   iconButton: {
     width: 44,
     height: 44,
@@ -198,6 +262,17 @@ const styles = StyleSheet.create({
   },
   todayCard: {
     marginBottom: theme.spacing.xl,
+  },
+  setupCard: {
+    marginBottom: theme.spacing.xl,
+  },
+  setupCopy: {
+    marginTop: theme.spacing.xs,
+  },
+  setupActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
   },
   todayHeader: {
     flexDirection: 'row',

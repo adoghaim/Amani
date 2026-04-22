@@ -1,10 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Linking } from 'react-native';
+import * as ExpoLinking from 'expo-linking';
 import { User as SupabaseUser } from '@supabase/supabase-js';
+import { User, validateOnboardingProfile } from '@amani/shared';
 import { supabase } from '../lib/supabase';
-import { User } from '@amani/shared';
-
-const PASSWORD_RESET_REDIRECT = 'amani://reset-password';
+import {
+  authCallbackUrl,
+  PASSWORD_RESET_PATH,
+  passwordResetUrl,
+} from '../navigation/linking';
 
 interface OnboardingProfileInput {
   ageRange: string;
@@ -19,6 +23,7 @@ interface AuthContextType {
   isPasswordRecovery: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  sendMagicLink: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -75,15 +80,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleAuthLink = async (url: string) => {
     try {
       const params = parseUrlParams(url);
+      const path = (ExpoLinking.parse(url).path ?? '').replace(/^\/+|\/+$/g, '');
       const code = params.get('code');
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
       const type = params.get('type');
+      const isRecoveryLink = type === 'recovery' || path === PASSWORD_RESET_PATH;
 
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error && type === 'recovery') {
-          setIsPasswordRecovery(true);
+        if (!error) {
+          setIsPasswordRecovery(isRecoveryLink);
         }
         return;
       }
@@ -94,8 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           refresh_token: refreshToken,
         });
 
-        if (!error && type === 'recovery') {
-          setIsPasswordRecovery(true);
+        if (!error) {
+          setIsPasswordRecovery(isRecoveryLink);
         }
       }
     } catch (error) {
@@ -210,6 +217,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const sendMagicLink = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: authCallbackUrl,
+      },
+    });
+
+    if (error) throw error;
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
@@ -219,7 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: PASSWORD_RESET_REDIRECT,
+      redirectTo: passwordResetUrl,
     });
     if (error) throw error;
   };
@@ -236,6 +254,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }: OnboardingProfileInput) => {
     if (!user) {
       throw new Error('No authenticated user found');
+    }
+
+    const validation = validateOnboardingProfile({
+      ageRange,
+      cycleLength,
+      periodLength,
+    });
+
+    if (!validation.valid) {
+      throw new Error(validation.error ?? 'Invalid onboarding profile.');
     }
 
     const { error } = await supabase.from('users').upsert(
@@ -265,6 +293,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isPasswordRecovery,
     signUp,
     signIn,
+    sendMagicLink,
     signOut,
     resetPassword,
     updatePassword,

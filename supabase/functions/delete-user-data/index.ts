@@ -54,6 +54,10 @@ Deno.serve(async (req: Request) => {
     }
 
     await supabase.from("interventions").delete().eq("user_id", user.id);
+    await supabase.from("period_logs").delete().eq("user_id", user.id);
+    await supabase.from("symptom_logs").delete().eq("user_id", user.id);
+    await supabase.from("notification_preferences").delete().eq("user_id", user.id);
+    await supabase.from("reminders").delete().eq("user_id", user.id);
     await supabase.from("cycle_events").delete().eq("user_id", user.id);
 
     const { data: reportIds } = await supabase
@@ -65,6 +69,8 @@ Deno.serve(async (req: Request) => {
       const ids = reportIds.map((r: any) => r.id);
       await supabase.from("interpretations").delete().in("lab_report_id", ids);
       await supabase.from("biomarkers").delete().in("lab_report_id", ids);
+      await supabase.from("report_analytes").delete().in("lab_report_id", ids);
+      await supabase.from("parser_debug").delete().in("report_id", ids);
     }
 
     await supabase.from("lab_reports").delete().eq("user_id", user.id);

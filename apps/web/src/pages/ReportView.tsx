@@ -35,7 +35,6 @@ import {
   Microscope, Sparkles, Stethoscope, CalendarDays,
   CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle, FlaskConical,
 } from 'lucide-react';
-import { detectLabSource } from '../utils/detectLabSource';
 import type { LabSource } from '../types';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
@@ -958,7 +957,7 @@ export function ReportView() {
 
                       // Fallbacks if no AI headline
                       if (outOfRange.length === 0 && borderline.length === 0) {
-                        if (ctx.anyBoundaryCrossImproved) {
+                        if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
                           return `All values are within optimal range, and ${name} has improved since your last draw.`;
                         }
@@ -972,7 +971,7 @@ export function ReportView() {
                         return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
                       }
                       if (outOfRange.length === 1 && borderline.length === 0) {
-                        if (ctx.anyBoundaryCrossImproved) {
+                        if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
                           return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
                         }

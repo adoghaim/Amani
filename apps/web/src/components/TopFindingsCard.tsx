@@ -1,4 +1,4 @@
-import { AlertCircle, TrendingUp, TrendingDown, Minus, List } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, List } from 'lucide-react';
 import type { TopFinding } from '../lib/insights/buildInsightSummary';
 
 const SECONDARY_STYLE: Record<string, {
