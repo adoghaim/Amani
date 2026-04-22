@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { AlertTriangle, Beaker, ChevronDown, ChevronLeft, ChevronRight, Info, Sparkles } from 'lucide-react-native';
+import { AlertTriangle, Beaker, ChevronDown, ChevronLeft, ChevronRight, Info, RefreshCw, Sparkles } from 'lucide-react-native';
 import { type AIInterpretation, type Biomarker, type LabReport, formatDate } from '@amani/shared';
 import { BiomarkerTrendChart, Button, Card, Notice, Text } from '../components';
 import { useAuth } from '../contexts/AuthContext';
@@ -66,11 +66,13 @@ function getFlagMeta(flagged: Biomarker['flagged']) {
 export function ReportDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { reportId } = route.params;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
@@ -214,6 +216,62 @@ export function ReportDetailScreen() {
     void fetchData();
   };
 
+  const isTrialActive = () => {
+    if (!userProfile) {
+      return false;
+    }
+    if (userProfile.subscription_status === 'active') {
+      return true;
+    }
+    if (userProfile.subscription_status === 'trial') {
+      const trialStart = new Date(userProfile.trial_start_date);
+      const daysSinceStart = Math.floor((Date.now() - trialStart.getTime()) / 86400000);
+      return daysSinceStart < 7;
+    }
+    return false;
+  };
+
+  const handleRegenerate = async () => {
+    if (!report || report.regeneration_count >= 3) {
+      return;
+    }
+    if (userProfile?.subscription_status !== 'active' && !isTrialActive()) {
+      setActionError('Regeneration is available for active or trial subscriptions.');
+      return;
+    }
+
+    setRegenerating(true);
+    setActionError('');
+    try {
+      await supabase.from('interpretations').delete().eq('lab_report_id', reportId);
+      await supabase
+        .from('lab_reports')
+        .update({
+          status: 'processing',
+          regeneration_count: report.regeneration_count + 1,
+        })
+        .eq('id', reportId);
+
+      const { data: fnData, error: interpretationError } = await supabase.functions.invoke(
+        'generate-interpretation',
+        { body: { reportId } }
+      );
+
+      if (interpretationError || !fnData?.success) {
+        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+        setActionError('Regeneration failed. You can try again if attempts remain.');
+      }
+      await fetchData();
+    } catch (regenerateError) {
+      console.error('Error regenerating report interpretation:', regenerateError);
+      await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+      setActionError('Regeneration failed. Please try again.');
+      await fetchData();
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const flaggedMarkers = useMemo(() => {
     return [...biomarkers]
       .filter((marker) => marker.flagged !== 'in_range')
@@ -249,6 +307,12 @@ export function ReportDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  const canRegenerate =
+    report.regeneration_count < 3 &&
+    (userProfile?.subscription_status === 'active' || isTrialActive());
+  const remainingRegenerations = 3 - report.regeneration_count;
+  const exhaustedRegenerations = report.regeneration_count >= 3;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -287,6 +351,43 @@ export function ReportDetailScreen() {
           <Notice tone="error" style={styles.notice}>
             This report hit a processing error. Try uploading the file again or use a clearer PDF export from your lab portal.
           </Notice>
+        ) : null}
+
+        {actionError ? (
+          <Notice tone="error" style={styles.notice}>
+            {actionError}
+          </Notice>
+        ) : null}
+
+        {(canRegenerate || exhaustedRegenerations) ? (
+          <Card style={styles.regenerationCard}>
+            <View style={styles.regenerationHeader}>
+              <Text variant="body" weight="bold">
+                Regenerate analysis
+              </Text>
+              <Text variant="caption" tone="muted">
+                {exhaustedRegenerations ? 'No retries left' : `${remainingRegenerations} left`}
+              </Text>
+            </View>
+            <Text variant="bodySm" tone="muted">
+              Request a new AI interpretation if this summary missed context or encountered an error.
+            </Text>
+            {canRegenerate ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={() => void handleRegenerate()}
+                loading={regenerating}
+                disabled={regenerating}
+                icon={<RefreshCw />}
+                label={regenerating ? 'Regenerating...' : `Regenerate (${remainingRegenerations} left)`}
+              />
+            ) : (
+              <Text variant="caption" tone="muted">
+                You have used all 3 regeneration attempts for this report.
+              </Text>
+            )}
+          </Card>
         ) : null}
 
         {interpretation ? (
@@ -620,6 +721,14 @@ const styles = StyleSheet.create({
   },
   recommendationCard: {
     gap: theme.spacing.sm,
+  },
+  regenerationCard: {
+    gap: theme.spacing.sm,
+  },
+  regenerationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   stepRow: {
     flexDirection: 'row',
