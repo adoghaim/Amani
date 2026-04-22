@@ -9,7 +9,9 @@ import {
 } from '@amani/shared';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  clearStoredPushTokenAsync,
   getDefaultNotificationPreferences,
+  getStoredPushTokenAsync,
   handleIncomingNotification,
   handleNotificationData,
   notifyForNewReadyReportsAsync,
@@ -102,16 +104,31 @@ export function useNotificationSync() {
 
     const syncNotifications = async () => {
       try {
-        const pushToken = await registerForPushNotificationsAsync();
+        const preferences = await fetchNotificationPreferencesAsync(user.id);
+        const remindersEnabled = [
+          preferences.period_reminders,
+          preferences.fertile_reminders,
+          preferences.ovulation_reminders,
+          preferences.lab_reminders,
+          preferences.intervention_reminders,
+        ].some(Boolean);
+
+        const pushToken = remindersEnabled
+          ? await registerForPushNotificationsAsync()
+          : null;
 
         if (!active) {
           return;
         }
 
-        await syncPushTokenAsync(user.id, pushToken);
+        if (!remindersEnabled) {
+          await clearStoredPushTokenAsync();
+        }
 
-        const [preferences, periodLogs, reports] = await Promise.all([
-          fetchNotificationPreferencesAsync(user.id),
+        const tokenToSync = pushToken ?? (await getStoredPushTokenAsync()) ?? null;
+        await syncPushTokenAsync(user.id, remindersEnabled ? tokenToSync : null);
+
+        const [periodLogs, reports] = await Promise.all([
           fetchPeriodLogsAsync(user.id),
           fetchLabReportsAsync(user.id),
         ]);
