@@ -36,6 +36,7 @@ const QUEST_URL = 'https://myquest.questdiagnostics.com/';
 const LABCORP_URL = 'https://patient.labcorp.com/';
 
 type EntryMode = 'upload' | 'manual';
+type WizardStep = 1 | 2 | 3;
 
 interface ManualEntryDraft {
   id: string;
@@ -80,6 +81,7 @@ export function UploadReportScreen() {
   const navigation = useNavigation<any>();
   const { user, userProfile } = useAuth();
   const [mode, setMode] = useState<EntryMode>('upload');
+  const [wizardStep, setWizardStep] = useState<WizardStep>(1);
   const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [lastPeriodDate, setLastPeriodDate] = useState('');
@@ -92,7 +94,6 @@ export function UploadReportScreen() {
   const [error, setError] = useState('');
   const [portalHint, setPortalHint] = useState('');
   const [manualEntries, setManualEntries] = useState<ManualEntryDraft[]>([emptyManualEntry()]);
-  const [manualReviewStep, setManualReviewStep] = useState(false);
   const [catalog, setCatalog] = useState<CatalogBiomarker[]>([]);
 
   const canUpload = useMemo(() => canCreateReport(userProfile), [userProfile]);
@@ -102,6 +103,11 @@ export function UploadReportScreen() {
     saving: 'Saving your report…',
     interpreting: 'Generating your analysis…',
   };
+  const wizardSteps: Array<{ id: WizardStep; title: string }> = [
+    { id: 1, title: 'Upload' },
+    { id: 2, title: 'Extraction review' },
+    { id: 3, title: 'Cycle context' },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -239,6 +245,27 @@ export function UploadReportScreen() {
     return cycleLengthValue;
   };
 
+  const handleContinue = () => {
+    setError('');
+
+    if (wizardStep === 1) {
+      if (mode === 'upload' && !selectedFile) {
+        setError('Choose a PDF or image to continue.');
+        return;
+      }
+      setWizardStep(2);
+      return;
+    }
+
+    if (wizardStep === 2) {
+      if (mode === 'manual' && manualPreview.length === 0) {
+        setError('Add at least one biomarker name and numeric value to continue.');
+        return;
+      }
+      setWizardStep(3);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!user) {
       setError('Please sign in again before uploading.');
@@ -254,15 +281,6 @@ export function UploadReportScreen() {
 
     try {
       if (mode === 'manual') {
-        if (!manualReviewStep) {
-          if (manualPreview.length === 0) {
-            setError('Add at least one biomarker name and numeric value to continue.');
-            return;
-          }
-          setManualReviewStep(true);
-          return;
-        }
-
         const result = await uploadManualReport({
           user,
           userProfile,
@@ -316,7 +334,7 @@ export function UploadReportScreen() {
       setError(message);
       if (message.toLowerCase().includes('no biomarkers were detected')) {
         setMode('manual');
-        setManualReviewStep(false);
+        setWizardStep(1);
       }
     }
   };
@@ -337,30 +355,19 @@ export function UploadReportScreen() {
         </View>
 
         <Card style={styles.modeCard}>
-          <Text variant="body" weight="bold">Choose entry method</Text>
-          <View style={styles.modeRow}>
-            <Pressable
-              onPress={() => {
-                setMode('upload');
-                setManualReviewStep(false);
-                setError('');
-              }}
-              style={[styles.modeButton, mode === 'upload' ? styles.modeButtonActive : null]}
-            >
-              <Upload size={18} color={theme.colors.primary} />
-              <Text variant="bodySm" weight="semibold">Upload + OCR</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setMode('manual');
-                setManualReviewStep(false);
-                setError('');
-              }}
-              style={[styles.modeButton, mode === 'manual' ? styles.modeButtonActive : null]}
-            >
-              <Sparkles size={18} color={theme.colors.primary} />
-              <Text variant="bodySm" weight="semibold">Manual entry</Text>
-            </Pressable>
+          <Text variant="body" weight="bold">Mobile upload wizard</Text>
+          <Text variant="bodySm" tone="muted">
+            Follow each step: upload, extraction review, then cycle context.
+          </Text>
+          <View style={styles.stepRow}>
+            {wizardSteps.map((step) => (
+              <View key={step.id} style={styles.stepItem}>
+                <View style={[styles.stepDot, wizardStep >= step.id ? styles.stepDotActive : null]}>
+                  <Text variant="caption" tone={wizardStep >= step.id ? 'inverse' : 'muted'}>{step.id}</Text>
+                </View>
+                <Text variant="caption" tone={wizardStep === step.id ? 'default' : 'muted'}>{step.title}</Text>
+              </View>
+            ))}
           </View>
         </Card>
 
@@ -395,7 +402,35 @@ export function UploadReportScreen() {
           </Notice>
         ) : null}
 
-        {mode === 'upload' ? (
+        {wizardStep === 1 ? (
+          <Card style={styles.modeCard}>
+            <Text variant="body" weight="bold">Choose entry method</Text>
+            <View style={styles.modeRow}>
+              <Pressable
+                onPress={() => {
+                  setMode('upload');
+                  setError('');
+                }}
+                style={[styles.modeButton, mode === 'upload' ? styles.modeButtonActive : null]}
+              >
+                <Upload size={18} color={theme.colors.primary} />
+                <Text variant="bodySm" weight="semibold">Upload + OCR</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setMode('manual');
+                  setError('');
+                }}
+                style={[styles.modeButton, mode === 'manual' ? styles.modeButtonActive : null]}
+              >
+                <Sparkles size={18} color={theme.colors.primary} />
+                <Text variant="bodySm" weight="semibold">Manual entry</Text>
+              </Pressable>
+            </View>
+          </Card>
+        ) : null}
+
+        {wizardStep === 1 ? (mode === 'upload' ? (
           <>
             <Card style={styles.portalCard}>
               <Text variant="body" weight="bold">
@@ -482,163 +517,181 @@ export function UploadReportScreen() {
           </>
         ) : (
           <Card>
-            {!manualReviewStep ? (
-              <>
-                <Text variant="body" weight="bold">Manual biomarkers</Text>
-                <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
-                  Enter results if extraction fails or if you prefer to review values before upload.
-                </Text>
+            <Text variant="body" weight="bold">Manual biomarkers</Text>
+            <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
+              Enter results if extraction fails or if you prefer to review values before upload.
+            </Text>
 
-                <View style={styles.formGroup}>
-                  {manualEntries.map((entry, index) => (
-                    <View key={entry.id} style={styles.manualEntryCard}>
-                      <View style={styles.manualEntryHeader}>
-                        <Text variant="bodySm" weight="semibold">Biomarker {index + 1}</Text>
-                        {manualEntries.length > 1 ? (
-                          <Pressable
-                            onPress={() => setManualEntries((current) => current.filter((item) => item.id !== entry.id))}
-                          >
-                            <X size={18} color={theme.colors.mutedText} />
-                          </Pressable>
-                        ) : null}
-                      </View>
+            <View style={styles.formGroup}>
+              {manualEntries.map((entry, index) => (
+                <View key={entry.id} style={styles.manualEntryCard}>
+                  <View style={styles.manualEntryHeader}>
+                    <Text variant="bodySm" weight="semibold">Biomarker {index + 1}</Text>
+                    {manualEntries.length > 1 ? (
+                      <Pressable
+                        onPress={() => setManualEntries((current) => current.filter((item) => item.id !== entry.id))}
+                      >
+                        <X size={18} color={theme.colors.mutedText} />
+                      </Pressable>
+                    ) : null}
+                  </View>
 
-                      <Input
-                        label="Name"
-                        value={entry.name}
-                        onChangeText={(value) => updateManualEntry(entry.id, 'name', value)}
-                        placeholder="e.g. Ferritin"
-                      />
-                      <Input
-                        label="Value"
-                        value={entry.value}
-                        onChangeText={(value) => updateManualEntry(entry.id, 'value', value)}
-                        keyboardType="decimal-pad"
-                        placeholder="e.g. 48"
-                      />
-                      <Input
-                        label="Unit (optional)"
-                        value={entry.unit}
-                        onChangeText={(value) => updateManualEntry(entry.id, 'unit', value)}
-                        placeholder="e.g. ng/mL"
-                      />
-
-                      <View style={styles.inlineInputs}>
-                        <Input
-                          label="Ref min"
-                          value={entry.referenceMin}
-                          onChangeText={(value) => updateManualEntry(entry.id, 'referenceMin', value)}
-                          keyboardType="decimal-pad"
-                          placeholder="optional"
-                          containerStyle={styles.inlineInput}
-                        />
-                        <Input
-                          label="Ref max"
-                          value={entry.referenceMax}
-                          onChangeText={(value) => updateManualEntry(entry.id, 'referenceMax', value)}
-                          keyboardType="decimal-pad"
-                          placeholder="optional"
-                          containerStyle={styles.inlineInput}
-                        />
-                      </View>
-                    </View>
-                  ))}
-
-                  <Button
-                    label="Add biomarker"
-                    variant="outline"
-                    icon={<Plus size={16} color={theme.colors.primary} />}
-                    onPress={() => setManualEntries((current) => [...current, emptyManualEntry()])}
+                  <Input
+                    label="Name"
+                    value={entry.name}
+                    onChangeText={(value) => updateManualEntry(entry.id, 'name', value)}
+                    placeholder="e.g. Ferritin"
                   />
-                </View>
-              </>
-            ) : (
-              <>
-                <Text variant="body" weight="bold">Review manual entries</Text>
-                <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
-                  We matched entries to core biomarkers when possible.
-                </Text>
+                  <Input
+                    label="Value"
+                    value={entry.value}
+                    onChangeText={(value) => updateManualEntry(entry.id, 'value', value)}
+                    keyboardType="decimal-pad"
+                    placeholder="e.g. 48"
+                  />
+                  <Input
+                    label="Unit (optional)"
+                    value={entry.unit}
+                    onChangeText={(value) => updateManualEntry(entry.id, 'unit', value)}
+                    placeholder="e.g. ng/mL"
+                  />
 
-                <View style={styles.formGroup}>
-                  {manualPreview.map((entry) => (
-                    <View key={entry.id} style={styles.reviewRow}>
-                      <View style={styles.reviewRowCopy}>
-                        <Text variant="bodySm" weight="semibold">{entry.name}</Text>
-                        <Text variant="caption" tone="muted">
-                          {entry.valueNumber} {entry.unit || entry.defaultUnit || ''}
-                        </Text>
-                      </View>
-                      <Text variant="caption" tone={entry.canonicalSlug ? 'default' : 'muted'}>
-                        {entry.canonicalSlug ? `Mapped to ${entry.canonicalName}` : 'Saved as extended marker'}
+                  <View style={styles.inlineInputs}>
+                    <Input
+                      label="Ref min"
+                      value={entry.referenceMin}
+                      onChangeText={(value) => updateManualEntry(entry.id, 'referenceMin', value)}
+                      keyboardType="decimal-pad"
+                      placeholder="optional"
+                      containerStyle={styles.inlineInput}
+                    />
+                    <Input
+                      label="Ref max"
+                      value={entry.referenceMax}
+                      onChangeText={(value) => updateManualEntry(entry.id, 'referenceMax', value)}
+                      keyboardType="decimal-pad"
+                      placeholder="optional"
+                      containerStyle={styles.inlineInput}
+                    />
+                  </View>
+                </View>
+              ))}
+
+              <Button
+                label="Add biomarker"
+                variant="outline"
+                icon={<Plus size={16} color={theme.colors.primary} />}
+                onPress={() => setManualEntries((current) => [...current, emptyManualEntry()])}
+              />
+            </View>
+          </Card>
+        )) : wizardStep === 2 ? (
+          <Card>
+            <Text variant="body" weight="bold">Extraction review</Text>
+            <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
+              Confirm what Amani will process before saving your report.
+            </Text>
+            {mode === 'manual' ? (
+              <View style={styles.formGroup}>
+                {manualPreview.map((entry) => (
+                  <View key={entry.id} style={styles.reviewRow}>
+                    <View style={styles.reviewRowCopy}>
+                      <Text variant="bodySm" weight="semibold">{entry.name}</Text>
+                      <Text variant="caption" tone="muted">
+                        {entry.valueNumber} {entry.unit || entry.defaultUnit || ''}
                       </Text>
                     </View>
-                  ))}
+                    <Text variant="caption" tone={entry.canonicalSlug ? 'default' : 'muted'}>
+                      {entry.canonicalSlug ? `Mapped to ${entry.canonicalName}` : 'Saved as extended marker'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.formGroup}>
+                <View style={styles.reviewRow}>
+                  <Text variant="bodySm" weight="semibold">Selected file</Text>
+                  <Text variant="caption" tone="muted">{selectedFile?.name ?? 'No file selected yet'}</Text>
                 </View>
-
-                <Button
-                  label="Back to edit"
-                  variant="outline"
-                  onPress={() => setManualReviewStep(false)}
-                />
-              </>
+                <View style={styles.reviewRow}>
+                  <Text variant="bodySm" weight="semibold">Import source</Text>
+                  <Text variant="caption" tone="muted">
+                    {labSource === 'unknown' ? 'Direct upload' : labSource === 'quest' ? 'Quest' : 'Labcorp'}
+                  </Text>
+                </View>
+              </View>
             )}
           </Card>
-        )}
+        ) : null}
 
-        <Card>
-          <Text variant="body" weight="bold">
-            Report details
-          </Text>
-          <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
-            We use these dates to keep cycle-aware interpretation aligned to the draw date.
-          </Text>
+        {wizardStep === 3 ? (
+          <Card>
+            <Text variant="body" weight="bold">
+              Report details
+            </Text>
+            <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
+              We use these dates to keep cycle-aware interpretation aligned to the draw date.
+            </Text>
 
-          <View style={styles.formGroup}>
-            <DateField
-              label="Report date"
-              value={reportDate}
-              onChange={setReportDate}
-              maximumDate={new Date()}
-            />
+            <View style={styles.formGroup}>
+              <DateField
+                label="Report date"
+                value={reportDate}
+                onChange={setReportDate}
+                maximumDate={new Date()}
+              />
 
-            <DateField
-              label="Last period start"
-              value={lastPeriodDate}
-              onChange={setLastPeriodDate}
-              hint={loadingDefaults ? 'Loading your latest period log…' : 'Optional but recommended for cycle-aware analysis.'}
-              allowClear
-              maximumDate={reportDate ? parseDateValue(reportDate) : new Date()}
-            />
+              <DateField
+                label="Last period start"
+                value={lastPeriodDate}
+                onChange={setLastPeriodDate}
+                hint={loadingDefaults ? 'Loading your latest period log…' : 'Optional but recommended for cycle-aware analysis.'}
+                allowClear
+                maximumDate={reportDate ? parseDateValue(reportDate) : new Date()}
+              />
 
-            <Input
-              label="Typical cycle length"
-              value={cycleLength}
-              onChangeText={setCycleLength}
-              keyboardType="number-pad"
-              placeholder="28"
-              hint="Used when the report date is outside your most recent logged cycle."
-            />
-          </View>
-        </Card>
+              <Input
+                label="Typical cycle length"
+                value={cycleLength}
+                onChangeText={setCycleLength}
+                keyboardType="number-pad"
+                placeholder="28"
+                hint="Used when the report date is outside your most recent logged cycle."
+              />
+            </View>
+          </Card>
+        ) : null}
 
         <Button
           label={
             stage
               ? stageLabels[stage]
-              : mode === 'manual' && !manualReviewStep
-                ? 'Review Manual Entries'
+              : wizardStep < 3
+                ? 'Continue'
                 : mode === 'manual'
                   ? 'Save Manual Report'
                   : 'Upload and Analyze'
           }
-          onPress={handleSubmit}
-          disabled={!canUpload || loadingDefaults || (mode === 'upload' && !selectedFile)}
+          onPress={wizardStep < 3 ? handleContinue : handleSubmit}
+          disabled={!canUpload || loadingDefaults || Boolean(stage)}
           loading={Boolean(stage)}
           fullWidth
           style={styles.submitButton}
         />
 
-        {mode === 'upload' && !selectedFile && !loadingDefaults ? (
+        {wizardStep > 1 && !stage ? (
+          <Button
+            label="Back"
+            variant="outline"
+            onPress={() => {
+              setError('');
+              setWizardStep((current) => (Math.max(1, current - 1) as WizardStep));
+            }}
+            fullWidth
+          />
+        ) : null}
+
+        {wizardStep === 1 && mode === 'upload' && !selectedFile && !loadingDefaults ? (
           <View style={styles.footerHint}>
             <ActivityIndicator size="small" color={theme.colors.background} style={styles.hiddenSpinner} />
             <Text variant="caption" tone="muted" style={styles.footerText}>
@@ -681,6 +734,29 @@ const styles = StyleSheet.create({
   },
   modeCard: {
     gap: theme.spacing.sm,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  stepItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  stepDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: theme.borders.thin,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface2,
+  },
+  stepDotActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
   },
   modeRow: {
     flexDirection: 'row',
