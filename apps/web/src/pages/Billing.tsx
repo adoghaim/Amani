@@ -59,7 +59,7 @@ export function Billing() {
         throw new Error('Not authenticated');
       }
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-portal-session`;
+      const apiUrl = `${import.meta.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/create-portal-session`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',

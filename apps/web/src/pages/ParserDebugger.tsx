@@ -368,7 +368,7 @@ export function ParserDebugger() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       await supabase.from('lab_reports').update({ status: 'processing' }).eq('id', reportId);
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-interpretation`;
+      const apiUrl = `${import.meta.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-interpretation`;
       await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },

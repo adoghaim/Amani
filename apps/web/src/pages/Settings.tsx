@@ -126,7 +126,7 @@ export function Settings() {
         return;
       }
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user-data`;
+      const apiUrl = `${import.meta.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-user-data`;
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {

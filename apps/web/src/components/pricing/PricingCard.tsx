@@ -24,7 +24,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         return
       }
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
+      const response = await fetch(`${import.meta.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/stripe-checkout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

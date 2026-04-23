@@ -374,7 +374,7 @@ export function Tracker() {
         setInsightsLoading(false);
         return;
       }
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lab-insights`;
+      const apiUrl = `${import.meta.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/lab-insights`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {

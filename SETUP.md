@@ -5,8 +5,8 @@
 Copy `.env.example` to `.env` and fill in the following values:
 
 ```
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key (optional for now)
 ```
 
