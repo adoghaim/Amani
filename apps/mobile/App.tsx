@@ -10,10 +10,10 @@ import {
   initialWindowMetrics,
 } from 'react-native-safe-area-context';
 import {
-  Droplets,
+  Calendar,
   FileText,
   Home,
-  Settings as SettingsIcon,
+  User as UserIcon,
 } from 'lucide-react-native';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { Text } from './src/components';
@@ -118,11 +118,11 @@ function MainTabsNavigator() {
             case 'Dashboard':
               return <Home size={size} color={color} />;
             case 'Tracker':
-              return <Droplets size={size} color={color} />;
-            case 'ReportsList':
+              return <Calendar size={size} color={color} />;
+            case 'Reports':
               return <FileText size={size} color={color} />;
             case 'Settings':
-              return <SettingsIcon size={size} color={color} />;
+              return <UserIcon size={size} color={color} />;
             default:
               return null;
           }
@@ -132,7 +132,7 @@ function MainTabsNavigator() {
       <Tab.Screen
         name="Dashboard"
         component={DashboardScreen}
-        options={{ tabBarLabel: 'Home' }}
+        options={{ tabBarLabel: 'Dashboard' }}
       />
       <Tab.Screen
         name="Tracker"
@@ -140,7 +140,7 @@ function MainTabsNavigator() {
         options={{ tabBarLabel: 'Tracker' }}
       />
       <Tab.Screen
-        name="ReportsList"
+        name="Reports"
         component={ReportsListScreen}
         options={{ tabBarLabel: 'Reports' }}
       />
@@ -150,6 +150,17 @@ function MainTabsNavigator() {
         options={{ tabBarLabel: 'Settings' }}
       />
     </Tab.Navigator>
+  );
+}
+
+function AuthenticatedNavigator() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name={MAIN_TABS_ROUTE} component={MainTabsNavigator} />
+      <Stack.Screen name="UploadReport" component={UploadReportScreen} />
+      <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+      <Stack.Screen name="Billing" component={BillingScreen} />
+    </Stack.Navigator>
   );
 }
 
@@ -186,12 +197,7 @@ function AppNavigator() {
           </Stack.Screen>
         </Stack.Navigator>
       ) : (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name={MAIN_TABS_ROUTE} component={MainTabsNavigator} />
-          <Stack.Screen name="UploadReport" component={UploadReportScreen} />
-          <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
-          <Stack.Screen name="Billing" component={BillingScreen} />
-        </Stack.Navigator>
+        <AuthenticatedNavigator />
       )}
     </NavigationContainer>
   );

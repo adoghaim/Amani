@@ -41,7 +41,7 @@ export const navigationLinking: LinkingOptions<ParamListBase> = {
         path: '',
         screens: {
           Dashboard: '',
-          ReportsList: 'reports',
+          Reports: 'reports',
           Tracker: 'tracker',
           Settings: 'settings',
         },

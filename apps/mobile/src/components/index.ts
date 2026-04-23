@@ -6,3 +6,4 @@ export * from './Input';
 export * from './Notice';
 export * from './Text';
 export * from './TrackerCalendar';
+export * from './YourPatternsCard';

@@ -190,7 +190,9 @@ export function UploadReportScreen() {
     setPortalHint('Download the PDF in the portal, then return here and choose the file from your device.');
 
     try {
-      await WebBrowser.openBrowserAsync(url);
+      await WebBrowser.openBrowserAsync(url, {
+        showInRecents: true,
+      });
     } catch (browserError) {
       setError(
         browserError instanceof Error
@@ -521,7 +523,6 @@ export function UploadReportScreen() {
                 variant="outline"
                 onPress={() => {
                   setMode('manual');
-                  setManualReviewStep(false);
                   setError('');
                   setManualAssistMessage(
                     selectedFile
@@ -647,7 +648,7 @@ export function UploadReportScreen() {
               Report details
             </Text>
             <Text variant="bodySm" tone="muted" style={styles.sectionBody}>
-              We use these dates to keep cycle-aware interpretation aligned to the draw date.
+              Pick the draw date and your last period start to keep cycle-aware interpretation aligned.
             </Text>
 
             <View style={styles.formGroup}>

@@ -5,7 +5,7 @@ import {
 } from '@react-navigation/native';
 
 const MAIN_TABS_ROUTE = 'MainTabs';
-const TAB_ROUTE_NAMES = new Set(['Dashboard', 'Tracker', 'ReportsList', 'Settings']);
+const TAB_ROUTE_NAMES = new Set(['Dashboard', 'Tracker', 'Reports', 'Settings']);
 
 export const navigationRef: NavigationContainerRefWithCurrent<ParamListBase> =
   createNavigationContainerRef<ParamListBase>();

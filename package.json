@@ -9,5 +9,9 @@
     "dev:web": "npm run dev --workspace=@amani/web",
     "dev:mobile": "npm run start --workspace=@amani/mobile",
     "build:web": "npm run build --workspace=@amani/web"
+  },
+  "devDependencies": {
+    "react-dom": "^19.2.5",
+    "react-native-web": "^0.21.2"
   }
 }

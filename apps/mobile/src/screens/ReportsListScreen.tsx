@@ -10,12 +10,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Button, Card, Text } from '../components';
 import { theme } from '../theme';
 import { LabReport, formatDate } from '@amani/shared';
 import { Search, FileText, ArrowRight, Clock, CheckCircle, XCircle, Plus } from 'lucide-react-native';
+
+function sortReportsByDate(reports: LabReport[]) {
+  return [...reports].sort((left, right) =>
+    right.report_date.localeCompare(left.report_date)
+  );
+}
 
 export function ReportsListScreen() {
   const { user } = useAuth();
@@ -25,34 +32,127 @@ export function ReportsListScreen() {
   const [reports, setReports] = useState<LabReport[]>([]);
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    if (user) fetchReports();
-  }, [user]);
-
-  const fetchReports = async () => {
-    if (!user) return;
+  const fetchReports = async (
+    userId: string,
+    shouldApply: () => boolean = () => true
+  ) => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('lab_reports')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('report_date', { ascending: false });
 
-      if (!error && data) {
+      if (shouldApply() && !error && data) {
         setReports(data as LabReport[]);
       }
     } catch (err) {
       console.error('Error fetching reports:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (shouldApply()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
+  useEffect(() => {
+    if (!user?.id) {
+      setReports([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    let isActive = true;
+
+    const loadReports = async () => {
+      await fetchReports(user.id, () => isActive);
+    };
+
+    const handleReportChange = (
+      payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+    ) => {
+      const nextReport = payload.new as LabReport | undefined;
+      const previousReport = payload.old as Partial<LabReport> | undefined;
+
+      switch (payload.eventType) {
+        case 'INSERT':
+          if (!nextReport) {
+            return;
+          }
+
+          setReports((current) =>
+            sortReportsByDate([
+              ...current.filter((report) => report.id !== nextReport.id),
+              nextReport,
+            ])
+          );
+          return;
+        case 'UPDATE':
+          if (!nextReport) {
+            return;
+          }
+
+          setReports((current) =>
+            sortReportsByDate([
+              ...current.filter((report) => report.id !== nextReport.id),
+              nextReport,
+            ])
+          );
+
+          if (
+            previousReport?.status === 'processing' &&
+            nextReport.status === 'ready'
+          ) {
+            setRefreshing(false);
+          }
+          return;
+        case 'DELETE':
+          if (!previousReport?.id) {
+            return;
+          }
+
+          setReports((current) =>
+            current.filter((report) => report.id !== previousReport.id)
+          );
+          return;
+        default:
+          return;
+      }
+    };
+
+    void loadReports();
+
+    const channel = supabase
+      .channel(`reports-list-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lab_reports',
+          filter: `user_id=eq.${user.id}`,
+        },
+        handleReportChange
+      )
+      .subscribe();
+
+    return () => {
+      isActive = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const onRefresh = () => {
     setRefreshing(true);
-    fetchReports();
+    if (!user?.id) {
+      setRefreshing(false);
+      return;
+    }
+
+    void fetchReports(user.id);
   };
 
   const filteredReports = reports.filter((r) => {

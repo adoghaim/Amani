@@ -14,8 +14,10 @@ import {
   formatDate,
   formatMonthDay,
   phaseDescription,
+  PersonalPattern,
 } from '@amani/shared';
 import { Plus, Upload, Droplets, ArrowRight, Settings } from 'lucide-react-native';
+import { YourPatternsCard } from '../components/YourPatternsCard';
 
 export function DashboardScreen() {
   const { user, userProfile } = useAuth();
@@ -23,6 +25,7 @@ export function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<LabReport[]>([]);
   const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
+  const [patterns, setPatterns] = useState<PersonalPattern[]>([]);
 
   useEffect(() => {
     if (user) fetchData();
@@ -32,13 +35,15 @@ export function DashboardScreen() {
     if (!user) return;
     try {
       setLoading(true);
-      const [reportsRes, periodRes] = await Promise.all([
+      const [reportsRes, periodRes, patternsRes] = await Promise.all([
         supabase.from('lab_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false }),
         supabase.from('period_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
+        supabase.from('personal_patterns').select('*').eq('user_id', user.id).limit(3),
       ]);
 
       if (!reportsRes.error && reportsRes.data) setReports(reportsRes.data as LabReport[]);
       if (!periodRes.error && periodRes.data) setPeriodLogs(periodRes.data as PeriodLog[]);
+      if (!patternsRes.error && patternsRes.data) setPatterns(patternsRes.data as PersonalPattern[]);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -118,7 +123,7 @@ export function DashboardScreen() {
                       ? canUploadReports
                         ? 'UploadReport'
                         : 'Billing'
-                      : 'ReportsList'
+                      : 'Reports'
                   )
                 }
                 style={styles.flexButton}
@@ -170,9 +175,13 @@ export function DashboardScreen() {
           </Card>
         )}
 
+        {patterns.length > 0 && (
+          <YourPatternsCard patterns={patterns} reportCount={reports.length} />
+        )}
+
         <View style={styles.sectionHeader}>
           <Text variant="titleSm">Recent Lab Reports</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('ReportsList')}>
+          <TouchableOpacity onPress={() => navigation.navigate('Reports')}>
             <Text variant="bodySm" tone="primary" weight="semibold">
               View all
             </Text>

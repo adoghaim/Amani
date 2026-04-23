@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { AlertTriangle, Beaker, ChevronDown, ChevronLeft, ChevronRight, Info, RefreshCw, Sparkles } from 'lucide-react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { AlertTriangle, Beaker, ChevronDown, ChevronLeft, ChevronRight, Download, Info, RefreshCw, Sparkles } from 'lucide-react-native';
 import {
   type AIInterpretation,
   type Biomarker,
@@ -36,12 +38,420 @@ interface TrendSeries {
   unit: string;
   points: Array<{
     label: string;
+    timestamp: number;
     value: number;
   }>;
 }
 
 function formatBiomarkerName(name: string) {
   return name.replace(/_/g, ' ');
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderPdfList(items: string[], ordered = false) {
+  if (items.length === 0) {
+    return '';
+  }
+
+  const tag = ordered ? 'ol' : 'ul';
+
+  return `<${tag}>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</${tag}>`;
+}
+
+function renderPdfSection(title: string, body: string) {
+  if (!body.trim()) {
+    return '';
+  }
+
+  return `
+    <section class="section">
+      <h2>${escapeHtml(title)}</h2>
+      ${body}
+    </section>
+  `;
+}
+
+function renderPdfBadge(status: string) {
+  const normalized = escapeHtml(status.toLowerCase().replace(/\s+/g, '-'));
+  return `<span class="badge badge-${normalized}">${escapeHtml(status)}</span>`;
+}
+
+function buildReportPdfHtml({
+  reportDate,
+  interpretation,
+  flaggedMarkers,
+  allMarkers,
+  insightFlags,
+  derivedMetrics,
+}: {
+  reportDate: string;
+  interpretation: AIInterpretation;
+  flaggedMarkers: Biomarker[];
+  allMarkers: Biomarker[];
+  insightFlags: Array<{ title: string; description: string }>;
+  derivedMetrics: Array<{ displayName: string; value: string | number; unit: string; interpretation: string }>;
+}) {
+  const generatedAt = new Date().toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const keyFindings = interpretation.key_findings?.length
+    ? interpretation.key_findings.map((finding) => ({
+        title: finding.title,
+        explanation: finding.explanation,
+        status: finding.status,
+      }))
+    : interpretation.top_findings.map((finding) => ({
+        title: finding.title,
+        explanation: finding.explanation,
+        status: finding.status,
+      }));
+  const biomarkerRows = (flaggedMarkers.length > 0 ? flaggedMarkers : allMarkers.slice(0, 8))
+    .map((marker) => {
+      const flagMeta = getFlagMeta(marker.flagged);
+      return `
+        <tr>
+          <td>${escapeHtml(formatBiomarkerName(marker.name))}</td>
+          <td>${escapeHtml(String(marker.value))} ${escapeHtml(marker.unit ?? '')}</td>
+          <td>${escapeHtml(`${marker.reference_min ?? '—'} to ${marker.reference_max ?? '—'} ${marker.unit ?? ''}`)}</td>
+          <td>${renderPdfBadge(flagMeta.label)}</td>
+        </tr>
+      `;
+    })
+    .join('');
+  const cyclePhase = interpretation.cycle_context?.estimated_cycle_phase
+    ? escapeHtml(String(interpretation.cycle_context.estimated_cycle_phase).replace(/_/g, ' '))
+    : 'Unknown';
+  const cycleDay = interpretation.cycle_context?.estimated_cycle_day ?? 'Unknown';
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <style>
+          @page {
+            margin: 28px;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #172033;
+            background: #f5f1e7;
+            line-height: 1.55;
+          }
+
+          .page {
+            background: #fffdf8;
+            border: 1px solid #e4dccd;
+            border-radius: 22px;
+            overflow: hidden;
+          }
+
+          .header {
+            padding: 28px 32px 20px;
+            background: linear-gradient(135deg, #0f6d6c 0%, #2a8f7f 100%);
+            color: #ffffff;
+          }
+
+          .eyebrow {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            opacity: 0.8;
+            margin: 0 0 8px;
+          }
+
+          h1 {
+            margin: 0;
+            font-size: 28px;
+            line-height: 1.2;
+          }
+
+          .header-meta {
+            margin-top: 14px;
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            flex-wrap: wrap;
+          }
+
+          .content {
+            padding: 28px 32px 32px;
+          }
+
+          .summary {
+            margin: 0 0 20px;
+            padding: 18px 20px;
+            border-radius: 18px;
+            background: #f3faf7;
+            border: 1px solid #d5ebe1;
+          }
+
+          .summary p {
+            margin: 0;
+            font-size: 16px;
+          }
+
+          .section {
+            margin-top: 24px;
+          }
+
+          h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+            color: #1d3557;
+          }
+
+          h3 {
+            margin: 0 0 6px;
+            font-size: 15px;
+            color: #20324d;
+          }
+
+          p {
+            margin: 0 0 10px;
+          }
+
+          ul, ol {
+            margin: 0;
+            padding-left: 20px;
+          }
+
+          li {
+            margin: 0 0 8px;
+          }
+
+          .panel {
+            padding: 16px 18px;
+            border-radius: 16px;
+            border: 1px solid #e8e1d7;
+            background: #ffffff;
+            margin-bottom: 12px;
+          }
+
+          .two-column {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+
+          .two-column .panel {
+            flex: 1 1 220px;
+          }
+
+          .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            background: #eef1f6;
+            color: #42526b;
+          }
+
+          .badge-out-of-range,
+          .badge-attention {
+            background: #fde7e8;
+            color: #9f2930;
+          }
+
+          .badge-borderline,
+          .badge-monitor,
+          .badge-discuss {
+            background: #fff0d8;
+            color: #9a6700;
+          }
+
+          .badge-in-range,
+          .badge-reassuring {
+            background: #e1f4ea;
+            color: #1a6e43;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+
+          th,
+          td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ece6db;
+            text-align: left;
+            vertical-align: top;
+          }
+
+          th {
+            background: #f8f5ee;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #68768a;
+          }
+
+          .footnote {
+            margin-top: 28px;
+            font-size: 12px;
+            color: #667085;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <header class="header">
+            <p class="eyebrow">Amani Lab Summary</p>
+            <h1>${escapeHtml(formatDate(reportDate))}</h1>
+            <div class="header-meta">
+              <span>Generated ${escapeHtml(generatedAt)}</span>
+              <span>Cycle phase: ${cyclePhase}</span>
+              <span>Estimated cycle day: ${escapeHtml(String(cycleDay))}</span>
+            </div>
+          </header>
+
+          <main class="content">
+            <div class="summary">
+              <p>${escapeHtml(interpretation.headline)}</p>
+            </div>
+
+            ${renderPdfSection('Summary', renderPdfList(interpretation.summary_bullets))}
+
+            ${interpretation.primary_concern ? renderPdfSection(
+              'Top Priority',
+              `
+                <div class="panel">
+                  <h3>${escapeHtml(interpretation.primary_concern.title)}</h3>
+                  <p>${escapeHtml(interpretation.primary_concern.summary)}</p>
+                  <p><strong>Why it matters:</strong> ${escapeHtml(interpretation.primary_concern.why_it_matters)}</p>
+                </div>
+              `
+            ) : ''}
+
+            ${renderPdfSection(
+              'Key Findings',
+              keyFindings
+                .map(
+                  (finding) => `
+                    <div class="panel">
+                      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                        <h3>${escapeHtml(finding.title)}</h3>
+                        ${renderPdfBadge(finding.status)}
+                      </div>
+                      <p>${escapeHtml(finding.explanation)}</p>
+                    </div>
+                  `
+                )
+                .join('')
+            )}
+
+            ${renderPdfSection(
+              'Current Biomarker Snapshot',
+              `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Marker</th>
+                      <th>Current Value</th>
+                      <th>Reference Range</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>${biomarkerRows}</tbody>
+                </table>
+              `
+            )}
+
+            ${renderPdfSection(
+              'Advanced Insights',
+              `
+                ${insightFlags.length > 0 ? `
+                  <div class="panel">
+                    <h3>Insight flags</h3>
+                    ${renderPdfList(insightFlags.map((flag) => `${flag.title}: ${flag.description}`))}
+                  </div>
+                ` : ''}
+                ${interpretation.pattern_signals.length > 0 ? `
+                  <div class="panel">
+                    <h3>Pattern signals</h3>
+                    ${renderPdfList(
+                      interpretation.pattern_signals.map(
+                        (signal) => `${signal.title} (${signal.confidence} confidence): ${signal.explanation}`
+                      )
+                    )}
+                  </div>
+                ` : ''}
+                ${derivedMetrics.length > 0 ? `
+                  <div class="panel">
+                    <h3>Derived metrics</h3>
+                    ${renderPdfList(
+                      derivedMetrics.map(
+                        (metric) => `${metric.displayName}: ${metric.value} ${metric.unit} - ${metric.interpretation}`
+                      )
+                    )}
+                  </div>
+                ` : ''}
+              `
+            )}
+
+            ${renderPdfSection('Next Steps', renderPdfList(interpretation.what_you_can_do_now ?? [], true))}
+
+            ${renderPdfSection('Questions for Your Doctor', renderPdfList(interpretation.questions_for_doctor, true))}
+
+            ${renderPdfSection(
+              'Supportive Considerations',
+              `
+                <div class="two-column">
+                  ${(interpretation.supportive_considerations?.nutrition?.length ?? 0) > 0 ? `
+                    <div class="panel">
+                      <h3>Nutrition</h3>
+                      ${renderPdfList(interpretation.supportive_considerations?.nutrition ?? [])}
+                    </div>
+                  ` : ''}
+                  ${(interpretation.supportive_considerations?.sleep_stress?.length ?? 0) > 0 ? `
+                    <div class="panel">
+                      <h3>Sleep &amp; Stress</h3>
+                      ${renderPdfList(interpretation.supportive_considerations?.sleep_stress ?? [])}
+                    </div>
+                  ` : ''}
+                  ${(interpretation.supportive_considerations?.lifestyle?.length ?? 0) > 0 ? `
+                    <div class="panel">
+                      <h3>Lifestyle</h3>
+                      ${renderPdfList(interpretation.supportive_considerations?.lifestyle ?? [])}
+                    </div>
+                  ` : ''}
+                </div>
+              `
+            )}
+
+            <p class="footnote">${escapeHtml(interpretation.disclaimer)}</p>
+          </main>
+        </div>
+      </body>
+    </html>
+  `;
 }
 
 function getFlagMeta(flagged: Biomarker['flagged']) {
@@ -97,12 +507,14 @@ export function ReportDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [actionError, setActionError] = useState('');
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [trendSeries, setTrendSeries] = useState<TrendSeries[]>([]);
+  const [selectedTrendName, setSelectedTrendName] = useState('');
   const [panelExpanded, setPanelExpanded] = useState(false);
 
   useEffect(() => {
@@ -110,6 +522,17 @@ export function ReportDetailScreen() {
       void fetchData();
     }
   }, [user?.id, reportId]);
+
+  useEffect(() => {
+    if (trendSeries.length === 0) {
+      setSelectedTrendName('');
+      return;
+    }
+
+    if (!trendSeries.some((series) => series.name === selectedTrendName)) {
+      setSelectedTrendName(trendSeries[0].name);
+    }
+  }, [selectedTrendName, trendSeries]);
 
   const fetchData = async () => {
     if (!user?.id) {
@@ -220,12 +643,12 @@ export function ReportDetailScreen() {
                   month: 'short',
                   day: 'numeric',
                 }),
+                timestamp: new Date(row.date).getTime(),
                 value: row.value,
               })),
             } satisfies TrendSeries;
           })
-          .filter((series): series is TrendSeries => Boolean(series))
-          .slice(0, 3);
+          .filter((series): series is TrendSeries => Boolean(series));
 
         setTrendSeries(nextTrendSeries);
       } else {
@@ -300,6 +723,53 @@ export function ReportDetailScreen() {
     }
   };
 
+  const handleExportPdf = async () => {
+    if (!report || !interpretation) {
+      return;
+    }
+
+    setExportingPdf(true);
+    setActionError('');
+
+    try {
+      const sharingAvailable = await Sharing.isAvailableAsync();
+
+      if (!sharingAvailable) {
+        setActionError('PDF sharing is not available on this device.');
+        return;
+      }
+
+      const html = buildReportPdfHtml({
+        reportDate: report.report_date,
+        interpretation,
+        flaggedMarkers,
+        allMarkers,
+        insightFlags: insightFlags.map((flag) => ({
+          title: flag.title,
+          description: flag.description,
+        })),
+        derivedMetrics: derivedMetrics.map((metric) => ({
+          displayName: metric.displayName,
+          value: metric.value,
+          unit: metric.unit,
+          interpretation: metric.interpretation,
+        })),
+      });
+      const { uri } = await Print.printToFileAsync({ html });
+
+      await Sharing.shareAsync(uri, {
+        dialogTitle: `Share ${formatDate(report.report_date)} report`,
+        mimeType: 'application/pdf',
+        UTI: '.pdf',
+      });
+    } catch (exportError) {
+      console.error('Error exporting report PDF:', exportError);
+      setActionError('Could not generate the PDF. Please try again.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const flaggedMarkers = useMemo(() => {
     return [...biomarkers]
       .filter((marker) => marker.flagged !== 'in_range')
@@ -342,6 +812,10 @@ export function ReportDetailScreen() {
     () => evaluateInsightRules(biomarkers, interpretation?.cycle_context?.estimated_cycle_phase ?? null),
     [biomarkers, interpretation?.cycle_context?.estimated_cycle_phase]
   );
+  const selectedTrendSeries = useMemo(
+    () => trendSeries.find((series) => series.name === selectedTrendName) ?? trendSeries[0] ?? null,
+    [selectedTrendName, trendSeries]
+  );
 
   if (loading && !refreshing) {
     return (
@@ -363,6 +837,7 @@ export function ReportDetailScreen() {
   const canRegenerate =
     report.regeneration_count < 3 &&
     (userProfile?.subscription_status === 'active' || isTrialActive());
+  const canExportPdf = Boolean(interpretation);
   const remainingRegenerations = 3 - report.regeneration_count;
   const exhaustedRegenerations = report.regeneration_count >= 3;
 
@@ -484,6 +959,21 @@ export function ReportDetailScreen() {
                 ))}
               </View>
             ) : null}
+
+            <View style={styles.exportRow}>
+              <Text variant="caption" tone="muted" style={styles.exportCopy}>
+                Generate a doctor-friendly PDF with the interpretation, biomarker summary, and follow-up questions.
+              </Text>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={() => void handleExportPdf()}
+                loading={exportingPdf}
+                disabled={!canExportPdf}
+                icon={<Download />}
+                label={exportingPdf ? 'Preparing PDF...' : 'Export to PDF'}
+              />
+            </View>
           </Card>
         ) : (
           <Card>
@@ -493,6 +983,19 @@ export function ReportDetailScreen() {
             <Text variant="bodySm" tone="muted" style={styles.pendingText}>
               Amani is still preparing the interpretation for this report. Pull to refresh if you just returned from the upload flow.
             </Text>
+            <View style={styles.exportRow}>
+              <Text variant="caption" tone="muted" style={styles.exportCopy}>
+                PDF export becomes available once the AI interpretation is ready.
+              </Text>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={() => void handleExportPdf()}
+                disabled
+                icon={<Download />}
+                label="Export to PDF"
+              />
+            </View>
           </Card>
         )}
 
@@ -542,14 +1045,45 @@ export function ReportDetailScreen() {
             <Text variant="titleSm" style={styles.sectionTitle}>
               Biomarker trends
             </Text>
-            {trendSeries.map((series) => (
+            {trendSeries.length > 1 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.trendPills}
+              >
+                {trendSeries.map((series) => {
+                  const selected = selectedTrendSeries?.name === series.name;
+
+                  return (
+                    <TouchableOpacity
+                      key={series.name}
+                      activeOpacity={0.85}
+                      onPress={() => setSelectedTrendName(series.name)}
+                      style={[
+                        styles.trendPill,
+                        selected ? styles.trendPillSelected : null,
+                      ]}
+                    >
+                      <Text
+                        variant="caption"
+                        tone={selected ? 'inverse' : 'muted'}
+                        weight="semibold"
+                      >
+                        {series.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+            {selectedTrendSeries ? (
               <BiomarkerTrendChart
-                key={series.name}
-                title={series.name}
-                unit={series.unit}
-                points={series.points}
+                key={selectedTrendSeries.name}
+                title={selectedTrendSeries.name}
+                unit={selectedTrendSeries.unit}
+                points={selectedTrendSeries.points}
               />
-            ))}
+            ) : null}
           </View>
         ) : null}
 
@@ -902,6 +1436,13 @@ const styles = StyleSheet.create({
   pendingText: {
     marginTop: theme.spacing.xs,
   },
+  exportRow: {
+    gap: theme.spacing.sm,
+    alignItems: 'flex-start',
+  },
+  exportCopy: {
+    maxWidth: 480,
+  },
   section: {
     gap: theme.spacing.md,
   },
@@ -927,6 +1468,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     gap: theme.spacing.sm,
+  },
+  trendPills: {
+    gap: theme.spacing.xs,
+    paddingBottom: theme.spacing.sm,
+  },
+  trendPill: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radii.pill,
+    borderWidth: theme.borders.thin,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  trendPillSelected: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.accent,
   },
   recommendationCard: {
     gap: theme.spacing.sm,

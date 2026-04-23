@@ -94,6 +94,31 @@ type TrackerTimelineItem =
       onPress: () => void;
     };
 
+interface PeriodDraft {
+  startDate: string;
+  endDate: string;
+  flowIntensity: FlowIntensity | null;
+  notes: string;
+}
+
+interface SymptomDraft {
+  date: string;
+  symptoms: DailySymptom[];
+  notes: string;
+}
+
+type RetryRequest =
+  | {
+      kind: 'period';
+      draft: PeriodDraft;
+      existingLog: PeriodLog | null;
+    }
+  | {
+      kind: 'symptom';
+      draft: SymptomDraft;
+      existingLog: SymptomLog | null;
+    };
+
 const INTERVENTION_CATEGORIES: Array<{
   value: InterventionCategory;
   label: string;
@@ -176,6 +201,18 @@ function getInterventionCategoryColor(category: InterventionCategory) {
   return colors[category];
 }
 
+function createOptimisticId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function sortPeriodLogsDescending(logs: PeriodLog[]) {
+  return [...logs].sort((left, right) => right.start_date.localeCompare(left.start_date));
+}
+
+function sortSymptomLogsDescending(logs: SymptomLog[]) {
+  return [...logs].sort((left, right) => right.log_date.localeCompare(left.log_date));
+}
+
 export function TrackerScreen() {
   const { user, userProfile } = useAuth();
   const navigation = useNavigation<any>();
@@ -195,6 +232,7 @@ export function TrackerScreen() {
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey());
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
 
   const [periodModalOpen, setPeriodModalOpen] = useState(false);
   const [editingPeriodLog, setEditingPeriodLog] = useState<PeriodLog | null>(null);
@@ -330,7 +368,7 @@ export function TrackerScreen() {
       }
     } catch (fetchError) {
       console.error('Error fetching tracker data:', fetchError);
-      setError(
+      showError(
         fetchError instanceof Error
           ? fetchError.message
           : 'Unable to load your tracker history.'
@@ -341,10 +379,27 @@ export function TrackerScreen() {
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
+  const clearNotices = () => {
     setError('');
     setSuccess('');
+    setRetryRequest(null);
+  };
+
+  const showError = (message: string, nextRetryRequest: RetryRequest | null = null) => {
+    setSuccess('');
+    setError(message);
+    setRetryRequest(nextRetryRequest);
+  };
+
+  const showSuccess = (message: string) => {
+    setError('');
+    setSuccess(message);
+    setRetryRequest(null);
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearNotices();
     void fetchData();
   };
 
@@ -482,8 +537,7 @@ export function TrackerScreen() {
     : timelineItems.slice(0, 6);
 
   const openPeriodEditor = (log?: PeriodLog | null, defaultDate?: string) => {
-    setError('');
-    setSuccess('');
+    clearNotices();
     setEditingPeriodLog(log ?? null);
     setPeriodStartDate(log?.start_date ?? defaultDate ?? todayKey());
     setPeriodEndDate(log?.end_date ?? '');
@@ -498,8 +552,7 @@ export function TrackerScreen() {
   };
 
   const openSymptomEditor = (log?: SymptomLog | null, defaultDate?: string) => {
-    setError('');
-    setSuccess('');
+    clearNotices();
     setEditingSymptomLog(log ?? null);
     setSymptomDate(log?.log_date ?? defaultDate ?? todayKey());
     setSelectedSymptoms(log?.symptoms ?? []);
@@ -520,43 +573,63 @@ export function TrackerScreen() {
     );
   };
 
-  const handleSavePeriod = async () => {
+  const submitPeriodDraft = async (
+    draft: PeriodDraft,
+    existingLog: PeriodLog | null
+  ) => {
     if (!user) {
       return;
     }
 
-    if (!isIsoDate(periodStartDate)) {
-      setError('Use YYYY-MM-DD for the period start date.');
-      return;
-    }
-
-    if (periodEndDate && !isIsoDate(periodEndDate)) {
-      setError('Use YYYY-MM-DD for the period end date.');
-      return;
-    }
-
-    if (periodEndDate && periodEndDate < periodStartDate) {
-      setError('The period end date cannot be before the start date.');
-      return;
-    }
+    const previousPeriodLogs = periodLogs;
+    const previousSelectedDateKey = selectedDateKey;
+    const now = new Date().toISOString();
+    const notes = draft.notes.trim() || null;
+    const optimisticLog: PeriodLog = existingLog
+      ? {
+          ...existingLog,
+          start_date: draft.startDate,
+          end_date: draft.endDate || null,
+          flow_intensity: draft.flowIntensity,
+          notes,
+          updated_at: now,
+        }
+      : {
+          id: createOptimisticId('period'),
+          user_id: user.id,
+          start_date: draft.startDate,
+          end_date: draft.endDate || null,
+          flow_intensity: draft.flowIntensity,
+          notes,
+          created_at: now,
+          updated_at: now,
+        };
 
     try {
       setSaving(true);
-      setError('');
+      clearNotices();
+      setPeriodLogs(
+        sortPeriodLogsDescending([
+          ...previousPeriodLogs.filter((log) => log.id !== existingLog?.id),
+          optimisticLog,
+        ])
+      );
+      setSelectedDateKey(draft.startDate);
+      closePeriodEditor();
 
       const payload = {
-        start_date: periodStartDate,
-        end_date: periodEndDate || null,
-        flow_intensity: periodFlow,
-        notes: periodNotes.trim() || null,
-        updated_at: new Date().toISOString(),
+        start_date: draft.startDate,
+        end_date: draft.endDate || null,
+        flow_intensity: draft.flowIntensity,
+        notes,
+        updated_at: now,
       };
 
-      if (editingPeriodLog) {
+      if (existingLog) {
         const { error: updateError } = await supabase
           .from('period_logs')
           .update(payload)
-          .eq('id', editingPeriodLog.id);
+          .eq('id', existingLog.id);
 
         if (updateError) {
           throw updateError;
@@ -564,10 +637,10 @@ export function TrackerScreen() {
       } else {
         const { error: insertError } = await supabase.from('period_logs').insert({
           user_id: user.id,
-          start_date: periodStartDate,
-          end_date: periodEndDate || null,
-          flow_intensity: periodFlow,
-          notes: periodNotes.trim() || null,
+          start_date: draft.startDate,
+          end_date: draft.endDate || null,
+          flow_intensity: draft.flowIntensity,
+          notes,
         });
 
         if (insertError) {
@@ -575,17 +648,143 @@ export function TrackerScreen() {
         }
       }
 
-      setSelectedDateKey(periodStartDate);
-      setSuccess(editingPeriodLog ? 'Period entry updated.' : 'Period entry saved.');
-      closePeriodEditor();
+      showSuccess(existingLog ? 'Period entry updated.' : 'Period entry saved.');
       await fetchData();
     } catch (saveError) {
       console.error('Error saving period log:', saveError);
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'Unable to save the period log.'
+      setPeriodLogs(previousPeriodLogs);
+      setSelectedDateKey(previousSelectedDateKey);
+      showError('Unable to save the period log.', {
+        kind: 'period',
+        draft,
+        existingLog,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePeriod = async () => {
+    if (!user) {
+      return;
+    }
+
+    if (!isIsoDate(periodStartDate)) {
+      showError('Choose a valid period start date.');
+      return;
+    }
+
+    if (periodEndDate && !isIsoDate(periodEndDate)) {
+      showError('Choose a valid period end date.');
+      return;
+    }
+
+    if (periodEndDate && periodEndDate < periodStartDate) {
+      showError('The period end date cannot be before the start date.');
+      return;
+    }
+
+    await submitPeriodDraft(
+      {
+        startDate: periodStartDate,
+        endDate: periodEndDate,
+        flowIntensity: periodFlow,
+        notes: periodNotes,
+      },
+      editingPeriodLog
+    );
+  };
+
+  const submitSymptomDraft = async (
+    draft: SymptomDraft,
+    existingLog: SymptomLog | null
+  ) => {
+    if (!user) {
+      return;
+    }
+
+    const conflictingLog = symptomLogs.find(
+      (log) => log.id !== existingLog?.id && log.log_date === draft.date
+    );
+
+    if (conflictingLog) {
+      showError('A symptom entry already exists for that date. Edit that entry instead.');
+      return;
+    }
+
+    const previousSymptomLogs = symptomLogs;
+    const previousSelectedDateKey = selectedDateKey;
+    const now = new Date().toISOString();
+    const notes = draft.notes.trim() || null;
+    const optimisticLog: SymptomLog = existingLog
+      ? {
+          ...existingLog,
+          log_date: draft.date,
+          symptoms: draft.symptoms,
+          notes,
+          updated_at: now,
+        }
+      : {
+          id: createOptimisticId('symptom'),
+          user_id: user.id,
+          log_date: draft.date,
+          symptoms: draft.symptoms,
+          notes,
+          created_at: now,
+          updated_at: now,
+        };
+
+    try {
+      setSaving(true);
+      clearNotices();
+      setSymptomLogs(
+        sortSymptomLogsDescending([
+          ...previousSymptomLogs.filter((log) => log.id !== existingLog?.id),
+          optimisticLog,
+        ])
       );
+      setSelectedDateKey(draft.date);
+      closeSymptomEditor();
+
+      if (existingLog) {
+        const { error: updateError } = await supabase
+          .from('symptom_logs')
+          .update({
+            log_date: draft.date,
+            symptoms: draft.symptoms,
+            notes,
+            updated_at: now,
+          })
+          .eq('id', existingLog.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        const { error: insertError } = await supabase.from('symptom_logs').insert({
+          user_id: user.id,
+          log_date: draft.date,
+          symptoms: draft.symptoms,
+          notes,
+          updated_at: now,
+        });
+
+        if (insertError) {
+          throw insertError;
+        }
+      }
+
+      showSuccess(existingLog ? 'Symptom entry updated.' : 'Symptoms saved.');
+      await fetchData();
+    } catch (saveError) {
+      console.error('Error saving symptom log:', saveError);
+      setSymptomLogs(previousSymptomLogs);
+      setSelectedDateKey(previousSelectedDateKey);
+      showError('Unable to save the symptom log.', {
+        kind: 'symptom',
+        draft,
+        existingLog,
+      });
     } finally {
       setSaving(false);
     }
@@ -597,53 +796,27 @@ export function TrackerScreen() {
     }
 
     if (!isIsoDate(symptomDate)) {
-      setError('Use YYYY-MM-DD for the symptom date.');
+      showError('Choose a valid symptom date.');
       return;
     }
 
     if (selectedSymptoms.length === 0 && !symptomNotes.trim()) {
-      setError('Add at least one symptom or a note before saving.');
+      showError('Add at least one symptom or a note before saving.');
       return;
     }
 
-    try {
-      setSaving(true);
-      setError('');
-
-      const { error: upsertError } = await supabase.from('symptom_logs').upsert(
-        {
-          user_id: user.id,
-          log_date: symptomDate,
-          symptoms: selectedSymptoms,
-          notes: symptomNotes.trim() || null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,log_date' }
-      );
-
-      if (upsertError) {
-        throw upsertError;
-      }
-
-      setSelectedDateKey(symptomDate);
-      setSuccess(editingSymptomLog ? 'Symptom entry updated.' : 'Symptoms saved.');
-      closeSymptomEditor();
-      await fetchData();
-    } catch (saveError) {
-      console.error('Error saving symptom log:', saveError);
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'Unable to save the symptom log.'
-      );
-    } finally {
-      setSaving(false);
-    }
+    await submitSymptomDraft(
+      {
+        date: symptomDate,
+        symptoms: selectedSymptoms,
+        notes: symptomNotes,
+      },
+      editingSymptomLog
+    );
   };
 
   const openInterventionEditor = (intervention?: Intervention | null) => {
-    setError('');
-    setSuccess('');
+    clearNotices();
     setEditingIntervention(intervention ?? null);
     setInterventionTitle(intervention?.title ?? '');
     setInterventionCategory(intervention?.category ?? 'supplement');
@@ -664,28 +837,28 @@ export function TrackerScreen() {
     }
 
     if (!interventionTitle.trim()) {
-      setError('Add a title for the intervention.');
+      showError('Add a title for the intervention.');
       return;
     }
 
     if (!isIsoDate(interventionStartDate)) {
-      setError('Use YYYY-MM-DD for the intervention start date.');
+      showError('Choose a valid intervention start date.');
       return;
     }
 
     if (interventionEndDate && !isIsoDate(interventionEndDate)) {
-      setError('Use YYYY-MM-DD for the intervention end date.');
+      showError('Choose a valid intervention end date.');
       return;
     }
 
     if (interventionEndDate && interventionEndDate < interventionStartDate) {
-      setError('The intervention end date cannot be before the start date.');
+      showError('The intervention end date cannot be before the start date.');
       return;
     }
 
     try {
       setSaving(true);
-      setError('');
+      clearNotices();
 
       const payload = {
         title: interventionTitle.trim(),
@@ -713,20 +886,37 @@ export function TrackerScreen() {
         }
       }
 
-      setSuccess(
+      showSuccess(
         editingIntervention ? 'Intervention updated.' : 'Intervention added.'
       );
       closeInterventionEditor();
       await fetchData();
     } catch (saveError) {
       console.error('Error saving intervention:', saveError);
-      setError(
+      showError(
         saveError instanceof Error
           ? saveError.message
           : 'Unable to save the intervention.'
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRetrySave = () => {
+    if (!retryRequest || saving) {
+      return;
+    }
+
+    switch (retryRequest.kind) {
+      case 'period':
+        void submitPeriodDraft(retryRequest.draft, retryRequest.existingLog);
+        return;
+      case 'symptom':
+        void submitSymptomDraft(retryRequest.draft, retryRequest.existingLog);
+        return;
+      default:
+        return;
     }
   };
 
@@ -808,7 +998,12 @@ export function TrackerScreen() {
         }
       >
         {error ? (
-          <Notice tone="error" style={styles.notice}>
+          <Notice
+            tone="error"
+            style={styles.notice}
+            actionLabel={retryRequest ? 'Retry' : undefined}
+            onAction={retryRequest && !saving ? handleRetrySave : null}
+          >
             {error}
           </Notice>
         ) : null}
@@ -1315,7 +1510,7 @@ export function TrackerScreen() {
                   {editingPeriodLog ? 'Edit period entry' : 'Log a period'}
                 </Text>
                 <Text variant="bodySm" tone="muted">
-                  Use ISO dates so the cycle prediction stays stable.
+                  Pick the dates for this cycle entry to keep predictions accurate.
                 </Text>
               </View>
               <Pressable onPress={closePeriodEditor} style={styles.modalCloseButton}>
