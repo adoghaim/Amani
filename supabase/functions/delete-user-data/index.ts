@@ -7,6 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+type ReportFileRow = { file_url: string | null };
+type ReportIdRow = { id: string };
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -44,9 +47,9 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", user.id);
 
     if (reports && reports.length > 0) {
-      const storagePaths = reports
-        .filter((r: any) => r.file_url && r.file_url.startsWith(user.id))
-        .map((r: any) => r.file_url as string);
+      const storagePaths = (reports as ReportFileRow[])
+        .filter((r) => r.file_url && r.file_url.startsWith(user.id))
+        .map((r) => r.file_url as string);
 
       if (storagePaths.length > 0) {
         await supabase.storage.from("lab-files").remove(storagePaths);
@@ -62,7 +65,7 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", user.id);
 
     if (reportIds && reportIds.length > 0) {
-      const ids = reportIds.map((r: any) => r.id);
+      const ids = (reportIds as ReportIdRow[]).map((r) => r.id);
       await supabase.from("interpretations").delete().in("lab_report_id", ids);
       await supabase.from("biomarkers").delete().in("lab_report_id", ids);
     }
@@ -75,10 +78,11 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ success: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error deleting user data:", error);
+    const message = error instanceof Error ? error.message : "Failed to delete data";
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to delete data" }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

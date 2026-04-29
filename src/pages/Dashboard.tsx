@@ -34,6 +34,7 @@ import { isTrialActive, getTrialDaysRemaining } from '../utils/subscription';
 import { formatDate } from '../utils/formatters';
 
 type NoteModalState = { open: boolean; defaultDate: string };
+type SymptomLogRow = Omit<SymptomLog, 'symptoms'> & { symptoms: unknown };
 
 export function Dashboard() {
   const { user, userProfile } = useAuth();
@@ -83,7 +84,7 @@ export function Dashboard() {
       if (!periodRes.error && periodRes.data) setPeriodLogs(periodRes.data as PeriodLog[]);
       if (!symptomRes.error && symptomRes.data) {
         setSymptomLogs(
-          (symptomRes.data as any[]).map((r) => ({
+          (symptomRes.data as SymptomLogRow[]).map((r) => ({
             ...r,
             symptoms: Array.isArray(r.symptoms) ? r.symptoms : [],
           })) as SymptomLog[]

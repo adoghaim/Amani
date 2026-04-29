@@ -62,13 +62,14 @@ export async function captureLabPhoto(): Promise<CameraResult> {
     // Prefix the base64 string so it can go straight into an <img src> or fetch body
     const mimeType = photo.format === 'png' ? 'image/png' : 'image/jpeg';
     return { ok: true, base64: `data:${mimeType};base64,${photo.base64String}` };
-  } catch (err: any) {
+  } catch (err: unknown) {
     // User cancelled — Camera plugin throws with message containing 'cancel'
+    const message = err instanceof Error ? err.message : undefined;
     const cancelled =
-      typeof err?.message === 'string' &&
-      (err.message.toLowerCase().includes('cancel') ||
-        err.message.toLowerCase().includes('dismiss'));
-    return { ok: false, cancelled, error: err?.message };
+      typeof message === 'string' &&
+      (message.toLowerCase().includes('cancel') ||
+        message.toLowerCase().includes('dismiss'));
+    return { ok: false, cancelled, error: message };
   }
 }
 

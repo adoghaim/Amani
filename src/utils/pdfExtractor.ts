@@ -110,7 +110,7 @@ export async function convertPDFToImages(file: File): Promise<string[]> {
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
-    await page.render({ canvasContext: context, viewport, canvas } as any).promise;
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
     images.push(canvas.toDataURL('image/jpeg', 0.85));
   }
 

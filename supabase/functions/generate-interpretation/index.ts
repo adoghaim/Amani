@@ -56,6 +56,8 @@ interface ReportFacts {
   context_notes: string[];
 }
 
+type AIInterpretationOutput = Record<string, unknown>;
+
 // ─── Classification ───────────────────────────────────────────────────────────
 
 function classifyAnalyte(a: AnalyteData): AnalyteStatus {
@@ -115,10 +117,6 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
   // ── Thyroid autoimmunity ──────────────────────────────────────────────────
   const tpo = getBySlug(analytes, "tpo_antibodies");
   const tgAb = getBySlug(analytes, "tg_antibodies");
-  const tsh = getBySlug(analytes, "tsh");
-  const ft4 = getBySlug(analytes, "free_t4");
-  const ft3 = getBySlug(analytes, "free_t3");
-
   const tpoHigh = tpo && isHigh(tpo);
   const tgHigh = tgAb && isHigh(tgAb);
   const thyroidFunctionAbnormal = isAbnormal("tsh") || isAbnormal("free_t4") || isAbnormal("free_t3");
@@ -148,8 +146,6 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
   }
 
   // ── Insulin resistance / glucose dysregulation ───────────────────────────
-  const glucose = getBySlug(analytes, "fasting_glucose");
-  const hba1c = getBySlug(analytes, "hemoglobin_a1c");
   const insulin = getBySlug(analytes, "fasting_insulin");
   const triglycerides = getBySlug(analytes, "triglycerides");
   const hdl = getBySlug(analytes, "hdl_cholesterol");
@@ -278,7 +274,7 @@ function detectPatterns(analytes: AnalyteData[], report: LabReportData): Pattern
 
 // ─── Missing Follow-up Labs ───────────────────────────────────────────────────
 
-function computeMissingFollowupLabs(analytes: AnalyteData[], report: LabReportData): string[] {
+function computeMissingFollowupLabs(analytes: AnalyteData[]): string[] {
   const present = new Set(analytes.map(a => a.canonical_slug).filter(Boolean));
   const missing: string[] = [];
 
@@ -374,7 +370,7 @@ function computeReportFacts(analytes: AnalyteData[], report: LabReportData): Rep
     top_borderline: borderline.slice(0, 5),
     reassuring_in_range: reassuring,
     matched_patterns: detectPatterns(analytes, report),
-    missing_followup_labs: computeMissingFollowupLabs(analytes, report),
+    missing_followup_labs: computeMissingFollowupLabs(analytes),
     cycle_notes: cycleNotes,
     context_notes: contextNotes,
   };
@@ -494,7 +490,7 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
 
 // ─── OpenAI Call ──────────────────────────────────────────────────────────────
 
-async function tryOpenAI(apiKey: string, report: LabReportData, analytes: AnalyteData[]): Promise<any | null> {
+async function tryOpenAI(apiKey: string, report: LabReportData, analytes: AnalyteData[]): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
 
@@ -804,9 +800,9 @@ Required schema:
     const parsed = JSON.parse(content);
     if (typeof parsed.headline !== "string") return null;
     return parsed;
-  } catch (e: any) {
+  } catch (e: unknown) {
     clearTimeout(tid);
-    console.warn("[generate-interpretation] OpenAI failed:", e?.message);
+    console.warn("[generate-interpretation] OpenAI failed:", e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -864,7 +860,7 @@ Deno.serve(async (req: Request) => {
     const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
     console.log(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
 
-    let interpretationJson: any;
+    let interpretationJson: AIInterpretationOutput;
     let source = "fallback";
 
     if (openaiApiKey && analytes.length > 0 && report) {
@@ -918,14 +914,17 @@ Deno.serve(async (req: Request) => {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (err: any) {
-    console.error("[generate-interpretation] Fatal error:", err?.message ?? err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("[generate-interpretation] Fatal error:", message);
     if (reportId) {
       try {
         await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
-      } catch (_) {}
+      } catch {
+        // Best-effort status update only.
+      }
     }
-    return new Response(JSON.stringify({ error: "Internal server error", detail: err?.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error", detail: message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

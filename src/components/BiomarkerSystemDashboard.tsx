@@ -5,7 +5,7 @@ import {
   computeAmaniStatus,
   amaniStatusToVariant,
 } from '../utils/biomarkerDefinitions';
-import type { BiomarkerName, BiomarkerCategory, CyclePhase } from '../types';
+import type { Biomarker, BiomarkerName, BiomarkerCategory, CyclePhase } from '../types';
 
 interface BiomarkerLike {
   name?: BiomarkerName;
@@ -45,21 +45,18 @@ const CATEGORY_ORDER: BiomarkerCategory[] = [
 ];
 
 export function BiomarkerSystemDashboard({ biomarkers, cyclePhase, activeCategory, onCategoryClick }: Props) {
-  const normalized = useMemo(() =>
+  const normalized = useMemo<Biomarker[]>(() =>
     biomarkers.map(b => ({
-      biomarker_name: (b.biomarker_name ?? b.name) as BiomarkerName,
-      value: b.value,
-      unit: b.unit ?? '',
-      lab_report_id: '',
       id: '',
-      lab_ref_min: null,
-      lab_ref_max: null,
-      amani_status: 'unknown' as const,
-      lab_status: 'unknown' as const,
-      cycle_phase: null,
-      extraction_confidence: null,
-      created_at: '',
-    })) as any,
+      lab_report_id: '',
+      name: (b.biomarker_name ?? b.name) as BiomarkerName,
+      value: b.value,
+      raw_value_text: null,
+      unit: b.unit ?? '',
+      reference_min: null,
+      reference_max: null,
+      flagged: 'unknown',
+    })),
     [biomarkers]
   );
 
@@ -71,7 +68,7 @@ export function BiomarkerSystemDashboard({ biomarkers, cyclePhase, activeCategor
       const cat = BIOMARKER_CATEGORY_MAP[b.name as BiomarkerName];
       if (!cat) continue;
       const existing = counts.get(cat) ?? { count: 0, flagged: 0 };
-      const status = computeAmaniStatus(b.name, b.value, cyclePhase);
+      const status = computeAmaniStatus(b.name as BiomarkerName, b.value, cyclePhase);
       const variant = amaniStatusToVariant(status);
       const flagged = variant === 'out_of_range' || variant === 'borderline_low' || variant === 'borderline_high' ? 1 : 0;
       counts.set(cat, { count: existing.count + 1, flagged: existing.flagged + flagged });

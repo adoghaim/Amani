@@ -40,6 +40,27 @@ export interface ReportAnalyte {
   category: string | null;
 }
 
+type SupabaseClient = ReturnType<typeof createClient>;
+type RawExtractedItem = Record<string, unknown> & {
+  raw_name?: string;
+  name?: string;
+  canonical_slug?: string | null;
+  value_numeric?: number | null;
+  value_text?: string | null;
+  unit?: string | null;
+  raw_reference_range?: string | null;
+  normalized_reference_min?: number | null;
+  normalized_reference_max?: number | null;
+  reference_operator?: string | null;
+  reference_operator_value?: number | null;
+  source_snippet?: string | null;
+  confidence_score?: "high" | "medium" | "low";
+};
+
+type OpenAIMessageContent =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 const CORE_BIOMARKER_SLUGS = new Set([
   'estradiol', 'progesterone', 'lh', 'fsh', 'amh',
   'total_testosterone', 'free_testosterone', 'dheas', 'prolactin', 'fasting_insulin', 'shbg',
@@ -68,7 +89,7 @@ const CORE_BIOMARKER_CATEGORIES: Record<string, string> = {
   vitamin_b12: 'nutrients', folate: 'nutrients', magnesium: 'nutrients',
 };
 
-async function loadCanonicalRegistry(supabaseAdmin: any): Promise<{
+async function loadCanonicalRegistry(supabaseAdmin: SupabaseClient): Promise<{
   analyteMap: Map<string, CanonicalAnalyte>;
   synonymMap: Map<string, string>;
 }> {
@@ -208,7 +229,7 @@ CRITICAL RULES:
 4. If image is blurry or hard to read, mark "confidence_score": "low".
 5. ALWAYS extract the 'source_snippet' which incorporates the text crop so the user can verify the OCR in our UI.`;
 
-    const userMessagesContent: any[] = [
+    const userMessagesContent: OpenAIMessageContent[] = [
       { type: "text", text: "Extract all lab test results from these images into the requested JSON format." }
     ];
 
@@ -246,10 +267,26 @@ CRITICAL RULES:
     const openaiData = await openaiResponse.json();
     const content = openaiData.choices[0].message.content;
 
-    let rawItems: any[];
+    let rawItems: RawExtractedItem[];
     try {
-      const parsedJson = JSON.parse(content);
-      rawItems = parsedJson.items || parsedJson.biomarkers || [];
+      const parsedJson = JSON.parse(content) as unknown;
+      if (
+        parsedJson &&
+        typeof parsedJson === "object" &&
+        "items" in parsedJson &&
+        Array.isArray(parsedJson.items)
+      ) {
+        rawItems = parsedJson.items as RawExtractedItem[];
+      } else if (
+        parsedJson &&
+        typeof parsedJson === "object" &&
+        "biomarkers" in parsedJson &&
+        Array.isArray(parsedJson.biomarkers)
+      ) {
+        rawItems = parsedJson.biomarkers as RawExtractedItem[];
+      } else {
+        rawItems = [];
+      }
     } catch {
       rawItems = [];
     }
@@ -307,7 +344,7 @@ CRITICAL RULES:
       JSON.stringify({ items: reportAnalytes, _source_format: 'ocr', _parser_version: 'v2_vision_fallback' }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in OCR fallback:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error occurred" }),

@@ -22,6 +22,14 @@ type BiomarkerChange = {
   percent_change: number;
 };
 
+type SupabaseClient = ReturnType<typeof createClient>;
+type InterventionRow = {
+  title: string;
+  category: string;
+  start_date: string;
+  end_date?: string | null;
+};
+
 const normalizeName = (s: string) => s.toLowerCase().trim();
 
 // Keep this conservative to avoid noise.
@@ -208,7 +216,7 @@ Cycle context (if available; use only as possible context, not as an explanation
 - Current cycle phase/day: ${cycleContext.current.phase ?? 'unknown'} / ${cycleContext.current.day ?? 'unknown'}
 
 Tracked interventions active during this window:
-${interventions && interventions.length > 0 ? interventions.map((i: any) => `- ${i.title} (${i.category}) start ${i.start_date}${i.end_date ? `, end ${i.end_date}` : ''}`).join('\n') : 'None tracked'}
+${interventions && interventions.length > 0 ? (interventions as InterventionRow[]).map((i) => `- ${i.title} (${i.category}) start ${i.start_date}${i.end_date ? `, end ${i.end_date}` : ''}`).join('\n') : 'None tracked'}
 
 Please provide:
 1) A brief summary (2–4 sentences) that highlights the most meaningful changes and what they may imply generally.
@@ -275,17 +283,18 @@ Remember:
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error generating insights:", error);
-    if (error?.message === "RATE_LIMIT_EXCEEDED") {
+    if (error instanceof Error && error.message === "RATE_LIMIT_EXCEEDED") {
       return new Response(
         JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    const message = error instanceof Error ? error.message : "Failed to generate insights";
     return new Response(
       JSON.stringify({
-        error: error.message || "Failed to generate insights",
+        error: message,
       }),
       {
         status: 500,
@@ -296,7 +305,7 @@ Remember:
 });
 
 async function checkAndIncrementRateLimit(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   endpoint: string,
   limitPerDay: number

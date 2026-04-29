@@ -21,3 +21,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Android release signing secrets
+android/app/*.jks
+android/keystore.properties

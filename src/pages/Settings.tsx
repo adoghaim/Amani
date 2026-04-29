@@ -43,7 +43,8 @@ export function Settings() {
         .eq('user_id', user.id)
         .maybeSingle();
       setNotifPrefs(data as NotificationPreferences | null);
-    } catch (_) {
+    } catch {
+      setNotifPrefs(null);
     } finally {
       setNotifLoading(false);
     }
@@ -105,7 +106,8 @@ export function Settings() {
 
       setNotifSaved(true);
       setTimeout(() => setNotifSaved(false), 2500);
-    } catch (_) {
+    } catch {
+      setNotifSaved(false);
     } finally {
       setNotifSaving(false);
     }

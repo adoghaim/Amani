@@ -74,8 +74,8 @@ export function ResetPassword() {
       setSuccess(true);
       await supabase.auth.signOut();
       setTimeout(() => { navigate('/login', { replace: true }); }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to reset password');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to reset password');
     } finally {
       setSubmitting(false);
     }
