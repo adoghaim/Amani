@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
-import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Symptom, LabReportContext, ReportAnalyte, BiomarkerName, LabSource, ImportMethod } from '../types';
+import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
@@ -51,13 +50,12 @@ export function NewReport() {
   const [file, setFile] = useState<File | null>(null);
   const [reportDate, setReportDate] = useState('');
   const [lastPeriodDate, setLastPeriodDate] = useState('');
-  const [cycleLength, setCycleLength] = useState('28');
-  const [birthControl, setBirthControl] = useState<'yes' | 'no' | 'unsure'>('unsure');
-  const [pregnant, setPregnant] = useState<'yes' | 'no' | 'unsure'>('unsure');
-  const [postpartum, setPostpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
+  const cycleLength = '28';
+  const birthControl = 'unsure' as const;
+  const pregnant = 'unsure' as const;
+  const postpartum = 'unsure' as const;
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
   const [reportItems, setReportItems] = useState<ReportItem[]>([]);
-  const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [coverage, setCoverage] = useState<{ total_detected: number; total_core: number; total_extended: number; needs_review: number } | null>(null);
   const [parserDebug, setParserDebug] = useState<ParserDebugOutput | null>(null);
   const [periodAutoFilled, setPeriodAutoFilled] = useState(false);
@@ -75,6 +73,32 @@ export function NewReport() {
   const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userEditedReportItemsRef = useRef(false);
+  const extractionRunRef = useRef(0);
+
+  const resetExtractionState = () => {
+    extractionRunRef.current += 1;
+    userEditedReportItemsRef.current = false;
+    setReportItems([]);
+    setCoverage(null);
+    setParserDebug(null);
+    setDetectedLabSource('unknown');
+    setReportDateAutoDetected(false);
+    setAiRefining(false);
+    setExtracting(false);
+  };
+
+  const applyExtractedItems = (items: ReportItem[], runId: number) => {
+    if (runId !== extractionRunRef.current || !items || items.length === 0 || userEditedReportItemsRef.current) return;
+
+    setReportItems(items);
+    setCoverage({
+      total_detected: items.length,
+      total_core: items.filter(i => i.is_core_biomarker).length,
+      total_extended: items.filter(i => !i.is_core_biomarker).length,
+      needs_review: items.filter(i => i.needs_review).length,
+    });
+  };
 
   useEffect(() => {
     if (pendingNavigation && !navigationDoneRef.current) {
@@ -107,7 +131,9 @@ export function NewReport() {
           setLastPeriodDate(events.event_date);
           setPeriodAutoFilled(true);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[NewReport] Failed to fetch recent cycle event:', err);
+      }
       setFetchingPeriod(false);
     };
     fetchMostRecentCycleEvent();
@@ -118,6 +144,7 @@ export function NewReport() {
       const selectedFile = e.target.files[0];
       const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
       if (validTypes.includes(selectedFile.type)) {
+        resetExtractionState();
         setFile(selectedFile);
         setError('');
       } else {
@@ -139,9 +166,10 @@ export function NewReport() {
       const res = await fetch(result.base64);
       const blob = await res.blob();
       const captured = new File([blob], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      resetExtractionState();
       setFile(captured);
-    } catch (err: any) {
-      setError(err?.message || 'Camera capture failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Camera capture failed');
     } finally {
       setCameraCapturing(false);
     }
@@ -176,6 +204,8 @@ export function NewReport() {
   const handleProceedFromStep1 = async () => {
     if (!file) return;
 
+    const runId = extractionRunRef.current;
+    setStep(2);
     setExtracting(true);
     setError('');
 
@@ -200,19 +230,16 @@ export function NewReport() {
         const { items: localItems, debug: debugOut, heuristics } = parseAllReportItemsWithDebug(text, file.name);
         setParserDebug(debugOut);
 
-        if (text.trim().length === 0 || heuristics.isWeak) {
-          const images = await convertPDFToImages(file);
-          await callOcrFallback(images);
+        if (text.trim().length === 0 || localItems.length === 0) {
+          void startPdfOcrFallback(file, runId);
         } else {
-          setReportItems(localItems);
-          setCoverage({
-            total_detected: localItems.length,
-            total_core: localItems.filter(i => i.is_core_biomarker).length,
-            total_extended: localItems.filter(i => !i.is_core_biomarker).length,
-            needs_review: localItems.filter(i => i.needs_review).length,
-          });
+          applyExtractedItems(localItems, runId);
 
-          await triggerAiRefinement(text);
+          if (heuristics.isWeak) {
+            void startPdfOcrFallback(file, runId);
+          } else {
+            void triggerAiRefinement(text, runId);
+          }
         }
       } else if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -220,18 +247,34 @@ export function NewReport() {
           reader.onload = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
         });
-        await callOcrFallback([base64]);
+        void callOcrFallback([base64], runId);
       }
     } catch (err) {
       console.error('[NewReport] Extraction failed:', err);
       setError('Failed to extract data. You can enter items manually.');
     } finally {
-      setExtracting(false);
-      setStep(2);
+      if (runId === extractionRunRef.current) setExtracting(false);
     }
   };
 
-  const callOcrFallback = async (base64Images: string[]) => {
+  const startPdfOcrFallback = async (pdfFile: File, runId: number) => {
+    if (runId !== extractionRunRef.current) return;
+    setAiRefining(true);
+    try {
+      const images = await convertPDFToImages(pdfFile);
+      await callOcrFallback(images, runId);
+    } catch (err) {
+      console.warn('[NewReport] Background OCR fallback failed:', err);
+      if (runId === extractionRunRef.current) {
+        setError('OCR extraction failed. You can enter items manually.');
+      }
+    } finally {
+      if (runId === extractionRunRef.current) setAiRefining(false);
+    }
+  };
+
+  const callOcrFallback = async (base64Images: string[], runId: number) => {
+    if (runId !== extractionRunRef.current) return;
     setAiRefining(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -246,28 +289,22 @@ export function NewReport() {
 
       if (invokeError) throw new Error(`OCR fallback failed: ${invokeError.message}`);
 
-      if (data.items && data.items.length > 0) {
-        setReportItems(data.items);
-        const cov = {
-          total_detected: data.items.length,
-          total_core: data.items.filter((i: ReportItem) => i.is_core_biomarker).length,
-          total_extended: data.items.filter((i: ReportItem) => !i.is_core_biomarker).length,
-          needs_review: data.items.filter((i: ReportItem) => i.needs_review).length,
-        };
-        setCoverage(cov);
-      }
+      if (data.items && data.items.length > 0) applyExtractedItems(data.items, runId);
     } catch (err) {
       console.error('[NewReport] OCR fallback error:', err);
-      setError('OCR extraction failed. Falling back to manual entry.');
+      if (runId === extractionRunRef.current) {
+        setError('OCR extraction failed. Falling back to manual entry.');
+      }
     } finally {
-      setAiRefining(false);
+      if (runId === extractionRunRef.current) setAiRefining(false);
     }
   };
 
-  const triggerAiRefinement = async (text: string) => {
+  const triggerAiRefinement = async (text: string, runId: number) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!user || !session) return;
 
+    if (runId !== extractionRunRef.current) return;
     setAiRefining(true);
     supabase.functions.invoke('extract-biomarkers', {
       body: { text },
@@ -279,23 +316,13 @@ export function NewReport() {
         console.warn('[NewReport] AI extraction background warning:', invokeError.message);
         return;
       }
-      if (data.items && data.items.length > 0) {
-        setReportItems(data.items);
-        const cov = {
-          total_detected: data.items.length,
-          total_core: data.items.filter((i: ReportItem) => i.is_core_biomarker).length,
-          total_extended: data.items.filter((i: ReportItem) => !i.is_core_biomarker).length,
-          needs_review: data.items.filter((i: ReportItem) => i.needs_review).length,
-        };
-        setCoverage(cov);
-      }
-      if (data.analytes && data.analytes.length > 0) {
-        setReportAnalytes(data.analytes);
+      if (runId === extractionRunRef.current && data.items && data.items.length > 0) {
+        applyExtractedItems(data.items, runId);
       }
     }).catch(err => {
       console.error('[NewReport] AI extraction background network error:', err);
     }).finally(() => {
-      setAiRefining(false);
+      if (runId === extractionRunRef.current) setAiRefining(false);
     });
   };
 
@@ -403,7 +430,7 @@ export function NewReport() {
       }
       createdReportId = reportData.id;
 
-      if (parserDebug) {
+      if (import.meta.env.DEV && parserDebug) {
         supabase.from('parser_debug').insert({
           report_id: createdReportId,
           user_id: user.id,
@@ -455,15 +482,10 @@ export function NewReport() {
         }
 
         const analyteIdBySlug = new Map<string, string>();
-        for (const a of reportAnalytes) {
-          if (a.canonical_slug && a.canonical_analyte_id) {
-            analyteIdBySlug.set(a.canonical_slug, a.canonical_analyte_id);
-          }
-        }
-        const missingSlugs = [...new Set(itemsToSave.map(i => i.canonical_slug).filter((s): s is string => !!s && !analyteIdBySlug.has(s)))];
-        if (missingSlugs.length > 0) {
-          const { data: caRows } = await supabase.from('canonical_analytes' as any).select('id, slug').in('slug', missingSlugs);
-          if (caRows) caRows.forEach((row: any) => analyteIdBySlug.set(row.slug, row.id));
+        const slugsToResolve = [...new Set(itemsToSave.map(i => i.canonical_slug).filter((s): s is string => !!s))];
+        if (slugsToResolve.length > 0) {
+          const { data: caRows } = await supabase.from('canonical_analytes').select('id, slug').in('slug', slugsToResolve);
+          if (caRows) caRows.forEach((row: { id: string; slug: string }) => analyteIdBySlug.set(row.slug, row.id));
         }
 
         const analyteInserts = itemsToSave.map(item => {
@@ -514,15 +536,25 @@ export function NewReport() {
               context: { ...context, submission_mode: 'compatibility' }
             }).eq('id', createdReportId);
 
-            const safeInserts = analyteInserts.map(item => {
-              const {
-                source_format, parser_version, unit_original,
-                unit_normalized, review_status, reviewed_by_user,
-                display_name, system_category, normalization_status,
-                ...safeData
-              } = item as any;
-              return safeData;
-            });
+            const safeInserts = analyteInserts.map(item => ({
+              lab_report_id: item.lab_report_id,
+              raw_name: item.raw_name,
+              raw_value_text: item.raw_value_text,
+              value_numeric: item.value_numeric,
+              unit: item.unit,
+              raw_reference_range: item.raw_reference_range,
+              normalized_min: item.normalized_min,
+              normalized_max: item.normalized_max,
+              normalized_operator: item.normalized_operator,
+              normalized_operator_value: item.normalized_operator_value,
+              source_snippet: item.source_snippet,
+              confidence_score: item.confidence_score,
+              canonical_analyte_id: item.canonical_analyte_id,
+              canonical_slug: item.canonical_slug,
+              parse_status: item.parse_status,
+              needs_review: item.needs_review,
+              is_core: item.is_core,
+            }));
 
             const { error: retryError } = await supabase.from('report_analytes').insert(safeInserts);
             if (retryError) {
@@ -582,6 +614,7 @@ export function NewReport() {
       const selectedFile = e.target.files[0];
       const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
       if (validTypes.includes(selectedFile.type)) {
+        resetExtractionState();
         setFile(selectedFile);
         setError('');
         setGuidedStep(null);
@@ -1172,8 +1205,12 @@ export function NewReport() {
                 <Button variant="secondary" onClick={() => setStep(1)}>
                   <ArrowLeft className="w-5 h-5 mr-2" />Back
                 </Button>
-                <Button onClick={handleProceedToStep3}>
-                  Next <ArrowRight className="w-5 h-5 ml-2" />
+                <Button onClick={handleProceedToStep3} disabled={extracting || aiRefining}>
+                  {extracting || aiRefining ? (
+                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Reading...</>
+                  ) : (
+                    <>Next <ArrowRight className="w-5 h-5 ml-2" /></>
+                  )}
                 </Button>
               </div>
               <p className="text-xs text-center text-gray-400">You can always edit this later</p>
@@ -1227,32 +1264,39 @@ export function NewReport() {
               <ReviewBiomarkers
                 items={reportItems}
                 onUpdate={(index, field, value) => {
+                  userEditedReportItemsRef.current = true;
                   setReportItems(prev => {
                     const updated = [...prev];
                     updated[index] = { ...updated[index], [field]: value } as ReportItem;
                     return updated;
                   });
                 }}
-                onRemove={index => setReportItems(reportItems.filter((_, i) => i !== index))}
-                onAddNew={() => setReportItems([...reportItems, {
-                  raw_name: '',
-                  canonical_slug: null,
-                  category: null,
-                  value_numeric: 0,
-                  value_text: null,
-                  unit: null,
-                  raw_reference_range: null,
-                  normalized_reference_min: null,
-                  normalized_reference_max: null,
-                  reference_operator: null,
-                  reference_operator_value: null,
-                  confidence_score: 'low',
-                  is_core_biomarker: false,
-                  needs_review: true,
-                  source_snippet: 'Manually added',
-                  source_format: 'manual',
-                  review_status: 'pending',
-                }])}
+                onRemove={index => {
+                  userEditedReportItemsRef.current = true;
+                  setReportItems(reportItems.filter((_, i) => i !== index));
+                }}
+                onAddNew={() => {
+                  userEditedReportItemsRef.current = true;
+                  setReportItems([...reportItems, {
+                    raw_name: '',
+                    canonical_slug: null,
+                    category: null,
+                    value_numeric: 0,
+                    value_text: null,
+                    unit: null,
+                    raw_reference_range: null,
+                    normalized_reference_min: null,
+                    normalized_reference_max: null,
+                    reference_operator: null,
+                    reference_operator_value: null,
+                    confidence_score: 'low',
+                    is_core_biomarker: false,
+                    needs_review: true,
+                    source_snippet: 'Manually added',
+                    source_format: 'manual',
+                    review_status: 'pending',
+                  }]);
+                }}
               />
             )}
 
@@ -1260,8 +1304,8 @@ export function NewReport() {
               <Button variant="secondary" onClick={() => setStep(2)}>
                 <ArrowLeft className="w-5 h-5 mr-2" />Back
               </Button>
-              <Button onClick={handleSubmit} disabled={loading}>
-                {loading ? 'Processing...' : 'Save and analyze'}
+              <Button onClick={handleSubmit} disabled={loading || extracting || aiRefining}>
+                {loading ? 'Processing...' : extracting || aiRefining ? 'Reading report...' : 'Save and analyze'}
               </Button>
             </div>
           </Card>

@@ -47,8 +47,8 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
       } else {
         setError(`Error (${response.status}): ${data.error || 'Unknown error'}`)
       }
-    } catch (err: any) {
-      setError(`Connection error: ${err?.message || 'Unknown'}`)
+    } catch (err: unknown) {
+      setError(`Connection error: ${err instanceof Error ? err.message : 'Unknown'}`)
     } finally {
       setLoading(false)
     }

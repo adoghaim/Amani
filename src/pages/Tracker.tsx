@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import type { ComponentProps } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Droplets,
@@ -44,6 +45,13 @@ type NoteModalState = {
   defaultDate: string;
 };
 
+type SymptomLogRow = Omit<SymptomLog, 'symptoms'> & { symptoms: unknown };
+
+interface LabInsightsResponse {
+  insights: ComponentProps<typeof InsightsModal>['insights'];
+  report_dates?: ComponentProps<typeof InsightsModal>['reportDates'];
+}
+
 export function Tracker() {
   const { user, userProfile } = useAuth();
   const navigate = useNavigate();
@@ -72,7 +80,7 @@ export function Tracker() {
   const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   const [showInsightsModal, setShowInsightsModal] = useState(false);
-  const [insightsData, setInsightsData] = useState<any>(null);
+  const [insightsData, setInsightsData] = useState<LabInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
 
@@ -116,7 +124,7 @@ export function Tracker() {
       setReports(fetchedReports);
       setPeriodLogs(periodRes.data as PeriodLog[]);
       setSymptomLogs(
-        (symptomRes.data as any[]).map((r) => ({
+        (symptomRes.data as SymptomLogRow[]).map((r) => ({
           ...r,
           symptoms: Array.isArray(r.symptoms) ? r.symptoms : [],
         })) as SymptomLog[]

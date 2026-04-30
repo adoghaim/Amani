@@ -381,10 +381,10 @@ export function Reports() {
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs text-theme-muted-text-4">Uploaded {timeAgo(report.upload_date)}</span>
-                              {(report as any).lab_source && (report as any).lab_source !== 'unknown' && (
+                              {report.lab_source && report.lab_source !== 'unknown' && (
                                 <span className="inline-flex items-center gap-0.5 text-[11px] text-theme-muted-text-4">
                                   <FlaskConical className="w-2.5 h-2.5" />
-                                  {(report as any).lab_source === 'quest' ? 'Quest' : 'Labcorp'}
+                                  {report.lab_source === 'quest' ? 'Quest' : 'Labcorp'}
                                 </span>
                               )}
                             </div>

@@ -98,21 +98,21 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
           ? getDaysSince(report.report_date, previousReport.report_date)
           : null;
 
-        const comparisons = KEY_BIOMARKERS.map((biomarkerName) => {
+        const comparisons = KEY_BIOMARKERS.flatMap((biomarkerName) => {
           const current = findBiomarker(currentBiomarkers, biomarkerName);
-          const previous = previousReport ? findBiomarker(previousBiomarkers, biomarkerName) : null;
+          const previous = previousReport ? findBiomarker(previousBiomarkers, biomarkerName) ?? null : null;
 
-          if (!current) return null;
+          if (!current) return [];
 
           let delta = null;
           if (previous) {
             delta = calculateDelta(current.value, previous.value);
           }
 
-          return { biomarkerName: current.name, current, previous, delta };
-        }).filter((c) => c !== null);
+          return [{ biomarkerName: current.name, current, previous, delta }];
+        });
 
-        const quickHighlights = getQuickHighlights(comparisons as any);
+        const quickHighlights = getQuickHighlights(comparisons);
 
         const activeInterventions = getActiveInterventions(report.report_date);
         const displayedInterventions = activeInterventions.slice(0, 3);

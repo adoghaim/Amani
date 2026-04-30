@@ -584,17 +584,6 @@ export function buildInsightSummary(
     const primaryDelta = deltaMap.get(primaryKey) ??
       [...deltaMap.values()].find(d => d.key.toLowerCase() === primaryKey.toLowerCase());
     const alreadyIncluded = biggestChanges.some(c => c.key === primaryKey);
-    const isMeaningful = primaryDelta && (
-      primaryDelta.significance === 'significant' ||
-      primaryDelta.significance === 'moderate' ||
-      primaryDelta.boundaryCrossing !== null ||
-      primaryDelta.trajectoryStatus === 'improving_still_high' ||
-      primaryDelta.trajectoryStatus === 'improving_still_low' ||
-      primaryDelta.trajectoryStatus === 'worsening_still_high' ||
-      primaryDelta.trajectoryStatus === 'worsening_still_low' ||
-      (primaryDelta.distanceToNormalImprovement !== null && Math.abs(primaryDelta.distanceToNormalImprovement) >= 10)
-    );
-
     const rankScore = (c: BiggestChange): number => {
       const crossScore = c.boundaryCrossing ? 10 : 0;
       const trajScore =

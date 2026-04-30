@@ -20,11 +20,6 @@ interface CanonicalAnalyte {
   affects_recommendations: boolean;
 }
 
-interface AnalyteSynonym {
-  canonical_analyte_id: string;
-  synonym_text: string;
-}
-
 interface ReportAnalyte {
   raw_name: string;
   raw_value_text: string | null;
@@ -44,6 +39,22 @@ interface ReportAnalyte {
   is_core: boolean;
   category: string | null;
 }
+
+type SupabaseClient = ReturnType<typeof createClient>;
+type RawExtractedItem = Record<string, unknown> & {
+  raw_name?: string;
+  name?: string;
+  canonical_slug?: string | null;
+  value_numeric?: number | string | null;
+  value_text?: string | null;
+  unit?: string | null;
+  raw_reference_range?: string | null;
+  normalized_reference_min?: number | null;
+  normalized_reference_max?: number | null;
+  reference_operator?: string | null;
+  reference_operator_value?: number | null;
+  confidence_score?: "high" | "medium" | "low";
+};
 
 const CORE_BIOMARKER_SLUGS = new Set([
   'estradiol', 'progesterone', 'lh', 'fsh', 'amh',
@@ -73,7 +84,7 @@ const CORE_BIOMARKER_CATEGORIES: Record<string, string> = {
   vitamin_b12: 'nutrients', folate: 'nutrients', magnesium: 'nutrients',
 };
 
-async function loadCanonicalRegistry(supabaseAdmin: any): Promise<{
+async function loadCanonicalRegistry(supabaseAdmin: SupabaseClient): Promise<{
   analyteMap: Map<string, CanonicalAnalyte>;
   synonymMap: Map<string, string>;
 }> {
@@ -395,15 +406,25 @@ CONFIDENCE:
     const openaiData = await openaiResponse.json();
     const content = openaiData.choices[0].message.content;
 
-    let rawItems: any[];
+    let rawItems: RawExtractedItem[];
     try {
-      const parsedJson = JSON.parse(content);
+      const parsedJson = JSON.parse(content) as unknown;
       if (Array.isArray(parsedJson)) {
-        rawItems = parsedJson;
-      } else if (parsedJson.items && Array.isArray(parsedJson.items)) {
-        rawItems = parsedJson.items;
-      } else if (parsedJson.biomarkers && Array.isArray(parsedJson.biomarkers)) {
-        rawItems = parsedJson.biomarkers;
+        rawItems = parsedJson as RawExtractedItem[];
+      } else if (
+        parsedJson &&
+        typeof parsedJson === "object" &&
+        "items" in parsedJson &&
+        Array.isArray(parsedJson.items)
+      ) {
+        rawItems = parsedJson.items as RawExtractedItem[];
+      } else if (
+        parsedJson &&
+        typeof parsedJson === "object" &&
+        "biomarkers" in parsedJson &&
+        Array.isArray(parsedJson.biomarkers)
+      ) {
+        rawItems = parsedJson.biomarkers as RawExtractedItem[];
       } else {
         rawItems = [];
       }
@@ -514,10 +535,10 @@ CONFIDENCE:
       JSON.stringify({ items: legacyItems, analytes: validatedAnalytes, coverage }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error extracting biomarkers:", error);
 
-    if (error?.message === "RATE_LIMIT_EXCEEDED") {
+    if (error instanceof Error && error.message === "RATE_LIMIT_EXCEEDED") {
       return new Response(
         JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -532,7 +553,7 @@ CONFIDENCE:
 });
 
 async function checkAndIncrementRateLimit(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   endpoint: string,
   limitPerDay: number

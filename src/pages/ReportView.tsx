@@ -35,7 +35,6 @@ import {
   Microscope, Sparkles, Stethoscope, CalendarDays,
   CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle, FlaskConical,
 } from 'lucide-react';
-import { detectLabSource } from '../utils/detectLabSource';
 import type { LabSource } from '../types';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
@@ -210,32 +209,36 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
   );
 }
 
-function normalizeInterpretation(raw: any): AIInterpretation {
+function normalizeInterpretation(raw: unknown): AIInterpretation {
+  const data = raw && typeof raw === 'object'
+    ? raw as Partial<AIInterpretation> & Record<string, unknown>
+    : {};
+
   return {
-    ...raw,
-    headline: typeof raw.headline === 'string' ? raw.headline : '',
-    summary_bullets: Array.isArray(raw.summary_bullets) ? raw.summary_bullets : [],
-    primary_concern: raw.primary_concern && typeof raw.primary_concern === 'object'
-      ? raw.primary_concern
+    ...data,
+    headline: typeof data.headline === 'string' ? data.headline : '',
+    summary_bullets: Array.isArray(data.summary_bullets) ? data.summary_bullets : [],
+    primary_concern: data.primary_concern && typeof data.primary_concern === 'object'
+      ? data.primary_concern as AIInterpretation['primary_concern']
       : undefined,
-    key_findings: Array.isArray(raw.key_findings) ? raw.key_findings : undefined,
-    what_you_can_do_now: Array.isArray(raw.what_you_can_do_now) ? raw.what_you_can_do_now : undefined,
-    what_to_do_next: Array.isArray(raw.what_to_do_next) ? raw.what_to_do_next : undefined,
-    top_findings: Array.isArray(raw.top_findings) ? raw.top_findings : [],
-    pattern_signals: Array.isArray(raw.pattern_signals) ? raw.pattern_signals : [],
-    questions_for_doctor: Array.isArray(raw.questions_for_doctor) ? raw.questions_for_doctor : [],
-    disclaimer: typeof raw.disclaimer === 'string' ? raw.disclaimer : '',
-    cycle_context: raw.cycle_context ?? {
+    key_findings: Array.isArray(data.key_findings) ? data.key_findings : undefined,
+    what_you_can_do_now: Array.isArray(data.what_you_can_do_now) ? data.what_you_can_do_now : undefined,
+    what_to_do_next: Array.isArray(data.what_to_do_next) ? data.what_to_do_next : undefined,
+    top_findings: Array.isArray(data.top_findings) ? data.top_findings : [],
+    pattern_signals: Array.isArray(data.pattern_signals) ? data.pattern_signals : [],
+    questions_for_doctor: Array.isArray(data.questions_for_doctor) ? data.questions_for_doctor : [],
+    disclaimer: typeof data.disclaimer === 'string' ? data.disclaimer : '',
+    cycle_context: data.cycle_context as AIInterpretation['cycle_context'] ?? {
       estimated_cycle_day: null,
       estimated_cycle_phase: 'unknown',
       confidence: 'low',
       explanation: '',
     },
-    safety_notes: Array.isArray(raw.safety_notes) ? raw.safety_notes : [],
-    suggested_followups_to_discuss: Array.isArray(raw.suggested_followups_to_discuss)
-      ? raw.suggested_followups_to_discuss
-      : raw.suggested_followups_to_discuss
-        ? [raw.suggested_followups_to_discuss as unknown as string]
+    safety_notes: Array.isArray(data.safety_notes) ? data.safety_notes : [],
+    suggested_followups_to_discuss: Array.isArray(data.suggested_followups_to_discuss)
+      ? data.suggested_followups_to_discuss
+      : data.suggested_followups_to_discuss
+        ? [String(data.suggested_followups_to_discuss)]
         : [],
   };
 }
@@ -360,7 +363,7 @@ export function ReportView() {
             setInterpGaveUp(true);
           }
         }, POLL_INTERVAL);
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           interpPollingActive.current = false;
           setInterpGaveUp(true);
@@ -400,6 +403,8 @@ export function ReportView() {
     if (interpretationData?.json_output) {
       setInterpretation(normalizeInterpretation(interpretationData.json_output));
     }
+
+    setLoading(false);
 
     if (reportData.user_id) {
       const windowStart = new Date(reportData.report_date);
@@ -471,8 +476,6 @@ export function ReportView() {
         }
       }
     }
-
-    setLoading(false);
   };
 
   const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
@@ -714,7 +717,7 @@ export function ReportView() {
         await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       }
       await fetchReport();
-    } catch (err: any) {
+    } catch {
       await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       await fetchReport();
     } finally {
@@ -959,7 +962,7 @@ export function ReportView() {
 
                       // Fallbacks if no AI headline
                       if (outOfRange.length === 0 && borderline.length === 0) {
-                        if (ctx.anyBoundaryCrossImproved) {
+                        if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
                           return `All values are within optimal range, and ${name} has improved since your last draw.`;
                         }
@@ -973,7 +976,7 @@ export function ReportView() {
                         return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
                       }
                       if (outOfRange.length === 1 && borderline.length === 0) {
-                        if (ctx.anyBoundaryCrossImproved) {
+                        if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
                           return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
                         }

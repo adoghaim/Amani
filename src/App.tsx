@@ -21,6 +21,7 @@ const Tracker        = React.lazy(() => import('./pages/Tracker').then(m => ({ d
 const Billing        = React.lazy(() => import('./pages/Billing').then(m => ({ default: m.Billing })))
 const Settings       = React.lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const ParserDebugger = React.lazy(() => import('./pages/ParserDebugger').then(m => ({ default: m.ParserDebugger })))
+const enableParserDebugger = import.meta.env.DEV
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -62,7 +63,9 @@ function AppRoutes() {
         <Route path="/app/tracker" element={<ProtectedRoute><Tracker /></ProtectedRoute>} />
         <Route path="/app/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
         <Route path="/app/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-        <Route path="/dev/parser/:id" element={<ProtectedRoute><ParserDebugger /></ProtectedRoute>} />
+        {enableParserDebugger && (
+          <Route path="/dev/parser/:id" element={<ProtectedRoute><ParserDebugger /></ProtectedRoute>} />
+        )}
       </Routes>
     </Suspense>
   )
