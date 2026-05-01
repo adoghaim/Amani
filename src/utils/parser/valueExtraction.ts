@@ -184,9 +184,11 @@ export function extractValueFromWindow(
   if (prefixMatch0) {
     const parsed0 = parseValueWithPrefix(prefixMatch0[1].trim());
     if (parsed0) {
+      // Extract the raw threshold number (before halving) to check against reference range
+      const rawThreshold = parseFloat(prefixMatch0[1].trim().replace(/^[<>]=?\s*/, ''));
       const isRefComp = referenceResult?.comparator &&
-        referenceResult.comparator.value === parsed0.value &&
-        knownRangeNumbers.has(String(parsed0.value));
+        (referenceResult.comparator.value === rawThreshold ||
+         knownRangeNumbers.has(String(rawThreshold)));
       if (!isRefComp) {
         return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult };
       }
