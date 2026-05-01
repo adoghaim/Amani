@@ -89,138 +89,72 @@ Do NOT include nutrients:
 - Without a clear connection to specific data
 - As preventive suggestions
 
-## JSON Output Structure
+## Where nutrients appear in the output
 
-The AI generates a `nutrient_topics_to_discuss` array in the interpretation JSON:
+The interpretation JSON does **not** carry a dedicated `nutrient_topics_to_discuss` field. Instead, nutrient mentions appear inline within the existing freeform output sections — most often `what_you_can_do_now` and `what_to_do_next`. Validation runs across the entire output rather than against a single field.
 
-```json
-{
-  "nutrient_topics_to_discuss": [
-    {
-      "nutrient": "vitamin_d",
-      "why_it_came_up": "Vitamin D is below the lab reference range (24 vs 30–100).",
-      "discussion_prompt": "Some clinicians may discuss dietary sources, sun exposure, or supplementation. You may want to ask your provider what's appropriate for you."
-    }
-  ]
-}
-```
-
-### Required Fields
-
-- **nutrient**: Must be one of the allowed nutrient identifiers (vitamin_d, iron, b12, folate, magnesium, omega_3, iodine)
-- **why_it_came_up**: Clear explanation of which specific lab value or symptom triggered this inclusion
-- **discussion_prompt**: Consultative language only, no prescriptive advice
+The system prompt enforces consultative phrasing at generation time; the server-side validator enforces it again at parse time.
 
 ## Server-Side Validation
 
-The edge function performs automatic validation on all AI-generated content:
+The validator lives in `supabase/functions/_shared/nutrient-policy.ts` and is invoked by `generate-interpretation/index.ts` after every OpenAI response.
 
-### Validation Steps
+### Single source of truth
 
-1. **First Generation Attempt**: AI generates interpretation following the prompt rules
-2. **Content Validation**: Server checks for banned keywords and patterns
-3. **If Validation Fails**:
-   - Log violations
-   - Attempt one regeneration with the same strict rules
-4. **If Second Attempt Fails**:
-   - Set `nutrient_topics_to_discuss` to empty array
-   - Proceed with the rest of the interpretation intact
+`_shared/nutrient-policy.ts` exports:
 
-### Banned Pattern Detection
+- `ALLOWED_NUTRIENTS_PROMPT_LIST` — interpolated into the prompt's "supplements allowed" line so the prompt cannot drift from the validator.
+- `BANNED_SUPPLEMENTS` — array of banned herbal/adaptogen names.
+- Internal regexes for dosage units, prescriptive verbs, and dosing-frequency words.
+- `validateInterpretationOutput(parsed)` → `{ valid, violations }`.
+- `sanitizeViolations(parsed)` → filters `what_you_can_do_now` and `what_to_do_next` arrays of items containing any violation pattern.
 
-The validator checks for:
+Any change to the allow-list, banned patterns, or phrasing rules goes in `_shared/nutrient-policy.ts` only — and the edge function must be redeployed.
 
-1. **Dosage units**: IU, mg, mcg, g (with numbers), mL
-2. **Directive verbs**: take, start, increase, decrease, recommended, prescribe
-3. **Frequency words**: daily, twice, per day, every day
-4. **Allow-list validation**: Ensures all nutrient values are in the approved list (vitamin_d, iron, b12, folate, magnesium, omega_3, iodine)
+### Validation flow
 
-### Validation Behavior
+1. **First call** — OpenAI generates the interpretation; server runs `validateInterpretationOutput`.
+2. **If violations are detected** — server logs the violations, appends a stricter reminder to the prompt, and calls OpenAI a second time.
+3. **If the second response also violates** — server runs `sanitizeViolations` to drop offending items from `what_you_can_do_now` and `what_to_do_next`, then returns the sanitized output. Other freeform fields are left intact (the validator's first line of defense is the regenerate retry; sanitization is the fail-closed floor).
 
-```typescript
-// If violations detected on first attempt
-if (attemptNumber === 1 && !validation.valid) {
-  // Regenerate once
-  return await callOpenAIWithRetry(..., attemptNumber: 2);
-}
+### Banned patterns
 
-// If violations detected on second attempt
-if (attemptNumber === 2 && !validation.valid) {
-  // Set nutrient_topics_to_discuss to empty array
-  return sanitizeNutrientSection(parsedJson);
-}
-```
+The validator scans every freeform string in the parsed output (recursive walk) for:
+
+1. **Dosage units**: `IU`, `mg`, `mcg`, `µg`/`ug`, `g`, `mL`/`ml`, `grams`, `milligrams`, `micrograms` — when adjacent to a number.
+2. **Banned supplements**: ashwagandha, maca, vitex, chasteberry, diindolylmethane, evening primrose, black cohosh, rhodiola, ginseng, saw palmetto.
+3. **Prescriptive verb patterns**: `take`, `start taking`, `begin taking`, `consume`, `swallow`, `prescribe(d)` — when followed by an article or a digit.
+4. **Dosing frequency**: `daily`, `twice a/per day`, `every day/morning/night/evening`, `once a day`, `per day`, `with food`, `on an empty stomach`.
 
 ## Examples
 
-### ✅ COMPLIANT Example
+These illustrate the kind of phrasing the policy expects to see (and reject) inside freeform output fields like `what_you_can_do_now`.
 
-**Lab Value**: Vitamin D = 24 ng/mL (Reference: 30-100 ng/mL)
+### ✅ COMPLIANT phrasing
 
-**Symptom**: User reports "fatigue"
+> "For your vitamin D: dietary sources and a few minutes of midday sun a few times a week can help. Worth asking your provider whether supplementation is appropriate for you."
 
-**Output**:
-```json
-{
-  "nutrient": "vitamin_d",
-  "why_it_came_up": "Vitamin D is below the lab reference range (24 vs 30–100).",
-  "discussion_prompt": "Some clinicians may discuss dietary sources, sun exposure, or supplementation. You may want to ask your provider what's appropriate for you."
-}
-```
+Tied to a flagged lab value, consultative framing, no dosage, no prescriptive verb.
 
-### ❌ NON-COMPLIANT Examples
+### ❌ NON-COMPLIANT phrasing (validator catches each)
 
-**Example 1 - Dosage included**:
-```json
-{
-  "discussion_prompt": "Consider taking 2000 IU of vitamin D daily"
-}
-```
-❌ Contains dosage and prescriptive language
-
-**Example 2 - Prescriptive language**:
-```json
-{
-  "discussion_prompt": "You should start taking a vitamin D supplement"
-}
-```
-❌ Uses "you should" and "taking"
-
-**Example 3 - Banned supplement**:
-```json
-{
-  "nutrient": "ashwagandha",
-  "discussion_prompt": "Some clinicians may discuss adaptogenic herbs..."
-}
-```
-❌ Banned supplement type (not in allow-list)
-
-**Example 4 - General wellness advice**:
-```json
-{
-  "nutrient": "magnesium",
-  "why_it_came_up": "Magnesium is important for overall health",
-  "discussion_prompt": "You may want to discuss magnesium with your provider"
-}
-```
-❌ Not tied to a specific lab value or symptom
-
-**Example 5 - Not in allow-list**:
-```json
-{
-  "nutrient": "zinc",
-  "why_it_came_up": "Low zinc levels detected",
-  "discussion_prompt": "Some clinicians may discuss zinc supplementation"
-}
-```
-❌ "zinc" was removed from the allow-list and is no longer permitted
+| Phrase | Why it fails |
+|---|---|
+| "Take 2000 IU of vitamin D daily" | dosage unit (`IU`) + frequency (`daily`) + prescriptive verb (`take`) |
+| "You should start taking a vitamin D supplement" | prescriptive verb (`start taking`) |
+| "Consider an ashwagandha or rhodiola stack for stress" | banned supplements |
+| "Magnesium is important for overall health, ask your provider about a supplement" | not tied to a specific lab value or symptom — semantic, not regex; the prompt rejects this, the validator does not |
+| "Some clinicians discuss zinc supplementation" | `zinc` is not in the canonical allow-list |
 
 ## Implementation Files
 
-- **Edge Function**: `/supabase/functions/generate-interpretation/index.ts`
-  - Contains system prompt with nutrient rules
-  - Implements validation logic
-  - Handles retry and sanitization
+- **Policy module (single source of truth)**: `/supabase/functions/_shared/nutrient-policy.ts`
+  - Exports `ALLOWED_NUTRIENTS_PROMPT_LIST`, `BANNED_SUPPLEMENTS`, banned-pattern regexes
+  - Exports `validateInterpretationOutput()` and `sanitizeViolations()`
+- **Edge function (consumer)**: `/supabase/functions/generate-interpretation/index.ts`
+  - Imports from the policy module above
+  - Interpolates `ALLOWED_NUTRIENTS_PROMPT_LIST` into the system prompt
+  - Calls `validateInterpretationOutput()` after every OpenAI response; regenerates on first violation; calls `sanitizeViolations()` on second violation
 
 ## Monitoring and Logging
 

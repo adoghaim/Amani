@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import { errorMessage } from '../_shared/errors.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
@@ -196,7 +197,7 @@ Deno.serve(async (req) => {
 
     return corsResponse({ sessionId: session.id, url: session.url });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Checkout failed';
+    const message = errorMessage(error, 'Checkout failed');
     console.error(`Checkout error: ${message}`);
     return corsResponse({ error: message }, 500);
   }

@@ -1,11 +1,8 @@
 import { AlertCircle } from 'lucide-react';
-import { BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
+import { getDisplayName, getEntry } from '../lib/biomarkers/dictionary';
 import type { AITopFinding, BiomarkerName, CyclePhase } from '../types';
-import {
-  computeAmaniStatus,
-  amaniStatusToVariant,
-  STATUS_PILL_CONFIG,
-} from '../utils/biomarkerDefinitions';
+import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
+import { amaniStatusToVariant, STATUS_PILL_CONFIG } from '../lib/scoring/statusPill';
 
 interface BiomarkerEntry {
   name: BiomarkerName;
@@ -71,7 +68,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
         <div className="space-y-2">
           {flagged.map((finding, i) => {
             const style = FINDING_STATUS_STYLE[finding.status];
-            const displayName = BIOMARKER_DISPLAY[finding.biomarker_slug as BiomarkerName]
+            const displayName = getEntry(finding.biomarker_slug as BiomarkerName)?.displayName
               ?? finding.title;
             return (
               <div
@@ -123,7 +120,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
       <div className="space-y-2">
         {flagged.map(h => {
           const pill = STATUS_PILL_CONFIG[h.variant];
-          const displayName = BIOMARKER_DISPLAY[h.name] ?? h.name.replace(/_/g, ' ');
+          const displayName = getDisplayName(h.name);
           const formatted = h.value % 1 === 0 ? h.value.toString() : h.value.toFixed(1);
           return (
             <div

@@ -1,6 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import { errorMessage } from '../_shared/errors.ts';
+import { StripeCheckoutOrderSchema } from '../_shared/schemas/stripe.ts';
 
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
@@ -9,6 +11,10 @@ const stripe = new Stripe(stripeSecret, {
     name: 'Bolt Integration',
     version: '1.0.0',
   },
+  // Stripe SDK retries on network errors and 429/5xx with exponential backoff.
+  // 2 retries is enough to cover the common transient cases without blowing
+  // the 30s webhook budget.
+  maxNetworkRetries: 2,
 });
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -40,22 +46,48 @@ Deno.serve(async (req) => {
     try {
       event = await stripe.webhooks.constructEventAsync(body, signature, stripeWebhookSecret);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Invalid webhook signature';
+      const message = errorMessage(error, 'Invalid webhook signature');
       console.error(`Webhook signature verification failed: ${message}`);
       return new Response(`Webhook signature verification failed: ${message}`, { status: 400 });
     }
 
-    EdgeRuntime.waitUntil(handleEvent(event));
+    // Process the event synchronously so any failure surfaces as 5xx and
+    // Stripe retries (instead of fire-and-forget via EdgeRuntime.waitUntil,
+    // which 200s before the work runs and silently loses errors).
+    await handleEvent(event);
 
     return Response.json({ received: true });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Error processing webhook';
+    const message = errorMessage(error, 'Error processing webhook');
     console.error('Error processing webhook:', error);
     return Response.json({ error: message }, { status: 500 });
   }
 });
 
 async function handleEvent(event: Stripe.Event) {
+  // Idempotency gate: insert the event_id, bail if we've already processed it.
+  // Stripe delivers webhooks at-least-once; this turns retries into no-ops.
+  const { data: claimed, error: claimError } = await supabase
+    .from('processed_stripe_events')
+    .insert({ event_id: event.id, event_type: event.type })
+    .select('event_id')
+    .maybeSingle();
+
+  if (claimError) {
+    // Postgres unique_violation — another delivery already claimed this event.
+    if (claimError.code === '23505') {
+      console.info(`Skipping duplicate Stripe event ${event.id} (${event.type})`);
+      return;
+    }
+    console.error(`Failed to claim Stripe event ${event.id}:`, claimError);
+    throw new Error(`Failed to claim event: ${claimError.message}`);
+  }
+
+  if (!claimed) {
+    console.info(`Stripe event ${event.id} already processed`);
+    return;
+  }
+
   const stripeData = event?.data?.object ?? {};
 
   if (!stripeData) {
@@ -93,34 +125,50 @@ async function handleEvent(event: Stripe.Event) {
       await syncCustomerFromStripe(customerId);
     } else if (mode === 'payment' && payment_status === 'paid') {
       try {
-        // Extract the necessary information from the session
+        // Defense-in-depth: signature was already verified by the SDK, but
+        // event.data.object is cast via `as Stripe.Checkout.Session`. Validate
+        // the exact fields we write into stripe_orders before the upsert.
+        const orderParse = StripeCheckoutOrderSchema.safeParse(stripeData);
+        if (!orderParse.success) {
+          console.error(
+            'Stripe checkout.session.completed payload failed validation:',
+            orderParse.error.flatten(),
+          );
+          throw new Error('Invalid checkout session payload');
+        }
         const {
           id: checkout_session_id,
           payment_intent,
           amount_subtotal,
           amount_total,
           currency,
-        } = stripeData as Stripe.Checkout.Session;
+        } = orderParse.data;
 
-        // Insert the order into the stripe_orders table
-        const { error: orderError } = await supabase.from('stripe_orders').insert({
-          checkout_session_id,
-          payment_intent_id: payment_intent,
-          customer_id: customerId,
-          amount_subtotal,
-          amount_total,
-          currency,
-          payment_status,
-          status: 'completed', // assuming we want to mark it as completed since payment is successful
-        });
+        // Upsert keyed on the unique checkout_session_id. Belt-and-suspenders
+        // alongside the processed_stripe_events ledger above — if the same
+        // session ever re-arrives, this is a no-op rather than a duplicate row.
+        const { error: orderError } = await supabase.from('stripe_orders').upsert(
+          {
+            checkout_session_id,
+            payment_intent_id: payment_intent,
+            customer_id: customerId,
+            amount_subtotal,
+            amount_total,
+            currency,
+            payment_status,
+            status: 'completed',
+          },
+          { onConflict: 'checkout_session_id' },
+        );
 
         if (orderError) {
-          console.error('Error inserting order:', orderError);
-          return;
+          console.error('Error upserting order:', orderError);
+          throw new Error(`Order upsert failed: ${orderError.message}`);
         }
         console.info(`Successfully processed one-time payment for session: ${checkout_session_id}`);
       } catch (error) {
         console.error('Error processing one-time payment:', error);
+        throw error;
       }
     }
   }
@@ -137,7 +185,6 @@ async function syncCustomerFromStripe(customerId: string) {
       expand: ['data.default_payment_method'],
     });
 
-    // TODO verify if needed
     if (subscriptions.data.length === 0) {
       console.info(`No active subscriptions found for customer: ${customerId}`);
       const { error: noSubError } = await supabase.from('stripe_subscriptions').upsert(

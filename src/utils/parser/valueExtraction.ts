@@ -10,15 +10,15 @@ const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|prim
 
 export function parseValueWithPrefix(text: string): { value: number; rawValue: string } | null {
   const ltMatch = text.match(/^<\s*(\d+\.?\d*)/);
-  if (ltMatch) {
+  if (ltMatch && ltMatch[1] !== undefined) {
     return { value: parseFloat(ltMatch[1]) * 0.5, rawValue: `<${ltMatch[1]}` };
   }
   const gtMatch = text.match(/^>\s*(\d+\.?\d*)/);
-  if (gtMatch) {
+  if (gtMatch && gtMatch[1] !== undefined) {
     return { value: parseFloat(gtMatch[1]), rawValue: `>${gtMatch[1]}` };
   }
   const numMatch = text.match(/(\d+\.?\d*)/);
-  if (numMatch) {
+  if (numMatch && numMatch[1] !== undefined) {
     return { value: parseFloat(numMatch[1]), rawValue: numMatch[1] };
   }
   return null;
@@ -33,6 +33,7 @@ export function extractValueFromWindow(
   if (cleanLines.length === 0) return null;
 
   const labelLine = cleanLines[0];
+  if (labelLine === undefined) return null;
   let valueLines = cleanLines.slice(1);
 
   if (adapter?.historyLine.historyLinePattern) {
@@ -42,7 +43,8 @@ export function extractValueFromWindow(
     if (nonDateLines.length > 0) {
       valueLines = nonDateLines;
     } else if (dateLines.length > 0) {
-      valueLines = [dateLines[dateLines.length - 1]];
+      const lastDateLine = dateLines[dateLines.length - 1];
+      valueLines = lastDateLine !== undefined ? [lastDateLine] : [];
     } else {
       valueLines = [];
     }
@@ -72,8 +74,11 @@ export function extractValueFromWindow(
   const ALL_RANGE_RE = /(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/g;
   let rm: RegExpExecArray | null;
   while ((rm = ALL_RANGE_RE.exec(windowText)) !== null) {
-    const lo = parseFloat(rm[1]);
-    const hi = parseFloat(rm[2]);
+    const loStr = rm[1];
+    const hiStr = rm[2];
+    if (loStr === undefined || hiStr === undefined) continue;
+    const lo = parseFloat(loStr);
+    const hi = parseFloat(hiStr);
     if (!isNaN(lo) && !isNaN(hi) && lo < hi) {
       addRangeNumber(lo);
       addRangeNumber(hi);
@@ -84,10 +89,14 @@ export function extractValueFromWindow(
     if (!PHASE_LINE_RE.test(vLine)) continue;
     const compRe = /[<>]=?\s*(\d+\.?\d*)/g;
     let cm: RegExpExecArray | null;
-    while ((cm = compRe.exec(vLine)) !== null) addRangeNumber(parseFloat(cm[1]));
+    while ((cm = compRe.exec(vLine)) !== null) {
+      if (cm[1] !== undefined) addRangeNumber(parseFloat(cm[1]));
+    }
     const numRe2 = /(\d+\.?\d*)/g;
     let nm: RegExpExecArray | null;
-    while ((nm = numRe2.exec(vLine)) !== null) addRangeNumber(parseFloat(nm[1]));
+    while ((nm = numRe2.exec(vLine)) !== null) {
+      if (nm[1] !== undefined) addRangeNumber(parseFloat(nm[1]));
+    }
   }
 
   const COMPARATOR_TOKEN_RE = /[<>]=?\s*(\d+\.?\d*)/g;
@@ -98,6 +107,7 @@ export function extractValueFromWindow(
     let cm: RegExpExecArray | null;
     while ((cm = re2.exec(trimmed)) !== null) {
       const v = cm[1];
+      if (v === undefined) continue;
       knownRangeNumbers.add(v);
       knownRangeNumbers.add(String(parseFloat(v)));
     }
@@ -118,9 +128,9 @@ export function extractValueFromWindow(
       while ((m = tokenRe.exec(searchLine)) !== null) {
         const tok = m[0];
         if (knownRangeNumbers.has(tok) || knownRangeNumbers.has(String(parseFloat(tok)))) continue;
-        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(searchLine[m.index - 1])) continue;
-        const after  = searchLine[m.index + tok.length];
-        const before = m.index > 0 ? searchLine[m.index - 1] : '';
+        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(searchLine[m.index - 1] ?? '')) continue;
+        const after  = searchLine[m.index + tok.length] ?? '';
+        const before = m.index > 0 ? (searchLine[m.index - 1] ?? '') : '';
         if (before === '/' || after === '/') continue;
         if (/^(?:19|20)\d{2}$/.test(tok)) continue;
         const v = parseFloat(tok);

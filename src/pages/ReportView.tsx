@@ -15,7 +15,8 @@ import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
-import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY, RECOMMENDED_LABS } from '../utils/biomarkerDefinitions';
+import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
+import { RECOMMENDED_LABS } from '../lib/biomarkers/recommendedLabs';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { buildPersonalInsights } from '../lib/insights/buildPersonalInsights';
@@ -658,7 +659,7 @@ export function ReportView() {
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
     for (const b of biomarkers) {
-      const cat = BIOMARKER_CATEGORY_MAP[b.name as BiomarkerName] ?? null;
+      const cat = getCategory(b.name as BiomarkerName);
       if (!cat) continue;
       if (!groups[cat]) groups[cat] = [];
       groups[cat]!.push(b);
@@ -684,7 +685,7 @@ export function ReportView() {
     const toCollapse = new Set<BiomarkerCategory>();
     const primaryKey = insightSummary?.primaryFinding?.key ?? null;
     const primaryCategory = primaryKey
-      ? (BIOMARKER_CATEGORY_MAP[primaryKey as BiomarkerName] ?? null)
+      ? getCategory(primaryKey as BiomarkerName)
       : null;
     for (const cat of CATEGORY_ORDER) {
       const items = sortedGroupedBiomarkers[cat];
@@ -1463,7 +1464,7 @@ export function ReportView() {
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {signal.related_biomarkers.map((slug, j) => (
                                   <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-theme-muted-text-2">
-                                    {BIOMARKER_DISPLAY[slug as BiomarkerName] ?? slug.replace(/_/g, ' ')}
+                                    {getDisplayName(slug as BiomarkerName)}
                                   </span>
                                 ))}
                               </div>

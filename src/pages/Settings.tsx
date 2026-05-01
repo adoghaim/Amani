@@ -5,6 +5,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { errorMessage } from '../lib/errors';
 import {
   Trash2,
   AlertTriangle,
@@ -148,7 +149,7 @@ export function Settings() {
       await supabase.auth.signOut();
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete data. Please try again.');
+      setError(errorMessage(err, 'Failed to delete data. Please try again.'));
       setDeleting(false);
     }
   };

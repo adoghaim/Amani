@@ -1,7 +1,22 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// Lazy pdfjs loader. The static import was pulling ~530 kB / 153 kB gz into
+// the NewReport route chunk on cold start; most users never upload a PDF on
+// first visit. The promise is cached so multiple PDF operations in one
+// session don't re-fetch the chunk.
+let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null;
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+async function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
+  if (!pdfjsPromise) {
+    pdfjsPromise = (async () => {
+      const [pdfjsLib, workerUrlMod] = await Promise.all([
+        import('pdfjs-dist'),
+        import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+      ]);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrlMod.default;
+      return pdfjsLib;
+    })();
+  }
+  return pdfjsPromise;
+}
 
 export interface PDFPageText {
   pageNumber: number;
@@ -68,6 +83,7 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtractResult> {
   try {
     const arrayBuffer = await file.arrayBuffer();
+    const pdfjsLib = await loadPdfJs();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
     const pages: PDFPageText[] = [];
@@ -97,6 +113,7 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
 
 export async function convertPDFToImages(file: File): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
+  const pdfjsLib = await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const images: string[] = [];
 

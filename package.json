@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "cap:sync": "vite build && npx cap sync"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cap:sync": "vite build && npx cap sync",
+    "prepare": "husky"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
@@ -19,12 +22,13 @@
     "@capacitor/core": "^8.3.1",
     "@capacitor/ios": "^8.3.1",
     "@capacitor/network": "^8.0.1",
-    "@supabase/supabase-js": "^2.57.4",
+    "@supabase/supabase-js": "^2.105.1",
     "lucide-react": "^0.344.0",
-    "pdfjs-dist": "^5.4.530",
+    "pdfjs-dist": "^5.7.284",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.13.0"
+    "react-router-dom": "^7.13.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.1",
@@ -35,13 +39,22 @@
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
     "eslint": "^9.9.1",
-    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "vitest": "^2.1.9"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "bash -c 'npm run typecheck'"
+    ]
   }
 }

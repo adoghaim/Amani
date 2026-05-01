@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
+import { errorMessage } from '../lib/errors';
 import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
 import { CycleSummary } from '../components/CycleSummary';
@@ -41,6 +42,7 @@ export function Dashboard() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [reports, setReports] = useState<LabReport[]>([]);
   const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
   const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
@@ -71,6 +73,7 @@ export function Dashboard() {
     if (!user) return;
     try {
       setLoading(true);
+      setError(null);
       const [reportsRes, periodRes, symptomRes, interventionRes] = await Promise.all([
         supabase.from('lab_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false }),
         supabase.from('period_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
@@ -112,7 +115,7 @@ export function Dashboard() {
         setShowContextNudge(!nudgeDismissed);
       }
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
+      setError(errorMessage(err, "Couldn't load your dashboard. Check your connection and try again."));
     } finally {
       setLoading(false);
     }
@@ -221,7 +224,7 @@ export function Dashboard() {
       }
       await fetchData();
     } catch (err) {
-      console.error('Error saving period log:', err);
+      setError(errorMessage(err, 'Failed to save period log.'));
     }
   };
 
@@ -235,7 +238,7 @@ export function Dashboard() {
       if (error) throw error;
       await fetchData();
     } catch (err) {
-      console.error('Error saving symptom log:', err);
+      setError(errorMessage(err, 'Failed to save symptom log.'));
     }
   };
 
@@ -252,7 +255,7 @@ export function Dashboard() {
       setNoteText('');
       setNoteModal({ open: false, defaultDate: '' });
     } catch (err) {
-      console.error('Error saving note:', err);
+      setError(errorMessage(err, 'Failed to save note.'));
     } finally {
       setSavingNote(false);
     }
@@ -313,6 +316,18 @@ export function Dashboard() {
   return (
     <Layout>
       <div className="max-w-5xl mx-auto">
+        {error && (
+          <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 flex items-start justify-between gap-3">
+            <div className="text-sm text-red-700 flex-1">{error}</div>
+            <button
+              onClick={() => setError(null)}
+              className="text-sm font-medium text-red-700 underline hover:no-underline whitespace-nowrap"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <div className="mb-5">
           <SubscriptionStatus />
         </div>

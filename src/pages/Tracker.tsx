@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { ComponentProps } from 'react';
+import { errorMessage } from '../lib/errors';
 import { useNavigate } from 'react-router-dom';
 import {
   Droplets,
@@ -395,7 +396,7 @@ export function Tracker() {
       const data = await res.json();
       setInsightsData(data);
     } catch (err) {
-      setInsightsError(err instanceof Error ? err.message : 'Failed to generate insights');
+      setInsightsError(errorMessage(err, 'Failed to generate insights'));
     } finally {
       setInsightsLoading(false);
     }

@@ -1,5 +1,21 @@
 # Amani Setup Guide
 
+## Local development
+
+Prerequisites:
+
+- Node 20 LTS
+- iOS native: Xcode 15+, iOS 13+ device or simulator
+- Android native: Android Studio + JDK 17 + Gradle (Capacitor 8 default)
+
+Standard scripts:
+
+- `npm run dev` — Vite dev server
+- `npm run build` — production build to `dist/`
+- `npm run lint` — ESLint
+- `npm run typecheck` — `tsc --noEmit`
+- `npm run cap:sync` — build then `npx cap sync` into `android/` and `ios/`
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and fill in the following values:

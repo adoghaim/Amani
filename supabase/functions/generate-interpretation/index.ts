@@ -1,11 +1,28 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  ALLOWED_NUTRIENTS_PROMPT_LIST,
+  sanitizeViolations,
+  validateInterpretationOutput,
+} from "../_shared/nutrient-policy.ts";
+import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { errorMessage } from "../_shared/errors.ts";
+import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
+import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
+import { LabReportContextSchema } from "../_shared/schemas/context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+// Verbose logs include analyte counts and biomarker names tied to reportId —
+// gated behind DEBUG to avoid PII-adjacent leakage in normal operation.
+const DEBUG_ENABLED = !!Deno.env.get("DEBUG");
+function debugLog(...args: unknown[]) {
+  if (DEBUG_ENABLED) console.log(...args);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -812,7 +829,11 @@ Rules:
 - Provide 3–5 suggestions, each tied to a specific flagged marker
 - Group suggestions by issue when possible (e.g., "For your thyroid:", "For glucose:")
 - Cover at least 2 of: nutrition, lifestyle, safe general supplements
-- Supplements allowed: vitamin D, magnesium, omega-3s, selenium, zinc — never give dosages
+- Supplements allowed (only if directly tied to a flagged lab value or symptom): ${ALLOWED_NUTRIENTS_PROMPT_LIST}
+- Never give dosages, frequencies, brands, or units (no IU, mg, mcg, g, mL, "daily", "twice a day", "with food")
+- Never use prescriptive verbs like "take", "start", "consume", "prescribe"
+- Frame as discussion topics with a clinician, not directives
+- Never mention herbal/adaptogen supplements (ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
 - Write like a knowledgeable friend giving a real tip, not a disclaimer
 
 DO NOT:
@@ -824,7 +845,7 @@ DO NOT:
 Tone: practical, warm, specific
 
 GOOD examples:
-- "For your thyroid: Brazil nuts are one of the best food sources of selenium, which supports thyroid enzyme activity — a small handful a few times a week is plenty."
+- "For your iron stores: ferritin can be slow to rebuild — pairing iron-rich foods like lentils or dark leafy greens with a vitamin C source helps absorption. Worth asking your provider about how to approach this."
 - "For glucose: swapping refined carbs for fiber-rich foods like legumes, oats, or vegetables can help blunt post-meal glucose spikes."
 - "For your vitamin D: 15–20 minutes of midday sun a few times a week is a simple place to start, especially if you're indoors most of the day."
 - "Magnesium-rich foods like pumpkin seeds, dark leafy greens, and dark chocolate can support sleep and stress regulation — relevant here."
@@ -958,29 +979,62 @@ Required schema:
   "disclaimer": "string"
 }`;
 
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 18000);
+  const first = await callOpenAIOnce(apiKey, prompt);
+  if (!first) return null;
 
+  const firstCheck = validateInterpretationOutput(first);
+  if (firstCheck.valid) return first;
+
+  console.warn(
+    "[generate-interpretation] nutrient validation failed (attempt 1):",
+    firstCheck.violations.join(", "),
+  );
+
+  const stricterPrompt =
+    prompt +
+    "\n\nIMPORTANT: Your previous response violated the medical-boundary rules (" +
+    firstCheck.violations.join(", ") +
+    "). Regenerate without dosages, frequencies, prescriptive verbs, or banned supplements. Re-read the supplement rules above and comply strictly.";
+
+  const second = await callOpenAIOnce(apiKey, stricterPrompt);
+  if (!second) return null;
+
+  const secondCheck = validateInterpretationOutput(second);
+  if (secondCheck.valid) return second;
+
+  console.warn(
+    "[generate-interpretation] nutrient validation failed (attempt 2), sanitizing:",
+    secondCheck.violations.join(", "),
+  );
+  return sanitizeViolations(second) as AIInterpretationOutput;
+}
+
+async function callOpenAIOnce(
+  apiKey: string,
+  prompt: string,
+): Promise<AIInterpretationOutput | null> {
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are Amani's clinical interpretation engine. Return ONLY valid JSON. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
-          },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 2200,
-        temperature: 0.25,
-        response_format: { type: "json_object" },
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(tid);
+    const res = await fetchWithBackoff(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are Amani's clinical interpretation engine. Return ONLY valid JSON. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
+            },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 2200,
+          temperature: 0.25,
+          response_format: { type: "json_object" },
+        }),
+      },
+      { attemptTimeoutMs: 18000 },
+    );
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -993,13 +1047,27 @@ Required schema:
     if (!content) return null;
 
     const parsed = JSON.parse(content);
-    if (typeof parsed.headline !== "string") return null;
-    return parsed;
+    const result = InterpretationSchema.safeParse(parsed);
+    if (!result.success) {
+      console.warn(
+        "[generate-interpretation] OpenAI response failed schema validation:",
+        result.error.flatten(),
+      );
+      return null;
+    }
+    return result.data as AIInterpretationOutput;
   } catch (e: unknown) {
-    clearTimeout(tid);
-    console.warn("[generate-interpretation] OpenAI failed:", e instanceof Error ? e.message : e);
+    console.warn("[generate-interpretation] OpenAI failed:", errorMessage(e));
     return null;
   }
+}
+
+// ─── Context sanitization ────────────────────────────────────────────────────
+// Parsing is delegated to `LabReportContextSchema` in `_shared/schemas/context.ts`.
+
+function sanitizeReportContext(raw: unknown): LabReportData["context"] {
+  const result = LabReportContextSchema.safeParse(raw);
+  return result.success ? result.data : undefined;
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -1010,23 +1078,44 @@ Deno.serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-  console.log("DEPLOYMENT VERIFIED: generate-interpretation v2.2. Auth Header Present:", !!req.headers.get("Authorization"));
+  debugLog("DEPLOYMENT VERIFIED: generate-interpretation v2.3 (auth + ownership). Auth Header Present:", !!req.headers.get("Authorization"));
   const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
 
   try {
-    const body = await req.json();
-    reportId = body?.reportId ?? null;
-
-    if (!reportId || typeof reportId !== "string") {
-      return new Response(JSON.stringify({ error: "reportId is required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const supabaseUser = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await checkAndIncrementRateLimit(supabase, user.id, "generate-interpretation", 20);
+
+    const body = await req.json().catch(() => null);
+    const parsedBody = GenerateInterpretationRequestSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request body", detail: parsedBody.error.flatten() }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    reportId = parsedBody.data.reportId;
 
     const { data: reportCheck } = await supabase
       .from("lab_reports")
@@ -1040,11 +1129,23 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (reportCheck.user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { data: report } = await supabase
       .from("lab_reports")
       .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")
       .eq("id", reportId)
       .maybeSingle();
+
+    if (report) {
+      (report as { context?: unknown }).context = sanitizeReportContext(
+        (report as { context?: unknown }).context,
+      );
+    }
 
     const { data: rawAnalytes } = await supabase
       .from("report_analytes")
@@ -1053,7 +1154,7 @@ Deno.serve(async (req: Request) => {
       .order("raw_name");
 
     const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
-    console.log(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
+    debugLog(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
 
     // ── Fetch most recent prior report analytes for the same user ──────────
     let priorAnalytes: AnalyteData[] = [];
@@ -1080,7 +1181,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const primaryContext = buildPrimaryContext(analytes, priorAnalytes, priorReportDate);
-    console.log(`[generate-interpretation] primaryContext:`, primaryContext
+    debugLog(`[generate-interpretation] primaryContext:`, primaryContext
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");
 
@@ -1143,7 +1244,7 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    const message = errorMessage(err, "Internal server error");
     console.error("[generate-interpretation] Fatal error:", message);
     if (reportId) {
       try {
@@ -1157,3 +1258,33 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
+
+async function checkAndIncrementRateLimit(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  endpoint: string,
+  limitPerDay: number,
+): Promise<void> {
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+
+  const { data: existing } = await supabase
+    .from("rate_limits")
+    .select("id, count")
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint)
+    .gte("window_start", windowStart.toISOString())
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.count >= limitPerDay) throw new Error("RATE_LIMIT_EXCEEDED");
+    await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
+  } else {
+    await supabase.from("rate_limits").insert({
+      user_id: userId,
+      endpoint,
+      window_start: windowStart.toISOString(),
+      count: 1,
+    });
+  }
+}

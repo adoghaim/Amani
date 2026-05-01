@@ -1,6 +1,6 @@
 import { Eye, TrendingUp, GitCommitHorizontal, Layers, ArrowRightLeft } from 'lucide-react';
 import type { WatchSignal, WatchSignalType } from '../lib/insights/buildInsightSummary';
-import { BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
+import { getDisplayName } from '../lib/biomarkers/dictionary';
 import type { BiomarkerName } from '../types';
 
 const SIGNAL_CONFIG: Record<WatchSignalType, {
@@ -111,7 +111,7 @@ export function WhatToWatchCard({ signals }: Props) {
                           key={key}
                           className={`text-[11px] px-2 py-0.5 rounded-full border border-gray-200/80 ${cfg.tagBg} ${cfg.tagText}`}
                         >
-                          {BIOMARKER_DISPLAY[key as BiomarkerName] ?? key.replace(/_/g, ' ')}
+                          {getDisplayName(key as BiomarkerName)}
                         </span>
                       ))}
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0 ${cfg.labelBg} ${cfg.labelText}`}>

@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { errorMessage } from "../_shared/errors.ts";
+import { ExtractBiomarkersRequestSchema } from "../_shared/schemas/requests.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -261,15 +264,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const body = await req.json();
-    const { text } = body;
-
-    if (!text || typeof text !== 'string') {
+    const body = await req.json().catch(() => null);
+    const parsedBody = ExtractBiomarkersRequestSchema.safeParse(body);
+    if (!parsedBody.success) {
       return new Response(
-        JSON.stringify({ error: "text parameter is required" }),
+        JSON.stringify({ error: "Invalid request body", detail: parsedBody.error.flatten() }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    const { text } = parsedBody.data;
 
     const { analyteMap, synonymMap } = await loadCanonicalRegistry(supabaseAdmin);
 
@@ -379,23 +382,27 @@ CONFIDENCE:
 
     const userPrompt = `Extract ALL lab test results from this report. Include every item with a numeric result.\n\n${text}\n\nReturn JSON: { "items": [...] }`;
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
+    const openaiResponse = await fetchWithBackoff(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_tokens: 4000,
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        }),
       },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        max_tokens: 4000,
-        temperature: 0.1,
-        response_format: { type: "json_object" }
-      }),
-    });
+      { attemptTimeoutMs: 25000 },
+    );
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
@@ -552,7 +559,7 @@ CONFIDENCE:
     }
 
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error occurred" }),
+      JSON.stringify({ error: errorMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
