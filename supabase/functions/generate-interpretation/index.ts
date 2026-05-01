@@ -39,6 +39,19 @@ interface LabReportData {
 
 type AnalyteStatus = "in_range" | "out_of_range" | "borderline" | "unknown";
 
+interface PrimaryContext {
+  primary_biomarker: string;
+  canonical_slug: string | null;
+  current_value: number;
+  previous_value: number | null;
+  unit: string | null;
+  current_status: "elevated" | "low" | "in_range" | "borderline" | "out_of_range";
+  trajectory: "improving" | "worsening" | "unchanged" | "no_prior_data";
+  percent_change: number | null;
+  prior_report_date: string | null;
+  supporting_biomarker: { name: string; value: string; direction: string } | null;
+}
+
 interface PatternCandidate {
   title: string;
   confidence: "low" | "medium" | "high";
@@ -322,6 +335,152 @@ const HIGH_VALUE_SLUGS = new Set([
   "amh", "prolactin", "apob", "tg_antibodies", "serum_iron",
 ]);
 
+function directionLabel(a: AnalyteData, status: AnalyteStatus): "elevated" | "low" | "in_range" | "borderline" | "out_of_range" {
+  if (status === "in_range") return "in_range";
+  const v = Number(a.value_numeric);
+  if (a.normalized_min !== null && a.normalized_max !== null) {
+    if (v > Number(a.normalized_max)) return status === "borderline" ? "borderline" : "elevated";
+    if (v < Number(a.normalized_min)) return status === "borderline" ? "borderline" : "low";
+  }
+  if (a.normalized_operator && a.normalized_operator_value !== null) {
+    const op = a.normalized_operator;
+    const thr = Number(a.normalized_operator_value);
+    if ((op === "<" || op === "<=" || op === "< OR =") && v > thr) return "elevated";
+    if ((op === ">" || op === ">=" || op === "> OR =") && v < thr) return "low";
+  }
+  return "out_of_range";
+}
+
+function concernScore(a: AnalyteData): number {
+  const status = classifyAnalyte(a);
+  if (status === "out_of_range") return 2;
+  if (status === "borderline") return 1;
+  return 0;
+}
+
+function deviationMultiplier(a: AnalyteData): number {
+  const v = Number(a.value_numeric);
+  if (a.normalized_min !== null && a.normalized_max !== null) {
+    const min = Number(a.normalized_min);
+    const max = Number(a.normalized_max);
+    const mid = (min + max) / 2;
+    const half = Math.max((max - min) / 2, 0.0001);
+    return Math.abs(v - mid) / half;
+  }
+  if (a.normalized_operator && a.normalized_operator_value !== null) {
+    const thr = Number(a.normalized_operator_value);
+    if (thr === 0) return Math.abs(v);
+    return Math.abs(v - thr) / Math.abs(thr);
+  }
+  return 0;
+}
+
+function computeTrajectory(
+  current: number,
+  previous: number,
+  status: AnalyteStatus,
+  direction: "elevated" | "low" | "in_range" | "borderline" | "out_of_range",
+): { trajectory: "improving" | "worsening" | "unchanged"; percent: number | null } {
+  const pct = Math.abs(previous) > 0.0001 ? ((current - previous) / Math.abs(previous)) * 100 : null;
+  const absPct = pct !== null ? Math.abs(pct) : Math.abs(current - previous);
+  if (absPct < 5) return { trajectory: "unchanged", percent: pct !== null ? Math.round(pct * 10) / 10 : null };
+
+  if (status === "in_range") {
+    return { trajectory: "unchanged", percent: pct !== null ? Math.round(pct * 10) / 10 : null };
+  }
+
+  let movedTowardRange = false;
+  if (direction === "elevated" && current < previous) movedTowardRange = true;
+  else if (direction === "low" && current > previous) movedTowardRange = true;
+
+  return {
+    trajectory: movedTowardRange ? "improving" : "worsening",
+    percent: pct !== null ? Math.round(pct * 10) / 10 : null,
+  };
+}
+
+function buildPrimaryContext(
+  analytes: AnalyteData[],
+  priorAnalytes: AnalyteData[],
+  priorReportDate: string | null,
+): PrimaryContext | null {
+  const abnormal = analytes
+    .filter(a => concernScore(a) > 0)
+    .map(a => ({ a, score: concernScore(a) * 10 + deviationMultiplier(a) }))
+    .sort((x, y) => y.score - x.score);
+
+  if (abnormal.length === 0) return null;
+  const primary = abnormal[0].a;
+  const status = classifyAnalyte(primary);
+  const direction = directionLabel(primary, status);
+
+  const prior = primary.canonical_slug
+    ? priorAnalytes.find(p => p.canonical_slug === primary.canonical_slug)
+    : priorAnalytes.find(p => p.raw_name.toLowerCase() === primary.raw_name.toLowerCase());
+
+  let trajectory: "improving" | "worsening" | "unchanged" | "no_prior_data" = "no_prior_data";
+  let percent: number | null = null;
+  let previousValue: number | null = null;
+
+  if (prior && prior.value_numeric !== null && prior.value_numeric !== undefined) {
+    previousValue = Number(prior.value_numeric);
+    const t = computeTrajectory(Number(primary.value_numeric), previousValue, status, direction);
+    trajectory = t.trajectory;
+    percent = t.percent;
+  }
+
+  const supporting = abnormal[1]?.a ?? null;
+  const supportingBlock = supporting
+    ? {
+        name: supporting.raw_name,
+        value: displayVal(supporting),
+        direction: directionLabel(supporting, classifyAnalyte(supporting)),
+      }
+    : null;
+
+  return {
+    primary_biomarker: primary.raw_name,
+    canonical_slug: primary.canonical_slug,
+    current_value: Number(primary.value_numeric),
+    previous_value: previousValue,
+    unit: primary.unit,
+    current_status: direction,
+    trajectory,
+    percent_change: percent,
+    prior_report_date: priorReportDate,
+    supporting_biomarker: supportingBlock,
+  };
+}
+
+function formatPrimarySummary(ctx: PrimaryContext): string {
+  const unit = ctx.unit ? ` ${ctx.unit}` : "";
+  const statusWord =
+    ctx.current_status === "elevated" ? "remains elevated" :
+    ctx.current_status === "low" ? "remains low" :
+    ctx.current_status === "borderline" ? "sits near the edge of the reference range" :
+    ctx.current_status === "out_of_range" ? "remains outside the reference range" :
+    "is within range";
+
+  let sentence1: string;
+  if (ctx.trajectory === "improving" && ctx.previous_value !== null) {
+    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit} but has improved from ${ctx.previous_value}${unit} since your last report.`;
+  } else if (ctx.trajectory === "worsening" && ctx.previous_value !== null) {
+    const verb = ctx.current_status === "elevated" ? "increased" : ctx.current_status === "low" ? "decreased" : "changed";
+    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit} and has ${verb} from ${ctx.previous_value}${unit} since your last report.`;
+  } else if (ctx.trajectory === "unchanged" && ctx.previous_value !== null) {
+    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit} and has not changed significantly from your previous result of ${ctx.previous_value}${unit}.`;
+  } else {
+    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit}.`;
+  }
+
+  if (ctx.supporting_biomarker) {
+    const s = ctx.supporting_biomarker;
+    const sDir = s.direction === "elevated" ? "elevated" : s.direction === "low" ? "low" : "outside range";
+    return `${sentence1} ${s.name} is also ${sDir} at ${s.value}, another area to monitor.`;
+  }
+  return sentence1;
+}
+
 function computeReportFacts(analytes: AnalyteData[], report: LabReportData): ReportFacts {
   const outOfRange = analytes.filter(a => classifyAnalyte(a) === "out_of_range");
   const borderline = analytes.filter(a => classifyAnalyte(a) === "borderline");
@@ -378,7 +537,11 @@ function computeReportFacts(analytes: AnalyteData[], report: LabReportData): Rep
 
 // ─── Fallback Interpretation ──────────────────────────────────────────────────
 
-function generateFallbackInterpretation(report: LabReportData, analytes: AnalyteData[]) {
+function generateFallbackInterpretation(
+  report: LabReportData,
+  analytes: AnalyteData[],
+  primaryContext: PrimaryContext | null,
+) {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, matched_patterns } = facts;
   const totalFlagged = top_out_of_range.length + top_borderline.length;
@@ -471,11 +634,18 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
     ? `Labs drawn on cycle day ${day} during the ${phase} phase. Hormone values on this panel should be read with that timing in mind.`
     : "Cycle timing was not available for this report. Providing your last period date with future reports will enable more precise hormone interpretation.";
 
+  const overallInterpretation = primaryContext
+    ? formatPrimarySummary(primaryContext)
+    : (totalFlagged === 0
+        ? `All ${analytes.length} markers reviewed are within their reference ranges. This panel is a solid baseline to continue tracking.`
+        : headline);
+
   return {
     headline,
     summary_bullets: summaryBullets.slice(0, 3),
     top_findings,
     pattern_signals: matched_patterns,
+    overall_interpretation: overallInterpretation,
     cycle_context: {
       estimated_cycle_day: day,
       estimated_cycle_phase: phase,
@@ -490,7 +660,12 @@ function generateFallbackInterpretation(report: LabReportData, analytes: Analyte
 
 // ─── OpenAI Call ──────────────────────────────────────────────────────────────
 
-async function tryOpenAI(apiKey: string, report: LabReportData, analytes: AnalyteData[]): Promise<AIInterpretationOutput | null> {
+async function tryOpenAI(
+  apiKey: string,
+  report: LabReportData,
+  analytes: AnalyteData[],
+  primaryContext: PrimaryContext | null,
+): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
 
@@ -674,31 +849,37 @@ Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_n
 
 -----------------------------------
 
-SECTION 6 — OVERALL INTERPRETATION
+SECTION 6 — OVERALL INTERPRETATION (phrase the pre-computed truth, do NOT recalculate)
 
-This section appears directly below the headline. It is the first prose the user reads. It must earn its position.
-
-Purpose: Give the user a clear, grounded sense of where they stand overall — interpreted, not just listed.
+The primary biomarker, current value, previous value, and trajectory have ALREADY been determined deterministically (see PRIMARY CONTEXT below). Your job is to phrase that truth in clean, warm language. You must NOT pick a different primary marker. You must NOT contradict the trajectory provided.
 
 Hard rules:
 - 2–3 sentences max
-- First sentence must name the most important finding and include a directional statement (improving, stable, mixed, needs attention)
-- Section as a whole must include at least one specific biomarker name and at least one specific value, trend, or timeframe
-- Final sentence must be forward-looking: what to watch, what to track, or what direction things are heading
+- Maximum 220 characters per sentence
+- Sentence 1 (REQUIRED): State the current status of the primary biomarker exactly as given. If trajectory is "improving", "worsening", or "unchanged" and a previous_value is provided, you MUST include direction of change using the numbers given.
+- Sentence 2 (OPTIONAL): Mention the supporting biomarker (if provided) or add one factual context note. Do NOT introduce new markers not in the lab panel.
+- Sentence 3 (OPTIONAL): One forward-looking line about monitoring or trend. Keep it specific.
 - Do NOT use em dashes
-- Do NOT use filler phrases: "overall", "in general", "it is important to", "be sure to", "this suggests", "may want to consider"
-- Do NOT repeat content already in primary_concern or key_findings
-- Write in natural second person — "your ferritin" not "the ferritin level" — but do not force "you" into every clause
+- Do NOT use filler phrases: "overall", "in general", "it is important to", "be sure to", "this suggests", "may want to consider", "may indicate", "warrants monitoring", "clinical significance depends", "further evaluation may be necessary", "keep an eye on things"
+- Do NOT say "everything looks good"
+- Do NOT give medical advice
+- When trajectory is "no_prior_data": describe current status only. Do NOT fabricate direction of change.
+
+Phrasing templates to follow:
+- Improving: "${"${primary} remains elevated at ${current} but has improved from ${previous} since your last report."}"
+- Worsening: "${"${primary} remains elevated at ${current} and has increased from ${previous} since your last report."}"
+- Unchanged: "${"${primary} remains elevated at ${current} and has not changed significantly from your previous result."}"
+- No prior: "${"${primary} is elevated at ${current}."}"
 
 GOOD examples:
-- "TPO Antibodies remain markedly elevated at 797 IU/mL, which is the defining finding on this panel. HDL is also below optimal, adding a second area worth attention. Both markers are worth tracking at your next draw to see whether the pattern holds."
-- "Ferritin has improved from 18 to 40 ng/mL since your last draw, which is a meaningful shift in the right direction. Vitamin D remains the one area that still needs support. The overall trajectory is positive."
-- "All key markers are within the optimal range on this panel. Ferritin has shown steady improvement across your last three reports, which is a notable positive trend to continue tracking."
+- "TPO antibodies remain elevated at 650 IU/mL but have improved from 900 IU/mL since your last report. HDL is also low at 45 mg/dL, another area to monitor."
+- "LDL cholesterol is elevated at 138 mg/dL and has increased from 115 mg/dL since your last report. Triglycerides are also slightly above optimal."
+- "Ferritin remains low at 18 ng/mL and has not changed significantly from your previous result. This continued low level may help explain ongoing fatigue."
 
 BAD examples (never write these):
-- "Overall, your results show some areas of concern and some areas of improvement." (no specific marker, no value, pure filler)
-- "These results suggest that further evaluation may be necessary." (banned phrasing, non-specific)
-- "It is important to monitor your thyroid health and maintain a healthy lifestyle." (generic, no data, no direction)
+- "Overall, your results show some areas of concern and some areas of improvement." (filler, no specifics)
+- "These results suggest that further evaluation may be necessary." (banned phrasing)
+- "It is important to monitor your thyroid health and maintain a healthy lifestyle." (generic)
 
 -----------------------------------
 
@@ -717,7 +898,21 @@ STRUCTURED FACTS (use these to ground your entire response):
 - Borderline markers: ${top_borderline.length > 0 ? top_borderline.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none"}
 - Clinically important in-range markers: ${reassuring_in_range.length > 0 ? reassuring_in_range.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none notable"}
 
-Prioritize the most clinically significant finding first across all sections.
+PRIMARY CONTEXT (deterministic — do NOT recompute, do NOT select a different primary marker):
+${primaryContext ? JSON.stringify({
+  primary_biomarker: primaryContext.primary_biomarker,
+  current_value: primaryContext.current_value,
+  previous_value: primaryContext.previous_value,
+  unit: primaryContext.unit,
+  current_status: primaryContext.current_status,
+  trajectory: primaryContext.trajectory,
+  percent_change: primaryContext.percent_change,
+  supporting_biomarker: primaryContext.supporting_biomarker,
+}, null, 2) : "null (no abnormal markers — describe overall panel as within range)"}
+
+The overall_interpretation field MUST phrase the PRIMARY CONTEXT above. If trajectory is "improving", "worsening", or "unchanged" and previous_value is not null, direction of change is MANDATORY in sentence 1.
+
+Prioritize the most clinically significant finding first across all sections, using PRIMARY CONTEXT as the anchor.
 
 -----------------------------------
 
@@ -860,24 +1055,57 @@ Deno.serve(async (req: Request) => {
     const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
     console.log(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
 
+    // ── Fetch most recent prior report analytes for the same user ──────────
+    let priorAnalytes: AnalyteData[] = [];
+    let priorReportDate: string | null = null;
+    if (report && reportCheck?.user_id) {
+      const { data: priorReport } = await supabase
+        .from("lab_reports")
+        .select("id, report_date")
+        .eq("user_id", reportCheck.user_id)
+        .neq("id", reportId)
+        .lt("report_date", report.report_date)
+        .order("report_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (priorReport?.id) {
+        priorReportDate = priorReport.report_date;
+        const { data: priorRows } = await supabase
+          .from("report_analytes")
+          .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
+          .eq("lab_report_id", priorReport.id);
+        priorAnalytes = (priorRows ?? []) as AnalyteData[];
+      }
+    }
+
+    const primaryContext = buildPrimaryContext(analytes, priorAnalytes, priorReportDate);
+    console.log(`[generate-interpretation] primaryContext:`, primaryContext
+      ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
+      : "null");
+
     let interpretationJson: AIInterpretationOutput;
     let source = "fallback";
 
     if (openaiApiKey && analytes.length > 0 && report) {
       console.log("[generate-interpretation] Trying OpenAI...");
-      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes);
+      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext);
       if (aiResult) {
+        // Guarantee overall_interpretation is grounded in deterministic primary_context
+        if (primaryContext) {
+          aiResult.overall_interpretation = aiResult.overall_interpretation ?? formatPrimarySummary(primaryContext);
+        }
         interpretationJson = aiResult;
         source = "ai";
         console.log("[generate-interpretation] OpenAI succeeded");
       } else {
         console.log("[generate-interpretation] OpenAI failed, using fallback");
-        interpretationJson = generateFallbackInterpretation(report as LabReportData, analytes);
+        interpretationJson = generateFallbackInterpretation(report as LabReportData, analytes, primaryContext);
       }
     } else {
       console.log("[generate-interpretation] Using fallback (no key or no analytes)");
       interpretationJson = report
-        ? generateFallbackInterpretation(report as LabReportData, analytes)
+        ? generateFallbackInterpretation(report as LabReportData, analytes, primaryContext)
         : {
             headline: "Lab data could not be loaded for this report.",
             summary_bullets: [],
