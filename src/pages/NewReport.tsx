@@ -237,8 +237,6 @@ export function NewReport() {
 
           if (heuristics.isWeak) {
             void startPdfOcrFallback(file, runId);
-          } else {
-            void triggerAiRefinement(text, runId);
           }
         }
       } else if (file.type.startsWith('image/')) {

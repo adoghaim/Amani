@@ -70,9 +70,9 @@ export function computeParseStatus(params: {
   if (value_numeric <= 0)       return 'parse_error';
   if (canonical_slug === null)  return 'unmapped';
 
-  const UNITLESS_SLUGS = new Set(['free_thyroxine_index', 'chol_hdl_ratio', 'albumin_globulin_ratio', 'bun_creatinine_ratio', 't3_uptake']);
-  const isUnitless = unit === null && UNITLESS_SLUGS.has(canonical_slug ?? '');
-  const isCoreWithoutRange = is_core_biomarker && raw_reference_range === null;
+    const UNITLESS_SLUGS = new Set(['free_thyroxine_index', 'chol_hdl_ratio', 'albumin_globulin_ratio', 'bun_creatinine_ratio', 't3_uptake']);
+  const isUnitless = UNITLESS_SLUGS.has(canonical_slug ?? '') || /ratio|index/i.test(canonical_slug ?? '');
+  const isCoreWithoutRange = is_core_biomarker && raw_reference_range === null && !isUnitless;
   if (parse_confidence === 'low' || (unit === null && !isUnitless) || isCoreWithoutRange) return 'needs_review';
   if (parse_confidence === 'medium') return 'partial';
 
@@ -319,7 +319,11 @@ export function validateExtractedBiomarkers(biomarkers: ExtractedBiomarker[]): E
       }
       return true;
     })
-    .map(b => (!b.unit ? { ...b, confidence: 'low' as const } : b));
+    .map(b => {
+      const UNITLESS = new Set(['chol_hdl_ratio', 'bun_creatinine_ratio', 'albumin_globulin_ratio', 'free_thyroxine_index', 't3_uptake']);
+      const isUnitless = UNITLESS.has(b.name) || /ratio|index/i.test(b.name);
+      return !b.unit && !isUnitless ? { ...b, confidence: 'low' as const } : b;
+    });
 }
 
 export function getCatalogSlug(legacyName: string): string {
@@ -458,8 +462,12 @@ function buildExtendedItems(
     if (slug && coreRawNames.has(slug)) continue;
 
     const ref = detectReferenceRange(line);
+    const UNITLESS_EXTENDED = new Set(['chol_hdl_ratio', 'bun_creatinine_ratio', 'albumin_globulin_ratio', 'free_thyroxine_index', 't3_uptake']);
+    const isUnitlessExtended = slug ? UNITLESS_EXTENDED.has(slug) : /ratio|index/i.test(rawName.toLowerCase());
     const confidence: 'high' | 'medium' | 'low' =
-      rawUnit && ref ? 'high' : rawUnit ? 'medium' : 'low';
+      (rawUnit || isUnitlessExtended) && ref ? 'high'
+      : (rawUnit || isUnitlessExtended) ? 'medium'
+      : 'low';
 
     const physBoundsError = slug ? checkPhysiologicalBounds(slug, valueNumeric) : null;
 
