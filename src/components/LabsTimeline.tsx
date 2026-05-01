@@ -22,7 +22,7 @@ const getCategoryColor = (category: string): string => {
     sleep: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     other: 'bg-theme-surface-2 text-theme-muted-text border-theme-border',
   };
-  return colors[category] || colors.other;
+  return colors[category] ?? colors.other ?? 'bg-theme-surface-2 text-theme-muted-text border-theme-border';
 };
 
 export function LabsTimeline({ reports, biomarkersByReport, interventions = [], onGenerateInsights }: LabsTimelineProps) {

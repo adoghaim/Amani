@@ -23,7 +23,7 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
 
   const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
 
-  if (improved.length > 0 && outOfRange.length > 0) {
+  if (improved.length > 0 && outOfRange.length > 0 && improved[0]) {
     const improvedName = improved[0].displayName;
     return `${topName} remains the primary area to keep an eye on, while ${improvedName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
   }
@@ -33,7 +33,7 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
     return `${topName} is near the edge of optimal range, though ${names} ${improved.length === 1 ? 'has' : 'have'} improved. The overall trend is positive.`;
   }
 
-  if (worsened.length > 0 && outOfRange.length > 0) {
+  if (worsened.length > 0 && outOfRange.length > 0 && worsened[0]) {
     return `${topName} is the priority finding here, and ${worsened[0].displayName} has shifted since your last draw. Tracking both at your next panel will help clarify the direction.`;
   }
 
@@ -42,7 +42,7 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
     return `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
   }
 
-  if (outOfRange.length === 1 && borderline.length > 0) {
+  if (outOfRange.length === 1 && borderline.length > 0 && borderline[0]) {
     const borderName = borderline[0].displayName;
     return `${topName} is outside optimal range and is the top priority. ${borderName} is borderline — worth monitoring, but not urgent on its own.`;
   }

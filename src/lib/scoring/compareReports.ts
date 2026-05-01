@@ -79,7 +79,7 @@ function computeSignificance(
   absoluteDelta: number,
   key: BiomarkerName,
 ): SignificanceTier {
-  const minAbs = MIN_ABSOLUTE_DELTA[key] ?? MIN_ABSOLUTE_DELTA.default;
+  const minAbs = MIN_ABSOLUTE_DELTA[key] ?? MIN_ABSOLUTE_DELTA.default ?? 0.5;
   if (absoluteDelta < minAbs) return 'minor';
   if (percentDelta === null) return 'minor';
   const absPct = Math.abs(percentDelta);
@@ -97,7 +97,7 @@ function detectBoundaryCrossing(
   if (prevBucket === currBucket) return null;
 
   const severity: Record<string, number> = { optimal: 0, borderline: 1, out_of_range: 2 };
-  const direction = severity[currBucket] < severity[prevBucket] ? 'improved' : 'worsened';
+  const direction = (severity[currBucket] ?? 0) < (severity[prevBucket] ?? 0) ? 'improved' : 'worsened';
 
   return { from: prevBucket, to: currBucket, direction };
 }

@@ -29,7 +29,7 @@ export function SymptomLogModal({
   existingLog,
   defaultDate,
 }: SymptomLogModalProps) {
-  const todayKey = new Date().toISOString().split('T')[0];
+  const todayKey = new Date().toISOString().split('T')[0] ?? new Date().toISOString();
   const [logDate, setLogDate] = useState(defaultDate || todayKey);
   const [selected, setSelected] = useState<DailySymptom[]>([]);
   const [notes, setNotes] = useState('');

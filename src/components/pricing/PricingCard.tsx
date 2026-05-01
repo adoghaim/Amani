@@ -3,6 +3,7 @@ import { Button } from '../Button'
 import { StripeProduct, formatPrice } from '../../stripe-config'
 import { supabase } from '../../lib/supabase'
 import { openExternalUrl } from '../../lib/native'
+import { errorMessage } from '../../lib/errors'
 
 interface PricingCardProps {
   product: StripeProduct
@@ -48,7 +49,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         setError(`Error (${response.status}): ${data.error || 'Unknown error'}`)
       }
     } catch (err: unknown) {
-      setError(`Connection error: ${err instanceof Error ? err.message : 'Unknown'}`)
+      setError(`Connection error: ${errorMessage(err)}`)
     } finally {
       setLoading(false)
     }

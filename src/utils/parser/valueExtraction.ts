@@ -10,15 +10,15 @@ const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|prim
 
 export function parseValueWithPrefix(text: string): { value: number; rawValue: string } | null {
   const ltMatch = text.match(/^<\s*(\d+\.?\d*)/);
-  if (ltMatch) {
+  if (ltMatch && ltMatch[1] !== undefined) {
     return { value: parseFloat(ltMatch[1]) * 0.5, rawValue: `<${ltMatch[1]}` };
   }
   const gtMatch = text.match(/^>\s*(\d+\.?\d*)/);
-  if (gtMatch) {
+  if (gtMatch && gtMatch[1] !== undefined) {
     return { value: parseFloat(gtMatch[1]), rawValue: `>${gtMatch[1]}` };
   }
   const numMatch = text.match(/(\d+\.?\d*)/);
-  if (numMatch) {
+  if (numMatch && numMatch[1] !== undefined) {
     return { value: parseFloat(numMatch[1]), rawValue: numMatch[1] };
   }
   return null;
@@ -33,6 +33,7 @@ export function extractValueFromWindow(
   if (cleanLines.length === 0) return null;
 
   const labelLine = cleanLines[0];
+  if (labelLine === undefined) return null;
   let valueLines = cleanLines.slice(1);
 
   if (adapter?.historyLine.historyLinePattern) {
@@ -42,7 +43,8 @@ export function extractValueFromWindow(
     if (nonDateLines.length > 0) {
       valueLines = nonDateLines;
     } else if (dateLines.length > 0) {
-      valueLines = [dateLines[dateLines.length - 1]];
+      const lastDateLine = dateLines[dateLines.length - 1];
+      valueLines = lastDateLine !== undefined ? [lastDateLine] : [];
     } else {
       valueLines = [];
     }
@@ -72,8 +74,11 @@ export function extractValueFromWindow(
   const ALL_RANGE_RE = /(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/g;
   let rm: RegExpExecArray | null;
   while ((rm = ALL_RANGE_RE.exec(windowText)) !== null) {
-    const lo = parseFloat(rm[1]);
-    const hi = parseFloat(rm[2]);
+    const loStr = rm[1];
+    const hiStr = rm[2];
+    if (loStr === undefined || hiStr === undefined) continue;
+    const lo = parseFloat(loStr);
+    const hi = parseFloat(hiStr);
     if (!isNaN(lo) && !isNaN(hi) && lo < hi) {
       addRangeNumber(lo);
       addRangeNumber(hi);
@@ -84,10 +89,14 @@ export function extractValueFromWindow(
     if (!PHASE_LINE_RE.test(vLine)) continue;
     const compRe = /[<>]=?\s*(\d+\.?\d*)/g;
     let cm: RegExpExecArray | null;
-    while ((cm = compRe.exec(vLine)) !== null) addRangeNumber(parseFloat(cm[1]));
+    while ((cm = compRe.exec(vLine)) !== null) {
+      if (cm[1] !== undefined) addRangeNumber(parseFloat(cm[1]));
+    }
     const numRe2 = /(\d+\.?\d*)/g;
     let nm: RegExpExecArray | null;
-    while ((nm = numRe2.exec(vLine)) !== null) addRangeNumber(parseFloat(nm[1]));
+    while ((nm = numRe2.exec(vLine)) !== null) {
+      if (nm[1] !== undefined) addRangeNumber(parseFloat(nm[1]));
+    }
   }
 
   const COMPARATOR_TOKEN_RE = /[<>]=?\s*(\d+\.?\d*)/g;
@@ -98,6 +107,7 @@ export function extractValueFromWindow(
     let cm: RegExpExecArray | null;
     while ((cm = re2.exec(trimmed)) !== null) {
       const v = cm[1];
+      if (v === undefined) continue;
       knownRangeNumbers.add(v);
       knownRangeNumbers.add(String(parseFloat(v)));
     }
@@ -118,9 +128,9 @@ export function extractValueFromWindow(
       while ((m = tokenRe.exec(searchLine)) !== null) {
         const tok = m[0];
         if (knownRangeNumbers.has(tok) || knownRangeNumbers.has(String(parseFloat(tok)))) continue;
-        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(searchLine[m.index - 1])) continue;
-        const after  = searchLine[m.index + tok.length];
-        const before = m.index > 0 ? searchLine[m.index - 1] : '';
+        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(searchLine[m.index - 1] ?? '')) continue;
+        const after  = searchLine[m.index + tok.length] ?? '';
+        const before = m.index > 0 ? (searchLine[m.index - 1] ?? '') : '';
         if (before === '/' || after === '/') continue;
         if (/^(?:19|20)\d{2}$/.test(tok)) continue;
         const v = parseFloat(tok);
@@ -155,12 +165,13 @@ export function extractValueFromWindow(
     candidates: { value: number; rawValue: string }[],
   ): { value: number; rawValue: string } | null {
     if (candidates.length === 0) return null;
-    if (candidates.length === 1) return candidates[0];
+    if (candidates.length === 1) return candidates[0] ?? null;
     if (referenceResult?.min !== undefined && referenceResult?.max !== undefined) {
-      return candidates.slice().sort((a, b) => scoreCandidate(a.value) - scoreCandidate(b.value))[0];
+      return candidates.slice().sort((a, b) => scoreCandidate(a.value) - scoreCandidate(b.value))[0] ?? null;
     }
     const first   = candidates[0];
     const largest = candidates.slice().sort((a, b) => b.value - a.value)[0];
+    if (!first || !largest) return first ?? largest ?? null;
     if (largest.value > first.value * 10) return largest;
     return first;
   }
@@ -181,11 +192,12 @@ export function extractValueFromWindow(
   const labelLineBeforeRef0 = refBoundaryIdx0 > 0 ? labelLine.substring(0, refBoundaryIdx0) : labelLine;
   const prefixRe0 = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
   const prefixMatch0 = labelLineBeforeRef0.match(prefixRe0);
-  if (prefixMatch0) {
-    const parsed0 = parseValueWithPrefix(prefixMatch0[1].trim());
+  if (prefixMatch0 && prefixMatch0[1] !== undefined) {
+    const prefixToken = prefixMatch0[1];
+    const parsed0 = parseValueWithPrefix(prefixToken.trim());
     if (parsed0) {
       // Extract the raw threshold number (before halving) to check against reference range
-      const rawThreshold = parseFloat(prefixMatch0[1].trim().replace(/^[<>]=?\s*/, ''));
+      const rawThreshold = parseFloat(prefixToken.trim().replace(/^[<>]=?\s*/, ''));
       const isRefComp = referenceResult?.comparator &&
         (referenceResult.comparator.value === rawThreshold ||
          knownRangeNumbers.has(String(rawThreshold)));
@@ -203,12 +215,17 @@ export function extractValueFromWindow(
       const best = pickBest(labelCandidates);
       if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
     } else {
-      const bestLabel = pickBest(labelCandidates)!;
-      const bestValue = pickBest(valueCandidates)!;
-      if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
-        return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
+      // Both candidate arrays are non-empty above, so pickBest returns non-null here.
+      const bestLabel = pickBest(labelCandidates);
+      const bestValue = pickBest(valueCandidates);
+      if (bestLabel && bestValue) {
+        if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
+          return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
+        }
+        return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
       }
-      return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
+      if (bestLabel) return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
+      if (bestValue) return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
     }
   }
 
@@ -223,10 +240,11 @@ export function extractValueFromWindow(
     if (PHASE_LINE_RE.test(trimmed)) continue;
     if (/\breference\s+range\b|\bref\s+range\b/i.test(trimmed)) continue;
     const cm2 = trimmed.match(COMPARATOR_VALUE_RE);
-    if (cm2) {
-      const parsed = parseValueWithPrefix(cm2[1].trim());
+    if (cm2 && cm2[1] !== undefined) {
+      const cmToken = cm2[1];
+      const parsed = parseValueWithPrefix(cmToken.trim());
       if (parsed) {
-        const rawNum = cm2[1].trim().replace(/^[<>]=?\s*/, '');
+        const rawNum = cmToken.trim().replace(/^[<>]=?\s*/, '');
         if (knownRangeNumbers.has(rawNum) || knownRangeNumbers.has(String(parseFloat(rawNum)))) {
           ambiguousComparator ??= parsed;
           continue;
@@ -250,10 +268,11 @@ export function extractValueFromWindow(
     const trimmed = rawLine.trim();
     if (trimmed.length === 0) continue;
     const sm = trimmed.match(STANDALONE_NUM_RE);
-    if (!sm) continue;
-    const parsed = parseValueWithPrefix(sm[1]);
+    if (!sm || sm[1] === undefined) continue;
+    const smToken = sm[1];
+    const parsed = parseValueWithPrefix(smToken);
     if (!parsed) continue;
-    if (knownRangeNumbers.has(sm[1]) || knownRangeNumbers.has(String(parseFloat(sm[1])))) continue;
+    if (knownRangeNumbers.has(smToken) || knownRangeNumbers.has(String(parseFloat(smToken)))) continue;
     if (parsed.value > 0 && parsed.value <= 100000) {
       return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
     }

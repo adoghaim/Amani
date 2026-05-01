@@ -165,6 +165,7 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
     if (result.length >= 6) {
       const weakestIdx = result.reduce((minIdx, s, idx, arr) => {
         const minS = arr[minIdx];
+        if (!minS) return idx;
         const isMinCritical = minS.concern === 2 && getImportance(minS.key) === 'critical';
         const isCurrCritical = s.concern === 2 && getImportance(s.key) === 'critical';
         if (isMinCritical && !isCurrCritical) return idx;
@@ -173,6 +174,10 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
       }, 0);
 
       const weakest = result[weakestIdx];
+      if (!weakest) {
+        result.push(m);
+        continue;
+      }
       const weakestIsCritical = weakest.concern === 2 && getImportance(weakest.key) === 'critical';
       if (!weakestIsCritical || m.weightedConcern > weakest.weightedConcern) {
         result[weakestIdx] = m;
@@ -271,14 +276,18 @@ function buildDoctorQuestions(
   for (const s of scored.filter(s => s.concern > 0)) {
     const cat = getCategory(s.key);
     if (!cat) continue;
-    if (!categoryMap.has(cat)) categoryMap.set(cat, []);
-    categoryMap.get(cat)!.push(s);
+    let bucket = categoryMap.get(cat);
+    if (!bucket) {
+      bucket = [];
+      categoryMap.set(cat, bucket);
+    }
+    bucket.push(s);
   }
 
   for (const [, peers] of categoryMap) {
     if (peers.length < 2) continue;
     const primary = peers.sort((a, b) => b.weightedConcern - a.weightedConcern)[0];
-    if (used.has(primary.key)) continue;
+    if (!primary || used.has(primary.key)) continue;
     used.add(primary.key);
     const peerNames = peers.map(p => getDisplayName(p.key));
     const systemName = peerNames.slice(0, 2).join(', ');
@@ -576,7 +585,7 @@ export function buildInsightSummary(
 
   const topFindings = buildTopFindings(scored, deltaMap);
 
-  const primaryKey = topFindings.length > 0 && topFindings[0].status === 'out_of_range'
+  const primaryKey = topFindings[0]?.status === 'out_of_range'
     ? topFindings[0].key
     : null;
 
@@ -651,7 +660,7 @@ export function buildInsightSummary(
 
   const confidence = calculateConfidence(current, (previous?.length ?? 0) > 0, dominantSourceFormat);
 
-  const primaryFinding = topFindings.length > 0 && topFindings[0].status === 'out_of_range'
+  const primaryFinding = topFindings[0]?.status === 'out_of_range'
     ? topFindings[0]
     : null;
 

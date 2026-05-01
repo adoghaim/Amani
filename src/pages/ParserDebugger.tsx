@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import type { AnalyteBlockDebug } from '../utils/biomarkerParser';
 import {
@@ -379,7 +380,7 @@ export function ParserDebugger() {
       setSavedMsg('Report regenerated');
       setTimeout(() => setSavedMsg(''), 3000);
     } catch (e: unknown) {
-      alert('Regen failed: ' + (e instanceof Error ? e.message : String(e)));
+      alert('Regen failed: ' + errorMessage(e));
     } finally {
       setRegenLoading(false);
     }

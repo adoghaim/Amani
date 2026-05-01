@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
+import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
@@ -47,8 +48,13 @@ export function NewReport() {
   const [isOffline, setIsOffline] = useState(false);
   const [cameraCapturing, setCameraCapturing] = useState(false);
 
+  const todayIso = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
   const [file, setFile] = useState<File | null>(null);
-  const [reportDate, setReportDate] = useState('');
+  const [reportDate, setReportDate] = useState(todayIso);
   const [lastPeriodDate, setLastPeriodDate] = useState('');
   const cycleLength = '28';
   const birthControl = 'unsure' as const;
@@ -60,7 +66,6 @@ export function NewReport() {
   const [parserDebug, setParserDebug] = useState<ParserDebugOutput | null>(null);
   const [periodAutoFilled, setPeriodAutoFilled] = useState(false);
   const [fetchingPeriod, setFetchingPeriod] = useState(false);
-  const [reportDateAutoDetected, setReportDateAutoDetected] = useState(false);
   const [submitStep, setSubmitStep] = useState<'uploading' | 'creating' | 'saving' | 'interpreting' | 'complete' | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const navigationDoneRef = useRef(false);
@@ -74,6 +79,7 @@ export function NewReport() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const userEditedReportItemsRef = useRef(false);
+  const userEditedPeriodRef = useRef(false);
   const extractionRunRef = useRef(0);
 
   const resetExtractionState = () => {
@@ -83,7 +89,6 @@ export function NewReport() {
     setCoverage(null);
     setParserDebug(null);
     setDetectedLabSource('unknown');
-    setReportDateAutoDetected(false);
     setAiRefining(false);
     setExtracting(false);
   };
@@ -114,29 +119,32 @@ export function NewReport() {
   }, []);
 
   useEffect(() => {
-    const fetchMostRecentCycleEvent = async () => {
+    const fetchMostRecentPeriodStart = async () => {
       if (!user || !reportDate) return;
+      if (userEditedPeriodRef.current) return;
       setFetchingPeriod(true);
       try {
-        const { data: events } = await supabase
-          .from('cycle_events')
-          .select('*')
+        const { data: log } = await supabase
+          .from('period_logs')
+          .select('start_date')
           .eq('user_id', user.id)
-          .eq('event_type', 'period_start')
-          .lte('event_date', reportDate)
-          .order('event_date', { ascending: false })
+          .lte('start_date', reportDate)
+          .order('start_date', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (events && !lastPeriodDate) {
-          setLastPeriodDate(events.event_date);
+        if (log?.start_date) {
+          setLastPeriodDate(log.start_date);
           setPeriodAutoFilled(true);
+        } else {
+          setLastPeriodDate('');
+          setPeriodAutoFilled(false);
         }
       } catch (err) {
-        console.warn('[NewReport] Failed to fetch recent cycle event:', err);
+        console.warn('[NewReport] Failed to fetch recent period log:', err);
       }
       setFetchingPeriod(false);
     };
-    fetchMostRecentCycleEvent();
+    fetchMostRecentPeriodStart();
   }, [reportDate, user]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,7 +177,7 @@ export function NewReport() {
       resetExtractionState();
       setFile(captured);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Camera capture failed');
+      setError(errorMessage(err, 'Camera capture failed'));
     } finally {
       setCameraCapturing(false);
     }
@@ -187,7 +195,7 @@ export function NewReport() {
 
     for (const pattern of patterns) {
       const match = text.match(pattern);
-      if (match) {
+      if (match && match[1] !== undefined) {
         const raw = match[1];
         const parsed = new Date(raw);
         if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= new Date().getFullYear() + 1) {
@@ -213,11 +221,10 @@ export function NewReport() {
       if (file.type === 'application/pdf') {
         const text = await extractTextFromPDF(file);
 
-        if (!reportDate && text.trim().length > 0) {
+        if (text.trim().length > 0) {
           const detected = extractDateFromText(text);
           if (detected) {
             setReportDate(detected);
-            setReportDateAutoDetected(true);
           }
         }
 
@@ -334,10 +341,6 @@ export function NewReport() {
   };
 
   const handleProceedToStep3 = () => {
-    if (!reportDate) {
-      setError('Please enter the report date before continuing.');
-      return;
-    }
     setError('');
     setStep(3);
   };
@@ -588,7 +591,7 @@ export function NewReport() {
       setPendingNavigation(`/app/reports/${createdReportId}`);
 
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'An error occurred';
+      const msg = errorMessage(err, 'An error occurred');
       setError(msg);
       setLoading(false);
       setStep(3);
@@ -782,29 +785,6 @@ export function NewReport() {
                       : <><Camera className="w-4 h-4 text-gray-500" />Scan with Camera</>
                     }
                   </button>
-                )}
-              </div>
-
-              {/* Report date */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Report date <span className="text-gray-400 font-normal">(detected from your file when possible)</span>
-                  </label>
-                  {reportDateAutoDetected && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      <CheckCircle className="w-3 h-3" /> Detected from report
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="date"
-                  value={reportDate}
-                  onChange={e => { setReportDate(e.target.value); setReportDateAutoDetected(false); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
-                />
-                {!reportDate && (
-                  <p className="mt-1 text-xs text-gray-400">Will be auto-detected from your PDF, or enter it manually above</p>
                 )}
               </div>
 
@@ -1026,35 +1006,17 @@ export function NewReport() {
 
               {/* Report date */}
               <div className="mb-5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                    Report date {!reportDate && <span className="text-red-500">*</span>}
-                  </label>
-                  {reportDateAutoDetected && reportDate && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      <CheckCircle className="w-3 h-3" /> Detected from report
-                    </span>
-                  )}
-                  {!reportDate && (
-                    <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      Not detected — enter manually
-                    </span>
-                  )}
-                </div>
+                <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                  Report date
+                </label>
                 <input
                   type="date"
                   value={reportDate}
-                  onChange={e => { setReportDate(e.target.value); setReportDateAutoDetected(false); }}
-                  className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 text-gray-900 ${
-                    !reportDate
-                      ? 'border-amber-300 focus:ring-amber-200 focus:border-amber-400'
-                      : 'border-gray-300 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B]'
-                  }`}
+                  onChange={e => setReportDate(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
                 />
-                {!reportDate && (
-                  <p className="mt-1 text-xs text-gray-400">This is the date shown on your lab report, not today</p>
-                )}
+                <p className="mt-1 text-xs text-gray-400">Change this if you're backlogging an older report — last period start will re-sync from your tracker</p>
               </div>
 
               {/* Marker count + confidence row */}
@@ -1159,7 +1121,11 @@ export function NewReport() {
                   <input
                     type="date"
                     value={lastPeriodDate}
-                    onChange={e => { setLastPeriodDate(e.target.value); setPeriodAutoFilled(false); }}
+                    onChange={e => {
+                      setLastPeriodDate(e.target.value);
+                      setPeriodAutoFilled(false);
+                      userEditedPeriodRef.current = true;
+                    }}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
                   />
                   {!lastPeriodDate && !fetchingPeriod && (

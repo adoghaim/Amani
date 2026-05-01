@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -75,7 +76,7 @@ export function ResetPassword() {
       await supabase.auth.signOut();
       setTimeout(() => { navigate('/login', { replace: true }); }, 2000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to reset password');
+      setError(errorMessage(err, 'Failed to reset password'));
     } finally {
       setSubmitting(false);
     }

@@ -19,7 +19,7 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
 
   useEffect(() => {
     const shouldAutoCompare = sessionStorage.getItem('showSecondLabComparison');
-    if (shouldAutoCompare === 'true' && sortedReports.length === 2) {
+    if (shouldAutoCompare === 'true' && sortedReports.length === 2 && sortedReports[0] && sortedReports[1]) {
       setBaselineId(sortedReports[0].id);
       setFollowupId(sortedReports[1].id);
       sessionStorage.removeItem('showSecondLabComparison');

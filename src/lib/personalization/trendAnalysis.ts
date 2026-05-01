@@ -11,7 +11,7 @@ export function analyzeTrend(
   const first = orderedValues[0];
   const last = orderedValues[orderedValues.length - 1];
 
-  if (first === 0) return null;
+  if (first === undefined || last === undefined || first === 0) return null;
 
   const totalChangePercent = ((last - first) / Math.abs(first)) * 100;
   const minChange = PERSONALIZATION_THRESHOLDS.TREND_MIN_CHANGE_PERCENT;
@@ -27,7 +27,10 @@ export function analyzeTrend(
     let consistentSteps = 0;
 
     for (let i = 1; i < orderedValues.length; i++) {
-      const diff = orderedValues[i] - orderedValues[i - 1];
+      const cur = orderedValues[i];
+      const prev = orderedValues[i - 1];
+      if (cur === undefined || prev === undefined) continue;
+      const diff = cur - prev;
       if (expectedDirection === 'up' && diff > 0) consistentSteps++;
       if (expectedDirection === 'down' && diff < 0) consistentSteps++;
     }

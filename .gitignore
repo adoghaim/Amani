@@ -25,3 +25,15 @@ dist-ssr
 # Android release signing secrets
 android/app/*.jks
 android/keystore.properties
+
+# Native build artifacts (defense in depth — see android/.gitignore for primary)
+android/build/
+android/app/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+**/*.aab
+**/*.apk
+**/*.ipa
+**/*.keystore
+**/*.jks

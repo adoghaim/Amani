@@ -4,9 +4,14 @@ import { PERSONALIZATION_THRESHOLDS } from '../../types';
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  if (sorted.length === 0) return 0;
+  if (sorted.length % 2 === 0) {
+    const lo = sorted[mid - 1];
+    const hi = sorted[mid];
+    if (lo === undefined || hi === undefined) return 0;
+    return (lo + hi) / 2;
+  }
+  return sorted[mid] ?? 0;
 }
 
 export function computeBaseline(

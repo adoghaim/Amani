@@ -17,10 +17,11 @@ import {
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
 import { supabase } from '../lib/supabase';
+import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import type { LabReport } from '../types';
 
-type SortKey = 'report_date' | 'status';
+type SortKey = 'report_date' | 'upload_date' | 'status';
 type SortDir = 'asc' | 'desc';
 
 function formatDate(dateStr: string) {
@@ -99,9 +100,10 @@ interface DeleteModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   deleting: boolean;
+  error?: string | null;
 }
 
-function DeleteModal({ report, onConfirm, onCancel, deleting }: DeleteModalProps) {
+function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -122,6 +124,11 @@ function DeleteModal({ report, onConfirm, onCancel, deleting }: DeleteModalProps
             <span className="font-semibold text-theme-text">{formatDate(report.report_date)}</span>
             , including all biomarkers and AI insights. This action cannot be reversed.
           </p>
+          {error && (
+            <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">
+              {error}
+            </div>
+          )}
         </div>
         <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
           <button
@@ -156,6 +163,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting }: DeleteModalProps
 export function Reports() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [reports, setReports] = useState<LabReport[]>([]);
   const [biomarkerCounts, setBiomarkerCounts] = useState<Record<string, number>>({});
   const [analyteCounts, setAnalyteCounts] = useState<Record<string, number>>({});
@@ -165,6 +173,7 @@ export function Reports() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [deleteTarget, setDeleteTarget] = useState<LabReport | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) fetchData();
@@ -173,12 +182,15 @@ export function Reports() {
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     try {
       const reportsRes = await supabase
         .from('lab_reports')
         .select('*')
         .eq('user_id', user.id)
         .order('report_date', { ascending: false });
+
+      if (reportsRes.error) throw reportsRes.error;
 
       const fetchedReports = reportsRes.data ?? [];
       setReports(fetchedReports as LabReport[]);
@@ -190,7 +202,10 @@ export function Reports() {
             supabase.from('biomarkers').select('lab_report_id').in('lab_report_id', reportIds),
             supabase.from('report_analytes').select('lab_report_id').in('lab_report_id', reportIds),
           ])
-        : [{ data: [] }, { data: [] }];
+        : [{ data: [], error: null }, { data: [], error: null }];
+
+      if (biomarkersRes.error) throw biomarkersRes.error;
+      if (analytesRes.error) throw analytesRes.error;
 
       const bCounts: Record<string, number> = {};
       for (const b of (biomarkersRes.data ?? [])) {
@@ -203,6 +218,8 @@ export function Reports() {
         aCounts[a.lab_report_id] = (aCounts[a.lab_report_id] ?? 0) + 1;
       }
       setAnalyteCounts(aCounts);
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't load your reports. Check your connection and try again."));
     } finally {
       setLoading(false);
     }
@@ -211,12 +228,15 @@ export function Reports() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    setDeleteError(null);
     const { error } = await supabase.from('lab_reports').delete().eq('id', deleteTarget.id);
     setDeleting(false);
-    if (!error) {
-      setReports(prev => prev.filter(r => r.id !== deleteTarget.id));
-      setDeleteTarget(null);
+    if (error) {
+      setDeleteError(errorMessage(error, 'Failed to delete this report. Please try again.'));
+      return;
     }
+    setReports(prev => prev.filter(r => r.id !== deleteTarget.id));
+    setDeleteTarget(null);
   };
 
   const cycleSort = (key: SortKey) => {
@@ -266,8 +286,9 @@ export function Reports() {
         <DeleteModal
           report={deleteTarget}
           onConfirm={handleDelete}
-          onCancel={() => setDeleteTarget(null)}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
           deleting={deleting}
+          error={deleteError}
         />
       )}
 
@@ -289,6 +310,18 @@ export function Reports() {
             New report
           </Link>
         </div>
+
+        {error && (
+          <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 flex items-start justify-between gap-3">
+            <div className="text-sm text-red-700 flex-1">{error}</div>
+            <button
+              onClick={fetchData}
+              className="text-sm font-medium text-red-700 underline hover:no-underline whitespace-nowrap"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {reports.length === 0 ? (
           <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-6 py-20 text-center">
@@ -345,12 +378,18 @@ export function Reports() {
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-theme-border shadow-sm overflow-hidden">
-                <div className="hidden sm:grid grid-cols-[1fr_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
+                <div className="hidden sm:grid grid-cols-[1fr_140px_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
                   <button
                     onClick={() => cycleSort('report_date')}
                     className="text-left text-xs font-semibold text-theme-muted-text uppercase tracking-wide hover:text-theme-primary transition-colors"
                   >
                     Report date <SortIcon col="report_date" />
+                  </button>
+                  <button
+                    onClick={() => cycleSort('upload_date')}
+                    className="text-left text-xs font-semibold text-theme-muted-text uppercase tracking-wide hover:text-theme-primary transition-colors"
+                  >
+                    Analyzed <SortIcon col="upload_date" />
                   </button>
                   <button
                     onClick={() => cycleSort('status')}
@@ -369,7 +408,7 @@ export function Reports() {
                     return (
                       <div
                         key={report.id}
-                        className="group grid grid-cols-1 sm:grid-cols-[1fr_120px_120px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
+                        className="group grid grid-cols-1 sm:grid-cols-[1fr_140px_120px_120px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
                       >
                         <Link to={`/app/reports/${report.id}`} className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 bg-theme-surface-2 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-theme-surface-hover transition-colors">
@@ -388,6 +427,15 @@ export function Reports() {
                                 </span>
                               )}
                             </div>
+                          </div>
+                        </Link>
+
+                        <Link to={`/app/reports/${report.id}`} className="hidden sm:block">
+                          <div className="text-sm text-theme-text-body">
+                            {timeAgo(report.upload_date)}
+                          </div>
+                          <div className="text-xs text-theme-muted-text-4 mt-0.5">
+                            {formatDateShort(report.upload_date.slice(0, 10))}
                           </div>
                         </Link>
 

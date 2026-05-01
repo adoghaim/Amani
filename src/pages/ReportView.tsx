@@ -15,7 +15,8 @@ import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
-import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY, RECOMMENDED_LABS } from '../utils/biomarkerDefinitions';
+import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
+import { RECOMMENDED_LABS } from '../lib/biomarkers/recommendedLabs';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { buildPersonalInsights } from '../lib/insights/buildPersonalInsights';
@@ -57,12 +58,16 @@ const CORE_BIOMARKER_CATEGORIES_UI: Record<string, string> = {
   serum_iron: 'Nutrients (Iron)', tibc: 'Nutrients (Iron)', uibc: 'Nutrients (Iron)',
 };
 
-const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+type StatusStyle = { bg: string; text: string; dot: string; label: string };
+
+const STATUS_STYLE: Record<string, StatusStyle> = {
   in_range:    { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'In range' },
   out_of_range:{ bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500',     label: 'Out of range' },
   borderline:  { bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400',   label: 'Borderline' },
   unknown:     { bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400',    label: 'No range' },
 };
+
+const STATUS_STYLE_FALLBACK: StatusStyle = { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', label: 'No range' };
 
 const CONFIDENCE_STYLE: Record<string, string> = {
   high:   'text-emerald-700 bg-emerald-50 border-emerald-200',
@@ -70,10 +75,16 @@ const CONFIDENCE_STYLE: Record<string, string> = {
   low:    'text-gray-500 bg-gray-100 border-gray-200',
 };
 
-const PATTERN_CONFIDENCE_STYLE: Record<string, { bg: string; text: string; border: string; label: string }> = {
+type PatternConfidenceStyle = { bg: string; text: string; border: string; label: string };
+
+const PATTERN_CONFIDENCE_STYLE: Record<string, PatternConfidenceStyle> = {
   high:   { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-100',   label: 'High confidence' },
   medium: { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100',  label: 'Medium confidence' },
   low:    { bg: 'bg-gray-50',   text: 'text-gray-600',   border: 'border-gray-200',   label: 'Low confidence' },
+};
+
+const PATTERN_CONFIDENCE_FALLBACK: PatternConfidenceStyle = {
+  bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', label: 'Low confidence',
 };
 
 interface OpeningContext {
@@ -215,7 +226,7 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
     analyte.normalized_operator,
     analyte.normalized_operator_value
   );
-  const style = STATUS_STYLE[status];
+  const style = STATUS_STYLE[status] ?? STATUS_STYLE.unknown ?? STATUS_STYLE_FALLBACK;
   const label = analyte.display_name || analyte.raw_name;
   const isUnmapped = analyte.parse_status === 'unmapped';
   return (
@@ -658,7 +669,7 @@ export function ReportView() {
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
     for (const b of biomarkers) {
-      const cat = BIOMARKER_CATEGORY_MAP[b.name as BiomarkerName] ?? null;
+      const cat = getCategory(b.name as BiomarkerName);
       if (!cat) continue;
       if (!groups[cat]) groups[cat] = [];
       groups[cat]!.push(b);
@@ -684,7 +695,7 @@ export function ReportView() {
     const toCollapse = new Set<BiomarkerCategory>();
     const primaryKey = insightSummary?.primaryFinding?.key ?? null;
     const primaryCategory = primaryKey
-      ? (BIOMARKER_CATEGORY_MAP[primaryKey as BiomarkerName] ?? null)
+      ? getCategory(primaryKey as BiomarkerName)
       : null;
     for (const cat of CATEGORY_ORDER) {
       const items = sortedGroupedBiomarkers[cat];
@@ -1248,7 +1259,7 @@ export function ReportView() {
                   const topConj = topName ? conjugate(topName) : { remains: 'remains', has: 'has', is: 'is' };
                   if (!ctx.anyWorsening) {
                     fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. This does not mean the issue is resolved, but it does show movement in the right direction worth continuing to track.`;
-                    if (borderline.length > 0 && borderline[0].displayName !== topName) {
+                    if (borderline[0] && borderline[0].displayName !== topName) {
                       const bConj = conjugate(borderline[0].displayName);
                       fallback += ` ${borderline[0].displayName} ${bConj.is} also borderline and worth monitoring.`;
                     }
@@ -1257,14 +1268,14 @@ export function ReportView() {
                     const wConj = worsenedName ? conjugate(worsenedName) : { remains: 'remains', has: 'has', is: 'is' };
                     fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. At the same time, your ${worsenedName ?? 'another marker'} ${wConj.has} shifted since your last draw and deserves attention alongside it.`;
                   }
-                } else if (improved.length > 0 && outOfRange.length > 0) {
+                } else if (improved[0] && outOfRange.length > 0) {
                   fallback = `${topName} remains the primary area to keep an eye on, while ${improved[0].displayName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
-                } else if (worsened.length > 0 && outOfRange.length > 0) {
+                } else if (worsened[0] && outOfRange.length > 0) {
                   fallback = `${topName} is the priority finding here, and ${worsened[0].displayName} has shifted since your last draw. Tracking both at your next panel will help clarify the direction.`;
                 } else if (outOfRange.length >= 2) {
                   const names = outOfRange.slice(0, 2).map(f => f.displayName).join(' and ');
                   fallback = `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
-                } else if (outOfRange.length === 1 && borderline.length > 0) {
+                } else if (outOfRange.length === 1 && borderline[0]) {
                   fallback = `${topName} is outside optimal range and is the top priority. ${borderline[0].displayName} is borderline — worth monitoring, but not urgent on its own.`;
                 } else if (outOfRange.length === 1) {
                   fallback = `${topName} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.`;
@@ -1284,7 +1295,7 @@ export function ReportView() {
                   const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
                   const pctStr = ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : '';
                   text = `${insightSummary.primaryFinding.displayName} remains ${dirWord} and has worsened from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr} since the prior report. This is worth discussing with your provider at your next visit.`;
-                  if (borderline.length > 0 && borderline[0].displayName !== insightSummary.primaryFinding.displayName) {
+                  if (borderline[0] && borderline[0].displayName !== insightSummary.primaryFinding.displayName) {
                     text += ` ${borderline[0].displayName} is also borderline — worth monitoring alongside it.`;
                   }
                 } else if (isStableAbnormal && ctx.primaryStableChange && insightSummary.primaryFinding) {
@@ -1449,7 +1460,7 @@ export function ReportView() {
                     <div className="space-y-3">
                       <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern Signals</p>
                       {interpretation!.pattern_signals!.map((signal, i) => {
-                        const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low;
+                        const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low ?? PATTERN_CONFIDENCE_FALLBACK;
                         return (
                           <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
                             <div className="flex items-start justify-between gap-3 mb-2">
@@ -1463,7 +1474,7 @@ export function ReportView() {
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {signal.related_biomarkers.map((slug, j) => (
                                   <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-theme-muted-text-2">
-                                    {BIOMARKER_DISPLAY[slug as BiomarkerName] ?? slug.replace(/_/g, ' ')}
+                                    {getDisplayName(slug as BiomarkerName)}
                                   </span>
                                 ))}
                               </div>

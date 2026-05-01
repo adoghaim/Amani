@@ -29,21 +29,20 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
     return new Date(year, month, 1).getDay();
   };
 
-  const formatDateKey = (date: Date) => {
-    return date.toISOString().split('T')[0];
+  const formatDateKey = (date: Date): string => {
+    return date.toISOString().split('T')[0] ?? date.toISOString();
   };
 
   const daysInMonth = getDaysInMonth(currentMonth);
   const firstDay = getFirstDayOfMonth(currentMonth);
   const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  const eventsByDate = events.reduce((acc, event) => {
-    if (!acc[event.date]) {
-      acc[event.date] = [];
-    }
-    acc[event.date].push(event);
+  const eventsByDate = events.reduce<Record<string, CalendarEvent[]>>((acc, event) => {
+    const bucket = acc[event.date] ?? [];
+    bucket.push(event);
+    acc[event.date] = bucket;
     return acc;
-  }, {} as Record<string, CalendarEvent[]>);
+  }, {});
 
   const previousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));

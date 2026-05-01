@@ -1,5 +1,6 @@
 import { FlaskConical } from 'lucide-react';
-import { RECOMMENDED_LABS, BIOMARKER_DISPLAY } from '../utils/biomarkerDefinitions';
+import { RECOMMENDED_LABS } from '../lib/biomarkers/recommendedLabs';
+import { getDisplayName } from '../lib/biomarkers/dictionary';
 import { CATEGORY_DISPLAY } from '../types';
 import type { BiomarkerCategory, BiomarkerName } from '../types';
 
@@ -51,7 +52,7 @@ export function RecommendedLabs({ presentBiomarkers, activeCategory }: Props) {
                   <div className="w-1.5 h-1.5 rounded-full bg-[#C97C8B] mt-1.5 shrink-0" />
                   <div>
                     <div className="text-sm font-medium text-[#2A1F23]">
-                      {BIOMARKER_DISPLAY[item.name] ?? item.name.replace(/_/g, ' ')}
+                      {getDisplayName(item.name)}
                     </div>
                     <div className="text-xs text-[#7A6570] mt-0.5">{item.reason}</div>
                   </div>

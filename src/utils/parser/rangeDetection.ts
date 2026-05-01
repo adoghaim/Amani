@@ -11,7 +11,7 @@ export function detectComparatorRange(text: string): ComparatorRange | null {
   ];
   for (const { re, op } of patterns) {
     const m = text.match(re);
-    if (m) {
+    if (m && m[1] !== undefined) {
       return { operator: op, value: parseFloat(m[1]), raw: m[0].replace(/\s+/g, ' ').trim() };
     }
   }
@@ -29,7 +29,7 @@ export function detectReferenceRange(text: string, adapter?: SourceAdapter): Ran
 
   for (const rp of allMinMax) {
     const m = text.match(rp);
-    if (m) {
+    if (m && m[1] !== undefined && m[2] !== undefined) {
       const min = parseFloat(m[1]);
       const max = parseFloat(m[2]);
       if (!isNaN(min) && !isNaN(max) && min < max) {

@@ -1,7 +1,22 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// Lazy pdfjs loader. The static import was pulling ~530 kB / 153 kB gz into
+// the NewReport route chunk on cold start; most users never upload a PDF on
+// first visit. The promise is cached so multiple PDF operations in one
+// session don't re-fetch the chunk.
+let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null;
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+async function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
+  if (!pdfjsPromise) {
+    pdfjsPromise = (async () => {
+      const [pdfjsLib, workerUrlMod] = await Promise.all([
+        import('pdfjs-dist'),
+        import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+      ]);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrlMod.default;
+      return pdfjsLib;
+    })();
+  }
+  return pdfjsPromise;
+}
 
 export interface PDFPageText {
   pageNumber: number;
@@ -16,7 +31,8 @@ export interface PDFExtractResult {
 
 interface TextItem {
   str: string;
-  transform: number[];
+  // pdfjs transform is a 6-tuple [a, b, c, d, e, f] where e=x, f=y.
+  transform: [number, number, number, number, number, number];
   width: number;
   height: number;
 }
@@ -44,15 +60,21 @@ function extractPageLines(items: TextItem[]): string {
       }
     }
 
-    if (!lineMap.has(bucketY)) lineMap.set(bucketY, []);
-    lineMap.get(bucketY)!.push({ x: item.transform[4], str: item.str });
+    let bucket = lineMap.get(bucketY);
+    if (!bucket) {
+      bucket = [];
+      lineMap.set(bucketY, bucket);
+    }
+    bucket.push({ x: item.transform[4], str: item.str });
   }
 
   const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
 
   const lines: string[] = [];
   for (const y of sortedYs) {
-    const lineItems = lineMap.get(y)!.sort((a, b) => a.x - b.x);
+    const bucket = lineMap.get(y);
+    if (!bucket) continue;
+    const lineItems = bucket.sort((a, b) => a.x - b.x);
     const lineStr = lineItems.map(it => it.str).join(' ').trim();
     if (lineStr) lines.push(lineStr);
   }
@@ -68,6 +90,7 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtractResult> {
   try {
     const arrayBuffer = await file.arrayBuffer();
+    const pdfjsLib = await loadPdfJs();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
     const pages: PDFPageText[] = [];
@@ -75,7 +98,7 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
-      const items = textContent.items as TextItem[];
+      const items = textContent.items as unknown as TextItem[];
 
       const pageText = extractPageLines(items);
       pages.push({ pageNumber: pageNum, text: pageText });
@@ -84,7 +107,7 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
     const fullText = pages.map(p => p.text).join('\n\n');
 
     console.log(`[pdfExtractor] Extracted ${pdf.numPages} pages, ${fullText.length} chars total`);
-    if (pages.length > 0) {
+    if (pages.length > 0 && pages[0]) {
       console.log('[pdfExtractor] Page 1 preview (first 500 chars):', pages[0].text.substring(0, 500));
     }
 
@@ -97,6 +120,7 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
 
 export async function convertPDFToImages(file: File): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
+  const pdfjsLib = await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const images: string[] = [];
 
