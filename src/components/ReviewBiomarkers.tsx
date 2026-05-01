@@ -169,7 +169,7 @@ function ItemCard({
           </div>
 
           <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
-            {item.review_status !== 'reviewed' && item.review_status !== 'edited_by_user' && (
+            {item.needs_review && item.review_status !== 'reviewed' && item.review_status !== 'edited_by_user' && (
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -178,6 +178,8 @@ function ItemCard({
                   e.stopPropagation();
                   onUpdate(globalIndex, 'review_status', 'reviewed');
                   onUpdate(globalIndex, 'reviewed_by_user', true);
+                  onUpdate(globalIndex, 'confidence_score', 'high');
+                  onUpdate(globalIndex, 'needs_review', false);
                   setExpanded(false);
                 }}
               >

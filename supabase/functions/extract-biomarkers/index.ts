@@ -473,7 +473,13 @@ CONFIDENCE:
           parseStatus = matchedVia === "synonym" ? "mapped" : "partial";
         }
 
-        const needsReview = item.confidence_score === 'low' || !item.unit;
+        const RATIO_SLUGS = new Set([
+          'chol_hdl_ratio', 'bun_creatinine_ratio', 'albumin_globulin_ratio', 'free_thyroxine_index',
+        ]);
+        const isRatio = canonicalSlug
+          ? RATIO_SLUGS.has(canonicalSlug)
+          : /ratio|index/i.test(rawName);
+        const needsReview = item.confidence_score === 'low' || (!item.unit && !isRatio);
 
         return {
           raw_name: rawName,

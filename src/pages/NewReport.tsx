@@ -306,22 +306,27 @@ export function NewReport() {
 
     if (runId !== extractionRunRef.current) return;
     setAiRefining(true);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
     supabase.functions.invoke('extract-biomarkers', {
       body: { text },
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
+      headers: { Authorization: `Bearer ${session.access_token}` },
     }).then(({ data, error: invokeError }) => {
       if (invokeError) {
         console.warn('[NewReport] AI extraction background warning:', invokeError.message);
         return;
       }
-      if (runId === extractionRunRef.current && data.items && data.items.length > 0) {
+      if (runId === extractionRunRef.current && data?.items && data.items.length > 0) {
         applyExtractedItems(data.items, runId);
       }
     }).catch(err => {
-      console.error('[NewReport] AI extraction background network error:', err);
+      if (err?.name !== 'AbortError') {
+        console.error('[NewReport] AI extraction background network error:', err);
+      }
     }).finally(() => {
+      clearTimeout(timeout);
       if (runId === extractionRunRef.current) setAiRefining(false);
     });
   };
