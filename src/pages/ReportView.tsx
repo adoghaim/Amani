@@ -644,16 +644,20 @@ export function ReportView() {
 
   useEffect(() => {
     if (biomarkers.length === 0 || categoriesInitialized) return;
+    // Default: collapse every system. Auto-expand only the system containing the primary finding.
     const toCollapse = new Set<BiomarkerCategory>();
+    const primaryKey = insightSummary?.primaryFinding?.key ?? null;
+    const primaryCategory = primaryKey
+      ? (BIOMARKER_CATEGORY_MAP[primaryKey as BiomarkerName] ?? null)
+      : null;
     for (const cat of CATEGORY_ORDER) {
       const items = sortedGroupedBiomarkers[cat];
       if (!items || items.length === 0) continue;
-      const hasFlagged = items.some(b => b.flagged === 'out_of_range' || b.flagged === 'borderline');
-      if (!hasFlagged) toCollapse.add(cat);
+      if (cat !== primaryCategory) toCollapse.add(cat);
     }
     setCollapsedCategories(toCollapse);
     setCategoriesInitialized(true);
-  }, [biomarkers, sortedGroupedBiomarkers, categoriesInitialized]);
+  }, [biomarkers, sortedGroupedBiomarkers, categoriesInitialized, insightSummary]);
 
   const interpMap = useMemo(() => {
     if (!interpretation?.biomarkers) return new Map<string, NonNullable<AIInterpretation['biomarkers']>[number]>();
@@ -1354,105 +1358,6 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── D. Core Biomarkers ──────────────────────────────── */}
-          {biomarkers.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-theme-text">
-                  Your Lab Results
-                  {activeCategory && (
-                    <span className="ml-2 text-sm font-normal text-theme-primary">
-                      : {CATEGORY_DISPLAY[activeCategory].label}
-                      <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
-                        clear
-                      </button>
-                    </span>
-                  )}
-                </h2>
-                <span className="text-xs text-theme-muted-text-3">
-                  {filteredCategories.reduce((a, g) => a + g.items.length, 0)} markers
-                </span>
-              </div>
-
-              {insightSummary && (
-                <SystemSummaryCards
-                  systems={insightSummary.systemSummaries}
-                  activeCategory={activeCategory}
-                  onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
-                />
-              )}
-
-              <div className="mt-5 space-y-2">
-                {filteredCategories.map(({ category, items }) => {
-                  const flaggedCount = items.filter(b => b.flagged === 'out_of_range' || b.flagged === 'borderline').length;
-                  const isCollapsed = collapsedCategories.has(category);
-                  const toggleCollapsed = () => {
-                    setCollapsedCategories(prev => {
-                      const next = new Set(prev);
-                      if (next.has(category)) next.delete(category);
-                      else next.add(category);
-                      return next;
-                    });
-                  };
-                  return (
-                    <div key={category} className="rounded-xl border border-gray-200 overflow-hidden">
-                      <button
-                        onClick={toggleCollapsed}
-                        className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-sm font-semibold text-theme-text">
-                            {CATEGORY_DISPLAY[category].label}
-                          </span>
-                          {flaggedCount > 0 && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                              {flaggedCount} outside optimal
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs text-theme-muted-text-3">{items.length}</span>
-                          {isCollapsed
-                            ? <ChevronRight className="w-4 h-4 text-gray-400" />
-                            : <ChevronDown className="w-4 h-4 text-gray-400" />
-                          }
-                        </div>
-                      </button>
-                      {!isCollapsed && (
-                        <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-2">
-                          {items.map(b => {
-                            const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
-                            const personalization = biomarkerPersonalizationMap.get(b.name);
-                            return (
-                              <BiomarkerCard
-                                key={b.id}
-                                name={b.name as BiomarkerName}
-                                value={b.value}
-                                rawValueText={b.raw_value_text}
-                                unit={b.unit}
-                                labRefMin={b.reference_min}
-                                labRefMax={b.reference_max}
-                                cyclePhase={cyclePhase}
-                                plainEnglishMeaning={interp?.plain_english_meaning}
-                                timingNotes={interp?.timing_notes}
-                                commonNonAlarmReasons={interp?.common_non_alarm_reasons}
-                                whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
-                                baselineStatus={personalization?.baselineStatus}
-                                baselineValue={personalization?.baselineValue}
-                                trendDirection={personalization?.trendDirection}
-                                trendStrength={personalization?.trendStrength}
-                              />
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* ── E. More Details (Pattern Signals, Flags, Derived) ── */}
           {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
             <div className="rounded-2xl border border-gray-200 overflow-hidden">
@@ -1607,6 +1512,108 @@ export function ReportView() {
           {/* ── Questions for Your Doctor (deterministic) ──────── */}
           {insightSummary && !isProcessing && insightSummary.questionsForDoctor.length > 0 && (
             <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} />
+          )}
+
+          {/* ── Health Systems (drill-down to underlying biomarkers) ── */}
+          {biomarkers.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-base font-semibold text-theme-text">
+                  Health Systems
+                  {activeCategory && (
+                    <span className="ml-2 text-sm font-normal text-theme-primary">
+                      : {CATEGORY_DISPLAY[activeCategory].label}
+                      <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
+                        clear
+                      </button>
+                    </span>
+                  )}
+                </h2>
+                <span className="text-xs text-theme-muted-text-3">
+                  {filteredCategories.reduce((a, g) => a + g.items.length, 0)} markers
+                </span>
+              </div>
+              <p className="text-sm text-theme-muted-text-2 mb-4">
+                Explore your results by body system when you want more detail.
+              </p>
+
+              {insightSummary && (
+                <SystemSummaryCards
+                  systems={insightSummary.systemSummaries}
+                  activeCategory={activeCategory}
+                  onCategoryClick={cat => setActiveCategory(prev => prev === cat ? null : cat)}
+                />
+              )}
+
+              <div className="mt-5 space-y-2">
+                {filteredCategories.map(({ category, items }) => {
+                  const flaggedCount = items.filter(b => b.flagged === 'out_of_range' || b.flagged === 'borderline').length;
+                  const isCollapsed = collapsedCategories.has(category);
+                  const toggleCollapsed = () => {
+                    setCollapsedCategories(prev => {
+                      const next = new Set(prev);
+                      if (next.has(category)) next.delete(category);
+                      else next.add(category);
+                      return next;
+                    });
+                  };
+                  return (
+                    <div key={category} className="rounded-xl border border-gray-200 overflow-hidden">
+                      <button
+                        onClick={toggleCollapsed}
+                        className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-sm font-semibold text-theme-text">
+                            {CATEGORY_DISPLAY[category].label}
+                          </span>
+                          {flaggedCount > 0 && (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                              {flaggedCount} outside optimal
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-theme-muted-text-3">{items.length}</span>
+                          {isCollapsed
+                            ? <ChevronRight className="w-4 h-4 text-gray-400" />
+                            : <ChevronDown className="w-4 h-4 text-gray-400" />
+                          }
+                        </div>
+                      </button>
+                      {!isCollapsed && (
+                        <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-2">
+                          {items.map(b => {
+                            const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
+                            const personalization = biomarkerPersonalizationMap.get(b.name);
+                            return (
+                              <BiomarkerCard
+                                key={b.id}
+                                name={b.name as BiomarkerName}
+                                value={b.value}
+                                rawValueText={b.raw_value_text}
+                                unit={b.unit}
+                                labRefMin={b.reference_min}
+                                labRefMax={b.reference_max}
+                                cyclePhase={cyclePhase}
+                                plainEnglishMeaning={interp?.plain_english_meaning}
+                                timingNotes={interp?.timing_notes}
+                                commonNonAlarmReasons={interp?.common_non_alarm_reasons}
+                                whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
+                                baselineStatus={personalization?.baselineStatus}
+                                baselineValue={personalization?.baselineValue}
+                                trendDirection={personalization?.trendDirection}
+                                trendStrength={personalization?.trendStrength}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* ── H. Disclaimer ───────────────────────────────────── */}
