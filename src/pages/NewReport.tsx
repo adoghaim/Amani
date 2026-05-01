@@ -300,19 +300,6 @@ export function NewReport() {
     }
   };
 
-  const trimTextForAi = (raw: string): string => {
-    // Keep only lines likely to contain lab data — strips boilerplate to reduce tokens
-    const lines = raw.split(/\r?\n/);
-    const kept = lines.filter(l => {
-      const t = l.trim();
-      if (t.length < 3 || t.length > 300) return false;
-      // Must contain a digit (lab values always do)
-      return /\d/.test(t);
-    });
-    // Cap at 6000 chars to stay well under token limits
-    return kept.join('\n').substring(0, 6000);
-  };
-
   const triggerAiRefinement = async (text: string, runId: number) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!user || !session) return;
@@ -320,10 +307,8 @@ export function NewReport() {
     if (runId !== extractionRunRef.current) return;
     setAiRefining(true);
 
-    const trimmedText = trimTextForAi(text);
-
     supabase.functions.invoke('extract-biomarkers', {
-      body: { text: trimmedText },
+      body: { text },
       headers: { Authorization: `Bearer ${session.access_token}` },
     }).then(({ data, error: invokeError }) => {
       if (invokeError) {
@@ -1219,8 +1204,8 @@ export function NewReport() {
                 <Button variant="secondary" onClick={() => setStep(1)}>
                   <ArrowLeft className="w-5 h-5 mr-2" />Back
                 </Button>
-                <Button onClick={handleProceedToStep3} disabled={extracting || aiRefining}>
-                  {extracting || aiRefining ? (
+                <Button onClick={handleProceedToStep3} disabled={extracting}>
+                  {extracting ? (
                     <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Reading...</>
                   ) : (
                     <>Next <ArrowRight className="w-5 h-5 ml-2" /></>
@@ -1318,8 +1303,8 @@ export function NewReport() {
               <Button variant="secondary" onClick={() => setStep(2)}>
                 <ArrowLeft className="w-5 h-5 mr-2" />Back
               </Button>
-              <Button onClick={handleSubmit} disabled={loading || extracting || aiRefining}>
-                {loading ? 'Processing...' : extracting || aiRefining ? 'Reading report...' : 'Save and analyze'}
+              <Button onClick={handleSubmit} disabled={loading || extracting}>
+                {loading ? 'Processing...' : extracting ? 'Reading report...' : 'Save and analyze'}
               </Button>
             </div>
           </Card>
