@@ -1301,6 +1301,27 @@ export function ReportView() {
                   kf => kf.biomarker_slug === insightSummary.primaryFinding!.key
                 )?.explanation
               }
+              delta={
+                insightSummary.biggestChanges.find(c => c.key === insightSummary.primaryFinding!.key) ??
+                (() => {
+                  const d = insightSummary.deltaMap.get(insightSummary.primaryFinding!.key);
+                  if (!d) return null;
+                  return {
+                    key: d.key,
+                    displayName: d.displayName,
+                    previousValue: d.previousValue,
+                    currentValue: d.currentValue,
+                    unit: d.unit,
+                    percentDelta: d.percentDelta,
+                    trendDirection: d.trendDirection,
+                    significance: d.significance,
+                    boundaryCrossing: d.boundaryCrossing,
+                    trajectoryStatus: d.trajectoryStatus,
+                    distanceToNormalImprovement: d.distanceToNormalImprovement,
+                    fact: '',
+                  };
+                })()
+              }
             />
           )}
 

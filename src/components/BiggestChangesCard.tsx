@@ -20,19 +20,19 @@ const TRAJECTORY_STYLE: Record<string, {
 }> = {
   improving_still_high: {
     bg: 'bg-teal-50', border: 'border-teal-100', text: 'text-teal-700',
-    badge: 'bg-teal-100 text-teal-700', label: 'Improving',
+    badge: 'bg-teal-100 text-teal-700', label: 'Improving, still elevated',
   },
   improving_still_low: {
     bg: 'bg-teal-50', border: 'border-teal-100', text: 'text-teal-700',
-    badge: 'bg-teal-100 text-teal-700', label: 'Improving',
+    badge: 'bg-teal-100 text-teal-700', label: 'Improving, still low',
   },
   worsening_still_high: {
     bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700',
-    badge: 'bg-orange-100 text-orange-700', label: 'Worsening',
+    badge: 'bg-orange-100 text-orange-700', label: 'Worsening, still elevated',
   },
   worsening_still_low: {
     bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700',
-    badge: 'bg-orange-100 text-orange-700', label: 'Worsening',
+    badge: 'bg-orange-100 text-orange-700', label: 'Worsening, still low',
   },
 };
 
