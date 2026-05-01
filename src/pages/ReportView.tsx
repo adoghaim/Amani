@@ -89,19 +89,55 @@ interface OpeningContext {
   anyBoundaryCrossImproved: boolean;
 }
 
+function isPluralSubject(displayName: string): boolean {
+  const n = displayName.toLowerCase();
+  return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(n);
+}
+
+function conjugate(displayName: string): { remains: string; has: string; is: string } {
+  const plural = isPluralSubject(displayName);
+  return {
+    remains: plural ? 'remain' : 'remains',
+    has: plural ? 'have' : 'has',
+    is: plural ? 'are' : 'is',
+  };
+}
+
 function getOpeningContext(summary: InsightSummary): OpeningContext {
   const primaryKey = summary.primaryFinding?.key ?? null;
 
-  const primaryImprovingChange = primaryKey
-    ? (summary.biggestChanges.find(
-        c =>
-          c.key === primaryKey &&
-          (c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low') &&
-          c.significance !== 'minor',
-      ) ?? null)
-    : null;
-
   const primaryRawDelta = primaryKey ? summary.deltaMap.get(primaryKey) ?? null : null;
+
+  const primaryImprovingChange: BiggestChange | null = (() => {
+    if (!primaryKey) return null;
+    const fromBiggest = summary.biggestChanges.find(
+      c =>
+        c.key === primaryKey &&
+        (c.trajectoryStatus === 'improving_still_high' || c.trajectoryStatus === 'improving_still_low') &&
+        c.significance !== 'minor',
+    );
+    if (fromBiggest) return fromBiggest;
+    if (!primaryRawDelta) return null;
+    if (
+      primaryRawDelta.trajectoryStatus !== 'improving_still_high' &&
+      primaryRawDelta.trajectoryStatus !== 'improving_still_low'
+    ) return null;
+    if (primaryRawDelta.previousValue === undefined || primaryRawDelta.currentValue === undefined) return null;
+    return {
+      key: primaryRawDelta.key,
+      displayName: primaryRawDelta.displayName,
+      previousValue: primaryRawDelta.previousValue,
+      currentValue: primaryRawDelta.currentValue,
+      unit: primaryRawDelta.unit,
+      percentDelta: primaryRawDelta.percentDelta,
+      trendDirection: primaryRawDelta.trendDirection,
+      significance: primaryRawDelta.significance,
+      boundaryCrossing: primaryRawDelta.boundaryCrossing,
+      trajectoryStatus: primaryRawDelta.trajectoryStatus,
+      distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
+      fact: '',
+    };
+  })();
 
   const primaryWorseningChange: BiggestChange | null = (() => {
     if (!primaryKey || !primaryRawDelta) return null;
@@ -934,18 +970,27 @@ export function ReportView() {
                       const borderline = allFindings.filter(f => f.status === 'borderline');
                       const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
                       const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
-                      const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'remains low' : 'remains elevated';
+                      const topConj = topName ? conjugate(topName) : { remains: 'remains', has: 'has', is: 'is' };
+                      const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? `${topConj.remains} low` : `${topConj.remains} elevated`;
 
                       // Force trajectory headline override if improving
                       if (isImproving && ctx.primaryImprovingChange) {
-                        const ch = ctx.primaryImprovingChange;
-                        const pctStr = ch.percentDelta !== null ? ` (down ${Math.abs(ch.percentDelta)}%)` : '';
-                        const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}`;
-                        if (!ctx.anyWorsening) {
-                          return `${topName} ${dirLabel}, but has improved ${valueStr} since your last report — a meaningful move in the right direction.`;
+                        const worsened = ctx.worseningChange;
+                        const secondaryFinding = outOfRange.find(f => f.displayName !== topName)
+                          ?? borderline.find(f => f.displayName !== topName)
+                          ?? null;
+                        const main = `${topName} ${dirLabel}, but ${topConj.has} improved from your prior report.`;
+                        if (worsened && worsened.displayName !== topName) {
+                          const wConj = conjugate(worsened.displayName);
+                          const w = worsened.trendDirection === 'up' ? `${wConj.has} risen` : worsened.trendDirection === 'down' ? `${wConj.has} dropped` : `${wConj.has} shifted`;
+                          return `${main} Your ${worsened.displayName} ${w} since your last report and ${wConj.is} worth monitoring.`;
                         }
-                        const worsenedName = ctx.worseningChange?.displayName;
-                        return `${topName} has improved ${valueStr} since your last report, though ${worsenedName ?? 'another marker'} still warrants attention.`;
+                        if (secondaryFinding) {
+                          const sConj = conjugate(secondaryFinding.displayName);
+                          const dirWord = secondaryFinding.direction === 'low' ? 'low' : 'high';
+                          return `${main} Your ${secondaryFinding.displayName} ${sConj.is} also ${dirWord} and worth monitoring.`;
+                        }
+                        return main;
                       }
 
                       // Force trajectory headline override if primary is worsening
@@ -1007,6 +1052,7 @@ export function ReportView() {
                 if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
                   const ch = ctx.primaryImprovingChange;
                   const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
+                  const conj = conjugate(insightSummary.primaryFinding.displayName);
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1021,11 +1067,11 @@ export function ReportView() {
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} remains {dirWord} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but has improved from {ch.previousValue} {ch.unit} since your last report
-                            {ch.percentDelta !== null ? ` — a ${Math.abs(ch.percentDelta)}% improvement` : ''}.
+                            {insightSummary.primaryFinding.displayName} {conj.remains} {dirWord} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but {conj.has} improved from {ch.previousValue} {ch.unit} since your last report
+                            {ch.percentDelta !== null ? ` (a ${Math.abs(ch.percentDelta)}% improvement)` : ''}.
                           </p>
                           <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3 mt-2.5">
-                            This improvement is meaningful, even though the value remains outside the optimal range. Continue tracking at your next panel.
+                            The drop from your prior result is encouraging. This does not mean the issue is resolved, but it does show movement in the right direction worth continuing to track.
                           </p>
                         </div>
                       </div>
@@ -1052,7 +1098,7 @@ export function ReportView() {
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} remains {dirWord} and has worsened from {ch.previousValue} to {ch.currentValue} {ch.unit} since your last report{ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : ''}.
+                            {insightSummary.primaryFinding.displayName} {conjugate(insightSummary.primaryFinding.displayName).remains} {dirWord} and {conjugate(insightSummary.primaryFinding.displayName).has} worsened from {ch.previousValue} to {ch.currentValue} {ch.unit} since your last report{ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : ''}.
                           </p>
                           {aiWhyItMatters ? (
                             <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3 mt-2.5">
@@ -1088,7 +1134,7 @@ export function ReportView() {
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} remains {dirWord} and has not changed significantly from the prior report ({ch.previousValue} to {ch.currentValue} {ch.unit}).
+                            {insightSummary.primaryFinding.displayName} {conjugate(insightSummary.primaryFinding.displayName).remains} {dirWord} and {conjugate(insightSummary.primaryFinding.displayName).has} not changed significantly from the prior report ({ch.previousValue} to {ch.currentValue} {ch.unit}).
                           </p>
                           {aiWhyItMatters ? (
                             <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
@@ -1198,17 +1244,18 @@ export function ReportView() {
                     fallback = `All measured values are within optimal ranges. This is a useful baseline to track over time.`;
                   }
                 } else if (ctx.primaryIsImproving && ctx.primaryImprovingChange) {
-                  const ch = ctx.primaryImprovingChange;
-                  const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'low' : 'elevated';
-                  const pctStr = ch.percentDelta !== null ? ` — a ${Math.abs(ch.percentDelta)}% improvement` : '';
+                  const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'below range' : 'above range';
+                  const topConj = topName ? conjugate(topName) : { remains: 'remains', has: 'has', is: 'is' };
                   if (!ctx.anyWorsening) {
-                    fallback = `${topName} remains ${dirLabel}, though it has come down from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}. That movement is encouraging and worth continuing to track at your next panel.`;
+                    fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. This does not mean the issue is resolved, but it does show movement in the right direction worth continuing to track.`;
                     if (borderline.length > 0 && borderline[0].displayName !== topName) {
-                      fallback += ` ${borderline[0].displayName} is also borderline — worth monitoring but not urgent on its own.`;
+                      const bConj = conjugate(borderline[0].displayName);
+                      fallback += ` ${borderline[0].displayName} ${bConj.is} also borderline and worth monitoring.`;
                     }
                   } else {
                     const worsenedName = ctx.worseningChange?.displayName ?? worsened[0]?.displayName;
-                    fallback = `${topName} has improved from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr}, which is a meaningful step in the right direction. At the same time, ${worsenedName ?? 'another marker'} has shifted since your last draw and deserves attention alongside it.`;
+                    const wConj = worsenedName ? conjugate(worsenedName) : { remains: 'remains', has: 'has', is: 'is' };
+                    fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. At the same time, your ${worsenedName ?? 'another marker'} ${wConj.has} shifted since your last draw and deserves attention alongside it.`;
                   }
                 } else if (improved.length > 0 && outOfRange.length > 0) {
                   fallback = `${topName} remains the primary area to keep an eye on, while ${improved[0].displayName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;

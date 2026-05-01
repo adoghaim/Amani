@@ -23,6 +23,11 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
   const isExtreme = finding.deviationMultiplier >= 3;
   const dirLabel = finding.direction === 'high' ? 'significantly elevated' : finding.direction === 'low' ? 'significantly low' : 'outside the optimal range';
   const extremeLabel = finding.direction === 'low' ? 'Far below range' : 'Far above range';
+  const nameLower = finding.displayName.toLowerCase();
+  const isPluralSubject = /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(nameLower);
+  const remainsVerb = isPluralSubject ? 'remain' : 'remains';
+  const hasVerb = isPluralSubject ? 'have' : 'has';
+  const isVerb = isPluralSubject ? 'are' : 'is';
 
   const hasPrior = !!delta && delta.previousValue !== undefined && delta.previousValue !== null && !delta.isFirstRecorded;
   const trajectory = getTrajectory(delta);
@@ -49,14 +54,14 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
   if (!explanation) {
     if (hasPrior && trajectory === 'improving_still_abnormal' && delta) {
       const pctStr = delta.percentDelta !== null ? ` (a ${Math.abs(delta.percentDelta)}% improvement)` : '';
-      explanation = `${finding.displayName} remains ${dirLabel} at ${finding.value} ${finding.unit}, but has improved from ${delta.previousValue} ${delta.unit} since your prior report${pctStr}. This is a meaningful move in the right direction, even though the level remains above range. Continue tracking this over time.`;
+      explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit}, but ${hasVerb} improved from ${delta.previousValue} ${delta.unit} since your prior report${pctStr}. This is a meaningful move in the right direction, even though the level remains above range. Continue tracking this over time.`;
     } else if (hasPrior && trajectory === 'worsening' && delta) {
       const verb = finding.direction === 'high' ? 'increased' : 'decreased';
-      explanation = `${finding.displayName} remains ${dirLabel} at ${finding.value} ${finding.unit} and has ${verb} from ${delta.previousValue} ${delta.unit} since your prior report. This trend is worth discussing with your provider.`;
+      explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit} and ${hasVerb} ${verb} from ${delta.previousValue} ${delta.unit} since your prior report. This trend is worth discussing with your provider.`;
     } else if (hasPrior && trajectory === 'unchanged' && delta) {
-      explanation = `${finding.displayName} remains ${dirLabel} at ${finding.value} ${finding.unit} and has not changed significantly from your prior result of ${delta.previousValue} ${delta.unit}. Continued tracking is the right next step.`;
+      explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit} and ${hasVerb} not changed significantly from your prior result of ${delta.previousValue} ${delta.unit}. Continued tracking is the right next step.`;
     } else {
-      explanation = `${finding.displayName} is ${dirLabel} at ${finding.value} ${finding.unit}, which stands out as the most abnormal result in this report.`;
+      explanation = `${finding.displayName} ${isVerb} ${dirLabel} at ${finding.value} ${finding.unit}, which stands out as the most abnormal result in this report.`;
     }
   }
 
