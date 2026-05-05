@@ -28,26 +28,35 @@ function conjugate(name: string) {
   };
 }
 
+function formatPriorDate(date: string): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'your prior report';
+  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+}
+
 function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryBullet | null {
-  const { displayName, trajectoryStatus, boundaryCrossing, trendDirection, previousValue, currentValue, unit, isFirstRecorded } = change;
+  const { displayName, trajectoryStatus, boundaryCrossing, trendDirection, previousValue, currentValue, unit, isFirstRecorded, priorReportDate, priorIsOlderThanImmediatePrior } = change;
   const c = conjugate(displayName);
   const formatBoundary = (b: string) => BUCKET_LABEL[b] ?? b.replace(/_/g, ' ');
+  const sinceClause = priorIsOlderThanImmediatePrior && priorReportDate
+    ? ` since ${formatPriorDate(priorReportDate)}`
+    : '';
 
   if (isFirstRecorded) {
     return { kind: 'first', isPrimary, text: `${displayName} ${c.is} measured for the first time at ${currentValue} ${unit}.` };
   }
   if (trajectoryStatus === 'normalized' && boundaryCrossing) {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}.` };
+    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
   }
   if (boundaryCrossing && boundaryCrossing.direction === 'improved') {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}.` };
+    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
   }
   if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low') {
-    return { kind: 'improved', isPrimary, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}, still outside optimal.` };
+    return { kind: 'improved', isPrimary, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
     const verb = trendDirection === 'up' ? 'risen' : trendDirection === 'down' ? 'dropped' : 'shifted';
-    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit} and ${c.remains} outside optimal.` };
+    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
   }
   if (trajectoryStatus === 'newly_abnormal') {
     return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside optimal at ${currentValue} ${unit}.` };

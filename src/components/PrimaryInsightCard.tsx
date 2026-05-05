@@ -54,14 +54,23 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
     directionTone = 'worsen';
   }
 
+  const formatPriorDate = (date: string): string => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return 'your prior report';
+    return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+  };
+  const priorReference = delta?.priorIsOlderThanImmediatePrior && delta.priorReportDate
+    ? formatPriorDate(delta.priorReportDate)
+    : 'your prior report';
+
   let explanation = aiExplanation;
   if (!explanation) {
     if (hasPrior && trajectory === 'improving_still_abnormal' && delta) {
       const pctStr = delta.percentDelta !== null ? ` (a ${Math.abs(delta.percentDelta)}% improvement)` : '';
-      explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit}, but ${hasVerb} improved from ${delta.previousValue} ${delta.unit} since your prior report${pctStr}. This is a meaningful move in the right direction, even though the level remains above range. Continue tracking this over time.`;
+      explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit}, but ${hasVerb} improved from ${delta.previousValue} ${delta.unit} since ${priorReference}${pctStr}. This is a meaningful move in the right direction, even though the level remains above range. Continue tracking this over time.`;
     } else if (hasPrior && trajectory === 'worsening' && delta) {
       const verb = finding.direction === 'high' ? 'increased' : 'decreased';
-      explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit} and ${hasVerb} ${verb} from ${delta.previousValue} ${delta.unit} since your prior report. This trend is worth discussing with your provider.`;
+      explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit} and ${hasVerb} ${verb} from ${delta.previousValue} ${delta.unit} since ${priorReference}. This trend is worth discussing with your provider.`;
     } else if (hasPrior && trajectory === 'unchanged' && delta) {
       explanation = `${finding.displayName} ${remainsVerb} ${dirLabel} at ${finding.value} ${finding.unit} and ${hasVerb} not changed significantly from your prior result of ${delta.previousValue} ${delta.unit}. Continued tracking is the right next step.`;
     } else {

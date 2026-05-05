@@ -421,11 +421,14 @@ export type TrendStrength = 'weak' | 'moderate' | 'strong';
 
 export type PersonalPatternType = 'baseline' | 'trend' | 'symptom';
 
+export type BaselineStaleness = 'fresh' | 'stale' | 'limited';
+
 export interface BaselineResult {
   baselineValue: number;
   deviationPercent: number;
   baselineStatus: BaselineStatus;
   reportsUsed: number;
+  staleness: BaselineStaleness;
 }
 
 export interface TrendResult {
@@ -461,6 +464,7 @@ export const PERSONALIZATION_THRESHOLDS = {
   SYMPTOM_WINDOW_DAYS: 14,
   DEVIATION_THRESHOLD_PERCENT: 10,
   TREND_MIN_CHANGE_PERCENT: 8,
+  BASELINE_STALENESS_THRESHOLD_MONTHS: 12,
 } as const;
 
 export interface Reminder {

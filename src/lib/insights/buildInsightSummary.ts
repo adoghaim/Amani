@@ -35,6 +35,8 @@ export interface BiggestChange {
   distanceToNormalImprovement: number | null;
   fact: string;
   isFirstRecorded?: boolean;
+  priorReportDate: string | null;
+  priorIsOlderThanImmediatePrior: boolean;
 }
 
 export interface DoctorQuestion {
@@ -82,6 +84,7 @@ interface BiomarkerInput {
   parserConfidence?: 'high' | 'medium' | 'low' | null;
   normalizationStatus?: 'mapped' | 'partial' | 'unmapped' | null;
   sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
+  reportDate?: string;
 }
 
 function toTopFinding(
@@ -192,25 +195,40 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
     .map(s => toTopFinding(s, null, deltaMap?.get(s.key)));
 }
 
-function deltaToChange(d: BiomarkerDelta): BiggestChange {
+function formatPriorReportDate(date: string): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'your prior report';
+  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+}
+
+function deltaToChange(d: BiomarkerDelta, immediatePriorReportDate: string | null): BiggestChange {
   const pct = d.percentDelta !== null
     ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`
     : '';
 
+  const priorIsOlder =
+    d.priorReportDate !== null &&
+    immediatePriorReportDate !== null &&
+    d.priorReportDate !== immediatePriorReportDate;
+
+  const sinceClause = priorIsOlder && d.priorReportDate
+    ? ` since ${formatPriorReportDate(d.priorReportDate)}`
+    : '';
+
   let fact: string;
   if (d.trajectoryStatus === 'improving_still_high') {
-    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains elevated above the optimal range.`;
+    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause} — meaningful improvement, though it remains elevated above the optimal range.`;
   } else if (d.trajectoryStatus === 'improving_still_low') {
-    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains below the optimal range.`;
+    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause} — meaningful improvement, though it remains below the optimal range.`;
   } else if (d.trajectoryStatus === 'worsening_still_high') {
-    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further above the optimal range.`;
+    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}, moving further above the optimal range.`;
   } else if (d.trajectoryStatus === 'worsening_still_low') {
-    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further below the optimal range.`;
+    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}, moving further below the optimal range.`;
   } else if (d.boundaryCrossing) {
     const bcDir = d.boundaryCrossing.direction === 'improved' ? 'improved' : 'moved';
-    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
+    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
   } else {
-    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}.`;
+    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}.`;
   }
 
   return {
@@ -226,11 +244,13 @@ function deltaToChange(d: BiomarkerDelta): BiggestChange {
     trajectoryStatus: d.trajectoryStatus,
     distanceToNormalImprovement: d.distanceToNormalImprovement,
     fact,
+    priorReportDate: d.priorReportDate,
+    priorIsOlderThanImmediatePrior: priorIsOlder,
   };
 }
 
-function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
-  return getBiggestChanges(deltas, 5).map(deltaToChange);
+function buildBiggestChanges(deltas: BiomarkerDelta[], immediatePriorReportDate: string | null): BiggestChange[] {
+  return getBiggestChanges(deltas, 5).map(d => deltaToChange(d, immediatePriorReportDate));
 }
 
 function buildDoctorQuestions(
@@ -563,6 +583,7 @@ export function buildInsightSummary(
   current: BiomarkerInput[],
   previous: BiomarkerInput[] | null,
   cyclePhase?: CyclePhase | null,
+  immediatePriorReportDate?: string | null,
 ): InsightSummary {
   const scored = current.map(b =>
     scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
@@ -575,12 +596,12 @@ export function buildInsightSummary(
 
   if (previous && previous.length > 0) {
     deltas = compareReports(
-      previous.map(b => ({ key: b.key, value: b.value, unit: b.unit })),
+      previous.map(b => ({ key: b.key, value: b.value, unit: b.unit, reportDate: b.reportDate })),
       current.map(b => ({ key: b.key, value: b.value, unit: b.unit })),
       cyclePhase,
     );
     deltaMap = new Map(deltas.map(d => [d.key, d]));
-    biggestChanges = buildBiggestChanges(deltas);
+    biggestChanges = buildBiggestChanges(deltas, immediatePriorReportDate ?? null);
   }
 
   const topFindings = buildTopFindings(scored, deltaMap);
@@ -616,7 +637,7 @@ export function buildInsightSummary(
     };
 
     if (!alreadyIncluded && primaryDelta) {
-      guaranteeInsert(deltaToChange(primaryDelta));
+      guaranteeInsert(deltaToChange(primaryDelta, immediatePriorReportDate ?? null));
     } else if (!alreadyIncluded && !primaryDelta) {
       // Primary marker exists in current report but has no previous value — first recorded result.
       // Always surface it so users see their most critical out-of-range marker.
@@ -638,6 +659,8 @@ export function buildInsightSummary(
           distanceToNormalImprovement: null,
           fact: `${getDisplayName(primaryKey)} is ${primaryScored.value} ${unit} — first result on record, currently out of range.`,
           isFirstRecorded: true,
+          priorReportDate: null,
+          priorIsOlderThanImmediatePrior: false,
         };
         guaranteeInsert(firstRecordedChange);
       }

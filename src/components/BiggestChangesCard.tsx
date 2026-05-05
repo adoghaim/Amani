@@ -75,24 +75,33 @@ function getChangeStyle(change: BiggestChange): ChangeStyle {
   return SIGNIFICANCE_STYLE[change.significance] ?? SIGNIFICANCE_STYLE.minor ?? FALLBACK_STYLE;
 }
 
+function formatPriorDate(date: string): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'your prior report';
+  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+}
+
 function getSubtitle(change: BiggestChange): string | null {
   const ts = change.trajectoryStatus as TrajectoryStatus;
+  const sinceClause = change.priorIsOlderThanImmediatePrior && change.priorReportDate
+    ? ` since ${formatPriorDate(change.priorReportDate)}`
+    : '';
   if (change.boundaryCrossing) {
     const bc = change.boundaryCrossing;
     const verb = bc.direction === 'improved' ? 'Improved' : 'Moved';
-    return `${verb} from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}`;
+    return `${verb} from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}${sinceClause}`;
   }
   if (ts === 'improving_still_high') {
-    return 'Still elevated, but moving toward the optimal range';
+    return `Still elevated, but moving toward the optimal range${sinceClause}`;
   }
   if (ts === 'improving_still_low') {
-    return 'Still below optimal, but moving in the right direction';
+    return `Still below optimal, but moving in the right direction${sinceClause}`;
   }
   if (ts === 'worsening_still_high') {
-    return 'Moving further above the optimal range';
+    return `Moving further above the optimal range${sinceClause}`;
   }
   if (ts === 'worsening_still_low') {
-    return 'Moving further below the optimal range';
+    return `Moving further below the optimal range${sinceClause}`;
   }
   return null;
 }

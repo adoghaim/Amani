@@ -26,7 +26,7 @@ import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourTrajectoryCard } from '../components/YourTrajectoryCard';
-import type { BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import type { BaselineStatus, BaselineStaleness, TrendDirection, TrendStrength } from '../types';
 import type { InsightSummary, BiggestChange } from '../lib/insights/buildInsightSummary';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
@@ -148,6 +148,8 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
       trajectoryStatus: primaryRawDelta.trajectoryStatus,
       distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
       fact: '',
+      priorReportDate: primaryRawDelta.priorReportDate,
+      priorIsOlderThanImmediatePrior: false,
     };
   })();
 
@@ -172,6 +174,8 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
       trajectoryStatus: primaryRawDelta.trajectoryStatus,
       distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
       fact: '',
+      priorReportDate: primaryRawDelta.priorReportDate,
+      priorIsOlderThanImmediatePrior: false,
     };
   })();
 
@@ -194,6 +198,8 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
       trajectoryStatus: primaryRawDelta.trajectoryStatus,
       distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
       fact: '',
+      priorReportDate: primaryRawDelta.priorReportDate,
+      priorIsOlderThanImmediatePrior: false,
     };
   })();
 
@@ -308,8 +314,10 @@ export function ReportView() {
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
-  const [previousBiomarkers, setPreviousBiomarkers] = useState<Biomarker[]>([]);
+  const [, setPreviousBiomarkers] = useState<Biomarker[]>([]);
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
+  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>>(new Map());
+  const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const interpPollingActive = useRef(false);
@@ -465,7 +473,7 @@ export function ReportView() {
       ] = await Promise.all([
         supabase
           .from('lab_reports')
-          .select('id')
+          .select('id, report_date')
           .eq('user_id', reportData.user_id)
           .lt('report_date', reportData.report_date)
           .order('report_date', { ascending: false })
@@ -486,6 +494,9 @@ export function ReportView() {
           .eq('lab_report_id', prevReportData.id);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
       }
+      if (prevReportData?.report_date) {
+        setImmediatePriorReportDate(prevReportData.report_date);
+      }
 
       if (allReportsData && allReportsData.length > 0) {
         setHistoricalReportCount(allReportsData.length);
@@ -497,18 +508,35 @@ export function ReportView() {
         const allHistoricalIds = allReportsData.map(r => r.id);
         const { data: allHistoricalBiomarkers } = await supabase
           .from('biomarkers')
-          .select('name, value, lab_report_id')
+          .select('name, value, unit, reference_min, reference_max, lab_report_id')
           .in('lab_report_id', allHistoricalIds);
 
         if (allHistoricalBiomarkers) {
           const histMap = new Map<string, { reportDate: string; value: number }[]>();
+          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
           for (const b of allHistoricalBiomarkers) {
             const reportDate = reportDateMap.get(b.lab_report_id);
             if (!reportDate) continue;
             if (!histMap.has(b.name)) histMap.set(b.name, []);
             histMap.get(b.name)!.push({ reportDate, value: b.value });
+            if (!occurrences.has(b.name)) occurrences.set(b.name, []);
+            occurrences.get(b.name)!.push({
+              reportDate,
+              value: b.value,
+              unit: b.unit,
+              reference_min: b.reference_min,
+              reference_max: b.reference_max,
+            });
           }
           setHistoricalBiomarkers(histMap);
+
+          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>();
+          for (const [name, list] of occurrences) {
+            const sorted = [...list].sort((a, b) => a.reportDate.localeCompare(b.reportDate));
+            const last = sorted[sorted.length - 1];
+            if (last) latestPriorByMarker.set(name, last);
+          }
+          setPreviousBiomarkerOccurrences(latestPriorByMarker);
         }
       }
     }
@@ -565,6 +593,7 @@ export function ReportView() {
   const biomarkerPersonalizationMap = useMemo(() => {
     const map = new Map<string, {
       baselineStatus?: BaselineStatus;
+      baselineStaleness?: BaselineStaleness;
       baselineValue?: number;
       trendDirection?: TrendDirection;
       trendStrength?: TrendStrength;
@@ -576,21 +605,30 @@ export function ReportView() {
       const history = historicalBiomarkers.get(b.name);
       if (!history || history.length === 0) continue;
 
-      const ordered = history
+      const orderedEntries = history
+        .slice()
         .sort((a, c) => a.reportDate.localeCompare(c.reportDate))
-        .map(h => h.value);
+        .map(h => ({ date: h.reportDate, value: h.value }));
+      const ordered = orderedEntries.map(h => h.value);
 
       const entry: {
         baselineStatus?: BaselineStatus;
+        baselineStaleness?: BaselineStaleness;
         baselineValue?: number;
         trendDirection?: TrendDirection;
         trendStrength?: TrendStrength;
       } = {};
 
       if (ordered.length >= PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) {
-        const baseline = computeBaseline(ordered, b.value);
+        // Pass the dated entries + current report date so computeBaseline can
+        // tag staleness ('fresh' if last prior < 12mo, 'stale' if older,
+        // 'limited' if only one old data point). BiomarkerCard switches copy
+        // on this signal so a 3-year-old single TPO reading no longer fires
+        // confident "your usual level" wording.
+        const baseline = computeBaseline(orderedEntries, b.value, report?.report_date ?? undefined);
         if (baseline) {
           entry.baselineStatus = baseline.baselineStatus;
+          entry.baselineStaleness = baseline.staleness;
           entry.baselineValue = baseline.baselineValue;
         }
       }
@@ -609,7 +647,7 @@ export function ReportView() {
     }
 
     return map;
-  }, [biomarkers, historicalBiomarkers, historicalReportCount]);
+  }, [biomarkers, historicalBiomarkers, historicalReportCount, report?.report_date]);
 
   const insightSummary = useMemo(() => {
     if (biomarkers.length === 0) return null;
@@ -626,17 +664,18 @@ export function ReportView() {
         sourceFormat: telemetry?.sourceFormat ?? null,
       };
     });
-    const previous = previousBiomarkers.length > 0
-      ? previousBiomarkers.map(b => ({
-          key: b.name as BiomarkerName,
-          value: b.value,
-          unit: b.unit,
-          labRefMin: b.reference_min,
-          labRefMax: b.reference_max,
+    const previous = previousBiomarkerOccurrences.size > 0
+      ? Array.from(previousBiomarkerOccurrences.entries()).map(([name, occ]) => ({
+          key: name as BiomarkerName,
+          value: occ.value,
+          unit: occ.unit,
+          labRefMin: occ.reference_min,
+          labRefMax: occ.reference_max,
+          reportDate: occ.reportDate,
         }))
       : null;
-    return buildInsightSummary(current, previous, report?.estimated_cycle_phase);
-  }, [biomarkers, previousBiomarkers, report, analyteTelemetryMap]);
+    return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
+  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap]);
 
   // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
   // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
@@ -683,7 +722,7 @@ export function ReportView() {
       current_status: currentStatus,
       trajectory,
       percent_change: change?.percentDelta ?? null,
-      prior_report_date: null,
+      prior_report_date: change?.priorReportDate ?? null,
       supporting_biomarker: null,
     };
   }, [insightSummary]);
@@ -1666,6 +1705,7 @@ export function ReportView() {
                                 commonNonAlarmReasons={interp?.common_non_alarm_reasons}
                                 whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
                                 baselineStatus={personalization?.baselineStatus}
+                                baselineStaleness={personalization?.baselineStaleness}
                                 baselineValue={personalization?.baselineValue}
                                 trendDirection={personalization?.trendDirection}
                                 trendStrength={personalization?.trendStrength}

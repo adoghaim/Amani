@@ -37,12 +37,14 @@ export interface BiomarkerDelta {
   previousStatus: AmaniStatus;
   currentStatus: AmaniStatus;
   distanceToNormalImprovement: number | null;
+  priorReportDate: string | null;
 }
 
 interface BiomarkerSnapshot {
   key: BiomarkerName;
   value: number;
   unit: string;
+  reportDate?: string;
 }
 
 const MIN_ABSOLUTE_DELTA: Record<string, number> = {
@@ -232,6 +234,7 @@ export function compareReports(
       distanceToNormalImprovement: distanceToNormalImprovement !== null
         ? Math.round(distanceToNormalImprovement * 10) / 10
         : null,
+      priorReportDate: prev.reportDate ?? null,
     });
   }
 
