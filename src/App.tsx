@@ -98,7 +98,7 @@ function AndroidBackHandler() {
     import('@capacitor/app').then(({ App: CapApp }) => {
       CapApp.addListener('backButton', ({ canGoBack }) => {
         // At root routes — exit the app rather than navigating back to a blank state
-        const rootRoutes = ['/app', '/login', '/signup', '/'];
+        const rootRoutes = ['/app', '/login', '/signup', '/', '/pricing', '/success', '/reset-password'];
         if (rootRoutes.includes(location.pathname) || !canGoBack) {
           CapApp.exitApp();
         } else {

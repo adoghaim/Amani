@@ -9,6 +9,16 @@ const config: CapacitorConfig = {
     // Uncomment and set to your local machine IP for live-reload during development:
     // url: 'http://192.168.x.x:5173',
     // cleartext: true,
+    androidScheme: 'https',
+    allowNavigation: ['*.supabase.co', '*.stripe.com'],
+  },
+  ios: {
+    contentInset: 'automatic',
+    webContentsDebuggingEnabled: false,
+    limitsNavigationsToAppBoundDomains: true,
+  },
+  android: {
+    webContentsDebuggingEnabled: false,
   },
 };
 
