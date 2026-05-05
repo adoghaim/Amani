@@ -1,7 +1,7 @@
 import type { BiomarkerName, BiomarkerCategory } from '../../types';
 import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
 import type { ScoredBiomarker } from '../scoring/scoreBiomarker';
-import type { InsightSummary, WatchSignal } from './buildInsightSummary';
+import type { InsightSummary, WatchSignal, BiggestChange } from './buildInsightSummary';
 
 export interface FocusAreaMarker {
   slug: string;
@@ -14,7 +14,6 @@ export interface FocusArea {
   title: string;
   whyItMatters: string;
   relatedMarkers: FocusAreaMarker[];
-  nextAction: string;
 }
 
 const IMPORTANCE_RANK: Record<'critical' | 'important' | 'supporting', number> = {
@@ -45,18 +44,6 @@ const CATEGORY_DEFAULT_WHY: Record<BiomarkerCategory, string> = {
   inflammation: 'Inflammation markers are outside their reference range. Tracking these together helps reveal whether the pattern persists.',
   nutrients: 'One or more nutrient markers are outside their reference range. Tracking these together helps clarify nutrient status over time.',
   blood: 'One or more hematology markers are outside their reference range. Tracking these together gives the clearest picture over time.',
-};
-
-const CATEGORY_KEYWORDS: Record<BiomarkerCategory, string[]> = {
-  hormones: ['hormone', 'estrogen', 'estradiol', 'progesterone', 'testosterone', 'dheas', 'shbg', 'prolactin', 'cycle', 'amh', 'fsh', 'lh'],
-  thyroid: ['thyroid', 'tsh', 't3', 't4', 'tpo', 'thyroglobulin'],
-  metabolic: ['glucose', 'a1c', 'insulin', 'metabolic', 'blood sugar', 'c-peptide', 'c peptide'],
-  lipids: ['cholesterol', 'ldl', 'hdl', 'triglyceride', 'apob', 'lipoprotein', 'lipid', 'cardiovascular'],
-  liver: ['liver', 'ast', 'alt', 'ggt', 'bilirubin', 'alkaline phosphatase'],
-  kidney: ['kidney', 'creatinine', 'bun', 'egfr', 'hydration'],
-  inflammation: ['inflammation', 'crp', 'esr'],
-  nutrients: ['vitamin', 'iron', 'ferritin', 'b12', 'folate', 'magnesium', 'nutrient', 'tibc'],
-  blood: ['hemoglobin', 'hematocrit', 'platelet', 'wbc', 'rbc', 'mcv', 'neutrophil', 'lymphocyte'],
 };
 
 interface PatternRule {
@@ -142,90 +129,100 @@ function statusFor(s: ScoredBiomarker): FocusAreaMarker['status'] {
   return 'reassuring';
 }
 
-function formatValue(n: number): string {
-  const abs = Math.abs(n);
-  const decimals = abs >= 10 ? 1 : 2;
-  const rounded = Number(n.toFixed(decimals));
-  return String(rounded);
-}
-
-function formatUnit(unit: string | null | undefined): string {
-  if (!unit) return '';
-  return ` ${unit}`;
-}
-
-function statusWord(s: ScoredBiomarker): string | null {
+function statusPhrase(s: ScoredBiomarker): string | null {
   switch (s.amaniStatus) {
     case 'borderline_high':
-      return 'borderline-high';
+      return 'is borderline-high';
     case 'borderline_low':
-      return 'borderline-low';
+      return 'is borderline-low';
     case 'out_of_range_high':
-      return 'elevated';
+      return 'is elevated';
     case 'out_of_range_low':
-      return 'low';
+      return 'is low';
     default:
       return null;
   }
 }
 
+function trajectoryPhrase(change: BiggestChange | null | undefined): string {
+  if (!change) return '';
+  const dir = change.boundaryCrossing?.direction;
+  if (dir === 'improvement') return 'is moving in the right direction';
+  if (dir === 'worsening') return 'has shifted in the wrong direction';
+
+  switch (change.trajectoryStatus) {
+    case 'improving':
+      return 'is moving in the right direction';
+    case 'worsening':
+      return 'has shifted in the wrong direction';
+    case 'stable':
+      return 'has not changed significantly';
+    default:
+      return '';
+  }
+}
+
 const CATEGORY_CLOSER: Record<BiomarkerCategory, (primary: string) => string> = {
-  lipids: (primary) => `This makes the full lipid pattern more useful than judging ${primary} alone.`,
-  thyroid: (primary) => `This makes the full thyroid pattern more useful than judging ${primary} alone.`,
-  kidney: () => 'This pattern is worth tracking together.',
-  metabolic: () => 'Tracking these blood-sugar markers together gives the clearest picture.',
-  liver: () => 'Tracking these liver markers together is more informative than judging one alone.',
-  hormones: () => 'Reproductive-hormone context matters when interpreting these together.',
-  inflammation: () => 'Tracking inflammation markers together is more useful than a single value.',
-  nutrients: () => 'Nutrient status is best read across the full panel.',
-  blood: () => 'Tracking these hematology markers together is more useful than a single value.',
+  lipids: () => 'so the full lipid pattern is more useful than judging it alone.',
+  thyroid: () => 'but this marker is still outside range.',
+  kidney: () => 'so hydration and protein context matter when reading this pattern.',
+  metabolic: () => 'so the full glucose pattern is worth tracking over time.',
+  liver: () => 'so tracking these liver markers together is more informative than judging one alone.',
+  hormones: () => 'Timing, symptoms, and cycle phase matter when interpreting this result.',
+  inflammation: () => 'so tracking inflammation markers together is more useful than a single value.',
+  nutrients: () => 'so nutrient status is best read across the full panel.',
+  blood: () => 'so tracking these hematology markers together is more useful than a single value.',
 };
 
-function buildValueRichWhy(
+function findChangeFor(
+  marker: ScoredBiomarker,
+  biggestChanges: BiggestChange[] | undefined,
+): BiggestChange | null {
+  if (!biggestChanges || biggestChanges.length === 0) return null;
+  return biggestChanges.find(c => c.key === marker.key) ?? null;
+}
+
+function buildValueFreeWhy(
   topMarkers: ScoredBiomarker[],
   category: BiomarkerCategory,
+  biggestChanges: BiggestChange[] | undefined,
 ): string | null {
   const flagged = topMarkers.filter(m => m.concern > 0);
   const primary = flagged[0];
   if (!primary) return null;
-  const primaryWord = statusWord(primary);
-  if (!primaryWord) return null;
+
+  const phrase = statusPhrase(primary);
+  if (!phrase) return null;
 
   const primaryName = getDisplayName(primary.key);
-  const primaryClause = `${primaryName} is ${primaryWord} at ${formatValue(primary.value)}${formatUnit(primary.unit)}`;
-
-  let leadSentence = `${primaryClause}.`;
-  const secondary = flagged[1];
-  if (secondary) {
-    const secondaryWord = statusWord(secondary);
-    if (secondaryWord) {
-      const secondaryName = getDisplayName(secondary.key);
-      leadSentence = `${primaryClause}, while ${secondaryName} is ${secondaryWord}.`;
-    }
-  }
-
+  const change = findChangeFor(primary, biggestChanges);
+  const trajectory = trajectoryPhrase(change);
   const closer = CATEGORY_CLOSER[category](primaryName);
-  return `${leadSentence} ${closer}`;
-}
 
-function findMatchingNextAction(
-  whatYouCanDoNow: string[] | undefined,
-  category: BiomarkerCategory,
-  markers: FocusAreaMarker[],
-): string | null {
-  if (!whatYouCanDoNow || whatYouCanDoNow.length === 0) return null;
-
-  const markerNames = markers.map(m => m.displayName.toLowerCase());
-  const markerSlugs = markers.map(m => m.slug.toLowerCase().replace(/_/g, ' '));
-  const categoryKeywords = CATEGORY_KEYWORDS[category] ?? [];
-
-  for (const tip of whatYouCanDoNow) {
-    const lower = tip.toLowerCase();
-    if (markerNames.some(n => lower.includes(n))) return tip;
-    if (markerSlugs.some(s => lower.includes(s))) return tip;
-    if (categoryKeywords.some(k => lower.includes(k))) return tip;
+  // Special composition for thyroid: lead with the primary signal, follow with
+  // an explicit trend sentence that pairs with an out-of-range qualifier closer.
+  if (category === 'thyroid') {
+    if (trajectory) {
+      const trendClause = trajectory.startsWith('is ')
+        ? trajectory.slice(3) // "is moving in the right direction" -> "moving in the right direction"
+        : trajectory.startsWith('has ')
+          ? trajectory // "has shifted in the wrong direction" / "has not changed significantly"
+          : trajectory;
+      return `${primaryName} remains the main thyroid signal. The trend ${trendClause === trajectory ? trajectory : `is ${trendClause}`}, ${closer}`;
+    }
+    return `${primaryName} ${phrase} and remains the main thyroid signal, ${closer}`;
   }
-  return null;
+
+  // Hormones: closer is its own sentence (cycle context).
+  if (category === 'hormones') {
+    const hormoneContext = primary.key === 'progesterone' || primary.key === 'estradiol' || primary.key === 'lh' || primary.key === 'fsh'
+      ? `${primaryName} ${phrase} for the recorded cycle context.`
+      : `${primaryName} ${phrase}.`;
+    return `${hormoneContext} ${closer}`;
+  }
+
+  // Default lead: "<Marker> is <state>, <closer>"
+  return `${primaryName} ${phrase}, ${closer}`;
 }
 
 function findMatchingWatchSignal(
@@ -289,7 +286,7 @@ function bucketByCategory(flagged: ScoredBiomarker[]): SystemBucket[] {
 function buildOneArea(
   bucket: SystemBucket,
   watchSignals: WatchSignal[],
-  whatYouCanDoNow: string[] | undefined,
+  biggestChanges: BiggestChange[] | undefined,
 ): FocusArea {
   const { category, markers } = bucket;
 
@@ -314,30 +311,28 @@ function buildOneArea(
   const id = matchedRule ? `${category}_${matchedRule.id}` : category;
   const title = matchedRule?.title ?? CATEGORY_DEFAULT_TITLE[category];
 
-  const matchedWatch = findMatchingWatchSignal(
+  // Keep findMatchingWatchSignal call alive for potential future use cases,
+  // but no longer source whyItMatters from watch description (it carries values).
+  void findMatchingWatchSignal(
     watchSignals,
     category,
     topMarkers.map(m => m.key),
   );
-  const whyItMatters = matchedWatch?.description
-    ?? matchedRule?.whyItMatters
-    ?? buildValueRichWhy(topMarkers, category)
+
+  const whyItMatters = matchedRule?.whyItMatters
+    ?? buildValueFreeWhy(topMarkers, category, biggestChanges)
     ?? CATEGORY_DEFAULT_WHY[category];
 
-  const matchedAction = findMatchingNextAction(whatYouCanDoNow, category, relatedMarkers);
-  const fallbackAction = bucket.outOfRangeCount > 0
-    ? 'Discuss these results with your provider at your next visit.'
-    : 'Track these markers in your next report to see if the pattern holds.';
-  const nextAction = matchedAction ?? fallbackAction;
-
-  return { id, title, whyItMatters, relatedMarkers, nextAction };
+  return { id, title, whyItMatters, relatedMarkers };
 }
 
 export function buildFocusAreas(
-  _insightSummary: InsightSummary,
+  insightSummary: InsightSummary,
   watchSignals: WatchSignal[],
   flaggedBiomarkers: ScoredBiomarker[],
-  whatYouCanDoNow: string[] | undefined,
+  // Accepted for backwards compatibility with existing callers, but no longer
+  // used. Actions belong only in Next Best Steps; Focus Areas are context-only.
+  _unusedWhatYouCanDoNow?: string[] | null,
 ): FocusArea[] {
   const flagged = flaggedBiomarkers.filter(b => b.concern > 0);
   if (flagged.length === 0) return [];
@@ -346,5 +341,5 @@ export function buildFocusAreas(
   if (buckets.length === 0) return [];
 
   const top = buckets.slice(0, 3);
-  return top.map(b => buildOneArea(b, watchSignals, whatYouCanDoNow));
+  return top.map(b => buildOneArea(b, watchSignals, insightSummary.biggestChanges));
 }

@@ -1,4 +1,4 @@
-import { Compass, ArrowRight } from 'lucide-react';
+import { Compass } from 'lucide-react';
 import type { FocusArea, FocusAreaMarker } from '../lib/insights/buildFocusAreas';
 
 interface FocusAreasProps {
@@ -81,11 +81,6 @@ export function FocusAreas({ focusAreas }: FocusAreasProps) {
                   </div>
                 </div>
               )}
-
-              <div className="mt-3 pt-3 border-t border-theme-border/60 flex items-start gap-1.5">
-                <ArrowRight className="w-3.5 h-3.5 text-theme-muted-text-2 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-theme-text leading-relaxed">{area.nextAction}</p>
-              </div>
             </article>
           ))}
         </div>
