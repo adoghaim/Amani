@@ -1,5 +1,7 @@
-import { AlertTriangle, TrendingUp, TrendingDown, ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, TrendingUp, TrendingDown, ArrowDownRight, ArrowUpRight, Minus, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 import type { TopFinding, BiggestChange } from '../lib/insights/buildInsightSummary';
+import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 
 interface Props {
   finding: TopFinding;
@@ -20,6 +22,8 @@ function getTrajectory(delta: BiggestChange | null | undefined): Trajectory {
 }
 
 export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
+  const [explanationOpen, setExplanationOpen] = useState(false);
+  const biomarkerExplanation = getBiomarkerExplanation(finding.key);
   const isExtreme = finding.deviationMultiplier >= 3;
   const dirLabel = finding.direction === 'high' ? 'significantly elevated' : finding.direction === 'low' ? 'significantly low' : 'outside the optimal range';
   const extremeLabel = finding.direction === 'low' ? 'Far below range' : 'Far above range';
@@ -137,6 +141,23 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
                 {directionLabel || 'No change data'}
               </span>
             </div>
+          </div>
+        )}
+
+        {biomarkerExplanation && (
+          <div className="mt-4 pt-4 border-t border-red-200/70">
+            <button
+              type="button"
+              onClick={() => setExplanationOpen(o => !o)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-red-700 hover:text-red-900 transition-colors"
+            >
+              <BookOpen className="w-3 h-3" />
+              <span>What this marker means</span>
+              {explanationOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            </button>
+            {explanationOpen && (
+              <p className="mt-2 text-xs text-red-800/90 leading-relaxed">{biomarkerExplanation}</p>
+            )}
           </div>
         )}
       </div>

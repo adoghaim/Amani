@@ -7,9 +7,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { BiomarkerCard } from '../components/BiomarkerCard';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
-import { TopFindingsCard } from '../components/TopFindingsCard';
-import { BiggestChangesCard } from '../components/BiggestChangesCard';
-import { WhatToWatchCard } from '../components/WhatToWatchCard';
+import { YourHealthStory } from '../components/YourHealthStory';
+import { FocusAreas } from '../components/FocusAreas';
+import { NextBestSteps } from '../components/NextBestSteps';
+import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
+import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
+import { scoreBiomarker } from '../lib/scoring/scoreBiomarker';
 import { SystemSummaryCards } from '../components/SystemSummaryCards';
 import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
@@ -19,13 +22,11 @@ import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import { RECOMMENDED_LABS } from '../lib/biomarkers/recommendedLabs';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
-import { buildPersonalInsights } from '../lib/insights/buildPersonalInsights';
 import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
-import { YourPatternsCard } from '../components/YourPatternsCard';
-import { PrimaryInsightCard } from '../components/PrimaryInsightCard';
-import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import { YourTrajectoryCard } from '../components/YourTrajectoryCard';
+import type { BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import type { InsightSummary, BiggestChange } from '../lib/insights/buildInsightSummary';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
@@ -34,7 +35,7 @@ import type {
 import {
   RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, Stethoscope, CalendarDays,
-  CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle, FlaskConical,
+  CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
 
@@ -309,7 +310,6 @@ export function ReportView() {
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [previousBiomarkers, setPreviousBiomarkers] = useState<Biomarker[]>([]);
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
-  const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const interpPollingActive = useRef(false);
@@ -462,7 +462,6 @@ export function ReportView() {
       const [
         { data: prevReportData },
         { data: allReportsData },
-        { data: symptomLogsData },
       ] = await Promise.all([
         supabase
           .from('lab_reports')
@@ -478,12 +477,6 @@ export function ReportView() {
           .eq('user_id', reportData.user_id)
           .lt('report_date', reportData.report_date)
           .order('report_date', { ascending: true }),
-        supabase
-          .from('symptom_logs')
-          .select('*')
-          .eq('user_id', reportData.user_id)
-          .gte('log_date', windowStart.toISOString().split('T')[0])
-          .lte('log_date', windowEnd.toISOString().split('T')[0]),
       ]);
 
       if (prevReportData?.id) {
@@ -492,10 +485,6 @@ export function ReportView() {
           .select('*')
           .eq('lab_report_id', prevReportData.id);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
-      }
-
-      if (symptomLogsData) {
-        setSymptomLogs(symptomLogsData as SymptomLog[]);
       }
 
       if (allReportsData && allReportsData.length > 0) {
@@ -573,21 +562,6 @@ export function ReportView() {
     return top as 'text' | 'ocr' | 'manual';
   }, [reportAnalytes]);
 
-  const personalInsights = useMemo<PersonalPattern[]>(() => {
-    if (biomarkers.length === 0 || historicalReportCount === 0) return [];
-    const currentBiomarkers = biomarkers.map(b => ({
-      name: b.name,
-      value: b.value,
-      flagged: b.flagged as 'out_of_range' | 'borderline' | 'in_range' | 'unknown',
-    }));
-    return buildPersonalInsights(
-      currentBiomarkers,
-      historicalBiomarkers,
-      symptomLogs,
-      report?.report_date ?? ''
-    );
-  }, [biomarkers, historicalBiomarkers, symptomLogs, historicalReportCount, report]);
-
   const biomarkerPersonalizationMap = useMemo(() => {
     const map = new Map<string, {
       baselineStatus?: BaselineStatus;
@@ -664,7 +638,83 @@ export function ReportView() {
     return buildInsightSummary(current, previous, report?.estimated_cycle_phase);
   }, [biomarkers, previousBiomarkers, report, analyteTelemetryMap]);
 
+  // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
+  // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
+  const scoredBiomarkers = useMemo(() => {
+    return biomarkers.map(b => scoreBiomarker(
+      b.name as BiomarkerName,
+      b.value,
+      b.unit,
+      b.reference_min,
+      b.reference_max,
+      report?.estimated_cycle_phase as Parameters<typeof scoreBiomarker>[5],
+    ));
+  }, [biomarkers, report]);
 
+  // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
+  // server's interpretation already carries one but it's not surfaced to the
+  // client; this matches the same shape so YourHealthStory can render the
+  // honest "first tracked" / "improved" / "worsened" sentence.
+  const frontendPrimaryContext = useMemo<PrimaryContext | null>(() => {
+    if (!insightSummary?.primaryFinding) return null;
+    const pf = insightSummary.primaryFinding;
+    const change = insightSummary.biggestChanges.find(c => c.key === pf.key);
+
+    let trajectory: PrimaryContext['trajectory'] = 'no_prior_data';
+    if (change?.isFirstRecorded === false && change.previousValue !== null) {
+      if (change.boundaryCrossing?.direction === 'improved') trajectory = 'improving';
+      else if (change.boundaryCrossing?.direction === 'worsened') trajectory = 'worsening';
+      else if (change.trajectoryStatus === 'improving_still_high' || change.trajectoryStatus === 'improving_still_low') trajectory = 'improving';
+      else if (change.trajectoryStatus === 'worsening_still_high' || change.trajectoryStatus === 'worsening_still_low') trajectory = 'worsening';
+      else trajectory = 'unchanged';
+    }
+
+    const currentStatus: PrimaryContext['current_status'] =
+      pf.status === 'out_of_range' ? (pf.direction === 'high' ? 'elevated' : pf.direction === 'low' ? 'low' : 'out_of_range')
+      : pf.status === 'borderline' ? 'borderline'
+      : 'in_range';
+
+    return {
+      primary_biomarker: pf.displayName,
+      canonical_slug: pf.key,
+      current_value: pf.value,
+      previous_value: change?.previousValue ?? null,
+      unit: pf.unit,
+      current_status: currentStatus,
+      trajectory,
+      percent_change: change?.percentDelta ?? null,
+      prior_report_date: null,
+      supporting_biomarker: null,
+    };
+  }, [insightSummary]);
+
+  const focusAreas = useMemo(() => {
+    if (!insightSummary) return [];
+    return buildFocusAreas(
+      insightSummary,
+      insightSummary.watchSignals,
+      scoredBiomarkers,
+      interpretation?.what_you_can_do_now,
+    );
+  }, [insightSummary, scoredBiomarkers, interpretation]);
+
+  const healthStory = useMemo(() => {
+    if (!insightSummary) return { sentences: [] };
+    const topOutOfRange = insightSummary.topFindings
+      .filter(tf => tf.status === 'out_of_range' || tf.status === 'borderline')
+      .map(tf => ({
+        slug: tf.key as string,
+        displayName: tf.displayName,
+        value: String(tf.value),
+        unit: tf.unit ?? null,
+      }));
+    return buildHealthStory({
+      primaryContext: frontendPrimaryContext,
+      biggestChanges: insightSummary.biggestChanges,
+      topOutOfRange,
+      hasFocusAreas: focusAreas.length > 0,
+    });
+  }, [insightSummary, frontendPrimaryContext, focusAreas]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
@@ -1061,9 +1111,6 @@ export function ReportView() {
 
                 // 1a. Deterministic Override — Improving
                 if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
-                  const ch = ctx.primaryImprovingChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
-                  const conj = conjugate(insightSummary.primaryFinding.displayName);
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1077,12 +1124,8 @@ export function ReportView() {
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
-                          <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} {conj.remains} {dirWord} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but {conj.has} improved from {ch.previousValue} {ch.unit} since your last report
-                            {ch.percentDelta !== null ? ` (a ${Math.abs(ch.percentDelta)}% improvement)` : ''}.
-                          </p>
-                          <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3 mt-2.5">
-                            The drop from your prior result is encouraging. This does not mean the issue is resolved, but it does show movement in the right direction worth continuing to track.
+                          <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3">
+                            The drop from your prior result is encouraging — see Your Health Story below for context.
                           </p>
                         </div>
                       </div>
@@ -1092,8 +1135,6 @@ export function ReportView() {
 
                 // 1b. Deterministic Override — Worsening
                 if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
-                  const ch = ctx.primaryWorseningChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
@@ -1108,16 +1149,13 @@ export function ReportView() {
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
-                          <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} {conjugate(insightSummary.primaryFinding.displayName).remains} {dirWord} and {conjugate(insightSummary.primaryFinding.displayName).has} worsened from {ch.previousValue} to {ch.currentValue} {ch.unit} since your last report{ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : ''}.
-                          </p>
                           {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3 mt-2.5">
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3">
                               {aiWhyItMatters}
                             </p>
                           ) : (
-                            <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3 mt-2.5">
-                              This trend is worth discussing with your provider at your next visit.
+                            <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3">
+                              Worth discussing with your provider — see Your Health Story below for the full picture.
                             </p>
                           )}
                         </div>
@@ -1128,8 +1166,6 @@ export function ReportView() {
 
                 // 1c. Deterministic Override — Stable Abnormal
                 if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
-                  const ch = ctx.primaryStableChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
@@ -1144,16 +1180,13 @@ export function ReportView() {
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
-                          <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} {conjugate(insightSummary.primaryFinding.displayName).remains} {dirWord} and {conjugate(insightSummary.primaryFinding.displayName).has} not changed significantly from the prior report ({ch.previousValue} to {ch.currentValue} {ch.unit}).
-                          </p>
                           {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
                               {aiWhyItMatters}
                             </p>
                           ) : (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
-                              Continued tracking at your next panel will help clarify whether this is a persistent pattern.
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
+                              Continued tracking at your next panel will clarify the pattern — see Your Health Story below.
                             </p>
                           )}
                         </div>
@@ -1350,92 +1383,41 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── C2. Primary Finding (dominant single takeaway) ────── */}
-          {insightSummary?.primaryFinding && !isProcessing && (
-            <PrimaryInsightCard
-              finding={insightSummary.primaryFinding}
-              aiExplanation={
-                interpretation?.key_findings?.find(
-                  kf => kf.biomarker_slug === insightSummary.primaryFinding!.key
-                )?.explanation
-              }
-              delta={
-                insightSummary.biggestChanges.find(c => c.key === insightSummary.primaryFinding!.key) ??
-                (() => {
-                  const d = insightSummary.deltaMap.get(insightSummary.primaryFinding!.key);
-                  if (!d) return null;
-                  return {
-                    key: d.key,
-                    displayName: d.displayName,
-                    previousValue: d.previousValue,
-                    currentValue: d.currentValue,
-                    unit: d.unit,
-                    percentDelta: d.percentDelta,
-                    trendDirection: d.trendDirection,
-                    significance: d.significance,
-                    boundaryCrossing: d.boundaryCrossing,
-                    trajectoryStatus: d.trajectoryStatus,
-                    distanceToNormalImprovement: d.distanceToNormalImprovement,
-                    fact: '',
-                  };
-                })()
-              }
+          {/* ── B1. Your Health Story (NEW — narrative paragraph after Amani Analysis) ─── */}
+          {!isProcessing && healthStory.sentences.length > 0 && (
+            <YourHealthStory story={healthStory} />
+          )}
+
+          {/* ── B2. Your Trajectory (top-level, after Health Story) ─── */}
+          {insightSummary && !isProcessing && (
+            <YourTrajectoryCard
+              changes={insightSummary.biggestChanges}
+              primaryFinding={insightSummary.primaryFinding}
+              reportCount={historicalReportCount}
             />
           )}
 
-          {/* ── D. Top Findings (secondary items, softer tone) ────── */}
-          {insightSummary && !isProcessing && insightSummary.topFindings.length > 0 && (
-            <TopFindingsCard
-              findings={insightSummary.topFindings}
-              aiExplanations={
-                interpretation?.key_findings
-                  ? Object.fromEntries(
-                      interpretation.key_findings.map(kf => [kf.biomarker_slug, kf.explanation])
-                    )
-                  : undefined
-              }
-              isPrimary={false}
+          {/* ── B3. Focus Areas (NEW — system-level deterministic cards) ─── */}
+          {!isProcessing && focusAreas.length > 0 && (
+            <FocusAreas focusAreas={focusAreas} />
+          )}
+
+          {/* ── B4. Next Best Steps (NEW — merges old "Next Steps" + "What to Do Next" into Track/Discuss/Support/Retest) ─── */}
+          {!isProcessing && interpretation && (
+            <NextBestSteps
+              whatYouCanDoNow={interpretation.what_you_can_do_now}
+              whatToDoNext={interpretation.what_to_do_next}
             />
           )}
 
-          {/* ── D2. Biggest Changes (vs previous report) ─────────── */}
-          {insightSummary && !isProcessing && insightSummary.biggestChanges.length > 0 && (
-            <BiggestChangesCard changes={insightSummary.biggestChanges} />
-          )}
-
-          {/* ── D3. Your Patterns (personalization) ─────────────── */}
-          {personalInsights.length > 0 && !isProcessing && (
-            <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
-          )}
-
-          {/* ── D4. What to Watch ────────────────────────────────── */}
-          {insightSummary && !isProcessing && insightSummary.watchSignals.length > 0 && (
-            <WhatToWatchCard signals={insightSummary.watchSignals} />
-          )}
-
-          {/* ── C4. Next Steps ───────────────────────────────────── */}
-          {interpretation && !isProcessing && (interpretation.what_you_can_do_now?.length ?? 0) > 0 && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-emerald-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
-                    <Lightbulb className="w-4 h-4 text-emerald-700" />
-                  </div>
-                  <h2 className="text-sm font-bold text-emerald-900">Next Steps</h2>
-                </div>
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                {interpretation.what_you_can_do_now!.map((tip, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-emerald-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-emerald-800">{i + 1}</span>
-                    </div>
-                    <p className="text-sm text-emerald-900 leading-relaxed">{tip}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Legacy cards removed in this consolidation pass:
+              - PrimaryInsightCard (subsumed by Your Health Story)
+              - TopFindingsCard (subsumed by Focus Areas)
+              - BiggestChangesCard (subsumed by Your Trajectory)
+              - YourPatternsCard (subsumed by Your Health Story)
+              - WhatToWatchCard (subsumed by Focus Areas)
+              - inline "Next Steps" + WhatToDoNextCard (merged into Next Best Steps)
+              See git history for the original implementations. */}
 
           {/* ── E. More Details (Pattern Signals, Flags, Derived) ── */}
           {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
@@ -1556,6 +1538,10 @@ export function ReportView() {
             const reportPhase = report.estimated_cycle_phase;
             const resolvedPhase = (aiPhase && aiPhase !== 'unknown') ? aiPhase : (reportPhase && reportPhase !== 'unknown' ? reportPhase : null);
             if (!resolvedPhase) return null;
+            // Hide thin cycle-context card: phase alone duplicates the header pill.
+            // Only render when there's additional context (cycle day, AI explanation, or confidence label).
+            const hasExtraContext = !!(aiCycle?.estimated_cycle_day || aiCycle?.explanation || aiCycle?.confidence);
+            if (!hasExtraContext) return null;
             return (
               <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
