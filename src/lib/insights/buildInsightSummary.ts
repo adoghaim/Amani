@@ -195,7 +195,7 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
     .map(s => toTopFinding(s, null, deltaMap?.get(s.key)));
 }
 
-function formatPriorReportDate(date: string): string {
+export function formatPriorReportDate(date: string): string {
   const d = new Date(date);
   if (isNaN(d.getTime())) return 'your prior report';
   return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
@@ -244,6 +244,7 @@ function deltaToChange(d: BiomarkerDelta, immediatePriorReportDate: string | nul
     trajectoryStatus: d.trajectoryStatus,
     distanceToNormalImprovement: d.distanceToNormalImprovement,
     fact,
+    isFirstRecorded: false,
     priorReportDate: d.priorReportDate,
     priorIsOlderThanImmediatePrior: priorIsOlder,
   };

@@ -126,14 +126,6 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
       ),
     },
   ],
-  lipids: [
-    {
-      id: 'cardiovascular',
-      title: 'Cardiovascular support',
-      whyItMatters: 'Lipid markers are outside the optimal range. Tracking the full lipid panel together is more informative than any single value.',
-      matches: () => true,
-    },
-  ],
   inflammation: [
     {
       id: 'systemic',
@@ -148,6 +140,72 @@ function statusFor(s: ScoredBiomarker): FocusAreaMarker['status'] {
   if (s.concern === 2) return 'attention';
   if (s.concern === 1) return 'monitor';
   return 'reassuring';
+}
+
+function formatValue(n: number): string {
+  const abs = Math.abs(n);
+  const decimals = abs >= 10 ? 1 : 2;
+  const rounded = Number(n.toFixed(decimals));
+  return String(rounded);
+}
+
+function formatUnit(unit: string | null | undefined): string {
+  if (!unit) return '';
+  return ` ${unit}`;
+}
+
+function statusWord(s: ScoredBiomarker): string | null {
+  switch (s.amaniStatus) {
+    case 'borderline_high':
+      return 'borderline-high';
+    case 'borderline_low':
+      return 'borderline-low';
+    case 'out_of_range_high':
+      return 'elevated';
+    case 'out_of_range_low':
+      return 'low';
+    default:
+      return null;
+  }
+}
+
+const CATEGORY_CLOSER: Record<BiomarkerCategory, (primary: string) => string> = {
+  lipids: (primary) => `This makes the full lipid pattern more useful than judging ${primary} alone.`,
+  thyroid: (primary) => `This makes the full thyroid pattern more useful than judging ${primary} alone.`,
+  kidney: () => 'This pattern is worth tracking together.',
+  metabolic: () => 'Tracking these blood-sugar markers together gives the clearest picture.',
+  liver: () => 'Tracking these liver markers together is more informative than judging one alone.',
+  hormones: () => 'Reproductive-hormone context matters when interpreting these together.',
+  inflammation: () => 'Tracking inflammation markers together is more useful than a single value.',
+  nutrients: () => 'Nutrient status is best read across the full panel.',
+  blood: () => 'Tracking these hematology markers together is more useful than a single value.',
+};
+
+function buildValueRichWhy(
+  topMarkers: ScoredBiomarker[],
+  category: BiomarkerCategory,
+): string | null {
+  const flagged = topMarkers.filter(m => m.concern > 0);
+  const primary = flagged[0];
+  if (!primary) return null;
+  const primaryWord = statusWord(primary);
+  if (!primaryWord) return null;
+
+  const primaryName = getDisplayName(primary.key);
+  const primaryClause = `${primaryName} is ${primaryWord} at ${formatValue(primary.value)}${formatUnit(primary.unit)}`;
+
+  let leadSentence = `${primaryClause}.`;
+  const secondary = flagged[1];
+  if (secondary) {
+    const secondaryWord = statusWord(secondary);
+    if (secondaryWord) {
+      const secondaryName = getDisplayName(secondary.key);
+      leadSentence = `${primaryClause}, while ${secondaryName} is ${secondaryWord}.`;
+    }
+  }
+
+  const closer = CATEGORY_CLOSER[category](primaryName);
+  return `${leadSentence} ${closer}`;
 }
 
 function findMatchingNextAction(
@@ -263,6 +321,7 @@ function buildOneArea(
   );
   const whyItMatters = matchedWatch?.description
     ?? matchedRule?.whyItMatters
+    ?? buildValueRichWhy(topMarkers, category)
     ?? CATEGORY_DEFAULT_WHY[category];
 
   const matchedAction = findMatchingNextAction(whatYouCanDoNow, category, relatedMarkers);

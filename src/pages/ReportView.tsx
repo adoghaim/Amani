@@ -12,16 +12,16 @@ import { FocusAreas } from '../components/FocusAreas';
 import { NextBestSteps } from '../components/NextBestSteps';
 import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
 import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
-import { scoreBiomarker } from '../lib/scoring/scoreBiomarker';
+import { scoreBiomarker, type ScoredBiomarker } from '../lib/scoring/scoreBiomarker';
 import { SystemSummaryCards } from '../components/SystemSummaryCards';
 import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
-import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
+import { getCategory, getDisplayName, getImportance } from '../lib/biomarkers/dictionary';
 import { RECOMMENDED_LABS } from '../lib/biomarkers/recommendedLabs';
 import { classifyLabValue } from '../utils/classifyLabValue';
-import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
+import { buildInsightSummary, formatPriorReportDate } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
@@ -113,6 +113,45 @@ function conjugate(displayName: string): { remains: string; has: string; is: str
     has: plural ? 'have' : 'has',
     is: plural ? 'are' : 'is',
   };
+}
+
+function formatList(items: string[]): string {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0]!;
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  try {
+    const ListFormatCtor = (Intl as unknown as {
+      ListFormat?: new (locale: string, opts: { style: string; type: string }) => { format: (items: string[]) => string };
+    }).ListFormat;
+    if (ListFormatCtor) {
+      const lf = new ListFormatCtor('en', { style: 'long', type: 'conjunction' });
+      return lf.format(items);
+    }
+  } catch {
+    // fall through
+  }
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+function getSystemMates(
+  primaryKey: BiomarkerName,
+  scored: ScoredBiomarker[],
+): string[] {
+  const primaryCategory = getCategory(primaryKey);
+  if (!primaryCategory) return [];
+  const seen = new Set<string>();
+  const mates: string[] = [];
+  for (const s of scored) {
+    if (s.key === primaryKey) continue;
+    if (getCategory(s.key) !== primaryCategory) continue;
+    if (getImportance(s.key) !== 'critical') continue;
+    const name = getDisplayName(s.key);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    mates.push(name);
+    if (mates.length >= 3) break;
+  }
+  return mates;
 }
 
 function getOpeningContext(summary: InsightSummary): OpeningContext {
@@ -700,7 +739,7 @@ export function ReportView() {
     const change = insightSummary.biggestChanges.find(c => c.key === pf.key);
 
     let trajectory: PrimaryContext['trajectory'] = 'no_prior_data';
-    if (change?.isFirstRecorded === false && change.previousValue !== null) {
+    if (change && !change.isFirstRecorded && change.previousValue !== null) {
       if (change.boundaryCrossing?.direction === 'improved') trajectory = 'improving';
       else if (change.boundaryCrossing?.direction === 'worsened') trajectory = 'worsening';
       else if (change.trajectoryStatus === 'improving_still_high' || change.trajectoryStatus === 'improving_still_low') trajectory = 'improving';
@@ -1075,11 +1114,14 @@ export function ReportView() {
 
                       // Force trajectory headline override if improving
                       if (isImproving && ctx.primaryImprovingChange) {
+                        const ch = ctx.primaryImprovingChange;
                         const worsened = ctx.worseningChange;
                         const secondaryFinding = outOfRange.find(f => f.displayName !== topName)
                           ?? borderline.find(f => f.displayName !== topName)
                           ?? null;
-                        const main = `${topName} ${dirLabel}, but ${topConj.has} improved from your prior report.`;
+                        const main = ch.priorReportDate
+                          ? `${topName} ${dirLabel}, but ${topConj.has} improved from ${ch.previousValue} to ${ch.currentValue} ${ch.unit} since ${formatPriorReportDate(ch.priorReportDate)}.`
+                          : `${topName} ${dirLabel}, but ${topConj.has} improved from ${ch.previousValue} to ${ch.currentValue} ${ch.unit} since your prior report.`;
                         if (worsened && worsened.displayName !== topName) {
                           const wConj = conjugate(worsened.displayName);
                           const w = worsened.trendDirection === 'up' ? `${wConj.has} risen` : worsened.trendDirection === 'down' ? `${wConj.has} dropped` : `${wConj.has} shifted`;
@@ -1150,6 +1192,15 @@ export function ReportView() {
 
                 // 1a. Deterministic Override — Improving
                 if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
+                  const ch = ctx.primaryImprovingChange;
+                  const pf = insightSummary.primaryFinding;
+                  const conj = conjugate(pf.displayName);
+                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
+                  const factSentence = `${pf.displayName} ${conj.remains} ${dirWord} at ${ch.currentValue} ${ch.unit}, but ${conj.has} improved from ${ch.previousValue} ${ch.unit}.`;
+                  const mates = getSystemMates(pf.key, scoredBiomarkers);
+                  const mateClause = mates.length > 0
+                    ? ` This is encouraging movement, while still worth tracking with ${formatList(mates)}.`
+                    : ' This is encouraging movement worth continuing to track.';
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1164,7 +1215,7 @@ export function ReportView() {
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3">
-                            The drop from your prior result is encouraging — see Your Health Story below for context.
+                            {factSentence}{mateClause}
                           </p>
                         </div>
                       </div>
@@ -1175,6 +1226,15 @@ export function ReportView() {
                 // 1b. Deterministic Override — Worsening
                 if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  const ch = ctx.primaryWorseningChange;
+                  const pf = insightSummary.primaryFinding;
+                  const conj = conjugate(pf.displayName);
+                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
+                  const factSentence = `${pf.displayName} ${conj.remains} ${dirWord} at ${ch.currentValue} ${ch.unit}, having shifted from ${ch.previousValue} ${ch.unit}.`;
+                  const mates = getSystemMates(pf.key, scoredBiomarkers);
+                  const mateClause = mates.length > 0
+                    ? ` This is worth attention; the related markers ${formatList(mates)} are worth tracking alongside.`
+                    : ' This is worth attention and continued tracking.';
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1194,7 +1254,7 @@ export function ReportView() {
                             </p>
                           ) : (
                             <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3">
-                              Worth discussing with your provider — see Your Health Story below for the full picture.
+                              {factSentence}{mateClause}
                             </p>
                           )}
                         </div>
@@ -1206,6 +1266,15 @@ export function ReportView() {
                 // 1c. Deterministic Override — Stable Abnormal
                 if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  const ch = ctx.primaryStableChange;
+                  const pf = insightSummary.primaryFinding;
+                  const conj = conjugate(pf.displayName);
+                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
+                  const factSentence = `${pf.displayName} ${conj.remains} ${dirWord} at ${ch.currentValue} ${ch.unit}, largely unchanged from ${ch.previousValue} ${ch.unit}.`;
+                  const mates = getSystemMates(pf.key, scoredBiomarkers);
+                  const mateClause = mates.length > 0
+                    ? ` Continued tracking with ${formatList(mates)} will clarify the pattern.`
+                    : ' Continued tracking at your next panel will clarify the pattern.';
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1225,7 +1294,7 @@ export function ReportView() {
                             </p>
                           ) : (
                             <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
-                              Continued tracking at your next panel will clarify the pattern — see Your Health Story below.
+                              {factSentence}{mateClause}
                             </p>
                           )}
                         </div>

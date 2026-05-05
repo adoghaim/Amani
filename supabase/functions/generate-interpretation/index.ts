@@ -835,6 +835,7 @@ Rules:
 - Frame as discussion topics with a clinician, not directives
 - Never mention herbal/adaptogen supplements (ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
 - Write like a knowledgeable friend giving a real tip, not a disclaimer
+- When suggesting food or lifestyle support, name the specific food (e.g. 'avocados, nuts, olive oil') and the marker it supports — not generic categories like 'healthy foods'.
 
 DO NOT:
 - Give dosages
@@ -861,10 +862,15 @@ SECTION 5 — WHAT TO DO NEXT
 
 Keep this completely distinct from "What You Can Do Now" — no overlap.
 
+- Specific markers, not categories. Name the specific follow-up markers when known. For example, write 'TPO antibodies, TSH, Free T4, and Free T3' rather than 'thyroid markers' or 'thyroid function tests'. If multiple markers are flagged in the same physiological system, list each by name (up to 5 max). Use the lab panel data above as the source of marker names.
+- Direct phrasing, not hedge phrases. Use direct phrasing. Prefer 'Discuss whether repeating X makes sense' over 'X can be helpful'. Prefer 'Review X with your provider if Y' over 'X might be worth discussing'. Banned phrases: 'can be helpful', 'might be worth', 'may be worth', 'could be worth'. Replace with: 'Discuss…', 'Review…', 'Consider repeating…'.
+
 Examples of good next steps:
 - "Continue monitoring vitamin D levels — retest in 2–3 months to see if the trend holds."
 - "Consider retesting thyroid markers at a different cycle phase for a clearer picture."
 - "Track how your energy and sleep align with these results over the next few weeks."
+- "Discuss whether repeating thyroid markers, including TPO antibodies, TSH, Free T4, and Free T3, makes sense based on your symptoms and timeline."
+- "Review hydration, protein intake, and repeat kidney markers with your provider if the BUN/Creatinine Ratio stays elevated."
 
 Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_now.
 
