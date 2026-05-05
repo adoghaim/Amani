@@ -450,10 +450,25 @@ export function NewReport() {
 
       setSubmitStep('saving');
       const normalized = normalizeReportItems(reportItems);
-      const itemsToSave = normalized.filter(i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000);
+      const allItemsToSave = normalized.filter(i => {
+        const rawName = (i.raw_biomarker_name ?? i.raw_name ?? '').trim();
+        const rawValue = (i.value_text ?? '').trim();
+        const hasNumeric = i.value_numeric != null;
+        return rawName.length > 0 && (hasNumeric || rawValue.length > 0);
+      });
+      const droppedRows = normalized.filter(i => !allItemsToSave.includes(i));
+      if (droppedRows.length > 0) {
+        console.warn(
+          `[NewReport] Dropped ${droppedRows.length} malformed parsed row(s) from save:`,
+          droppedRows.map(r => r.raw_biomarker_name ?? r.raw_name ?? '<missing raw_name>')
+        );
+      }
+      const scorableItemsToSave = allItemsToSave.filter(
+        i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000
+      );
 
-      if (itemsToSave.length > 0) {
-        const coreItems = itemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
+      if (allItemsToSave.length > 0) {
+        const coreItems = scorableItemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
           const biomarkerInserts = coreItems.map(item => {
             const slug = item.canonical_slug! as BiomarkerName;
@@ -484,13 +499,13 @@ export function NewReport() {
         }
 
         const analyteIdBySlug = new Map<string, string>();
-        const slugsToResolve = [...new Set(itemsToSave.map(i => i.canonical_slug).filter((s): s is string => !!s))];
+        const slugsToResolve = [...new Set(allItemsToSave.map(i => i.canonical_slug).filter((s): s is string => !!s))];
         if (slugsToResolve.length > 0) {
           const { data: caRows } = await supabase.from('canonical_analytes').select('id, slug').in('slug', slugsToResolve);
           if (caRows) caRows.forEach((row: { id: string; slug: string }) => analyteIdBySlug.set(row.slug, row.id));
         }
 
-        const analyteInserts = itemsToSave.map(item => {
+        const analyteInserts = allItemsToSave.map(item => {
           const slug = item.canonical_slug ?? null;
           const canonicalAnalyteId = slug ? (analyteIdBySlug.get(slug) ?? null) : null;
           const isMapped = item.normalization_status === 'mapped';

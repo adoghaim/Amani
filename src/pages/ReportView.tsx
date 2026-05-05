@@ -310,6 +310,8 @@ export function ReportView() {
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [previousBiomarkers, setPreviousBiomarkers] = useState<Biomarker[]>([]);
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
+  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>>(new Map());
+  const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const interpPollingActive = useRef(false);
@@ -465,7 +467,7 @@ export function ReportView() {
       ] = await Promise.all([
         supabase
           .from('lab_reports')
-          .select('id')
+          .select('id, report_date')
           .eq('user_id', reportData.user_id)
           .lt('report_date', reportData.report_date)
           .order('report_date', { ascending: false })
@@ -486,6 +488,9 @@ export function ReportView() {
           .eq('lab_report_id', prevReportData.id);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
       }
+      if (prevReportData?.report_date) {
+        setImmediatePriorReportDate(prevReportData.report_date);
+      }
 
       if (allReportsData && allReportsData.length > 0) {
         setHistoricalReportCount(allReportsData.length);
@@ -497,18 +502,35 @@ export function ReportView() {
         const allHistoricalIds = allReportsData.map(r => r.id);
         const { data: allHistoricalBiomarkers } = await supabase
           .from('biomarkers')
-          .select('name, value, lab_report_id')
+          .select('name, value, unit, reference_min, reference_max, lab_report_id')
           .in('lab_report_id', allHistoricalIds);
 
         if (allHistoricalBiomarkers) {
           const histMap = new Map<string, { reportDate: string; value: number }[]>();
+          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
           for (const b of allHistoricalBiomarkers) {
             const reportDate = reportDateMap.get(b.lab_report_id);
             if (!reportDate) continue;
             if (!histMap.has(b.name)) histMap.set(b.name, []);
             histMap.get(b.name)!.push({ reportDate, value: b.value });
+            if (!occurrences.has(b.name)) occurrences.set(b.name, []);
+            occurrences.get(b.name)!.push({
+              reportDate,
+              value: b.value,
+              unit: b.unit,
+              reference_min: b.reference_min,
+              reference_max: b.reference_max,
+            });
           }
           setHistoricalBiomarkers(histMap);
+
+          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>();
+          for (const [name, list] of occurrences) {
+            const sorted = [...list].sort((a, b) => a.reportDate.localeCompare(b.reportDate));
+            const last = sorted[sorted.length - 1];
+            if (last) latestPriorByMarker.set(name, last);
+          }
+          setPreviousBiomarkerOccurrences(latestPriorByMarker);
         }
       }
     }
@@ -626,17 +648,18 @@ export function ReportView() {
         sourceFormat: telemetry?.sourceFormat ?? null,
       };
     });
-    const previous = previousBiomarkers.length > 0
-      ? previousBiomarkers.map(b => ({
-          key: b.name as BiomarkerName,
-          value: b.value,
-          unit: b.unit,
-          labRefMin: b.reference_min,
-          labRefMax: b.reference_max,
+    const previous = previousBiomarkerOccurrences.size > 0
+      ? Array.from(previousBiomarkerOccurrences.entries()).map(([name, occ]) => ({
+          key: name as BiomarkerName,
+          value: occ.value,
+          unit: occ.unit,
+          labRefMin: occ.reference_min,
+          labRefMax: occ.reference_max,
+          reportDate: occ.reportDate,
         }))
       : null;
-    return buildInsightSummary(current, previous, report?.estimated_cycle_phase);
-  }, [biomarkers, previousBiomarkers, report, analyteTelemetryMap]);
+    return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
+  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap]);
 
   // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
   // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
@@ -683,7 +706,7 @@ export function ReportView() {
       current_status: currentStatus,
       trajectory,
       percent_change: change?.percentDelta ?? null,
-      prior_report_date: null,
+      prior_report_date: change?.priorReportDate ?? null,
       supporting_biomarker: null,
     };
   }, [insightSummary]);

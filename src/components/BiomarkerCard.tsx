@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Info, BookOpen } from 'lucide-react';
 import { computeAmaniStatus, computeLabStatus } from '../lib/scoring/scoreBiomarker';
 import { amaniStatusToVariant, STATUS_PILL_CONFIG } from '../lib/scoring/statusPill';
 import { getEntry, getDisplayName } from '../lib/biomarkers/dictionary';
-import type { BiomarkerName, CyclePhase, AmaniStatus, BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import type { BiomarkerName, CyclePhase, AmaniStatus, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 
 interface BiomarkerCardProps {
@@ -21,8 +21,26 @@ interface BiomarkerCardProps {
   historicalValues?: { date: string; value: number }[];
   baselineStatus?: BaselineStatus;
   baselineValue?: number;
+  baselineStaleness?: BaselineStaleness;
   trendDirection?: TrendDirection;
   trendStrength?: TrendStrength;
+}
+
+function baselineCopy(
+  status: BaselineStatus,
+  staleness: BaselineStaleness
+): string | null {
+  if (staleness === 'limited') return 'Limited prior history';
+  if (status === 'above_baseline') {
+    return staleness === 'stale' ? 'Higher compared with older history' : 'Higher than your usual level';
+  }
+  if (status === 'below_baseline') {
+    return staleness === 'stale' ? 'Lower compared with older history' : 'Lower than your usual level';
+  }
+  if (status === 'near_baseline') {
+    return staleness === 'stale' ? 'Within your older history range' : 'Within your usual range';
+  }
+  return null;
 }
 
 function formatRangeLabel(n: number): string {
@@ -167,6 +185,7 @@ export function BiomarkerCard({
   whenCliniciansFollowUp,
   historicalValues,
   baselineStatus,
+  baselineStaleness,
   trendDirection,
   trendStrength,
 }: BiomarkerCardProps) {
@@ -227,20 +246,33 @@ export function BiomarkerCard({
               <span className="text-xs text-[#9A8A90]">· lab ref: {labRefMin}–{labRefMax}</span>
             )}
           </div>
-          {(baselineStatus && baselineStatus !== 'insufficient_data' && baselineStatus !== 'near_baseline') || (trendDirection && trendDirection !== 'stable' && trendDirection !== 'fluctuating' && trendDirection !== 'insufficient_data' && trendStrength !== 'weak') ? (
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              {baselineStatus && baselineStatus !== 'insufficient_data' && baselineStatus !== 'near_baseline' && (
-                <span className="text-[10px] text-teal-600 font-medium">
-                  {baselineStatus === 'above_baseline' ? 'Higher than your usual level' : 'Lower than your usual level'}
-                </span>
-              )}
-              {trendDirection && trendDirection !== 'stable' && trendDirection !== 'fluctuating' && trendDirection !== 'insufficient_data' && trendStrength !== 'weak' && (
-                <span className="text-[10px] text-sky-600 font-medium">
-                  Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
-                </span>
-              )}
-            </div>
-          ) : null}
+          {(() => {
+            const effectiveStaleness: BaselineStaleness = baselineStaleness ?? 'fresh';
+            const showBaselinePill = baselineStatus
+              && baselineStatus !== 'near_baseline'
+              && (effectiveStaleness === 'limited' || baselineStatus !== 'insufficient_data');
+            const baselineLabel = showBaselinePill && baselineStatus
+              ? baselineCopy(baselineStatus, effectiveStaleness)
+              : null;
+            const showTrendPill = trendDirection
+              && trendDirection !== 'stable'
+              && trendDirection !== 'fluctuating'
+              && trendDirection !== 'insufficient_data'
+              && trendStrength !== 'weak';
+            if (!baselineLabel && !showTrendPill) return null;
+            return (
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {baselineLabel && (
+                  <span className="text-[10px] text-teal-600 font-medium">{baselineLabel}</span>
+                )}
+                {showTrendPill && (
+                  <span className="text-[10px] text-sky-600 font-medium">
+                    Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
           {(optMin !== null && optMax !== null) && (
             <RangeBar value={value} optMin={optMin} optMax={optMax} clinMin={labRefMin ?? clinMin} clinMax={labRefMax ?? clinMax} />
           )}
