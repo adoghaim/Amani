@@ -36,14 +36,37 @@ interface BuildHealthStoryArgs {
   hasFocusAreas: boolean;
 }
 
-function statusWord(status: PrimaryContext['current_status']): string {
+function rangeWord(status: PrimaryContext['current_status'], direction?: 'high' | 'low'): string {
   switch (status) {
-    case 'elevated': return 'elevated';
-    case 'low': return 'low';
-    case 'borderline': return 'borderline';
-    case 'out_of_range': return 'outside range';
+    case 'elevated': return 'above range';
+    case 'low': return 'below range';
+    case 'borderline': return 'near the boundary';
     case 'in_range': return 'within range';
+    case 'out_of_range':
+      if (direction === 'high') return 'above range';
+      if (direction === 'low') return 'below range';
+      return 'outside range';
   }
+}
+
+function isPluralSubject(displayName: string): boolean {
+  const n = displayName.toLowerCase();
+  return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins|markers)\b/.test(n);
+}
+
+function conjugate(displayName: string): { has: 'has' | 'have'; remain: 'remains' | 'remain' } {
+  const plural = isPluralSubject(displayName);
+  return {
+    has: plural ? 'have' : 'has',
+    remain: plural ? 'remain' : 'remains',
+  };
+}
+
+function formatValue(n: number): string {
+  const abs = Math.abs(n);
+  const decimals = abs >= 10 ? 1 : 2;
+  const rounded = Number(n.toFixed(decimals));
+  return String(rounded);
 }
 
 function secondaryStatusWord(displayName: string, slug: string, biggestChanges: BiggestChange[]): string {
@@ -67,35 +90,35 @@ function buildPrimarySentence(ctx: PrimaryContext | null): HealthStorySentence |
   }
 
   const name = ctx.primary_biomarker;
-  const status = statusWord(ctx.current_status);
+  const range = rangeWord(ctx.current_status);
   const unit = formatUnit(ctx.unit);
-  const cur = ctx.current_value;
   const prev = ctx.previous_value;
+  const { has: conjHas, remain: conjRemain } = conjugate(name);
 
   if (ctx.trajectory === 'improving' && prev !== null) {
     return {
       kind: 'primary',
-      text: `${name} remains ${status} at ${cur}${unit}, but has improved from ${prev}${unit} since your last report.`,
+      text: `${name} ${conjHas} improved from ${formatValue(prev)}${unit} to ${formatValue(ctx.current_value)}${unit} since your prior report, while still remaining ${range}.`,
     };
   }
 
   if (ctx.trajectory === 'worsening' && prev !== null) {
     return {
       kind: 'primary',
-      text: `${name} remains ${status} at ${cur}${unit} and has increased from ${prev}${unit} since your last report.`,
+      text: `${name} ${conjHas} increased since your prior report and ${conjRemain} ${range}.`,
     };
   }
 
   if (ctx.trajectory === 'unchanged' && prev !== null) {
     return {
       kind: 'primary',
-      text: `${name} remains ${status} at ${cur}${unit} and has not changed significantly from your previous result.`,
+      text: `${name} ${conjRemain} ${range} and ${conjHas} not changed significantly since your prior report.`,
     };
   }
 
   return {
     kind: 'primary',
-    text: `${name} is ${status} at ${cur}${unit} — this is the first tracked ${name} result in Amani, so future reports will show whether it is improving or worsening.`,
+    text: `This is the first tracked ${name} result in Amani, so future reports will show whether this marker is improving, worsening, or staying stable.`,
   };
 }
 
