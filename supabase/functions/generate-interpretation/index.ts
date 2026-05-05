@@ -827,7 +827,6 @@ This is actionable, empowering, and practical. Users read this closely.
 
 Rules:
 - Provide 3–5 suggestions, each tied to a specific flagged marker
-- Group suggestions by issue when possible (e.g., "For your thyroid:", "For glucose:")
 - Cover at least 2 of: nutrition, lifestyle, safe general supplements
 - Supplements allowed (only if directly tied to a flagged lab value or symptom): ${ALLOWED_NUTRIENTS_PROMPT_LIST}
 - Never give dosages, frequencies, brands, or units (no IU, mg, mcg, g, mL, "daily", "twice a day", "with food")
@@ -836,6 +835,7 @@ Rules:
 - Never mention herbal/adaptogen supplements (ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
 - Write like a knowledgeable friend giving a real tip, not a disclaimer
 - When suggesting food or lifestyle support, name the specific food (e.g. 'avocados, nuts, olive oil') and the marker it supports — not generic categories like 'healthy foods'.
+- No "For your X:" prefixes. Do not begin bullets with phrases like "For your thyroid:" or "For your HDL cholesterol:". Lead directly with the verb. Example: write "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish." not "For your HDL cholesterol: Incorporating healthy fats can help...".
 
 DO NOT:
 - Give dosages
@@ -846,9 +846,9 @@ DO NOT:
 Tone: practical, warm, specific
 
 GOOD examples:
-- "For your iron stores: ferritin can be slow to rebuild — pairing iron-rich foods like lentils or dark leafy greens with a vitamin C source helps absorption. Worth asking your provider about how to approach this."
-- "For glucose: swapping refined carbs for fiber-rich foods like legumes, oats, or vegetables can help blunt post-meal glucose spikes."
-- "For your vitamin D: 15–20 minutes of midday sun a few times a week is a simple place to start, especially if you're indoors most of the day."
+- "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish."
+- "Pair iron-rich foods like lentils or dark leafy greens with a vitamin C source to support ferritin rebuilding."
+- "Aim for 15–20 minutes of midday sun a few times a week to support vitamin D, especially if you're indoors most of the day."
 - "Magnesium-rich foods like pumpkin seeds, dark leafy greens, and dark chocolate can support sleep and stress regulation — relevant here."
 
 -----------------------------------
@@ -864,13 +864,14 @@ Keep this completely distinct from "What You Can Do Now" — no overlap.
 
 - Specific markers, not categories. Name the specific follow-up markers when known. For example, write 'TPO antibodies, TSH, Free T4, and Free T3' rather than 'thyroid markers' or 'thyroid function tests'. If multiple markers are flagged in the same physiological system, list each by name (up to 5 max). Use the lab panel data above as the source of marker names.
 - Direct phrasing, not hedge phrases. Use direct phrasing. Prefer 'Discuss whether repeating X makes sense' over 'X can be helpful'. Prefer 'Review X with your provider if Y' over 'X might be worth discussing'. Banned phrases: 'can be helpful', 'might be worth', 'may be worth', 'could be worth'. Replace with: 'Discuss…', 'Review…', 'Consider repeating…'.
+- No "For your X:" prefixes. Lead with the action verb. Write "Discuss whether repeating thyroid markers makes sense" not "For your thyroid: Discuss whether repeating thyroid markers makes sense". The bucketing UI already groups by system, so the prefix is redundant.
 
 Examples of good next steps:
+- "Discuss whether repeating TPO antibodies, TSH, Free T4, and Free T3 makes sense based on your symptoms and timeline."
+- "Review BUN/Creatinine Ratio if hydration, protein intake, or kidney markers remain a concern."
+- "Consider retesting thyroid markers in a few months to confirm the trend."
 - "Continue monitoring vitamin D levels — retest in 2–3 months to see if the trend holds."
-- "Consider retesting thyroid markers at a different cycle phase for a clearer picture."
 - "Track how your energy and sleep align with these results over the next few weeks."
-- "Discuss whether repeating thyroid markers, including TPO antibodies, TSH, Free T4, and Free T3, makes sense based on your symptoms and timeline."
-- "Review hydration, protein intake, and repeat kidney markers with your provider if the BUN/Creatinine Ratio stays elevated."
 
 Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_now.
 

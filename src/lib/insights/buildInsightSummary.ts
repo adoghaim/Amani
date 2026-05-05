@@ -201,6 +201,19 @@ export function formatPriorReportDate(date: string): string {
   return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
 }
 
+function isPluralSubject(displayName: string): boolean {
+  const n = displayName.toLowerCase();
+  return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(n);
+}
+
+function conjugate(displayName: string): { has: 'has' | 'have'; remain: 'remains' | 'remain' } {
+  const plural = isPluralSubject(displayName);
+  return {
+    has: plural ? 'have' : 'has',
+    remain: plural ? 'remain' : 'remains',
+  };
+}
+
 function deltaToChange(d: BiomarkerDelta, immediatePriorReportDate: string | null): BiggestChange {
   const pct = d.percentDelta !== null
     ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`
@@ -331,9 +344,10 @@ function buildDoctorQuestions(
   for (const d of improvingAbnormal.slice(0, 1)) {
     used.add(d.key);
     const name = d.displayName;
-    const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
+    const { has: conjHas, remain: conjRemain } = conjugate(name);
+    const dirWord = d.trajectoryStatus === 'improving_still_low' ? 'low' : 'elevated';
     questions.push({
-      text: `My ${name} dropped from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} and remains elevated. Is this rate of improvement clinically meaningful, and what should I aim for?`,
+      text: `My ${name} ${conjHas} improved but ${conjRemain} ${dirWord}. Is this rate of improvement clinically meaningful, and what should I aim for?`,
       relatedBiomarker: d.key,
     });
   }

@@ -19,7 +19,6 @@ import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { getCategory, getDisplayName, getImportance } from '../lib/biomarkers/dictionary';
-import { RECOMMENDED_LABS } from '../lib/biomarkers/recommendedLabs';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { buildInsightSummary, formatPriorReportDate } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
@@ -34,7 +33,7 @@ import type {
 } from '../types';
 import {
   RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
-  Microscope, Sparkles, Stethoscope, CalendarDays,
+  Microscope, Sparkles, CalendarDays,
   CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
@@ -349,7 +348,6 @@ export function ReportView() {
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
-  const [showRecommendedLabs, setShowRecommendedLabs] = useState(true);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
@@ -873,13 +871,6 @@ export function ReportView() {
 
   const totalAnalyteCount = useMemo(() => reportAnalytes.filter(a => !a.is_core).length, [reportAnalytes]);
 
-  const hasRecommendedLabs = useMemo(() => {
-    const presentSet = new Set(presentBiomarkerNames);
-    return (Object.keys(RECOMMENDED_LABS) as BiomarkerCategory[]).some(cat =>
-      (RECOMMENDED_LABS[cat] ?? []).some(r => !presentSet.has(r.name))
-    );
-  }, [presentBiomarkerNames]);
-
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
     if (userProfile?.subscription_status !== 'active' && !isTrialActive()) return;
@@ -1120,8 +1111,8 @@ export function ReportView() {
                           ?? borderline.find(f => f.displayName !== topName)
                           ?? null;
                         const main = ch.priorReportDate
-                          ? `${topName} ${dirLabel}, but ${topConj.has} improved from ${ch.previousValue} to ${ch.currentValue} ${ch.unit} since ${formatPriorReportDate(ch.priorReportDate)}.`
-                          : `${topName} ${dirLabel}, but ${topConj.has} improved from ${ch.previousValue} to ${ch.currentValue} ${ch.unit} since your prior report.`;
+                          ? `${topName} ${dirLabel} but ${topConj.has} improved since ${formatPriorReportDate(ch.priorReportDate)}.`
+                          : `${topName} ${dirLabel} but ${topConj.has} improved since your prior report.`;
                         if (worsened && worsened.displayName !== topName) {
                           const wConj = conjugate(worsened.displayName);
                           const w = worsened.trendDirection === 'up' ? `${wConj.has} risen` : worsened.trendDirection === 'down' ? `${wConj.has} dropped` : `${wConj.has} shifted`;
@@ -1138,14 +1129,15 @@ export function ReportView() {
                       // Force trajectory headline override if primary is worsening
                       if (isWorsening && ctx.primaryWorseningChange) {
                         const ch = ctx.primaryWorseningChange;
-                        const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}`;
-                        return `${topName} ${dirLabel} and has worsened ${valueStr} since your last report — worth discussing with your provider.`;
+                        const dateClause = ch.priorReportDate
+                          ? `since ${formatPriorReportDate(ch.priorReportDate)}`
+                          : 'since your last report';
+                        return `${topName} ${dirLabel} and has worsened ${dateClause} — worth discussing with your provider.`;
                       }
 
                       // Force trajectory headline override if primary is stable abnormal
                       if (isStableAbnormal && ctx.primaryStableChange) {
-                        const ch = ctx.primaryStableChange;
-                        return `${topName} ${dirLabel} and has not changed significantly from the prior report (${ch.previousValue} to ${ch.currentValue} ${ch.unit}).`;
+                        return `${topName} ${dirLabel} and has not changed significantly from the prior report.`;
                       }
 
                       // If AI headline available and no trajectory override, use AI headline
@@ -1192,15 +1184,10 @@ export function ReportView() {
 
                 // 1a. Deterministic Override — Improving
                 if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
-                  const ch = ctx.primaryImprovingChange;
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const factSentence = `${pf.displayName} ${conj.remains} ${dirWord} at ${ch.currentValue} ${ch.unit}, but ${conj.has} improved from ${ch.previousValue} ${ch.unit}.`;
-                  const mates = getSystemMates(pf.key, scoredBiomarkers);
-                  const mateClause = mates.length > 0
-                    ? ` This is encouraging movement, while still worth tracking with ${formatList(mates)}.`
-                    : ' This is encouraging movement worth continuing to track.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} but ${conj.has} improved since your prior report — encouraging movement worth continuing to track.`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1215,7 +1202,7 @@ export function ReportView() {
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3">
-                            {factSentence}{mateClause}
+                            {subnote}
                           </p>
                         </div>
                       </div>
@@ -1226,15 +1213,10 @@ export function ReportView() {
                 // 1b. Deterministic Override — Worsening
                 if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
-                  const ch = ctx.primaryWorseningChange;
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const factSentence = `${pf.displayName} ${conj.remains} ${dirWord} at ${ch.currentValue} ${ch.unit}, having shifted from ${ch.previousValue} ${ch.unit}.`;
-                  const mates = getSystemMates(pf.key, scoredBiomarkers);
-                  const mateClause = mates.length > 0
-                    ? ` This is worth attention; the related markers ${formatList(mates)} are worth tracking alongside.`
-                    : ' This is worth attention and continued tracking.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} shifted in the wrong direction since your prior report. Worth attention with your provider.`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1254,7 +1236,7 @@ export function ReportView() {
                             </p>
                           ) : (
                             <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3">
-                              {factSentence}{mateClause}
+                              {subnote}
                             </p>
                           )}
                         </div>
@@ -1266,15 +1248,10 @@ export function ReportView() {
                 // 1c. Deterministic Override — Stable Abnormal
                 if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
-                  const ch = ctx.primaryStableChange;
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const factSentence = `${pf.displayName} ${conj.remains} ${dirWord} at ${ch.currentValue} ${ch.unit}, largely unchanged from ${ch.previousValue} ${ch.unit}.`;
-                  const mates = getSystemMates(pf.key, scoredBiomarkers);
-                  const mateClause = mates.length > 0
-                    ? ` Continued tracking with ${formatList(mates)} will clarify the pattern.`
-                    : ' Continued tracking at your next panel will clarify the pattern.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} not changed significantly. Continued tracking will clarify the pattern.`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1294,7 +1271,7 @@ export function ReportView() {
                             </p>
                           ) : (
                             <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
-                              {factSentence}{mateClause}
+                              {subnote}
                             </p>
                           )}
                         </div>
@@ -1373,121 +1350,6 @@ export function ReportView() {
                 </div>
               )}
 
-              {/* What This Means — narrative, unified inside the card */}
-              {insightSummary && (() => {
-                const aiText = interpretation?.overall_interpretation;
-                const topFindings = insightSummary.primaryFinding
-                  ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
-                  : insightSummary.topFindings;
-
-                const outOfRange = topFindings.filter(f => f.status === 'out_of_range');
-                const borderline = topFindings.filter(f => f.status === 'borderline');
-                const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
-                const worsened = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'worsened');
-                const ctx = getOpeningContext(insightSummary);
-
-                let fallback = '';
-                const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
-                if (outOfRange.length === 0 && borderline.length === 0) {
-                  if (improved.length > 0) {
-                    const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
-                    fallback = `Your panel looks solid overall, with ${names} showing improvement since your last draw. The trend is moving in a positive direction.`;
-                  } else {
-                    fallback = `All measured values are within optimal ranges. This is a useful baseline to track over time.`;
-                  }
-                } else if (ctx.primaryIsImproving && ctx.primaryImprovingChange) {
-                  const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'below range' : 'above range';
-                  const topConj = topName ? conjugate(topName) : { remains: 'remains', has: 'has', is: 'is' };
-                  if (!ctx.anyWorsening) {
-                    fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. This does not mean the issue is resolved, but it does show movement in the right direction worth continuing to track.`;
-                    if (borderline[0] && borderline[0].displayName !== topName) {
-                      const bConj = conjugate(borderline[0].displayName);
-                      fallback += ` ${borderline[0].displayName} ${bConj.is} also borderline and worth monitoring.`;
-                    }
-                  } else {
-                    const worsenedName = ctx.worseningChange?.displayName ?? worsened[0]?.displayName;
-                    const wConj = worsenedName ? conjugate(worsenedName) : { remains: 'remains', has: 'has', is: 'is' };
-                    fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. At the same time, your ${worsenedName ?? 'another marker'} ${wConj.has} shifted since your last draw and deserves attention alongside it.`;
-                  }
-                } else if (improved[0] && outOfRange.length > 0) {
-                  fallback = `${topName} remains the primary area to keep an eye on, while ${improved[0].displayName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
-                } else if (worsened[0] && outOfRange.length > 0) {
-                  fallback = `${topName} is the priority finding here, and ${worsened[0].displayName} has shifted since your last draw. Tracking both at your next panel will help clarify the direction.`;
-                } else if (outOfRange.length >= 2) {
-                  const names = outOfRange.slice(0, 2).map(f => f.displayName).join(' and ');
-                  fallback = `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
-                } else if (outOfRange.length === 1 && borderline[0]) {
-                  fallback = `${topName} is outside optimal range and is the top priority. ${borderline[0].displayName} is borderline — worth monitoring, but not urgent on its own.`;
-                } else if (outOfRange.length === 1) {
-                  fallback = `${topName} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.`;
-                } else {
-                  fallback = `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops.`;
-                }
-
-                const isImproving = ctx.primaryIsImproving && ctx.primaryImprovingChange !== null;
-                const isWorsening = ctx.primaryIsWorsening && ctx.primaryWorseningChange !== null;
-                const isStableAbnormal = ctx.primaryIsStableAbnormal && ctx.primaryStableChange !== null;
-                let text = '';
-
-                if (isImproving) {
-                  text = fallback;
-                } else if (isWorsening && ctx.primaryWorseningChange && insightSummary.primaryFinding) {
-                  const ch = ctx.primaryWorseningChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
-                  const pctStr = ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : '';
-                  text = `${insightSummary.primaryFinding.displayName} remains ${dirWord} and has worsened from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr} since the prior report. This is worth discussing with your provider at your next visit.`;
-                  if (borderline[0] && borderline[0].displayName !== insightSummary.primaryFinding.displayName) {
-                    text += ` ${borderline[0].displayName} is also borderline — worth monitoring alongside it.`;
-                  }
-                } else if (isStableAbnormal && ctx.primaryStableChange && insightSummary.primaryFinding) {
-                  const ch = ctx.primaryStableChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
-                  text = `${insightSummary.primaryFinding.displayName} has remained ${dirWord} and has not changed significantly from the prior report (${ch.previousValue} to ${ch.currentValue} ${ch.unit}). Continued tracking is the right next step.`;
-                } else {
-                  // Use AI with fluff filtering
-                  const rawText = aiText ?? fallback;
-                  const headline = interpretation?.headline ?? '';
-                  const normalizeForCompare = (s: string) =>
-                    s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-                  const headlineNorm = normalizeForCompare(headline);
-
-                  const splitSentences = (t: string): string[] =>
-                    t.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(Boolean) ?? [t];
-
-                  const FILLER_PATTERNS = [
-                    /\bstand(s)? out as\b/i,
-                    /\bmost abnormal\b/i,
-                    /\bprimary (finding|concern|result)\b/i,
-                  ];
-                  const isFluff = (sentence: string): boolean =>
-                    FILLER_PATTERNS.some(p => p.test(sentence)) &&
-                    !/(direction|action|trend|monitor|track|discuss|follow|watch)/i.test(sentence);
-
-                  const isDuplicateOfHeadline = (sentence: string): boolean => {
-                    if (!headlineNorm) return false;
-                    const sentNorm = normalizeForCompare(sentence);
-                    const headlineWords = headlineNorm.split(' ').filter(w => w.length > 4);
-                    if (headlineWords.length === 0) return false;
-                    const matchCount = headlineWords.filter(w => sentNorm.includes(w)).length;
-                    return matchCount / headlineWords.length >= 0.7;
-                  };
-
-                  const sentences = splitSentences(rawText);
-                  const filtered = sentences.filter(s => !isDuplicateOfHeadline(s));
-                  const strong = filtered.filter((s, i) => i === 0 || !isFluff(s));
-                  const capped = strong.slice(0, 2).join(' ');
-                  text = capped || rawText;
-                }
-
-                return (
-                  <div className="border-t border-theme-border-inner bg-white px-6 py-5">
-                    <p className="text-xs font-medium text-theme-muted-text-2 uppercase tracking-widest mb-3">
-                      What This Means
-                    </p>
-                    <p className="text-[15px] text-theme-text-body leading-[1.7]">{text}</p>
-                  </div>
-                );
-              })()}
             </div>
           )}
 
@@ -1615,29 +1477,8 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── G. Recommended Labs (accordion — only when there are suggestions) */}
-          {hasRecommendedLabs && (
-            <div className="rounded-2xl border border-gray-200 overflow-hidden">
-              <button
-                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-gray-50 transition-colors"
-                onClick={() => setShowRecommendedLabs(v => !v)}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Stethoscope className="w-4 h-4 text-theme-muted-text-2" />
-                  <span className="text-sm font-semibold text-theme-text">Recommended Labs</span>
-                </div>
-                {showRecommendedLabs
-                  ? <ChevronDown className="w-4 h-4 text-gray-400" />
-                  : <ChevronRight className="w-4 h-4 text-gray-400" />
-                }
-              </button>
-              {showRecommendedLabs && (
-                <div className="border-t border-gray-100 px-5 pb-5 pt-3">
-                  <RecommendedLabs presentBiomarkers={presentBiomarkerNames} activeCategory={activeCategory} />
-                </div>
-              )}
-            </div>
-          )}
+          {/* ── G. Recommended Labs (component owns its own heading + empty-state) */}
+          <RecommendedLabs presentBiomarkers={presentBiomarkerNames} activeCategory={activeCategory} />
 
           {/* ── Cycle context ─────────────────────────────────────── */}
           {!isProcessing && (() => {
