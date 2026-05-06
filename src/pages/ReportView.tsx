@@ -296,6 +296,24 @@ function normalizeInterpretation(raw: unknown): AIInterpretation {
   };
 }
 
+function systemContextPhrase(key: BiomarkerName | null): string | null {
+  if (!key) return null;
+  const cat = getCategory(key);
+  if (!cat) return null;
+  switch (cat) {
+    case 'thyroid':       return 'thyroid function markers';
+    case 'lipids':        return 'the lipid panel';
+    case 'hormones':      return 'the rest of your hormone panel';
+    case 'metabolic':     return 'blood-sugar markers';
+    case 'kidney':        return 'kidney function markers';
+    case 'liver':         return 'liver function markers';
+    case 'inflammation':  return 'inflammation markers';
+    case 'nutrients':     return 'the rest of your nutrient panel';
+    case 'blood':         return 'the rest of your hematology panel';
+    default:              return null;
+  }
+}
+
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
   const { userProfile } = useAuth();
@@ -725,6 +743,21 @@ export function ReportView() {
     };
   }, [insightSummary]);
 
+  const primaryCategory = useMemo<BiomarkerCategory | null>(() => {
+    if (!insightSummary?.primaryFinding) return null;
+    return getCategory(insightSummary.primaryFinding.key as BiomarkerName) ?? null;
+  }, [insightSummary]);
+
+  const flaggedSlugs = useMemo<BiomarkerName[]>(
+    () => scoredBiomarkers.filter(s => s.concern > 0).map(s => s.key),
+    [scoredBiomarkers],
+  );
+
+  const flaggedCategories = useMemo<BiomarkerCategory[]>(
+    () => Array.from(new Set(flaggedSlugs.map(s => getCategory(s)).filter(Boolean) as BiomarkerCategory[])),
+    [flaggedSlugs],
+  );
+
   const focusAreas = useMemo(() => {
     if (!insightSummary) return [];
     return buildFocusAreas(
@@ -732,8 +765,9 @@ export function ReportView() {
       insightSummary.watchSignals,
       scoredBiomarkers,
       interpretation?.what_you_can_do_now,
+      primaryCategory,
     );
-  }, [insightSummary, scoredBiomarkers, interpretation]);
+  }, [insightSummary, scoredBiomarkers, interpretation, primaryCategory]);
 
   const healthStory = useMemo(() => {
     if (!insightSummary) return { sentences: [] };
@@ -1138,7 +1172,11 @@ export function ReportView() {
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} but ${conj.has} improved since your prior report — encouraging movement worth continuing to track.`;
+                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
+                  const closer = ctxPhrase
+                    ? `This is encouraging movement, while still worth tracking alongside ${ctxPhrase}.`
+                    : 'This is encouraging movement worth continuing to track.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} but ${conj.has} improved since your prior report. ${closer}`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1167,7 +1205,11 @@ export function ReportView() {
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} shifted in the wrong direction since your prior report. Worth attention with your provider.`;
+                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
+                  const closer = ctxPhrase
+                    ? `Worth attention with your provider, alongside ${ctxPhrase}.`
+                    : 'Worth attention with your provider.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} shifted in the wrong direction since your prior report. ${closer}`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1202,7 +1244,11 @@ export function ReportView() {
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} not changed significantly. Continued tracking will clarify the pattern.`;
+                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
+                  const closer = ctxPhrase
+                    ? `Continued tracking with ${ctxPhrase} will clarify the pattern.`
+                    : 'Continued tracking at your next panel will clarify the pattern.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} not changed significantly. ${closer}`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1429,7 +1475,13 @@ export function ReportView() {
           )}
 
           {/* ── G. Recommended Labs (component owns its own heading + empty-state) */}
-          <RecommendedLabs presentBiomarkers={presentBiomarkerNames} activeCategory={activeCategory} />
+          <RecommendedLabs
+            presentBiomarkers={presentBiomarkerNames}
+            activeCategory={activeCategory}
+            primaryCategory={primaryCategory}
+            flaggedSlugs={flaggedSlugs}
+            flaggedCategories={flaggedCategories}
+          />
 
           {/* ── Cycle context ─────────────────────────────────────── */}
           {!isProcessing && (() => {

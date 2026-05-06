@@ -82,11 +82,27 @@ const SUPPORT_KEYWORDS = [
   'rest',
 ];
 
+const LEADING_DISCUSS_VERBS = new Set([
+  'discuss', 'ask', 'review', 'talk', 'consult', 'schedule',
+]);
+
+function startsWithDiscussVerb(text: string): boolean {
+  const first = text
+    .toLowerCase()
+    .replace(/^[^a-z]*/, '')      // strip leading punctuation
+    .split(/\s+/)[0]              // first word
+    ?? '';
+  return LEADING_DISCUSS_VERBS.has(first);
+}
+
 function classifyStep(step: string): NextStepBucket {
   const lower = step.toLowerCase();
+  // classify order: Retest -> first-word Discuss -> Support -> fallback Discuss -> Track
   if (RETEST_KEYWORDS.some(k => lower.includes(k))) return 'retest';
-  if (DISCUSS_KEYWORDS.some(k => lower.includes(k))) return 'discuss';
+  if (startsWithDiscussVerb(step)) return 'discuss';
   if (SUPPORT_KEYWORDS.some(k => lower.includes(k))) return 'support';
+  // catch-all Discuss for backward-compat (e.g. "Have a discussion with...")
+  if (DISCUSS_KEYWORDS.some(k => lower.includes(k))) return 'discuss';
   return 'track';
 }
 

@@ -206,11 +206,12 @@ function isPluralSubject(displayName: string): boolean {
   return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(n);
 }
 
-function conjugate(displayName: string): { has: 'has' | 'have'; remain: 'remains' | 'remain' } {
+function conjugate(displayName: string): { has: 'has' | 'have'; remain: 'remains' | 'remain'; is: 'is' | 'are' } {
   const plural = isPluralSubject(displayName);
   return {
     has: plural ? 'have' : 'has',
     remain: plural ? 'remain' : 'remains',
+    is: plural ? 'are' : 'is',
   };
 }
 
@@ -344,10 +345,10 @@ function buildDoctorQuestions(
   for (const d of improvingAbnormal.slice(0, 1)) {
     used.add(d.key);
     const name = d.displayName;
-    const { has: conjHas, remain: conjRemain } = conjugate(name);
+    const { remain: conjRemain, is: conjAre } = conjugate(name);
     const dirWord = d.trajectoryStatus === 'improving_still_low' ? 'low' : 'elevated';
     questions.push({
-      text: `My ${name} ${conjHas} improved but ${conjRemain} ${dirWord}. Is this rate of improvement clinically meaningful, and what should I aim for?`,
+      text: `My ${name} ${conjAre} better than the prior result but ${conjRemain} ${dirWord}. Is this rate of change clinically meaningful, and what should I aim for?`,
       relatedBiomarker: d.key,
     });
   }

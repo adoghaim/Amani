@@ -14,6 +14,7 @@ export interface FocusArea {
   title: string;
   whyItMatters: string;
   relatedMarkers: FocusAreaMarker[];
+  isPrimaryAligned: boolean;
 }
 
 const IMPORTANCE_RANK: Record<'critical' | 'important' | 'supporting', number> = {
@@ -328,7 +329,7 @@ function buildOneArea(
     ?? buildValueFreeWhy(topMarkers, category, biggestChanges)
     ?? CATEGORY_DEFAULT_WHY[category];
 
-  return { id, title, whyItMatters, relatedMarkers };
+  return { id, title, whyItMatters, relatedMarkers, isPrimaryAligned: false };
 }
 
 export function buildFocusAreas(
@@ -338,6 +339,7 @@ export function buildFocusAreas(
   // Accepted for backwards compatibility with existing callers, but no longer
   // used. Actions belong only in Next Best Steps; Focus Areas are context-only.
   _unusedWhatYouCanDoNow?: string[] | null,
+  primaryCategory?: BiomarkerCategory | null,
 ): FocusArea[] {
   const flagged = flaggedBiomarkers.filter(b => b.concern > 0);
   if (flagged.length === 0) return [];
@@ -346,5 +348,20 @@ export function buildFocusAreas(
   if (buckets.length === 0) return [];
 
   const top = buckets.slice(0, 3);
-  return top.map(b => buildOneArea(b, watchSignals, insightSummary.biggestChanges));
+  const focusAreas = top.map(b => buildOneArea(b, watchSignals, insightSummary.biggestChanges));
+
+  const annotated = focusAreas.map(fa => ({
+    ...fa,
+    isPrimaryAligned:
+      primaryCategory != null
+      && (fa.id === primaryCategory || fa.id.startsWith(`${primaryCategory}_`)),
+  }));
+
+  const primaryIdx = annotated.findIndex(fa => fa.isPrimaryAligned);
+  if (primaryIdx > 0) {
+    const [aligned] = annotated.splice(primaryIdx, 1);
+    if (aligned) annotated.unshift(aligned);
+  }
+
+  return annotated;
 }

@@ -30,7 +30,7 @@ interface BuildHealthStoryArgs {
 function trajectoryVerb(trajectory: PrimaryContext['trajectory'] | null): string {
   switch (trajectory) {
     case 'improving':
-      return 'is improving but not yet resolved';
+      return 'is moving in the right direction but still needs follow-up';
     case 'worsening':
       return 'has shifted in the wrong direction since your prior report';
     case 'unchanged':
@@ -39,6 +39,10 @@ function trajectoryVerb(trajectory: PrimaryContext['trajectory'] | null): string
     default:
       return 'is the strongest signal in this panel';
   }
+}
+
+function pickDominant(focusAreas: FocusArea[]): FocusArea | null {
+  return focusAreas.find((fa) => fa.isPrimaryAligned) ?? focusAreas[0] ?? null;
 }
 
 function formatList(items: string[]): string {
@@ -53,7 +57,7 @@ function buildThemeSentence(
   focusAreas: FocusArea[],
   primaryContext: PrimaryContext | null,
 ): HealthStorySentence | null {
-  const dominant = focusAreas[0];
+  const dominant = pickDominant(focusAreas);
   if (!dominant) return null;
   const dominantTitle = dominant.title.toLowerCase();
   const verb = trajectoryVerb(primaryContext?.trajectory ?? null);
@@ -64,10 +68,13 @@ function buildThemeSentence(
 }
 
 function buildOthersSentence(focusAreas: FocusArea[]): HealthStorySentence | null {
-  if (focusAreas.length <= 1) return null;
+  if (focusAreas.length < 2) return null;
+  const dominant = pickDominant(focusAreas);
+  if (!dominant) return null;
   const seen = new Set<string>();
   const others: string[] = [];
-  for (const area of focusAreas.slice(1)) {
+  for (const area of focusAreas) {
+    if (area === dominant) continue;
     const lowered = area.title.toLowerCase();
     if (seen.has(lowered)) continue;
     seen.add(lowered);

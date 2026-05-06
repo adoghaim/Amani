@@ -836,6 +836,7 @@ Rules:
 - Write like a knowledgeable friend giving a real tip, not a disclaimer
 - When suggesting food or lifestyle support, name the specific food (e.g. 'avocados, nuts, olive oil') and the marker it supports — not generic categories like 'healthy foods'.
 - No "For your X:" prefixes. Do not begin bullets with phrases like "For your thyroid:" or "For your HDL cholesterol:". Lead directly with the verb. Example: write "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish." not "For your HDL cholesterol: Incorporating healthy fats can help...".
+- One verb per bullet. Do not combine multiple intents in a single bullet. Bad: "Monitor your HDL cholesterol and discuss lifestyle changes" — split into two bullets if both intents matter, otherwise pick the dominant intent.
 
 DO NOT:
 - Give dosages
@@ -865,6 +866,7 @@ Keep this completely distinct from "What You Can Do Now" — no overlap.
 - Specific markers, not categories. Name the specific follow-up markers when known. For example, write 'TPO antibodies, TSH, Free T4, and Free T3' rather than 'thyroid markers' or 'thyroid function tests'. If multiple markers are flagged in the same physiological system, list each by name (up to 5 max). Use the lab panel data above as the source of marker names.
 - Direct phrasing, not hedge phrases. Use direct phrasing. Prefer 'Discuss whether repeating X makes sense' over 'X can be helpful'. Prefer 'Review X with your provider if Y' over 'X might be worth discussing'. Banned phrases: 'can be helpful', 'might be worth', 'may be worth', 'could be worth'. Replace with: 'Discuss…', 'Review…', 'Consider repeating…'.
 - No "For your X:" prefixes. Lead with the action verb. Write "Discuss whether repeating thyroid markers makes sense" not "For your thyroid: Discuss whether repeating thyroid markers makes sense". The bucketing UI already groups by system, so the prefix is redundant.
+- One verb per bullet. Do not combine multiple intents in a single bullet. Bad: "Monitor your HDL cholesterol and discuss lifestyle changes" — split into two bullets if both intents matter, otherwise pick the dominant intent. Good: "Monitor your HDL cholesterol over the next 3-6 months." OR "Discuss lifestyle changes with your provider.", not both.
 
 Examples of good next steps:
 - "Discuss whether repeating TPO antibodies, TSH, Free T4, and Free T3 makes sense based on your symptoms and timeline."
