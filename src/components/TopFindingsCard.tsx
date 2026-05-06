@@ -1,10 +1,12 @@
 import { TrendingUp, TrendingDown, Minus, List } from 'lucide-react';
 import type { TopFinding } from '../lib/insights/buildInsightSummary';
 
-const SECONDARY_STYLE: Record<string, {
+type FindingStyle = {
   bg: string; border: string; text: string; badge: string;
   label: string; leftBar: string; iconBg: string; iconColor: string; nameColor: string;
-}> = {
+};
+
+const SECONDARY_STYLE: Record<string, FindingStyle> = {
   out_of_range: {
     bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
     text: 'text-theme-text-body', badge: 'bg-red-50 text-red-500 border border-red-100', label: 'Outside Range',
@@ -20,6 +22,12 @@ const SECONDARY_STYLE: Record<string, {
     text: 'text-theme-text-body', badge: 'bg-emerald-50 text-emerald-500 border border-emerald-100', label: 'Optimal',
     leftBar: 'bg-emerald-100', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-400',
   },
+};
+
+const FALLBACK_FINDING_STYLE: FindingStyle = {
+  bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
+  text: 'text-theme-text-body', badge: 'bg-amber-50 text-amber-500 border border-amber-100', label: 'Borderline',
+  leftBar: 'bg-amber-100', iconBg: 'bg-amber-50', iconColor: 'text-amber-400',
 };
 
 const EXTREME_THRESHOLD = 3;
@@ -43,7 +51,7 @@ export function TopFindingsCard({ findings, aiExplanations, isPrimary = true }: 
       </div>
       <div className="space-y-2">
         {findings.map((finding) => {
-          const style = SECONDARY_STYLE[finding.status] ?? SECONDARY_STYLE.borderline;
+          const style = SECONDARY_STYLE[finding.status] ?? SECONDARY_STYLE.borderline ?? FALLBACK_FINDING_STYLE;
           const aiExplanation = aiExplanations?.[finding.key];
           const isLow = finding.direction === 'low';
           const isExtreme = finding.deviationMultiplier >= EXTREME_THRESHOLD;

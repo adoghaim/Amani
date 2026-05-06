@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { errorMessage } from "../_shared/errors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -183,6 +185,8 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    await checkAndIncrementRateLimit(supabaseAdmin, user.id, "parse-lab-report-ocr", 20);
+
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
       return new Response(
@@ -199,6 +203,24 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "base64Images array is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    const MAX_IMAGES = 10;
+    if (base64Images.length > MAX_IMAGES) {
+      return new Response(
+        JSON.stringify({ error: `Too many images (max ${MAX_IMAGES})` }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const MAX_BASE64_LENGTH = 7_000_000; // ~5 MB raw per image
+    for (const b64 of base64Images) {
+      if (typeof b64 !== "string" || b64.length > MAX_BASE64_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: "Image too large or invalid (max ~5MB per image)" }),
+          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const { analyteMap, synonymMap } = await loadCanonicalRegistry(supabaseAdmin);
@@ -240,23 +262,27 @@ CRITICAL RULES:
       });
     }
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
+    const openaiResponse = await fetchWithBackoff(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o", // Strongest model for OCR validation
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessagesContent }
+          ],
+          max_tokens: 4000,
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        }),
       },
-      body: JSON.stringify({
-        model: "gpt-4o", // Strongest model for OCR validation
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessagesContent }
-        ],
-        max_tokens: 4000,
-        temperature: 0.1,
-        response_format: { type: "json_object" }
-      }),
-    });
+      { attemptTimeoutMs: 30000 },
+    );
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
@@ -347,8 +373,38 @@ CRITICAL RULES:
   } catch (error: unknown) {
     console.error("Error in OCR fallback:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error occurred" }),
+      JSON.stringify({ error: errorMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
+
+async function checkAndIncrementRateLimit(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  endpoint: string,
+  limitPerDay: number,
+): Promise<void> {
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+
+  const { data: existing } = await supabase
+    .from("rate_limits")
+    .select("id, count")
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint)
+    .gte("window_start", windowStart.toISOString())
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.count >= limitPerDay) throw new Error("RATE_LIMIT_EXCEEDED");
+    await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
+  } else {
+    await supabase.from("rate_limits").insert({
+      user_id: userId,
+      endpoint,
+      window_start: windowStart.toISOString(),
+      count: 1,
+    });
+  }
+}

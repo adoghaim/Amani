@@ -35,6 +35,8 @@ export interface BiggestChange {
   distanceToNormalImprovement: number | null;
   fact: string;
   isFirstRecorded?: boolean;
+  priorReportDate: string | null;
+  priorIsOlderThanImmediatePrior: boolean;
 }
 
 export interface DoctorQuestion {
@@ -82,6 +84,7 @@ interface BiomarkerInput {
   parserConfidence?: 'high' | 'medium' | 'low' | null;
   normalizationStatus?: 'mapped' | 'partial' | 'unmapped' | null;
   sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
+  reportDate?: string;
 }
 
 function toTopFinding(
@@ -165,6 +168,7 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
     if (result.length >= 6) {
       const weakestIdx = result.reduce((minIdx, s, idx, arr) => {
         const minS = arr[minIdx];
+        if (!minS) return idx;
         const isMinCritical = minS.concern === 2 && getImportance(minS.key) === 'critical';
         const isCurrCritical = s.concern === 2 && getImportance(s.key) === 'critical';
         if (isMinCritical && !isCurrCritical) return idx;
@@ -173,6 +177,10 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
       }, 0);
 
       const weakest = result[weakestIdx];
+      if (!weakest) {
+        result.push(m);
+        continue;
+      }
       const weakestIsCritical = weakest.concern === 2 && getImportance(weakest.key) === 'critical';
       if (!weakestIsCritical || m.weightedConcern > weakest.weightedConcern) {
         result[weakestIdx] = m;
@@ -187,25 +195,54 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
     .map(s => toTopFinding(s, null, deltaMap?.get(s.key)));
 }
 
-function deltaToChange(d: BiomarkerDelta): BiggestChange {
+export function formatPriorReportDate(date: string): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'your prior report';
+  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+}
+
+function isPluralSubject(displayName: string): boolean {
+  const n = displayName.toLowerCase();
+  return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(n);
+}
+
+function conjugate(displayName: string): { has: 'has' | 'have'; remain: 'remains' | 'remain'; is: 'is' | 'are' } {
+  const plural = isPluralSubject(displayName);
+  return {
+    has: plural ? 'have' : 'has',
+    remain: plural ? 'remain' : 'remains',
+    is: plural ? 'are' : 'is',
+  };
+}
+
+function deltaToChange(d: BiomarkerDelta, immediatePriorReportDate: string | null): BiggestChange {
   const pct = d.percentDelta !== null
     ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`
     : '';
 
+  const priorIsOlder =
+    d.priorReportDate !== null &&
+    immediatePriorReportDate !== null &&
+    d.priorReportDate !== immediatePriorReportDate;
+
+  const sinceClause = priorIsOlder && d.priorReportDate
+    ? ` since ${formatPriorReportDate(d.priorReportDate)}`
+    : '';
+
   let fact: string;
   if (d.trajectoryStatus === 'improving_still_high') {
-    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains elevated above the optimal range.`;
+    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause} — meaningful improvement, though it remains elevated above the optimal range.`;
   } else if (d.trajectoryStatus === 'improving_still_low') {
-    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — meaningful improvement, though it remains below the optimal range.`;
+    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause} — meaningful improvement, though it remains below the optimal range.`;
   } else if (d.trajectoryStatus === 'worsening_still_high') {
-    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further above the optimal range.`;
+    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}, moving further above the optimal range.`;
   } else if (d.trajectoryStatus === 'worsening_still_low') {
-    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}, moving further below the optimal range.`;
+    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}, moving further below the optimal range.`;
   } else if (d.boundaryCrossing) {
     const bcDir = d.boundaryCrossing.direction === 'improved' ? 'improved' : 'moved';
-    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
+    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
   } else {
-    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}.`;
+    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}.`;
   }
 
   return {
@@ -221,11 +258,14 @@ function deltaToChange(d: BiomarkerDelta): BiggestChange {
     trajectoryStatus: d.trajectoryStatus,
     distanceToNormalImprovement: d.distanceToNormalImprovement,
     fact,
+    isFirstRecorded: false,
+    priorReportDate: d.priorReportDate,
+    priorIsOlderThanImmediatePrior: priorIsOlder,
   };
 }
 
-function buildBiggestChanges(deltas: BiomarkerDelta[]): BiggestChange[] {
-  return getBiggestChanges(deltas, 5).map(deltaToChange);
+function buildBiggestChanges(deltas: BiomarkerDelta[], immediatePriorReportDate: string | null): BiggestChange[] {
+  return getBiggestChanges(deltas, 5).map(d => deltaToChange(d, immediatePriorReportDate));
 }
 
 function buildDoctorQuestions(
@@ -271,14 +311,18 @@ function buildDoctorQuestions(
   for (const s of scored.filter(s => s.concern > 0)) {
     const cat = getCategory(s.key);
     if (!cat) continue;
-    if (!categoryMap.has(cat)) categoryMap.set(cat, []);
-    categoryMap.get(cat)!.push(s);
+    let bucket = categoryMap.get(cat);
+    if (!bucket) {
+      bucket = [];
+      categoryMap.set(cat, bucket);
+    }
+    bucket.push(s);
   }
 
   for (const [, peers] of categoryMap) {
     if (peers.length < 2) continue;
     const primary = peers.sort((a, b) => b.weightedConcern - a.weightedConcern)[0];
-    if (used.has(primary.key)) continue;
+    if (!primary || used.has(primary.key)) continue;
     used.add(primary.key);
     const peerNames = peers.map(p => getDisplayName(p.key));
     const systemName = peerNames.slice(0, 2).join(', ');
@@ -301,9 +345,10 @@ function buildDoctorQuestions(
   for (const d of improvingAbnormal.slice(0, 1)) {
     used.add(d.key);
     const name = d.displayName;
-    const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
+    const { remain: conjRemain, is: conjAre } = conjugate(name);
+    const dirWord = d.trajectoryStatus === 'improving_still_low' ? 'low' : 'elevated';
     questions.push({
-      text: `My ${name} dropped from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} and remains elevated. Is this rate of improvement clinically meaningful, and what should I aim for?`,
+      text: `My ${name} ${conjAre} better than the prior result but ${conjRemain} ${dirWord}. Is this rate of change clinically meaningful, and what should I aim for?`,
       relatedBiomarker: d.key,
     });
   }
@@ -554,6 +599,7 @@ export function buildInsightSummary(
   current: BiomarkerInput[],
   previous: BiomarkerInput[] | null,
   cyclePhase?: CyclePhase | null,
+  immediatePriorReportDate?: string | null,
 ): InsightSummary {
   const scored = current.map(b =>
     scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
@@ -566,17 +612,17 @@ export function buildInsightSummary(
 
   if (previous && previous.length > 0) {
     deltas = compareReports(
-      previous.map(b => ({ key: b.key, value: b.value, unit: b.unit })),
+      previous.map(b => ({ key: b.key, value: b.value, unit: b.unit, reportDate: b.reportDate })),
       current.map(b => ({ key: b.key, value: b.value, unit: b.unit })),
       cyclePhase,
     );
     deltaMap = new Map(deltas.map(d => [d.key, d]));
-    biggestChanges = buildBiggestChanges(deltas);
+    biggestChanges = buildBiggestChanges(deltas, immediatePriorReportDate ?? null);
   }
 
   const topFindings = buildTopFindings(scored, deltaMap);
 
-  const primaryKey = topFindings.length > 0 && topFindings[0].status === 'out_of_range'
+  const primaryKey = topFindings[0]?.status === 'out_of_range'
     ? topFindings[0].key
     : null;
 
@@ -607,7 +653,7 @@ export function buildInsightSummary(
     };
 
     if (!alreadyIncluded && primaryDelta) {
-      guaranteeInsert(deltaToChange(primaryDelta));
+      guaranteeInsert(deltaToChange(primaryDelta, immediatePriorReportDate ?? null));
     } else if (!alreadyIncluded && !primaryDelta) {
       // Primary marker exists in current report but has no previous value — first recorded result.
       // Always surface it so users see their most critical out-of-range marker.
@@ -629,6 +675,8 @@ export function buildInsightSummary(
           distanceToNormalImprovement: null,
           fact: `${getDisplayName(primaryKey)} is ${primaryScored.value} ${unit} — first result on record, currently out of range.`,
           isFirstRecorded: true,
+          priorReportDate: null,
+          priorIsOlderThanImmediatePrior: false,
         };
         guaranteeInsert(firstRecordedChange);
       }
@@ -651,7 +699,7 @@ export function buildInsightSummary(
 
   const confidence = calculateConfidence(current, (previous?.length ?? 0) > 0, dominantSourceFormat);
 
-  const primaryFinding = topFindings.length > 0 && topFindings[0].status === 'out_of_range'
+  const primaryFinding = topFindings[0]?.status === 'out_of_range'
     ? topFindings[0]
     : null;
 

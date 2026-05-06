@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { errorMessage } from "../_shared/errors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,9 +69,16 @@ Deno.serve(async (req: Request) => {
       const ids = (reportIds as ReportIdRow[]).map((r) => r.id);
       await supabase.from("interpretations").delete().in("lab_report_id", ids);
       await supabase.from("biomarkers").delete().in("lab_report_id", ids);
+      await supabase.from("report_items").delete().in("lab_report_id", ids);
+      await supabase.from("report_analytes").delete().in("lab_report_id", ids);
     }
 
+    await supabase.from("parser_debug").delete().eq("user_id", user.id);
     await supabase.from("lab_reports").delete().eq("user_id", user.id);
+    await supabase.from("period_logs").delete().eq("user_id", user.id);
+    await supabase.from("symptom_logs").delete().eq("user_id", user.id);
+    await supabase.from("notification_preferences").delete().eq("user_id", user.id);
+    await supabase.from("reminders").delete().eq("user_id", user.id);
     await supabase.from("audit_events").delete().eq("user_id", user.id);
     await supabase.from("rate_limits").delete().eq("user_id", user.id);
 
@@ -80,7 +88,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error: unknown) {
     console.error("Error deleting user data:", error);
-    const message = error instanceof Error ? error.message : "Failed to delete data";
+    const message = errorMessage(error, "Failed to delete data");
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

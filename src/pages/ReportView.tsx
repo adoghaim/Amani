@@ -7,24 +7,25 @@ import { useAuth } from '../contexts/AuthContext';
 import { BiomarkerCard } from '../components/BiomarkerCard';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
-import { TopFindingsCard } from '../components/TopFindingsCard';
-import { BiggestChangesCard } from '../components/BiggestChangesCard';
-import { WhatToWatchCard } from '../components/WhatToWatchCard';
+import { YourHealthStory } from '../components/YourHealthStory';
+import { FocusAreas } from '../components/FocusAreas';
+import { NextBestSteps } from '../components/NextBestSteps';
+import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
+import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
+import { scoreBiomarker } from '../lib/scoring/scoreBiomarker';
 import { SystemSummaryCards } from '../components/SystemSummaryCards';
 import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
-import { BIOMARKER_CATEGORY_MAP, BIOMARKER_DISPLAY, RECOMMENDED_LABS } from '../utils/biomarkerDefinitions';
+import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import { classifyLabValue } from '../utils/classifyLabValue';
-import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
-import { buildPersonalInsights } from '../lib/insights/buildPersonalInsights';
+import { buildInsightSummary, formatPriorReportDate } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
 import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
-import { YourPatternsCard } from '../components/YourPatternsCard';
-import { PrimaryInsightCard } from '../components/PrimaryInsightCard';
-import type { PersonalPattern, SymptomLog, BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import { YourTrajectoryCard } from '../components/YourTrajectoryCard';
+import type { BaselineStatus, BaselineStaleness, TrendDirection, TrendStrength } from '../types';
 import type { InsightSummary, BiggestChange } from '../lib/insights/buildInsightSummary';
 import type {
   LabReport, Biomarker, AIInterpretation, BiomarkerCategory,
@@ -32,8 +33,8 @@ import type {
 } from '../types';
 import {
   RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
-  Microscope, Sparkles, Stethoscope, CalendarDays,
-  CheckCircle2, Loader2, Info, Activity, Lightbulb, AlertTriangle, FlaskConical,
+  Microscope, Sparkles, CalendarDays,
+  CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
 
@@ -57,12 +58,16 @@ const CORE_BIOMARKER_CATEGORIES_UI: Record<string, string> = {
   serum_iron: 'Nutrients (Iron)', tibc: 'Nutrients (Iron)', uibc: 'Nutrients (Iron)',
 };
 
-const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+type StatusStyle = { bg: string; text: string; dot: string; label: string };
+
+const STATUS_STYLE: Record<string, StatusStyle> = {
   in_range:    { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'In range' },
   out_of_range:{ bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500',     label: 'Out of range' },
   borderline:  { bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400',   label: 'Borderline' },
   unknown:     { bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400',    label: 'No range' },
 };
+
+const STATUS_STYLE_FALLBACK: StatusStyle = { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', label: 'No range' };
 
 const CONFIDENCE_STYLE: Record<string, string> = {
   high:   'text-emerald-700 bg-emerald-50 border-emerald-200',
@@ -70,10 +75,16 @@ const CONFIDENCE_STYLE: Record<string, string> = {
   low:    'text-gray-500 bg-gray-100 border-gray-200',
 };
 
-const PATTERN_CONFIDENCE_STYLE: Record<string, { bg: string; text: string; border: string; label: string }> = {
+type PatternConfidenceStyle = { bg: string; text: string; border: string; label: string };
+
+const PATTERN_CONFIDENCE_STYLE: Record<string, PatternConfidenceStyle> = {
   high:   { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-100',   label: 'High confidence' },
   medium: { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100',  label: 'Medium confidence' },
   low:    { bg: 'bg-gray-50',   text: 'text-gray-600',   border: 'border-gray-200',   label: 'Low confidence' },
+};
+
+const PATTERN_CONFIDENCE_FALLBACK: PatternConfidenceStyle = {
+  bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', label: 'Low confidence',
 };
 
 interface OpeningContext {
@@ -136,6 +147,8 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
       trajectoryStatus: primaryRawDelta.trajectoryStatus,
       distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
       fact: '',
+      priorReportDate: primaryRawDelta.priorReportDate,
+      priorIsOlderThanImmediatePrior: false,
     };
   })();
 
@@ -160,6 +173,8 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
       trajectoryStatus: primaryRawDelta.trajectoryStatus,
       distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
       fact: '',
+      priorReportDate: primaryRawDelta.priorReportDate,
+      priorIsOlderThanImmediatePrior: false,
     };
   })();
 
@@ -182,6 +197,8 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
       trajectoryStatus: primaryRawDelta.trajectoryStatus,
       distanceToNormalImprovement: primaryRawDelta.distanceToNormalImprovement,
       fact: '',
+      priorReportDate: primaryRawDelta.priorReportDate,
+      priorIsOlderThanImmediatePrior: false,
     };
   })();
 
@@ -215,7 +232,7 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
     analyte.normalized_operator,
     analyte.normalized_operator_value
   );
-  const style = STATUS_STYLE[status];
+  const style = STATUS_STYLE[status] ?? STATUS_STYLE.unknown ?? STATUS_STYLE_FALLBACK;
   const label = analyte.display_name || analyte.raw_name;
   const isUnmapped = analyte.parse_status === 'unmapped';
   return (
@@ -279,6 +296,24 @@ function normalizeInterpretation(raw: unknown): AIInterpretation {
   };
 }
 
+function systemContextPhrase(key: BiomarkerName | null): string | null {
+  if (!key) return null;
+  const cat = getCategory(key);
+  if (!cat) return null;
+  switch (cat) {
+    case 'thyroid':       return 'thyroid function markers';
+    case 'lipids':        return 'the lipid panel';
+    case 'hormones':      return 'the rest of your hormone panel';
+    case 'metabolic':     return 'blood-sugar markers';
+    case 'kidney':        return 'kidney function markers';
+    case 'liver':         return 'liver function markers';
+    case 'inflammation':  return 'inflammation markers';
+    case 'nutrients':     return 'the rest of your nutrient panel';
+    case 'blood':         return 'the rest of your hematology panel';
+    default:              return null;
+  }
+}
+
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
   const { userProfile } = useAuth();
@@ -292,13 +327,13 @@ export function ReportView() {
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
-  const [showRecommendedLabs, setShowRecommendedLabs] = useState(true);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
-  const [previousBiomarkers, setPreviousBiomarkers] = useState<Biomarker[]>([]);
+  const [, setPreviousBiomarkers] = useState<Biomarker[]>([]);
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
-  const [symptomLogs, setSymptomLogs] = useState<SymptomLog[]>([]);
+  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>>(new Map());
+  const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const interpPollingActive = useRef(false);
@@ -451,11 +486,10 @@ export function ReportView() {
       const [
         { data: prevReportData },
         { data: allReportsData },
-        { data: symptomLogsData },
       ] = await Promise.all([
         supabase
           .from('lab_reports')
-          .select('id')
+          .select('id, report_date')
           .eq('user_id', reportData.user_id)
           .lt('report_date', reportData.report_date)
           .order('report_date', { ascending: false })
@@ -467,12 +501,6 @@ export function ReportView() {
           .eq('user_id', reportData.user_id)
           .lt('report_date', reportData.report_date)
           .order('report_date', { ascending: true }),
-        supabase
-          .from('symptom_logs')
-          .select('*')
-          .eq('user_id', reportData.user_id)
-          .gte('log_date', windowStart.toISOString().split('T')[0])
-          .lte('log_date', windowEnd.toISOString().split('T')[0]),
       ]);
 
       if (prevReportData?.id) {
@@ -482,9 +510,8 @@ export function ReportView() {
           .eq('lab_report_id', prevReportData.id);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
       }
-
-      if (symptomLogsData) {
-        setSymptomLogs(symptomLogsData as SymptomLog[]);
+      if (prevReportData?.report_date) {
+        setImmediatePriorReportDate(prevReportData.report_date);
       }
 
       if (allReportsData && allReportsData.length > 0) {
@@ -497,18 +524,35 @@ export function ReportView() {
         const allHistoricalIds = allReportsData.map(r => r.id);
         const { data: allHistoricalBiomarkers } = await supabase
           .from('biomarkers')
-          .select('name, value, lab_report_id')
+          .select('name, value, unit, reference_min, reference_max, lab_report_id')
           .in('lab_report_id', allHistoricalIds);
 
         if (allHistoricalBiomarkers) {
           const histMap = new Map<string, { reportDate: string; value: number }[]>();
+          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
           for (const b of allHistoricalBiomarkers) {
             const reportDate = reportDateMap.get(b.lab_report_id);
             if (!reportDate) continue;
             if (!histMap.has(b.name)) histMap.set(b.name, []);
             histMap.get(b.name)!.push({ reportDate, value: b.value });
+            if (!occurrences.has(b.name)) occurrences.set(b.name, []);
+            occurrences.get(b.name)!.push({
+              reportDate,
+              value: b.value,
+              unit: b.unit,
+              reference_min: b.reference_min,
+              reference_max: b.reference_max,
+            });
           }
           setHistoricalBiomarkers(histMap);
+
+          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>();
+          for (const [name, list] of occurrences) {
+            const sorted = [...list].sort((a, b) => a.reportDate.localeCompare(b.reportDate));
+            const last = sorted[sorted.length - 1];
+            if (last) latestPriorByMarker.set(name, last);
+          }
+          setPreviousBiomarkerOccurrences(latestPriorByMarker);
         }
       }
     }
@@ -562,24 +606,10 @@ export function ReportView() {
     return top as 'text' | 'ocr' | 'manual';
   }, [reportAnalytes]);
 
-  const personalInsights = useMemo<PersonalPattern[]>(() => {
-    if (biomarkers.length === 0 || historicalReportCount === 0) return [];
-    const currentBiomarkers = biomarkers.map(b => ({
-      name: b.name,
-      value: b.value,
-      flagged: b.flagged as 'out_of_range' | 'borderline' | 'in_range' | 'unknown',
-    }));
-    return buildPersonalInsights(
-      currentBiomarkers,
-      historicalBiomarkers,
-      symptomLogs,
-      report?.report_date ?? ''
-    );
-  }, [biomarkers, historicalBiomarkers, symptomLogs, historicalReportCount, report]);
-
   const biomarkerPersonalizationMap = useMemo(() => {
     const map = new Map<string, {
       baselineStatus?: BaselineStatus;
+      baselineStaleness?: BaselineStaleness;
       baselineValue?: number;
       trendDirection?: TrendDirection;
       trendStrength?: TrendStrength;
@@ -591,21 +621,30 @@ export function ReportView() {
       const history = historicalBiomarkers.get(b.name);
       if (!history || history.length === 0) continue;
 
-      const ordered = history
+      const orderedEntries = history
+        .slice()
         .sort((a, c) => a.reportDate.localeCompare(c.reportDate))
-        .map(h => h.value);
+        .map(h => ({ date: h.reportDate, value: h.value }));
+      const ordered = orderedEntries.map(h => h.value);
 
       const entry: {
         baselineStatus?: BaselineStatus;
+        baselineStaleness?: BaselineStaleness;
         baselineValue?: number;
         trendDirection?: TrendDirection;
         trendStrength?: TrendStrength;
       } = {};
 
       if (ordered.length >= PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) {
-        const baseline = computeBaseline(ordered, b.value);
+        // Pass the dated entries + current report date so computeBaseline can
+        // tag staleness ('fresh' if last prior < 12mo, 'stale' if older,
+        // 'limited' if only one old data point). BiomarkerCard switches copy
+        // on this signal so a 3-year-old single TPO reading no longer fires
+        // confident "your usual level" wording.
+        const baseline = computeBaseline(orderedEntries, b.value, report?.report_date ?? undefined);
         if (baseline) {
           entry.baselineStatus = baseline.baselineStatus;
+          entry.baselineStaleness = baseline.staleness;
           entry.baselineValue = baseline.baselineValue;
         }
       }
@@ -624,7 +663,7 @@ export function ReportView() {
     }
 
     return map;
-  }, [biomarkers, historicalBiomarkers, historicalReportCount]);
+  }, [biomarkers, historicalBiomarkers, historicalReportCount, report?.report_date]);
 
   const insightSummary = useMemo(() => {
     if (biomarkers.length === 0) return null;
@@ -641,24 +680,107 @@ export function ReportView() {
         sourceFormat: telemetry?.sourceFormat ?? null,
       };
     });
-    const previous = previousBiomarkers.length > 0
-      ? previousBiomarkers.map(b => ({
-          key: b.name as BiomarkerName,
-          value: b.value,
-          unit: b.unit,
-          labRefMin: b.reference_min,
-          labRefMax: b.reference_max,
+    const previous = previousBiomarkerOccurrences.size > 0
+      ? Array.from(previousBiomarkerOccurrences.entries()).map(([name, occ]) => ({
+          key: name as BiomarkerName,
+          value: occ.value,
+          unit: occ.unit,
+          labRefMin: occ.reference_min,
+          labRefMax: occ.reference_max,
+          reportDate: occ.reportDate,
         }))
       : null;
-    return buildInsightSummary(current, previous, report?.estimated_cycle_phase);
-  }, [biomarkers, previousBiomarkers, report, analyteTelemetryMap]);
+    return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
+  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap]);
 
+  // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
+  // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
+  const scoredBiomarkers = useMemo(() => {
+    return biomarkers.map(b => scoreBiomarker(
+      b.name as BiomarkerName,
+      b.value,
+      b.unit,
+      b.reference_min,
+      b.reference_max,
+      report?.estimated_cycle_phase as Parameters<typeof scoreBiomarker>[5],
+    ));
+  }, [biomarkers, report]);
 
+  // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
+  // server's interpretation already carries one but it's not surfaced to the
+  // client; this matches the same shape so YourHealthStory can render the
+  // honest "first tracked" / "improved" / "worsened" sentence.
+  const frontendPrimaryContext = useMemo<PrimaryContext | null>(() => {
+    if (!insightSummary?.primaryFinding) return null;
+    const pf = insightSummary.primaryFinding;
+    const change = insightSummary.biggestChanges.find(c => c.key === pf.key);
+
+    let trajectory: PrimaryContext['trajectory'] = 'no_prior_data';
+    if (change && !change.isFirstRecorded && change.previousValue !== null) {
+      if (change.boundaryCrossing?.direction === 'improved') trajectory = 'improving';
+      else if (change.boundaryCrossing?.direction === 'worsened') trajectory = 'worsening';
+      else if (change.trajectoryStatus === 'improving_still_high' || change.trajectoryStatus === 'improving_still_low') trajectory = 'improving';
+      else if (change.trajectoryStatus === 'worsening_still_high' || change.trajectoryStatus === 'worsening_still_low') trajectory = 'worsening';
+      else trajectory = 'unchanged';
+    }
+
+    const currentStatus: PrimaryContext['current_status'] =
+      pf.status === 'out_of_range' ? (pf.direction === 'high' ? 'elevated' : pf.direction === 'low' ? 'low' : 'out_of_range')
+      : pf.status === 'borderline' ? 'borderline'
+      : 'in_range';
+
+    return {
+      primary_biomarker: pf.displayName,
+      canonical_slug: pf.key,
+      current_value: pf.value,
+      previous_value: change?.previousValue ?? null,
+      unit: pf.unit,
+      current_status: currentStatus,
+      trajectory,
+      percent_change: change?.percentDelta ?? null,
+      prior_report_date: change?.priorReportDate ?? null,
+      supporting_biomarker: null,
+    };
+  }, [insightSummary]);
+
+  const primaryCategory = useMemo<BiomarkerCategory | null>(() => {
+    if (!insightSummary?.primaryFinding) return null;
+    return getCategory(insightSummary.primaryFinding.key as BiomarkerName) ?? null;
+  }, [insightSummary]);
+
+  const flaggedSlugs = useMemo<BiomarkerName[]>(
+    () => scoredBiomarkers.filter(s => s.concern > 0).map(s => s.key),
+    [scoredBiomarkers],
+  );
+
+  const flaggedCategories = useMemo<BiomarkerCategory[]>(
+    () => Array.from(new Set(flaggedSlugs.map(s => getCategory(s)).filter(Boolean) as BiomarkerCategory[])),
+    [flaggedSlugs],
+  );
+
+  const focusAreas = useMemo(() => {
+    if (!insightSummary) return [];
+    return buildFocusAreas(
+      insightSummary,
+      insightSummary.watchSignals,
+      scoredBiomarkers,
+      interpretation?.what_you_can_do_now,
+      primaryCategory,
+    );
+  }, [insightSummary, scoredBiomarkers, interpretation, primaryCategory]);
+
+  const healthStory = useMemo(() => {
+    if (!insightSummary) return { sentences: [] };
+    return buildHealthStory({
+      primaryContext: frontendPrimaryContext,
+      focusAreas,
+    });
+  }, [insightSummary, frontendPrimaryContext, focusAreas]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
     for (const b of biomarkers) {
-      const cat = BIOMARKER_CATEGORY_MAP[b.name as BiomarkerName] ?? null;
+      const cat = getCategory(b.name as BiomarkerName);
       if (!cat) continue;
       if (!groups[cat]) groups[cat] = [];
       groups[cat]!.push(b);
@@ -684,7 +806,7 @@ export function ReportView() {
     const toCollapse = new Set<BiomarkerCategory>();
     const primaryKey = insightSummary?.primaryFinding?.key ?? null;
     const primaryCategory = primaryKey
-      ? (BIOMARKER_CATEGORY_MAP[primaryKey as BiomarkerName] ?? null)
+      ? getCategory(primaryKey as BiomarkerName)
       : null;
     for (const cat of CATEGORY_ORDER) {
       const items = sortedGroupedBiomarkers[cat];
@@ -733,13 +855,6 @@ export function ReportView() {
   }, [reportAnalytes]);
 
   const totalAnalyteCount = useMemo(() => reportAnalytes.filter(a => !a.is_core).length, [reportAnalytes]);
-
-  const hasRecommendedLabs = useMemo(() => {
-    const presentSet = new Set(presentBiomarkerNames);
-    return (Object.keys(RECOMMENDED_LABS) as BiomarkerCategory[]).some(cat =>
-      (RECOMMENDED_LABS[cat] ?? []).some(r => !presentSet.has(r.name))
-    );
-  }, [presentBiomarkerNames]);
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
@@ -975,11 +1090,14 @@ export function ReportView() {
 
                       // Force trajectory headline override if improving
                       if (isImproving && ctx.primaryImprovingChange) {
+                        const ch = ctx.primaryImprovingChange;
                         const worsened = ctx.worseningChange;
                         const secondaryFinding = outOfRange.find(f => f.displayName !== topName)
                           ?? borderline.find(f => f.displayName !== topName)
                           ?? null;
-                        const main = `${topName} ${dirLabel}, but ${topConj.has} improved from your prior report.`;
+                        const main = ch.priorReportDate
+                          ? `${topName} ${dirLabel} but ${topConj.has} improved since ${formatPriorReportDate(ch.priorReportDate)}.`
+                          : `${topName} ${dirLabel} but ${topConj.has} improved since your prior report.`;
                         if (worsened && worsened.displayName !== topName) {
                           const wConj = conjugate(worsened.displayName);
                           const w = worsened.trendDirection === 'up' ? `${wConj.has} risen` : worsened.trendDirection === 'down' ? `${wConj.has} dropped` : `${wConj.has} shifted`;
@@ -996,14 +1114,15 @@ export function ReportView() {
                       // Force trajectory headline override if primary is worsening
                       if (isWorsening && ctx.primaryWorseningChange) {
                         const ch = ctx.primaryWorseningChange;
-                        const valueStr = `from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}`;
-                        return `${topName} ${dirLabel} and has worsened ${valueStr} since your last report — worth discussing with your provider.`;
+                        const dateClause = ch.priorReportDate
+                          ? `since ${formatPriorReportDate(ch.priorReportDate)}`
+                          : 'since your last report';
+                        return `${topName} ${dirLabel} and has worsened ${dateClause} — worth discussing with your provider.`;
                       }
 
                       // Force trajectory headline override if primary is stable abnormal
                       if (isStableAbnormal && ctx.primaryStableChange) {
-                        const ch = ctx.primaryStableChange;
-                        return `${topName} ${dirLabel} and has not changed significantly from the prior report (${ch.previousValue} to ${ch.currentValue} ${ch.unit}).`;
+                        return `${topName} ${dirLabel} and has not changed significantly from the prior report.`;
                       }
 
                       // If AI headline available and no trajectory override, use AI headline
@@ -1050,9 +1169,14 @@ export function ReportView() {
 
                 // 1a. Deterministic Override — Improving
                 if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
-                  const ch = ctx.primaryImprovingChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
-                  const conj = conjugate(insightSummary.primaryFinding.displayName);
+                  const pf = insightSummary.primaryFinding;
+                  const conj = conjugate(pf.displayName);
+                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
+                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
+                  const closer = ctxPhrase
+                    ? `This is encouraging movement, while still worth tracking alongside ${ctxPhrase}.`
+                    : 'This is encouraging movement worth continuing to track.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} but ${conj.has} improved since your prior report. ${closer}`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1066,12 +1190,8 @@ export function ReportView() {
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
-                          <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} {conj.remains} {dirWord} at {insightSummary.primaryFinding.value} {insightSummary.primaryFinding.unit}, but {conj.has} improved from {ch.previousValue} {ch.unit} since your last report
-                            {ch.percentDelta !== null ? ` (a ${Math.abs(ch.percentDelta)}% improvement)` : ''}.
-                          </p>
-                          <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3 mt-2.5">
-                            The drop from your prior result is encouraging. This does not mean the issue is resolved, but it does show movement in the right direction worth continuing to track.
+                          <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3">
+                            {subnote}
                           </p>
                         </div>
                       </div>
@@ -1081,9 +1201,15 @@ export function ReportView() {
 
                 // 1b. Deterministic Override — Worsening
                 if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
-                  const ch = ctx.primaryWorseningChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  const pf = insightSummary.primaryFinding;
+                  const conj = conjugate(pf.displayName);
+                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
+                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
+                  const closer = ctxPhrase
+                    ? `Worth attention with your provider, alongside ${ctxPhrase}.`
+                    : 'Worth attention with your provider.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} shifted in the wrong direction since your prior report. ${closer}`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1097,16 +1223,13 @@ export function ReportView() {
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
-                          <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} {conjugate(insightSummary.primaryFinding.displayName).remains} {dirWord} and {conjugate(insightSummary.primaryFinding.displayName).has} worsened from {ch.previousValue} to {ch.currentValue} {ch.unit} since your last report{ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : ''}.
-                          </p>
                           {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3 mt-2.5">
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3">
                               {aiWhyItMatters}
                             </p>
                           ) : (
-                            <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3 mt-2.5">
-                              This trend is worth discussing with your provider at your next visit.
+                            <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3">
+                              {subnote}
                             </p>
                           )}
                         </div>
@@ -1117,9 +1240,15 @@ export function ReportView() {
 
                 // 1c. Deterministic Override — Stable Abnormal
                 if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
-                  const ch = ctx.primaryStableChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
                   const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  const pf = insightSummary.primaryFinding;
+                  const conj = conjugate(pf.displayName);
+                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
+                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
+                  const closer = ctxPhrase
+                    ? `Continued tracking with ${ctxPhrase} will clarify the pattern.`
+                    : 'Continued tracking at your next panel will clarify the pattern.';
+                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} not changed significantly. ${closer}`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1133,16 +1262,13 @@ export function ReportView() {
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
                           </p>
-                          <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.displayName} {conjugate(insightSummary.primaryFinding.displayName).remains} {dirWord} and {conjugate(insightSummary.primaryFinding.displayName).has} not changed significantly from the prior report ({ch.previousValue} to {ch.currentValue} {ch.unit}).
-                          </p>
                           {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
                               {aiWhyItMatters}
                             </p>
                           ) : (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
-                              Continued tracking at your next panel will help clarify whether this is a persistent pattern.
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
+                              {subnote}
                             </p>
                           )}
                         </div>
@@ -1221,210 +1347,44 @@ export function ReportView() {
                 </div>
               )}
 
-              {/* What This Means — narrative, unified inside the card */}
-              {insightSummary && (() => {
-                const aiText = interpretation?.overall_interpretation;
-                const topFindings = insightSummary.primaryFinding
-                  ? [insightSummary.primaryFinding, ...insightSummary.topFindings]
-                  : insightSummary.topFindings;
-
-                const outOfRange = topFindings.filter(f => f.status === 'out_of_range');
-                const borderline = topFindings.filter(f => f.status === 'borderline');
-                const improved = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'improved');
-                const worsened = insightSummary.biggestChanges.filter(c => c.boundaryCrossing?.direction === 'worsened');
-                const ctx = getOpeningContext(insightSummary);
-
-                let fallback = '';
-                const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
-                if (outOfRange.length === 0 && borderline.length === 0) {
-                  if (improved.length > 0) {
-                    const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
-                    fallback = `Your panel looks solid overall, with ${names} showing improvement since your last draw. The trend is moving in a positive direction.`;
-                  } else {
-                    fallback = `All measured values are within optimal ranges. This is a useful baseline to track over time.`;
-                  }
-                } else if (ctx.primaryIsImproving && ctx.primaryImprovingChange) {
-                  const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? 'below range' : 'above range';
-                  const topConj = topName ? conjugate(topName) : { remains: 'remains', has: 'has', is: 'is' };
-                  if (!ctx.anyWorsening) {
-                    fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. This does not mean the issue is resolved, but it does show movement in the right direction worth continuing to track.`;
-                    if (borderline.length > 0 && borderline[0].displayName !== topName) {
-                      const bConj = conjugate(borderline[0].displayName);
-                      fallback += ` ${borderline[0].displayName} ${bConj.is} also borderline and worth monitoring.`;
-                    }
-                  } else {
-                    const worsenedName = ctx.worseningChange?.displayName ?? worsened[0]?.displayName;
-                    const wConj = worsenedName ? conjugate(worsenedName) : { remains: 'remains', has: 'has', is: 'is' };
-                    fallback = `Your ${topName} ${topConj.remains} ${dirLabel}, but the drop from your prior result is encouraging. At the same time, your ${worsenedName ?? 'another marker'} ${wConj.has} shifted since your last draw and deserves attention alongside it.`;
-                  }
-                } else if (improved.length > 0 && outOfRange.length > 0) {
-                  fallback = `${topName} remains the primary area to keep an eye on, while ${improved[0].displayName} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.`;
-                } else if (worsened.length > 0 && outOfRange.length > 0) {
-                  fallback = `${topName} is the priority finding here, and ${worsened[0].displayName} has shifted since your last draw. Tracking both at your next panel will help clarify the direction.`;
-                } else if (outOfRange.length >= 2) {
-                  const names = outOfRange.slice(0, 2).map(f => f.displayName).join(' and ');
-                  fallback = `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
-                } else if (outOfRange.length === 1 && borderline.length > 0) {
-                  fallback = `${topName} is outside optimal range and is the top priority. ${borderline[0].displayName} is borderline — worth monitoring, but not urgent on its own.`;
-                } else if (outOfRange.length === 1) {
-                  fallback = `${topName} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.`;
-                } else {
-                  fallback = `${topName} is the primary item to keep an eye on. Continue tracking these markers to see how the trend develops.`;
-                }
-
-                const isImproving = ctx.primaryIsImproving && ctx.primaryImprovingChange !== null;
-                const isWorsening = ctx.primaryIsWorsening && ctx.primaryWorseningChange !== null;
-                const isStableAbnormal = ctx.primaryIsStableAbnormal && ctx.primaryStableChange !== null;
-                let text = '';
-
-                if (isImproving) {
-                  text = fallback;
-                } else if (isWorsening && ctx.primaryWorseningChange && insightSummary.primaryFinding) {
-                  const ch = ctx.primaryWorseningChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
-                  const pctStr = ch.percentDelta !== null ? ` (${ch.percentDelta > 0 ? '+' : ''}${ch.percentDelta}%)` : '';
-                  text = `${insightSummary.primaryFinding.displayName} remains ${dirWord} and has worsened from ${ch.previousValue} to ${ch.currentValue} ${ch.unit}${pctStr} since the prior report. This is worth discussing with your provider at your next visit.`;
-                  if (borderline.length > 0 && borderline[0].displayName !== insightSummary.primaryFinding.displayName) {
-                    text += ` ${borderline[0].displayName} is also borderline — worth monitoring alongside it.`;
-                  }
-                } else if (isStableAbnormal && ctx.primaryStableChange && insightSummary.primaryFinding) {
-                  const ch = ctx.primaryStableChange;
-                  const dirWord = insightSummary.primaryFinding.direction === 'high' ? 'elevated' : 'low';
-                  text = `${insightSummary.primaryFinding.displayName} has remained ${dirWord} and has not changed significantly from the prior report (${ch.previousValue} to ${ch.currentValue} ${ch.unit}). Continued tracking is the right next step.`;
-                } else {
-                  // Use AI with fluff filtering
-                  const rawText = aiText ?? fallback;
-                  const headline = interpretation?.headline ?? '';
-                  const normalizeForCompare = (s: string) =>
-                    s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-                  const headlineNorm = normalizeForCompare(headline);
-
-                  const splitSentences = (t: string): string[] =>
-                    t.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(Boolean) ?? [t];
-
-                  const FILLER_PATTERNS = [
-                    /\bstand(s)? out as\b/i,
-                    /\bmost abnormal\b/i,
-                    /\bprimary (finding|concern|result)\b/i,
-                  ];
-                  const isFluff = (sentence: string): boolean =>
-                    FILLER_PATTERNS.some(p => p.test(sentence)) &&
-                    !/(direction|action|trend|monitor|track|discuss|follow|watch)/i.test(sentence);
-
-                  const isDuplicateOfHeadline = (sentence: string): boolean => {
-                    if (!headlineNorm) return false;
-                    const sentNorm = normalizeForCompare(sentence);
-                    const headlineWords = headlineNorm.split(' ').filter(w => w.length > 4);
-                    if (headlineWords.length === 0) return false;
-                    const matchCount = headlineWords.filter(w => sentNorm.includes(w)).length;
-                    return matchCount / headlineWords.length >= 0.7;
-                  };
-
-                  const sentences = splitSentences(rawText);
-                  const filtered = sentences.filter(s => !isDuplicateOfHeadline(s));
-                  const strong = filtered.filter((s, i) => i === 0 || !isFluff(s));
-                  const capped = strong.slice(0, 2).join(' ');
-                  text = capped || rawText;
-                }
-
-                return (
-                  <div className="border-t border-theme-border-inner bg-white px-6 py-5">
-                    <p className="text-xs font-medium text-theme-muted-text-2 uppercase tracking-widest mb-3">
-                      What This Means
-                    </p>
-                    <p className="text-[15px] text-theme-text-body leading-[1.7]">{text}</p>
-                  </div>
-                );
-              })()}
             </div>
           )}
 
-          {/* ── C2. Primary Finding (dominant single takeaway) ────── */}
-          {insightSummary?.primaryFinding && !isProcessing && (
-            <PrimaryInsightCard
-              finding={insightSummary.primaryFinding}
-              aiExplanation={
-                interpretation?.key_findings?.find(
-                  kf => kf.biomarker_slug === insightSummary.primaryFinding!.key
-                )?.explanation
-              }
-              delta={
-                insightSummary.biggestChanges.find(c => c.key === insightSummary.primaryFinding!.key) ??
-                (() => {
-                  const d = insightSummary.deltaMap.get(insightSummary.primaryFinding!.key);
-                  if (!d) return null;
-                  return {
-                    key: d.key,
-                    displayName: d.displayName,
-                    previousValue: d.previousValue,
-                    currentValue: d.currentValue,
-                    unit: d.unit,
-                    percentDelta: d.percentDelta,
-                    trendDirection: d.trendDirection,
-                    significance: d.significance,
-                    boundaryCrossing: d.boundaryCrossing,
-                    trajectoryStatus: d.trajectoryStatus,
-                    distanceToNormalImprovement: d.distanceToNormalImprovement,
-                    fact: '',
-                  };
-                })()
-              }
+          {/* ── B1. Your Health Story (NEW — narrative paragraph after Amani Analysis) ─── */}
+          {!isProcessing && healthStory.sentences.length > 0 && (
+            <YourHealthStory story={healthStory} />
+          )}
+
+          {/* ── B2. Your Trajectory (top-level, after Health Story) ─── */}
+          {insightSummary && !isProcessing && (
+            <YourTrajectoryCard
+              changes={insightSummary.biggestChanges}
+              primaryFinding={insightSummary.primaryFinding}
+              reportCount={historicalReportCount}
             />
           )}
 
-          {/* ── D. Top Findings (secondary items, softer tone) ────── */}
-          {insightSummary && !isProcessing && insightSummary.topFindings.length > 0 && (
-            <TopFindingsCard
-              findings={insightSummary.topFindings}
-              aiExplanations={
-                interpretation?.key_findings
-                  ? Object.fromEntries(
-                      interpretation.key_findings.map(kf => [kf.biomarker_slug, kf.explanation])
-                    )
-                  : undefined
-              }
-              isPrimary={false}
+          {/* ── B3. Focus Areas (NEW — system-level deterministic cards) ─── */}
+          {!isProcessing && focusAreas.length > 0 && (
+            <FocusAreas focusAreas={focusAreas} />
+          )}
+
+          {/* ── B4. Next Best Steps (NEW — merges old "Next Steps" + "What to Do Next" into Track/Discuss/Support/Retest) ─── */}
+          {!isProcessing && interpretation && (
+            <NextBestSteps
+              whatYouCanDoNow={interpretation.what_you_can_do_now}
+              whatToDoNext={interpretation.what_to_do_next}
             />
           )}
 
-          {/* ── D2. Biggest Changes (vs previous report) ─────────── */}
-          {insightSummary && !isProcessing && insightSummary.biggestChanges.length > 0 && (
-            <BiggestChangesCard changes={insightSummary.biggestChanges} />
-          )}
-
-          {/* ── D3. Your Patterns (personalization) ─────────────── */}
-          {personalInsights.length > 0 && !isProcessing && (
-            <YourPatternsCard patterns={personalInsights} reportCount={historicalReportCount} />
-          )}
-
-          {/* ── D4. What to Watch ────────────────────────────────── */}
-          {insightSummary && !isProcessing && insightSummary.watchSignals.length > 0 && (
-            <WhatToWatchCard signals={insightSummary.watchSignals} />
-          )}
-
-          {/* ── C4. Next Steps ───────────────────────────────────── */}
-          {interpretation && !isProcessing && (interpretation.what_you_can_do_now?.length ?? 0) > 0 && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-emerald-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
-                    <Lightbulb className="w-4 h-4 text-emerald-700" />
-                  </div>
-                  <h2 className="text-sm font-bold text-emerald-900">Next Steps</h2>
-                </div>
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                {interpretation.what_you_can_do_now!.map((tip, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-emerald-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-emerald-800">{i + 1}</span>
-                    </div>
-                    <p className="text-sm text-emerald-900 leading-relaxed">{tip}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Legacy cards removed in this consolidation pass:
+              - PrimaryInsightCard (subsumed by Your Health Story)
+              - TopFindingsCard (subsumed by Focus Areas)
+              - BiggestChangesCard (subsumed by Your Trajectory)
+              - YourPatternsCard (subsumed by Your Health Story)
+              - WhatToWatchCard (subsumed by Focus Areas)
+              - inline "Next Steps" + WhatToDoNextCard (merged into Next Best Steps)
+              See git history for the original implementations. */}
 
           {/* ── E. More Details (Pattern Signals, Flags, Derived) ── */}
           {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
@@ -1449,7 +1409,7 @@ export function ReportView() {
                     <div className="space-y-3">
                       <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern Signals</p>
                       {interpretation!.pattern_signals!.map((signal, i) => {
-                        const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low;
+                        const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low ?? PATTERN_CONFIDENCE_FALLBACK;
                         return (
                           <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
                             <div className="flex items-start justify-between gap-3 mb-2">
@@ -1463,7 +1423,7 @@ export function ReportView() {
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {signal.related_biomarkers.map((slug, j) => (
                                   <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-theme-muted-text-2">
-                                    {BIOMARKER_DISPLAY[slug as BiomarkerName] ?? slug.replace(/_/g, ' ')}
+                                    {getDisplayName(slug as BiomarkerName)}
                                   </span>
                                 ))}
                               </div>
@@ -1514,29 +1474,14 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── G. Recommended Labs (accordion — only when there are suggestions) */}
-          {hasRecommendedLabs && (
-            <div className="rounded-2xl border border-gray-200 overflow-hidden">
-              <button
-                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-gray-50 transition-colors"
-                onClick={() => setShowRecommendedLabs(v => !v)}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Stethoscope className="w-4 h-4 text-theme-muted-text-2" />
-                  <span className="text-sm font-semibold text-theme-text">Recommended Labs</span>
-                </div>
-                {showRecommendedLabs
-                  ? <ChevronDown className="w-4 h-4 text-gray-400" />
-                  : <ChevronRight className="w-4 h-4 text-gray-400" />
-                }
-              </button>
-              {showRecommendedLabs && (
-                <div className="border-t border-gray-100 px-5 pb-5 pt-3">
-                  <RecommendedLabs presentBiomarkers={presentBiomarkerNames} activeCategory={activeCategory} />
-                </div>
-              )}
-            </div>
-          )}
+          {/* ── G. Recommended Labs (component owns its own heading + empty-state) */}
+          <RecommendedLabs
+            presentBiomarkers={presentBiomarkerNames}
+            activeCategory={activeCategory}
+            primaryCategory={primaryCategory}
+            flaggedSlugs={flaggedSlugs}
+            flaggedCategories={flaggedCategories}
+          />
 
           {/* ── Cycle context ─────────────────────────────────────── */}
           {!isProcessing && (() => {
@@ -1545,6 +1490,10 @@ export function ReportView() {
             const reportPhase = report.estimated_cycle_phase;
             const resolvedPhase = (aiPhase && aiPhase !== 'unknown') ? aiPhase : (reportPhase && reportPhase !== 'unknown' ? reportPhase : null);
             if (!resolvedPhase) return null;
+            // Hide thin cycle-context card: phase alone duplicates the header pill.
+            // Only render when there's additional context (cycle day, AI explanation, or confidence label).
+            const hasExtraContext = !!(aiCycle?.estimated_cycle_day || aiCycle?.explanation || aiCycle?.confidence);
+            if (!hasExtraContext) return null;
             return (
               <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
@@ -1669,6 +1618,7 @@ export function ReportView() {
                                 commonNonAlarmReasons={interp?.common_non_alarm_reasons}
                                 whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
                                 baselineStatus={personalization?.baselineStatus}
+                                baselineStaleness={personalization?.baselineStaleness}
                                 baselineValue={personalization?.baselineValue}
                                 trendDirection={personalization?.trendDirection}
                                 trendStrength={personalization?.trendStrength}

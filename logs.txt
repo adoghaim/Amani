@@ -1,0 +1,200 @@
+
+/Users/adelldoghaimat/Desktop/Amani/src/components/BiomarkerSystemDashboard.tsx
+  62:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/components/LabsTimeline.tsx
+  115:67  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/components/TopFindingsCard.tsx
+  1:10  error  'AlertCircle' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/adelldoghaimat/Desktop/Amani/src/components/auth/LoginForm.tsx
+  33:14  error  'err' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/adelldoghaimat/Desktop/Amani/src/components/auth/SignupForm.tsx
+  51:14  error  'err' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/adelldoghaimat/Desktop/Amani/src/components/pricing/PricingCard.tsx
+  50:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/contexts/AuthContext.tsx
+  164:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+/Users/adelldoghaimat/Desktop/Amani/src/lib/insights/buildInsightSummary.ts
+  587:11  error  'isMeaningful' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/adelldoghaimat/Desktop/Amani/src/lib/native.ts
+  65:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/pages/Dashboard.tsx
+  67:6   warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  86:31  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/pages/NewReport.tsx
+    5:10  error    'Input' is defined but never used                                                                                  @typescript-eslint/no-unused-vars
+   54:23  error    'setCycleLength' is assigned a value but never used                                                                @typescript-eslint/no-unused-vars
+   55:24  error    'setBirthControl' is assigned a value but never used                                                               @typescript-eslint/no-unused-vars
+   56:20  error    'setPregnant' is assigned a value but never used                                                                   @typescript-eslint/no-unused-vars
+   57:22  error    'setPostpartum' is assigned a value but never used                                                                 @typescript-eslint/no-unused-vars
+   84:6   warning  React Hook useEffect has a missing dependency: 'navigate'. Either include it or remove the dependency array        react-hooks/exhaustive-deps
+  110:15  error    Empty block statement                                                                                              no-empty
+  114:6   warning  React Hook useEffect has a missing dependency: 'lastPeriodDate'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  143:19  error    Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  465:80  error    Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  466:44  error    Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  519:17  error    'source_format' is assigned a value but never used                                                                 @typescript-eslint/no-unused-vars
+  519:32  error    'parser_version' is assigned a value but never used                                                                @typescript-eslint/no-unused-vars
+  519:48  error    'unit_original' is assigned a value but never used                                                                 @typescript-eslint/no-unused-vars
+  520:17  error    'unit_normalized' is assigned a value but never used                                                               @typescript-eslint/no-unused-vars
+  520:34  error    'review_status' is assigned a value but never used                                                                 @typescript-eslint/no-unused-vars
+  520:49  error    'reviewed_by_user' is assigned a value but never used                                                              @typescript-eslint/no-unused-vars
+  521:17  error    'display_name' is assigned a value but never used                                                                  @typescript-eslint/no-unused-vars
+  521:31  error    'system_category' is assigned a value but never used                                                               @typescript-eslint/no-unused-vars
+  521:48  error    'normalization_status' is assigned a value but never used                                                          @typescript-eslint/no-unused-vars
+  523:27  error    Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/pages/ReportView.tsx
+   38:10  error    'detectLabSource' is defined but never used                                                                                    @typescript-eslint/no-unused-vars
+  213:39  error    Unexpected any. Specify a different type                                                                                       @typescript-eslint/no-explicit-any
+  268:39  warning  React Hook useEffect has a missing dependency: 'fetchReport'. Either include it or remove the dependency array                 react-hooks/exhaustive-deps
+  300:6   warning  React Hook useEffect has missing dependencies: 'fetchReport' and 'report'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  363:16  error    'e' is defined but never used                                                                                                  @typescript-eslint/no-unused-vars
+  375:6   warning  React Hook useEffect has a missing dependency: 'report'. Either include it or remove the dependency array                      react-hooks/exhaustive-deps
+  717:14  error    'err' is defined but never used                                                                                                @typescript-eslint/no-unused-vars
+  717:19  error    Unexpected any. Specify a different type                                                                                       @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/pages/Reports.tsx
+  171:6   warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  384:43  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  384:73  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  387:47  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/pages/ResetPassword.tsx
+  77:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/pages/Settings.tsx
+   34:6   warning  React Hook useEffect has a missing dependency: 'fetchNotifPrefs'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   46:14  error    '_' is defined but never used                                                                                       @typescript-eslint/no-unused-vars
+   46:17  error    Empty block statement                                                                                               no-empty
+  108:14  error    '_' is defined but never used                                                                                       @typescript-eslint/no-unused-vars
+  108:17  error    Empty block statement                                                                                               no-empty
+
+/Users/adelldoghaimat/Desktop/Amani/src/pages/Tracker.tsx
+   75:52  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   81:6   warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  119:29  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/src/utils/pdfExtractor.ts
+  113:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/supabase/functions/delete-user-data/index.ts
+  48:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  49:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/supabase/functions/extract-biomarkers/index.ts
+   23:11  error  'AnalyteSynonym' is defined but never used  @typescript-eslint/no-unused-vars
+   76:53  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  398:19  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  517:19  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  535:13  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/supabase/functions/generate-interpretation/index.ts
+  118:9   error  'tsh' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  119:9   error  'ft4' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  120:9   error  'ft3' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  151:9   error  'glucose' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  152:9   error  'hba1c' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  281:62  error  'report' is defined but never used            @typescript-eslint/no-unused-vars
+  497:99  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  807:15  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  867:29  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  921:17  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  926:16  error  '_' is defined but never used                 @typescript-eslint/no-unused-vars
+  926:19  error  Empty block statement                         no-empty
+
+/Users/adelldoghaimat/Desktop/Amani/supabase/functions/lab-insights/index.ts
+  211:69  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  299:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/supabase/functions/parse-lab-report-ocr/index.ts
+   71:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  211:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  249:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  310:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/supabase/functions/stripe-checkout/index.ts
+  198:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/adelldoghaimat/Desktop/Amani/supabase/functions/stripe-webhook/index.ts
+  42:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  50:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 86 problems (76 errors, 10 warnings)
+
+adelldoghaimat@Adells-MacBook-Pro Amani %   npm run typecheck
+
+> vite-react-typescript-starter@0.0.0 typecheck
+> tsc --noEmit -p tsconfig.app.json
+
+src/components/TopFindingsCard.tsx:1:10 - error TS6133: 'AlertCircle' is declared but its value is never read.
+
+1 import { AlertCircle, TrendingUp, TrendingDown, Minus, List } from 'lucide-react';
+           ~~~~~~~~~~~
+
+src/lib/insights/buildInsightSummary.ts:587:11 - error TS6133: 'isMeaningful' is declared but its value is never read.
+
+587     const isMeaningful = primaryDelta && (
+              ~~~~~~~~~~~~
+
+src/pages/NewReport.tsx:5:1 - error TS6133: 'Input' is declared but its value is never read.
+
+5 import { Input } from '../components/Input';
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/NewReport.tsx:54:23 - error TS6133: 'setCycleLength' is declared but its value is never read.
+
+54   const [cycleLength, setCycleLength] = useState('28');
+                         ~~~~~~~~~~~~~~
+
+src/pages/NewReport.tsx:55:24 - error TS6133: 'setBirthControl' is declared but its value is never read.
+
+55   const [birthControl, setBirthControl] = useState<'yes' | 'no' | 'unsure'>('unsure');
+                          ~~~~~~~~~~~~~~~
+
+src/pages/NewReport.tsx:56:20 - error TS6133: 'setPregnant' is declared but its value is never read.
+
+56   const [pregnant, setPregnant] = useState<'yes' | 'no' | 'unsure'>('unsure');
+                      ~~~~~~~~~~~
+
+src/pages/NewReport.tsx:57:22 - error TS6133: 'setPostpartum' is declared but its value is never read.
+
+57   const [postpartum, setPostpartum] = useState<'yes' | 'no' | 'unsure'>('unsure');
+                        ~~~~~~~~~~~~~
+
+src/pages/ReportView.tsx:38:1 - error TS6133: 'detectLabSource' is declared but its value is never read.
+
+38 import { detectLabSource } from '../utils/detectLabSource';
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/ReportView.tsx:962:29 - error TS18047: 'ctx' is possibly 'null'.
+
+962                         if (ctx.anyBoundaryCrossImproved) {
+                                ~~~
+
+src/pages/ReportView.tsx:976:29 - error TS18047: 'ctx' is possibly 'null'.
+
+976                         if (ctx.anyBoundaryCrossImproved) {
+                                ~~~
+
+
+Found 10 errors in 4 files.
+
+Errors  Files
+     1  src/components/TopFindingsCard.tsx:1
+     1  src/lib/insights/buildInsightSummary.ts:587
+     5  src/pages/NewReport.tsx:5
+     3  src/pages/ReportView.tsx:38

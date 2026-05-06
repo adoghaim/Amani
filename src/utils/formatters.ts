@@ -22,8 +22,8 @@ export function canonicalReportDate(
 ): string {
   if (reportDate && reportDate.trim().length > 0) return reportDate.trim();
   if (createdAt && createdAt.trim().length > 0) {
-    return createdAt.trim().split('T')[0];
+    return createdAt.trim().split('T')[0] ?? createdAt.trim();
   }
-  return new Date().toISOString().split('T')[0];
+  return new Date().toISOString().split('T')[0] ?? new Date().toISOString();
 }
 

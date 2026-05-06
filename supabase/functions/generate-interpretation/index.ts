@@ -1,11 +1,28 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  ALLOWED_NUTRIENTS_PROMPT_LIST,
+  sanitizeViolations,
+  validateInterpretationOutput,
+} from "../_shared/nutrient-policy.ts";
+import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { errorMessage } from "../_shared/errors.ts";
+import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
+import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
+import { LabReportContextSchema } from "../_shared/schemas/context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+// Verbose logs include analyte counts and biomarker names tied to reportId —
+// gated behind DEBUG to avoid PII-adjacent leakage in normal operation.
+const DEBUG_ENABLED = !!Deno.env.get("DEBUG");
+function debugLog(...args: unknown[]) {
+  if (DEBUG_ENABLED) console.log(...args);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -810,10 +827,16 @@ This is actionable, empowering, and practical. Users read this closely.
 
 Rules:
 - Provide 3–5 suggestions, each tied to a specific flagged marker
-- Group suggestions by issue when possible (e.g., "For your thyroid:", "For glucose:")
 - Cover at least 2 of: nutrition, lifestyle, safe general supplements
-- Supplements allowed: vitamin D, magnesium, omega-3s, selenium, zinc — never give dosages
+- Supplements allowed (only if directly tied to a flagged lab value or symptom): ${ALLOWED_NUTRIENTS_PROMPT_LIST}
+- Never give dosages, frequencies, brands, or units (no IU, mg, mcg, g, mL, "daily", "twice a day", "with food")
+- Never use prescriptive verbs like "take", "start", "consume", "prescribe"
+- Frame as discussion topics with a clinician, not directives
+- Never mention herbal/adaptogen supplements (ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
 - Write like a knowledgeable friend giving a real tip, not a disclaimer
+- When suggesting food or lifestyle support, name the specific food (e.g. 'avocados, nuts, olive oil') and the marker it supports — not generic categories like 'healthy foods'.
+- No "For your X:" prefixes. Do not begin bullets with phrases like "For your thyroid:" or "For your HDL cholesterol:". Lead directly with the verb. Example: write "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish." not "For your HDL cholesterol: Incorporating healthy fats can help...".
+- One verb per bullet. Do not combine multiple intents in a single bullet. Bad: "Monitor your HDL cholesterol and discuss lifestyle changes" — split into two bullets if both intents matter, otherwise pick the dominant intent.
 
 DO NOT:
 - Give dosages
@@ -824,9 +847,9 @@ DO NOT:
 Tone: practical, warm, specific
 
 GOOD examples:
-- "For your thyroid: Brazil nuts are one of the best food sources of selenium, which supports thyroid enzyme activity — a small handful a few times a week is plenty."
-- "For glucose: swapping refined carbs for fiber-rich foods like legumes, oats, or vegetables can help blunt post-meal glucose spikes."
-- "For your vitamin D: 15–20 minutes of midday sun a few times a week is a simple place to start, especially if you're indoors most of the day."
+- "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish."
+- "Pair iron-rich foods like lentils or dark leafy greens with a vitamin C source to support ferritin rebuilding."
+- "Aim for 15–20 minutes of midday sun a few times a week to support vitamin D, especially if you're indoors most of the day."
 - "Magnesium-rich foods like pumpkin seeds, dark leafy greens, and dark chocolate can support sleep and stress regulation — relevant here."
 
 -----------------------------------
@@ -840,9 +863,16 @@ SECTION 5 — WHAT TO DO NEXT
 
 Keep this completely distinct from "What You Can Do Now" — no overlap.
 
+- Specific markers, not categories. Name the specific follow-up markers when known. For example, write 'TPO antibodies, TSH, Free T4, and Free T3' rather than 'thyroid markers' or 'thyroid function tests'. If multiple markers are flagged in the same physiological system, list each by name (up to 5 max). Use the lab panel data above as the source of marker names.
+- Direct phrasing, not hedge phrases. Use direct phrasing. Prefer 'Discuss whether repeating X makes sense' over 'X can be helpful'. Prefer 'Review X with your provider if Y' over 'X might be worth discussing'. Banned phrases: 'can be helpful', 'might be worth', 'may be worth', 'could be worth'. Replace with: 'Discuss…', 'Review…', 'Consider repeating…'.
+- No "For your X:" prefixes. Lead with the action verb. Write "Discuss whether repeating thyroid markers makes sense" not "For your thyroid: Discuss whether repeating thyroid markers makes sense". The bucketing UI already groups by system, so the prefix is redundant.
+- One verb per bullet. Do not combine multiple intents in a single bullet. Bad: "Monitor your HDL cholesterol and discuss lifestyle changes" — split into two bullets if both intents matter, otherwise pick the dominant intent. Good: "Monitor your HDL cholesterol over the next 3-6 months." OR "Discuss lifestyle changes with your provider.", not both.
+
 Examples of good next steps:
+- "Discuss whether repeating TPO antibodies, TSH, Free T4, and Free T3 makes sense based on your symptoms and timeline."
+- "Review BUN/Creatinine Ratio if hydration, protein intake, or kidney markers remain a concern."
+- "Consider retesting thyroid markers in a few months to confirm the trend."
 - "Continue monitoring vitamin D levels — retest in 2–3 months to see if the trend holds."
-- "Consider retesting thyroid markers at a different cycle phase for a clearer picture."
 - "Track how your energy and sleep align with these results over the next few weeks."
 
 Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_now.
@@ -958,29 +988,62 @@ Required schema:
   "disclaimer": "string"
 }`;
 
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 18000);
+  const first = await callOpenAIOnce(apiKey, prompt);
+  if (!first) return null;
 
+  const firstCheck = validateInterpretationOutput(first);
+  if (firstCheck.valid) return first;
+
+  console.warn(
+    "[generate-interpretation] nutrient validation failed (attempt 1):",
+    firstCheck.violations.join(", "),
+  );
+
+  const stricterPrompt =
+    prompt +
+    "\n\nIMPORTANT: Your previous response violated the medical-boundary rules (" +
+    firstCheck.violations.join(", ") +
+    "). Regenerate without dosages, frequencies, prescriptive verbs, or banned supplements. Re-read the supplement rules above and comply strictly.";
+
+  const second = await callOpenAIOnce(apiKey, stricterPrompt);
+  if (!second) return null;
+
+  const secondCheck = validateInterpretationOutput(second);
+  if (secondCheck.valid) return second;
+
+  console.warn(
+    "[generate-interpretation] nutrient validation failed (attempt 2), sanitizing:",
+    secondCheck.violations.join(", "),
+  );
+  return sanitizeViolations(second) as AIInterpretationOutput;
+}
+
+async function callOpenAIOnce(
+  apiKey: string,
+  prompt: string,
+): Promise<AIInterpretationOutput | null> {
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are Amani's clinical interpretation engine. Return ONLY valid JSON. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
-          },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 2200,
-        temperature: 0.25,
-        response_format: { type: "json_object" },
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(tid);
+    const res = await fetchWithBackoff(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are Amani's clinical interpretation engine. Return ONLY valid JSON. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
+            },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 2200,
+          temperature: 0.25,
+          response_format: { type: "json_object" },
+        }),
+      },
+      { attemptTimeoutMs: 18000 },
+    );
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -993,13 +1056,27 @@ Required schema:
     if (!content) return null;
 
     const parsed = JSON.parse(content);
-    if (typeof parsed.headline !== "string") return null;
-    return parsed;
+    const result = InterpretationSchema.safeParse(parsed);
+    if (!result.success) {
+      console.warn(
+        "[generate-interpretation] OpenAI response failed schema validation:",
+        result.error.flatten(),
+      );
+      return null;
+    }
+    return result.data as AIInterpretationOutput;
   } catch (e: unknown) {
-    clearTimeout(tid);
-    console.warn("[generate-interpretation] OpenAI failed:", e instanceof Error ? e.message : e);
+    console.warn("[generate-interpretation] OpenAI failed:", errorMessage(e));
     return null;
   }
+}
+
+// ─── Context sanitization ────────────────────────────────────────────────────
+// Parsing is delegated to `LabReportContextSchema` in `_shared/schemas/context.ts`.
+
+function sanitizeReportContext(raw: unknown): LabReportData["context"] {
+  const result = LabReportContextSchema.safeParse(raw);
+  return result.success ? result.data : undefined;
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -1010,23 +1087,44 @@ Deno.serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-  console.log("DEPLOYMENT VERIFIED: generate-interpretation v2.2. Auth Header Present:", !!req.headers.get("Authorization"));
+  debugLog("DEPLOYMENT VERIFIED: generate-interpretation v2.3 (auth + ownership). Auth Header Present:", !!req.headers.get("Authorization"));
   const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
 
   try {
-    const body = await req.json();
-    reportId = body?.reportId ?? null;
-
-    if (!reportId || typeof reportId !== "string") {
-      return new Response(JSON.stringify({ error: "reportId is required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const supabaseUser = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await checkAndIncrementRateLimit(supabase, user.id, "generate-interpretation", 20);
+
+    const body = await req.json().catch(() => null);
+    const parsedBody = GenerateInterpretationRequestSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request body", detail: parsedBody.error.flatten() }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    reportId = parsedBody.data.reportId;
 
     const { data: reportCheck } = await supabase
       .from("lab_reports")
@@ -1040,11 +1138,23 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (reportCheck.user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { data: report } = await supabase
       .from("lab_reports")
       .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")
       .eq("id", reportId)
       .maybeSingle();
+
+    if (report) {
+      (report as { context?: unknown }).context = sanitizeReportContext(
+        (report as { context?: unknown }).context,
+      );
+    }
 
     const { data: rawAnalytes } = await supabase
       .from("report_analytes")
@@ -1053,7 +1163,7 @@ Deno.serve(async (req: Request) => {
       .order("raw_name");
 
     const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
-    console.log(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
+    debugLog(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
 
     // ── Fetch most recent prior report analytes for the same user ──────────
     let priorAnalytes: AnalyteData[] = [];
@@ -1080,7 +1190,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const primaryContext = buildPrimaryContext(analytes, priorAnalytes, priorReportDate);
-    console.log(`[generate-interpretation] primaryContext:`, primaryContext
+    debugLog(`[generate-interpretation] primaryContext:`, primaryContext
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");
 
@@ -1143,7 +1253,7 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    const message = errorMessage(err, "Internal server error");
     console.error("[generate-interpretation] Fatal error:", message);
     if (reportId) {
       try {
@@ -1157,3 +1267,33 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
+
+async function checkAndIncrementRateLimit(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  endpoint: string,
+  limitPerDay: number,
+): Promise<void> {
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+
+  const { data: existing } = await supabase
+    .from("rate_limits")
+    .select("id, count")
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint)
+    .gte("window_start", windowStart.toISOString())
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.count >= limitPerDay) throw new Error("RATE_LIMIT_EXCEEDED");
+    await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
+  } else {
+    await supabase.from("rate_limits").insert({
+      user_id: userId,
+      endpoint,
+      window_start: windowStart.toISOString(),
+      count: 1,
+    });
+  }
+}

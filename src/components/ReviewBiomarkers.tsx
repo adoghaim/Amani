@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle, CheckCircle, AlertTriangle, ChevronDown, ChevronRight, FlaskConical, Microscope } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ChevronDown, ChevronRight, FlaskConical, Microscope } from 'lucide-react';
 import { Button } from './Button';
 import type { ReportItem } from '../utils/biomarkerParser';
 import { useBiomarkerCatalog } from '../hooks/useBiomarkerCatalog';
@@ -12,8 +12,8 @@ interface ReviewBiomarkersProps {
 }
 
 const ConfidenceBadge = ({ confidence }: { confidence: 'high' | 'medium' | 'low' }) => {
+  if (confidence === 'high') return null;
   const config = {
-    high:   { icon: CheckCircle,  color: 'text-emerald-600', bg: 'bg-emerald-50',  label: 'High' },
     medium: { icon: AlertTriangle, color: 'text-amber-600',  bg: 'bg-amber-50',    label: 'Review' },
     low:    { icon: AlertCircle,  color: 'text-red-600',     bg: 'bg-red-50',      label: 'Low confidence' },
   };
@@ -41,7 +41,7 @@ function ItemCard({
   onRemove: ReviewBiomarkersProps['onRemove'];
   catalogSlugs: { slug: string; name: string; unit: string }[];
 }) {
-  const [expanded, setExpanded] = useState(item.confidence_score === 'low');
+  const [expanded, setExpanded] = useState(item.confidence_score === 'low' || item.needs_review);
 
   const borderColor =
     item.confidence_score === 'low'
@@ -206,9 +206,12 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
   const [showExtended, setShowExtended] = useState(true);
 
   const catalogSlugs = catalog.map(b => ({ slug: b.slug, name: b.name, unit: b.unit }));
-  const coreItems = items.map((item, i) => ({ item, globalIndex: i })).filter(({ item }) => item.is_core_biomarker);
-  const extendedItems = items.map((item, i) => ({ item, globalIndex: i })).filter(({ item }) => !item.is_core_biomarker);
-  const needsReview = items.filter(i => i.needs_review).length;
+  const indexed = items.map((item, i) => ({ item, globalIndex: i }));
+  const reviewItems = indexed.filter(({ item }) => item.needs_review);
+  const coreItems = indexed.filter(({ item }) => item.is_core_biomarker && !item.needs_review);
+  const extendedItems = indexed.filter(({ item }) => !item.is_core_biomarker && !item.needs_review);
+  const totalCore = items.filter(i => i.is_core_biomarker).length;
+  const totalExtended = items.length - totalCore;
 
   return (
     <div className="space-y-6">
@@ -217,18 +220,37 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
           {items.length} lab item{items.length !== 1 ? 's' : ''} extracted
         </h3>
         <p className="text-sm text-blue-700">
-          {coreItems.length} match the Amani core panel &middot; {extendedItems.length} extended items saved for history.
-          {needsReview > 0 && <span className="text-amber-700 font-medium ml-1">{needsReview} need review.</span>}
+          {totalCore} match the Amani core panel &middot; {totalExtended} extended items saved for history.
+          {reviewItems.length > 0 && <span className="text-amber-700 font-medium ml-1">{reviewItems.length} need review.</span>}
         </p>
       </div>
 
-      {needsReview > 0 && (
-        <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            Some items have low extraction confidence — missing units or unusual values. Review them before submitting.
-          </p>
-        </div>
+      {reviewItems.length > 0 && (
+        <section className="bg-amber-50/40 border border-amber-300 rounded-lg p-4">
+          <div className="flex items-start gap-3 mb-4">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">
+                Needs review ({reviewItems.length})
+              </h3>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Confirm or fix these before saving — they'll move into your panel below as you go.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {reviewItems.map(({ item, globalIndex }) => (
+              <ItemCard
+                key={globalIndex}
+                item={item}
+                globalIndex={globalIndex}
+                onUpdate={onUpdate}
+                onRemove={onRemove}
+                catalogSlugs={catalogSlugs}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {coreItems.length > 0 && (

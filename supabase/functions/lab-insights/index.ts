@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { errorMessage } from "../_shared/errors.ts";
+import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,18 +96,20 @@ Deno.serve(async (req: Request) => {
 
     await checkAndIncrementRateLimit(supabase, userId, "lab-insights", 30);
 
-    const body = await req.json();
-    const { currentReportId, previousReportId } = body;
-
-    if (!currentReportId) {
-      throw new Error("Missing required parameters");
+    const body = await req.json().catch(() => null);
+    const parsedBody = LabInsightsRequestSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request body", detail: parsedBody.error.flatten() }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+    const { currentReportId, previousReportId } = parsedBody.data;
 
-    const { data: currentReport, error: currentError } = await supabase
+    const { data: currentReport, error: currentError } = await supabaseAuth
       .from("lab_reports")
       .select("*")
       .eq("id", currentReportId)
-      .eq("user_id", userId)
       .single();
 
     if (currentError || !currentReport) {
@@ -113,11 +118,10 @@ Deno.serve(async (req: Request) => {
 
     let previousReport = null;
     if (previousReportId) {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAuth
         .from("lab_reports")
         .select("*")
         .eq("id", previousReportId)
-        .eq("user_id", userId)
         .single();
 
       if (!error && data) {
@@ -137,12 +141,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: currentBiomarkers } = await supabase
+    const { data: currentBiomarkers } = await supabaseAuth
       .from("biomarkers")
       .select("name, value, unit")
       .eq("lab_report_id", currentReportId);
 
-    const { data: previousBiomarkers } = await supabase
+    const { data: previousBiomarkers } = await supabaseAuth
       .from("biomarkers")
       .select("name, value, unit")
       .eq("lab_report_id", previousReportId);
@@ -175,10 +179,9 @@ Deno.serve(async (req: Request) => {
     // Interventions relevant to the comparison window:
     // - started before/current
     // - and active at any point between previous and current (end_date null or end_date >= previous)
-    const { data: interventions } = await supabase
+    const { data: interventions } = await supabaseAuth
       .from("interventions")
       .select("title, category, start_date, end_date")
-      .eq("user_id", userId)
       .lte("start_date", currentReport.report_date)
       .or(`end_date.is.null,end_date.gte.${previousReport.report_date}`);
 
@@ -239,28 +242,32 @@ Remember:
 - If cycle context is present, treat it as possible context only.
 - Keep explanations accessible and action-neutral ("consider discussing", "ask about").`;
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
+    const openaiResponse = await fetchWithBackoff(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are a health education assistant. Provide educational insights only. Never diagnose or prescribe treatment.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0.7,
+          response_format: { type: "json_object" },
+        }),
       },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are a health education assistant. Provide educational insights only. Never diagnose or prescribe treatment.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-      }),
-    });
+      { attemptTimeoutMs: 18000 },
+    );
 
     if (!openaiResponse.ok) {
       throw new Error(`OpenAI API error: ${openaiResponse.statusText}`);
@@ -291,7 +298,7 @@ Remember:
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const message = error instanceof Error ? error.message : "Failed to generate insights";
+    const message = errorMessage(error, "Failed to generate insights");
     return new Response(
       JSON.stringify({
         error: message,

@@ -16,6 +16,9 @@ export function dateToKey(date: Date): string {
 
 export function keyToDate(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
+  if (y === undefined || m === undefined || d === undefined) {
+    return new Date(NaN);
+  }
   return new Date(y, m - 1, d);
 }
 
@@ -34,8 +37,11 @@ function inferCycleLength(sortedLogs: PeriodLog[]): number {
   if (sortedLogs.length < 2) return DEFAULT_CYCLE_LENGTH;
   const lengths: number[] = [];
   for (let i = 0; i < sortedLogs.length - 1; i++) {
-    const a = keyToDate(sortedLogs[i].start_date);
-    const b = keyToDate(sortedLogs[i + 1].start_date);
+    const cur = sortedLogs[i];
+    const nxt = sortedLogs[i + 1];
+    if (!cur || !nxt) continue;
+    const a = keyToDate(cur.start_date);
+    const b = keyToDate(nxt.start_date);
     const diff = diffDays(b, a);
     if (diff >= 15 && diff <= 60) {
       lengths.push(diff);

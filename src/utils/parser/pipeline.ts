@@ -94,6 +94,7 @@ export function layeredParse(
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (line === undefined) continue;
     const bp = matchBiomarkerLabel(line, adapter);
     if (!bp && isSectionHeader(line)) continue;
     if (!bp) continue;
@@ -105,7 +106,7 @@ export function layeredParse(
 
     const canonical      = normalizeToCatalogSlug(bp.canonical);
     const snippetText    = windowLines.join(' ').substring(0, 200);
-    const matchedPattern = bp.patterns.find(p => line.toLowerCase().includes(p)) ?? bp.patterns[0];
+    const matchedPattern = bp.patterns.find(p => line.toLowerCase().includes(p)) ?? bp.patterns[0] ?? null;
 
     if (!parsed) {
       if (debug) debugLog.push(`[MISS] ${canonical} | label="${line}" | no value found`);
@@ -212,7 +213,7 @@ function extractBiomarkerFromContext(
     const escapedUnit = u.toLowerCase().replace(/[/()[\].+*?^${}|\\]/g, '\\$&');
     return new RegExp(escapedUnit, 'i').test(contextText);
   });
-  unit = unitMatch ?? commonUnits[0];
+  unit = unitMatch ?? commonUnits[0] ?? null;
   if (unitMatch) confidence = 'medium';
 
   const ref = detectReferenceRange(contextText);
@@ -234,7 +235,10 @@ function extractBiomarkerFromContext(
       confidence = ref ? 'high' : 'medium';
     }
   } else {
-    const numbers = [...contextText.matchAll(/(\d+\.?\d*)/g)].map(m => parseFloat(m[1]));
+    const numbers = [...contextText.matchAll(/(\d+\.?\d*)/g)]
+      .map(m => m[1])
+      .filter((s): s is string => s !== undefined)
+      .map(s => parseFloat(s));
     if (numbers.length === 0) return null;
 
     const knownRangeNums = new Set<number>();
@@ -245,9 +249,9 @@ function extractBiomarkerFromContext(
     if (ref) {
       confidence = 'high';
       const outside = numbers.filter(n => !knownRangeNums.has(n));
-      value = outside.length > 0 ? outside[0] : numbers[0];
+      value = (outside.length > 0 ? outside[0] : numbers[0]) ?? null;
     } else {
-      value = numbers[0];
+      value = numbers[0] ?? null;
     }
   }
 
@@ -294,7 +298,8 @@ export function parseBiomarkersFromText(
           extracted.name = catalogSlug;
           const existingIndex = extractedBiomarkers.findIndex(b => b.name === extracted.name);
           if (existingIndex >= 0) {
-            if (extracted.confidence === 'high' && extractedBiomarkers[existingIndex].confidence !== 'high') {
+            const existing = extractedBiomarkers[existingIndex];
+            if (extracted.confidence === 'high' && existing && existing.confidence !== 'high') {
               extractedBiomarkers[existingIndex] = extracted;
             }
           } else {
@@ -432,7 +437,7 @@ function buildExtendedItems(
     if (SKIP_LINES_RE.test(line)) continue;
     if (line.length > 120) continue;
     const m = line.match(LABEL_VALUE_RE);
-    if (!m) continue;
+    if (!m || m[1] === undefined || m[2] === undefined) continue;
     const rawName    = m[1].trim();
     const rawValueStr = m[2].trim();
     const rawUnit    = m[3]?.trim() ?? null;
@@ -535,6 +540,7 @@ export function parseAllReportItemsWithDebug(
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      if (line === undefined) continue;
       const bp   = matchBiomarkerLabel(line, adapter);
       if (!bp && isSectionHeader(line)) continue;
       if (!bp) continue;
@@ -546,7 +552,7 @@ export function parseAllReportItemsWithDebug(
       const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter);
       const canonical      = normalizeToCatalogSlug(bp.canonical);
       const snippetText    = windowLines.join(' ').substring(0, 200);
-      const matchedPattern = bp.patterns.find(p => line.toLowerCase().includes(p)) ?? bp.patterns[0];
+      const matchedPattern = bp.patterns.find(p => line.toLowerCase().includes(p)) ?? bp.patterns[0] ?? null;
 
       if (!parsed) {
         analyteBlocks.push({

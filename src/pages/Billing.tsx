@@ -4,6 +4,7 @@ import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { supabase } from '../lib/supabase';
+import { errorMessage } from '../lib/errors';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -81,7 +82,7 @@ export function Billing() {
         await openExternalUrl(data.url);
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
+      const msg = errorMessage(error);
       console.error('Billing error:', msg);
       setError(`Failed to open billing portal: ${msg}`);
     } finally {

@@ -1,5 +1,4 @@
 import { LoginForm } from '../components/auth/LoginForm'
-import { supabase } from '../lib/supabase'
 import { Link, useNavigate } from 'react-router-dom'
 import { Heart, ArrowLeft } from 'lucide-react'
 
@@ -10,19 +9,6 @@ export function LoginPage() {
 
   const handleSuccess = () => {
     navigate(redirect)
-  }
-
-  const handleSkipLogin = async () => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: 'test@amani.app',
-      password: 'password123'
-    })
-    if (error) {
-      console.error("Test login failed:", error)
-      alert("Test login failed: " + error.message)
-    } else {
-      handleSuccess()
-    }
   }
 
   return (
@@ -63,17 +49,6 @@ export function LoginPage() {
               >
                 Forgot your password?
               </Link>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-theme-border text-center">
-              <button
-                type="button"
-                onClick={handleSkipLogin}
-                className="text-sm font-medium text-theme-primary hover:text-theme-primary-dark transition-colors flex items-center justify-center gap-2 mx-auto"
-              >
-                Skip login (Test Account)
-                <ArrowLeft className="w-3 h-3 rotate-180" />
-              </button>
             </div>
           </div>
         </div>

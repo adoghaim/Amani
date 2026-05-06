@@ -1,14 +1,9 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Info, BookOpen } from 'lucide-react';
-import {
-  computeAmaniStatus,
-  computeLabStatus,
-  amaniStatusToVariant,
-  STATUS_PILL_CONFIG,
-  BIOMARKER_RANGES,
-  BIOMARKER_DISPLAY,
-} from '../utils/biomarkerDefinitions';
-import type { BiomarkerName, CyclePhase, AmaniStatus, BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import { computeAmaniStatus, computeLabStatus } from '../lib/scoring/scoreBiomarker';
+import { amaniStatusToVariant, STATUS_PILL_CONFIG } from '../lib/scoring/statusPill';
+import { getEntry, getDisplayName } from '../lib/biomarkers/dictionary';
+import type { BiomarkerName, CyclePhase, AmaniStatus, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 
 interface BiomarkerCardProps {
@@ -26,8 +21,26 @@ interface BiomarkerCardProps {
   historicalValues?: { date: string; value: number }[];
   baselineStatus?: BaselineStatus;
   baselineValue?: number;
+  baselineStaleness?: BaselineStaleness;
   trendDirection?: TrendDirection;
   trendStrength?: TrendStrength;
+}
+
+function baselineCopy(
+  status: BaselineStatus,
+  staleness: BaselineStaleness
+): string | null {
+  if (staleness === 'limited') return 'Limited prior history';
+  if (status === 'above_baseline') {
+    return staleness === 'stale' ? 'Higher compared with older history' : 'Higher than your usual level';
+  }
+  if (status === 'below_baseline') {
+    return staleness === 'stale' ? 'Lower compared with older history' : 'Lower than your usual level';
+  }
+  if (status === 'near_baseline') {
+    return staleness === 'stale' ? 'Within your older history range' : 'Within your usual range';
+  }
+  return null;
 }
 
 function formatRangeLabel(n: number): string {
@@ -172,6 +185,7 @@ export function BiomarkerCard({
   whenCliniciansFollowUp,
   historicalValues,
   baselineStatus,
+  baselineStaleness,
   trendDirection,
   trendStrength,
 }: BiomarkerCardProps) {
@@ -181,29 +195,30 @@ export function BiomarkerCard({
   const amaniVariant = amaniStatusToVariant(amaniStatus);
   const pill = STATUS_PILL_CONFIG[amaniVariant];
 
-  const ranges = BIOMARKER_RANGES[name];
-  let optMin = ranges?.optimal.min ?? null;
-  let optMax = ranges?.optimal.max ?? null;
-  let clinMin = ranges?.clinical.min ?? null;
-  let clinMax = ranges?.clinical.max ?? null;
+  const entry = getEntry(name);
+  let optMin = entry?.optimal.min ?? null;
+  let optMax = entry?.optimal.max ?? null;
+  let clinMin = entry?.clinical.min ?? null;
+  let clinMax = entry?.clinical.max ?? null;
 
-  if (cyclePhase && ranges?.phaseRanges?.[cyclePhase]) {
-    const pr = ranges.phaseRanges[cyclePhase]!;
+  if (cyclePhase && entry?.phaseRanges?.[cyclePhase]) {
+    const pr = entry.phaseRanges[cyclePhase]!;
     optMin = pr.optimal.min ?? optMin;
     optMax = pr.optimal.max ?? optMax;
     clinMin = pr.clinical.min ?? clinMin;
     clinMax = pr.clinical.max ?? clinMax;
   }
 
-  const displayName = BIOMARKER_DISPLAY[name] ?? name.replace(/_/g, ' ');
+  const displayName = getDisplayName(name);
   const formattedValue = rawValueText ?? (value % 1 === 0 ? value.toString() : value.toFixed(2));
 
-  const hasTrend = historicalValues && historicalValues.length >= 2;
-  const trendDir = hasTrend
-    ? historicalValues![historicalValues!.length - 1].value > historicalValues![historicalValues!.length - 2].value
-      ? 'up'
-      : 'down'
-    : null;
+  const trendDir = (() => {
+    if (!historicalValues || historicalValues.length < 2) return null;
+    const last = historicalValues[historicalValues.length - 1];
+    const prev = historicalValues[historicalValues.length - 2];
+    if (!last || !prev) return null;
+    return last.value > prev.value ? 'up' : 'down';
+  })();
 
   return (
     <div className={`bg-white rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
@@ -231,20 +246,33 @@ export function BiomarkerCard({
               <span className="text-xs text-[#9A8A90]">· lab ref: {labRefMin}–{labRefMax}</span>
             )}
           </div>
-          {(baselineStatus && baselineStatus !== 'insufficient_data' && baselineStatus !== 'near_baseline') || (trendDirection && trendDirection !== 'stable' && trendDirection !== 'fluctuating' && trendDirection !== 'insufficient_data' && trendStrength !== 'weak') ? (
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              {baselineStatus && baselineStatus !== 'insufficient_data' && baselineStatus !== 'near_baseline' && (
-                <span className="text-[10px] text-teal-600 font-medium">
-                  {baselineStatus === 'above_baseline' ? 'Higher than your usual level' : 'Lower than your usual level'}
-                </span>
-              )}
-              {trendDirection && trendDirection !== 'stable' && trendDirection !== 'fluctuating' && trendDirection !== 'insufficient_data' && trendStrength !== 'weak' && (
-                <span className="text-[10px] text-sky-600 font-medium">
-                  Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
-                </span>
-              )}
-            </div>
-          ) : null}
+          {(() => {
+            const effectiveStaleness: BaselineStaleness = baselineStaleness ?? 'fresh';
+            const showBaselinePill = baselineStatus
+              && baselineStatus !== 'near_baseline'
+              && (effectiveStaleness === 'limited' || baselineStatus !== 'insufficient_data');
+            const baselineLabel = showBaselinePill && baselineStatus
+              ? baselineCopy(baselineStatus, effectiveStaleness)
+              : null;
+            const showTrendPill = trendDirection
+              && trendDirection !== 'stable'
+              && trendDirection !== 'fluctuating'
+              && trendDirection !== 'insufficient_data'
+              && trendStrength !== 'weak';
+            if (!baselineLabel && !showTrendPill) return null;
+            return (
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {baselineLabel && (
+                  <span className="text-[10px] text-teal-600 font-medium">{baselineLabel}</span>
+                )}
+                {showTrendPill && (
+                  <span className="text-[10px] text-sky-600 font-medium">
+                    Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
           {(optMin !== null && optMax !== null) && (
             <RangeBar value={value} optMin={optMin} optMax={optMax} clinMin={labRefMin ?? clinMin} clinMax={labRefMax ?? clinMax} />
           )}
@@ -285,7 +313,7 @@ export function BiomarkerCard({
             <p className="text-xs text-[#7A6570] italic border-l-2 border-[#E9D6DA] pl-2">{timingNotes}</p>
           )}
 
-          {cyclePhase && ranges?.phaseRanges?.[cyclePhase] && (
+          {cyclePhase && entry?.phaseRanges?.[cyclePhase] && (
             <div className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 text-xs text-rose-700">
               Showing cycle-adjusted ranges for the <span className="font-semibold capitalize">{cyclePhase}</span> phase.
             </div>

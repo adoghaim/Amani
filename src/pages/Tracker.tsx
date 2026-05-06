@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { ComponentProps } from 'react';
+import { errorMessage } from '../lib/errors';
 import { useNavigate } from 'react-router-dom';
 import {
   Droplets,
@@ -138,11 +139,12 @@ export function Tracker() {
           .select('*')
           .in('lab_report_id', ids);
         if (bm) {
-          const grouped = (bm as Biomarker[]).reduce((acc, b) => {
-            if (!acc[b.lab_report_id]) acc[b.lab_report_id] = [];
-            acc[b.lab_report_id].push(b);
+          const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
+            const bucket = acc[b.lab_report_id] ?? [];
+            bucket.push(b);
+            acc[b.lab_report_id] = bucket;
             return acc;
-          }, {} as Record<string, Biomarker[]>);
+          }, {});
           setBiomarkersByReport(grouped);
         }
       }
@@ -159,8 +161,8 @@ export function Tracker() {
   );
 
   const today = toDateOnly(new Date());
-  const lastPeriodLog = periodLogs.length > 0 ? periodLogs[0] : null;
-  const lastReport = reports.length > 0 ? reports[0] : null;
+  const lastPeriodLog = periodLogs[0] ?? null;
+  const lastReport = reports[0] ?? null;
 
   const activeInterventions = useMemo(() => {
     const todayKey = dateToKey(today);
@@ -395,7 +397,7 @@ export function Tracker() {
       const data = await res.json();
       setInsightsData(data);
     } catch (err) {
-      setInsightsError(err instanceof Error ? err.message : 'Failed to generate insights');
+      setInsightsError(errorMessage(err, 'Failed to generate insights'));
     } finally {
       setInsightsLoading(false);
     }

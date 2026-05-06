@@ -53,36 +53,55 @@ const SIGNIFICANCE_STYLE: Record<string, {
   },
 };
 
-function getChangeStyle(change: BiggestChange): {
+type ChangeStyle = {
   bg: string; border: string; text: string; badge: string; label: string; iconColor?: string;
-} {
+};
+
+const FALLBACK_STYLE: ChangeStyle = {
+  bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-600',
+  badge: 'bg-gray-100 text-gray-600', label: 'Minor Change', iconColor: 'text-gray-400',
+};
+
+function getChangeStyle(change: BiggestChange): ChangeStyle {
   if (change.boundaryCrossing) {
-    return BOUNDARY_CROSSING_STYLE[change.boundaryCrossing.direction] ?? SIGNIFICANCE_STYLE.moderate;
+    return BOUNDARY_CROSSING_STYLE[change.boundaryCrossing.direction]
+      ?? SIGNIFICANCE_STYLE.moderate
+      ?? FALLBACK_STYLE;
   }
-  if (change.trajectoryStatus && TRAJECTORY_STYLE[change.trajectoryStatus]) {
-    return TRAJECTORY_STYLE[change.trajectoryStatus];
+  if (change.trajectoryStatus) {
+    const trajStyle = TRAJECTORY_STYLE[change.trajectoryStatus];
+    if (trajStyle) return trajStyle;
   }
-  return SIGNIFICANCE_STYLE[change.significance] ?? SIGNIFICANCE_STYLE.minor;
+  return SIGNIFICANCE_STYLE[change.significance] ?? SIGNIFICANCE_STYLE.minor ?? FALLBACK_STYLE;
+}
+
+function formatPriorDate(date: string): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'your prior report';
+  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
 }
 
 function getSubtitle(change: BiggestChange): string | null {
   const ts = change.trajectoryStatus as TrajectoryStatus;
+  const sinceClause = change.priorIsOlderThanImmediatePrior && change.priorReportDate
+    ? ` since ${formatPriorDate(change.priorReportDate)}`
+    : '';
   if (change.boundaryCrossing) {
     const bc = change.boundaryCrossing;
     const verb = bc.direction === 'improved' ? 'Improved' : 'Moved';
-    return `${verb} from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}`;
+    return `${verb} from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}${sinceClause}`;
   }
   if (ts === 'improving_still_high') {
-    return 'Still elevated, but moving toward the optimal range';
+    return `Still elevated, but moving toward the optimal range${sinceClause}`;
   }
   if (ts === 'improving_still_low') {
-    return 'Still below optimal, but moving in the right direction';
+    return `Still below optimal, but moving in the right direction${sinceClause}`;
   }
   if (ts === 'worsening_still_high') {
-    return 'Moving further above the optimal range';
+    return `Moving further above the optimal range${sinceClause}`;
   }
   if (ts === 'worsening_still_low') {
-    return 'Moving further below the optimal range';
+    return `Moving further below the optimal range${sinceClause}`;
   }
   return null;
 }
@@ -105,7 +124,7 @@ function buildSummaryLine(changes: BiggestChange[]): string | null {
   );
 
   if (improved.length > 0 && worsened.length === 0) {
-    if (improved.length === 1) {
+    if (improved.length === 1 && improved[0]) {
       return `${improved[0].displayName} has moved into a better range since your last report.`;
     }
     const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
@@ -117,12 +136,12 @@ function buildSummaryLine(changes: BiggestChange[]): string | null {
     return `${names} ${worsened.length === 1 ? 'has' : 'have'} shifted outside optimal range — worth tracking at your next draw.`;
   }
 
-  if (improved.length > 0 && worsened.length > 0) {
+  if (improved.length > 0 && worsened.length > 0 && improved[0] && worsened[0]) {
     return `${improved[0].displayName} has improved while ${worsened[0].displayName} has moved in the opposite direction.`;
   }
 
   if (improvingAbnormal.length > 0 && worsened.length === 0) {
-    if (improvingAbnormal.length === 1) {
+    if (improvingAbnormal.length === 1 && improvingAbnormal[0]) {
       return `${improvingAbnormal[0].displayName} remains outside the optimal range but has improved since the prior report.`;
     }
     const names = improvingAbnormal.slice(0, 2).map(c => c.displayName).join(' and ');
