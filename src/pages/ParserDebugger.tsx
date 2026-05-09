@@ -154,6 +154,23 @@ function MonoField({ label, value, highlight = false }: {
   );
 }
 
+/**
+ * Mirror of `pipeline.ts` ExcludedReason derivation, for rows loaded from the DB
+ * (which doesn't currently persist the field). Kept narrow to the failure modes
+ * the pipeline actually produces:
+ *   - included as core              → null
+ *   - slug present, not in CORE     → 'non_core'
+ *   - no slug at all                → 'no_canonical_match'
+ *   - parse_status flagged an error → 'value_extraction_failed'
+ * Anything else falls through to 'unknown'.
+ */
+function deriveExcludedReason(a: ReportAnalyteRow): string | null {
+  if (a.is_core) return null;
+  if (a.parse_status === 'parse_error') return 'value_extraction_failed';
+  if (a.canonical_slug === null) return 'no_canonical_match';
+  return 'non_core';
+}
+
 function isSuspicious(block: AnalyteBlockDebug): boolean {
   if (block.parseError) return true;
   if (block.confidence === 'miss' || block.confidence === 'reject') return true;
@@ -719,34 +736,42 @@ export function ParserDebugger() {
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        {['Raw label','Canonical slug','Parse status','Method','Core?','Needs review'].map(h => (
+                        {['Raw label','Canonical slug','Parse status','Method','Core?','Excluded reason','Needs review'].map(h => (
                           <th key={h} className="text-left px-3 py-2.5 font-medium text-slate-600 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredAnalytes.map(a => (
-                        <tr key={a.id} className={a.needs_review ? 'bg-amber-50/40' : 'bg-white hover:bg-slate-50'}>
-                          <td className="px-3 py-2 font-mono text-slate-700 max-w-[200px] truncate">{a.raw_name}</td>
-                          <td className="px-3 py-2 font-mono text-slate-500">
-                            {a.canonical_slug ?? <span className="text-red-400 italic">unmapped</span>}
-                          </td>
-                          <td className="px-3 py-2"><StatusPill status={a.parse_status} /></td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {a.parse_status === 'mapped' ? 'synonym' : a.parse_status === 'partial' ? 'slug' : '—'}
-                          </td>
-                          <td className="px-3 py-2">
-                            {a.is_core
-                              ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                              : <span className="text-slate-300">—</span>}
-                          </td>
-                          <td className="px-3 py-2">
-                            {a.needs_review
-                              ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                              : <span className="text-slate-300">—</span>}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredAnalytes.map(a => {
+                        const excludedReason = deriveExcludedReason(a);
+                        return (
+                          <tr key={a.id} className={a.needs_review ? 'bg-amber-50/40' : 'bg-white hover:bg-slate-50'}>
+                            <td className="px-3 py-2 font-mono text-slate-700 max-w-[200px] truncate">{a.raw_name}</td>
+                            <td className="px-3 py-2 font-mono text-slate-500">
+                              {a.canonical_slug ?? <span className="text-red-400 italic">unmapped</span>}
+                            </td>
+                            <td className="px-3 py-2"><StatusPill status={a.parse_status} /></td>
+                            <td className="px-3 py-2 text-slate-400">
+                              {a.parse_status === 'mapped' ? 'synonym' : a.parse_status === 'partial' ? 'slug' : '—'}
+                            </td>
+                            <td className="px-3 py-2">
+                              {a.is_core
+                                ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                                : <span className="text-slate-300">—</span>}
+                            </td>
+                            <td className="px-3 py-2">
+                              {excludedReason === null
+                                ? <span className="text-slate-300">—</span>
+                                : <span className="font-mono text-slate-400 italic">{excludedReason}</span>}
+                            </td>
+                            <td className="px-3 py-2">
+                              {a.needs_review
+                                ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                                : <span className="text-slate-300">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

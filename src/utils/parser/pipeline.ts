@@ -27,6 +27,29 @@ import { resolveAlias, getEntry } from '../../lib/biomarkers/dictionary';
 export { normalizeToCatalogSlug } from './patterns';
 export { CATALOG_SLUG_ALIASES };
 
+/**
+ * Telemetry: why an extracted line was excluded from the core-biomarker set.
+ *
+ *  - null                    — included as a core biomarker
+ *  - 'non_core'              — matched a canonical slug but slug not in CORE_SLUGS
+ *  - 'no_canonical_match'    — extracted line, no alias matched
+ *  - 'unit_mismatch'         — slug matched but unit incompatible with dictionary's expected unit
+ *  - 'value_extraction_failed' — label matched but value couldn't be parsed
+ *  - 'qualitative_result'    — qualitative (text) result like "Negative" / "Positive";
+ *                              saved as extended history but never scored
+ *  - 'unknown'               — anything else (last-resort default)
+ */
+export type ExcludedReason =
+  | null
+  | 'non_core'
+  | 'no_canonical_match'
+  | 'unit_mismatch'
+  | 'value_extraction_failed'
+  | 'qualitative_result'
+  | 'unknown';
+
+export type ReportItemWithExclusion = ReportItem & { excluded_reason: ExcludedReason };
+
 
 export function calculateExtractionHeuristics(items: ReportItem[], text: string): ExtractionHeuristics {
   if (items.length === 0) return { score: 0, isWeak: true, reason: 'No items detected' };
@@ -63,8 +86,19 @@ export function computeParseStatus(params: {
   unit: string | null;
   raw_reference_range: string | null;
   is_core_biomarker: boolean;
+  /**
+   * When set, the row carries a qualitative result (e.g. "Negative") and
+   * `value_numeric` is a sentinel that should bypass the numeric gate. Such
+   * rows are always saved as extended (non-scored) items.
+   */
+  value_text?: string | null;
 }): ParseStatus {
-  const { canonical_slug, parse_confidence, physBoundsError, value_numeric, unit, raw_reference_range, is_core_biomarker } = params;
+  const { canonical_slug, parse_confidence, physBoundsError, value_numeric, unit, raw_reference_range, is_core_biomarker, value_text } = params;
+
+  // Qualitative results: skip numeric/range checks, accept as extended.
+  if (value_text && value_text.trim().length > 0) {
+    return 'mapped';
+  }
 
   if (physBoundsError !== null) return 'parse_error';
   if (value_numeric <= 0)       return 'parse_error';
@@ -176,6 +210,7 @@ export function layeredParse(
     if (!existing || confidenceRank(confidence) > confidenceRank(existing.confidence)) {
       results.set(canonical, {
         name: canonical, value: parsed.value, rawValue: parsed.rawValue,
+        value_text: parsed.value_text,
         unit: parsed.unit, reference_min: ref?.min, reference_max: ref?.max,
         reference_comparator: ref?.comparator, reference_text_raw: ref?.raw,
         confidence, rawText: snippetText, debugInfo,
@@ -335,7 +370,7 @@ export function getCatalogSlug(legacyName: string): string {
   return normalizeToCatalogSlug(legacyName);
 }
 
-export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): ReportItem[] {
+export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): ReportItemWithExclusion[] {
   return extracted.map(b => {
     const slug    = b.name;
     const isCore  = CORE_SLUGS.has(slug);
@@ -353,6 +388,11 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       raw_reference_range: rawRef,
       is_core_biomarker: isCore,
     });
+
+    // Telemetry: explain why this item was (or was not) included as a core biomarker.
+    // In this branch `b.name` is already a normalized slug from layeredParse, so the
+    // only failure mode reachable here is "slug exists but isn't in CORE_SLUGS".
+    const excluded_reason: ExcludedReason = isCore ? null : 'non_core';
 
     return {
       raw_name: b.name,
@@ -383,6 +423,9 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       normalization_status: isCore ? 'mapped' : 'unmapped',
       review_status: 'pending',
       reviewed_by_user: false,
+
+      // Phase 4B Telemetry — exclusion reason for the "core" pass.
+      excluded_reason,
     };
   });
 }
@@ -429,8 +472,8 @@ function tryResolveExtendedSlug(rawName: string): { slug: string; category: stri
 function buildExtendedItems(
   text: string,
   coreRawNames: Set<string>,
-): ReportItem[] {
-  const extendedItems: ReportItem[] = [];
+): ReportItemWithExclusion[] {
+  const extendedItems: ReportItemWithExclusion[] = [];
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
 
   for (const line of lines) {
@@ -486,6 +529,13 @@ function buildExtendedItems(
       is_core_biomarker: isCore,
     });
 
+    // Telemetry: explain why this extended-pass item was (or was not) treated as core.
+    //   - slug resolved + isCore  → null (included)
+    //   - slug resolved + !isCore → 'non_core' (matched a slug, but slug not in CORE_SLUGS)
+    //   - slug === null           → 'no_canonical_match' (extracted a label/value pair, no alias hit)
+    const excluded_reason: ExcludedReason =
+      slug === null ? 'no_canonical_match' : isCore ? null : 'non_core';
+
     extendedItems.push({
       raw_name: rawName, canonical_slug: slug, category,
       value_numeric: valueNumeric, value_text: valueText, unit: rawUnit,
@@ -510,12 +560,15 @@ function buildExtendedItems(
       normalization_status: slug ? 'mapped' : 'unmapped',
       review_status: 'pending',
       reviewed_by_user: false,
+
+      // Phase 4B Telemetry — exclusion reason for the "extended" pass.
+      excluded_reason,
     });
   }
   return extendedItems;
 }
 
-export function parseAllReportItems(text: string, debug = false): ReportItem[] {
+export function parseAllReportItems(text: string, debug = false): ReportItemWithExclusion[] {
   const source  = detectReportSource(text);
   const adapter = getAdapter(source);
   const coreExtracted = parseBiomarkersFromText(text, debug, adapter);
@@ -528,7 +581,7 @@ export function parseAllReportItems(text: string, debug = false): ReportItem[] {
 export function parseAllReportItemsWithDebug(
   text: string,
   fileName = 'unknown',
-): { items: ReportItem[]; debug: ParserDebugOutput; heuristics: ExtractionHeuristics } {
+): { items: ReportItemWithExclusion[]; debug: ParserDebugOutput; heuristics: ExtractionHeuristics } {
   const source  = detectReportSource(text);
   const adapter = getAdapter(source);
   const analyteBlocks: AnalyteBlockDebug[] = [];
@@ -603,6 +656,7 @@ export function parseAllReportItemsWithDebug(
       if (!existing || confidenceRank(confidence) > confidenceRank(existing.confidence)) {
         results.set(canonical, {
           name: canonical, value: parsed.value, rawValue: parsed.rawValue,
+          value_text: parsed.value_text,
           unit: parsed.unit, reference_min: ref?.min, reference_max: ref?.max,
           reference_comparator: ref?.comparator, reference_text_raw: ref?.raw,
           confidence, rawText: snippetText,

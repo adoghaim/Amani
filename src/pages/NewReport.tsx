@@ -11,6 +11,7 @@ import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod 
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
+import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { detectLabSource } from '../utils/detectLabSource';
@@ -81,10 +82,14 @@ export function NewReport() {
   const userEditedReportItemsRef = useRef(false);
   const userEditedPeriodRef = useRef(false);
   const extractionRunRef = useRef(0);
+  // Cycle metadata extracted from the PDF/OCR itself. When non-null, it wins
+  // over the calculated fallback derived from reportDate + lastPeriodDate.
+  const parsedCycleRef = useRef<ExtractedCycleContext | null>(null);
 
   const resetExtractionState = () => {
     extractionRunRef.current += 1;
     userEditedReportItemsRef.current = false;
+    parsedCycleRef.current = null;
     setReportItems([]);
     setCoverage(null);
     setParserDebug(null);
@@ -226,6 +231,10 @@ export function NewReport() {
           if (detected) {
             setReportDate(detected);
           }
+          const parsedCycle = extractCycleContextFromText(text);
+          if (parsedCycle.cycleDay !== null || parsedCycle.cyclePhase !== null) {
+            parsedCycleRef.current = parsedCycle;
+          }
         }
 
         const src = detectLabSource(text);
@@ -297,6 +306,25 @@ export function NewReport() {
       if (invokeError) throw new Error(`OCR fallback failed: ${invokeError.message}`);
 
       if (data.items && data.items.length > 0) applyExtractedItems(data.items, runId);
+
+      // Capture cycle metadata from OCR if the text-path didn't already find any.
+      // OCR returns metadata.cycle_day / metadata.cycle_phase per the edge function contract.
+      if (data?.metadata && parsedCycleRef.current === null && runId === extractionRunRef.current) {
+        const rawDay = data.metadata.cycle_day;
+        const rawPhase = data.metadata.cycle_phase;
+        const cycleDay =
+          typeof rawDay === 'number' && Number.isFinite(rawDay) && rawDay >= 1 && rawDay <= 45
+            ? Math.trunc(rawDay)
+            : null;
+        const cyclePhase =
+          rawPhase === 'follicular' || rawPhase === 'luteal' ||
+          rawPhase === 'ovulatory' || rawPhase === 'menstrual'
+            ? rawPhase
+            : null;
+        if (cycleDay !== null || cyclePhase !== null) {
+          parsedCycleRef.current = { cycleDay, cyclePhase };
+        }
+      }
     } catch (err) {
       console.error('[NewReport] OCR fallback error:', err);
       if (runId === extractionRunRef.current) {
@@ -400,7 +428,12 @@ export function NewReport() {
       }
 
       setSubmitStep('creating');
-      const { cycleDay, cyclePhase } = calculateCycleInfo();
+      const calculatedCycleInfo = calculateCycleInfo();
+      const parsedCycle = parsedCycleRef.current;
+      // Parser-extracted cycle metadata wins per-field; fall back to the
+      // calculated value when the PDF/OCR didn't expose explicit cycle context.
+      const cycleDay = parsedCycle?.cycleDay ?? calculatedCycleInfo.cycleDay;
+      const cyclePhase = parsedCycle?.cyclePhase ?? calculatedCycleInfo.cyclePhase;
       const context: LabReportContext = {
         birth_control: birthControl,
         pregnant,
@@ -1089,7 +1122,11 @@ export function NewReport() {
                         <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50">
                           <span className="text-sm text-gray-800 font-medium truncate max-w-[60%]">{item.raw_name}</span>
                           <span className="text-sm text-gray-500 ml-2 flex-shrink-0">
-                            {item.value_numeric != null ? `${item.value_numeric}${item.unit ? ' ' + item.unit : ''}` : item.value_text || '—'}
+                            {item.value_text && (item.value_numeric == null || item.value_numeric === 0)
+                              ? item.value_text
+                              : item.value_numeric != null
+                                ? `${item.value_numeric}${item.unit ? ' ' + item.unit : ''}`
+                                : item.value_text || '—'}
                             {item.needs_review && (
                               <span className="ml-1.5 text-xs text-amber-500 font-medium">review</span>
                             )}

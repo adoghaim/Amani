@@ -12,11 +12,13 @@ export const ALLOWED_NUTRIENTS = [
   "omega-3",
   "omega 3",
   "iodine",
+  "selenium",
+  "zinc",
 ] as const;
 
 // Display string the prompt embeds when listing allowed nutrients to the model.
 export const ALLOWED_NUTRIENTS_PROMPT_LIST =
-  "vitamin D, vitamin B12, folate, iron, magnesium, omega-3, iodine";
+  "vitamin D, vitamin B12, folate, iron, magnesium, omega-3, iodine, selenium, zinc";
 
 export const BANNED_SUPPLEMENTS = [
   "ashwagandha",

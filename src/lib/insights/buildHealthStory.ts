@@ -1,3 +1,4 @@
+import type { BiomarkerCategory } from '../../types';
 import type { FocusArea } from './buildFocusAreas';
 
 export interface PrimaryContext {
@@ -25,6 +26,7 @@ export interface HealthStory {
 interface BuildHealthStoryArgs {
   primaryContext: PrimaryContext | null;
   focusAreas: FocusArea[];
+  primaryCategory?: BiomarkerCategory | null;
 }
 
 function trajectoryVerb(trajectory: PrimaryContext['trajectory'] | null): string {
@@ -41,7 +43,19 @@ function trajectoryVerb(trajectory: PrimaryContext['trajectory'] | null): string
   }
 }
 
-function pickDominant(focusAreas: FocusArea[]): FocusArea | null {
+function pickDominant(
+  focusAreas: FocusArea[],
+  primaryCategory?: BiomarkerCategory | null,
+): FocusArea | null {
+  // 1. Prefer focus area whose category-id slice matches primaryCategory.
+  // FocusArea ids are formed as either "<category>" or "<category>_<rule>" (see buildFocusAreas line 317).
+  if (primaryCategory) {
+    const matched = focusAreas.find(
+      (fa) => fa.id === primaryCategory || fa.id.startsWith(`${primaryCategory}_`),
+    );
+    if (matched) return matched;
+  }
+  // 2. Fall back to existing behavior.
   return focusAreas.find((fa) => fa.isPrimaryAligned) ?? focusAreas[0] ?? null;
 }
 
@@ -56,8 +70,9 @@ function formatList(items: string[]): string {
 function buildThemeSentence(
   focusAreas: FocusArea[],
   primaryContext: PrimaryContext | null,
+  primaryCategory?: BiomarkerCategory | null,
 ): HealthStorySentence | null {
-  const dominant = pickDominant(focusAreas);
+  const dominant = pickDominant(focusAreas, primaryCategory);
   if (!dominant) return null;
   const dominantTitle = dominant.title.toLowerCase();
   const verb = trajectoryVerb(primaryContext?.trajectory ?? null);
@@ -67,9 +82,12 @@ function buildThemeSentence(
   };
 }
 
-function buildOthersSentence(focusAreas: FocusArea[]): HealthStorySentence | null {
+function buildOthersSentence(
+  focusAreas: FocusArea[],
+  primaryCategory?: BiomarkerCategory | null,
+): HealthStorySentence | null {
   if (focusAreas.length < 2) return null;
-  const dominant = pickDominant(focusAreas);
+  const dominant = pickDominant(focusAreas, primaryCategory);
   if (!dominant) return null;
   const seen = new Set<string>();
   const others: string[] = [];
@@ -96,7 +114,7 @@ function buildFocusPointer(focusAreas: FocusArea[]): HealthStorySentence | null 
 }
 
 export function buildHealthStory(args: BuildHealthStoryArgs): HealthStory {
-  const { primaryContext, focusAreas } = args;
+  const { primaryContext, focusAreas, primaryCategory } = args;
 
   if (focusAreas.length === 0) {
     return {
@@ -111,10 +129,10 @@ export function buildHealthStory(args: BuildHealthStoryArgs): HealthStory {
 
   const sentences: HealthStorySentence[] = [];
 
-  const theme = buildThemeSentence(focusAreas, primaryContext);
+  const theme = buildThemeSentence(focusAreas, primaryContext, primaryCategory);
   if (theme) sentences.push(theme);
 
-  const others = buildOthersSentence(focusAreas);
+  const others = buildOthersSentence(focusAreas, primaryCategory);
   if (others) sentences.push(others);
 
   const pointer = buildFocusPointer(focusAreas);
