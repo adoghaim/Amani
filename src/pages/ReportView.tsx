@@ -41,7 +41,7 @@ import {
 import type { LabSource } from '../types';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
-  'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients',
+  'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients', 'blood',
 ];
 
 const CORE_BIOMARKER_CATEGORIES_UI: Record<string, string> = {

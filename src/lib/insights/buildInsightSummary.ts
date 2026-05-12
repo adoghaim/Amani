@@ -348,7 +348,7 @@ function buildDoctorQuestions(
     const { remain: conjRemain, is: conjAre } = conjugate(name);
     const dirWord = d.trajectoryStatus === 'improving_still_low' ? 'low' : 'elevated';
     questions.push({
-      text: `My ${name} ${conjAre} better than the prior result but ${conjRemain} ${dirWord}. Is this rate of change clinically meaningful, and what should I aim for?`,
+      text: `My ${name} ${conjAre} better than the prior result but ${conjRemain} ${dirWord}. Is this rate of change clinically meaningful, and how should we approach it from here?`,
       relatedBiomarker: d.key,
     });
   }

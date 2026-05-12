@@ -12,7 +12,8 @@ export type CardKey =
   | 'cardiovascular'
   | 'cycle_hormones'
   | 'metabolic'
-  | 'kidney_hydration';
+  | 'kidney_hydration'
+  | 'nutrient_sufficiency';
 
 const SAFETY_NOTE = 'Educational information only. Discuss changes with your provider, especially if you are pregnant, breastfeeding, taking medications, or managing kidney-related concerns.';
 
@@ -130,6 +131,33 @@ export const CARD_MAP: Record<CardKey, CardContent> = {
     ],
     note: 'Educational information only. Because kidney-related markers are involved, discuss major diet or supplement changes with your provider first.',
   },
+
+  nutrient_sufficiency: {
+    title: 'Nutrient Sufficiency Context',
+    summary: 'Nutrient and iron-related markers move together over time. Tracking them as a panel gives a fuller picture than any single value.',
+    examples: [
+      'leafy greens',
+      'nuts and seeds',
+      'eggs',
+      'fatty fish',
+      'legumes and lentils',
+    ],
+    discussionItems: [
+      'Vitamin D',
+      'Magnesium',
+      'Iron',
+      'Vitamin B12',
+      'Folate',
+    ],
+    trackingItems: [
+      'Vitamin D',
+      'Ferritin',
+      'Magnesium',
+      'Folate',
+      'Vitamin B12',
+    ],
+    note: SAFETY_NOTE,
+  },
 };
 
 export function isCardKey(value: string): value is CardKey {
@@ -137,5 +165,6 @@ export function isCardKey(value: string): value is CardKey {
     || value === 'cardiovascular'
     || value === 'cycle_hormones'
     || value === 'metabolic'
-    || value === 'kidney_hydration';
+    || value === 'kidney_hydration'
+    || value === 'nutrient_sufficiency';
 }

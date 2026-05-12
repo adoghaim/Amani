@@ -427,13 +427,17 @@ function buildPrimaryContext(
     .map(a => ({ a, score: concernScore(a) * 10 + deviationMultiplier(a) }))
     .sort((x, y) => y.score - x.score);
 
-  if (abnormal.length === 0) return null;
-  let primary = abnormal[0].a;
+  // Pin override: when the frontend supplies a canonical primary slug, use it
+  // even when no marker is abnormal per backend's lab-ref classifier. The
+  // frontend often flags markers as primary using stricter Amani-optimal ranges
+  // that this function's classifyAnalyte doesn't see.
+  let primary: AnalyteData | null = null;
   if (pinnedSlug) {
-    const pinned = analytes.find(a => a.canonical_slug === pinnedSlug);
-    if (pinned) {
-      primary = pinned;
-    }
+    primary = analytes.find(a => a.canonical_slug === pinnedSlug) ?? null;
+  }
+  if (!primary) {
+    if (abnormal.length === 0) return null;
+    primary = abnormal[0].a;
   }
   const status = classifyAnalyte(primary);
   const direction = directionLabel(primary, status);
@@ -840,6 +844,7 @@ Rules:
 - Cover lifestyle behaviors: sleep, stress, movement, sun exposure, hydration patterns, symptom awareness
 - Do NOT name foods (no "olive oil", "avocados", "lentils", "leafy greens", etc.) — those live in Support Plan
 - Do NOT name nutrients/supplements (no ${ALLOWED_NUTRIENTS_PROMPT_LIST}) — those live in Support Plan
+- Do NOT use the words "supplement" or "supplements" anywhere in what_you_can_do_now, even as a generic term. Supplement discussion lives only in Support Plan. If you would have said "lifestyle changes or supplements", say "lifestyle changes" instead.
 - Never give dosages, frequencies, brands, or units (no IU, mg, mcg, g, mL, "daily", "twice a day", "with food")
 - Never use prescriptive verbs like "take", "start", "consume", "prescribe"
 - Frame as discussion topics with a clinician, not directives
@@ -867,6 +872,8 @@ BAD examples (these now belong in Support Plan, not here):
 - "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish." (names foods)
 - "Pair iron-rich foods like lentils or dark leafy greens with a vitamin C source." (names foods + nutrients)
 - "Magnesium-rich foods like pumpkin seeds and dark chocolate can support sleep." (names foods + nutrient)
+- "Consider discussing selenium or zinc with your provider." (nutrient names belong in Support Plan, not in what_you_can_do_now)
+- "Discussing any lifestyle changes or supplements with your healthcare provider..." (the word "supplements" must not appear here — supplement discussion is Support Plan's scope)
 
 -----------------------------------
 
@@ -887,6 +894,10 @@ This section is for Track / Discuss / Retest actions only. Do NOT include foods,
 - When thyroid autoantibodies (TPO or TG) are flagged AND thyroid function markers are present in the panel, include a Discuss bullet asking whether repeat-testing thyroid function markers makes sense given the user's symptoms and timeline.
 - No "For your X:" prefixes. Lead with the action verb. Write "Discuss whether repeating thyroid markers makes sense" not "For your thyroid: Discuss whether repeating thyroid markers makes sense". The bucketing UI already groups by system, so the prefix is redundant.
 - One verb per bullet. Do not combine multiple intents in a single bullet. Bad: "Monitor your HDL cholesterol and discuss lifestyle changes" — split into two bullets if both intents matter, otherwise pick the dominant intent. Good: "Monitor your HDL cholesterol over the next 3-6 months." OR "Discuss lifestyle changes with your provider.", not both.
+- Do NOT use the words "supplement" or "supplements" anywhere in what_to_do_next bullets. If a Discuss bullet would have referenced supplements, rephrase to "lifestyle changes" or "any changes to your routine" without naming supplements.
+
+BAD examples:
+- "Discuss whether you should start any supplements with your provider." (use "Discuss any lifestyle considerations with your provider" instead)
 
 Examples of good next steps:
 - "Discuss whether repeating TPO antibodies, TSH, Free T4, and Free T3 makes sense based on your symptoms and timeline."
@@ -917,6 +928,8 @@ Hard rules:
 - When trajectory is "no_prior_data": describe current status only. Do NOT fabricate direction of change.
 - `primary_concern.title` MUST name the same biomarker as `PRIMARY CONTEXT.primary_biomarker`. Do not pick a different marker as the title even if you think another finding is more "concerning" — the deterministic primary is the canonical primary.
 - `primary_concern.summary` and `primary_concern.why_it_matters` must center on the PRIMARY CONTEXT biomarker.
+- When the PRIMARY CONTEXT supplies a `supporting_biomarker` with `direction: "borderline"`, you MUST describe it as "borderline" (e.g., "TgAb is also borderline and worth tracking"). Do not upgrade "borderline" to "high"/"low"/"elevated". Use the direction field verbatim.
+- When `supporting_biomarker` is null in PRIMARY CONTEXT, you MUST NOT mention any other marker by name in Sentence 2 or Sentence 3. Use a generic context note instead (e.g., "Continued monitoring will help clarify the trend." or "Tracking this over time will give a clearer picture."). NEVER write phrases like "Your TgAb is also high" or "Your X is also low" when no supporting biomarker was provided.
 
 Phrasing templates to follow:
 - Improving: "${"${primary} remains elevated at ${current} but has improved from ${previous} since your last report."}"
@@ -928,12 +941,15 @@ GOOD examples:
 - "TPO antibodies remain elevated at 650 IU/mL but have improved from 900 IU/mL since your last report. HDL is also low at 45 mg/dL, another area to monitor."
 - "LDL cholesterol is elevated at 138 mg/dL and has increased from 115 mg/dL since your last report. Triglycerides are also slightly above optimal."
 - "Ferritin remains low at 18 ng/mL and has not changed significantly from your previous result. This continued low level may help explain ongoing fatigue."
+- "Vitamin D remains low at 25 ng/mL but has improved from 18 ng/mL since your last report. TgAb is also borderline and worth tracking alongside thyroid markers."
 
 BAD examples (never write these):
 - "Overall, your results show some areas of concern and some areas of improvement." (filler, no specifics)
 - "These results suggest that further evaluation may be necessary." (banned phrasing)
 - "It is important to monitor your thyroid health and maintain a healthy lifestyle." (generic)
 - "primary_concern.title naming a different marker than PRIMARY CONTEXT.primary_biomarker (e.g., headline says 'Ferritin remains low' but primary_concern.title says 'Elevated ALT')."
+- "Your TgAb is also high and worth monitoring." (when direction is "borderline" — do not strengthen borderline to high)
+- "Your TgAb is also high and worth monitoring." (no supporting_biomarker in PRIMARY CONTEXT — do not invent marker status; use a generic context note instead)
 
 -----------------------------------
 

@@ -17,6 +17,8 @@ const FOCUS_TO_CARD: Record<string, CardKey> = {
   metabolic_blood_sugar: 'metabolic',
   metabolic: 'metabolic',
   kidney_hydration: 'kidney_hydration',
+  nutrients: 'nutrient_sufficiency',
+  nutrients_iron_status: 'nutrient_sufficiency',
 };
 
 function focusIdToCardKey(focusAreaId: string): CardKey | null {
