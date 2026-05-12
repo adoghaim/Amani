@@ -52,8 +52,12 @@ export type BiomarkerName =
   | 'bun_creatinine_ratio' | 'serum_iron' | 'tibc' | 'uibc'
   | 'wbc' | 'rbc' | 'hemoglobin' | 'hematocrit' | 'mcv' | 'mch' | 'mchc' | 'rdw' | 'platelets' | 'mpv'
   | 'neutrophils' | 'lymphocytes' | 'monocytes' | 'eosinophils' | 'basophils'
+  | 'neutrophils_absolute' | 'lymphocytes_absolute' | 'monocytes_absolute'
+  | 'eosinophils_absolute' | 'basophils_absolute'
   | 'sodium' | 'potassium' | 'chloride' | 'co2' | 'calcium'
-  | 't3_uptake' | 'total_t3';
+  | 't3_uptake' | 'total_t3'
+  | 'rheumatoid_factor'
+  | 'ana_screen';
 
 export type AmaniStatus =
   | 'optimal'

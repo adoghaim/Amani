@@ -420,6 +420,7 @@ function buildPrimaryContext(
   analytes: AnalyteData[],
   priorAnalytes: AnalyteData[],
   priorReportDate: string | null,
+  pinnedSlug?: string | null,
 ): PrimaryContext | null {
   const abnormal = analytes
     .filter(a => concernScore(a) > 0)
@@ -427,7 +428,13 @@ function buildPrimaryContext(
     .sort((x, y) => y.score - x.score);
 
   if (abnormal.length === 0) return null;
-  const primary = abnormal[0].a;
+  let primary = abnormal[0].a;
+  if (pinnedSlug) {
+    const pinned = analytes.find(a => a.canonical_slug === pinnedSlug);
+    if (pinned) {
+      primary = pinned;
+    }
+  }
   const status = classifyAnalyte(primary);
   const direction = directionLabel(primary, status);
 
@@ -446,7 +453,7 @@ function buildPrimaryContext(
     percent = t.percent;
   }
 
-  const supporting = abnormal[1]?.a ?? null;
+  const supporting = abnormal.find(entry => entry.a !== primary)?.a ?? null;
   const supportingBlock = supporting
     ? {
         name: supporting.raw_name,
@@ -825,17 +832,20 @@ SECTION 4 — WHAT YOU CAN DO NOW (most important section)
 
 This is actionable, empowering, and practical. Users read this closely.
 
+IMPORTANT — scope split with Support Plan:
+The "Support Plan" section of the report owns ALL food and nutrient discussion topics. This section ("what_you_can_do_now") must NOT include foods, named food groups, or nutrient/supplement names. Focus this section on lifestyle behaviors only (sleep, stress, movement, sun exposure, hydration timing, symptom awareness).
+
 Rules:
 - Provide 3–5 suggestions, each tied to a specific flagged marker
-- Cover at least 2 of: nutrition, lifestyle, safe general supplements
-- Supplements allowed (only if directly tied to a flagged lab value or symptom): ${ALLOWED_NUTRIENTS_PROMPT_LIST}
+- Cover lifestyle behaviors: sleep, stress, movement, sun exposure, hydration patterns, symptom awareness
+- Do NOT name foods (no "olive oil", "avocados", "lentils", "leafy greens", etc.) — those live in Support Plan
+- Do NOT name nutrients/supplements (no ${ALLOWED_NUTRIENTS_PROMPT_LIST}) — those live in Support Plan
 - Never give dosages, frequencies, brands, or units (no IU, mg, mcg, g, mL, "daily", "twice a day", "with food")
 - Never use prescriptive verbs like "take", "start", "consume", "prescribe"
 - Frame as discussion topics with a clinician, not directives
 - Never mention herbal/adaptogen supplements (ashwagandha, maca, vitex, DIM, evening primrose, black cohosh, etc.)
 - Write like a knowledgeable friend giving a real tip, not a disclaimer
-- When suggesting food or lifestyle support, name the specific food (e.g. 'avocados, nuts, olive oil') and the marker it supports — not generic categories like 'healthy foods'.
-- No "For your X:" prefixes. Do not begin bullets with phrases like "For your thyroid:" or "For your HDL cholesterol:". Lead directly with the verb. Example: write "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish." not "For your HDL cholesterol: Incorporating healthy fats can help...".
+- No "For your X:" prefixes. Do not begin bullets with phrases like "For your thyroid:" or "For your HDL cholesterol:". Lead directly with the verb.
 - One verb per bullet. Do not combine multiple intents in a single bullet. Bad: "Monitor your HDL cholesterol and discuss lifestyle changes" — split into two bullets if both intents matter, otherwise pick the dominant intent.
 
 DO NOT:
@@ -843,14 +853,20 @@ DO NOT:
 - Prescribe or suggest medications
 - Repeat anything from what_to_do_next
 - Use generic advice not tied to what was found
+- Include foods or nutrient names (Support Plan owns those)
 
 Tone: practical, warm, specific
 
-GOOD examples:
-- "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish."
-- "Pair iron-rich foods like lentils or dark leafy greens with a vitamin C source to support ferritin rebuilding."
-- "Aim for 15–20 minutes of midday sun a few times a week to support vitamin D, especially if you're indoors most of the day."
-- "Magnesium-rich foods like pumpkin seeds, dark leafy greens, and dark chocolate can support sleep and stress regulation — relevant here."
+GOOD examples (lifestyle-only, no foods/nutrients):
+- "Aim for 15–20 minutes of midday sun a few times a week, especially if you're indoors most of the day."
+- "Track how your energy and sleep align with these results over the next few weeks."
+- "Build in short stress-down breaks during the day — even 5 minutes can help cycle-related symptoms."
+- "Notice how hydration patterns line up with how you feel between meals."
+
+BAD examples (these now belong in Support Plan, not here):
+- "Focus on heart-supportive fats such as olive oil, avocado, nuts, and fatty fish." (names foods)
+- "Pair iron-rich foods like lentils or dark leafy greens with a vitamin C source." (names foods + nutrients)
+- "Magnesium-rich foods like pumpkin seeds and dark chocolate can support sleep." (names foods + nutrient)
 
 -----------------------------------
 
@@ -863,13 +879,18 @@ SECTION 5 — WHAT TO DO NEXT
 
 Keep this completely distinct from "What You Can Do Now" — no overlap.
 
+IMPORTANT — scope split with Support Plan:
+This section is for Track / Discuss / Retest actions only. Do NOT include foods, named food groups, or nutrient/supplement names. Food and nutrient discussion topics live in the Support Plan section of the report.
+
 - Specific markers, not categories. Name the specific follow-up markers when known. For example, write 'TPO antibodies, TSH, Free T4, and Free T3' rather than 'thyroid markers' or 'thyroid function tests'. If multiple markers are flagged in the same physiological system, list each by name (up to 5 max). Use the lab panel data above as the source of marker names.
 - Direct phrasing, not hedge phrases. Use direct phrasing. Prefer 'Discuss whether repeating X makes sense' over 'X can be helpful'. Prefer 'Review X with your provider if Y' over 'X might be worth discussing'. Banned phrases: 'can be helpful', 'might be worth', 'may be worth', 'could be worth'. Replace with: 'Discuss…', 'Review…', 'Consider repeating…'.
+- When thyroid autoantibodies (TPO or TG) are flagged AND thyroid function markers are present in the panel, include a Discuss bullet asking whether repeat-testing thyroid function markers makes sense given the user's symptoms and timeline.
 - No "For your X:" prefixes. Lead with the action verb. Write "Discuss whether repeating thyroid markers makes sense" not "For your thyroid: Discuss whether repeating thyroid markers makes sense". The bucketing UI already groups by system, so the prefix is redundant.
 - One verb per bullet. Do not combine multiple intents in a single bullet. Bad: "Monitor your HDL cholesterol and discuss lifestyle changes" — split into two bullets if both intents matter, otherwise pick the dominant intent. Good: "Monitor your HDL cholesterol over the next 3-6 months." OR "Discuss lifestyle changes with your provider.", not both.
 
 Examples of good next steps:
 - "Discuss whether repeating TPO antibodies, TSH, Free T4, and Free T3 makes sense based on your symptoms and timeline."
+- "Ask whether repeating thyroid function markers with TPO antibodies makes sense based on your symptoms and timeline."
 - "Review BUN/Creatinine Ratio if hydration, protein intake, or kidney markers remain a concern."
 - "Consider retesting thyroid markers in a few months to confirm the trend."
 - "Continue monitoring vitamin D levels — retest in 2–3 months to see if the trend holds."
@@ -894,6 +915,8 @@ Hard rules:
 - Do NOT say "everything looks good"
 - Do NOT give medical advice
 - When trajectory is "no_prior_data": describe current status only. Do NOT fabricate direction of change.
+- `primary_concern.title` MUST name the same biomarker as `PRIMARY CONTEXT.primary_biomarker`. Do not pick a different marker as the title even if you think another finding is more "concerning" — the deterministic primary is the canonical primary.
+- `primary_concern.summary` and `primary_concern.why_it_matters` must center on the PRIMARY CONTEXT biomarker.
 
 Phrasing templates to follow:
 - Improving: "${"${primary} remains elevated at ${current} but has improved from ${previous} since your last report."}"
@@ -910,6 +933,7 @@ BAD examples (never write these):
 - "Overall, your results show some areas of concern and some areas of improvement." (filler, no specifics)
 - "These results suggest that further evaluation may be necessary." (banned phrasing)
 - "It is important to monitor your thyroid health and maintain a healthy lifestyle." (generic)
+- "primary_concern.title naming a different marker than PRIMARY CONTEXT.primary_biomarker (e.g., headline says 'Ferritin remains low' but primary_concern.title says 'Elevated ALT')."
 
 -----------------------------------
 
@@ -1189,7 +1213,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const primaryContext = buildPrimaryContext(analytes, priorAnalytes, priorReportDate);
+    const primaryContext = buildPrimaryContext(
+      analytes,
+      priorAnalytes,
+      priorReportDate,
+      parsedBody.data.primary_canonical_slug ?? null,
+    );
     debugLog(`[generate-interpretation] primaryContext:`, primaryContext
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");

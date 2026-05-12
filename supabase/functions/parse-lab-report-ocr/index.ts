@@ -242,14 +242,22 @@ You must return a STRICT JSON object with the following schema:
     "confidence_score": "high",
     "source_snippet": "the exact string of text surrounding this row on the page for UI context"
   }
-] }
+],
+  "metadata": {
+    "cycle_day": null,
+    "cycle_phase": null
+  }
+}
 
 CRITICAL RULES:
 1. Extract ALL tests on the report.
 2. For "<0.5" set value_numeric = 0.25, value_text = "<0.5", reference_operator = "<", reference_operator_value = 0.5.
 3. value_numeric MUST be a number.
 4. If image is blurry or hard to read, mark "confidence_score": "low".
-5. ALWAYS extract the 'source_snippet' which incorporates the text crop so the user can verify the OCR in our UI.`;
+5. ALWAYS extract the 'source_snippet' which incorporates the text crop so the user can verify the OCR in our UI.
+
+CYCLE METADATA:
+Additionally, if the report contains menstrual cycle metadata explicitly printed on it (e.g. "Cycle Day: 21", "Phase: Luteal", "CD 14", "Ovulatory phase"), extract it into the top-level "metadata" field with shape { "cycle_day": number | null, "cycle_phase": "follicular" | "luteal" | "ovulatory" | "menstrual" | null }. If no cycle metadata is present, return { "cycle_day": null, "cycle_phase": null }. Do NOT infer cycle metadata from collection dates or hormone values; only extract what is explicitly printed on the report. Normalize "ovulation"/"ovulating" to "ovulatory". cycle_day must be an integer between 1 and 45 or null.`;
 
     const userMessagesContent: OpenAIMessageContent[] = [
       { type: "text", text: "Extract all lab test results from these images into the requested JSON format." }
@@ -294,24 +302,58 @@ CRITICAL RULES:
     const content = openaiData.choices[0].message.content;
 
     let rawItems: RawExtractedItem[];
+    let cycleMetadata: { cycle_day: number | null; cycle_phase: string | null } = {
+      cycle_day: null,
+      cycle_phase: null,
+    };
     try {
       const parsedJson = JSON.parse(content) as unknown;
       if (
         parsedJson &&
         typeof parsedJson === "object" &&
         "items" in parsedJson &&
-        Array.isArray(parsedJson.items)
+        Array.isArray((parsedJson as { items: unknown }).items)
       ) {
-        rawItems = parsedJson.items as RawExtractedItem[];
+        rawItems = (parsedJson as { items: RawExtractedItem[] }).items;
       } else if (
         parsedJson &&
         typeof parsedJson === "object" &&
         "biomarkers" in parsedJson &&
-        Array.isArray(parsedJson.biomarkers)
+        Array.isArray((parsedJson as { biomarkers: unknown }).biomarkers)
       ) {
-        rawItems = parsedJson.biomarkers as RawExtractedItem[];
+        rawItems = (parsedJson as { biomarkers: RawExtractedItem[] }).biomarkers;
       } else {
         rawItems = [];
+      }
+
+      if (
+        parsedJson &&
+        typeof parsedJson === "object" &&
+        "metadata" in parsedJson &&
+        (parsedJson as { metadata: unknown }).metadata &&
+        typeof (parsedJson as { metadata: unknown }).metadata === "object"
+      ) {
+        const meta = (parsedJson as { metadata: Record<string, unknown> }).metadata;
+        const rawDay = meta.cycle_day;
+        const rawPhase = meta.cycle_phase;
+
+        let cycleDay: number | null = null;
+        if (typeof rawDay === "number" && Number.isFinite(rawDay)) {
+          const intDay = Math.trunc(rawDay);
+          if (intDay >= 1 && intDay <= 45) cycleDay = intDay;
+        }
+
+        let cyclePhase: string | null = null;
+        if (typeof rawPhase === "string") {
+          const lower = rawPhase.toLowerCase().trim();
+          if (lower === "follicular" || lower === "luteal" || lower === "menstrual") {
+            cyclePhase = lower;
+          } else if (lower === "ovulatory" || lower === "ovulation" || lower === "ovulating") {
+            cyclePhase = "ovulatory";
+          }
+        }
+
+        cycleMetadata = { cycle_day: cycleDay, cycle_phase: cyclePhase };
       }
     } catch {
       rawItems = [];
@@ -367,7 +409,12 @@ CRITICAL RULES:
       });
 
     return new Response(
-      JSON.stringify({ items: reportAnalytes, _source_format: 'ocr', _parser_version: 'v2_vision_fallback' }),
+      JSON.stringify({
+        items: reportAnalytes,
+        metadata: cycleMetadata,
+        _source_format: 'ocr',
+        _parser_version: 'v2_vision_fallback',
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {

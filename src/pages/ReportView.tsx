@@ -9,7 +9,9 @@ import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
 import { YourHealthStory } from '../components/YourHealthStory';
 import { FocusAreas } from '../components/FocusAreas';
+import { GuidanceCards } from '../components/GuidanceCards';
 import { NextBestSteps } from '../components/NextBestSteps';
+import { buildCards } from '../lib/cards/buildCards';
 import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
 import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
 import { scoreBiomarker } from '../lib/scoring/scoreBiomarker';
@@ -769,13 +771,19 @@ export function ReportView() {
     );
   }, [insightSummary, scoredBiomarkers, interpretation, primaryCategory]);
 
+  const guidanceCards = useMemo(() => {
+    const primaryFocusId = focusAreas.find((a) => a.isPrimaryAligned)?.id ?? null;
+    return buildCards(focusAreas, primaryFocusId);
+  }, [focusAreas]);
+
   const healthStory = useMemo(() => {
     if (!insightSummary) return { sentences: [] };
     return buildHealthStory({
       primaryContext: frontendPrimaryContext,
       focusAreas,
+      primaryCategory,
     });
-  }, [insightSummary, frontendPrimaryContext, focusAreas]);
+  }, [insightSummary, frontendPrimaryContext, focusAreas, primaryCategory]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
@@ -867,7 +875,12 @@ export function ReportView() {
         status: 'processing',
         regeneration_count: report.regeneration_count + 1,
       }).eq('id', reportId);
-      const { data: fnData, error: interpError } = await supabase.functions.invoke('generate-interpretation', { body: { reportId } });
+      const { data: fnData, error: interpError } = await supabase.functions.invoke('generate-interpretation', {
+        body: {
+          reportId,
+          primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
+        },
+      });
       if (interpError || !fnData?.success) {
         await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       }
@@ -1166,6 +1179,10 @@ export function ReportView() {
                 const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
                 const isWorsening = ctx?.primaryIsWorsening && ctx?.primaryWorseningChange !== null;
                 const isStableAbnormal = ctx?.primaryIsStableAbnormal && ctx?.primaryStableChange !== null;
+                const aiTitleMatchesPrimary =
+                  !!interpretation?.primary_concern &&
+                  !!insightSummary?.primaryFinding &&
+                  (interpretation.primary_concern as { canonical_slug?: string }).canonical_slug === insightSummary.primaryFinding.key;
 
                 // 1a. Deterministic Override — Improving
                 if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
@@ -1173,10 +1190,7 @@ export function ReportView() {
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
                   const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
-                  const closer = ctxPhrase
-                    ? `This is encouraging movement, while still worth tracking alongside ${ctxPhrase}.`
-                    : 'This is encouraging movement worth continuing to track.';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} but ${conj.has} improved since your prior report. ${closer}`;
+                  const subnote = `${pf.displayName} ${conj.is} still ${dirWord === 'low' ? 'below range' : 'above range'}, but the trend is moving in the right direction. Continue tracking this${ctxPhrase ? ` alongside ${ctxPhrase}` : ''}.`;
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1188,7 +1202,7 @@ export function ReportView() {
                             Top Priority
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
+                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3">
                             {subnote}
@@ -1201,7 +1215,7 @@ export function ReportView() {
 
                 // 1b. Deterministic Override — Worsening
                 if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
-                  const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  const aiWhyItMatters = aiTitleMatchesPrimary ? interpretation?.primary_concern?.why_it_matters : undefined;
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
@@ -1221,7 +1235,7 @@ export function ReportView() {
                             Top Priority
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
+                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
                           </p>
                           {aiWhyItMatters ? (
                             <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3">
@@ -1240,7 +1254,7 @@ export function ReportView() {
 
                 // 1c. Deterministic Override — Stable Abnormal
                 if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
-                  const aiWhyItMatters = interpretation?.primary_concern?.why_it_matters;
+                  const aiWhyItMatters = aiTitleMatchesPrimary ? interpretation?.primary_concern?.why_it_matters : undefined;
                   const pf = insightSummary.primaryFinding;
                   const conj = conjugate(pf.displayName);
                   const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
@@ -1260,7 +1274,7 @@ export function ReportView() {
                             Top Priority
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {interpretation?.primary_concern?.title || insightSummary.primaryFinding.displayName}
+                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
                           </p>
                           {aiWhyItMatters ? (
                             <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
@@ -1277,8 +1291,8 @@ export function ReportView() {
                   );
                 }
 
-                // 2. Standard AI Path
-                if (interpretation?.primary_concern) {
+                // 2. Standard AI Path — only when AI title matches deterministic primary
+                if (interpretation?.primary_concern && aiTitleMatchesPrimary) {
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
@@ -1369,11 +1383,16 @@ export function ReportView() {
             <FocusAreas focusAreas={focusAreas} />
           )}
 
+          {!isProcessing && guidanceCards.length > 0 && (
+            <GuidanceCards cards={guidanceCards} />
+          )}
+
           {/* ── B4. Next Best Steps (NEW — merges old "Next Steps" + "What to Do Next" into Track/Discuss/Support/Retest) ─── */}
           {!isProcessing && interpretation && (
             <NextBestSteps
               whatYouCanDoNow={interpretation.what_you_can_do_now}
               whatToDoNext={interpretation.what_to_do_next}
+              hideSupportBucket={guidanceCards.length > 0}
             />
           )}
 

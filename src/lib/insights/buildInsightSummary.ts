@@ -699,12 +699,77 @@ export function buildInsightSummary(
 
   const confidence = calculateConfidence(current, (previous?.length ?? 0) > 0, dominantSourceFormat);
 
-  const primaryFinding = topFindings[0]?.status === 'out_of_range'
-    ? topFindings[0]
-    : null;
+  // Cluster-first primary finding: bucket abnormal markers by category, pick the
+  // bucket with the most out-of-range members (tiebreak: total weighted severity),
+  // then surface that bucket's most severe out-of-range marker. Override with the
+  // global single-marker pick only when one isolated marker is at least 2× more
+  // deviated than the dominant cluster's top member — preserves true single-marker
+  // extremes (e.g. very high TPO) without letting them eclipse multi-marker patterns.
+  let primaryFinding: TopFinding | null = null;
+  const abnormalScored = scored.filter(s => s.concern > 0);
+  const outOfRangeScored = abnormalScored.filter(s => s.concern === 2);
+
+  if (outOfRangeScored.length > 0) {
+    const bucketMap = new Map<string, ScoredBiomarker[]>();
+    for (const s of abnormalScored) {
+      const cat = getCategory(s.key);
+      if (!cat) continue;
+      let bucket = bucketMap.get(cat);
+      if (!bucket) {
+        bucket = [];
+        bucketMap.set(cat, bucket);
+      }
+      bucket.push(s);
+    }
+
+    interface BucketStats {
+      outOfRangeCount: number;
+      severity: number;
+      topMember: ScoredBiomarker;
+    }
+    const bucketStats: BucketStats[] = [];
+    for (const [, members] of bucketMap) {
+      const oorMembers = members.filter(m => m.concern === 2);
+      if (oorMembers.length === 0) continue;
+      const topMember = oorMembers.reduce(
+        (best, m) => (m.weightedConcern > best.weightedConcern ? m : best),
+        oorMembers[0]!,
+      );
+      const severity = members.reduce((sum, m) => sum + m.weightedConcern, 0);
+      bucketStats.push({ outOfRangeCount: oorMembers.length, severity, topMember });
+    }
+
+    bucketStats.sort((a, b) => {
+      if (b.outOfRangeCount !== a.outOfRangeCount) return b.outOfRangeCount - a.outOfRangeCount;
+      return b.severity - a.severity;
+    });
+
+    const dominantCluster = bucketStats[0] ?? null;
+
+    const globalTopMarker = outOfRangeScored.reduce(
+      (best, m) => (m.weightedConcern > best.weightedConcern ? m : best),
+      outOfRangeScored[0]!,
+    );
+
+    let chosen: ScoredBiomarker | null = null;
+    if (dominantCluster) {
+      chosen = dominantCluster.topMember;
+      if (
+        globalTopMarker.key !== dominantCluster.topMember.key &&
+        globalTopMarker.weightedConcern >= 2 * dominantCluster.topMember.weightedConcern
+      ) {
+        chosen = globalTopMarker;
+      }
+    }
+
+    if (chosen) {
+      const matched = topFindings.find(f => f.key === chosen!.key);
+      primaryFinding = matched ?? toTopFinding(chosen, null, deltaMap.get(chosen.key));
+    }
+  }
 
   const secondaryFindings = primaryFinding
-    ? topFindings.slice(1)
+    ? topFindings.filter(f => f.key !== primaryFinding!.key)
     : topFindings;
 
   return {

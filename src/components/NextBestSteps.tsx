@@ -4,6 +4,7 @@ import { categorizeNextSteps, type NextStepBucket } from '../lib/insights/catego
 interface NextBestStepsProps {
   whatYouCanDoNow: string[] | undefined;
   whatToDoNext: string[] | undefined;
+  hideSupportBucket?: boolean;
 }
 
 const BUCKET_ORDER: NextStepBucket[] = ['track', 'discuss', 'support', 'retest'];
@@ -40,9 +41,12 @@ const BUCKET_META: Record<NextStepBucket, {
   },
 };
 
-export function NextBestSteps({ whatYouCanDoNow, whatToDoNext }: NextBestStepsProps) {
+export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket }: NextBestStepsProps) {
   const buckets = categorizeNextSteps(whatYouCanDoNow, whatToDoNext);
-  const populated = BUCKET_ORDER.filter(b => buckets[b].length > 0);
+  const bucketOrder = hideSupportBucket
+    ? BUCKET_ORDER.filter(b => b !== 'support')
+    : BUCKET_ORDER;
+  const populated = bucketOrder.filter(b => buckets[b].length > 0);
 
   if (populated.length === 0) return null;
 

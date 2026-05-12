@@ -291,29 +291,66 @@ export const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
     commonUnits: ['fL', 'fl'],
   },
   {
+    canonical: 'neutrophils_absolute',
+    patterns: ['absolute neutrophils', 'neutrophils absolute', 'abs neutrophils', 'neut absolute', 'abs. neutrophils', 'neutrophils (abs)', 'neut #', 'neutrophils #', 'neutrophil count'],
+    commonUnits: ['cells/uL', 'cells/μL', 'x10E3/uL', 'K/uL', '10^3/uL'],
+  },
+  {
+    canonical: 'lymphocytes_absolute',
+    patterns: ['absolute lymphocytes', 'lymphocytes absolute', 'abs lymphocytes', 'lymph absolute', 'abs. lymphocytes', 'lymphocytes (abs)', 'lymph #', 'lymphocytes #', 'lymphocyte count'],
+    commonUnits: ['cells/uL', 'cells/μL', 'x10E3/uL', 'K/uL', '10^3/uL'],
+  },
+  {
+    canonical: 'monocytes_absolute',
+    patterns: ['absolute monocytes', 'monocytes absolute', 'abs monocytes', 'mono absolute', 'abs. monocytes', 'monocytes (abs)', 'mono #', 'monocytes #', 'monocyte count'],
+    commonUnits: ['cells/uL', 'cells/μL', 'x10E3/uL', 'K/uL', '10^3/uL'],
+  },
+  {
+    canonical: 'eosinophils_absolute',
+    patterns: ['absolute eosinophils', 'eosinophils absolute', 'abs eosinophils', 'eos absolute', 'abs. eosinophils', 'eosinophils (abs)', 'eos #', 'eosinophils #', 'eosinophil count'],
+    commonUnits: ['cells/uL', 'cells/μL', 'x10E3/uL', 'K/uL', '10^3/uL'],
+  },
+  {
+    canonical: 'basophils_absolute',
+    patterns: ['absolute basophils', 'basophils absolute', 'abs basophils', 'baso absolute', 'abs. basophils', 'basophils (abs)', 'baso #', 'basophils #', 'basophil count'],
+    commonUnits: ['cells/uL', 'cells/μL', 'x10E3/uL', 'K/uL', '10^3/uL'],
+  },
+  {
     canonical: 'neutrophils',
-    patterns: ['neutrophils', 'neutrophils (%)', 'neut %', 'neutrophil %', 'neutrophils absolute', 'neutrophils (abs)', 'abs. neutrophils', 'absolute neutrophils'],
-    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+    patterns: ['neutrophils %', 'neutrophils (%)', 'neutrophils percent', 'neut %', 'neutrophil %', 'neutrophils pct', 'neutrophils'],
+    commonUnits: ['%'],
   },
   {
     canonical: 'lymphocytes',
-    patterns: ['lymphocytes', 'lymphs', 'lymphocytes (%)', 'lymph %', 'lymphocytes (abs)', 'absolute lymphocytes'],
-    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+    patterns: ['lymphocytes %', 'lymphocytes (%)', 'lymphocytes percent', 'lymph %', 'lymphocytes pct', 'lymphocytes', 'lymphs'],
+    commonUnits: ['%'],
   },
   {
     canonical: 'monocytes',
-    patterns: ['monocytes', 'mono %', 'monocytes (%)', 'monocytes (abs)', 'absolute monocytes'],
-    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+    patterns: ['monocytes %', 'monocytes (%)', 'monocytes percent', 'mono %', 'monocytes pct', 'monocytes'],
+    commonUnits: ['%'],
   },
   {
     canonical: 'eosinophils',
-    patterns: ['eosinophils', 'eos %', 'eosinophils (%)', 'eosinophils (abs)', 'absolute eosinophils'],
-    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+    patterns: ['eosinophils %', 'eosinophils (%)', 'eosinophils percent', 'eos %', 'eosinophils pct', 'eosinophils'],
+    commonUnits: ['%'],
   },
   {
     canonical: 'basophils',
-    patterns: ['basophils', 'baso %', 'basophils (%)', 'basophils (abs)', 'absolute basophils'],
-    commonUnits: ['%', 'x10E3/uL', 'K/uL'],
+    patterns: ['basophils %', 'basophils (%)', 'basophils percent', 'baso %', 'basophils pct', 'basophils'],
+    commonUnits: ['%'],
+  },
+  {
+    canonical: 'rheumatoid_factor',
+    patterns: ['rheumatoid factor (rf)', 'rheumatoid factor', 'rf'],
+    commonUnits: ['IU/mL', 'IU/ml', 'iu/ml', 'U/mL'],
+  },
+  {
+    // Qualitative-only marker. Not in CORE_SLUGS — saved as extended via the
+    // value_text/qualitative pipeline. Aliases longest-first for the matcher.
+    canonical: 'ana_screen',
+    patterns: ['antinuclear antibodies', 'antinuclear antibody', 'ana screen, ifa', 'ana screen ifa', 'ana screen', 'ana ifa', 'ana'],
+    commonUnits: [''],
   },
   {
     canonical: 'sodium',
@@ -433,6 +470,8 @@ export const CORE_SLUGS = new Set([
   'serum_iron', 'tibc', 'uibc',
   'wbc', 'rbc', 'hemoglobin', 'hematocrit', 'mcv', 'mch', 'mchc', 'rdw', 'platelets', 'mpv',
   'neutrophils', 'lymphocytes', 'monocytes', 'eosinophils', 'basophils',
+  'neutrophils_absolute', 'lymphocytes_absolute', 'monocytes_absolute', 'eosinophils_absolute', 'basophils_absolute',
+  'rheumatoid_factor',
 ]);
 
 export const CORE_CATEGORIES: Record<string, string> = {
@@ -456,6 +495,9 @@ export const CORE_CATEGORIES: Record<string, string> = {
   wbc: 'blood', rbc: 'blood', hemoglobin: 'blood', hematocrit: 'blood', mcv: 'blood', mch: 'blood',
   mchc: 'blood', rdw: 'blood', platelets: 'blood', mpv: 'blood',
   neutrophils: 'blood', lymphocytes: 'blood', monocytes: 'blood', eosinophils: 'blood', basophils: 'blood',
+  neutrophils_absolute: 'blood', lymphocytes_absolute: 'blood', monocytes_absolute: 'blood',
+  eosinophils_absolute: 'blood', basophils_absolute: 'blood',
+  rheumatoid_factor: 'inflammation',
 };
 
 export const PHYSIOLOGICAL_BOUNDS: Record<string, { min: number; max: number }> = {

@@ -278,5 +278,58 @@ export function extractValueFromWindow(
     }
   }
 
+  // PRIORITY 6: qualitative fallback — if no numeric value was found anywhere
+  // in the window, look for a qualitative result token like "Negative",
+  // "Positive", "Reactive", "Non-reactive", "Detected", "Not Detected",
+  // "Indeterminate", "Equivocal", "Borderline". These are returned with a
+  // sentinel `value` (0) and `value_text` set to the matched token; the
+  // pipeline treats them as extended (non-core, non-scored) items.
+  const qualitative = detectQualitativeToken(cleanLines);
+  if (qualitative) {
+    return { value: 0, rawValue: qualitative, value_text: qualitative, unit, referenceResult };
+  }
+
+  return null;
+}
+
+/**
+ * Detects a qualitative result token in the value window. Returns the matched
+ * token preserving its original casing (e.g. "Negative"), or null if no token
+ * is found. Tokens are matched as whole words, case-insensitively, and
+ * "Borderline" is only accepted when no numeric value is present in the
+ * window (handled by the caller's earlier numeric passes).
+ */
+function detectQualitativeToken(windowLines: string[]): string | null {
+  // Order matters: longer/multi-word phrases first so "Not Detected" wins
+  // over "Detected", and "Non-reactive" / "Non Reactive" win over "Reactive".
+  const PATTERNS: Array<{ re: RegExp; canonical: string }> = [
+    { re: /\bNot\s+Detected\b/i,                canonical: 'Not Detected' },
+    { re: /\bNon[\s-]?Reactive\b/i,             canonical: 'Non-reactive' },
+    { re: /\bNonreactive\b/i,                   canonical: 'Non-reactive' },
+    { re: /\bIndeterminate\b/i,                 canonical: 'Indeterminate' },
+    { re: /\bEquivocal\b/i,                     canonical: 'Equivocal' },
+    { re: /\bBorderline\b/i,                    canonical: 'Borderline' },
+    { re: /\bNegative\b/i,                      canonical: 'Negative' },
+    { re: /\bPositive\b/i,                      canonical: 'Positive' },
+    { re: /\bReactive\b/i,                      canonical: 'Reactive' },
+    { re: /\bDetected\b/i,                      canonical: 'Detected' },
+  ];
+
+  for (const line of windowLines) {
+    for (const { re, canonical } of PATTERNS) {
+      const m = line.match(re);
+      if (!m) continue;
+      // Preserve the original casing as it appeared in the source line; fall
+      // back to the canonical spelling if the regex consumed punctuation.
+      const matched = m[0];
+      // Normalize whitespace/dash for the multi-word forms so we always emit
+      // a clean canonical form.
+      if (canonical === 'Non-reactive' || canonical === 'Not Detected') {
+        return canonical;
+      }
+      // For the simple single-word tokens, use Title Case of the match.
+      return matched.charAt(0).toUpperCase() + matched.slice(1).toLowerCase();
+    }
+  }
   return null;
 }

@@ -15,6 +15,13 @@ export interface ExtractedBiomarker {
   name: string;
   value: number;
   rawValue?: string;
+  /**
+   * Optional non-numeric result token, e.g. "Negative", "Positive", "Reactive",
+   * "Detected", "Not Detected". When set, `value` is a sentinel (0) and the item
+   * is treated as a qualitative (extended, non-scored) result throughout the
+   * pipeline. Numeric biomarkers leave this undefined.
+   */
+  value_text?: string;
   unit: string | null;
   reference_min?: number;
   reference_max?: number;
@@ -102,6 +109,12 @@ export interface BiomarkerPattern {
 export interface ParsedResult {
   value: number;
   rawValue?: string;
+  /**
+   * Optional qualitative result token (e.g. "Negative"). When set, callers
+   * should treat the row as an extended, non-scored item; `value` will be a
+   * sentinel (0) in that case.
+   */
+  value_text?: string;
   unit: string | null;
   referenceResult?: RangeResult;
 }

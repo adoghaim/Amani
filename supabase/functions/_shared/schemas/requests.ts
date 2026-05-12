@@ -2,6 +2,7 @@ import { z } from "npm:zod@^3.25.76";
 
 export const GenerateInterpretationRequestSchema = z.object({
   reportId: z.string().uuid(),
+  primary_canonical_slug: z.string().nullish().optional(),
 });
 export type GenerateInterpretationRequest = z.infer<
   typeof GenerateInterpretationRequestSchema

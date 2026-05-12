@@ -154,6 +154,23 @@ function MonoField({ label, value, highlight = false }: {
   );
 }
 
+/**
+ * Mirror of `pipeline.ts` ExcludedReason derivation, for rows loaded from the DB
+ * (which doesn't currently persist the field). Kept narrow to the failure modes
+ * the pipeline actually produces:
+ *   - included as core              → null
+ *   - slug present, not in CORE     → 'non_core'
+ *   - no slug at all                → 'no_canonical_match'
+ *   - parse_status flagged an error → 'value_extraction_failed'
+ * Anything else falls through to 'unknown'.
+ */
+function deriveExcludedReason(a: ReportAnalyteRow): string | null {
+  if (a.is_core) return null;
+  if (a.parse_status === 'parse_error') return 'value_extraction_failed';
+  if (a.canonical_slug === null) return 'no_canonical_match';
+  return 'non_core';
+}
+
 function isSuspicious(block: AnalyteBlockDebug): boolean {
   if (block.parseError) return true;
   if (block.confidence === 'miss' || block.confidence === 'reject') return true;
@@ -254,6 +271,8 @@ export function ParserDebugger() {
   const [editRow, setEditRow] = useState<ReportAnalyteRow | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  const [showOnlyExcluded, setShowOnlyExcluded] = useState(false);
+  const [excludedCopyMsg, setExcludedCopyMsg] = useState('');
 
   useEffect(() => {
     if (!reportId || !user) return;
@@ -536,6 +555,26 @@ export function ParserDebugger() {
           )}
 
           <div className="p-6 font-sans">
+            {/* ─── STAGE 0: Raw extracted text (always visible, collapsible) ─── */}
+            <details className="mb-6 bg-white border border-slate-200 rounded-lg overflow-hidden group">
+              <summary className="flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none transition-colors list-none">
+                <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-open:hidden" />
+                  <ChevronDown className="w-4 h-4 text-slate-400 hidden group-open:block" />
+                  Stage 0 — Raw extracted text
+                  <span className="text-xs font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+                    {(debugRecord?.raw_text ?? '').length.toLocaleString()} chars
+                  </span>
+                </span>
+                <span className="text-xs text-slate-400 font-sans">
+                  Cmd-F to grep silently-filtered lines
+                </span>
+              </summary>
+              <pre className="p-4 text-xs font-mono text-slate-700 whitespace-pre-wrap break-words leading-relaxed overflow-auto max-h-[480px] select-text">
+                {debugRecord?.raw_text ?? '(no raw text — re-upload to capture)'}
+              </pre>
+            </details>
+
             {/* ─── STAGE 1: Raw Document Input ─── */}
             {activeStage === 1 && (
               <div>
@@ -715,41 +754,110 @@ export function ParserDebugger() {
                   count={filteredAnalytes.length}
                   subtitle="How each raw analyte label was matched to a canonical slug"
                 />
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        {['Raw label','Canonical slug','Parse status','Method','Core?','Needs review'].map(h => (
-                          <th key={h} className="text-left px-3 py-2.5 font-medium text-slate-600 whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredAnalytes.map(a => (
-                        <tr key={a.id} className={a.needs_review ? 'bg-amber-50/40' : 'bg-white hover:bg-slate-50'}>
-                          <td className="px-3 py-2 font-mono text-slate-700 max-w-[200px] truncate">{a.raw_name}</td>
-                          <td className="px-3 py-2 font-mono text-slate-500">
-                            {a.canonical_slug ?? <span className="text-red-400 italic">unmapped</span>}
-                          </td>
-                          <td className="px-3 py-2"><StatusPill status={a.parse_status} /></td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {a.parse_status === 'mapped' ? 'synonym' : a.parse_status === 'partial' ? 'slug' : '—'}
-                          </td>
-                          <td className="px-3 py-2">
-                            {a.is_core
-                              ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                              : <span className="text-slate-300">—</span>}
-                          </td>
-                          <td className="px-3 py-2">
-                            {a.needs_review
-                              ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                              : <span className="text-slate-300">—</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {(() => {
+                  const rowsWithReason = filteredAnalytes.map(a => ({ a, reason: deriveExcludedReason(a) }));
+                  const visibleRows = showOnlyExcluded
+                    ? rowsWithReason.filter(r => r.reason !== null && r.reason !== undefined && r.reason !== '')
+                    : rowsWithReason;
+                  const allExcludedRows = analytes
+                    .map(a => ({ a, reason: deriveExcludedReason(a) }))
+                    .filter(r => r.reason !== null && r.reason !== undefined && r.reason !== '');
+                  const handleCopyExcluded = () => {
+                    const arr = allExcludedRows.map(({ a, reason }) => ({
+                      raw_name: a.raw_name ?? null,
+                      value_numeric: a.value_numeric ?? null,
+                      unit: a.unit ?? null,
+                      excluded_reason: reason ?? null,
+                    }));
+                    navigator.clipboard.writeText(JSON.stringify(arr, null, 2));
+                    setExcludedCopyMsg(`Copied ${arr.length} rows ✓`);
+                    setTimeout(() => setExcludedCopyMsg(''), 2000);
+                  };
+                  return (
+                    <>
+                      <div className="flex items-center gap-3 mb-3 flex-wrap">
+                        <button
+                          onClick={() => setShowOnlyExcluded(v => !v)}
+                          className={`px-3 py-1.5 text-xs rounded-full transition-colors font-sans border ${
+                            showOnlyExcluded
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {showOnlyExcluded ? '✓ ' : ''}Show only excluded
+                        </button>
+                        <button
+                          onClick={handleCopyExcluded}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-sans transition-colors"
+                        >
+                          <Copy className="w-3 h-3" />
+                          Copy excluded rows
+                        </button>
+                        {excludedCopyMsg && (
+                          <span className="text-xs text-emerald-600 font-sans">{excludedCopyMsg}</span>
+                        )}
+                        <span className="text-xs text-slate-400 font-sans ml-auto">
+                          {allExcludedRows.length} excluded / {analytes.length} total
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto rounded-lg border border-slate-200">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                              {['Raw label','Canonical slug','Parse status','Method','Core?','Excluded reason','Needs review'].map(h => (
+                                <th key={h} className="text-left px-3 py-2.5 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {visibleRows.map(({ a, reason: excludedReason }) => {
+                              const isExcluded = excludedReason !== null && excludedReason !== undefined && excludedReason !== '';
+                              const rowClass = isExcluded
+                                ? 'bg-amber-50/50 hover:bg-amber-50'
+                                : a.needs_review
+                                  ? 'bg-amber-50/40'
+                                  : 'bg-white hover:bg-slate-50';
+                              return (
+                                <tr key={a.id} className={rowClass}>
+                                  <td className="px-3 py-2 font-mono text-slate-700 max-w-[200px] truncate">{a.raw_name}</td>
+                                  <td className="px-3 py-2 font-mono text-slate-500">
+                                    {a.canonical_slug ?? <span className="text-red-400 italic">unmapped</span>}
+                                  </td>
+                                  <td className="px-3 py-2"><StatusPill status={a.parse_status} /></td>
+                                  <td className="px-3 py-2 text-slate-400">
+                                    {a.parse_status === 'mapped' ? 'synonym' : a.parse_status === 'partial' ? 'slug' : '—'}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {a.is_core
+                                      ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                                      : <span className="text-slate-300">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {!isExcluded
+                                      ? <span className="text-slate-300">—</span>
+                                      : <span className="font-mono text-slate-400 italic">{excludedReason}</span>}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {a.needs_review
+                                      ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                                      : <span className="text-slate-300">—</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {visibleRows.length === 0 && (
+                              <tr>
+                                <td colSpan={7} className="px-3 py-6 text-center text-xs text-slate-400 font-sans">
+                                  {showOnlyExcluded ? 'No excluded rows match the current filter.' : 'No rows.'}
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             )}
 
