@@ -222,7 +222,10 @@ export const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
   },
   {
     canonical: 'vitamin_d_25_oh',
-    patterns: ['vitamin d, 25-hydroxy', 'vitamin d, 25-oh', '25-hydroxy vitamin d', '25-oh vitamin d', 'vit d', '25(oh)d', '25 hydroxy', 'cholecalciferol', 'vitamin d (25-oh)', '25-hydroxyvitamin d'],
+    // Bare 'vitamin d' is listed alongside compound forms. The global longest-first
+    // matcher in labelMatching.ts naturally resolves "Vitamin D, 25-OH, Total" to the
+    // compound alias first; bare "Vitamin D 42 ng/mL …" falls through to this entry.
+    patterns: ['vitamin d, 25-hydroxy', 'vitamin d, 25-oh', '25-hydroxy vitamin d', '25-oh vitamin d', '25-hydroxyvitamin d', 'vitamin d (25-oh)', 'cholecalciferol', '25 hydroxy', '25(oh)d', 'vitamin d', 'vit d'],
     commonUnits: ['ng/mL', 'nmol/L', 'ng/ml', 'ng/dl'],
   },
   {

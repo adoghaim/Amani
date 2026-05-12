@@ -132,7 +132,13 @@ export function extractValueFromWindow(
         const after  = searchLine[m.index + tok.length] ?? '';
         const before = m.index > 0 ? (searchLine[m.index - 1] ?? '') : '';
         if (before === '/' || after === '/') continue;
-        if (/^(?:19|20)\d{2}$/.test(tok)) continue;
+        // Year-like tokens (e.g. "2015") are sometimes legitimate lab values, especially
+        // CBC absolute counts (Absolute Lymphocytes 2015 cells/uL). Only skip when the
+        // line carries explicit date context.
+        if (/^(?:19|20)\d{2}$/.test(tok) &&
+            /\d{1,2}\/\d{1,2}\/|\bdob\b|\bdate\b|\bcollected?\b|\breport(?:ed)?\b|\baccession\b/i.test(line)) {
+          continue;
+        }
         const v = parseFloat(tok);
         if (v >= 0 && v <= 100000) {
           candidates.push({ value: v, rawValue: tok });
@@ -204,6 +210,42 @@ export function extractValueFromWindow(
       if (!isRefComp) {
         return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult };
       }
+    }
+  }
+
+  // Rescue: when the actual value happens to equal the reference threshold
+  // (e.g. "Thyroglobulin Antibodies 1 IU/mL <=1 Normal" or
+  // "Rheumatoid Factor <14 IU/mL <14 Normal"), the candidate filter strips
+  // the value as a reference-range number, leaving labelCandidates empty.
+  // Re-scan the label line ignoring knownRangeNumbers and take the first
+  // numeric token, including <N / >N / <=N / >=N prefixed values.
+  if (labelCandidates.length === 0 && knownRangeNumbers.size > 0) {
+    const prefixedNumRe = /(<=?|>=?)?(\d+\.?\d*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = prefixedNumRe.exec(labelLine)) !== null) {
+      const raw = m[0];
+      const parsed = parseValueWithPrefix(raw);
+      if (!parsed) continue;
+      // Skip year-like tokens unless the line has date context (matches Patch A logic).
+      if (/^(?:19|20)\d{2}$/.test(parsed.rawValue ?? raw) &&
+          /\d{1,2}\/\d{1,2}\/|\bdob\b|\bdate\b|\bcollected?\b|\breport(?:ed)?\b|\baccession\b/i.test(labelLine)) {
+        continue;
+      }
+      labelCandidates.push({ value: parsed.value, rawValue: parsed.rawValue ?? raw });
+      break;
+    }
+  }
+
+  // PRIORITY 1.5: early qualitative path. When the label line itself has no
+  // digits AND carries a qualitative result token (Negative/Positive/etc.),
+  // return that immediately. Without this, lines like
+  //   "ANA Screen, IFA Negative Negative Normal"
+  // fall through to PRIORITY 2/3, which scan subsequent lines and can pick up
+  // numbers from footers (e.g. "Page 2") as the value.
+  if (labelCandidates.length === 0 && !/\d/.test(labelLine)) {
+    const qualToken = detectQualitativeToken([labelLine]);
+    if (qualToken) {
+      return { value: 0, rawValue: qualToken, value_text: qualToken, unit: null, referenceResult: undefined };
     }
   }
 
