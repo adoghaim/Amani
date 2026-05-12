@@ -23,11 +23,19 @@ export type Database = {
           goal: string
           has_consented: boolean
           subscription_status: string
-          trial_start_date: string
+          trial_start_date: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           default_cycle_length: number | null
           default_period_length: number | null
+          onboarding_completed: boolean
+          onboarding_skipped: boolean
+          health_goals: string[]
+          symptoms: string[]
+          sex_at_birth: string | null
+          pregnancy_status: string | null
+          supplements: string[]
+          known_conditions: string[]
         }
         Insert: {
           id: string
@@ -37,11 +45,19 @@ export type Database = {
           goal?: string
           has_consented?: boolean
           subscription_status?: string
-          trial_start_date?: string
+          trial_start_date?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           default_cycle_length?: number | null
           default_period_length?: number | null
+          onboarding_completed?: boolean
+          onboarding_skipped?: boolean
+          health_goals?: string[]
+          symptoms?: string[]
+          sex_at_birth?: string | null
+          pregnancy_status?: string | null
+          supplements?: string[]
+          known_conditions?: string[]
         }
         Update: {
           id?: string
@@ -51,11 +67,19 @@ export type Database = {
           goal?: string
           has_consented?: boolean
           subscription_status?: string
-          trial_start_date?: string
+          trial_start_date?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           default_cycle_length?: number | null
           default_period_length?: number | null
+          onboarding_completed?: boolean
+          onboarding_skipped?: boolean
+          health_goals?: string[]
+          symptoms?: string[]
+          sex_at_birth?: string | null
+          pregnancy_status?: string | null
+          supplements?: string[]
+          known_conditions?: string[]
         }
       }
       stripe_user_subscriptions: {

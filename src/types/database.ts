@@ -18,7 +18,7 @@ export interface Database {
           goal: string
           has_consented: boolean
           subscription_status: string
-          trial_start_date: string
+          trial_start_date: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           default_cycle_length: number | null
@@ -32,7 +32,7 @@ export interface Database {
           goal?: string
           has_consented?: boolean
           subscription_status?: string
-          trial_start_date?: string
+          trial_start_date?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           default_cycle_length?: number | null
@@ -46,7 +46,7 @@ export interface Database {
           goal?: string
           has_consented?: boolean
           subscription_status?: string
-          trial_start_date?: string
+          trial_start_date?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           default_cycle_length?: number | null
