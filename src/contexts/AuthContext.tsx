@@ -21,6 +21,8 @@ interface AuthContextType {
   isPasswordRecovery: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
@@ -45,7 +47,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!error && data) {
       setUserProfile(data as User);
+      return data as User;
     }
+    return null;
   };
 
   const refreshUserProfile = async () => {
@@ -84,7 +88,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'SIGNED_IN') {
           setUser(session?.user ?? null);
           if (session?.user) {
-            await fetchUserProfile(session.user.id);
+            const profile = await fetchUserProfile(session.user.id);
+            // OAuth round-trip: the auth.users insert and the SECURITY DEFINER
+            // trigger that backfills public.users can finish a few ms after our
+            // SELECT lands. Retry once before giving up so OnboardingGate
+            // doesn't strand a fresh OAuth user on Loading.
+            if (!profile) {
+              await new Promise((resolve) => setTimeout(resolve, 400));
+              await fetchUserProfile(session.user.id);
+            }
           }
           if (!initializedFromSession) setLoading(false);
           return;
@@ -144,6 +156,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) throw error;
   };
+
+  const signInWithProvider = async (provider: 'google' | 'apple') => {
+    const origin = import.meta.env.VITE_APP_URL || window.location.origin;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${origin}/app`,
+      },
+    });
+    if (error) throw error;
+  };
+
+  const signInWithGoogle = () => signInWithProvider('google');
+  const signInWithApple = () => signInWithProvider('apple');
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -223,6 +249,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isPasswordRecovery,
     signUp,
     signIn,
+    signInWithGoogle,
+    signInWithApple,
     signOut,
     resetPassword,
     refreshUserProfile,
