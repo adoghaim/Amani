@@ -3,6 +3,17 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { User } from '../types';
 
+export interface OnboardingAnswers {
+  full_name: string | null;
+  health_goals: string[];
+  symptoms: string[];
+  age_range: string | null;
+  sex_at_birth: string | null;
+  pregnancy_status: string | null;
+  supplements: string[];
+  known_conditions: string[];
+}
+
 interface AuthContextType {
   user: SupabaseUser | null;
   userProfile: User | null;
@@ -13,6 +24,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  markOnboardingComplete: (answers: OnboardingAnswers) => Promise<{ error: string | null }>;
+  markOnboardingSkipped: () => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -117,7 +130,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: data.user.email!,
             has_consented: true,
             subscription_status: 'trial',
-            trial_start_date: new Date().toISOString(),
           },
           { onConflict: 'id' }
         );
@@ -146,6 +158,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const markOnboardingComplete = async (answers: OnboardingAnswers): Promise<{ error: string | null }> => {
+    if (!user) return { error: 'No user' };
+
+    const currentTrialStart = (userProfile as User & { trial_start_date?: string | null } | null)?.trial_start_date ?? null;
+
+    const payload: Record<string, unknown> = {
+      onboarding_completed: true,
+      full_name: answers.full_name ?? null,
+      health_goals: answers.health_goals,
+      symptoms: answers.symptoms,
+      age_range: answers.age_range,
+      sex_at_birth: answers.sex_at_birth,
+      pregnancy_status: answers.pregnancy_status,
+      supplements: answers.supplements,
+      known_conditions: answers.known_conditions,
+    };
+
+    if (currentTrialStart == null) {
+      payload.trial_start_date = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update(payload)
+      .eq('id', user.id);
+
+    if (!error) {
+      await fetchUserProfile(user.id);
+    }
+
+    return { error: error?.message ?? null };
+  };
+
+  const markOnboardingSkipped = async (): Promise<{ error: string | null }> => {
+    if (!user) return { error: 'No user' };
+
+    const currentTrialStart = (userProfile as User & { trial_start_date?: string | null } | null)?.trial_start_date ?? null;
+
+    const payload: Record<string, unknown> = {
+      onboarding_skipped: true,
+    };
+
+    if (currentTrialStart == null) {
+      payload.trial_start_date = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update(payload)
+      .eq('id', user.id);
+
+    if (!error) {
+      await fetchUserProfile(user.id);
+    }
+
+    return { error: error?.message ?? null };
+  };
+
   const value = {
     user,
     userProfile,
@@ -156,6 +226,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     resetPassword,
     refreshUserProfile,
+    markOnboardingComplete,
+    markOnboardingSkipped,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

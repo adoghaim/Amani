@@ -13,12 +13,13 @@ export interface Database {
         Row: {
           id: string
           email: string
+          full_name: string | null
           created_at: string
           age_range: string | null
           goal: string
           has_consented: boolean
           subscription_status: string
-          trial_start_date: string
+          trial_start_date: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           default_cycle_length: number | null
@@ -27,12 +28,13 @@ export interface Database {
         Insert: {
           id: string
           email: string
+          full_name?: string | null
           created_at?: string
           age_range?: string | null
           goal?: string
           has_consented?: boolean
           subscription_status?: string
-          trial_start_date?: string
+          trial_start_date?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           default_cycle_length?: number | null
@@ -41,12 +43,13 @@ export interface Database {
         Update: {
           id?: string
           email?: string
+          full_name?: string | null
           created_at?: string
           age_range?: string | null
           goal?: string
           has_consented?: boolean
           subscription_status?: string
-          trial_start_date?: string
+          trial_start_date?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           default_cycle_length?: number | null
