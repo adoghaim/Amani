@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../Button'
 import { Input } from '../Input'
 import { Alert } from '../Alert'
@@ -9,6 +10,7 @@ interface SignupFormProps {
 }
 
 export function SignupForm({ onSuccess }: SignupFormProps) {
+  const { refreshUserProfile } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -46,6 +48,10 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
             email: user.email!
           })
         }
+        // Re-fetch the profile to close a race where AuthContext's SIGNED_IN
+        // listener queried the users table before this insert completed,
+        // leaving userProfile null and OnboardingGate stuck on Loading.
+        await refreshUserProfile()
         onSuccess?.()
       }
     } catch {
