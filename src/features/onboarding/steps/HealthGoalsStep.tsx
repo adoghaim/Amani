@@ -1,4 +1,5 @@
 import { Button } from '../../../components/Button';
+import { HEALTH_GOALS } from '../contextOptions';
 
 interface HealthGoalsStepProps {
   value: string[];
@@ -6,17 +7,6 @@ interface HealthGoalsStepProps {
   onNext: () => void;
   onBack: () => void;
 }
-
-const GOALS = [
-  'General lab results',
-  'Hormones or fertility',
-  'Thyroid health',
-  'Iron, fatigue, or energy',
-  'Vitamins and nutrients',
-  'Inflammation or autoimmune markers',
-  'Blood sugar or metabolism',
-  "I'm not sure yet",
-];
 
 export function HealthGoalsStep({ value, onChange, onNext, onBack }: HealthGoalsStepProps) {
   const toggle = (goal: string) => {
@@ -39,7 +29,7 @@ export function HealthGoalsStep({ value, onChange, onNext, onBack }: HealthGoals
       </p>
 
       <div className="flex flex-wrap gap-2 mb-8">
-        {GOALS.map((goal) => {
+        {HEALTH_GOALS.map((goal) => {
           const selected = value.includes(goal);
           return (
             <button
