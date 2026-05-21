@@ -9,7 +9,11 @@ import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
 import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
-import { LabReportContextSchema } from "../_shared/schemas/context.ts";
+import {
+  formatUserContextBlock,
+  LabReportContextSchema,
+  UserProfileContextSchema,
+} from "../_shared/schemas/context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -693,6 +697,7 @@ async function tryOpenAI(
   report: LabReportData,
   analytes: AnalyteData[],
   primaryContext: PrimaryContext | null,
+  userContextBlock: string | null,
 ): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
@@ -957,7 +962,7 @@ PATIENT CONTEXT:
 - Report date: ${report.report_date}
 - Cycle: ${cycle_notes}
 ${context_notes.length ? "- " + context_notes.join("\n- ") : ""}
-
+${userContextBlock ? `\n${userContextBlock}\n` : ""}
 LAB PANEL: ${analytes.length} total analytes. Key values shown below:
 ${labLines}
 ${patternBlock}
@@ -1196,6 +1201,36 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ── Voluntary user profile context (Phase 8A) ──────────────────────────
+    // Belt-and-braces: any failure here must NOT block interpretation. On
+    // schema-fail, fetch-fail, or empty fields, userContextBlock stays null
+    // and the prompt is byte-identical to pre-8A behavior.
+    let userContextBlock: string | null = null;
+    try {
+      const { data: userProfileRaw } = await supabase
+        .from("users")
+        .select("full_name, age_range, sex_at_birth, pregnancy_status, health_goals, symptoms")
+        .eq("id", reportCheck.user_id)
+        .maybeSingle();
+
+      if (userProfileRaw) {
+        const parsed = UserProfileContextSchema.safeParse(userProfileRaw);
+        if (parsed.success) {
+          userContextBlock = formatUserContextBlock(parsed.data);
+        } else {
+          console.warn(
+            "[generate-interpretation] user profile context failed schema validation:",
+            parsed.error.flatten(),
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(
+        "[generate-interpretation] user profile context fetch threw:",
+        errorMessage(err),
+      );
+    }
+
     const { data: rawAnalytes } = await supabase
       .from("report_analytes")
       .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
@@ -1244,7 +1279,7 @@ Deno.serve(async (req: Request) => {
 
     if (openaiApiKey && analytes.length > 0 && report) {
       console.log("[generate-interpretation] Trying OpenAI...");
-      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext);
+      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext, userContextBlock);
       if (aiResult) {
         // Guarantee overall_interpretation is grounded in deterministic primary_context
         if (primaryContext) {
