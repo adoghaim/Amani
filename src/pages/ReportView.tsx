@@ -903,7 +903,6 @@ export function ReportView() {
     if (!userProfile) return false;
     if (userProfile.subscription_status === 'active') return true;
     if (userProfile.subscription_status === 'trial') {
-      if (!userProfile.trial_start_date) return false;
       const trialStart = new Date(userProfile.trial_start_date);
       const days = Math.floor((Date.now() - trialStart.getTime()) / 86400000);
       return days < 7;
