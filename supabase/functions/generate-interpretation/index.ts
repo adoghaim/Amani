@@ -698,6 +698,7 @@ async function tryOpenAI(
   analytes: AnalyteData[],
   primaryContext: PrimaryContext | null,
   userContextBlock: string | null,
+  isOptimizationOnly: boolean,
 ): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
@@ -787,16 +788,21 @@ Rules:
 - Name the ACTUAL systems or markers that stand out — never count them
 - Be specific, warm, and direct
 - One sentence only
+- Amani distinguishes two ranges: the lab's *clinical reference range* and Amani's tighter *optimal range*. A marker can sit inside the clinical range while still being outside Amani's optimal range. The UI labels that state "Outside Optimal" (not "Out of Range").
+- NEVER write "all within range" or "all values look good" when ANY marker is flagged as outside optimal. The downstream UI will show that flag and the user will see the contradiction. Instead, use phrasing like "all within standard lab ranges, with X as the main area to optimize" when clinical labs are clean but something is outside optimal.${isOptimizationOnly ? `
+- OPTIMIZATION-ONLY MODE IS ACTIVE: the deterministic primary marker (${primaryContext?.primary_biomarker}) is within the lab's clinical reference range but outside Amani's optimal range. The headline MUST acknowledge both truths. Do NOT say everything is within range. Use a phrase like "Your standard lab ranges look stable overall, with ${primaryContext?.primary_biomarker} as the main area to optimize."` : ""}
 
 GOOD:
 - "Your thyroid markers stand out, and your glucose is trending slightly higher than ideal."
 - "Iron storage is low, and your vitamin D is worth addressing soon."
 - "Most of your panel looks solid — your lipids are the one area to keep an eye on."
+- "Your standard lab ranges look stable overall, with vitamin D as the main area to optimize." (optimization-only example)
 
 BAD (never write these):
 - "3 values outside range"
 - "Your results show some abnormalities"
 - "Several biomarkers require attention"
+- "All your lab results are within range" (when something is flagged outside optimal — contradicts the UI)
 
 -----------------------------------
 
@@ -813,7 +819,17 @@ Rules for primary_concern.why_it_matters:
 - Explain the real-world consequence: energy, hormones, metabolism, mood — whatever applies
 - Do NOT say "clinical significance depends" — say what it actually tends to affect
 
-Example:
+${isOptimizationOnly ? `OPTIMIZATION-ONLY MODE OVERRIDE (active for this report):
+- The primary marker is within the lab's clinical reference range. Do NOT use words like "deficient", "abnormal", "concerning", "elevated", or "low" as if it were a clinical finding.
+- Frame the marker as "below the optimal target" or "above the optimal target" rather than "out of range".
+- primary_concern.summary should say the marker is within the lab's reference range but sits below/above Amani's optimal range, and what moving toward optimal typically supports.
+- primary_concern.why_it_matters should describe the benefits of moving toward the optimal target, not the dangers of staying where they are. Tone is educational, not alarming.
+
+Optimization-only example:
+summary: "Your Vitamin D came back at 42 ng/mL — within the lab's standard reference range, but below the level Amani considers optimal."
+why_it_matters: "Moving Vitamin D into the optimal range is often linked with steadier energy, better mood, and stronger immune resilience."
+
+` : ""}Example (clinical concern):
 summary: "Your TSH came back elevated, which means your thyroid is working harder than it should to keep up."
 why_it_matters: "When the thyroid is sluggish, it often shows up as fatigue, brain fog, weight changes, or feeling cold — even when other things look fine."
 
@@ -1274,12 +1290,24 @@ Deno.serve(async (req: Request) => {
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");
 
+    // Optimization-only signal: the client pinned a primary slug because its UI
+    // flags it as outside Amani's *optimal* range, yet the server's clinical
+    // classifier sees the marker as in-range against the lab's reference range.
+    // When true, the AI prompt switches tone from "clinical concern" to
+    // "main focus to optimize" so the headline never says "all within range"
+    // while the UI flags a marker as Outside Optimal.
+    const isOptimizationOnly = !!(
+      parsedBody.data.primary_canonical_slug &&
+      primaryContext &&
+      primaryContext.current_status === "in_range"
+    );
+
     let interpretationJson: AIInterpretationOutput;
     let source = "fallback";
 
     if (openaiApiKey && analytes.length > 0 && report) {
       console.log("[generate-interpretation] Trying OpenAI...");
-      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext, userContextBlock);
+      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly);
       if (aiResult) {
         // Guarantee overall_interpretation is grounded in deterministic primary_context
         if (primaryContext) {
