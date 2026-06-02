@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocat
 import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { OnboardingGate } from './components/OnboardingGate'
 import { isNative } from './lib/native'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 
@@ -26,7 +25,6 @@ const Tracker        = lazyWithRetry(() => import('./pages/Tracker').then(m => (
 const Billing        = lazyWithRetry(() => import('./pages/Billing').then(m => ({ default: m.Billing })))
 const Settings       = lazyWithRetry(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const ParserDebugger = lazyWithRetry(() => import('./pages/ParserDebugger').then(m => ({ default: m.ParserDebugger })))
-const Onboarding    = lazyWithRetry(() => import('./pages/Onboarding'))
 const enableParserDebugger = import.meta.env.DEV
 
 function safeRedirectTarget(raw: string | null): string {
@@ -65,25 +63,23 @@ function AppRoutes() {
   return (
     <Suspense fallback={<Loading />}>
       <Routes>
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={user ? <Navigate to="/app" replace /> : <Landing />} />
         <Route path="/login" element={user ? <Navigate to={redirectTarget} replace /> : <LoginPage />} />
         <Route path="/signup" element={user ? <Navigate to={redirectTarget} replace /> : <SignupPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/success" element={<SuccessPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-
-        <Route path="/app" element={<ProtectedRoute><OnboardingGate><Dashboard /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/pricing" element={<ProtectedRoute><OnboardingGate><PricingPage /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/new" element={<ProtectedRoute><OnboardingGate><NewReport /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/reports" element={<ProtectedRoute><OnboardingGate><Reports /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/reports/:id" element={<ProtectedRoute><OnboardingGate><ReportView /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/settings" element={<ProtectedRoute><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
+        <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/app/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
+        <Route path="/app/new" element={<ProtectedRoute><NewReport /></ProtectedRoute>} />
+        <Route path="/app/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/app/reports/:id" element={<ProtectedRoute><ReportView /></ProtectedRoute>} />
+        <Route path="/app/tracker" element={<ProtectedRoute><Tracker /></ProtectedRoute>} />
+        <Route path="/app/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+        <Route path="/app/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         {enableParserDebugger && (
-          <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
+          <Route path="/dev/parser/:id" element={<ProtectedRoute><ParserDebugger /></ProtectedRoute>} />
         )}
       </Routes>
     </Suspense>

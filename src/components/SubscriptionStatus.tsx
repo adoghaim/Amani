@@ -31,8 +31,6 @@ export function SubscriptionStatus() {
   }
 
   if (userProfile.subscription_status === 'trial') {
-    // Pre-onboarding: trial clock hasn't started yet — skip the badge.
-    if (!userProfile.trial_start_date) return null;
     const trialStart = new Date(userProfile.trial_start_date);
     const daysSinceStart = Math.floor((Date.now() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
     const daysRemaining = Math.max(0, 7 - daysSinceStart);
