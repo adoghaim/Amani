@@ -948,10 +948,10 @@ Hard rules:
 - Do NOT say "everything looks good"
 - Do NOT give medical advice
 - When trajectory is "no_prior_data": describe current status only. Do NOT fabricate direction of change.
-- `primary_concern.title` MUST name the same biomarker as `PRIMARY CONTEXT.primary_biomarker`. Do not pick a different marker as the title even if you think another finding is more "concerning" — the deterministic primary is the canonical primary.
-- `primary_concern.summary` and `primary_concern.why_it_matters` must center on the PRIMARY CONTEXT biomarker.
-- When the PRIMARY CONTEXT supplies a `supporting_biomarker` with `direction: "borderline"`, you MUST describe it as "borderline" (e.g., "TgAb is also borderline and worth tracking"). Do not upgrade "borderline" to "high"/"low"/"elevated". Use the direction field verbatim.
-- When `supporting_biomarker` is null in PRIMARY CONTEXT, you MUST NOT mention any other marker by name in Sentence 2 or Sentence 3. Use a generic context note instead (e.g., "Continued monitoring will help clarify the trend." or "Tracking this over time will give a clearer picture."). NEVER write phrases like "Your TgAb is also high" or "Your X is also low" when no supporting biomarker was provided.
+- \`primary_concern.title\` MUST name the same biomarker as \`PRIMARY CONTEXT.primary_biomarker\`. Do not pick a different marker as the title even if you think another finding is more "concerning" — the deterministic primary is the canonical primary.
+- \`primary_concern.summary\` and \`primary_concern.why_it_matters\` must center on the PRIMARY CONTEXT biomarker.
+- When the PRIMARY CONTEXT supplies a \`supporting_biomarker\` with \`direction: "borderline"\`, you MUST describe it as "borderline" (e.g., "TgAb is also borderline and worth tracking"). Do not upgrade "borderline" to "high"/"low"/"elevated". Use the direction field verbatim.
+- When \`supporting_biomarker\` is null in PRIMARY CONTEXT, you MUST NOT mention any other marker by name in Sentence 2 or Sentence 3. Use a generic context note instead (e.g., "Continued monitoring will help clarify the trend." or "Tracking this over time will give a clearer picture."). NEVER write phrases like "Your TgAb is also high" or "Your X is also low" when no supporting biomarker was provided.
 
 Phrasing templates to follow:
 - Improving: "${"${primary} remains elevated at ${current} but has improved from ${previous} since your last report."}"
