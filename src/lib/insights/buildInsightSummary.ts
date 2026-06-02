@@ -271,6 +271,8 @@ function buildBiggestChanges(deltas: BiomarkerDelta[], immediatePriorReportDate:
 function buildDoctorQuestions(
   scored: ScoredBiomarker[],
   deltas: BiomarkerDelta[],
+  primaryFinding: TopFinding | null,
+  isOptimizationOnly: boolean,
 ): DoctorQuestion[] {
   const questions: DoctorQuestion[] = [];
   const used = new Set<BiomarkerName>();
@@ -388,6 +390,31 @@ function buildDoctorQuestions(
       relatedBiomarker: s.key,
     });
     if (questions.length >= 5) break;
+  }
+
+  // 5. Phase 8C supplement — guarantee 2-3 questions when there's a clear
+  // primary finding, even for borderline / optimization-only primaries that
+  // rules 1-4 skip. Non-prescriptive templates: discuss / ask / consider.
+  if (primaryFinding && questions.length < 3) {
+    const pName = primaryFinding.displayName;
+    if (questions.length < 2) {
+      questions.push({
+        text: `Should we recheck ${pName} in a few months to see how it's tracking?`,
+        relatedBiomarker: primaryFinding.key,
+      });
+    }
+    if (questions.length < 3) {
+      questions.push({
+        text: `Are there lifestyle or routine considerations I should discuss before making changes?`,
+        relatedBiomarker: primaryFinding.key,
+      });
+    }
+    if (isOptimizationOnly && questions.length < 3) {
+      questions.push({
+        text: `Does this ${pName} result matter given the rest of my labs look stable?`,
+        relatedBiomarker: primaryFinding.key,
+      });
+    }
   }
 
   return questions.slice(0, 5);
@@ -683,7 +710,6 @@ export function buildInsightSummary(
     }
   }
 
-  const questionsForDoctor = buildDoctorQuestions(scored, deltas);
   const watchSignals = buildWatchSignals(scored, deltas);
 
   const sourceCounts: Record<string, number> = {};
@@ -771,6 +797,17 @@ export function buildInsightSummary(
   const secondaryFindings = primaryFinding
     ? topFindings.filter(f => f.key !== primaryFinding!.key)
     : topFindings;
+
+  // Optimization-only state (Phase 8C): no marker is outside the lab's clinical
+  // reference range but at least one is outside Amani's tighter optimal range.
+  // Used by buildDoctorQuestions to soften wording for stable-but-suboptimal cases.
+  const clinicallyOutOfRange = scored.some(
+    s => s.labStatus === 'out_of_range_low' || s.labStatus === 'out_of_range_high',
+  );
+  const outsideOptimal = scored.some(s => s.concern > 0);
+  const isOptimizationOnly = !clinicallyOutOfRange && outsideOptimal;
+
+  const questionsForDoctor = buildDoctorQuestions(scored, deltas, primaryFinding, isOptimizationOnly);
 
   return {
     primaryFinding,
