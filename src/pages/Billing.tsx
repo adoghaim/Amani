@@ -20,7 +20,7 @@ export function Billing() {
   const isActive = subscription?.subscription_status === 'active';
 
   const getTrialDaysRemaining = () => {
-    if (!userProfile || !userProfile.trial_start_date) return 0;
+    if (!userProfile) return 0;
     const trialStart = new Date(userProfile.trial_start_date);
     const now = new Date();
     const daysSinceStart = Math.floor((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24));
@@ -141,7 +141,7 @@ export function Billing() {
                       <span className="font-medium">Days Remaining:</span> {getTrialDaysRemaining()} days
                     </p>
                     <p className="text-theme-text">
-                      <span className="font-medium">Trial Ends:</span> {userProfile.trial_start_date ? formatDate(userProfile.trial_start_date) : '—'}
+                      <span className="font-medium">Trial Ends:</span> {formatDate(userProfile.trial_start_date)}
                     </p>
                   </div>
                 ) : (

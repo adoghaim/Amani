@@ -16,7 +16,6 @@ import {
   Check,
 } from 'lucide-react';
 import { NotificationPreferences } from '../types';
-import { PersonalContextCard } from '../features/settings/PersonalContextCard';
 
 export function Settings() {
   const { user, userProfile } = useAuth();
@@ -224,8 +223,6 @@ export function Settings() {
               </div>
             </div>
           </Card>
-
-          <PersonalContextCard />
 
           <Card>
             <div className="flex items-center justify-between mb-5">
