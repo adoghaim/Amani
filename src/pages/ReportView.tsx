@@ -1415,6 +1415,7 @@ export function ReportView() {
               whatYouCanDoNow={interpretation.what_you_can_do_now}
               whatToDoNext={interpretation.what_to_do_next}
               hideSupportBucket={guidanceCards.length > 0}
+              primaryDisplayName={insightSummary?.primaryFinding?.displayName ?? null}
             />
           )}
 
