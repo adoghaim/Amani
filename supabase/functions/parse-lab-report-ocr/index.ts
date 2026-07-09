@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -177,6 +178,15 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const subCheck = await checkUserSubscription(supabase, user.id);
+    if (!subCheck.allowed) {
+      console.log("[parse-lab-report-ocr] subscription check blocked:", subCheck.reason);
+      return new Response(
+        JSON.stringify({ error: "subscription_required", reason: subCheck.reason }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
