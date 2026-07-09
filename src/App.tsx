@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocat
 import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { SubscriptionGate } from './components/SubscriptionGate'
 import { isNative } from './lib/native'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 
@@ -72,7 +73,7 @@ function AppRoutes() {
 
         <Route path="/app" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/app/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
-        <Route path="/app/new" element={<ProtectedRoute><NewReport /></ProtectedRoute>} />
+        <Route path="/app/new" element={<ProtectedRoute><SubscriptionGate><NewReport /></SubscriptionGate></ProtectedRoute>} />
         <Route path="/app/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/app/reports/:id" element={<ProtectedRoute><ReportView /></ProtectedRoute>} />
         <Route path="/app/tracker" element={<ProtectedRoute><Tracker /></ProtectedRoute>} />
