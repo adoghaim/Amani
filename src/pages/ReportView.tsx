@@ -39,6 +39,7 @@ import {
   CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
+import { handle402 } from '../utils/subscription';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients', 'blood',
@@ -408,6 +409,8 @@ export function ReportView() {
         });
         if (cancelled) return;
         if (invokeErr) {
+          const redirect = await handle402(invokeErr);
+          if (redirect && !cancelled) { navigate(redirect, { replace: true }); return; }
           interpPollingActive.current = false;
           setInterpGaveUp(true);
           return;
@@ -894,7 +897,11 @@ export function ReportView() {
           primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
         },
       });
-      if (interpError || !fnData?.success) {
+      if (interpError) {
+        const redirect = await handle402(interpError);
+        if (redirect) { navigate(redirect, { replace: true }); return; }
+        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+      } else if (!fnData?.success) {
         await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       }
       await fetchReport();
