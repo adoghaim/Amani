@@ -7,6 +7,7 @@ import {
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
 import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
 import { LabReportContextSchema } from "../_shared/schemas/context.ts";
@@ -1182,6 +1183,15 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const subCheck = await checkUserSubscription(supabaseUser, user.id);
+    if (!subCheck.allowed) {
+      debugLog("[generate-interpretation] subscription check blocked:", subCheck.reason);
+      return new Response(
+        JSON.stringify({ error: "subscription_required", reason: subCheck.reason }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { data: report } = await supabase

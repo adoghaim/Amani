@@ -7,6 +7,7 @@ import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
+import { checkSubscriptionLive, handle402 } from '../utils/subscription';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
@@ -85,6 +86,22 @@ export function NewReport() {
   // Cycle metadata extracted from the PDF/OCR itself. When non-null, it wins
   // over the calculated fallback derived from reportDate + lastPeriodDate.
   const parsedCycleRef = useRef<ExtractedCycleContext | null>(null);
+  const [subChecked, setSubChecked] = useState(false);
+
+  // Defense-in-depth: re-check subscription before rendering the upload UI.
+  // SubscriptionGate in App.tsx is the primary guard; this is the fallback.
+  useEffect(() => {
+    let cancelled = false;
+    checkSubscriptionLive().then(result => {
+      if (cancelled) return;
+      if (!result.allowed) navigate(result.redirectTo, { replace: true });
+      else setSubChecked(true);
+    }).catch(() => {
+      if (!cancelled) navigate('/pricing', { replace: true });
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resetExtractionState = () => {
     extractionRunRef.current += 1;
@@ -303,7 +320,11 @@ export function NewReport() {
         },
       });
 
-      if (invokeError) throw new Error(`OCR fallback failed: ${invokeError.message}`);
+      if (invokeError) {
+        const redirect = await handle402(invokeError);
+        if (redirect) { navigate(redirect, { replace: true }); return; }
+        throw new Error(`OCR fallback failed: ${invokeError.message}`);
+      }
 
       if (data.items && data.items.length > 0) applyExtractedItems(data.items, runId);
 
@@ -345,8 +366,10 @@ export function NewReport() {
     supabase.functions.invoke('extract-biomarkers', {
       body: { text },
       headers: { Authorization: `Bearer ${session.access_token}` },
-    }).then(({ data, error: invokeError }) => {
+    }).then(async ({ data, error: invokeError }) => {
       if (invokeError) {
+        const redirect = await handle402(invokeError);
+        if (redirect) { navigate(redirect, { replace: true }); return; }
         console.warn('[NewReport] AI extraction background warning:', invokeError.message);
         return;
       }
@@ -623,8 +646,10 @@ export function NewReport() {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
-      }).then(({ error: interpError }) => {
+      }).then(async ({ error: interpError }) => {
         if (interpError) {
+          const redirect = await handle402(interpError);
+          if (redirect) { navigate(redirect, { replace: true }); return; }
           supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
         }
       }).catch(() => {
@@ -696,6 +721,8 @@ export function NewReport() {
     Medium: 'text-amber-700 bg-amber-50 border-amber-200',
     Low: 'text-red-700 bg-red-50 border-red-200',
   };
+
+  if (!subChecked) return null;
 
   return (
     <Layout>
