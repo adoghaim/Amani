@@ -1,6 +1,8 @@
 # Amani — Native-Platform Roadmap
 
-Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-05-04. ✅ shipped local · ⏳ blocked on user decision · ⬜ not started.
+Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-08-05. ✅ shipped local · ⏳ blocked on user decision · ⬜ not started.
+
+(The 2026-07-09 stabilization sprint documented in `production-grade.md` did not touch native-platform code — all changes were web/backend. Native readiness is unchanged from the last audit; blockers still hinge on your input for N0-3 privacy manifest, N0-4 keystore rotation, N1-6 deep-link domain, N2-5 dark-mode assets, and N2-6 background-blur decision.)
 
 The headline finding when the audit ran was: **Capacitor plugins are aliased to web stubs in production builds** — Camera, Browser, Network, Android back button silently no-op on device. **That is now fixed** (N0-1 below). The bundle that `cap:sync` pushed into `ios/App/App/public/` and `android/app/src/main/assets/public/` now reaches the real `@capacitor/*` packages on device.
 

@@ -6,7 +6,7 @@ The biggest finding across all audits: **the medical-safety guardrail described 
 
 ## Progress tracker
 
-Status as of 2026-05-01. ✅ shipped local · ⏳ blocked on user input · ⬜ not started.
+Status as of 2026-08-05. ✅ shipped local · ⏳ blocked on user input · ⬜ not started.
 
 ### Sprint 1 — P0 ship-blockers (8 of 8)
 
@@ -55,12 +55,28 @@ Status as of 2026-05-01. ✅ shipped local · ⏳ blocked on user input · ⬜ n
 - ✅ **P3-9** Deleted `createTestUser.js` — confirmed zero non-doc references first.
 - ✅ **P3-10** Console-log scrubbing — added `debugLog()` helper in `generate-interpretation/index.ts`, gated behind `Deno.env.get("DEBUG")`. Three PII-adjacent log sites converted; `console.warn`/`console.error` (signal channels) untouched.
 
+### Sprint 5 — 2026-07-09 stabilization: Codex-flagged regressions + gaps (5 of 5 shipped, verified 2026-08-05)
+
+Triggered by a Codex zip review that identified four launch blockers. Verified end-to-end via manual walkthrough on `http://localhost:5173/` before doc update.
+
+- ✅ **S5-1** LabCorp A1c parser regression — `13d0fae`. Rescue block in `valueExtraction.ts` (added by `accef7d`) was firing on plain min-max range rows and picking the "1" from the "A1c" label as the value. Gated rescue on `referenceResult?.comparator`; added `skipLetterPrefixedDigits` guard to rescue loop as defense-in-depth.
+- ✅ **S5-2** Retired duplicate `create-checkout-session` — `5157701`. Legacy edge function had `unit_amount: 2400` (hardcoded $24/month) inside `price_data`. Zero frontend call sites confirmed via grep. Deleted directory, removed `[functions.create-checkout-session]` from `supabase/config.toml`. `stripe-checkout` (proper `price_id` from `stripe-config.ts`) is the live path.
+- ✅ **S5-3** Refreshed parser snapshots — `fe337a1`. Captured new `excluded_reason` field added to pipeline output. All values null in current fixtures — pure mechanical drift, no semantic changes.
+- ✅ **S5-4** Restored onboarding + OAuth + personal-context deleted by `f731cc7` regression — `26c6a00`. `f731cc7` (misleadingly titled "Updated App.tsx") had silently deleted 1,572 lines across 29 files including all onboarding steps, `SocialAuthButton`, `PersonalContextCard`, `_shared/schemas/context.ts`, and three migrations. Reverted with conflict resolution that preserved Phase 8A/B/C interpretation-prompt improvements (`isOptimizationOnly` param kept from HEAD side). Discovery: `SocialAuthButton`/`LoginForm`/`SignupForm` already had the `VITE_ENABLE_APPLE_OAUTH` env-flag gate baked in from Phase 7B (`c56ce9a`). Phase 8A was importing the deleted `_shared/schemas/context.ts` — so any deploy after `f731cc7` would have been broken until this restore.
+- ✅ **S5-5** Server-side + client-side paywall enforcement — `9d387f6`. New `supabase/functions/_shared/subscription-guard.ts` reads `stripe_user_subscriptions` view + `users.trial_start_date`. Access rule: allowed if Stripe status is `active`/`trialing`/`past_due` OR trial started < 7 days ago. Wired 402 `{"error":"subscription_required","reason":...}` responses into `generate-interpretation`, `extract-biomarkers`, `parse-lab-report-ocr` — check runs after auth+ownership, before any OpenAI call or DB write. Client-side `SubscriptionGate` wraps `/app/new` inside `OnboardingGate` (full chain: `ProtectedRoute → OnboardingGate → SubscriptionGate → NewReport`). Fail-closed on read errors and null `trial_start_date`. Redirect target: `/billing` for users with any Stripe row (lapsed customer) or `/pricing` for new users. `NewReport.tsx` re-checks internally as defense in depth. All frontend `supabase.functions.invoke` sites for the three gated functions handle 402 gracefully via `handle402` helper.
+
+**Nits discovered during 2026-08-05 verification (backlog, not blocking):**
+- Onboarding state model is loose: `onboarding_completed` and `onboarding_skipped` are not mutually exclusive; can both be true. `markOnboardingComplete()` and `markOnboardingSkipped()` in `AuthContext.tsx` each set their own flag without clearing the other. Gate accepts either as "past onboarding," so no UX bug — but funnel metrics like "% completed" would undercount skip-then-complete users.
+- UX perception mismatch on `UploadIntroStep.tsx`: primary CTA "Upload Lab Report" (→ `completed=true`, navigates `/app/new`) vs. small text link "Skip for now" (→ `skipped=true`, navigates `/app`). Users perceive Skip as completion. If completion tracking matters downstream, either reconcile the semantics or rename the CTA.
+- No 404 catch-all route in `App.tsx` — a typo under `/app/*` shows a blank Suspense screen forever instead of a NotFound page.
+
 ### Pending deploys (in this order)
 
 ```
-supabase db push
+supabase db push  # includes 3 migrations restored by S5-4: add_onboarding_fields_to_users, add_full_name_to_users, defer_trial_start_until_onboarding
 supabase functions deploy generate-interpretation parse-lab-report-ocr extract-biomarkers lab-insights stripe-webhook stripe-checkout delete-user-data
 # config.toml verify_jwt declarations apply via your normal config-push flow
+# (create-checkout-session no longer in the list — retired in S5-2)
 npm run cap:sync   # push web bundle into android/ and ios/
 ```
 
