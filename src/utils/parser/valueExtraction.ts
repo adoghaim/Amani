@@ -219,13 +219,22 @@ export function extractValueFromWindow(
   // the value as a reference-range number, leaving labelCandidates empty.
   // Re-scan the label line ignoring knownRangeNumbers and take the first
   // numeric token, including <N / >N / <=N / >=N prefixed values.
-  if (labelCandidates.length === 0 && knownRangeNumbers.size > 0) {
+  //
+  // Only fire for comparator references (< or >). When the reference is a
+  // min-max range (e.g. "4.8-5.6"), a value that equals a boundary is
+  // ambiguous — let buildExtendedItems resolve it via the raw label text.
+  // This prevents "Hemoglobin A1c 5.6 % 4.8-5.6" from being rescued with
+  // "5.6" (which == ref_max) when the correct path is the extended parser.
+  if (labelCandidates.length === 0 && knownRangeNumbers.size > 0 && referenceResult?.comparator) {
     const prefixedNumRe = /(<=?|>=?)?(\d+\.?\d*)/g;
     let m: RegExpExecArray | null;
     while ((m = prefixedNumRe.exec(labelLine)) !== null) {
       const raw = m[0];
       const parsed = parseValueWithPrefix(raw);
       if (!parsed) continue;
+      // Skip digits immediately preceded by a letter — they are part of the analyte
+      // name itself (e.g. the "1" in "A1c", "T3", "B12") and not the patient result.
+      if (m.index > 0 && /[A-Za-z]/.test(labelLine[m.index - 1] ?? '')) continue;
       // Skip year-like tokens unless the line has date context (matches Patch A logic).
       if (/^(?:19|20)\d{2}$/.test(parsed.rawValue ?? raw) &&
           /\d{1,2}\/\d{1,2}\/|\bdob\b|\bdate\b|\bcollected?\b|\breport(?:ed)?\b|\baccession\b/i.test(labelLine)) {

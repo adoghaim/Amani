@@ -23,8 +23,5 @@ verify_jwt = false
 [functions.stripe-checkout]
 verify_jwt = true
 
-[functions.create-checkout-session]
-verify_jwt = true
-
 [functions.create-portal-session]
 verify_jwt = true

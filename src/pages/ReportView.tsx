@@ -39,6 +39,7 @@ import {
   CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
+import { handle402 } from '../utils/subscription';
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients', 'blood',
@@ -408,6 +409,8 @@ export function ReportView() {
         });
         if (cancelled) return;
         if (invokeErr) {
+          const redirect = await handle402(invokeErr);
+          if (redirect && !cancelled) { navigate(redirect, { replace: true }); return; }
           interpPollingActive.current = false;
           setInterpGaveUp(true);
           return;
@@ -708,6 +711,19 @@ export function ReportView() {
     ));
   }, [biomarkers, report]);
 
+  // Optimization-only state: clinical labs are clean (no marker outside the
+  // lab's reference range) but at least one marker is outside Amani's tighter
+  // optimal range. Used to soften "Top Priority" → "Main Focus" and to swap
+  // the headline to acknowledge both truths (Phase 8B).
+  const isOptimizationOnly = useMemo(() => {
+    const clinicallyOutOfRange = scoredBiomarkers.some(
+      s => s.labStatus === 'out_of_range_low' || s.labStatus === 'out_of_range_high',
+    );
+    const outsideOptimal = scoredBiomarkers.some(s => s.concern > 0);
+    return !clinicallyOutOfRange && outsideOptimal;
+  }, [scoredBiomarkers]);
+  const topPriorityLabel = isOptimizationOnly ? 'Main Focus' : 'Top Priority';
+
   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
   // server's interpretation already carries one but it's not surfaced to the
   // client; this matches the same shape so YourHealthStory can render the
@@ -881,7 +897,11 @@ export function ReportView() {
           primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
         },
       });
-      if (interpError || !fnData?.success) {
+      if (interpError) {
+        const redirect = await handle402(interpError);
+        if (redirect) { navigate(redirect, { replace: true }); return; }
+        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+      } else if (!fnData?.success) {
         await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       }
       await fetchReport();
@@ -903,6 +923,7 @@ export function ReportView() {
     if (!userProfile) return false;
     if (userProfile.subscription_status === 'active') return true;
     if (userProfile.subscription_status === 'trial') {
+      if (!userProfile.trial_start_date) return false;
       const trialStart = new Date(userProfile.trial_start_date);
       const days = Math.floor((Date.now() - trialStart.getTime()) / 86400000);
       return days < 7;
@@ -1138,6 +1159,14 @@ export function ReportView() {
                         return `${topName} ${dirLabel} and has not changed significantly from the prior report.`;
                       }
 
+                      // Deterministic safety net (Phase 8B): when labs are clinically
+                      // stable but at least one marker is outside Amani's optimal range,
+                      // override any AI headline so it never says "all within range"
+                      // while the UI flags a marker as Outside Optimal.
+                      if (isOptimizationOnly && insightSummary.primaryFinding) {
+                        return `Your standard lab ranges look stable overall, with ${insightSummary.primaryFinding.displayName} standing out as the main area to optimize.`;
+                      }
+
                       // If AI headline available and no trajectory override, use AI headline
                       if (interpretation?.headline) return interpretation.headline;
 
@@ -1199,7 +1228,7 @@ export function ReportView() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-emerald-600">
-                            Top Priority
+                            {topPriorityLabel}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
@@ -1232,7 +1261,7 @@ export function ReportView() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-amber-600">
-                            Top Priority
+                            {topPriorityLabel}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
@@ -1271,7 +1300,7 @@ export function ReportView() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            Top Priority
+                            {topPriorityLabel}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
@@ -1301,7 +1330,7 @@ export function ReportView() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            Top Priority
+                            {topPriorityLabel}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {interpretation.primary_concern.title}
@@ -1330,7 +1359,7 @@ export function ReportView() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            Top Priority
+                            {topPriorityLabel}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {insightSummary.primaryFinding.displayName}
@@ -1393,6 +1422,7 @@ export function ReportView() {
               whatYouCanDoNow={interpretation.what_you_can_do_now}
               whatToDoNext={interpretation.what_to_do_next}
               hideSupportBucket={guidanceCards.length > 0}
+              primaryDisplayName={insightSummary?.primaryFinding?.displayName ?? null}
             />
           )}
 

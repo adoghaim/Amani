@@ -48,7 +48,7 @@ Upload → extract → score → interpret → persist → render.
 
 ### Stripe
 
-Frontend product/price catalog is hard-coded in `src/stripe-config.ts`. Checkout, customer-portal, and webhook handling are edge functions (`stripe-checkout`, `create-checkout-session`, `create-portal-session`, `stripe-webhook`). `VITE_STRIPE_PUBLISHABLE_KEY` is optional in dev.
+Frontend product/price catalog is hard-coded in `src/stripe-config.ts`. Checkout, customer-portal, and webhook handling are edge functions (`stripe-checkout`, `create-portal-session`, `stripe-webhook`). `VITE_STRIPE_PUBLISHABLE_KEY` is optional in dev.
 
 ## Conventions
 

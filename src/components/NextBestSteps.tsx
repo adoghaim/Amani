@@ -5,6 +5,7 @@ interface NextBestStepsProps {
   whatYouCanDoNow: string[] | undefined;
   whatToDoNext: string[] | undefined;
   hideSupportBucket?: boolean;
+  primaryDisplayName?: string | null;
 }
 
 const BUCKET_ORDER: NextStepBucket[] = ['track', 'discuss', 'support', 'retest'];
@@ -41,8 +42,25 @@ const BUCKET_META: Record<NextStepBucket, {
   },
 };
 
-export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket }: NextBestStepsProps) {
+export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket, primaryDisplayName }: NextBestStepsProps) {
   const buckets = categorizeNextSteps(whatYouCanDoNow, whatToDoNext);
+
+  // Phase 8C safety net: when there's a clear primary finding but the AI's
+  // next-steps text never mentions it, inject one non-prescriptive Discuss
+  // item so the Main Focus always has at least one explicit next step.
+  if (primaryDisplayName) {
+    const needle = primaryDisplayName.toLowerCase();
+    const mentioned = (Object.values(buckets) as string[][]).some(items =>
+      items.some(item => item.toLowerCase().includes(needle)),
+    );
+    if (!mentioned) {
+      buckets.discuss = [
+        `Discuss whether ${primaryDisplayName} should be rechecked and what range your provider wants to target.`,
+        ...buckets.discuss,
+      ];
+    }
+  }
+
   const bucketOrder = hideSupportBucket
     ? BUCKET_ORDER.filter(b => b !== 'support')
     : BUCKET_ORDER;

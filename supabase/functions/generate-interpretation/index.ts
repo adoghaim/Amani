@@ -7,9 +7,14 @@ import {
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
 import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
-import { LabReportContextSchema } from "../_shared/schemas/context.ts";
+import {
+  formatUserContextBlock,
+  LabReportContextSchema,
+  UserProfileContextSchema,
+} from "../_shared/schemas/context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -693,6 +698,8 @@ async function tryOpenAI(
   report: LabReportData,
   analytes: AnalyteData[],
   primaryContext: PrimaryContext | null,
+  userContextBlock: string | null,
+  isOptimizationOnly: boolean,
 ): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
@@ -782,16 +789,21 @@ Rules:
 - Name the ACTUAL systems or markers that stand out — never count them
 - Be specific, warm, and direct
 - One sentence only
+- Amani distinguishes two ranges: the lab's *clinical reference range* and Amani's tighter *optimal range*. A marker can sit inside the clinical range while still being outside Amani's optimal range. The UI labels that state "Outside Optimal" (not "Out of Range").
+- NEVER write "all within range" or "all values look good" when ANY marker is flagged as outside optimal. The downstream UI will show that flag and the user will see the contradiction. Instead, use phrasing like "all within standard lab ranges, with X as the main area to optimize" when clinical labs are clean but something is outside optimal.${isOptimizationOnly ? `
+- OPTIMIZATION-ONLY MODE IS ACTIVE: the deterministic primary marker (${primaryContext?.primary_biomarker}) is within the lab's clinical reference range but outside Amani's optimal range. The headline MUST acknowledge both truths. Do NOT say everything is within range. Use a phrase like "Your standard lab ranges look stable overall, with ${primaryContext?.primary_biomarker} as the main area to optimize."` : ""}
 
 GOOD:
 - "Your thyroid markers stand out, and your glucose is trending slightly higher than ideal."
 - "Iron storage is low, and your vitamin D is worth addressing soon."
 - "Most of your panel looks solid — your lipids are the one area to keep an eye on."
+- "Your standard lab ranges look stable overall, with vitamin D as the main area to optimize." (optimization-only example)
 
 BAD (never write these):
 - "3 values outside range"
 - "Your results show some abnormalities"
 - "Several biomarkers require attention"
+- "All your lab results are within range" (when something is flagged outside optimal — contradicts the UI)
 
 -----------------------------------
 
@@ -808,7 +820,17 @@ Rules for primary_concern.why_it_matters:
 - Explain the real-world consequence: energy, hormones, metabolism, mood — whatever applies
 - Do NOT say "clinical significance depends" — say what it actually tends to affect
 
-Example:
+${isOptimizationOnly ? `OPTIMIZATION-ONLY MODE OVERRIDE (active for this report):
+- The primary marker is within the lab's clinical reference range. Do NOT use words like "deficient", "abnormal", "concerning", "elevated", or "low" as if it were a clinical finding.
+- Frame the marker as "below the optimal target" or "above the optimal target" rather than "out of range".
+- primary_concern.summary should say the marker is within the lab's reference range but sits below/above Amani's optimal range, and what moving toward optimal typically supports.
+- primary_concern.why_it_matters should describe the benefits of moving toward the optimal target, not the dangers of staying where they are. Tone is educational, not alarming.
+
+Optimization-only example:
+summary: "Your Vitamin D came back at 42 ng/mL — within the lab's standard reference range, but below the level Amani considers optimal."
+why_it_matters: "Moving Vitamin D into the optimal range is often linked with steadier energy, better mood, and stronger immune resilience."
+
+` : ""}Example (clinical concern):
 summary: "Your TSH came back elevated, which means your thyroid is working harder than it should to keep up."
 why_it_matters: "When the thyroid is sluggish, it often shows up as fatigue, brain fog, weight changes, or feeling cold — even when other things look fine."
 
@@ -890,6 +912,7 @@ IMPORTANT — scope split with Support Plan:
 This section is for Track / Discuss / Retest actions only. Do NOT include foods, named food groups, or nutrient/supplement names. Food and nutrient discussion topics live in the Support Plan section of the report.
 
 - Specific markers, not categories. Name the specific follow-up markers when known. For example, write 'TPO antibodies, TSH, Free T4, and Free T3' rather than 'thyroid markers' or 'thyroid function tests'. If multiple markers are flagged in the same physiological system, list each by name (up to 5 max). Use the lab panel data above as the source of marker names.
+- When PRIMARY CONTEXT is set, what_to_do_next MUST include at least one step that explicitly names the primary biomarker (use the exact display name from PRIMARY CONTEXT.primary_biomarker). Frame it as a Discuss or Retest item — e.g. "Discuss whether retesting {primary} in a few months makes sense" or "Review {primary} trend with your provider." Do NOT prescribe dosages, supplements, or treatments. If the primary marker is in optimization-only mode (within the lab's reference range but outside Amani's optimal range), keep the wording educational and non-alarming.
 - Direct phrasing, not hedge phrases. Use direct phrasing. Prefer 'Discuss whether repeating X makes sense' over 'X can be helpful'. Prefer 'Review X with your provider if Y' over 'X might be worth discussing'. Banned phrases: 'can be helpful', 'might be worth', 'may be worth', 'could be worth'. Replace with: 'Discuss…', 'Review…', 'Consider repeating…'.
 - When thyroid autoantibodies (TPO or TG) are flagged AND thyroid function markers are present in the panel, include a Discuss bullet asking whether repeat-testing thyroid function markers makes sense given the user's symptoms and timeline.
 - No "For your X:" prefixes. Lead with the action verb. Write "Discuss whether repeating thyroid markers makes sense" not "For your thyroid: Discuss whether repeating thyroid markers makes sense". The bucketing UI already groups by system, so the prefix is redundant.
@@ -926,10 +949,10 @@ Hard rules:
 - Do NOT say "everything looks good"
 - Do NOT give medical advice
 - When trajectory is "no_prior_data": describe current status only. Do NOT fabricate direction of change.
-- `primary_concern.title` MUST name the same biomarker as `PRIMARY CONTEXT.primary_biomarker`. Do not pick a different marker as the title even if you think another finding is more "concerning" — the deterministic primary is the canonical primary.
-- `primary_concern.summary` and `primary_concern.why_it_matters` must center on the PRIMARY CONTEXT biomarker.
-- When the PRIMARY CONTEXT supplies a `supporting_biomarker` with `direction: "borderline"`, you MUST describe it as "borderline" (e.g., "TgAb is also borderline and worth tracking"). Do not upgrade "borderline" to "high"/"low"/"elevated". Use the direction field verbatim.
-- When `supporting_biomarker` is null in PRIMARY CONTEXT, you MUST NOT mention any other marker by name in Sentence 2 or Sentence 3. Use a generic context note instead (e.g., "Continued monitoring will help clarify the trend." or "Tracking this over time will give a clearer picture."). NEVER write phrases like "Your TgAb is also high" or "Your X is also low" when no supporting biomarker was provided.
+- \`primary_concern.title\` MUST name the same biomarker as \`PRIMARY CONTEXT.primary_biomarker\`. Do not pick a different marker as the title even if you think another finding is more "concerning" — the deterministic primary is the canonical primary.
+- \`primary_concern.summary\` and \`primary_concern.why_it_matters\` must center on the PRIMARY CONTEXT biomarker.
+- When the PRIMARY CONTEXT supplies a \`supporting_biomarker\` with \`direction: "borderline"\`, you MUST describe it as "borderline" (e.g., "TgAb is also borderline and worth tracking"). Do not upgrade "borderline" to "high"/"low"/"elevated". Use the direction field verbatim.
+- When \`supporting_biomarker\` is null in PRIMARY CONTEXT, you MUST NOT mention any other marker by name in Sentence 2 or Sentence 3. Use a generic context note instead (e.g., "Continued monitoring will help clarify the trend." or "Tracking this over time will give a clearer picture."). NEVER write phrases like "Your TgAb is also high" or "Your X is also low" when no supporting biomarker was provided.
 
 Phrasing templates to follow:
 - Improving: "${"${primary} remains elevated at ${current} but has improved from ${previous} since your last report."}"
@@ -957,7 +980,7 @@ PATIENT CONTEXT:
 - Report date: ${report.report_date}
 - Cycle: ${cycle_notes}
 ${context_notes.length ? "- " + context_notes.join("\n- ") : ""}
-
+${userContextBlock ? `\n${userContextBlock}\n` : ""}
 LAB PANEL: ${analytes.length} total analytes. Key values shown below:
 ${labLines}
 ${patternBlock}
@@ -1184,6 +1207,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const subCheck = await checkUserSubscription(supabaseUser, user.id);
+    if (!subCheck.allowed) {
+      debugLog("[generate-interpretation] subscription check blocked:", subCheck.reason);
+      return new Response(
+        JSON.stringify({ error: "subscription_required", reason: subCheck.reason }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { data: report } = await supabase
       .from("lab_reports")
       .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")
@@ -1193,6 +1225,36 @@ Deno.serve(async (req: Request) => {
     if (report) {
       (report as { context?: unknown }).context = sanitizeReportContext(
         (report as { context?: unknown }).context,
+      );
+    }
+
+    // ── Voluntary user profile context (Phase 8A) ──────────────────────────
+    // Belt-and-braces: any failure here must NOT block interpretation. On
+    // schema-fail, fetch-fail, or empty fields, userContextBlock stays null
+    // and the prompt is byte-identical to pre-8A behavior.
+    let userContextBlock: string | null = null;
+    try {
+      const { data: userProfileRaw } = await supabase
+        .from("users")
+        .select("full_name, age_range, sex_at_birth, pregnancy_status, health_goals, symptoms")
+        .eq("id", reportCheck.user_id)
+        .maybeSingle();
+
+      if (userProfileRaw) {
+        const parsed = UserProfileContextSchema.safeParse(userProfileRaw);
+        if (parsed.success) {
+          userContextBlock = formatUserContextBlock(parsed.data);
+        } else {
+          console.warn(
+            "[generate-interpretation] user profile context failed schema validation:",
+            parsed.error.flatten(),
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(
+        "[generate-interpretation] user profile context fetch threw:",
+        errorMessage(err),
       );
     }
 
@@ -1239,12 +1301,24 @@ Deno.serve(async (req: Request) => {
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");
 
+    // Optimization-only signal: the client pinned a primary slug because its UI
+    // flags it as outside Amani's *optimal* range, yet the server's clinical
+    // classifier sees the marker as in-range against the lab's reference range.
+    // When true, the AI prompt switches tone from "clinical concern" to
+    // "main focus to optimize" so the headline never says "all within range"
+    // while the UI flags a marker as Outside Optimal.
+    const isOptimizationOnly = !!(
+      parsedBody.data.primary_canonical_slug &&
+      primaryContext &&
+      primaryContext.current_status === "in_range"
+    );
+
     let interpretationJson: AIInterpretationOutput;
     let source = "fallback";
 
     if (openaiApiKey && analytes.length > 0 && report) {
       console.log("[generate-interpretation] Trying OpenAI...");
-      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext);
+      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly);
       if (aiResult) {
         // Guarantee overall_interpretation is grounded in deterministic primary_context
         if (primaryContext) {

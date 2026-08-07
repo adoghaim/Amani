@@ -314,16 +314,28 @@ export interface AIInterpretation {
 export interface User {
   id: string;
   email: string;
+  full_name: string | null;
   created_at: string;
   age_range: string | null;
   goal: string;
   has_consented: boolean;
   subscription_status: SubscriptionStatus;
-  trial_start_date: string;
+  trial_start_date: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   default_cycle_length: number | null;
   default_period_length: number | null;
+  // Phase 7 onboarding fields. Defaults provided by the users-table migration
+  // (boolean false / empty array). trial_start_date is nullable because the
+  // 7-day clock now starts when onboarding completes (or is skipped), not at signup.
+  onboarding_completed: boolean;
+  onboarding_skipped: boolean;
+  health_goals: string[];
+  symptoms: string[];
+  sex_at_birth: string | null;
+  pregnancy_status: string | null;
+  supplements: string[];
+  known_conditions: string[];
 }
 
 export type CycleEventType = 'period_start' | 'period_end' | 'symptom' | 'note';

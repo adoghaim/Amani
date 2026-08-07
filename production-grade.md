@@ -6,7 +6,7 @@ The biggest finding across all audits: **the medical-safety guardrail described 
 
 ## Progress tracker
 
-Status as of 2026-05-01. ✅ shipped local · ⏳ blocked on user input · ⬜ not started.
+Status as of 2026-08-05. ✅ shipped local · ⏳ blocked on user input · ⬜ not started.
 
 ### Sprint 1 — P0 ship-blockers (8 of 8)
 
@@ -14,7 +14,7 @@ Status as of 2026-05-01. ✅ shipped local · ⏳ blocked on user input · ⬜ n
 - ✅ **P0-2** Nutrient-policy validator — `_shared/nutrient-policy.ts` is the single source of truth; validate-then-regenerate-then-sanitize wired into `tryOpenAI`. Needs deploy.
 - ✅ **P0-3** Sanitize `lab_reports.context` before prompt — `sanitizeReportContext()` bounds string lengths, caps `top_symptoms`, strips unknown keys. Needs deploy.
 - ✅ **P0-4** Stripe webhook idempotency — `processed_stripe_events` ledger, `stripe_orders.checkout_session_id` UNIQUE, `await` instead of `waitUntil`, order insert → upsert. Needs `supabase db push` + deploy.
-- ✅ **P0-5** Explicit `verify_jwt` declarations in `config.toml` — stripe-webhook=false; stripe-checkout / create-checkout-session / create-portal-session=true. Needs config push.
+- ✅ **P0-5** Explicit `verify_jwt` declarations in `config.toml` — stripe-webhook=false; stripe-checkout / create-portal-session=true. Needs config push. (`create-checkout-session` retired — was a hardcoded-$24 duplicate; `stripe-checkout` is the live path.)
 - ✅ **P0-6** Open-redirect fix in `src/App.tsx` — `safeRedirectTarget()` rejects `://`, `//`, `:`, `@`.
 - ✅ **P0-7** Rate-limit + 5 MB / 10-image cap on `parse-lab-report-ocr`. Needs deploy.
 - ✅ **P0-8** Extend `delete-user-data` PHI sweep — adds report_items, report_analytes, parser_debug, period_logs, symptom_logs, notification_preferences, reminders. Needs deploy.
@@ -55,12 +55,28 @@ Status as of 2026-05-01. ✅ shipped local · ⏳ blocked on user input · ⬜ n
 - ✅ **P3-9** Deleted `createTestUser.js` — confirmed zero non-doc references first.
 - ✅ **P3-10** Console-log scrubbing — added `debugLog()` helper in `generate-interpretation/index.ts`, gated behind `Deno.env.get("DEBUG")`. Three PII-adjacent log sites converted; `console.warn`/`console.error` (signal channels) untouched.
 
+### Sprint 5 — 2026-07-09 stabilization: Codex-flagged regressions + gaps (5 of 5 shipped, verified 2026-08-05)
+
+Triggered by a Codex zip review that identified four launch blockers. Verified end-to-end via manual walkthrough on `http://localhost:5173/` before doc update.
+
+- ✅ **S5-1** LabCorp A1c parser regression — `13d0fae`. Rescue block in `valueExtraction.ts` (added by `accef7d`) was firing on plain min-max range rows and picking the "1" from the "A1c" label as the value. Gated rescue on `referenceResult?.comparator`; added `skipLetterPrefixedDigits` guard to rescue loop as defense-in-depth.
+- ✅ **S5-2** Retired duplicate `create-checkout-session` — `5157701`. Legacy edge function had `unit_amount: 2400` (hardcoded $24/month) inside `price_data`. Zero frontend call sites confirmed via grep. Deleted directory, removed `[functions.create-checkout-session]` from `supabase/config.toml`. `stripe-checkout` (proper `price_id` from `stripe-config.ts`) is the live path.
+- ✅ **S5-3** Refreshed parser snapshots — `fe337a1`. Captured new `excluded_reason` field added to pipeline output. All values null in current fixtures — pure mechanical drift, no semantic changes.
+- ✅ **S5-4** Restored onboarding + OAuth + personal-context deleted by `f731cc7` regression — `26c6a00`. `f731cc7` (misleadingly titled "Updated App.tsx") had silently deleted 1,572 lines across 29 files including all onboarding steps, `SocialAuthButton`, `PersonalContextCard`, `_shared/schemas/context.ts`, and three migrations. Reverted with conflict resolution that preserved Phase 8A/B/C interpretation-prompt improvements (`isOptimizationOnly` param kept from HEAD side). Discovery: `SocialAuthButton`/`LoginForm`/`SignupForm` already had the `VITE_ENABLE_APPLE_OAUTH` env-flag gate baked in from Phase 7B (`c56ce9a`). Phase 8A was importing the deleted `_shared/schemas/context.ts` — so any deploy after `f731cc7` would have been broken until this restore.
+- ✅ **S5-5** Server-side + client-side paywall enforcement — `9d387f6`. New `supabase/functions/_shared/subscription-guard.ts` reads `stripe_user_subscriptions` view + `users.trial_start_date`. Access rule: allowed if Stripe status is `active`/`trialing`/`past_due` OR trial started < 7 days ago. Wired 402 `{"error":"subscription_required","reason":...}` responses into `generate-interpretation`, `extract-biomarkers`, `parse-lab-report-ocr` — check runs after auth+ownership, before any OpenAI call or DB write. Client-side `SubscriptionGate` wraps `/app/new` inside `OnboardingGate` (full chain: `ProtectedRoute → OnboardingGate → SubscriptionGate → NewReport`). Fail-closed on read errors and null `trial_start_date`. Redirect target: `/billing` for users with any Stripe row (lapsed customer) or `/pricing` for new users. `NewReport.tsx` re-checks internally as defense in depth. All frontend `supabase.functions.invoke` sites for the three gated functions handle 402 gracefully via `handle402` helper.
+
+**Nits discovered during 2026-08-05 verification (backlog, not blocking):**
+- Onboarding state model is loose: `onboarding_completed` and `onboarding_skipped` are not mutually exclusive; can both be true. `markOnboardingComplete()` and `markOnboardingSkipped()` in `AuthContext.tsx` each set their own flag without clearing the other. Gate accepts either as "past onboarding," so no UX bug — but funnel metrics like "% completed" would undercount skip-then-complete users.
+- UX perception mismatch on `UploadIntroStep.tsx`: primary CTA "Upload Lab Report" (→ `completed=true`, navigates `/app/new`) vs. small text link "Skip for now" (→ `skipped=true`, navigates `/app`). Users perceive Skip as completion. If completion tracking matters downstream, either reconcile the semantics or rename the CTA.
+- No 404 catch-all route in `App.tsx` — a typo under `/app/*` shows a blank Suspense screen forever instead of a NotFound page.
+
 ### Pending deploys (in this order)
 
 ```
-supabase db push
+supabase db push  # includes 3 migrations restored by S5-4: add_onboarding_fields_to_users, add_full_name_to_users, defer_trial_start_until_onboarding
 supabase functions deploy generate-interpretation parse-lab-report-ocr extract-biomarkers lab-insights stripe-webhook stripe-checkout delete-user-data
 # config.toml verify_jwt declarations apply via your normal config-push flow
+# (create-checkout-session no longer in the list — retired in S5-2)
 npm run cap:sync   # push web bundle into android/ and ios/
 ```
 
@@ -81,7 +97,7 @@ npm run cap:sync   # push web bundle into android/ and ios/
 > `supabase/functions/stripe-webhook/index.ts:48` does `EdgeRuntime.waitUntil(handleEvent(event))` and returns 200 immediately. Two problems: (1) any failure inside `handleEvent` is silently lost — Stripe never retries because we already 200'd; (2) Stripe's at-least-once delivery + zero dedup means duplicate `customer.subscription.updated` events fire twice and `checkout.session.completed` inserts duplicate `stripe_orders` rows (no unique constraint on `checkout_session_id` per `20260216193045_initial_schema.sql`). Fix: (a) add migration creating `processed_stripe_events(event_id text primary key, processed_at timestamptz default now())` and insert with `on conflict do nothing`; bail if no row inserted. (b) Add `unique(checkout_session_id)` to `stripe_orders`. (c) Replace `waitUntil` with `await handleEvent(event)` so failures return 5xx and Stripe retries.
 
 ### P0-5. Stripe webhook config — `verify_jwt = false` not declared
-> `supabase/config.toml` lists `verify_jwt = false` only for the three OpenAI functions. Edge functions default to `verify_jwt = true`. If this config is ever pushed cleanly (current state may rely on stale dashboard config), every Stripe webhook will 401 before signature verification, silently breaking billing. Fix: add explicit `[functions.stripe-webhook]` block with `verify_jwt = false`. Same audit for `stripe-checkout`, `create-checkout-session`, `create-portal-session` — confirm intent and declare explicitly.
+> `supabase/config.toml` lists `verify_jwt = false` only for the three OpenAI functions. Edge functions default to `verify_jwt = true`. If this config is ever pushed cleanly (current state may rely on stale dashboard config), every Stripe webhook will 401 before signature verification, silently breaking billing. Fix: add explicit `[functions.stripe-webhook]` block with `verify_jwt = false`. Same audit for `stripe-checkout`, `create-portal-session` — confirm intent and declare explicitly. (`create-checkout-session` was a legacy duplicate with a hardcoded $24/month price; it has been retired — see cleanup note in Sprint 1 P0-5 above.)
 
 ### P0-6. Open redirect in login flow
 > `src/App.tsx:52-53` does `<Navigate to={new URLSearchParams(window.location.search).get('redirect') || '/app'} replace />` with no validation of the `redirect` param. `?redirect=https://evil.com` or `?redirect=//evil.com` navigates the just-authenticated user off-domain. Fix: validate the redirect — accept only paths that start with a single `/` and not `//`, reject anything containing `:` or `@`. Apply the same fix at `App.tsx:34-35`.
