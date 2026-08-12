@@ -1,0 +1,17 @@
+# Local tooling artifacts (not needed in Vercel build)
+.claude-flow/
+.claude/
+.swarm/
+agentdb.rvf
+agentdb.rvf.lock
+ruvector.db
+android/ruvector.db
+
+# Native platform folders (not needed for web build)
+android/
+ios/
+dist/
+
+# Local env
+.env
+.env.local
