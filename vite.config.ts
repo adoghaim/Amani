@@ -34,13 +34,20 @@ export default defineConfig(({ command }) => ({
       output: {
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('/react-router-dom/') || id.includes('/react-router/')) {
-            return 'react-router-vendor';
-          }
           if (id.includes('/@supabase/')) {
             return 'supabase-vendor';
           }
-          if (id.includes('/react-dom/') || id.includes('/react/') || id.includes('/scheduler/')) {
+          // React, React DOM, scheduler, AND react-router-dom must ship in the
+          // same chunk. Splitting react-router into its own vendor breaks
+          // React.createContext() at runtime because router loads before/
+          // without a React reference in scope.
+          if (
+            id.includes('/react-dom/') ||
+            id.includes('/react/') ||
+            id.includes('/scheduler/') ||
+            id.includes('/react-router-dom/') ||
+            id.includes('/react-router/')
+          ) {
             return 'react-vendor';
           }
           return undefined;
