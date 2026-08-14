@@ -217,13 +217,31 @@ function resolveCanonicalByLabel(
   return { analyte: null, matchedVia: "none" };
 }
 
+// Catch any unhandled promise rejection so we can see what's crashing the
+// isolate outside try/catch (previous EDGE_FUNCTION_ERROR with no error body
+// suggested async work rejecting after the response returned).
+addEventListener("unhandledrejection", (event) => {
+  console.error("[extract-biomarkers] UNHANDLED REJECTION:", (event as PromiseRejectionEvent).reason);
+});
+
+const trace = (invocationId: string, step: string, extra?: Record<string, unknown>) => {
+  const parts = [`[trace ${invocationId}]`, step];
+  if (extra) parts.push(JSON.stringify(extra));
+  console.log(parts.join(" "));
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const invocationId = crypto.randomUUID().slice(0, 8);
+  const startedAt = Date.now();
+  const stepMs = () => Date.now() - startedAt;
+
   try {
-    console.log("DEPLOYMENT VERIFIED: extract-biomarkers v2.1 (explicit auth). Auth Header Present:", !!req.headers.get("Authorization"));
+    trace(invocationId, "start", { hasAuth: !!req.headers.get("Authorization") });
+    console.log("DEPLOYMENT VERIFIED: extract-biomarkers v2.2 (traced). Auth Header Present:", !!req.headers.get("Authorization"));
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(
@@ -249,8 +267,10 @@ Deno.serve(async (req: Request) => {
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    trace(invocationId, "auth-ok", { userId: user.id, ms: stepMs() });
 
     const subCheck = await checkUserSubscription(supabase, user.id);
+    trace(invocationId, "sub-check", { allowed: subCheck.allowed, reason: subCheck.reason, ms: stepMs() });
     if (!subCheck.allowed) {
       console.log("[extract-biomarkers] subscription check blocked:", subCheck.reason);
       return new Response(
@@ -265,6 +285,7 @@ Deno.serve(async (req: Request) => {
     );
 
     await checkAndIncrementRateLimit(supabaseAdmin, user.id, "extract-biomarkers", 20);
+    trace(invocationId, "rate-limit-ok", { ms: stepMs() });
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
@@ -283,8 +304,10 @@ Deno.serve(async (req: Request) => {
       );
     }
     const { text } = parsedBody.data;
+    trace(invocationId, "body-parsed", { textLen: text.length, ms: stepMs() });
 
     const { analyteMap, synonymMap } = await loadCanonicalRegistry(supabaseAdmin);
+    trace(invocationId, "registry-loaded", { analytes: analyteMap.size, synonyms: synonymMap.size, ms: stepMs() });
 
     const systemPrompt = `You are a medical lab data extraction specialist. Extract EVERY lab test result from the report — not just a fixed set.
 
@@ -392,6 +415,7 @@ CONFIDENCE:
 
     const userPrompt = `Extract ALL lab test results from this report. Include every item with a numeric result.\n\n${text}\n\nReturn JSON: { "items": [...] }`;
 
+    trace(invocationId, "openai-call-start", { ms: stepMs() });
     const openaiResponse = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -411,9 +435,10 @@ CONFIDENCE:
           response_format: { type: "json_object" }
         }),
       },
-      { attemptTimeoutMs: 25000 },
+      { tries: 2, attemptTimeoutMs: 25000 },
     );
 
+    trace(invocationId, "openai-call-returned", { status: openaiResponse.status, ok: openaiResponse.ok, ms: stepMs() });
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
       console.error("OpenAI API error:", errorData);
@@ -421,6 +446,7 @@ CONFIDENCE:
     }
 
     const openaiData = await openaiResponse.json();
+    trace(invocationId, "openai-json-parsed", { hasChoices: !!openaiData?.choices, choicesLen: openaiData?.choices?.length ?? 0, ms: stepMs() });
     const content = openaiData.choices[0].message.content;
 
     let rawItems: RawExtractedItem[];
@@ -554,12 +580,13 @@ CONFIDENCE:
       source_snippet: a.source_snippet,
     }));
 
+    trace(invocationId, "returning-success", { items: legacyItems.length, analytes: validatedAnalytes.length, ms: stepMs() });
     return new Response(
       JSON.stringify({ items: legacyItems, analytes: validatedAnalytes, coverage }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error extracting biomarkers:", error);
+    console.error("Error extracting biomarkers:", error, "afterMs:", stepMs());
 
     if (error instanceof Error && error.message === "RATE_LIMIT_EXCEEDED") {
       return new Response(
