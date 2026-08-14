@@ -37,3 +37,8 @@ ios/Pods/
 **/*.ipa
 **/*.keystore
 **/*.jks
+.vercel
+.env*
+
+# Local Netlify folder
+.netlify

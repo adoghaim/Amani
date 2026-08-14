@@ -271,7 +271,12 @@ export function NewReport() {
           if (heuristics.isWeak) {
             void startPdfOcrFallback(file, runId);
           } else {
-            void triggerAiRefinement(text, runId);
+            const gate = shouldRefineWithAI(localItems, src);
+            console.log('[NewReport] AI refinement gate:', { ...gate, itemCount: localItems.length, detectedSource: src });
+            if (gate.call) {
+              void triggerAiRefinement(text, runId);
+            }
+            // else: pure client parser result — no AI call, no cost, no failure surface
           }
         }
       } else if (file.type.startsWith('image/')) {
@@ -354,6 +359,23 @@ export function NewReport() {
     } finally {
       if (runId === extractionRunRef.current) setAiRefining(false);
     }
+  };
+
+  // Decide whether the AI refinement pass is worth calling. AI is a net for
+  // reports the client parser struggles with; when everything parsed cleanly,
+  // skip it to save cost/latency and avoid the extract-biomarkers 500 pattern
+  // triggered by slow OpenAI calls hitting Supabase runtime limits.
+  const shouldRefineWithAI = (
+    items: Array<{ confidence_score?: string; needs_review?: boolean; parse_status?: string }>,
+    detectedSource: string,
+  ): { call: boolean; reason: string } => {
+    if (items.length < 10) return { call: true, reason: 'low_item_count' };
+    if (items.some(i => i.needs_review === true)) return { call: true, reason: 'needs_review' };
+    if (items.some(i => i.confidence_score === 'low')) return { call: true, reason: 'low_confidence' };
+    if (items.some(i => i.parse_status === 'parse_error')) return { call: true, reason: 'parse_error' };
+    if (items.some(i => i.parse_status === 'unmapped')) return { call: true, reason: 'unmapped' };
+    if (detectedSource === 'unknown') return { call: true, reason: 'unknown_lab_source' };
+    return { call: false, reason: 'all_good' };
   };
 
   const triggerAiRefinement = async (text: string, runId: number) => {
