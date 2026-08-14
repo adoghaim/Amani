@@ -3,6 +3,7 @@ import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
 import { StripeCheckoutOrderSchema } from '../_shared/schemas/stripe.ts';
+import { type EventClaimStore, withStripeEventClaim } from '../_shared/stripe-idempotency.ts';
 
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
@@ -64,30 +65,90 @@ Deno.serve(async (req) => {
   }
 });
 
-async function handleEvent(event: Stripe.Event) {
-  // Idempotency gate: insert the event_id, bail if we've already processed it.
-  // Stripe delivers webhooks at-least-once; this turns retries into no-ops.
-  const { data: claimed, error: claimError } = await supabase
-    .from('processed_stripe_events')
-    .insert({ event_id: event.id, event_type: event.type })
-    .select('event_id')
-    .maybeSingle();
+// PostgREST-backed implementation of the claim ledger. All the ordering rules
+// live in ../_shared/stripe-idempotency.ts; these are just the four queries.
+//
+// Every conditional write is scoped to `status = 'processing'` *and* the exact
+// `claimed_at` the caller holds, so a worker can only ever settle or drop the
+// claim it actually took — never one that a takeover has since handed to
+// somebody else.
+const eventClaimStore: EventClaimStore = {
+  async insertClaim({ eventId, eventType, claimedAt }) {
+    // The event_id primary key is the atomic gate: concurrent deliveries race
+    // here and exactly one INSERT survives, the rest come back 23505.
+    const { error } = await supabase.from('processed_stripe_events').insert({
+      event_id: eventId,
+      event_type: eventType,
+      status: 'processing',
+      claimed_at: claimedAt,
+      processed_at: null,
+    });
 
-  if (claimError) {
-    // Postgres unique_violation — another delivery already claimed this event.
-    if (claimError.code === '23505') {
-      console.info(`Skipping duplicate Stripe event ${event.id} (${event.type})`);
-      return;
+    return { data: null, error };
+  },
+
+  async readClaim(eventId) {
+    const { data, error } = await supabase
+      .from('processed_stripe_events')
+      .select('status, claimed_at')
+      .eq('event_id', eventId)
+      .maybeSingle();
+
+    if (error) {
+      return { data: null, error };
     }
-    console.error(`Failed to claim Stripe event ${event.id}:`, claimError);
-    throw new Error(`Failed to claim event: ${claimError.message}`);
-  }
 
-  if (!claimed) {
-    console.info(`Stripe event ${event.id} already processed`);
-    return;
-  }
+    return {
+      data: data ? { status: data.status, claimedAt: data.claimed_at } : null,
+      error: null,
+    };
+  },
 
+  async reclaimStale({ eventId, expectedClaimedAt, claimedAt }) {
+    // Compare-and-swap. Under READ COMMITTED, a racer that blocks on this row
+    // re-evaluates the WHERE clause once the winner commits, sees the new
+    // claimed_at, and matches zero rows.
+    const { data, error } = await supabase
+      .from('processed_stripe_events')
+      .update({ status: 'processing', claimed_at: claimedAt, processed_at: null })
+      .eq('event_id', eventId)
+      .eq('status', 'processing')
+      .eq('claimed_at', expectedClaimedAt)
+      .select('event_id');
+
+    return { data: data?.length ?? null, error };
+  },
+
+  async markCompleted({ eventId, claimedAt, processedAt }) {
+    const { data, error } = await supabase
+      .from('processed_stripe_events')
+      .update({ status: 'completed', processed_at: processedAt })
+      .eq('event_id', eventId)
+      .eq('status', 'processing')
+      .eq('claimed_at', claimedAt)
+      .select('event_id');
+
+    return { data: data?.length ?? null, error };
+  },
+
+  async deleteClaim({ eventId, claimedAt }) {
+    const { data, error } = await supabase
+      .from('processed_stripe_events')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('status', 'processing')
+      .eq('claimed_at', claimedAt)
+      .select('event_id');
+
+    return { data: data?.length ?? null, error };
+  },
+};
+
+async function handleEvent(event: Stripe.Event) {
+  await withStripeEventClaim(eventClaimStore, { id: event.id, type: event.type }, () => processEvent(event));
+}
+
+async function processEvent(event: Stripe.Event) {
   const stripeData = event?.data?.object ?? {};
 
   if (!stripeData) {
@@ -187,10 +248,12 @@ async function syncCustomerFromStripe(customerId: string) {
 
     if (subscriptions.data.length === 0) {
       console.info(`No active subscriptions found for customer: ${customerId}`);
+      // `status` is the real column on stripe_subscriptions; `subscription_status`
+      // only exists as an alias on the stripe_user_subscriptions view.
       const { error: noSubError } = await supabase.from('stripe_subscriptions').upsert(
         {
           customer_id: customerId,
-          subscription_status: 'not_started',
+          status: 'not_started',
         },
         {
           onConflict: 'customer_id',
@@ -199,8 +262,9 @@ async function syncCustomerFromStripe(customerId: string) {
 
       if (noSubError) {
         console.error('Error updating subscription status:', noSubError);
-        throw new Error('Failed to update subscription status in database');
+        throw new Error(`Failed to update subscription status in database: ${noSubError.message}`);
       }
+      return;
     }
 
     // assumes that a customer can only have a single subscription
