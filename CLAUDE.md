@@ -62,3 +62,15 @@ Frontend product/price catalog is hard-coded in `src/stripe-config.ts`. Checkout
 
 - `.env` (Vite, client-exposed): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STRIPE_PUBLISHABLE_KEY`.
 - Supabase Edge Function secrets (server-only): `OPENAI_API_KEY` (required for `generate-interpretation`), Stripe secret keys for webhook/checkout functions. Never put these in `.env` or source.
+
+## Workflow (implementer role)
+
+Claude Code operates as the implementation engineer. A separate reviewer (Codex or another agent) reviews PRs; the human coordinates and merges.
+
+- **Never commit or push to `main`.** All work goes on a dedicated feature branch (e.g. `fix/rate-limit-atomicity`, `feat/onboarding-oauth-restore`, `security/pdfjs-upgrade`).
+- **Always open a PR** — never merge yourself. The reviewer (Codex or human) merges after review.
+- **Don't deploy production from feature-branch work.** Deploys happen post-merge from `main`, and only when the human explicitly authorizes (`supabase functions deploy`, `supabase db push`, `npm run cap:sync`, `netlify deploy --prod`). Feature branches do not touch production infrastructure directly.
+- **Bounded task discipline:** stick to the assigned objective, acceptance criteria, and file scope. Don't sneak unrelated cleanups into a feature PR — flag them separately.
+- **Tests + verify before opening a PR:** `npm run lint`, `npm run typecheck`, `npm run build`, `npm test`. Add tests when introducing new logic (see `_shared/stripe-idempotency.test.ts` for the pattern — testable modules kept free of Supabase/Deno imports and driven via port interfaces).
+- **PR body includes:** short summary, files changed, verification output, deployment sequence if any, risks, and open decisions. See PR #16 for a good template.
+- **Dialogue-mode exceptions:** debugging, design discussions, and infra emergencies happen conversationally (not via PR round-trips). Once a bounded fix emerges from dialogue, return to the branch + PR flow to ship it.
