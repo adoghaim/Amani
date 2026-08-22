@@ -52,3 +52,13 @@ ruvector.db
 **/ruvector.db
 .claude/proven-config.json
 .claude/.proven-config-version
+
+# impeccable — installs ~10 MB as three duplicate copies and registers its
+# hooks in gitignored .claude/settings.local.json, so a clone needs
+# `npx impeccable install` to activate it regardless. Keep it out of the repo.
+.agents/skills/impeccable/
+.claude/skills/impeccable/
+.github/skills/
+.github/hooks/
+.github/agents/
+.codex/
