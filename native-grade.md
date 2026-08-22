@@ -1,18 +1,18 @@
 # Amani — Native-Platform Roadmap
 
-Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-08-05. ✅ shipped local · ⏳ blocked on user decision · ⬜ not started.
+Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-08-21. ✅ shipped · ⏳ blocked on user decision · ⬜ not started.
 
-(The 2026-07-09 stabilization sprint documented in `production-grade.md` did not touch native-platform code — all changes were web/backend. Native readiness is unchanged from the last audit; blockers still hinge on your input for N0-3 privacy manifest, N0-4 keystore rotation, N1-6 deep-link domain, N2-5 dark-mode assets, and N2-6 background-blur decision.)
+(Updated 2026-08-21: **N0-3 and N1-6 are done.** The privacy manifest shipped with build 5 (PR #17) and universal/app links shipped in PR #20. Remaining store-blockers are **N0-4** keystore rotation and **N2-5** dark-mode assets — both need you, neither is code. `amanibiometrics.com` is confirmed live on Netlify, which is what unblocked N1-6.)
 
 The headline finding when the audit ran was: **Capacitor plugins are aliased to web stubs in production builds** — Camera, Browser, Network, Android back button silently no-op on device. **That is now fixed** (N0-1 below). The bundle that `cap:sync` pushed into `ios/App/App/public/` and `android/app/src/main/assets/public/` now reaches the real `@capacitor/*` packages on device.
 
 ## Progress tracker
 
-### Critical / High — mechanical fixes (10 of 11 shipped)
+### Critical / High — mechanical fixes (12 of 13 shipped)
 
 - ✅ **N0-1** Vite stub aliases gated to `command === 'serve'` — production bundle now contains real `Capacitor.isNativePlatform` checks, not the stubs. Verified.
 - ✅ **N0-2** iOS `NSCameraUsageDescription` + `NSPhotoLibraryUsageDescription` added with health-app-specific copy. `NSPhotoLibraryAddUsageDescription` deliberately omitted (`captureLabPhoto` doesn't pass `saveToGallery: true`).
-- ⏳ **N0-3** `PrivacyInfo.xcprivacy` privacy manifest — App Store requires it. **Needs your input** on tracking/analytics declarations and which required-reason APIs to declare. I can ship a template once you decide.
+- ✅ **N0-3** `PrivacyInfo.xcprivacy` shipped with build 5 (`9c6acbf`, PR #17) and is referenced from the Xcode project.
 - ⏳ **N0-4** Plaintext upload-keystore password in `android/keystore.properties`. **Needs your action**: rotate the upload key via Play Console, move secrets into a secret manager. Destructive Play Console action — I can't do it for you.
 - ✅ **N0-5** `android:allowBackup="false"` on the `<application>` tag.
 - ✅ **N0-6** `android:usesCleartextTraffic="false"` explicit + `network_security_config.xml` referenced from manifest. Base config blocks cleartext, trusts only system CAs.
@@ -22,7 +22,8 @@ The headline finding when the audit ran was: **Capacitor plugins are aliased to 
 - ✅ **N1-3** AndroidBackHandler `rootRoutes` now includes `/pricing`, `/success`, `/reset-password`.
 - ✅ **N1-4** Capacitor stub plugin signatures already typed (event-name unions + `PluginListenerHandle` returns) — verified all four stubs.
 - ⏳ **N1-5** `secureStorage` in `src/lib/native.ts` is misnamed (delegates to plain `localStorage`). **Needs architectural decision**: rename to `kvStorage` (cheap, removes the false promise) or migrate to a real secure-storage plugin (weekend of work).
-- ⏳ **N1-6** No `appUrlOpen` deep-link handler — Supabase password-reset and Stripe `success_url` redirects don't reach the native app. **Needs your domain** (likely `https://amani.health`) for universal-link verification before I can add the entitlement / intent filter / JS handler.
+- ✅ **N1-6** Universal links + app links — PR #20. Domain is `amanibiometrics.com` (confirmed serving from Netlify). Associated-domains entitlement + `CODE_SIGN_ENTITLEMENTS` on both iOS configs, `autoVerify` intent filter scoped by `pathPrefix`, `.well-known/apple-app-site-association` and `assetlinks.json`, plus `public/_headers` forcing `application/json` on the extensionless AASA file (Netlify otherwise serves `octet-stream` and iOS rejects the domain with no visible error — verified `200 application/json` on the deploy preview). Routing lives in `src/lib/deepLinks.ts`, pure and 11-tested, and doubles as the trust boundary for OS-supplied URLs.
+  **Three steps remain, all outside the repo:** (1) paste the Play **App Signing** SHA-256 from Play Console → App integrity into `public/.well-known/assetlinks.json` — not the upload key, since Play re-signs, and rotating the upload key for N0-4 does *not* change this value; (2) allowlist `https://amanibiometrics.com/reset-password` in Supabase → Auth → URL Configuration or `redirectTo` is silently dropped; (3) enable Associated Domains on the Apple App ID and regenerate the provisioning profile. iOS works without (1); Android does not.
 - ✅ **N1-7** `ios/App/App/config.xml` (Cordova-era `<access origin="*"/>` leftover) deleted.
 - ✅ **N1-8** `package.json` `name` is now `"amani"` (was `"vite-react-typescript-starter"`).
 
@@ -46,7 +47,7 @@ npm run build
 npm run cap:sync     # ← already ran; bundle in ios/ and android/ is up to date
 
 # Native rebuild + ship
-npx cap open ios       # Xcode → Archive → Distribute (after you complete N0-3, N0-4, N1-6, N2-5)
+npx cap open ios       # Xcode → Archive → Distribute (after you complete N0-4, N2-5, and the Apple Associated Domains capability)
 npx cap open android   # Android Studio → Generate Signed Bundle (after N0-4)
 ```
 
@@ -60,7 +61,7 @@ npx cap open android   # Android Studio → Generate Signed Bundle (after N0-4)
 ### N0-2 ⬜ Missing `NSCameraUsageDescription` and photo-library strings — App Store auto-reject
 `ios/App/App/Info.plist` has zero `NS*UsageDescription` keys, but Camera plugin is registered and `captureLabPhoto` ships in `src/lib/native.ts`. First call crashes the app; reviewer rejects before that. Fix: add `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`, `NSPhotoLibraryAddUsageDescription` with health-specific copy.
 
-### N0-3 ⏳ Missing `PrivacyInfo.xcprivacy` privacy manifest
+### N0-3 ✅ `PrivacyInfo.xcprivacy` privacy manifest — shipped in PR #17
 Apple requires this for App Store submissions since May 2024. Submissions without it return ITMS-91056. App declares: email (linked, identity), health/medical (linked, sensitive — biomarkers qualify), `UserDefaults` access (CA92.1). **Needs your input on tracking/analytics declarations** before I can write a final manifest. I can ship a template with the obvious entries and a `TODO:` for the rest.
 
 ### N0-4 ⏳ Plaintext upload-keystore password in working tree
@@ -94,7 +95,7 @@ Apple requires this for App Store submissions since May 2024. Submissions withou
 ### N1-5 ⏳ `secureStorage` is misnamed — backed by `localStorage`
 `src/lib/native.ts:134-144`. The name implies Keychain/Keystore but the implementation is plain WebView `localStorage`. Supabase auth tokens (`src/lib/supabase.ts:6-11`) go to the same place. **Needs architectural decision**: rename to `kvStorage` (cheap, removes the false promise) or migrate to `@capacitor-community/secure-storage` for tokens (real fix, weekend of work).
 
-### N1-6 ⏳ No `appUrlOpen` deep-link handler
+### N1-6 ✅ Universal links + app links — shipped in PR #20
 Supabase password-reset emails set `redirectTo` to `window.location.origin/reset-password`, which on native Capacitor is `capacitor://localhost` or `https://localhost`. Stripe checkout's `success_url` has the same problem. **Needs your input**: which domain is universal-link-verified for Amani (likely `https://amani.health` once registered)? Once domain is known, I can add the iOS associated-domains entitlement, Android `<intent-filter>` with `autoVerify="true"`, and the JS `App.addListener('appUrlOpen', ...)` handler.
 
 ### N1-7 ⬜ Cordova leftovers

@@ -13,9 +13,12 @@ Amani is a women's health lab-interpretation app: users upload lab PDFs/photos, 
 - `npm run preview` — serve the built app.
 - `npm run lint` — ESLint (TS + React Hooks + React Refresh rules).
 - `npm run typecheck` — `tsc --noEmit -p tsconfig.app.json`.
+- `npm test` — Vitest (`vitest.config.ts`). Runs in CI between typecheck and build.
 - `npm run cap:sync` — build then `npx cap sync` to push web assets into `android/` and `ios/`.
 
-There is no automated test runner configured. Before opening a PR, run `npm run lint`, `npm run typecheck`, and `npm run build`. Document manual validation steps in the PR (especially for parser, scoring, or interpretation changes).
+Before opening a PR run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Document manual validation steps in the PR (especially for parser, scoring, or interpretation changes).
+
+Four suites, 32 tests: `src/utils/parser/parser.test.ts` (snapshot harness over 5 lab-source fixtures), `src/lib/deepLinks.test.ts`, and `supabase/functions/_shared/{stripe-idempotency,account-deletion}.test.ts`. The edge-function suites set the pattern worth copying for new server logic: keep the ordering and policy in a pure `_shared/*.ts` module behind an injected actions port, with no Deno or Stripe imports, so Vitest can drive it with fakes and the Deno handler stays a thin wiring layer.
 
 ## Architecture
 
