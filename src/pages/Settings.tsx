@@ -142,11 +142,16 @@ export function Settings() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete data');
+        // Backend handles the full teardown (Stripe, storage, tables, auth).
+        // Any non-2xx here means the deletion is INCOMPLETE — surface the
+        // error so the user can retry rather than pretending it succeeded.
+        const data = await response.json().catch(() => ({ error: 'Failed to delete account' }));
+        throw new Error(data.error || 'Failed to delete account');
       }
 
-      await supabase.from('users').delete().eq('id', user!.id);
+      // Backend already deleted the users row and the auth identity. Don't
+      // re-issue a client-side delete — the RLS/row would be gone and any
+      // resulting error would be misleading. Just clear the local session.
       await supabase.auth.signOut();
       navigate('/', { replace: true });
     } catch (err) {
