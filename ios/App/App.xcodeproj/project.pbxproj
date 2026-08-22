@@ -310,6 +310,7 @@
 				);
 				MARKETING_VERSION = 1.0.3;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = com.amani.health;
 				PRODUCT_NAME = "Amani Biometrics";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -332,6 +333,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.3;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = com.amani.health;
 				PRODUCT_NAME = "Amani Biometrics";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";

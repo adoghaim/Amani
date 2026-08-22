@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../Button'
 import { StripeProduct, formatPrice } from '../../stripe-config'
 import { supabase } from '../../lib/supabase'
+import { publicUrl } from '../../lib/appUrl';
 import { openExternalUrl } from '../../lib/native'
 import { errorMessage } from '../../lib/errors'
 
@@ -35,8 +36,8 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         },
         body: JSON.stringify({
           price_id: product.priceId,
-          success_url: `${import.meta.env.VITE_APP_URL || window.location.origin}/success`,
-          cancel_url: `${import.meta.env.VITE_APP_URL || window.location.origin}/app/pricing`,
+          success_url: publicUrl('/success'),
+          cancel_url: publicUrl('/app/pricing'),
           mode: product.mode
         })
       })

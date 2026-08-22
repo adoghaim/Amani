@@ -1,0 +1,18 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["954V925LL8.com.amani.health"],
+        "components": [
+          { "/": "/reset-password", "comment": "Supabase password-recovery link" },
+          { "/": "/reset-password/*", "comment": "recovery link with trailing segments" },
+          { "/": "/success", "comment": "Stripe checkout return" },
+          { "/": "/success/*", "comment": "Stripe return with trailing segments" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["954V925LL8.com.amani.health"]
+  }
+}

@@ -1,0 +1,5 @@
+# Apple requires the association file to be served as application/json. It has
+# no file extension, so Netlify would otherwise guess application/octet-stream
+# and iOS would reject the domain without a visible error.
+/.well-known/apple-app-site-association
+  Content-Type: application/json

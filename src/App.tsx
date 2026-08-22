@@ -5,7 +5,8 @@ import { Loading } from './components/Loading'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { OnboardingGate } from './components/OnboardingGate'
 import { SubscriptionGate } from './components/SubscriptionGate'
-import { isNative } from './lib/native'
+import { isNative, onAppUrlOpen } from './lib/native'
+import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 
 // Eagerly loaded — tiny pages used immediately on arrival
@@ -91,6 +92,28 @@ function AppRoutes() {
   )
 }
 
+/**
+ * Routes inbound universal/app links into the SPA.
+ *
+ * Without this the OS opens the app but leaves it on whatever screen it was
+ * last on, so a password-reset or Stripe-return link appears to do nothing.
+ * Unclaimed URLs are ignored rather than navigated to — see deepLinkTarget.
+ */
+function DeepLinkHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isNative()) return;
+
+    return onAppUrlOpen((url) => {
+      const target = deepLinkTarget(url);
+      if (target) navigate(target, { replace: true });
+    });
+  }, [navigate]);
+
+  return null;
+}
+
 function AndroidBackHandler() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,6 +145,7 @@ function App() {
   return (
     <Router>
       <AndroidBackHandler />
+      <DeepLinkHandler />
       <ErrorBoundary>
         <AppRoutes />
       </ErrorBoundary>

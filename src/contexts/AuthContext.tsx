@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { publicOrigin, publicUrl } from '../lib/appUrl';
 import type { User } from '../types';
 
 export interface OnboardingAnswers {
@@ -158,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithProvider = async (provider: 'google' | 'apple') => {
-    const origin = import.meta.env.VITE_APP_URL || window.location.origin;
+    const origin = publicOrigin();
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -179,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${import.meta.env.VITE_APP_URL || window.location.origin}/reset-password`,
+      redirectTo: publicUrl('/reset-password'),
     });
     if (error) throw error;
   };
