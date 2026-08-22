@@ -24,6 +24,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- App Links: claims https://amanibiometrics.com/reset-password and
+                 /success so Supabase recovery emails and Stripe returns open the
+                 app instead of a browser. autoVerify requires
+                 /.well-known/assetlinks.json on the domain to list this app's
+                 Play App Signing SHA-256, or the links silently fall back to
+                 the browser. Keep the paths in sync with src/lib/deepLinks.ts. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="amanibiometrics.com" android:pathPrefix="/reset-password" />
+                <data android:scheme="https" android:host="amanibiometrics.com" android:pathPrefix="/success" />
+                <data android:scheme="https" android:host="www.amanibiometrics.com" android:pathPrefix="/reset-password" />
+                <data android:scheme="https" android:host="www.amanibiometrics.com" android:pathPrefix="/success" />
+            </intent-filter>
+
         </activity>
 
         <provider
