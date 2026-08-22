@@ -1,6 +1,7 @@
 import type { User } from '../types';
 import { supabase } from '../lib/supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { resolveEntitlement, type IapRecord } from '../lib/entitlement';
 
 /**
  * Check whether the user has an active subscription or valid trial.
@@ -49,30 +50,48 @@ export type ClientSubscriptionState =
   | { allowed: false; redirectTo: '/billing' | '/pricing' };
 
 /**
- * Check subscription state live from Supabase.
+ * Check subscription state live from Supabase, across all three storefronts
+ * (Stripe on web, StoreKit on iOS, Play Billing on Android).
+ *
+ * Decision logic lives in `lib/entitlement.ts` so this and the server guard
+ * cannot drift — see the parity test in `lib/entitlement.test.ts`.
+ *
  * Returns the redirect target:
- *   - /billing  — user has a Stripe row but no active status (lapsed/canceled)
- *   - /pricing  — user never subscribed
+ *   - /billing  — had a paid subscription that lapsed
+ *   - /pricing  — never subscribed
  */
 export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> {
-  const ACTIVE = new Set(['active', 'trialing', 'past_due']);
-  const TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
+  const [{ data: subData }, { data: iapData, error: iapError }, { data: userData }] =
+    await Promise.all([
+      supabase.from('stripe_user_subscriptions').select('subscription_status').maybeSingle(),
+      supabase.from('iap_subscriptions').select('status, expires_at, environment'),
+      supabase.from('users').select('trial_start_date').maybeSingle(),
+    ]);
 
-  const [{ data: subData }, { data: userData }] = await Promise.all([
-    supabase.from('stripe_user_subscriptions').select('subscription_status').maybeSingle(),
-    supabase.from('users').select('trial_start_date').maybeSingle(),
-  ]);
-
-  const stripeStatus = subData?.subscription_status ?? null;
-  if (stripeStatus && ACTIVE.has(stripeStatus)) return { allowed: true };
-
-  const trialStart = userData?.trial_start_date ?? null;
-  if (trialStart && Date.now() - new Date(trialStart).getTime() < TRIAL_MS) {
-    return { allowed: true };
+  // A failed IAP read must not silently demote a paying App Store customer to
+  // "never subscribed" and route them to /pricing. Send them to /billing, where
+  // existing customers belong, and let the server's 402 be the real gate.
+  if (iapError) {
+    return { allowed: false, redirectTo: '/billing' };
   }
 
-  const redirectTo = stripeStatus !== null ? '/billing' : '/pricing';
-  return { allowed: false, redirectTo };
+  const result = resolveEntitlement({
+    stripeStatus: subData?.subscription_status ?? null,
+    iapRecords: (iapData ?? []) as IapRecord[],
+    trialStartDate: userData?.trial_start_date ?? null,
+    now: Date.now(),
+    // Sandbox never entitles in the shipped client; the server decides for real.
+    allowSandbox: false,
+  });
+
+  if (result.allowed) return { allowed: true };
+
+  // 'no_subscription' means there was a paid relationship that lapsed — those
+  // users want the billing screen, not the marketing pricing page.
+  return {
+    allowed: false,
+    redirectTo: result.reason === 'no_subscription' ? '/billing' : '/pricing',
+  };
 }
 
 /**
