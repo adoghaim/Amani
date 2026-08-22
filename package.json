@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cap:sync": "vite build && npx cap sync",
+    "cap:sync": "BUILD_TARGET=native vite build && npx cap sync",
     "prepare": "husky"
   },
   "dependencies": {

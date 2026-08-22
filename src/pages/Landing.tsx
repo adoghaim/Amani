@@ -1,4 +1,5 @@
 import { Heart, Upload, MessageCircle, FileText, CheckCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 
 export function Landing() {
@@ -12,16 +13,16 @@ export function Landing() {
               <span className="text-xl font-semibold text-theme-text">Amani</span>
             </div>
             <div className="flex items-center gap-4">
-              <a href="/login">
+              <Link to="/login">
                 <Button variant="ghost" size="sm">
                   Log in
                 </Button>
-              </a>
-              <a href="/signup">
+              </Link>
+              <Link to="/signup">
                 <Button size="sm">
                   Start free trial
                 </Button>
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -42,16 +43,16 @@ export function Landing() {
           Amani helps you make sense of hormone labs in context, so you can have better conversations with your doctor.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
-          <a href="/signup">
+          <Link to="/signup">
             <Button size="lg" className="w-full sm:w-auto">
               Start your free 7-day trial
             </Button>
-          </a>
-          <a href="/login">
+          </Link>
+          <Link to="/login">
             <Button variant="secondary" size="lg" className="w-full sm:w-auto">
               Log in
             </Button>
-          </a>
+          </Link>
         </div>
         <p className="text-sm text-theme-muted-text">
           Free for 7 days, then $9.99/mo or $99.99/yr. Cancel anytime.
@@ -146,11 +147,11 @@ export function Landing() {
               <span className="text-theme-text">Questions to ask your doctor</span>
             </li>
           </ul>
-          <a href="/signup">
+          <Link to="/signup">
             <Button size="lg" className="w-full sm:w-auto mb-3">
               Start your free 7-day trial
             </Button>
-          </a>
+          </Link>
           <p className="text-sm text-theme-muted-text">
             Free for 7 days, then $9.99/mo or $99.99/yr. Cancel anytime.
           </p>
