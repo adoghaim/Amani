@@ -10,7 +10,17 @@ import react from '@vitejs/plugin-react';
 // network detection, and the Android back button silently no-op on device.
 export default defineConfig(({ command }) => ({
   plugins: [react()],
-  base: './',
+  /*
+    Web needs an absolute base. With './', a nested route like /app/reports
+    resolves its asset URLs against /app/, so the bundle 404s and the page
+    dies — the relative base only ever worked at the root path.
+
+    Native still needs './': cap:sync sets BUILD_TARGET=native, because the
+    webview loads index.html from the bundled filesystem rather than a server
+    root. Native never full-loads a nested path anyway — it boots at / and
+    routes client-side, including for inbound universal links.
+  */
+  base: process.env.BUILD_TARGET === 'native' ? './' : '/',
   optimizeDeps: {
     exclude: ['lucide-react', '@capacitor/app', '@capacitor/browser', '@capacitor/camera', '@capacitor/network', '@capacitor/core'],
   },

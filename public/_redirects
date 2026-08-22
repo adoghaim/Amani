@@ -1,0 +1,10 @@
+# SPA fallback. Without this, Netlify looks for a file at the requested path
+# and 404s on every client-side route — so /login, /signup, /reset-password,
+# /success and everything under /app broke on direct navigation, refresh, or
+# any inbound link. That includes the two flows that must survive leaving the
+# app: Supabase password-recovery emails and Stripe checkout returns.
+#
+# Real files win over this rule, so /.well-known/apple-app-site-association
+# and /.well-known/assetlinks.json still serve as themselves — which the
+# universal-link and app-link verification both depend on.
+/*    /index.html   200
