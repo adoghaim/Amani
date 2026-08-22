@@ -58,6 +58,16 @@ Frontend product/price catalog is hard-coded in `src/stripe-config.ts`. Checkout
 - Icons from `lucide-react`. Don't add UI/icon libraries.
 - Generated mobile files in `android/` and `ios/` — only edit for genuinely platform-specific changes; otherwise use `npm run cap:sync`.
 
+## Hosting & deploys
+
+**The web app is hosted on Netlify. It is not on Vercel.**
+
+- **Netlify** (`amani-biometrics`) is the only web host. It builds every PR as a deploy preview and serves the production site. Custom domain: `amanibiometrics.com`.
+- **Vercel is dead.** A stale GitHub integration still posts a failing `Vercel` status check on PRs — it fails because the auto-created project sits on a Hobby team the repo owner can't deploy from. **That red check is expected noise; it is never a reason to block a merge.** The `Lint, typecheck, build` CI check and the Netlify deploy preview are the checks that matter.
+- **Bolt is gone** (cancelled 2026-08-13). Any Bolt-era guidance or Bolt-built bundle is obsolete. The only correct Supabase project is `eyfvqdnczorscwveaadv` — a bundle baked against any other project URL is a stale Bolt artifact.
+- There is no `netlify.toml`; build settings live in the Netlify UI, as do the `VITE_*` env vars baked into the production bundle. Changing a `VITE_*` value requires a Netlify rebuild, not just a redeploy.
+- Backend deploys are separate and manual: `supabase db push` for migrations, `supabase functions deploy <name>` for Edge Functions. Netlify does not deploy anything under `supabase/`.
+
 ## Secrets
 
 - `.env` (Vite, client-exposed): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STRIPE_PUBLISHABLE_KEY`.
