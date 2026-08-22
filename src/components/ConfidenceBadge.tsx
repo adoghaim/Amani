@@ -9,20 +9,20 @@ const LABEL_CONFIG: Record<ReportConfidence['label'], {
   text: string;
 }> = {
   high: {
-    badge: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30',
-    dot: 'bg-emerald-400',
+    badge: 'bg-theme-flag-ok/20 text-theme-flag-ok border-theme-flag-ok-border/30',
+    dot: 'bg-theme-flag-ok',
     panel: 'bg-theme-text border-white/10',
     text: 'text-white/80',
   },
   medium: {
-    badge: 'bg-amber-500/20 text-amber-200 border-amber-500/30',
-    dot: 'bg-amber-400',
+    badge: 'bg-theme-flag-watch/20 text-theme-flag-watch border-theme-flag-watch-border/30',
+    dot: 'bg-theme-flag-watch',
     panel: 'bg-theme-text border-white/10',
     text: 'text-white/80',
   },
   low: {
-    badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
-    dot: 'bg-gray-400',
+    badge: 'bg-theme-neutral-500/20 text-theme-neutral-300 border-theme-neutral-500/30',
+    dot: 'bg-theme-neutral-400',
     panel: 'bg-theme-text border-white/10',
     text: 'text-white/70',
   },

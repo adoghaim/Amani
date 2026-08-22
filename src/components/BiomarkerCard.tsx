@@ -89,13 +89,13 @@ function RangeBar({
 
   return (
     <div className="mt-3">
-      <div className="relative h-3 rounded-full bg-gray-100 overflow-visible">
+      <div className="relative h-3 rounded-full bg-theme-neutral-100 overflow-visible">
         <div
-          className="absolute h-full rounded-full bg-blue-100"
+          className="absolute h-full rounded-full bg-theme-info-bg"
           style={{ left: `${clinLeft}%`, width: `${clinWidth}%` }}
         />
         <div
-          className="absolute h-full rounded-full bg-emerald-200"
+          className="absolute h-full rounded-full bg-theme-flag-ok-bg"
           style={{ left: `${optLeft}%`, width: `${optWidth}%` }}
         />
         <div
@@ -106,12 +106,12 @@ function RangeBar({
       <div className="flex justify-between text-[10px] text-[#9A8A90] mt-1">
         <span>{formatRangeLabel(clinMin ?? optMin)}</span>
         <div className="flex gap-3 text-center items-center">
-          <span className="text-emerald-600">Opt: {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}</span>
+          <span className="text-theme-flag-ok">Opt: {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}</span>
           {clinMin !== null && clinMax !== null && (
-            <span className="text-blue-500">Lab: {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}</span>
+            <span className="text-theme-info">Lab: {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}</span>
           )}
           {isExtreme && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-50 text-red-600 border border-red-200">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border">
               {isExtremeHigh ? 'Far above range' : 'Far below range'}
             </span>
           )}
@@ -148,20 +148,20 @@ function DualStatusSection({
           {amaniPill.label}
         </div>
         {hasBoth && labStatus !== 'in_range' && (
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-gray-200 bg-gray-50 text-gray-600">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-600">
             Lab ref: {labStatus.replace(/_/g, ' ')}
           </div>
         )}
         {hasBoth && labStatus === 'in_range' && amaniStatus !== 'optimal' && (
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-gray-200 bg-gray-50 text-gray-500">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-500">
             Within lab ref range
           </div>
         )}
       </div>
       {isNormalNotOptimal && (
-        <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-          <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
-          <p className="text-xs text-blue-700">
+        <div className="flex items-start gap-1.5 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2">
+          <Info className="w-3.5 h-3.5 text-theme-info mt-0.5 shrink-0" />
+          <p className="text-xs text-theme-info">
             This result is within the standard lab reference range but below the Amani optimal threshold.
             Being "normal" and being "optimal" are different — Amani uses tighter ranges for peak health.
           </p>
@@ -224,7 +224,7 @@ export function BiomarkerCard({
     <div className={`bg-white rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-gray-50/50 transition-colors"
+        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-theme-neutral-50/50 transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -234,7 +234,7 @@ export function BiomarkerCard({
               {pill.label}
             </div>
             {trendDir && (
-              <span className={`text-xs font-medium ${trendDir === 'up' ? 'text-rose-500' : 'text-emerald-600'}`}>
+              <span className={`text-xs font-medium ${trendDir === 'up' ? 'text-theme-flag-low' : 'text-theme-flag-ok'}`}>
                 {trendDir === 'up' ? '↑' : '↓'}
               </span>
             )}
@@ -263,10 +263,10 @@ export function BiomarkerCard({
             return (
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 {baselineLabel && (
-                  <span className="text-[10px] text-teal-600 font-medium">{baselineLabel}</span>
+                  <span className="text-[10px] text-theme-flag-ok font-medium">{baselineLabel}</span>
                 )}
                 {showTrendPill && (
-                  <span className="text-[10px] text-sky-600 font-medium">
+                  <span className="text-[10px] text-theme-info font-medium">
                     Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
                   </span>
                 )}
@@ -283,7 +283,7 @@ export function BiomarkerCard({
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
+        <div className="px-4 pb-4 space-y-3 border-t border-theme-neutral-100 pt-3">
           <DualStatusSection
             amaniStatus={amaniStatus}
             labRefMin={labRefMin}
@@ -295,11 +295,11 @@ export function BiomarkerCard({
             const explanation = getBiomarkerExplanation(name);
             if (!explanation) return null;
             return (
-              <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
-                <BookOpen className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2.5">
+                <BookOpen className="w-3.5 h-3.5 text-theme-info mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Why this matters</p>
-                  <p className="text-xs text-blue-800 leading-relaxed">{explanation}</p>
+                  <p className="text-[10px] font-bold text-theme-info uppercase tracking-widest mb-1">Why this matters</p>
+                  <p className="text-xs text-theme-info leading-relaxed">{explanation}</p>
                 </div>
               </div>
             );
@@ -314,7 +314,7 @@ export function BiomarkerCard({
           )}
 
           {cyclePhase && entry?.phaseRanges?.[cyclePhase] && (
-            <div className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 text-xs text-rose-700">
+            <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg px-3 py-2 text-xs text-theme-flag-low">
               Showing cycle-adjusted ranges for the <span className="font-semibold capitalize">{cyclePhase}</span> phase.
             </div>
           )}

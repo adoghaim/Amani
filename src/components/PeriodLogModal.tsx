@@ -134,7 +134,7 @@ export function PeriodLogModal({
                   onClick={() => setFlow(flow === key ? null : key)}
                   className={`flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all duration-150 ${
                     flow === key
-                      ? 'bg-rose-50 border-rose-400 text-rose-700'
+                      ? 'bg-theme-flag-low-bg border-theme-flag-low-border text-theme-flag-low'
                       : 'border-[#E9D6DA] text-[#6B5B60] hover:border-[#C97C8B] hover:bg-[#FFF8F7]'
                   }`}
                 >

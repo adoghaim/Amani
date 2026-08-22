@@ -192,9 +192,9 @@ export function Billing() {
                 : 'Subscribe to unlock full access to all features.'}
             </p>
             {error && (
-              <div className="flex items-start gap-3 p-4 mb-4 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="flex items-start gap-3 p-4 mb-4 bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg">
+                <AlertCircle className="w-5 h-5 text-theme-flag-low mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-theme-flag-low">{error}</p>
               </div>
             )}
             <Button onClick={handleManageSubscription} disabled={loading}>

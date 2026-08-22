@@ -19,26 +19,26 @@ const BUCKET_META: Record<NextStepBucket, {
   track: {
     label: 'Track',
     icon: TrendingUp,
-    iconColor: 'text-sky-600',
-    iconBg: 'bg-sky-50',
+    iconColor: 'text-theme-info',
+    iconBg: 'bg-theme-info-bg',
   },
   discuss: {
     label: 'Discuss',
     icon: MessageSquare,
-    iconColor: 'text-violet-600',
-    iconBg: 'bg-violet-50',
+    iconColor: 'text-theme-cat-sleep',
+    iconBg: 'bg-theme-cat-sleep',
   },
   support: {
     label: 'Support',
     icon: Heart,
-    iconColor: 'text-rose-600',
-    iconBg: 'bg-rose-50',
+    iconColor: 'text-theme-flag-low',
+    iconBg: 'bg-theme-flag-low-bg',
   },
   retest: {
     label: 'Retest',
     icon: Calendar,
-    iconColor: 'text-emerald-600',
-    iconBg: 'bg-emerald-50',
+    iconColor: 'text-theme-flag-ok',
+    iconBg: 'bg-theme-flag-ok-bg',
   },
 };
 
@@ -72,8 +72,8 @@ export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket
     <div className="rounded-2xl border border-theme-border-subtle bg-white overflow-hidden">
       <div className="px-5 py-4 border-b border-theme-border-inner">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-            <ArrowRight className="w-4 h-4 text-amber-700" />
+          <div className="w-7 h-7 rounded-lg bg-theme-flag-watch-bg flex items-center justify-center">
+            <ArrowRight className="w-4 h-4 text-theme-flag-watch" />
           </div>
           <div>
             <h2 className="text-sm font-bold text-theme-text">Next Best Steps</h2>

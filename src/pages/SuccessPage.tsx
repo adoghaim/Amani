@@ -22,7 +22,7 @@ export function SuccessPage() {
       <div className="max-w-md w-full text-center">
         <div className="bg-theme-surface rounded-lg shadow-lg p-8 border border-theme-border">
           <div className="flex justify-center mb-6">
-            <CheckCircle className="h-16 w-16 text-green-500" />
+            <CheckCircle className="h-16 w-16 text-theme-flag-ok" />
           </div>
           
           <h1 className="text-2xl font-bold text-theme-text mb-4">

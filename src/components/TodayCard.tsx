@@ -47,7 +47,7 @@ export function TodayCard({
   return (
     <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
       <div className="bg-gradient-to-br from-[#C97C8B] to-[#A85C6D] px-6 py-5">
-        <p className="text-rose-100 text-xs font-medium uppercase tracking-wide mb-1">
+        <p className="text-theme-flag-low text-xs font-medium uppercase tracking-wide mb-1">
           {dayOfWeek}
         </p>
         <p className="text-white text-sm mb-3">{todayLabel}</p>
@@ -69,7 +69,7 @@ export function TodayCard({
         ) : (
           <div>
             <p className="text-white text-lg font-semibold">Start tracking your cycle</p>
-            <p className="text-rose-100 text-sm mt-1">Log your period to get personalized insights</p>
+            <p className="text-theme-flag-low text-sm mt-1">Log your period to get personalized insights</p>
           </div>
         )}
       </div>
@@ -83,7 +83,7 @@ export function TodayCard({
 
         <div className="grid grid-cols-3 gap-3">
           <StatChip
-            icon={<Droplets className="w-3.5 h-3.5 text-rose-500" />}
+            icon={<Droplets className="w-3.5 h-3.5 text-theme-flag-low" />}
             label="Next period"
             value={
               prediction
@@ -101,7 +101,7 @@ export function TodayCard({
             }
           />
           <StatChip
-            icon={<Activity className="w-3.5 h-3.5 text-teal-500" />}
+            icon={<Activity className="w-3.5 h-3.5 text-theme-flag-ok" />}
             label="Interventions"
             value={activeInterventions.length > 0 ? `${activeInterventions.length} active` : 'None'}
           />

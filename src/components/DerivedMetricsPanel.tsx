@@ -29,10 +29,10 @@ const METRIC_META: Record<string, { label: string; description: string; optimalL
 };
 
 function getStatusColor(value: number, low: number, high: number) {
-  if (value >= low && value <= high) return { dot: 'bg-green-400', text: 'text-green-700', badge: 'bg-green-50 border-green-200', label: 'Optimal' };
+  if (value >= low && value <= high) return { dot: 'bg-theme-flag-ok', text: 'text-theme-flag-ok', badge: 'bg-theme-flag-ok-bg border-theme-flag-ok-border', label: 'Optimal' };
   const pctOutside = Math.abs(value > high ? (value - high) / high : (low - value) / (low || 1));
-  if (pctOutside < 0.3) return { dot: 'bg-amber-400', text: 'text-amber-700', badge: 'bg-amber-50 border-amber-200', label: 'Borderline' };
-  return { dot: 'bg-orange-400', text: 'text-orange-700', badge: 'bg-orange-50 border-orange-200', label: 'Outside optimal' };
+  if (pctOutside < 0.3) return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Borderline' };
+  return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Outside optimal' };
 }
 
 interface Props {

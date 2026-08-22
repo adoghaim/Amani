@@ -717,9 +717,9 @@ export function NewReport() {
   })();
 
   const confidenceColors = {
-    High: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-    Medium: 'text-amber-700 bg-amber-50 border-amber-200',
-    Low: 'text-red-700 bg-red-50 border-red-200',
+    High: 'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border',
+    Medium: 'text-theme-flag-watch bg-theme-flag-watch-bg border-theme-flag-watch-border',
+    Low: 'text-theme-flag-low bg-theme-flag-low-bg border-theme-flag-low-border',
   };
 
   if (!subChecked) return null;
@@ -727,14 +727,14 @@ export function NewReport() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">New Lab Report</h1>
+        <h1 className="text-3xl font-bold text-theme-neutral-900 mb-8">New Lab Report</h1>
 
         <div className="flex flex-col items-center mb-8 gap-3">
           <div className="flex items-center">
             {[1, 2, 3].map((s, idx) => (
               <div key={s} className="flex items-center">
-                {idx > 0 && <div className={`w-16 h-1 ${step >= s ? 'bg-theme-primary' : 'bg-gray-300'}`} />}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= s ? 'bg-theme-primary text-white' : 'bg-gray-200 text-gray-600'}`}>
+                {idx > 0 && <div className={`w-16 h-1 ${step >= s ? 'bg-theme-primary' : 'bg-theme-neutral-300'}`} />}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= s ? 'bg-theme-primary text-white' : 'bg-theme-neutral-200 text-theme-neutral-600'}`}>
                   {s}
                 </div>
               </div>
@@ -749,7 +749,7 @@ export function NewReport() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+          <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg mb-6">
             {error}
           </div>
         )}
@@ -757,12 +757,12 @@ export function NewReport() {
         {/* ── STEP 1: Upload ─────────────────────────────────────────────── */}
         {step === 1 && !guidedStep && (
           <Card>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-1">Upload your official report</h2>
-            <p className="text-sm text-gray-500 mb-6">Import directly from your lab portal, or upload any PDF or image.</p>
+            <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Upload your official report</h2>
+            <p className="text-sm text-theme-neutral-500 mb-6">Import directly from your lab portal, or upload any PDF or image.</p>
 
             {/* Offline banner */}
             {isOffline && (
-              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-4 text-sm">
+              <div className="flex items-center gap-3 bg-theme-flag-watch-bg border border-theme-flag-watch-border text-theme-flag-watch px-4 py-3 rounded-xl mb-4 text-sm">
                 <WifiOff className="w-4 h-4 shrink-0" />
                 <span>You're offline. Connect to the internet before uploading your report.</span>
               </div>
@@ -772,42 +772,42 @@ export function NewReport() {
 
               {/* Lab portal import options */}
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Import from a lab portal</p>
+                <p className="text-xs font-semibold text-theme-neutral-400 uppercase tracking-wide mb-3">Import from a lab portal</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     onClick={() => startGuidedImport('quest')}
-                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
+                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-theme-neutral-200 hover:border-theme-flag-ok-border hover:bg-theme-flag-ok-bg/50 transition-all text-left"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 transition-colors">
-                      <FlaskConical className="w-5 h-5 text-emerald-600" />
+                    <div className="w-10 h-10 rounded-lg bg-theme-flag-ok-bg flex items-center justify-center flex-shrink-0 group-hover:bg-theme-flag-ok-bg transition-colors">
+                      <FlaskConical className="w-5 h-5 text-theme-flag-ok" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900">Import from Quest</p>
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">Upload an official report from MyQuest</p>
+                      <p className="text-sm font-semibold text-theme-neutral-900">Import from Quest</p>
+                      <p className="text-xs text-theme-neutral-500 mt-0.5 truncate">Upload an official report from MyQuest</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-emerald-500 flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-theme-neutral-400 group-hover:text-theme-flag-ok flex-shrink-0" />
                   </button>
 
                   <button
                     onClick={() => startGuidedImport('labcorp')}
-                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
+                    className="group relative flex items-center gap-4 p-4 rounded-xl border-2 border-theme-neutral-200 hover:border-theme-info-border hover:bg-theme-info-bg/50 transition-all text-left"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-100 transition-colors">
-                      <FlaskConical className="w-5 h-5 text-sky-600" />
+                    <div className="w-10 h-10 rounded-lg bg-theme-info-bg flex items-center justify-center flex-shrink-0 group-hover:bg-theme-info-bg transition-colors">
+                      <FlaskConical className="w-5 h-5 text-theme-info" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900">Import from Labcorp</p>
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">Upload an official report from Labcorp Patient</p>
+                      <p className="text-sm font-semibold text-theme-neutral-900">Import from Labcorp</p>
+                      <p className="text-xs text-theme-neutral-500 mt-0.5 truncate">Upload an official report from Labcorp Patient</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-sky-500 flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-theme-neutral-400 group-hover:text-theme-info flex-shrink-0" />
                   </button>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-gray-200" />
-                <span className="text-xs text-gray-400 font-medium">or upload any file</span>
-                <div className="flex-1 h-px bg-gray-200" />
+                <div className="flex-1 h-px bg-theme-neutral-200" />
+                <span className="text-xs text-theme-neutral-400 font-medium">or upload any file</span>
+                <div className="flex-1 h-px bg-theme-neutral-200" />
               </div>
 
               {/* Generic file upload */}
@@ -823,25 +823,25 @@ export function NewReport() {
                   htmlFor="file-upload"
                   className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none
                     ${file
-                      ? 'border-emerald-400 bg-emerald-50/60'
-                      : 'border-gray-300 hover:border-theme-primary hover:bg-theme-background/60'
+                      ? 'border-theme-flag-ok-border bg-theme-flag-ok-bg/60'
+                      : 'border-theme-neutral-300 hover:border-theme-primary hover:bg-theme-background/60'
                     }`}
                 >
                   {file ? (
                     <>
-                      <CheckCircle className="w-9 h-9 text-emerald-500" />
-                      <span className="text-sm font-semibold text-emerald-700 text-center px-4 break-all line-clamp-2">{file.name}</span>
-                      <span className="text-xs text-emerald-600">Tap to choose a different file</span>
+                      <CheckCircle className="w-9 h-9 text-theme-flag-ok" />
+                      <span className="text-sm font-semibold text-theme-flag-ok text-center px-4 break-all line-clamp-2">{file.name}</span>
+                      <span className="text-xs text-theme-flag-ok">Tap to choose a different file</span>
                     </>
                   ) : (
                     <>
-                      <Upload className="w-9 h-9 text-gray-400" />
+                      <Upload className="w-9 h-9 text-theme-neutral-400" />
                       <div className="text-center px-4">
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-theme-neutral-700">
                           <span className="text-theme-primary">Choose a file</span>
                           <span className="hidden sm:inline"> or drag and drop</span>
                         </p>
-                        <p className="text-xs text-gray-400 mt-1">PDF, JPG, or PNG</p>
+                        <p className="text-xs text-theme-neutral-400 mt-1">PDF, JPG, or PNG</p>
                       </div>
                     </>
                   )}
@@ -853,11 +853,11 @@ export function NewReport() {
                     type="button"
                     onClick={handleCameraCapture}
                     disabled={cameraCapturing}
-                    className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 active:scale-[0.98] transition-all text-sm font-medium text-gray-700 disabled:opacity-50"
+                    className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-theme-neutral-200 bg-theme-neutral-50 hover:bg-theme-neutral-100 active:scale-[0.98] transition-all text-sm font-medium text-theme-neutral-700 disabled:opacity-50"
                   >
                     {cameraCapturing
                       ? <><Loader2 className="w-4 h-4 animate-spin" />Opening camera…</>
-                      : <><Camera className="w-4 h-4 text-gray-500" />Scan with Camera</>
+                      : <><Camera className="w-4 h-4 text-theme-neutral-500" />Scan with Camera</>
                     }
                   </button>
                 )}
@@ -880,43 +880,43 @@ export function NewReport() {
         {step === 1 && guidedStep === 'choose' && (
           <Card>
             <div className="mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-1">Import your lab results</h2>
-              <p className="text-sm text-gray-500">Bring in an official report from your lab portal.</p>
+              <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Import your lab results</h2>
+              <p className="text-sm text-theme-neutral-500">Bring in an official report from your lab portal.</p>
             </div>
 
             <div className="space-y-3 mb-8">
               <button
                 onClick={() => startGuidedImport('quest')}
-                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
+                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-theme-neutral-200 hover:border-theme-flag-ok-border hover:bg-theme-flag-ok-bg/50 transition-all text-left"
               >
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                  <FlaskConical className="w-6 h-6 text-emerald-600" />
+                <div className="w-12 h-12 rounded-xl bg-theme-flag-ok-bg flex items-center justify-center flex-shrink-0">
+                  <FlaskConical className="w-6 h-6 text-theme-flag-ok" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">Quest Diagnostics</p>
-                  <p className="text-sm text-gray-500 mt-0.5">Import from MyQuest portal</p>
+                  <p className="font-semibold text-theme-neutral-900">Quest Diagnostics</p>
+                  <p className="text-sm text-theme-neutral-500 mt-0.5">Import from MyQuest portal</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                <ChevronRight className="w-5 h-5 text-theme-neutral-400 group-hover:text-theme-flag-ok transition-colors" />
               </button>
 
               <button
                 onClick={() => startGuidedImport('labcorp')}
-                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
+                className="group w-full flex items-center gap-4 p-5 rounded-xl border-2 border-theme-neutral-200 hover:border-theme-info-border hover:bg-theme-info-bg/50 transition-all text-left"
               >
-                <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                  <FlaskConical className="w-6 h-6 text-sky-600" />
+                <div className="w-12 h-12 rounded-xl bg-theme-info-bg flex items-center justify-center flex-shrink-0">
+                  <FlaskConical className="w-6 h-6 text-theme-info" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">Labcorp</p>
-                  <p className="text-sm text-gray-500 mt-0.5">Import from Labcorp Patient portal</p>
+                  <p className="font-semibold text-theme-neutral-900">Labcorp</p>
+                  <p className="text-sm text-theme-neutral-500 mt-0.5">Import from Labcorp Patient portal</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-sky-500 transition-colors" />
+                <ChevronRight className="w-5 h-5 text-theme-neutral-400 group-hover:text-theme-info transition-colors" />
               </button>
             </div>
 
             <button
               onClick={() => setGuidedStep(null)}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              className="flex items-center gap-1.5 text-sm text-theme-neutral-500 hover:text-theme-neutral-700 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
@@ -929,12 +929,12 @@ export function NewReport() {
             {chosenLab === 'quest' ? (
               <>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                    <FlaskConical className="w-6 h-6 text-emerald-600" />
+                  <div className="w-12 h-12 rounded-xl bg-theme-flag-ok-bg flex items-center justify-center flex-shrink-0">
+                    <FlaskConical className="w-6 h-6 text-theme-flag-ok" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Import from Quest</h2>
-                    <p className="text-sm text-gray-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
+                    <h2 className="text-xl font-semibold text-theme-neutral-900">Import from Quest</h2>
+                    <p className="text-sm text-theme-neutral-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
                   </div>
                 </div>
 
@@ -946,8 +946,8 @@ export function NewReport() {
                     { num: 4, text: 'Come back here and upload it below' },
                   ].map(step => (
                     <li key={step.num} className="flex items-start gap-4">
-                      <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
-                      <span className="text-sm text-gray-700 pt-1">{step.text}</span>
+                      <span className="w-7 h-7 rounded-full bg-theme-flag-ok-bg text-theme-flag-ok text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
+                      <span className="text-sm text-theme-neutral-700 pt-1">{step.text}</span>
                     </li>
                   ))}
                 </ol>
@@ -957,7 +957,7 @@ export function NewReport() {
                     href={questPortalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-theme-flag-ok-border text-theme-flag-ok text-sm font-semibold hover:bg-theme-flag-ok-bg transition-colors"
                   >
                     Open MyQuest <ExternalLink className="w-4 h-4" />
                   </a>
@@ -978,12 +978,12 @@ export function NewReport() {
             ) : (
               <>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                    <FlaskConical className="w-6 h-6 text-sky-600" />
+                  <div className="w-12 h-12 rounded-xl bg-theme-info-bg flex items-center justify-center flex-shrink-0">
+                    <FlaskConical className="w-6 h-6 text-theme-info" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Import from Labcorp</h2>
-                    <p className="text-sm text-gray-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
+                    <h2 className="text-xl font-semibold text-theme-neutral-900">Import from Labcorp</h2>
+                    <p className="text-sm text-theme-neutral-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
                   </div>
                 </div>
 
@@ -995,8 +995,8 @@ export function NewReport() {
                     { num: 4, text: 'Return here and upload it below' },
                   ].map(step => (
                     <li key={step.num} className="flex items-start gap-4">
-                      <span className="w-7 h-7 rounded-full bg-sky-100 text-sky-700 text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
-                      <span className="text-sm text-gray-700 pt-1">{step.text}</span>
+                      <span className="w-7 h-7 rounded-full bg-theme-info-bg text-theme-info text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.num}</span>
+                      <span className="text-sm text-theme-neutral-700 pt-1">{step.text}</span>
                     </li>
                   ))}
                 </ol>
@@ -1006,7 +1006,7 @@ export function NewReport() {
                     href={labcorpPortalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-sky-300 text-sky-700 text-sm font-semibold hover:bg-sky-50 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border-2 border-theme-info-border text-theme-info text-sm font-semibold hover:bg-theme-info-bg transition-colors"
                   >
                     Open Labcorp <ExternalLink className="w-4 h-4" />
                   </a>
@@ -1025,10 +1025,10 @@ export function NewReport() {
               </>
             )}
 
-            <div className="mt-6 pt-5 border-t border-gray-100">
+            <div className="mt-6 pt-5 border-t border-theme-neutral-100">
               <button
                 onClick={() => setGuidedStep('choose')}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                className="flex items-center gap-1.5 text-sm text-theme-neutral-500 hover:text-theme-neutral-700 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
@@ -1049,8 +1049,8 @@ export function NewReport() {
             {/* ── Section 1: Amani Understanding ─────────────────────────── */}
             <Card>
               <div className="mb-5">
-                <h2 className="text-2xl font-semibold text-gray-900 mb-1">Review your report</h2>
-                <p className="text-sm text-gray-500">
+                <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Review your report</h2>
+                <p className="text-sm text-theme-neutral-500">
                   We extracted your report details automatically — review anything below before saving.
                 </p>
               </div>
@@ -1058,53 +1058,53 @@ export function NewReport() {
               {/* Source + detection message */}
               {effectiveSource !== 'unknown' ? (
                 <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border mb-5 ${
-                  effectiveSource === 'quest' ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'
+                  effectiveSource === 'quest' ? 'bg-theme-flag-ok-bg border-theme-flag-ok-border' : 'bg-theme-info-bg border-theme-info-border'
                 }`}>
-                  <FlaskConical className={`w-4 h-4 flex-shrink-0 mt-0.5 ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`} />
+                  <FlaskConical className={`w-4 h-4 flex-shrink-0 mt-0.5 ${effectiveSource === 'quest' ? 'text-theme-flag-ok' : 'text-theme-info'}`} />
                   <div>
-                    <p className={`text-sm font-semibold ${effectiveSource === 'quest' ? 'text-emerald-800' : 'text-sky-800'}`}>
+                    <p className={`text-sm font-semibold ${effectiveSource === 'quest' ? 'text-theme-flag-ok' : 'text-theme-info'}`}>
                       {detectedLabSource !== 'unknown' && labSource === detectedLabSource
                         ? `We detected this as a ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'} report and extracted your results automatically`
                         : `Imported from ${effectiveSource === 'quest' ? 'Quest' : 'Labcorp'}`}
                     </p>
-                    <p className={`text-xs mt-0.5 ${effectiveSource === 'quest' ? 'text-emerald-600' : 'text-sky-600'}`}>
+                    <p className={`text-xs mt-0.5 ${effectiveSource === 'quest' ? 'text-theme-flag-ok' : 'text-theme-info'}`}>
                       {detectedLabSource !== 'unknown' ? 'Detected from report' : 'Selected by you'}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-gray-200 bg-gray-50 mb-5">
-                  <CheckCircle className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-600 font-medium">We extracted your report details automatically — review anything below before saving</p>
+                <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-theme-neutral-200 bg-theme-neutral-50 mb-5">
+                  <CheckCircle className="w-4 h-4 text-theme-neutral-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-theme-neutral-600 font-medium">We extracted your report details automatically — review anything below before saving</p>
                 </div>
               )}
 
               {/* Report date */}
               <div className="mb-5">
-                <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                <label className="flex items-center gap-1.5 text-sm font-semibold text-theme-neutral-700 mb-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-theme-neutral-400" />
                   Report date
                 </label>
                 <input
                   type="date"
                   value={reportDate}
                   onChange={e => setReportDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                  className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-theme-neutral-900"
                 />
-                <p className="mt-1 text-xs text-gray-400">Change this if you're backlogging an older report — last period start will re-sync from your tracker</p>
+                <p className="mt-1 text-xs text-theme-neutral-400">Change this if you're backlogging an older report — last period start will re-sync from your tracker</p>
               </div>
 
               {/* Marker count + confidence row */}
               {coverage && (
                 <div className="grid grid-cols-2 gap-3 mb-5">
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50">
-                    <Activity className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-theme-neutral-200 bg-theme-neutral-50">
+                    <Activity className="w-4 h-4 text-theme-neutral-500 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-bold text-gray-900">
+                      <p className="text-sm font-bold text-theme-neutral-900">
                         {coverage.total_detected} marker{coverage.total_detected !== 1 ? 's' : ''} detected
                       </p>
                       {coverage.needs_review > 0 && (
-                        <p className="text-xs text-amber-600 mt-0.5">{coverage.needs_review} may need review</p>
+                        <p className="text-xs text-theme-flag-watch mt-0.5">{coverage.needs_review} may need review</p>
                       )}
                     </div>
                   </div>
@@ -1122,9 +1122,9 @@ export function NewReport() {
 
               {/* Partial parse warning */}
               {coverage && coverage.needs_review > 0 && (
-                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 mb-5">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700">
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mb-5">
+                  <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-theme-flag-watch">
                     We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''} — you can still continue, Amani will use what it understood
                   </p>
                 </div>
@@ -1132,30 +1132,30 @@ export function NewReport() {
 
               {/* Expandable marker preview */}
               {reportItems.length > 0 && (
-                <div className="border border-gray-200 rounded-xl overflow-hidden mb-2">
+                <div className="border border-theme-neutral-200 rounded-xl overflow-hidden mb-2">
                   <button
                     onClick={() => setMarkerPreviewOpen(v => !v)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                    className="w-full flex items-center justify-between px-4 py-3 bg-theme-neutral-50 hover:bg-theme-neutral-100 transition-colors text-left"
                   >
-                    <span className="text-sm font-semibold text-gray-700">View detected markers</span>
-                    <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <span className="text-sm font-semibold text-theme-neutral-700">View detected markers</span>
+                    <span className="flex items-center gap-1.5 text-xs text-theme-neutral-400">
                       {reportItems.length} markers
                       {markerPreviewOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </span>
                   </button>
                   {markerPreviewOpen && (
-                    <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                    <div className="divide-y divide-theme-neutral-100 max-h-64 overflow-y-auto">
                       {reportItems.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50">
-                          <span className="text-sm text-gray-800 font-medium truncate max-w-[60%]">{item.raw_name}</span>
-                          <span className="text-sm text-gray-500 ml-2 flex-shrink-0">
+                        <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-theme-neutral-50">
+                          <span className="text-sm text-theme-neutral-800 font-medium truncate max-w-[60%]">{item.raw_name}</span>
+                          <span className="text-sm text-theme-neutral-500 ml-2 flex-shrink-0">
                             {item.value_text && (item.value_numeric == null || item.value_numeric === 0)
                               ? item.value_text
                               : item.value_numeric != null
                                 ? `${item.value_numeric}${item.unit ? ' ' + item.unit : ''}`
                                 : item.value_text || '—'}
                             {item.needs_review && (
-                              <span className="ml-1.5 text-xs text-amber-500 font-medium">review</span>
+                              <span className="ml-1.5 text-xs text-theme-flag-watch font-medium">review</span>
                             )}
                           </span>
                         </div>
@@ -1166,7 +1166,7 @@ export function NewReport() {
               )}
 
               {aiRefining && (
-                <div className="flex items-center gap-2 text-xs text-gray-400 mt-2">
+                <div className="flex items-center gap-2 text-xs text-theme-neutral-400 mt-2">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   AI is refining extracted values in the background...
                 </div>
@@ -1179,20 +1179,20 @@ export function NewReport() {
                 {/* Cycle context */}
                 <div>
                   <div className="mb-3">
-                    <h3 className="text-base font-semibold text-gray-900 mb-0.5">
-                      Cycle context <span className="text-gray-400 font-normal text-sm">(optional)</span>
+                    <h3 className="text-base font-semibold text-theme-neutral-900 mb-0.5">
+                      Cycle context <span className="text-theme-neutral-400 font-normal text-sm">(optional)</span>
                     </h3>
-                    <p className="text-xs text-gray-500">This helps Amani interpret your results more accurately</p>
+                    <p className="text-xs text-theme-neutral-500">This helps Amani interpret your results more accurately</p>
                   </div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-sm font-medium text-gray-700">Last period start</label>
+                    <label className="text-sm font-medium text-theme-neutral-700">Last period start</label>
                     {fetchingPeriod && (
-                      <span className="flex items-center gap-1 text-xs text-gray-400">
+                      <span className="flex items-center gap-1 text-xs text-theme-neutral-400">
                         <Loader2 className="w-3 h-3 animate-spin" /> Looking up tracker...
                       </span>
                     )}
                     {periodAutoFilled && !fetchingPeriod && (
-                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <span className="flex items-center gap-1 text-xs font-medium text-theme-flag-ok bg-theme-flag-ok-bg px-2 py-0.5 rounded-full border border-theme-flag-ok-border">
                         <CheckCircle className="w-3 h-3" /> Auto-filled from your tracker
                       </span>
                     )}
@@ -1205,23 +1205,23 @@ export function NewReport() {
                       setPeriodAutoFilled(false);
                       userEditedPeriodRef.current = true;
                     }}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                    className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-theme-neutral-900"
                   />
                   {!lastPeriodDate && !fetchingPeriod && (
-                    <p className="mt-1 text-xs text-gray-400">Add your last period start date for more accurate insights</p>
+                    <p className="mt-1 text-xs text-theme-neutral-400">Add your last period start date for more accurate insights</p>
                   )}
                 </div>
 
                 {/* Divider */}
-                <div className="border-t border-gray-100" />
+                <div className="border-t border-theme-neutral-100" />
 
                 {/* Symptoms */}
                 <div>
                   <div className="mb-3">
-                    <h3 className="text-base font-semibold text-gray-900 mb-0.5">
-                      Any symptoms? <span className="text-gray-400 font-normal text-sm">(optional)</span>
+                    <h3 className="text-base font-semibold text-theme-neutral-900 mb-0.5">
+                      Any symptoms? <span className="text-theme-neutral-400 font-normal text-sm">(optional)</span>
                     </h3>
-                    <p className="text-xs text-gray-500">Select up to 5 — helps personalize your insights</p>
+                    <p className="text-xs text-theme-neutral-500">Select up to 5 — helps personalize your insights</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {SYMPTOMS.map(symptom => (
@@ -1231,7 +1231,7 @@ export function NewReport() {
                         className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
                           symptoms.includes(symptom.value)
                             ? 'border-[#C97C8B] bg-[#C97C8B]/10 text-[#C97C8B] font-medium'
-                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                            : 'border-theme-neutral-200 text-theme-neutral-600 hover:border-theme-neutral-300'
                         }`}
                         disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}
                       >
@@ -1257,7 +1257,7 @@ export function NewReport() {
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-center text-gray-400">You can always edit this later</p>
+              <p className="text-xs text-center text-theme-neutral-400">You can always edit this later</p>
             </div>
           </div>
         )}
@@ -1266,12 +1266,12 @@ export function NewReport() {
         {step === 3 && (
           <Card>
             <div className="mb-5">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-1">Confirm your markers</h2>
-              <p className="text-sm text-gray-500">Review what Amani found — edit, remove, or add anything before saving.</p>
+              <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Confirm your markers</h2>
+              <p className="text-sm text-theme-neutral-500">Review what Amani found — edit, remove, or add anything before saving.</p>
             </div>
 
             {aiRefining && (
-              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2.5 rounded-lg mb-4 text-sm">
+              <div className="flex items-center gap-2 bg-theme-info-bg border border-theme-info-border text-theme-info px-4 py-2.5 rounded-lg mb-4 text-sm">
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                 <span>AI is refining extracted values in the background — results will update automatically.</span>
               </div>
@@ -1280,10 +1280,10 @@ export function NewReport() {
             {coverage && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 mt-2">
                 {[
-                  { label: 'Detected', value: coverage.total_detected, color: 'bg-gray-50 border-gray-200 text-gray-700' },
-                  { label: 'Core panel', value: coverage.total_core, color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
-                  { label: 'Extended', value: coverage.total_extended, color: 'bg-blue-50 border-blue-200 text-blue-700' },
-                  { label: 'Needs review', value: coverage.needs_review, color: 'bg-amber-50 border-amber-200 text-amber-700' },
+                  { label: 'Detected', value: coverage.total_detected, color: 'bg-theme-neutral-50 border-theme-neutral-200 text-theme-neutral-700' },
+                  { label: 'Core panel', value: coverage.total_core, color: 'bg-theme-flag-ok-bg border-theme-flag-ok-border text-theme-flag-ok' },
+                  { label: 'Extended', value: coverage.total_extended, color: 'bg-theme-info-bg border-theme-info-border text-theme-info' },
+                  { label: 'Needs review', value: coverage.needs_review, color: 'bg-theme-flag-watch-bg border-theme-flag-watch-border text-theme-flag-watch' },
                 ].map(stat => (
                   <div key={stat.label} className={`rounded-lg border px-3 py-2 text-center ${stat.color}`}>
                     <p className="text-2xl font-bold">{stat.value}</p>
@@ -1294,10 +1294,10 @@ export function NewReport() {
             )}
 
             {reportItems.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-lg p-4 mb-6">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-amber-700">
+                  <AlertTriangle className="w-5 h-5 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-theme-flag-watch">
                     We couldn't automatically extract lab data from your file. You can still submit the report — it will be saved and you can add results manually.
                   </p>
                 </div>
@@ -1360,17 +1360,17 @@ export function NewReport() {
           <Card className="py-16 text-center">
             <div className="flex flex-col items-center justify-center space-y-6">
               <div className="relative">
-                <div className="w-20 h-20 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin" />
+                <div className="w-20 h-20 border-4 border-theme-flag-ok-border border-t-teal-600 rounded-full animate-spin" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <CheckCircle className={`w-10 h-10 transition-all duration-1000 ${submitStep === 'complete' ? 'text-teal-600 opacity-100 scale-100' : 'text-gray-200 opacity-0 scale-50'}`} />
+                  <CheckCircle className={`w-10 h-10 transition-all duration-1000 ${submitStep === 'complete' ? 'text-theme-flag-ok opacity-100 scale-100' : 'text-theme-neutral-200 opacity-0 scale-50'}`} />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900">
+                <h2 className="text-2xl font-bold text-theme-neutral-900">
                   {submitStep === 'complete' ? 'Report imported' : "We're reading your report"}
                 </h2>
-                <p className="text-gray-500 max-w-sm mx-auto">
+                <p className="text-theme-neutral-500 max-w-sm mx-auto">
                   {submitStep === 'uploading' && 'Uploading your file...'}
                   {submitStep === 'creating' && 'Detecting report date...'}
                   {submitStep === 'saving' && 'Extracting lab markers...'}
@@ -1379,9 +1379,9 @@ export function NewReport() {
                 </p>
               </div>
 
-              <div className="w-full max-w-xs bg-gray-100 h-1.5 rounded-full overflow-hidden mt-8">
+              <div className="w-full max-w-xs bg-theme-neutral-100 h-1.5 rounded-full overflow-hidden mt-8">
                 <div
-                  className="bg-teal-600 h-full transition-all duration-1000 ease-out"
+                  className="bg-theme-flag-ok h-full transition-all duration-1000 ease-out"
                   style={{
                     width:
                       submitStep === 'uploading' ? '25%' :

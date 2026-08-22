@@ -14,8 +14,8 @@ interface ReviewBiomarkersProps {
 const ConfidenceBadge = ({ confidence }: { confidence: 'high' | 'medium' | 'low' }) => {
   if (confidence === 'high') return null;
   const config = {
-    medium: { icon: AlertTriangle, color: 'text-amber-600',  bg: 'bg-amber-50',    label: 'Review' },
-    low:    { icon: AlertCircle,  color: 'text-red-600',     bg: 'bg-red-50',      label: 'Low confidence' },
+    medium: { icon: AlertTriangle, color: 'text-theme-flag-watch',  bg: 'bg-theme-flag-watch-bg',    label: 'Review' },
+    low:    { icon: AlertCircle,  color: 'text-theme-flag-low',     bg: 'bg-theme-flag-low-bg',      label: 'Low confidence' },
   };
   const { icon: Icon, color, bg, label } = config[confidence];
   return (
@@ -45,34 +45,34 @@ function ItemCard({
 
   const borderColor =
     item.confidence_score === 'low'
-      ? 'border-red-200 bg-red-50/40'
+      ? 'border-theme-flag-low-border bg-theme-flag-low-bg/40'
       : item.confidence_score === 'medium'
-      ? 'border-amber-200'
-      : 'border-gray-200';
+      ? 'border-theme-flag-watch-border'
+      : 'border-theme-neutral-200';
 
   return (
     <div className={`border rounded-lg overflow-hidden ${borderColor}`}>
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-gray-50/50 transition-colors"
+        className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-theme-neutral-50/50 transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
         <div className="flex items-center gap-3 min-w-0">
-          {expanded ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-          <span className="font-medium text-gray-900 truncate">
-            {item.raw_name || <span className="text-gray-400 italic">Unnamed</span>}
+          {expanded ? <ChevronDown className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" />}
+          <span className="font-medium text-theme-neutral-900 truncate">
+            {item.raw_name || <span className="text-theme-neutral-400 italic">Unnamed</span>}
           </span>
           {item.canonical_slug && (
-            <span className="hidden sm:inline text-xs text-gray-400">({item.canonical_slug})</span>
+            <span className="hidden sm:inline text-xs text-theme-neutral-400">({item.canonical_slug})</span>
           )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-          <span className="font-semibold text-gray-900 tabular-nums">
+          <span className="font-semibold text-theme-neutral-900 tabular-nums">
             {item.value_text ?? item.value_numeric}
-            {item.unit && <span className="text-gray-500 font-normal ml-1">{item.unit}</span>}
+            {item.unit && <span className="text-theme-neutral-500 font-normal ml-1">{item.unit}</span>}
           </span>
           <ConfidenceBadge confidence={item.confidence_score} />
           <button
-            className="text-gray-400 hover:text-red-500 transition-colors ml-1"
+            className="text-theme-neutral-400 hover:text-theme-flag-low transition-colors ml-1"
             onClick={e => { e.stopPropagation(); onRemove(globalIndex); }}
             title="Remove"
           >
@@ -82,36 +82,36 @@ function ItemCard({
       </div>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-100 bg-white">
+        <div className="px-4 pb-4 border-t border-theme-neutral-100 bg-white">
           {item.source_snippet && (
-            <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Raw Report Context</label>
-              <p className="text-sm font-mono text-slate-700 break-words leading-relaxed">
+            <div className="mt-4 p-3 bg-theme-neutral-50 rounded-lg border border-theme-neutral-200">
+              <label className="block text-[10px] font-bold text-theme-neutral-400 uppercase tracking-wider mb-1">Raw Report Context</label>
+              <p className="text-sm font-mono text-theme-neutral-700 break-words leading-relaxed">
                 {item.source_snippet}
               </p>
             </div>
           )}
           
           {item.parse_error && (
-            <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-              <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-red-700 font-medium">{item.parse_error} — please correct the value below.</p>
+            <div className="mt-3 flex items-start gap-2 bg-theme-flag-low-bg border border-theme-flag-low-border rounded-md px-3 py-2">
+              <AlertCircle className="w-3.5 h-3.5 text-theme-flag-low flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-theme-flag-low font-medium">{item.parse_error} — please correct the value below.</p>
             </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Test Label (on report)</label>
+              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Test Label (on report)</label>
               <input
                 type="text"
                 value={item.raw_name}
                 onChange={e => onUpdate(globalIndex, 'raw_name', e.target.value)}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                className="w-full px-3 py-1.5 text-sm border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Map to Amani Biomarker</label>
+              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Map to Amani Biomarker</label>
               <select
                 value={item.canonical_slug ?? ''}
                 onChange={e => {
@@ -120,7 +120,7 @@ function ItemCard({
                   onUpdate(globalIndex, 'is_core_biomarker', slug !== null);
                   onUpdate(globalIndex, 'review_status', 'edited_by_user');
                 }}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                className="w-full px-3 py-1.5 text-sm border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border"
               >
                 <option value="">— Extended (not mapped) —</option>
                 {catalogSlugs.map(b => (
@@ -130,7 +130,7 @@ function ItemCard({
             </div>
 
             <div>
-              <label className={`block text-xs font-medium mb-1 ${item.parse_error ? 'text-red-600' : 'text-gray-600'}`}>
+              <label className={`block text-xs font-medium mb-1 ${item.parse_error ? 'text-theme-flag-low' : 'text-theme-neutral-600'}`}>
                 Value
               </label>
               <input
@@ -141,34 +141,34 @@ function ItemCard({
                   onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value));
                   onUpdate(globalIndex, 'review_status', 'edited_by_user');
                 }}
-                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${item.parse_error ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border ${item.parse_error ? 'border-theme-flag-low-border bg-theme-flag-low-bg' : 'border-theme-neutral-300'}`}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
+              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Unit</label>
               <input
                 type="text"
                 value={item.unit ?? ''}
                 onChange={e => onUpdate(globalIndex, 'unit', e.target.value || null)}
                 placeholder="e.g. mg/dL"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                className="w-full px-3 py-1.5 text-sm border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Reference range (raw)</label>
+              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Reference range (raw)</label>
               <input
                 type="text"
                 value={item.raw_reference_range ?? ''}
                 onChange={e => onUpdate(globalIndex, 'raw_reference_range', e.target.value || null)}
                 placeholder='e.g. "65-99"'
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                className="w-full px-3 py-1.5 text-sm border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border"
               />
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
+          <div className="mt-6 flex justify-end gap-3 border-t border-theme-neutral-100 pt-4">
             {item.needs_review && item.review_status !== 'reviewed' && item.review_status !== 'edited_by_user' && (
               <Button 
                 variant="outline" 
@@ -189,7 +189,7 @@ function ItemCard({
             <Button 
               variant="outline" 
               size="sm" 
-              className="text-xs py-1 h-8 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              className="text-xs py-1 h-8 text-theme-flag-low hover:text-theme-flag-low hover:bg-theme-flag-low-bg border-theme-flag-low-border"
               onClick={(e) => { e.stopPropagation(); onRemove(globalIndex); }}
             >
               Remove Item
@@ -215,25 +215,25 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
 
   return (
     <div className="space-y-6">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-        <h3 className="font-semibold text-blue-900 mb-1">
+      <div className="bg-theme-info-bg border border-theme-info-border rounded-lg px-4 py-3">
+        <h3 className="font-semibold text-theme-info mb-1">
           {items.length} lab item{items.length !== 1 ? 's' : ''} extracted
         </h3>
-        <p className="text-sm text-blue-700">
+        <p className="text-sm text-theme-info">
           {totalCore} match the Amani core panel &middot; {totalExtended} extended items saved for history.
-          {reviewItems.length > 0 && <span className="text-amber-700 font-medium ml-1">{reviewItems.length} need review.</span>}
+          {reviewItems.length > 0 && <span className="text-theme-flag-watch font-medium ml-1">{reviewItems.length} need review.</span>}
         </p>
       </div>
 
       {reviewItems.length > 0 && (
-        <section className="bg-amber-50/40 border border-amber-300 rounded-lg p-4">
+        <section className="bg-theme-flag-watch-bg/40 border border-theme-flag-watch-border rounded-lg p-4">
           <div className="flex items-start gap-3 mb-4">
-            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-theme-flag-watch flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">
+              <h3 className="text-sm font-bold text-theme-flag-watch uppercase tracking-wide">
                 Needs review ({reviewItems.length})
               </h3>
-              <p className="text-xs text-amber-800 mt-0.5">
+              <p className="text-xs text-theme-flag-watch mt-0.5">
                 Confirm or fix these before saving — they'll move into your panel below as you go.
               </p>
             </div>
@@ -256,13 +256,13 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
       {coreItems.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <FlaskConical className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Core Biomarkers ({coreItems.length})</h3>
-            <span className="text-xs text-gray-400">Used for scoring & insights</span>
+            <FlaskConical className="w-4 h-4 text-theme-flag-ok" />
+            <h3 className="text-sm font-bold text-theme-neutral-700 uppercase tracking-wide">Core Biomarkers ({coreItems.length})</h3>
+            <span className="text-xs text-theme-neutral-400">Used for scoring & insights</span>
           </div>
           <div className="space-y-2">
             {catalogLoading ? (
-              <p className="text-sm text-gray-400">Loading catalog...</p>
+              <p className="text-sm text-theme-neutral-400">Loading catalog...</p>
             ) : (
               coreItems.map(({ item, globalIndex }) => (
                 <ItemCard
@@ -285,12 +285,12 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
             className="flex items-center gap-2 mb-3 group w-full text-left"
             onClick={() => setShowExtended(v => !v)}
           >
-            <Microscope className="w-4 h-4 text-blue-500" />
-            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide group-hover:text-gray-900 transition-colors">
+            <Microscope className="w-4 h-4 text-theme-info" />
+            <h3 className="text-sm font-bold text-theme-neutral-700 uppercase tracking-wide group-hover:text-theme-neutral-900 transition-colors">
               Extended Lab Items ({extendedItems.length})
             </h3>
-            <span className="text-xs text-gray-400">Stored for history — not used in scoring</span>
-            {showExtended ? <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" /> : <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />}
+            <span className="text-xs text-theme-neutral-400">Stored for history — not used in scoring</span>
+            {showExtended ? <ChevronDown className="w-4 h-4 text-theme-neutral-400 ml-auto" /> : <ChevronRight className="w-4 h-4 text-theme-neutral-400 ml-auto" />}
           </button>
 
           {showExtended && (

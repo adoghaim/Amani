@@ -14,19 +14,19 @@ interface ChipTone {
 
 const CHIP_TONES: Record<'food' | 'topic' | 'track', ChipTone> = {
   food: {
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    border: 'border-emerald-100',
+    bg: 'bg-theme-flag-ok-bg',
+    text: 'text-theme-flag-ok',
+    border: 'border-theme-flag-ok-border',
   },
   topic: {
-    bg: 'bg-violet-50',
-    text: 'text-violet-700',
-    border: 'border-violet-100',
+    bg: 'bg-theme-cat-sleep',
+    text: 'text-theme-cat-sleep',
+    border: 'border-theme-cat-sleep',
   },
   track: {
-    bg: 'bg-sky-50',
-    text: 'text-sky-700',
-    border: 'border-sky-100',
+    bg: 'bg-theme-info-bg',
+    text: 'text-theme-info',
+    border: 'border-theme-info-border',
   },
 };
 

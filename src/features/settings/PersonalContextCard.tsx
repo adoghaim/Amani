@@ -250,7 +250,7 @@ export function PersonalContextCard() {
           />
 
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="text-sm text-theme-flag-low bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg px-3 py-2">
               {error}
             </div>
           )}

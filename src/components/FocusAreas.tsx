@@ -7,22 +7,22 @@ interface FocusAreasProps {
 
 const STATUS_DOT: Record<FocusAreaMarker['status'], { dot: string; chipBg: string; chipText: string; chipBorder: string }> = {
   attention: {
-    dot: 'bg-rose-500',
-    chipBg: 'bg-rose-50',
-    chipText: 'text-rose-700',
-    chipBorder: 'border-rose-100',
+    dot: 'bg-theme-flag-low',
+    chipBg: 'bg-theme-flag-low-bg',
+    chipText: 'text-theme-flag-low',
+    chipBorder: 'border-theme-flag-low-border',
   },
   monitor: {
-    dot: 'bg-amber-400',
-    chipBg: 'bg-amber-50',
-    chipText: 'text-amber-700',
-    chipBorder: 'border-amber-100',
+    dot: 'bg-theme-flag-watch',
+    chipBg: 'bg-theme-flag-watch-bg',
+    chipText: 'text-theme-flag-watch',
+    chipBorder: 'border-theme-flag-watch-border',
   },
   reassuring: {
-    dot: 'bg-emerald-500',
-    chipBg: 'bg-emerald-50',
-    chipText: 'text-emerald-700',
-    chipBorder: 'border-emerald-100',
+    dot: 'bg-theme-flag-ok',
+    chipBg: 'bg-theme-flag-ok-bg',
+    chipText: 'text-theme-flag-ok',
+    chipBorder: 'border-theme-flag-ok-border',
   },
 };
 

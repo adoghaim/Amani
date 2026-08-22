@@ -37,7 +37,7 @@ export function DoctorQuestionsCard({ questions }: Props) {
       </div>
       <div className="space-y-2">
         {questions.map((q, i) => (
-          <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
+          <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-theme-neutral-50">
             <span className="text-xs font-bold text-theme-primary bg-theme-primary/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
               {i + 1}
             </span>

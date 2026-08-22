@@ -121,7 +121,7 @@ export function ResetPassword() {
           <Card>
             {requestSent ? (
               <div className="space-y-4">
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border text-theme-flag-ok px-4 py-3 rounded-lg text-sm">
                   Password reset email sent! Check your inbox and click the link to set a new password.
                 </div>
                 <button
@@ -142,7 +142,7 @@ export function ResetPassword() {
                 </div>
 
                 {requestError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg text-sm">
                     {requestError}
                   </div>
                 )}
@@ -181,7 +181,7 @@ export function ResetPassword() {
         {logo}
         <Card>
           {success ? (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border text-theme-flag-ok px-4 py-3 rounded-lg text-sm">
               Password updated successfully! Redirecting to login...
             </div>
           ) : (
@@ -191,7 +191,7 @@ export function ResetPassword() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}

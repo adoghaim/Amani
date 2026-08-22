@@ -294,9 +294,9 @@ export function Dashboard() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'processing': return <Clock className="w-4 h-4 text-yellow-600" />;
-      case 'ready': return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'error': return <XCircle className="w-4 h-4 text-red-600" />;
+      case 'processing': return <Clock className="w-4 h-4 text-theme-flag-watch" />;
+      case 'ready': return <CheckCircle className="w-4 h-4 text-theme-flag-ok" />;
+      case 'error': return <XCircle className="w-4 h-4 text-theme-flag-low" />;
       default: return null;
     }
   };
@@ -318,11 +318,11 @@ export function Dashboard() {
     <Layout>
       <div className="max-w-5xl mx-auto">
         {error && (
-          <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 flex items-start justify-between gap-3">
-            <div className="text-sm text-red-700 flex-1">{error}</div>
+          <div className="mb-5 px-4 py-3 rounded-xl bg-theme-flag-low-bg border border-theme-flag-low-border flex items-start justify-between gap-3">
+            <div className="text-sm text-theme-flag-low flex-1">{error}</div>
             <button
               onClick={() => setError(null)}
-              className="text-sm font-medium text-red-700 underline hover:no-underline whitespace-nowrap"
+              className="text-sm font-medium text-theme-flag-low underline hover:no-underline whitespace-nowrap"
             >
               Dismiss
             </button>
@@ -353,8 +353,8 @@ export function Dashboard() {
           <Link to="/app/pricing" className="block mb-5">
             <div className="flex items-center justify-between gap-4 bg-white border border-theme-border rounded-xl px-5 py-4 hover:border-theme-primary hover:shadow-sm transition-all">
               <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
+                <span className="inline-flex items-center gap-1.5 bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-theme-flag-low inline-block"></span>
                   Founders Launch
                 </span>
                 <span className="text-sm text-theme-text font-medium">
@@ -384,10 +384,10 @@ export function Dashboard() {
         )}
 
         {!canCreateReport && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-4 mb-5">
-            <p className="text-sm text-yellow-800">
+          <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl px-5 py-4 mb-5">
+            <p className="text-sm text-theme-flag-watch">
               Your trial has expired.{' '}
-              <Link to="/app/pricing" className="text-yellow-900 underline font-medium">View pricing</Link> to continue.
+              <Link to="/app/pricing" className="text-theme-flag-watch underline font-medium">View pricing</Link> to continue.
             </p>
           </div>
         )}
@@ -623,10 +623,10 @@ function QuickLogButton({
   variant: 'rose' | 'rose-light' | 'amber' | 'teal' | 'neutral';
 }) {
   const classes = {
-    rose: 'bg-rose-500 text-white hover:bg-rose-600',
-    'rose-light': 'bg-rose-100 text-rose-600 hover:bg-rose-200 border border-dashed border-rose-300',
-    amber: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200',
-    teal: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200',
+    rose: 'bg-theme-flag-low text-white hover:bg-theme-flag-low',
+    'rose-light': 'bg-theme-flag-low-bg text-theme-flag-low hover:bg-theme-flag-low-bg border border-dashed border-theme-flag-low-border',
+    amber: 'bg-theme-flag-watch-bg text-theme-flag-watch hover:bg-theme-flag-watch-bg border border-theme-flag-watch-border',
+    teal: 'bg-theme-flag-ok-bg text-theme-flag-ok hover:bg-theme-flag-ok-bg border border-theme-flag-ok-border',
     neutral: 'bg-theme-surface-2 text-theme-muted-text hover:bg-theme-surface-hover border border-theme-border',
   };
   return (
