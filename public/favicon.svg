@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Amani">
+  <!-- Cycle mark: the ring is the full cycle, the arc is elapsed days, the dot
+       is today. Same idea as the dashboard dial, reduced until it survives 16px.
+       Deliberately not a heart — every health app is a heart. -->
+  <rect width="32" height="32" rx="7" fill="#FFF8F7"/>
+  <circle cx="16" cy="16" r="9.5" fill="none" stroke="#EAD2D7" stroke-width="3.5"/>
+  <path d="M16 6.5 a9.5 9.5 0 0 1 8.15 14.4" fill="none" stroke="#C97C8B"
+        stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="24.15" cy="20.9" r="2.9" fill="#7A3E55"/>
+</svg>
