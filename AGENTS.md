@@ -25,7 +25,7 @@ Use TypeScript for app code and React function components for UI. Follow existin
 
 ## Testing Guidelines
 
-No automated test script or test directory is currently configured. Before opening a PR, run `npm run lint`, `npm run typecheck`, and `npm run build`. For parser, scoring, Supabase, or health-interpretation changes, add focused tests when introducing a test framework, and document manual validation steps in the PR.
+Vitest is configured (`vitest.config.ts`); `npm test` runs four suites totalling 32 tests and executes in CI between typecheck and build. Before opening a PR, run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. For parser, scoring, Supabase, or health-interpretation changes, add focused tests and document manual validation steps in the PR. For server logic, follow the existing pattern: put ordering and policy in a pure `supabase/functions/_shared/*.ts` module behind an injected actions port so it can be tested with fakes, and keep the Deno handler a thin wiring layer.
 
 ## Commit & Pull Request Guidelines
 

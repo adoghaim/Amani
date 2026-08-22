@@ -6,7 +6,7 @@ The biggest finding across all audits: **the medical-safety guardrail described 
 
 ## Progress tracker
 
-Status as of 2026-08-05. ✅ shipped local · ⏳ blocked on user input · ⬜ not started.
+Status as of 2026-08-21. ✅ shipped **and deployed** · ⏳ blocked on user input · ⬜ not started.
 
 ### Sprint 1 — P0 ship-blockers (8 of 8)
 
@@ -70,13 +70,31 @@ Triggered by a Codex zip review that identified four launch blockers. Verified e
 - UX perception mismatch on `UploadIntroStep.tsx`: primary CTA "Upload Lab Report" (→ `completed=true`, navigates `/app/new`) vs. small text link "Skip for now" (→ `skipped=true`, navigates `/app`). Users perceive Skip as completion. If completion tracking matters downstream, either reconcile the semantics or rename the CTA.
 - No 404 catch-all route in `App.tsx` — a typo under `/app/*` shows a blank Suspense screen forever instead of a NotFound page.
 
-### Pending deploys (in this order)
+### Sprint 6 — 2026-08-11 → 2026-08-21: reliability, store-blockers, native deep links
+
+- ✅ **S6-1** Stripe webhook claim lease — `b6705e1` (PR #16). `_shared/stripe-idempotency.ts` + migration `20260811000000_stripe_event_claim_lease.sql` make event claims recoverable instead of permanently stuck when a handler dies mid-flight. 10 tests.
+- ✅ **S6-2** iOS build 5 + `PrivacyInfo.xcprivacy` — `9c6acbf` (PR #17). **This closed native N0-3**, which `native-grade.md` had listed as blocked on user input.
+- ✅ **S6-3** Account deletion full teardown — PR #18. `delete-user-data` now cancels Stripe subscriptions, deletes the Stripe customer, deletes the Supabase Auth identity, and propagates errors instead of reporting false success. Previously a "deleted" user kept getting charged — an Apple/Google in-app-deletion review blocker. Ordering + error policy live in `_shared/account-deletion.ts` behind an injected actions port so vitest drives the flow with fakes; 6 tests.
+- ✅ **S6-4** Hosting recorded in-repo — PR #19. Netlify is the web host; the failing `Vercel` PR check was only firing because commits were authored by a second GitHub account (`mawad2`) that lacks Vercel project access. Re-authoring as `adoghaim` cleared it; no Vercel check has appeared since.
+- ✅ **S6-5** Universal links + app links (native **N1-6**) — PR #20. Also fixed a latent bug: `VITE_APP_URL` was set nowhere, so both redirect call sites fell back to `window.location.origin`, which inside a Capacitor webview is `https://localhost` — the password-reset email and Stripe `success_url` pointed at dead links on device. New `src/lib/appUrl.ts` and `src/lib/deepLinks.ts` (pure, 11 tests, doubles as the trust boundary for OS-supplied URLs).
+
+### Deploy status — verified against the live project 2026-08-21
+
+**Nothing is pending.** The old "pending deploys" list here was stale; the work had already shipped.
 
 ```
-supabase db push  # includes 3 migrations restored by S5-4: add_onboarding_fields_to_users, add_full_name_to_users, defer_trial_start_until_onboarding
-supabase functions deploy generate-interpretation parse-lab-report-ocr extract-biomarkers lab-insights stripe-webhook stripe-checkout delete-user-data
-# config.toml verify_jwt declarations apply via your normal config-push flow
-# (create-checkout-session no longer in the list — retired in S5-2)
+migrations              32 local == 32 remote (supabase migration list --linked)
+config.toml verify_jwt  matches remote on all 6 declared functions
+edge functions          every deploy timestamp post-dates its last source change
+```
+
+Last deploy of each function: `delete-user-data` v7 (2026-08-21, this sprint), `stripe-webhook` v12 and `extract-biomarkers` v45 (2026-08-13), `generate-interpretation` v118 and `parse-lab-report-ocr` v8 (2026-08-05), `lab-insights` v8 / `stripe-checkout` v7 (2026-05-01, unchanged since).
+
+Still open, all blocked on user input: **P1-3** Sentry DSN · **P1-5** run `supabase gen types` and commit · **P1-8** production CORS origins.
+
+Run after any web-bundle change that needs to reach the native apps:
+
+```
 npm run cap:sync   # push web bundle into android/ and ios/
 ```
 
