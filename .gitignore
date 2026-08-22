@@ -41,3 +41,14 @@ ios/Pods/
 # Host CLI local state (Netlify is the web host; Vercel dir is a leftover)
 .netlify/
 .vercel/
+
+# Local agent-tooling runtime state (per-machine, not shareable)
+.claude-flow/
+**/.claude-flow/
+.swarm/
+*.rvf
+*.rvf.lock
+ruvector.db
+**/ruvector.db
+.claude/proven-config.json
+.claude/.proven-config-version
