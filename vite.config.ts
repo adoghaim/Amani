@@ -34,14 +34,34 @@ export default defineConfig(({ command }) => ({
       output: {
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('/react-router-dom/') || id.includes('/react-router/')) {
-            return 'react-router-vendor';
+
+          /*
+            react-router MUST stay in the same chunk as react.
+
+            Splitting them produced a blank white page in every production
+            build: react-router touches React.createContext while its module
+            body evaluates, so if the router chunk runs before the react chunk,
+            React is undefined and the app throws before it ever mounts. There
+            is no error boundary above that — the root render never happens, so
+            the user just sees #root sitting empty.
+
+            It never showed up in `npm run dev`, because the dev server serves
+            unbundled ESM and manualChunks does not apply.
+
+            Keep this predicate ordered before the react check, and keep both
+            returning the same chunk name.
+          */
+          if (
+            id.includes('/react-router-dom/') ||
+            id.includes('/react-router/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/react/') ||
+            id.includes('/scheduler/')
+          ) {
+            return 'react-vendor';
           }
           if (id.includes('/@supabase/')) {
             return 'supabase-vendor';
-          }
-          if (id.includes('/react-dom/') || id.includes('/react/') || id.includes('/scheduler/')) {
-            return 'react-vendor';
           }
           return undefined;
         },
