@@ -23,9 +23,9 @@ export function SubscriptionStatus() {
 
   if (userProfile.subscription_status === 'active') {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
-        <Crown className="w-4 h-4 text-green-600 shrink-0" />
-        <p className="text-sm text-green-800 font-medium">Active subscription</p>
+      <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border rounded-xl px-4 py-3 flex items-center gap-3">
+        <Crown className="w-4 h-4 text-theme-flag-ok shrink-0" />
+        <p className="text-sm text-theme-flag-ok font-medium">Active subscription</p>
       </div>
     );
   }
@@ -59,16 +59,16 @@ export function SubscriptionStatus() {
   }
 
   return (
-    <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+    <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl px-4 py-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-3">
-        <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0" />
-        <p className="text-sm text-yellow-800 font-medium">
+        <AlertCircle className="w-4 h-4 text-theme-flag-watch shrink-0" />
+        <p className="text-sm text-theme-flag-watch font-medium">
           {userProfile.subscription_status === 'trial' ? 'Trial expired' : 'No active subscription'}
         </p>
       </div>
       <Link
         to="/app/pricing"
-        className="text-xs font-semibold text-yellow-700 hover:text-yellow-900 shrink-0 transition-colors"
+        className="text-xs font-semibold text-theme-flag-watch hover:text-theme-flag-watch shrink-0 transition-colors"
       >
         View plans
       </Link>

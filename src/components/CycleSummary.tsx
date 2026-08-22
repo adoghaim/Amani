@@ -27,7 +27,7 @@ export function CycleSummary({
 
       <div className="px-5 py-4 space-y-3">
         <SummaryRow
-          icon={<Droplets className="w-4 h-4 text-rose-500" />}
+          icon={<Droplets className="w-4 h-4 text-theme-flag-low" />}
           label="Last period"
           value={
             lastPeriodLog
@@ -61,7 +61,7 @@ export function CycleSummary({
         )}
 
         <SummaryRow
-          icon={<Zap className="w-4 h-4 text-amber-500" />}
+          icon={<Zap className="w-4 h-4 text-theme-flag-watch" />}
           label="Symptoms this cycle"
           value={
             symptomLogsThisCycle.length > 0
@@ -71,7 +71,7 @@ export function CycleSummary({
         />
 
         <SummaryRow
-          icon={<Activity className="w-4 h-4 text-teal-500" />}
+          icon={<Activity className="w-4 h-4 text-theme-flag-ok" />}
           label="Active interventions"
           value={
             activeInterventions.length > 0

@@ -50,9 +50,9 @@ function dedup(items: string[], existing: string[]): string[] {
 }
 
 const BUCKET_META: Record<Bucket, { label: string; icon: typeof Eye; iconColor: string; bg: string }> = {
-  track: { label: 'Track', icon: Eye, iconColor: 'text-sky-600', bg: 'bg-sky-50' },
-  discuss: { label: 'Discuss with your provider', icon: MessageSquareText, iconColor: 'text-violet-600', bg: 'bg-violet-50' },
-  retest: { label: 'Prepare for next labs', icon: FlaskConical, iconColor: 'text-emerald-600', bg: 'bg-emerald-50' },
+  track: { label: 'Track', icon: Eye, iconColor: 'text-theme-info', bg: 'bg-theme-info-bg' },
+  discuss: { label: 'Discuss with your provider', icon: MessageSquareText, iconColor: 'text-theme-cat-sleep', bg: 'bg-theme-cat-sleep' },
+  retest: { label: 'Prepare for next labs', icon: FlaskConical, iconColor: 'text-theme-flag-ok', bg: 'bg-theme-flag-ok-bg' },
 };
 
 interface Props {
@@ -81,8 +81,8 @@ export function WhatToDoNextCard({ items, existingNextSteps = [] }: Props) {
     <div className="rounded-2xl border border-theme-border-subtle bg-white overflow-hidden">
       <div className="px-5 py-4 border-b border-theme-border-inner">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-            <ArrowRight className="w-4 h-4 text-amber-700" />
+          <div className="w-7 h-7 rounded-lg bg-theme-flag-watch-bg flex items-center justify-center">
+            <ArrowRight className="w-4 h-4 text-theme-flag-watch" />
           </div>
           <div>
             <h2 className="text-sm font-bold text-theme-text">What to Do Next</h2>

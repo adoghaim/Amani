@@ -675,10 +675,10 @@ function QuickLogButton({
   variant: 'rose' | 'rose-light' | 'amber' | 'teal' | 'neutral';
 }) {
   const classes = {
-    rose: 'bg-rose-500 text-white hover:bg-rose-600',
-    'rose-light': 'bg-rose-100 text-rose-600 hover:bg-rose-200 border border-dashed border-rose-300',
-    amber: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200',
-    teal: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200',
+    rose: 'bg-theme-flag-low text-white hover:bg-theme-flag-low',
+    'rose-light': 'bg-theme-flag-low-bg text-theme-flag-low hover:bg-theme-flag-low-bg border border-dashed border-theme-flag-low-border',
+    amber: 'bg-theme-flag-watch-bg text-theme-flag-watch hover:bg-theme-flag-watch-bg border border-theme-flag-watch-border',
+    teal: 'bg-theme-flag-ok-bg text-theme-flag-ok hover:bg-theme-flag-ok-bg border border-theme-flag-ok-border',
     neutral: 'bg-[#F6ECEB] text-[#6B5B60] hover:bg-[#EED9D9] border border-[#E9D6DA]',
   };
 

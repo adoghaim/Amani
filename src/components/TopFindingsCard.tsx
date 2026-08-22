@@ -8,26 +8,26 @@ type FindingStyle = {
 
 const SECONDARY_STYLE: Record<string, FindingStyle> = {
   out_of_range: {
-    bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-red-50 text-red-500 border border-red-100', label: 'Outside Range',
-    leftBar: 'bg-red-200', iconBg: 'bg-red-50', iconColor: 'text-red-400',
+    bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+    text: 'text-theme-text-body', badge: 'bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border', label: 'Outside Range',
+    leftBar: 'bg-theme-flag-low-bg', iconBg: 'bg-theme-flag-low-bg', iconColor: 'text-theme-flag-low',
   },
   borderline: {
-    bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-amber-50 text-amber-500 border border-amber-100', label: 'Borderline',
-    leftBar: 'bg-amber-100', iconBg: 'bg-amber-50', iconColor: 'text-amber-400',
+    bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+    text: 'text-theme-text-body', badge: 'bg-theme-flag-watch-bg text-theme-flag-watch border border-theme-flag-watch-border', label: 'Borderline',
+    leftBar: 'bg-theme-flag-watch-bg', iconBg: 'bg-theme-flag-watch-bg', iconColor: 'text-theme-flag-watch',
   },
   optimal: {
-    bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-emerald-50 text-emerald-500 border border-emerald-100', label: 'Optimal',
-    leftBar: 'bg-emerald-100', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-400',
+    bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+    text: 'text-theme-text-body', badge: 'bg-theme-flag-ok-bg text-theme-flag-ok border border-theme-flag-ok-border', label: 'Optimal',
+    leftBar: 'bg-theme-flag-ok-bg', iconBg: 'bg-theme-flag-ok-bg', iconColor: 'text-theme-flag-ok',
   },
 };
 
 const FALLBACK_FINDING_STYLE: FindingStyle = {
-  bg: 'bg-white', border: 'border-gray-100', nameColor: 'text-theme-text',
-  text: 'text-theme-text-body', badge: 'bg-amber-50 text-amber-500 border border-amber-100', label: 'Borderline',
-  leftBar: 'bg-amber-100', iconBg: 'bg-amber-50', iconColor: 'text-amber-400',
+  bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+  text: 'text-theme-text-body', badge: 'bg-theme-flag-watch-bg text-theme-flag-watch border border-theme-flag-watch-border', label: 'Borderline',
+  leftBar: 'bg-theme-flag-watch-bg', iconBg: 'bg-theme-flag-watch-bg', iconColor: 'text-theme-flag-watch',
 };
 
 const EXTREME_THRESHOLD = 3;
@@ -76,7 +76,7 @@ export function TopFindingsCard({ findings, aiExplanations, isPrimary = true }: 
                         <span className="font-normal text-xs text-theme-muted-text-2 ml-1">{finding.unit}</span>
                       </span>
                       {isExtreme ? (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-100">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border">
                           {extremeLabel}
                         </span>
                       ) : (
@@ -86,9 +86,9 @@ export function TopFindingsCard({ findings, aiExplanations, isPrimary = true }: 
                       )}
                       {finding.trend && (
                         <div title={`${finding.trend.interpretation} trend`} className="flex-shrink-0 ml-1">
-                          {finding.trend.direction === 'up' && <TrendingUp className={`w-3.5 h-3.5 ${finding.trend.interpretation === 'improved' ? 'text-emerald-500' : 'text-rose-500'}`} />}
-                          {finding.trend.direction === 'down' && <TrendingDown className={`w-3.5 h-3.5 ${finding.trend.interpretation === 'improved' ? 'text-emerald-500' : 'text-rose-500'}`} />}
-                          {finding.trend.direction === 'stable' && <Minus className="w-3.5 h-3.5 text-gray-400" />}
+                          {finding.trend.direction === 'up' && <TrendingUp className={`w-3.5 h-3.5 ${finding.trend.interpretation === 'improved' ? 'text-theme-flag-ok' : 'text-theme-flag-low'}`} />}
+                          {finding.trend.direction === 'down' && <TrendingDown className={`w-3.5 h-3.5 ${finding.trend.interpretation === 'improved' ? 'text-theme-flag-ok' : 'text-theme-flag-low'}`} />}
+                          {finding.trend.direction === 'stable' && <Minus className="w-3.5 h-3.5 text-theme-neutral-400" />}
                         </div>
                       )}
                     </div>

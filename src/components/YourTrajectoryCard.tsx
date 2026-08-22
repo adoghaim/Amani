@@ -119,8 +119,8 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
     <div className="rounded-2xl border border-theme-border-subtle bg-white overflow-hidden">
       <div className="px-5 py-4 border-b border-theme-border-inner">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <LineChart className="w-4 h-4 text-indigo-600" />
+          <div className="w-7 h-7 rounded-lg bg-theme-cat-sleep flex items-center justify-center">
+            <LineChart className="w-4 h-4 text-theme-cat-sleep" />
           </div>
           <div>
             <h2 className="text-sm font-bold text-theme-text">Your Trajectory</h2>
@@ -145,8 +145,8 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
 }
 
 function BulletIcon({ kind }: { kind: BulletKind }) {
-  if (kind === 'improved') return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
-  if (kind === 'worsened') return <TrendingUp className="w-4 h-4 text-amber-600" />;
-  if (kind === 'stable_elevated') return <AlertCircle className="w-4 h-4 text-amber-500" />;
-  return <Sparkles className="w-4 h-4 text-indigo-500" />;
+  if (kind === 'improved') return <CheckCircle2 className="w-4 h-4 text-theme-flag-ok" />;
+  if (kind === 'worsened') return <TrendingUp className="w-4 h-4 text-theme-flag-watch" />;
+  if (kind === 'stable_elevated') return <AlertCircle className="w-4 h-4 text-theme-flag-watch" />;
+  return <Sparkles className="w-4 h-4 text-theme-cat-sleep" />;
 }

@@ -23,16 +23,16 @@ function getDayClasses(info: DayInfo, isToday: boolean): string {
   const base = 'relative flex flex-col items-center justify-start pt-1.5 pb-1 rounded-xl cursor-pointer select-none transition-all duration-150 min-h-[52px] group';
 
   if (primary === 'confirmed_period') {
-    return `${base} bg-rose-500 hover:bg-rose-600`;
+    return `${base} bg-theme-flag-low hover:bg-theme-flag-low`;
   }
   if (primary === 'predicted_period') {
-    return `${base} bg-rose-100 hover:bg-rose-200 border border-dashed border-rose-300`;
+    return `${base} bg-theme-flag-low-bg hover:bg-theme-flag-low-bg border border-dashed border-theme-flag-low-border`;
   }
   if (primary === 'ovulation') {
-    return `${base} bg-amber-100 hover:bg-amber-200 border border-amber-300`;
+    return `${base} bg-theme-flag-watch-bg hover:bg-theme-flag-watch-bg border border-theme-flag-watch-border`;
   }
   if (primary === 'fertile_window') {
-    return `${base} bg-teal-50 hover:bg-teal-100 border border-teal-200`;
+    return `${base} bg-theme-flag-ok-bg hover:bg-theme-flag-ok-bg border border-theme-flag-ok-border`;
   }
   if (isToday) {
     return `${base} bg-[#F6ECEB] border-2 border-[#C97C8B] hover:bg-[#EED9D9]`;
@@ -43,11 +43,11 @@ function getDayClasses(info: DayInfo, isToday: boolean): string {
 function getDayNumberClasses(info: DayInfo, isToday: boolean): string {
   const primary = getPrimaryState(info.states);
   if (primary === 'confirmed_period') return 'text-white font-semibold text-sm';
-  if (primary === 'predicted_period') return 'text-rose-600 font-medium text-sm';
-  if (primary === 'ovulation') return 'text-amber-700 font-semibold text-sm';
-  if (primary === 'fertile_window') return 'text-teal-700 font-medium text-sm';
+  if (primary === 'predicted_period') return 'text-theme-flag-low font-medium text-sm';
+  if (primary === 'ovulation') return 'text-theme-flag-watch font-semibold text-sm';
+  if (primary === 'fertile_window') return 'text-theme-flag-ok font-medium text-sm';
   if (isToday) return 'text-[#C97C8B] font-bold text-sm';
-  return 'text-gray-700 text-sm';
+  return 'text-theme-neutral-700 text-sm';
 }
 
 export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChange }: TrackerCalendarProps) {
@@ -84,10 +84,10 @@ export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChang
             <TestTube2 className="w-2.5 h-2.5 text-[#C97C8B] shrink-0" />
           )}
           {info.hasSymptom && (
-            <Zap className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+            <Zap className="w-2.5 h-2.5 text-theme-flag-watch shrink-0" />
           )}
           {info.hasIntervention && (
-            <Pill className="w-2.5 h-2.5 text-teal-500 shrink-0" />
+            <Pill className="w-2.5 h-2.5 text-theme-flag-ok shrink-0" />
           )}
         </div>
       </button>
@@ -127,20 +127,20 @@ export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChang
 
       <div className="px-5 py-3 border-t border-[#E9D6DA] bg-[#FFF8F7]">
         <div className="flex flex-wrap gap-x-4 gap-y-2">
-          <LegendItem color="bg-rose-500" label="Period" />
-          <LegendItem color="bg-rose-100 border border-dashed border-rose-300" label="Predicted period" />
-          <LegendItem color="bg-amber-100 border border-amber-300" label="Estimated ovulation" />
-          <LegendItem color="bg-teal-50 border border-teal-200" label="Fertile window" />
+          <LegendItem color="bg-theme-flag-low" label="Period" />
+          <LegendItem color="bg-theme-flag-low-bg border border-dashed border-theme-flag-low-border" label="Predicted period" />
+          <LegendItem color="bg-theme-flag-watch-bg border border-theme-flag-watch-border" label="Estimated ovulation" />
+          <LegendItem color="bg-theme-flag-ok-bg border border-theme-flag-ok-border" label="Fertile window" />
           <div className="flex items-center gap-1.5">
             <TestTube2 className="w-3.5 h-3.5 text-[#C97C8B]" />
             <span className="text-xs text-[#6B5B60]">Labs</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <Zap className="w-3.5 h-3.5 text-theme-flag-watch" />
             <span className="text-xs text-[#6B5B60]">Symptoms</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Pill className="w-3.5 h-3.5 text-teal-500" />
+            <Pill className="w-3.5 h-3.5 text-theme-flag-ok" />
             <span className="text-xs text-[#6B5B60]">Intervention</span>
           </div>
         </div>

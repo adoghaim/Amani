@@ -57,10 +57,10 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
-      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-theme-neutral-100 hover:bg-theme-neutral-200 text-theme-neutral-600 transition-colors"
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
     >
-      {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-theme-flag-ok" /> : <Copy className="w-3 h-3" />}
       {copied ? 'Copied' : 'Copy'}
     </button>
   );
@@ -68,11 +68,11 @@ function CopyButton({ text }: { text: string }) {
 
 function ConfidencePill({ conf, className = '' }: { conf: string; className?: string }) {
   const cfg: Record<string, string> = {
-    high:   'bg-emerald-100 text-emerald-800 border-emerald-300',
-    medium: 'bg-amber-100 text-amber-800 border-amber-300',
-    low:    'bg-red-100 text-red-800 border-red-300',
-    miss:   'bg-slate-100 text-slate-600 border-slate-300',
-    reject: 'bg-red-200 text-red-900 border-red-400',
+    high:   'bg-theme-flag-ok-bg text-theme-flag-ok border-theme-flag-ok-border',
+    medium: 'bg-theme-flag-watch-bg text-theme-flag-watch border-theme-flag-watch-border',
+    low:    'bg-theme-flag-low-bg text-theme-flag-low border-theme-flag-low-border',
+    miss:   'bg-theme-neutral-100 text-theme-neutral-600 border-theme-neutral-300',
+    reject: 'bg-theme-flag-low-bg text-theme-flag-low border-theme-flag-low-border',
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cfg[conf] ?? cfg.low} ${className}`}>
@@ -83,12 +83,12 @@ function ConfidencePill({ conf, className = '' }: { conf: string; className?: st
 
 function StatusPill({ status }: { status: string }) {
   const cfg: Record<string, string> = {
-    mapped:   'bg-emerald-100 text-emerald-800',
-    partial:  'bg-amber-100 text-amber-800',
-    unmapped: 'bg-red-100 text-red-800',
+    mapped:   'bg-theme-flag-ok-bg text-theme-flag-ok',
+    partial:  'bg-theme-flag-watch-bg text-theme-flag-watch',
+    unmapped: 'bg-theme-flag-low-bg text-theme-flag-low',
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg[status] ?? 'bg-gray-100 text-gray-700'}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg[status] ?? 'bg-theme-neutral-100 text-theme-neutral-700'}`}>
       {status}
     </span>
   );
@@ -99,17 +99,17 @@ function SectionHeader({ icon: Icon, title, count, subtitle }: {
 }) {
   return (
     <div className="flex items-start gap-3 mb-6">
-      <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Icon className="w-4.5 h-4.5 text-slate-200" style={{ width: 18, height: 18 }} />
+      <div className="w-9 h-9 rounded-lg bg-theme-neutral-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Icon className="w-4.5 h-4.5 text-theme-neutral-200" style={{ width: 18, height: 18 }} />
       </div>
       <div>
-        <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-theme-neutral-900 flex items-center gap-2">
           {title}
           {count !== undefined && (
-            <span className="text-sm font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{count}</span>
+            <span className="text-sm font-mono bg-theme-neutral-100 text-theme-neutral-600 px-2 py-0.5 rounded">{count}</span>
           )}
         </h2>
-        {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
+        {subtitle && <p className="text-sm text-theme-neutral-500 mt-0.5">{subtitle}</p>}
       </div>
     </div>
   );
@@ -120,13 +120,13 @@ function CollapsibleBlock({ label, children, defaultOpen = false }: {
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-slate-200 rounded-lg overflow-hidden">
+    <div className="border border-theme-neutral-200 rounded-lg overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-left transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-theme-neutral-50 hover:bg-theme-neutral-100 text-left transition-colors"
         onClick={() => setOpen(o => !o)}
       >
-        <span className="text-sm font-medium text-slate-700">{label}</span>
-        {open ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+        <span className="text-sm font-medium text-theme-neutral-700">{label}</span>
+        {open ? <ChevronDown className="w-4 h-4 text-theme-neutral-400" /> : <ChevronRight className="w-4 h-4 text-theme-neutral-400" />}
       </button>
       {open && <div className="p-4 bg-white">{children}</div>}
     </div>
@@ -139,15 +139,15 @@ function MonoField({ label, value, highlight = false }: {
   if (value === null || value === undefined) {
     return (
       <div>
-        <p className="text-xs text-slate-500 mb-0.5">{label}</p>
-        <p className="text-xs font-mono text-slate-400 italic">null</p>
+        <p className="text-xs text-theme-neutral-500 mb-0.5">{label}</p>
+        <p className="text-xs font-mono text-theme-neutral-400 italic">null</p>
       </div>
     );
   }
   return (
     <div>
-      <p className="text-xs text-slate-500 mb-0.5">{label}</p>
-      <p className={`text-xs font-mono ${highlight ? 'text-amber-700 bg-amber-50 rounded px-1' : 'text-slate-800'}`}>
+      <p className="text-xs text-theme-neutral-500 mb-0.5">{label}</p>
+      <p className={`text-xs font-mono ${highlight ? 'text-theme-flag-watch bg-theme-flag-watch-bg rounded px-1' : 'text-theme-neutral-800'}`}>
         {String(value)}
       </p>
     </div>
@@ -207,9 +207,9 @@ function EditAnalyteModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h3 className="font-semibold text-slate-900">Edit Analyte Row</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-theme-neutral-200">
+          <h3 className="font-semibold text-theme-neutral-900">Edit Analyte Row</h3>
+          <button onClick={onClose} className="text-theme-neutral-400 hover:text-theme-neutral-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-4">
           {[
@@ -220,17 +220,17 @@ function EditAnalyteModal({
             { key: 'canonical_slug', label: 'Canonical slug' },
           ].map(({ key, label }) => (
             <div key={key}>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">{label}</label>
               <input
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
+                className="w-full px-3 py-2 text-sm border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-neutral-500 focus:border-theme-neutral-500"
                 value={vals[key as keyof typeof vals]}
                 onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
               />
             </div>
           ))}
         </div>
-        <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-200">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-theme-neutral-200">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-theme-neutral-600 hover:text-theme-neutral-800">Cancel</button>
           <button
             disabled={saving}
             onClick={async () => {
@@ -245,7 +245,7 @@ function EditAnalyteModal({
               setSaving(false);
               onClose();
             }}
-            className="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-theme-neutral-800 text-white rounded-lg hover:bg-theme-neutral-700 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save changes'}
           </button>
@@ -416,50 +416,50 @@ export function ParserDebugger() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="animate-spin w-6 h-6 border-2 border-slate-800 border-t-transparent rounded-full" />
+      <div className="min-h-screen bg-theme-neutral-50 flex items-center justify-center">
+        <div className="animate-spin w-6 h-6 border-2 border-theme-neutral-800 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 max-w-md text-center">
-          <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
-          <p className="text-red-700 font-medium">{error}</p>
+      <div className="min-h-screen bg-theme-neutral-50 flex items-center justify-center p-8">
+        <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-xl p-6 max-w-md text-center">
+          <AlertCircle className="w-8 h-8 text-theme-flag-low mx-auto mb-3" />
+          <p className="text-theme-flag-low font-medium">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-mono text-sm">
+    <div className="min-h-screen bg-theme-neutral-50 font-mono text-sm">
       {/* Top bar */}
-      <div className="bg-slate-900 text-slate-100 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg">
+      <div className="bg-theme-neutral-900 text-theme-neutral-100 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg">
         <div className="flex items-center gap-4">
-          <Link to={`/app/reports/${reportId}`} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition-colors text-xs">
+          <Link to={`/app/reports/${reportId}`} className="flex items-center gap-1.5 text-theme-neutral-400 hover:text-theme-neutral-200 transition-colors text-xs">
             <ArrowLeft className="w-3.5 h-3.5" />Back to report
           </Link>
-          <div className="w-px h-4 bg-slate-700" />
+          <div className="w-px h-4 bg-theme-neutral-700" />
           <div className="flex items-center gap-2">
-            <Bug className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-bold text-slate-200 tracking-wide uppercase">Parser Debug</span>
-            {report && <span className="text-xs text-slate-400 font-sans">— {report.report_date}</span>}
+            <Bug className="w-4 h-4 text-theme-flag-watch" />
+            <span className="text-xs font-bold text-theme-neutral-200 tracking-wide uppercase">Parser Debug</span>
+            {report && <span className="text-xs text-theme-neutral-400 font-sans">— {report.report_date}</span>}
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {savedMsg && <span className="text-xs text-emerald-400">{savedMsg}</span>}
+          {savedMsg && <span className="text-xs text-theme-flag-ok">{savedMsg}</span>}
           {report && (
             <span className={`text-xs px-2 py-0.5 rounded-full ${
-              report.status === 'ready' ? 'bg-emerald-900 text-emerald-300' :
-              report.status === 'error' ? 'bg-red-900 text-red-300' : 'bg-amber-900 text-amber-300'
+              report.status === 'ready' ? 'bg-theme-flag-ok text-theme-flag-ok' :
+              report.status === 'error' ? 'bg-theme-flag-low text-theme-flag-low' : 'bg-theme-flag-watch text-theme-flag-watch'
             }`}>{report.status}</span>
           )}
           <button
             onClick={handleRegenerate}
             disabled={regenLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-theme-neutral-700 hover:bg-theme-neutral-600 rounded-lg transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3 h-3 ${regenLoading ? 'animate-spin' : ''}`} />
             Regen interpretation
@@ -467,7 +467,7 @@ export function ParserDebugger() {
           {report?.id && (
             <Link
               to={`/app/reports/${reportId}`}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-amber-700 hover:bg-amber-600 rounded-lg transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-theme-flag-watch hover:bg-theme-flag-watch rounded-lg transition-colors"
             >
               <ExternalLink className="w-3 h-3" />View report
             </Link>
@@ -476,35 +476,35 @@ export function ParserDebugger() {
       </div>
 
       {/* Stats banner */}
-      <div className="bg-slate-800 px-6 py-3 flex items-center gap-6 text-xs border-b border-slate-700">
-        <div className="text-slate-300">File: <span className="text-white">{debugRecord?.file_name ?? 'Unknown'}</span></div>
-        <div className="text-slate-300">Pages: <span className="text-white">{debugRecord?.page_count ?? '?'}</span></div>
-        <div className="text-slate-300">Lines: <span className="text-white">{debugRecord ? (debugRecord.raw_text ?? '').split('\n').length : '?'}</span></div>
-        <div className="w-px h-4 bg-slate-600" />
-        <div className="text-slate-300">Blocks: <span className="text-white">{stats.totalBlocks}</span></div>
-        <div className="text-emerald-400">Matched: {stats.matched}</div>
-        {stats.misses > 0 && <div className="text-amber-400">Misses: {stats.misses}</div>}
-        {stats.rejects > 0 && <div className="text-red-400">Rejects: {stats.rejects}</div>}
-        {stats.parseErrors > 0 && <div className="text-red-300">Parse errors: {stats.parseErrors}</div>}
-        {stats.suspicious > 0 && <div className="text-orange-400">Suspicious: {stats.suspicious}</div>}
-        <div className="w-px h-4 bg-slate-600" />
-        <div className="text-slate-300">Stored: <span className="text-white">{stats.totalAnalytes}</span></div>
-        <div className="text-emerald-400">Mapped: {stats.mapped}</div>
-        {stats.unmapped > 0 && <div className="text-red-400">Unmapped: {stats.unmapped}</div>}
-        {stats.needsReview > 0 && <div className="text-amber-400">Review: {stats.needsReview}</div>}
+      <div className="bg-theme-neutral-800 px-6 py-3 flex items-center gap-6 text-xs border-b border-theme-neutral-700">
+        <div className="text-theme-neutral-300">File: <span className="text-white">{debugRecord?.file_name ?? 'Unknown'}</span></div>
+        <div className="text-theme-neutral-300">Pages: <span className="text-white">{debugRecord?.page_count ?? '?'}</span></div>
+        <div className="text-theme-neutral-300">Lines: <span className="text-white">{debugRecord ? (debugRecord.raw_text ?? '').split('\n').length : '?'}</span></div>
+        <div className="w-px h-4 bg-theme-neutral-600" />
+        <div className="text-theme-neutral-300">Blocks: <span className="text-white">{stats.totalBlocks}</span></div>
+        <div className="text-theme-flag-ok">Matched: {stats.matched}</div>
+        {stats.misses > 0 && <div className="text-theme-flag-watch">Misses: {stats.misses}</div>}
+        {stats.rejects > 0 && <div className="text-theme-flag-low">Rejects: {stats.rejects}</div>}
+        {stats.parseErrors > 0 && <div className="text-theme-flag-low">Parse errors: {stats.parseErrors}</div>}
+        {stats.suspicious > 0 && <div className="text-theme-flag-watch">Suspicious: {stats.suspicious}</div>}
+        <div className="w-px h-4 bg-theme-neutral-600" />
+        <div className="text-theme-neutral-300">Stored: <span className="text-white">{stats.totalAnalytes}</span></div>
+        <div className="text-theme-flag-ok">Mapped: {stats.mapped}</div>
+        {stats.unmapped > 0 && <div className="text-theme-flag-low">Unmapped: {stats.unmapped}</div>}
+        {stats.needsReview > 0 && <div className="text-theme-flag-watch">Review: {stats.needsReview}</div>}
       </div>
 
       <div className="flex h-[calc(100vh-105px)]">
         {/* Left sidebar — stage navigation */}
-        <div className="w-52 flex-shrink-0 bg-slate-900 flex flex-col overflow-y-auto">
+        <div className="w-52 flex-shrink-0 bg-theme-neutral-900 flex flex-col overflow-y-auto">
           {STAGES.map(s => (
             <button
               key={s.id}
               onClick={() => setActiveStage(s.id)}
-              className={`flex items-start gap-2.5 px-4 py-3.5 text-left transition-colors border-b border-slate-800 ${
+              className={`flex items-start gap-2.5 px-4 py-3.5 text-left transition-colors border-b border-theme-neutral-800 ${
                 activeStage === s.id
-                  ? 'bg-slate-700 text-white border-l-2 border-l-amber-400'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                  ? 'bg-theme-neutral-700 text-white border-l-2 border-l-amber-400'
+                  : 'text-theme-neutral-400 hover:bg-theme-neutral-800 hover:text-theme-neutral-200'
               }`}
             >
               <div className="flex-shrink-0 mt-0.5">
@@ -512,7 +512,7 @@ export function ParserDebugger() {
               </div>
               <div>
                 <p className="text-xs font-medium leading-tight">{s.id}. {s.shortLabel}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 leading-snug font-sans">{s.label}</p>
+                <p className="text-[10px] text-theme-neutral-500 mt-0.5 leading-snug font-sans">{s.label}</p>
               </div>
             </button>
           ))}
@@ -522,29 +522,29 @@ export function ParserDebugger() {
         <div className="flex-1 overflow-y-auto">
           {/* Search + filter toolbar */}
           {(activeStage === 2 || activeStage === 3 || activeStage === 4 || activeStage === 5) && (
-            <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3 sticky top-0 z-10">
+            <div className="bg-white border-b border-theme-neutral-200 px-6 py-3 flex items-center gap-3 sticky top-0 z-10">
               <div className="relative flex-1 max-w-xs">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-theme-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Search analyte name..."
-                  className="w-full pl-8 pr-8 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 font-sans"
+                  className="w-full pl-8 pr-8 py-1.5 text-xs border border-theme-neutral-200 rounded-lg focus:ring-2 focus:ring-theme-neutral-500 focus:border-theme-neutral-500 font-sans"
                 />
                 {search && (
-                  <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-theme-neutral-400 hover:text-theme-neutral-600">
                     <X className="w-3 h-3" />
                   </button>
                 )}
               </div>
               <div className="flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <Filter className="w-3.5 h-3.5 text-theme-neutral-400" />
                 {(['all','mapped','unmapped','parse_error','core','extended','miss','reject'] as FilterStatus[]).map(f => (
                   <button
                     key={f}
                     onClick={() => setFilterStatus(f)}
                     className={`px-2 py-1 text-xs rounded transition-colors font-sans ${
-                      filterStatus === f ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      filterStatus === f ? 'bg-theme-neutral-800 text-white' : 'bg-theme-neutral-100 text-theme-neutral-600 hover:bg-theme-neutral-200'
                     }`}
                   >
                     {f}
@@ -556,21 +556,21 @@ export function ParserDebugger() {
 
           <div className="p-6 font-sans">
             {/* ─── STAGE 0: Raw extracted text (always visible, collapsible) ─── */}
-            <details className="mb-6 bg-white border border-slate-200 rounded-lg overflow-hidden group">
-              <summary className="flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none transition-colors list-none">
-                <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-open:hidden" />
-                  <ChevronDown className="w-4 h-4 text-slate-400 hidden group-open:block" />
+            <details className="mb-6 bg-white border border-theme-neutral-200 rounded-lg overflow-hidden group">
+              <summary className="flex items-center justify-between px-4 py-2.5 bg-theme-neutral-50 hover:bg-theme-neutral-100 cursor-pointer select-none transition-colors list-none">
+                <span className="flex items-center gap-2 text-sm font-medium text-theme-neutral-700">
+                  <ChevronRight className="w-4 h-4 text-theme-neutral-400 group-open:hidden" />
+                  <ChevronDown className="w-4 h-4 text-theme-neutral-400 hidden group-open:block" />
                   Stage 0 — Raw extracted text
-                  <span className="text-xs font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+                  <span className="text-xs font-mono bg-theme-neutral-100 text-theme-neutral-500 px-1.5 py-0.5 rounded">
                     {(debugRecord?.raw_text ?? '').length.toLocaleString()} chars
                   </span>
                 </span>
-                <span className="text-xs text-slate-400 font-sans">
+                <span className="text-xs text-theme-neutral-400 font-sans">
                   Cmd-F to grep silently-filtered lines
                 </span>
               </summary>
-              <pre className="p-4 text-xs font-mono text-slate-700 whitespace-pre-wrap break-words leading-relaxed overflow-auto max-h-[480px] select-text">
+              <pre className="p-4 text-xs font-mono text-theme-neutral-700 whitespace-pre-wrap break-words leading-relaxed overflow-auto max-h-[480px] select-text">
                 {debugRecord?.raw_text ?? '(no raw text — re-upload to capture)'}
               </pre>
             </details>
@@ -584,7 +584,7 @@ export function ParserDebugger() {
                   subtitle="Extracted text from the uploaded PDF, before any parsing"
                 />
                 {!debugRecord ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+                  <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-lg p-4 text-theme-flag-watch text-sm">
                     No debug record found for this report. Debug data is saved on new uploads. Re-upload to capture it.
                   </div>
                 ) : (
@@ -596,27 +596,27 @@ export function ParserDebugger() {
                         { label: 'Text length', value: `${(debugRecord.raw_text ?? '').length.toLocaleString()} chars` },
                         { label: 'Lines', value: `${(debugRecord.raw_text ?? '').split('\n').length.toLocaleString()}` },
                       ].map(item => (
-                        <div key={item.label} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                          <p className="text-xs text-slate-500">{item.label}</p>
-                          <p className="text-sm font-mono text-slate-800 font-medium mt-0.5">{item.value}</p>
+                        <div key={item.label} className="bg-theme-neutral-50 border border-theme-neutral-200 rounded-lg p-3">
+                          <p className="text-xs text-theme-neutral-500">{item.label}</p>
+                          <p className="text-sm font-mono text-theme-neutral-800 font-medium mt-0.5">{item.value}</p>
                         </div>
                       ))}
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-                        <span className="text-sm font-medium text-slate-700">Raw extracted text</span>
+                    <div className="bg-white border border-theme-neutral-200 rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 border-b border-theme-neutral-100 bg-theme-neutral-50">
+                        <span className="text-sm font-medium text-theme-neutral-700">Raw extracted text</span>
                         <div className="flex items-center gap-2">
                           <CopyButton text={debugRecord.raw_text ?? ''} />
                           <button
                             onClick={() => setRawTextExpanded(e => !e)}
-                            className="text-xs text-slate-500 hover:text-slate-700"
+                            className="text-xs text-theme-neutral-500 hover:text-theme-neutral-700"
                           >
                             {rawTextExpanded ? 'Collapse' : 'Expand full text'}
                           </button>
                         </div>
                       </div>
-                      <pre className={`p-4 text-xs font-mono text-slate-700 whitespace-pre-wrap break-all leading-relaxed overflow-y-auto ${rawTextExpanded ? '' : 'max-h-96'}`}>
+                      <pre className={`p-4 text-xs font-mono text-theme-neutral-700 whitespace-pre-wrap break-all leading-relaxed overflow-y-auto ${rawTextExpanded ? '' : 'max-h-96'}`}>
                         {debugRecord.raw_text ?? '(empty)'}
                       </pre>
                     </div>
@@ -635,7 +635,7 @@ export function ParserDebugger() {
                   subtitle="Each block detected by the biomarker label matcher"
                 />
                 {blocks.length === 0 ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+                  <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-lg p-4 text-theme-flag-watch text-sm">
                     No analyte blocks captured. Upload a new report to see parser debug data.
                   </div>
                 ) : (
@@ -644,37 +644,37 @@ export function ParserDebugger() {
                       <div
                         key={b.blockIndex}
                         className={`border rounded-lg overflow-hidden ${
-                          isSuspicious(b) ? 'border-orange-300 bg-orange-50/30' : 'border-slate-200 bg-white'
+                          isSuspicious(b) ? 'border-theme-flag-watch-border bg-theme-flag-watch-bg/30' : 'border-theme-neutral-200 bg-white'
                         }`}
                       >
                         <div className="flex items-start justify-between px-4 py-2.5">
                           <div className="flex items-start gap-3 min-w-0">
-                            <span className="text-xs font-mono text-slate-400 flex-shrink-0 mt-0.5">#{b.blockIndex}</span>
+                            <span className="text-xs font-mono text-theme-neutral-400 flex-shrink-0 mt-0.5">#{b.blockIndex}</span>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono text-slate-800 font-medium text-xs truncate">{b.rawLabel}</span>
-                                <span className="text-slate-400 text-xs">→</span>
-                                <span className="font-mono text-slate-500 text-xs">{b.canonical}</span>
+                                <span className="font-mono text-theme-neutral-800 font-medium text-xs truncate">{b.rawLabel}</span>
+                                <span className="text-theme-neutral-400 text-xs">→</span>
+                                <span className="font-mono text-theme-neutral-500 text-xs">{b.canonical}</span>
                                 <ConfidencePill conf={b.confidence} />
-                                {isSuspicious(b) && <span className="text-xs text-orange-600 font-medium">suspicious</span>}
+                                {isSuspicious(b) && <span className="text-xs text-theme-flag-watch font-medium">suspicious</span>}
                               </div>
                               {b.matchedPattern && (
-                                <p className="text-xs text-slate-400 mt-0.5">Matched pattern: <code className="bg-slate-100 px-1 rounded">{b.matchedPattern}</code></p>
+                                <p className="text-xs text-theme-neutral-400 mt-0.5">Matched pattern: <code className="bg-theme-neutral-100 px-1 rounded">{b.matchedPattern}</code></p>
                               )}
                             </div>
                           </div>
-                          <span className="text-xs text-slate-400 flex-shrink-0 ml-3">line {b.lineIndex}</span>
+                          <span className="text-xs text-theme-neutral-400 flex-shrink-0 ml-3">line {b.lineIndex}</span>
                         </div>
                         {b.missReason && (
                           <div className="px-4 pb-2.5 flex items-center gap-2">
-                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                            <p className="text-xs text-amber-700">{b.missReason}</p>
+                            <AlertCircle className="w-3.5 h-3.5 text-theme-flag-watch flex-shrink-0" />
+                            <p className="text-xs text-theme-flag-watch">{b.missReason}</p>
                           </div>
                         )}
                         {b.blockSnippet && (
                           <div className="px-4 pb-3">
-                            <p className="text-xs text-slate-400 mb-1">Block snippet:</p>
-                            <pre className="text-xs font-mono bg-slate-50 border border-slate-100 rounded p-2 whitespace-pre-wrap break-all text-slate-600 leading-relaxed">
+                            <p className="text-xs text-theme-neutral-400 mb-1">Block snippet:</p>
+                            <pre className="text-xs font-mono bg-theme-neutral-50 border border-theme-neutral-100 rounded p-2 whitespace-pre-wrap break-all text-theme-neutral-600 leading-relaxed">
                               {b.blockSnippet}
                             </pre>
                           </div>
@@ -696,7 +696,7 @@ export function ParserDebugger() {
                   subtitle="Per-analyte extraction details: value, unit, reference range"
                 />
                 {blocks.length === 0 ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+                  <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-lg p-4 text-theme-flag-watch text-sm">
                     No parser blocks found. Upload a new report to capture debug data.
                   </div>
                 ) : (
@@ -709,15 +709,15 @@ export function ParserDebugger() {
                       >
                         <div className="space-y-4">
                           {b.parseError && (
-                            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-md p-3">
-                              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                              <p className="text-xs text-red-700 font-medium">{b.parseError}</p>
+                            <div className="flex items-start gap-2 bg-theme-flag-low-bg border border-theme-flag-low-border rounded-md p-3">
+                              <AlertCircle className="w-4 h-4 text-theme-flag-low flex-shrink-0 mt-0.5" />
+                              <p className="text-xs text-theme-flag-low font-medium">{b.parseError}</p>
                             </div>
                           )}
                           {b.missReason && (
-                            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md p-3">
-                              <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                              <p className="text-xs text-amber-700">{b.missReason}</p>
+                            <div className="flex items-start gap-2 bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-md p-3">
+                              <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                              <p className="text-xs text-theme-flag-watch">{b.missReason}</p>
                             </div>
                           )}
                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -732,8 +732,8 @@ export function ParserDebugger() {
                             <MonoField label="Ref op value" value={b.parsedRefOperatorValue} />
                           </div>
                           <div>
-                            <p className="text-xs text-slate-500 mb-1">Source block snippet:</p>
-                            <pre className="text-xs font-mono bg-slate-50 border border-slate-100 rounded p-2 whitespace-pre-wrap break-all text-slate-600 leading-relaxed">
+                            <p className="text-xs text-theme-neutral-500 mb-1">Source block snippet:</p>
+                            <pre className="text-xs font-mono bg-theme-neutral-50 border border-theme-neutral-100 rounded p-2 whitespace-pre-wrap break-all text-theme-neutral-600 leading-relaxed">
                               {b.blockSnippet}
                             </pre>
                           </div>
@@ -780,74 +780,74 @@ export function ParserDebugger() {
                           onClick={() => setShowOnlyExcluded(v => !v)}
                           className={`px-3 py-1.5 text-xs rounded-full transition-colors font-sans border ${
                             showOnlyExcluded
-                              ? 'bg-amber-100 text-amber-800 border-amber-300'
-                              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                              ? 'bg-theme-flag-watch-bg text-theme-flag-watch border-theme-flag-watch-border'
+                              : 'bg-white text-theme-neutral-600 border-theme-neutral-300 hover:bg-theme-neutral-50'
                           }`}
                         >
                           {showOnlyExcluded ? '✓ ' : ''}Show only excluded
                         </button>
                         <button
                           onClick={handleCopyExcluded}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-sans transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-theme-neutral-100 hover:bg-theme-neutral-200 text-theme-neutral-700 border border-theme-neutral-300 font-sans transition-colors"
                         >
                           <Copy className="w-3 h-3" />
                           Copy excluded rows
                         </button>
                         {excludedCopyMsg && (
-                          <span className="text-xs text-emerald-600 font-sans">{excludedCopyMsg}</span>
+                          <span className="text-xs text-theme-flag-ok font-sans">{excludedCopyMsg}</span>
                         )}
-                        <span className="text-xs text-slate-400 font-sans ml-auto">
+                        <span className="text-xs text-theme-neutral-400 font-sans ml-auto">
                           {allExcludedRows.length} excluded / {analytes.length} total
                         </span>
                       </div>
-                      <div className="overflow-x-auto rounded-lg border border-slate-200">
+                      <div className="overflow-x-auto rounded-lg border border-theme-neutral-200">
                         <table className="w-full text-xs">
-                          <thead className="bg-slate-50 border-b border-slate-200">
+                          <thead className="bg-theme-neutral-50 border-b border-theme-neutral-200">
                             <tr>
                               {['Raw label','Canonical slug','Parse status','Method','Core?','Excluded reason','Needs review'].map(h => (
-                                <th key={h} className="text-left px-3 py-2.5 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                                <th key={h} className="text-left px-3 py-2.5 font-medium text-theme-neutral-600 whitespace-nowrap">{h}</th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100">
+                          <tbody className="divide-y divide-theme-neutral-100">
                             {visibleRows.map(({ a, reason: excludedReason }) => {
                               const isExcluded = excludedReason !== null && excludedReason !== undefined && excludedReason !== '';
                               const rowClass = isExcluded
-                                ? 'bg-amber-50/50 hover:bg-amber-50'
+                                ? 'bg-theme-flag-watch-bg/50 hover:bg-theme-flag-watch-bg'
                                 : a.needs_review
-                                  ? 'bg-amber-50/40'
-                                  : 'bg-white hover:bg-slate-50';
+                                  ? 'bg-theme-flag-watch-bg/40'
+                                  : 'bg-white hover:bg-theme-neutral-50';
                               return (
                                 <tr key={a.id} className={rowClass}>
-                                  <td className="px-3 py-2 font-mono text-slate-700 max-w-[200px] truncate">{a.raw_name}</td>
-                                  <td className="px-3 py-2 font-mono text-slate-500">
-                                    {a.canonical_slug ?? <span className="text-red-400 italic">unmapped</span>}
+                                  <td className="px-3 py-2 font-mono text-theme-neutral-700 max-w-[200px] truncate">{a.raw_name}</td>
+                                  <td className="px-3 py-2 font-mono text-theme-neutral-500">
+                                    {a.canonical_slug ?? <span className="text-theme-flag-low italic">unmapped</span>}
                                   </td>
                                   <td className="px-3 py-2"><StatusPill status={a.parse_status} /></td>
-                                  <td className="px-3 py-2 text-slate-400">
+                                  <td className="px-3 py-2 text-theme-neutral-400">
                                     {a.parse_status === 'mapped' ? 'synonym' : a.parse_status === 'partial' ? 'slug' : '—'}
                                   </td>
                                   <td className="px-3 py-2">
                                     {a.is_core
-                                      ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                                      : <span className="text-slate-300">—</span>}
+                                      ? <CheckCircle className="w-3.5 h-3.5 text-theme-flag-ok" />
+                                      : <span className="text-theme-neutral-300">—</span>}
                                   </td>
                                   <td className="px-3 py-2">
                                     {!isExcluded
-                                      ? <span className="text-slate-300">—</span>
-                                      : <span className="font-mono text-slate-400 italic">{excludedReason}</span>}
+                                      ? <span className="text-theme-neutral-300">—</span>
+                                      : <span className="font-mono text-theme-neutral-400 italic">{excludedReason}</span>}
                                   </td>
                                   <td className="px-3 py-2">
                                     {a.needs_review
-                                      ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                                      : <span className="text-slate-300">—</span>}
+                                      ? <AlertTriangle className="w-3.5 h-3.5 text-theme-flag-watch" />
+                                      : <span className="text-theme-neutral-300">—</span>}
                                   </td>
                                 </tr>
                               );
                             })}
                             {visibleRows.length === 0 && (
                               <tr>
-                                <td colSpan={7} className="px-3 py-6 text-center text-xs text-slate-400 font-sans">
+                                <td colSpan={7} className="px-3 py-6 text-center text-xs text-theme-neutral-400 font-sans">
                                   {showOnlyExcluded ? 'No excluded rows match the current filter.' : 'No rows.'}
                                 </td>
                               </tr>
@@ -896,14 +896,14 @@ export function ParserDebugger() {
                         </div>
                         {a.source_snippet && (
                           <div>
-                            <p className="text-xs text-slate-500 mb-1">source_snippet:</p>
-                            <pre className="text-xs font-mono bg-slate-50 border border-slate-100 rounded p-2 whitespace-pre-wrap break-all text-slate-600">{a.source_snippet}</pre>
+                            <p className="text-xs text-theme-neutral-500 mb-1">source_snippet:</p>
+                            <pre className="text-xs font-mono bg-theme-neutral-50 border border-theme-neutral-100 rounded p-2 whitespace-pre-wrap break-all text-theme-neutral-600">{a.source_snippet}</pre>
                           </div>
                         )}
-                        <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+                        <div className="flex items-center gap-3 pt-2 border-t border-theme-neutral-100">
                           <button
                             onClick={() => setEditRow(a)}
-                            className="px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors"
+                            className="px-3 py-1.5 text-xs bg-theme-neutral-800 text-white rounded-lg hover:bg-theme-neutral-700 transition-colors"
                           >
                             Edit row
                           </button>
@@ -928,9 +928,9 @@ export function ParserDebugger() {
                   {/* Included items */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-slate-800">
+                      <h3 className="text-sm font-semibold text-theme-neutral-800">
                         Included in AI prompt
-                        <span className="ml-2 text-xs font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">{aiInputItems.included.length}</span>
+                        <span className="ml-2 text-xs font-mono bg-theme-flag-ok-bg text-theme-flag-ok px-2 py-0.5 rounded">{aiInputItems.included.length}</span>
                       </h3>
                       <CopyButton text={JSON.stringify(aiInputItems.included.map(a => ({
                         raw_name: a.raw_name,
@@ -940,38 +940,38 @@ export function ParserDebugger() {
                         status: aiInputItems.classifyFn(a),
                       })), null, 2)} />
                     </div>
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto rounded-lg border border-theme-neutral-200">
                       <table className="w-full text-xs">
-                        <thead className="bg-slate-50 border-b border-slate-200">
+                        <thead className="bg-theme-neutral-50 border-b border-theme-neutral-200">
                           <tr>
                             {['#','Name','Value','Unit','Reference range','Status','Core?'].map(h => (
-                              <th key={h} className="text-left px-3 py-2.5 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                              <th key={h} className="text-left px-3 py-2.5 font-medium text-theme-neutral-600 whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-theme-neutral-100">
                           {aiInputItems.included.map((a, idx) => {
                             const status = aiInputItems.classifyFn(a);
                             return (
                               <tr key={a.id} className={
-                                status === 'out_of_range' ? 'bg-red-50' :
-                                status === 'borderline' ? 'bg-amber-50' : 'bg-white'
+                                status === 'out_of_range' ? 'bg-theme-flag-low-bg' :
+                                status === 'borderline' ? 'bg-theme-flag-watch-bg' : 'bg-white'
                               }>
-                                <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
-                                <td className="px-3 py-2 font-mono text-slate-700">{a.raw_name}</td>
-                                <td className="px-3 py-2 font-mono font-medium text-slate-800">{a.value_numeric ?? 'null'}</td>
-                                <td className="px-3 py-2 text-slate-500">{a.unit ?? '—'}</td>
-                                <td className="px-3 py-2 text-slate-500">{a.raw_reference_range ?? '—'}</td>
+                                <td className="px-3 py-2 text-theme-neutral-400">{idx + 1}</td>
+                                <td className="px-3 py-2 font-mono text-theme-neutral-700">{a.raw_name}</td>
+                                <td className="px-3 py-2 font-mono font-medium text-theme-neutral-800">{a.value_numeric ?? 'null'}</td>
+                                <td className="px-3 py-2 text-theme-neutral-500">{a.unit ?? '—'}</td>
+                                <td className="px-3 py-2 text-theme-neutral-500">{a.raw_reference_range ?? '—'}</td>
                                 <td className="px-3 py-2">
                                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                    status === 'out_of_range' ? 'bg-red-100 text-red-800' :
-                                    status === 'borderline' ? 'bg-amber-100 text-amber-800' :
-                                    status === 'in_range' ? 'bg-emerald-100 text-emerald-800' :
-                                    'bg-slate-100 text-slate-600'
+                                    status === 'out_of_range' ? 'bg-theme-flag-low-bg text-theme-flag-low' :
+                                    status === 'borderline' ? 'bg-theme-flag-watch-bg text-theme-flag-watch' :
+                                    status === 'in_range' ? 'bg-theme-flag-ok-bg text-theme-flag-ok' :
+                                    'bg-theme-neutral-100 text-theme-neutral-600'
                                   }`}>{status}</span>
                                 </td>
                                 <td className="px-3 py-2">
-                                  {a.is_core ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> : <span className="text-slate-300">—</span>}
+                                  {a.is_core ? <CheckCircle className="w-3.5 h-3.5 text-theme-flag-ok" /> : <span className="text-theme-neutral-300">—</span>}
                                 </td>
                               </tr>
                             );
@@ -986,16 +986,16 @@ export function ParserDebugger() {
                     <CollapsibleBlock label={`Excluded from AI prompt (${aiInputItems.excluded.length} items over the 20-item cap)`}>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
-                          <thead className="border-b border-slate-100">
+                          <thead className="border-b border-theme-neutral-100">
                             <tr>
                               {['Name','Value','Unit','Status'].map(h => (
-                                <th key={h} className="text-left px-2 py-1.5 font-medium text-slate-500">{h}</th>
+                                <th key={h} className="text-left px-2 py-1.5 font-medium text-theme-neutral-500">{h}</th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-50">
+                          <tbody className="divide-y divide-theme-neutral-50">
                             {aiInputItems.excluded.map(a => (
-                              <tr key={a.id} className="text-slate-500">
+                              <tr key={a.id} className="text-theme-neutral-500">
                                 <td className="px-2 py-1.5 font-mono">{a.raw_name}</td>
                                 <td className="px-2 py-1.5">{a.value_numeric ?? '—'}</td>
                                 <td className="px-2 py-1.5">{a.unit ?? '—'}</td>
@@ -1014,10 +1014,10 @@ export function ParserDebugger() {
                       <div className="space-y-1">
                         {analytes.filter(a => a.needs_review).map(a => (
                           <div key={a.id} className="flex items-center gap-3 text-xs py-1">
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                            <span className="font-mono text-slate-700">{a.raw_name}</span>
-                            <span className="text-slate-400">= {a.value_numeric ?? 'null'} {a.unit ?? ''}</span>
-                            <span className="text-red-500">{a.parse_status}</span>
+                            <AlertTriangle className="w-3.5 h-3.5 text-theme-flag-watch flex-shrink-0" />
+                            <span className="font-mono text-theme-neutral-700">{a.raw_name}</span>
+                            <span className="text-theme-neutral-400">= {a.value_numeric ?? 'null'} {a.unit ?? ''}</span>
+                            <span className="text-theme-flag-low">{a.parse_status}</span>
                           </div>
                         ))}
                       </div>

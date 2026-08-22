@@ -55,10 +55,36 @@ export default {
           */
           'flag-ok': '#2F8F6B',
           'flag-ok-bg': '#EAF4EF',
+          'flag-ok-border': '#CBE4D8',
           'flag-watch': '#B07C25',
           'flag-watch-bg': '#FAF2E3',
+          'flag-watch-border': '#EFDCB6',
           'flag-low': '#B5475A',
           'flag-low-bg': '#FBEDEF',
+          'flag-low-border': '#F0CDD3',
+
+          /* Informational, not a status. Kept distinct from the three flags so
+             an explanatory callout never reads as a result being out of range. */
+          'info': '#2E86B0',
+          'info-bg': '#E8F1F6',
+          'info-border': '#C4DDEA',
+
+          /*
+            Categorical hues for intervention types. NOT chosen by eye — run
+            through the dataviz validator (OKLab lightness band, chroma floor,
+            colour-vision-deficiency separation, contrast vs the #FFF8F7
+            ground) until every check passed. Separation comes from lightness
+            variation as much as hue: hue spacing alone failed protanopia.
+
+            Fixed order, never cycled. `supplement` sits at 2.71:1 against the
+            ground, which is legal only because these always render with a
+            visible text label — do not use it as a bare colour chip.
+          */
+          'cat-medication': '#8E3A5E',
+          'cat-supplement': '#D08A3A',
+          'cat-diet': '#4E7A2E',
+          'cat-exercise': '#2E86B0',
+          'cat-sleep': '#5A4A9E',
 
           /*
             Cycle phases. The organising idea of the redesign: results are read

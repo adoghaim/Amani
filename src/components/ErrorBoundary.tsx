@@ -32,10 +32,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
-        <h1 className="text-xl font-semibold text-gray-900 mb-2">
+        <h1 className="text-xl font-semibold text-theme-neutral-900 mb-2">
           Something went wrong
         </h1>
-        <p className="text-sm text-gray-600 mb-6 max-w-sm">
+        <p className="text-sm text-theme-neutral-600 mb-6 max-w-sm">
           We hit an unexpected error. Reloading usually fixes it. If it keeps
           happening, please reach out.
         </p>

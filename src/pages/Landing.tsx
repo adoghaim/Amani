@@ -1,189 +1,265 @@
-import { Heart, Upload, MessageCircle, FileText, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { CycleMark } from '../components/CycleMark';
+
+/*
+  The old page opened with a centred headline over three equal icon columns —
+  the most generic layout on the web, and it described the product instead of
+  showing it. This version leads with a real reading: a specimen panel with an
+  actual cycle day, actual biomarkers and an actual out-of-range value, so the
+  thing Amani does is visible before anyone has read a word of copy.
+
+  Asymmetric by default. Nothing here is centred except the legal note, which
+  should read as a statement rather than a pitch.
+*/
+
+/** One biomarker row in the specimen panel. `pos` and `width` place the marker
+ *  within its reference range, so the bar carries the same meaning as the
+ *  number rather than decorating it. */
+function SpecimenRow({
+  name, value, unit, range, pos, width, tone,
+}: {
+  name: string; value: string; unit: string; range: string;
+  pos: number; width: number; tone: 'ok' | 'watch' | 'low';
+}) {
+  const bar = {
+    ok: 'bg-theme-flag-ok',
+    watch: 'bg-theme-flag-watch',
+    low: 'bg-theme-flag-low',
+  }[tone];
+
+  return (
+    <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 items-baseline">
+      <div>
+        <span className="text-sm font-medium text-theme-text">{name}</span>
+        <span className="block font-mono text-[11px] text-theme-muted-text-4 mt-0.5">{range}</span>
+      </div>
+      <div className="text-right">
+        <span className="font-mono text-base text-theme-text tabular-nums">{value}</span>
+        <span className="block font-mono text-[10px] text-theme-muted-text-4">{unit}</span>
+      </div>
+      <div className="col-span-2 h-1 rounded-full bg-theme-surface-2 relative overflow-hidden">
+        <span
+          className={`absolute inset-y-0 rounded-full ${bar}`}
+          style={{ left: `${pos}%`, width: `${width}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Step({ n, title, body }: { n: string; title: string; body: string }) {
+  return (
+    <li className="grid grid-cols-[auto_1fr] gap-5 items-start">
+      {/* Numbered because this genuinely is a sequence — you cannot interpret
+          a panel before uploading one. */}
+      <span className="font-mono text-sm text-theme-primary pt-1 tabular-nums">{n}</span>
+      <div className="border-b border-theme-border-inner pb-7">
+        <h3 className="text-lg mb-1.5">{title}</h3>
+        <p className="text-theme-muted-text max-w-prose">{body}</p>
+      </div>
+    </li>
+  );
+}
 
 export function Landing() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-theme-background to-theme-surface-2">
-      <nav className="bg-theme-surface border-b border-theme-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <span className="text-xl font-semibold text-theme-text">Amani</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link to="/login">
-                <Button variant="ghost" size="sm">
-                  Log in
-                </Button>
-              </Link>
-              <Link to="/signup">
-                <Button size="sm">
-                  Start free trial
-                </Button>
-              </Link>
-            </div>
+    <div className="min-h-dvh bg-theme-background">
+      <nav className="border-b border-theme-border-inner">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
+          <span className="flex items-center gap-2.5">
+            <CycleMark className="w-6 h-6 text-theme-primary" />
+            <span className="font-display text-xl text-theme-text">Amani</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <Link to="/login">
+              <Button variant="ghost" size="sm">Log in</Button>
+            </Link>
+            <Link to="/signup">
+              <Button size="sm">Start free trial</Button>
+            </Link>
           </div>
         </div>
       </nav>
 
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
-        <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-4 py-1.5 mb-6">
-          <CheckCircle className="w-4 h-4 text-emerald-600" />
-          <span className="text-emerald-700 text-sm font-semibold">7-day free trial — no credit card required to sign up</span>
-        </div>
-        <h1 className="text-5xl md:text-6xl font-bold text-theme-text mb-4 leading-tight">
-          Understand your lab results.
-        </h1>
-        <p className="text-2xl text-theme-text mb-6 font-medium">
-          Clear explanations with real context.
-        </p>
-        <p className="text-lg text-theme-muted-text mb-10 max-w-3xl mx-auto">
-          Amani helps you make sense of hormone labs in context, so you can have better conversations with your doctor.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
-          <Link to="/signup">
-            <Button size="lg" className="w-full sm:w-auto">
-              Start your free 7-day trial
-            </Button>
-          </Link>
-          <Link to="/login">
-            <Button variant="secondary" size="lg" className="w-full sm:w-auto">
-              Log in
-            </Button>
-          </Link>
-        </div>
-        <p className="text-sm text-theme-muted-text">
-          Free for 7 days, then $9.99/mo or $99.99/yr. Cancel anytime.
-        </p>
-      </section>
+      {/* ── Hero ───────────────────────────────────────────────── */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-8 pt-14 pb-20 lg:pt-24 lg:pb-28">
+        <div className="grid lg:grid-cols-[1.05fr_1fr] gap-14 lg:gap-20 items-center">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.16em] text-theme-primary mb-5">
+              Hormone &amp; blood panels
+            </p>
+            <h1 className="text-[2.6rem] sm:text-5xl lg:text-[3.4rem] leading-[1.04] mb-6">
+              Your labs, read against your cycle.
+            </h1>
+            <p className="text-lg text-theme-text-body mb-9 max-w-[38ch]">
+              The same hormone can be normal on day 3 and worrying on day 21. Amani reads
+              every result in the context of where you actually are, then explains it in
+              language you can take to your doctor.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 mb-5">
+              <Link to="/signup" className="sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto">Start your free 7-day trial</Button>
+              </Link>
+              <Link to="/login" className="sm:w-auto">
+                <Button variant="outline" size="lg" className="w-full sm:w-auto">Log in</Button>
+              </Link>
+            </div>
+            <p className="text-sm text-theme-muted-text-2">
+              No card to start. Then $9.99 a month, or $99.99 a year.
+            </p>
+          </div>
 
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="text-3xl font-bold text-center text-theme-text mb-12">
-          How it works
-        </h2>
-        <div className="grid md:grid-cols-3 gap-8">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-theme-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Upload className="w-8 h-8 text-theme-primary" />
+          {/* Specimen panel — the product, not a picture of the product. */}
+          <div className="relative">
+            <div className="rounded-2xl border border-theme-border bg-theme-surface p-6 sm:p-7 shadow-theme-lg">
+              <div className="flex items-center gap-4 pb-5 mb-5 border-b border-theme-border-inner">
+                <svg viewBox="0 0 100 100" className="w-16 h-16 shrink-0" role="img" aria-label="Cycle day 21 of 28, luteal phase">
+                  <circle cx="50" cy="50" r="41" fill="none" stroke="#EFDFE2" strokeWidth="8" />
+                  <circle
+                    cx="50" cy="50" r="41" fill="none" stroke="#C97C8B" strokeWidth="8"
+                    strokeLinecap="round" strokeDasharray="257.6" strokeDashoffset="64.4"
+                    transform="rotate(-90 50 50)"
+                  />
+                  <text x="50" y="47" textAnchor="middle" className="font-mono" fontSize="21" fill="#2A1F23">21</text>
+                  <text x="50" y="63" textAnchor="middle" className="font-mono" fontSize="9" fill="#A8969C" letterSpacing="1">OF 28</text>
+                </svg>
+                <div>
+                  <p className="font-display text-xl text-theme-accent leading-tight">Luteal phase</p>
+                  <p className="text-sm text-theme-muted-text-2 mt-0.5">
+                    Quest Diagnostics &middot; drawn 14 March
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <SpecimenRow name="Ferritin" value="18" unit="ng/mL" range="15–150 ng/mL" pos={2} width={7} tone="low" />
+                <SpecimenRow name="Estradiol" value="142" unit="pg/mL" range="26–165 pg/mL · luteal" pos={71} width={9} tone="ok" />
+                <SpecimenRow name="TSH" value="4.12" unit="mIU/L" range="0.45–4.50 mIU/L" pos={87} width={8} tone="watch" />
+              </div>
+
+              <p className="mt-6 pt-5 border-t border-theme-border-inner text-sm text-theme-text-body">
+                <span className="text-theme-flag-low font-medium">Ferritin is low</span> and has been
+                falling since October. Everything else sits where it should for day 21.
+              </p>
             </div>
-            <h3 className="text-xl font-semibold text-theme-text mb-2">
-              1. Upload labs
-            </h3>
-            <p className="text-theme-muted-text">
-              Upload your lab results as a PDF or image. We keep your data secure and private.
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="w-16 h-16 bg-theme-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MessageCircle className="w-8 h-8 text-theme-primary" />
-            </div>
-            <h3 className="text-xl font-semibold text-theme-text mb-2">
-              2. Add a bit of context
-            </h3>
-            <p className="text-theme-muted-text">
-              Tell us about your cycle, symptoms, and health situation so we can provide personalized insights.
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="w-16 h-16 bg-theme-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-theme-primary" />
-            </div>
-            <h3 className="text-xl font-semibold text-theme-text mb-2">
-              3. Get clear explanations
-            </h3>
-            <p className="text-theme-muted-text">
-              Receive an educational breakdown with context, questions to ask your doctor, and guidance on next steps.
-            </p>
           </div>
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="bg-theme-surface rounded-2xl shadow-lg border border-theme-border p-8 text-center">
-          <div className="inline-flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-full px-4 py-1.5 mb-5">
-            <span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
-            <span className="text-rose-700 text-sm font-semibold tracking-wide uppercase">Founders Launch</span>
-          </div>
-          <h2 className="text-3xl font-bold text-theme-text mb-6">
-            Simple, transparent pricing
-          </h2>
-
-          <div className="grid sm:grid-cols-2 gap-6 mb-8 text-left max-w-xl mx-auto">
-            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Monthly</p>
-              <p className="text-sm text-gray-400 line-through mb-0.5">$19.99/mo</p>
-              <p className="text-3xl font-bold text-gray-900">$9.99<span className="text-base font-normal text-gray-500">/mo</span></p>
+      {/* ── How it works ───────────────────────────────────────── */}
+      <section className="border-t border-theme-border-inner bg-theme-background-tint">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+          <div className="grid lg:grid-cols-[1fr_1.45fr] gap-12 lg:gap-20">
+            <div>
+              <h2 className="text-3xl mb-3">How it works</h2>
+              <p className="text-theme-muted-text max-w-[34ch]">
+                Three steps, about two minutes. Your results stay yours.
+              </p>
             </div>
-            <div className="bg-gray-50 rounded-xl p-5 border border-rose-300 relative">
-              <span className="absolute -top-2.5 right-4 bg-gray-900 text-white text-xs font-semibold px-2.5 py-0.5 rounded-full">Best Value</span>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Yearly</p>
-              <p className="text-sm text-gray-400 line-through mb-0.5">$199.99/yr</p>
-              <p className="text-3xl font-bold text-gray-900">$99.99<span className="text-base font-normal text-gray-500">/yr</span></p>
-            </div>
+            <ol className="space-y-7">
+              <Step
+                n="01"
+                title="Upload the panel"
+                body="A PDF from your portal or a photo of the printout. Quest, LabCorp and Hone are read directly; anything else is parsed generically."
+              />
+              <Step
+                n="02"
+                title="Say where you are"
+                body="Cycle dates and anything you have noticed — sleep, energy, a new supplement. This is what turns a reference range into an answer."
+              />
+              <Step
+                n="03"
+                title="Get it in plain language"
+                body="What each marker means at this point in your cycle, what changed since last time, and the specific questions worth raising at your next appointment."
+              />
+            </ol>
           </div>
+        </div>
+      </section>
 
-          <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-4 py-1.5 mb-5">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span className="text-emerald-700 text-sm font-semibold">7-day free trial included</span>
-          </div>
-
-          <ul className="text-left space-y-3 mb-6 max-w-md mx-auto">
-            <li className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
-              <span className="text-theme-text">Unlimited lab report uploads</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
-              <span className="text-theme-text">AI-powered educational explanations</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
-              <span className="text-theme-text">Cycle-aware context</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-theme-primary mt-0.5 shrink-0" />
-              <span className="text-theme-text">Questions to ask your doctor</span>
-            </li>
-          </ul>
-          <Link to="/signup">
-            <Button size="lg" className="w-full sm:w-auto mb-3">
-              Start your free 7-day trial
-            </Button>
-          </Link>
-          <p className="text-sm text-theme-muted-text">
-            Free for 7 days, then $9.99/mo or $99.99/yr. Cancel anytime.
+      {/* ── Pricing ────────────────────────────────────────────── */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+        <div className="mb-10">
+          <h2 className="text-3xl mb-3">Pricing</h2>
+          <p className="text-theme-muted-text max-w-[42ch]">
+            One plan, billed monthly or yearly. Seven days free first, and you can cancel
+            from inside the app.
           </p>
         </div>
+
+        <div className="grid sm:grid-cols-2 gap-5 max-w-3xl">
+          {/* Emphasis on the recommended tier comes from colour and weight, not
+              from making the card taller than its neighbour. */}
+          <div className="rounded-2xl border border-theme-border bg-theme-surface p-7 flex flex-col">
+            <p className="font-mono text-xs uppercase tracking-[0.14em] text-theme-muted-text-3 mb-4">Monthly</p>
+            <p className="mb-1">
+              <span className="font-mono text-4xl text-theme-text tabular-nums">$9.99</span>
+              <span className="text-theme-muted-text-2 text-sm ml-1">/month</span>
+            </p>
+            <p className="font-mono text-sm text-theme-muted-text-4 line-through mb-7">$19.99</p>
+            <Link to="/signup" className="mt-auto">
+              <Button variant="outline" className="w-full">Start free trial</Button>
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border-2 border-theme-primary bg-theme-surface p-7 flex flex-col relative">
+            <span className="absolute -top-3 left-7 bg-theme-accent text-white font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded">
+              Save $20
+            </span>
+            <p className="font-mono text-xs uppercase tracking-[0.14em] text-theme-primary mb-4">Yearly</p>
+            <p className="mb-1">
+              <span className="font-mono text-4xl text-theme-text tabular-nums">$99.99</span>
+              <span className="text-theme-muted-text-2 text-sm ml-1">/year</span>
+            </p>
+            <p className="font-mono text-sm text-theme-muted-text-4 line-through mb-7">$199.99</p>
+            <Link to="/signup" className="mt-auto">
+              <Button className="w-full">Start free trial</Button>
+            </Link>
+          </div>
+        </div>
+
+        <ul className="grid sm:grid-cols-2 gap-x-10 gap-y-3 mt-10 max-w-3xl">
+          {[
+            'Unlimited lab panels',
+            'Cycle-aware interpretation',
+            'Trends across every past panel',
+            'Questions to take to your doctor',
+          ].map(f => (
+            <li key={f} className="flex items-baseline gap-3 text-theme-text-body border-b border-theme-border-inner pb-3">
+              <CycleMark className="w-3.5 h-3.5 text-theme-primary shrink-0 translate-y-0.5" />
+              {f}
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <section className="bg-theme-surface-2 py-16">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-theme-text mb-2">
-              Important: This is educational only
-            </h3>
-            <p className="text-theme-text">
-              Amani provides educational information and does not diagnose conditions or provide medical advice.
-              Always consult with a licensed healthcare provider about your health concerns.
+      {/* ── Boundary ───────────────────────────────────────────── */}
+      <section className="border-t border-theme-border-inner">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-14">
+          <div className="max-w-[62ch]">
+            <h2 className="font-mono text-xs uppercase tracking-[0.16em] text-theme-muted-text-3 mb-3">
+              What Amani is not
+            </h2>
+            <p className="text-theme-text-body">
+              Amani is educational. It does not diagnose, prescribe, or replace your
+              clinician — it helps you walk into the appointment knowing what to ask.
+              Anything that concerns you belongs in front of a licensed provider.
             </p>
           </div>
         </div>
       </section>
 
-      <footer className="bg-theme-surface border-t border-theme-border py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Heart className="w-5 h-5 text-theme-primary fill-theme-primary" />
-              <span className="text-theme-text font-semibold">Amani</span>
-            </div>
-            <div className="flex gap-6 text-sm text-theme-muted-text">
-              <Link to="/privacy" className="hover:text-theme-text transition-colors">Privacy</Link>
-              <Link to="/terms" className="hover:text-theme-text transition-colors">Terms</Link>
-              <Link to="/contact" className="hover:text-theme-text transition-colors">Contact</Link>
-            </div>
+      <footer className="border-t border-theme-border-inner">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 flex flex-col sm:flex-row justify-between items-center gap-5">
+          <span className="flex items-center gap-2.5">
+            <CycleMark className="w-5 h-5 text-theme-primary" />
+            <span className="font-display text-theme-text">Amani</span>
+          </span>
+          <div className="flex gap-7 text-sm text-theme-muted-text-2">
+            <Link to="/privacy" className="hover:text-theme-text transition-colors">Privacy</Link>
+            <Link to="/terms" className="hover:text-theme-text transition-colors">Terms</Link>
+            <Link to="/contact" className="hover:text-theme-text transition-colors">Contact</Link>
           </div>
         </div>
       </footer>

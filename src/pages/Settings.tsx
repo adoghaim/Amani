@@ -202,7 +202,7 @@ export function Settings() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-theme-neutral-600">Loading...</p>
         </div>
       </Layout>
     );
@@ -241,19 +241,19 @@ export function Settings() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
+        <h1 className="text-3xl font-bold text-theme-neutral-900 mb-8">Settings</h1>
 
         <div className="space-y-6">
           <Card>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Account Information</h2>
+            <h2 className="text-xl font-semibold text-theme-neutral-900 mb-4">Account Information</h2>
             <div className="space-y-3">
               <div>
-                <span className="text-sm font-medium text-gray-700">Email:</span>
-                <p className="text-gray-900">{user.email}</p>
+                <span className="text-sm font-medium text-theme-neutral-700">Email:</span>
+                <p className="text-theme-neutral-900">{user.email}</p>
               </div>
               <div>
-                <span className="text-sm font-medium text-gray-700">Member Since:</span>
-                <p className="text-gray-900">
+                <span className="text-sm font-medium text-theme-neutral-700">Member Since:</span>
+                <p className="text-theme-neutral-900">
                   {new Date(userProfile.created_at).toLocaleDateString('en-US', {
                     month: 'long',
                     day: 'numeric',
@@ -262,8 +262,8 @@ export function Settings() {
                 </p>
               </div>
               <div>
-                <span className="text-sm font-medium text-gray-700">Subscription Status:</span>
-                <p className="text-gray-900 capitalize">{userProfile.subscription_status}</p>
+                <span className="text-sm font-medium text-theme-neutral-700">Subscription Status:</span>
+                <p className="text-theme-neutral-900 capitalize">{userProfile.subscription_status}</p>
               </div>
             </div>
           </Card>
@@ -277,7 +277,7 @@ export function Settings() {
                   <Bell className="w-4 h-4 text-[#C97C8B]" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Reminder Preferences</h2>
+                  <h2 className="text-lg font-semibold text-theme-neutral-900">Reminder Preferences</h2>
                   <p className="text-xs text-[#6B5B60]">
                     In-app notifications. Mobile push support coming soon.
                   </p>
@@ -298,7 +298,7 @@ export function Settings() {
                     <button
                       onClick={() => updatePref(key, !(prefs[key] as boolean))}
                       className={`shrink-0 w-11 h-6 rounded-full transition-colors duration-200 relative ${
-                        prefs[key] ? 'bg-[#C97C8B]' : 'bg-gray-200'
+                        prefs[key] ? 'bg-[#C97C8B]' : 'bg-theme-neutral-200'
                       }`}
                     >
                       <span
@@ -352,21 +352,21 @@ export function Settings() {
             )}
           </Card>
 
-          <Card className="border-teal-200 bg-teal-50/40">
+          <Card className="border-theme-flag-ok-border bg-theme-flag-ok-bg/40">
             <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <ShieldCheck className="w-5 h-5 text-teal-700" />
+              <div className="w-10 h-10 bg-theme-flag-ok-bg rounded-full flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-5 h-5 text-theme-flag-ok" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-1">
+                <h2 className="text-lg font-semibold text-theme-neutral-900 mb-1">
                   Data Privacy & Security
                 </h2>
-                <p className="text-sm text-gray-600 leading-relaxed">
+                <p className="text-sm text-theme-neutral-600 leading-relaxed">
                   Your data is protected with account-based access controls and encryption in
                   transit. Only you can access your lab results and health information — no other
                   user or third party can view your data.
                 </p>
-                <div className="mt-3 flex items-center gap-2 text-xs text-teal-700 font-medium">
+                <div className="mt-3 flex items-center gap-2 text-xs text-theme-flag-ok font-medium">
                   <Lock className="w-3.5 h-3.5" />
                   <span>All data is scoped to your account and encrypted in transit</span>
                 </div>
@@ -374,14 +374,14 @@ export function Settings() {
             </div>
           </Card>
 
-          <Card className="border-red-200">
+          <Card className="border-theme-flag-low-border">
             <div className="flex items-start gap-4 mb-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <Trash2 className="w-6 h-6 text-red-600" />
+              <div className="w-12 h-12 bg-theme-flag-low-bg rounded-full flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-theme-flag-low" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Delete My Data</h2>
-                <p className="text-gray-600 mb-4">
+                <h2 className="text-xl font-semibold text-theme-neutral-900 mb-2">Delete My Data</h2>
+                <p className="text-theme-neutral-600 mb-4">
                   Permanently delete all your health data and account. This action cannot be undone.
                 </p>
                 {!showDeleteConfirm ? (
@@ -390,15 +390,15 @@ export function Settings() {
                   </Button>
                 ) : (
                   <div className="space-y-4">
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg p-4">
                       <div className="flex items-start gap-2 mb-3">
-                        <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 text-theme-flag-low mt-0.5" />
                         <div>
-                          <h3 className="font-semibold text-red-900 mb-1">
+                          <h3 className="font-semibold text-theme-flag-low mb-1">
                             Warning: This action is permanent
                           </h3>
-                          <p className="text-sm text-red-800">Deleting your data will:</p>
-                          <ul className="text-sm text-red-800 list-disc list-inside mt-2 space-y-1">
+                          <p className="text-sm text-theme-flag-low">Deleting your data will:</p>
+                          <ul className="text-sm text-theme-flag-low list-disc list-inside mt-2 space-y-1">
                             <li>Permanently delete all your lab reports</li>
                             <li>Remove all uploaded files</li>
                             <li>Delete all biomarker data and interpretations</li>
@@ -451,20 +451,20 @@ export function Settings() {
                     )}
 
                     {error && (
-                      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                      <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg">
                         {error}
                       </div>
                     )}
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-theme-neutral-700 mb-2">
                         Type DELETE to confirm
                       </label>
                       <input
                         type="text"
                         value={deleteConfirmText}
                         onChange={(e) => setDeleteConfirmText(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-flag-low-border focus:border-transparent"
                         placeholder="DELETE"
                       />
                     </div>
