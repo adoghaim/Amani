@@ -1,13 +1,47 @@
+@import './styles/fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-theme-background text-theme-text;
+    @apply bg-theme-background text-theme-text font-sans;
     line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     /* Prevent elastic overscroll on iOS WebView */
     overscroll-behavior: none;
+  }
+
+  /*
+    Display type is set on the optical-size axis so Fraunces gets its warmth at
+    headline sizes and stays readable small. Tight tracking and balanced wrapping
+    keep headings from stranding a single word on the last line.
+  */
+  h1, h2, h3 {
+    @apply font-display text-theme-text;
+    font-variation-settings: 'opsz' 40;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /*
+    Every number in Amani is a measurement — a lab value, a reference range, a
+    cycle day. Tabular figures make two readings comparable down a column, which
+    proportional figures make impossible.
+  */
+  .tnum,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Safe-area inset utilities for Capacitor/iOS notch and home indicator */
@@ -15,4 +49,13 @@
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .safe-left   { padding-left:   env(safe-area-inset-left, 0px); }
   .safe-right  { padding-right:  env(safe-area-inset-right, 0px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
