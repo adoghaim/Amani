@@ -16,20 +16,26 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
+  // active:scale gives the press a physical response — without it a tap on
+  // device feels like nothing happened until the next screen paints.
+  // motion-reduce opts out for anyone who asked the OS to stop animations.
   const baseStyles =
-    'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm';
+    'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 ' +
+    'active:scale-[0.98] motion-reduce:active:scale-100 motion-reduce:transition-none ' +
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background ' +
+    'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 shadow-theme-sm';
 
   const variants = {
     primary:
-      'bg-theme-primary hover:bg-theme-primary-dark text-white focus:ring-theme-primary',
+      'bg-theme-primary hover:bg-theme-primary-dark text-white focus-visible:ring-theme-primary',
     secondary:
-      'bg-theme-surface-2 hover:bg-theme-border text-theme-text border border-theme-border focus:ring-theme-primary',
+      'bg-theme-surface-2 hover:bg-theme-surface-hover text-theme-text border border-theme-border focus-visible:ring-theme-primary',
     danger:
-      'bg-theme-danger hover:bg-red-700 text-white focus:ring-theme-danger',
+      'bg-theme-danger hover:bg-[#9E3A4C] text-white focus-visible:ring-theme-danger',
     ghost:
-      'bg-transparent hover:bg-theme-surface-2 text-theme-muted-text shadow-none focus:ring-theme-primary',
+      'bg-transparent hover:bg-theme-surface-2 text-theme-muted-text shadow-none focus-visible:ring-theme-primary',
     outline:
-      'border border-theme-border text-theme-text bg-theme-surface hover:bg-theme-surface-2 focus:ring-theme-primary',
+      'border border-theme-border text-theme-text bg-theme-surface hover:bg-theme-surface-2 focus-visible:ring-theme-primary',
   };
 
   const sizes = {
