@@ -31,6 +31,10 @@ No automated test script or test directory is currently configured. Before openi
 
 Recent history uses short imperative or descriptive commits such as `Updated build.gradle` and `Fix Android Supabase env embedding`. Keep commits scoped and clear. PRs should include a concise summary, linked issue if applicable, verification commands, screenshots for UI changes, and notes for Supabase migrations, Edge Function secrets, or Capacitor sync requirements.
 
+## Deployment
+
+The web app is hosted on **Netlify** (`amani-biometrics`, custom domain `amanibiometrics.com`), which builds a deploy preview for every PR. It is **not** hosted on Vercel — a leftover Vercel GitHub integration still posts a failing `Vercel` status check on PRs, and that failure is expected noise, not a merge blocker. Judge PRs by the `Lint, typecheck, build` CI check and the Netlify preview. Supabase migrations and Edge Functions deploy separately and manually (`supabase db push`, `supabase functions deploy <name>`); Netlify never deploys anything under `supabase/`.
+
 ## Security & Configuration Tips
 
 Use `.env` for Vite variables such as `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and optional Stripe keys. Store Edge Function secrets such as `OPENAI_API_KEY` in Supabase, not in source control. Never commit user health data, lab files, API keys, or local build artifacts.

@@ -37,3 +37,7 @@ ios/Pods/
 **/*.ipa
 **/*.keystore
 **/*.jks
+
+# Host CLI local state (Netlify is the web host; Vercel dir is a leftover)
+.netlify/
+.vercel/
