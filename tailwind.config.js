@@ -28,10 +28,72 @@ export default {
           success: '#2F8F6B',
           warning: '#C78A2A',
           danger: '#B5475A',
+
+          /*
+            Warm neutral ramp. The app carried ~1,100 usages of Tailwind's
+            `gray`, `slate` and `zinc` — all cool-biased — sitting on a warm
+            rose ground, which is what made the UI read muddy. These are the
+            same lightness steps tinted toward the rose, so they sit on the
+            background instead of fighting it. Replace gray-N with neutral-N.
+          */
+          'neutral-50':  '#FBF7F7',
+          'neutral-100': '#F4EEEE',
+          'neutral-200': '#E7DDDF',
+          'neutral-300': '#D5C7CA',
+          'neutral-400': '#A8969C',
+          'neutral-500': '#837177',
+          'neutral-600': '#665459',
+          'neutral-700': '#4A3A40',
+          'neutral-800': '#332830',
+          'neutral-900': '#2A1F23',
+
+          /*
+            Muted semantics. A flagged biomarker should inform, not alarm —
+            someone reading a low ferritin is already anxious. These are the
+            success/warning/danger hues desaturated and darkened to stay
+            legible on the warm ground without shouting.
+          */
+          'flag-ok': '#2F8F6B',
+          'flag-ok-bg': '#EAF4EF',
+          'flag-watch': '#B07C25',
+          'flag-watch-bg': '#FAF2E3',
+          'flag-low': '#B5475A',
+          'flag-low-bg': '#FBEDEF',
+
+          /*
+            Cycle phases. The organising idea of the redesign: results are read
+            against where someone is in their cycle, so phase needs to be a
+            first-class token rather than an ad-hoc colour at each call site.
+            Warm through the follicular rise, brightest at ovulation, deeper
+            through the luteal fall.
+          */
+          'phase-menstrual': '#A85C6D',
+          'phase-menstrual-bg': '#F7E7EA',
+          'phase-follicular': '#C08A6B',
+          'phase-follicular-bg': '#F9EEE6',
+          'phase-ovulatory': '#C97C8B',
+          'phase-ovulatory-bg': '#FBEEF0',
+          'phase-luteal': '#7A3E55',
+          'phase-luteal-bg': '#F4E6EA',
         },
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        /* Fraunces carries the warmth; used for headings only, never body. */
+        display: ['"Fraunces Variable"', 'Georgia', 'Cambria', 'serif'],
+        /* Instrument Sans for everything read as interface. */
+        sans: ['"Instrument Sans Variable"', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        /* Plex Mono for every measurement. Unambiguous 0/O and 1/l matter when
+           the number is a test result. */
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+      boxShadow: {
+        /*
+          Shadows tinted with the ground's hue rather than neutral black, so
+          elevation reads as part of the surface instead of dirt on top of it.
+        */
+        'theme-sm': '0 1px 2px rgba(42, 31, 35, 0.05)',
+        'theme': '0 1px 2px rgba(42, 31, 35, 0.05), 0 4px 12px -6px rgba(42, 31, 35, 0.14)',
+        'theme-lg': '0 1px 2px rgba(42, 31, 35, 0.05), 0 16px 40px -24px rgba(42, 31, 35, 0.34)',
       },
     },
   },

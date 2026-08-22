@@ -1,0 +1,57 @@
+/*
+ * Amani's typefaces, bundled.
+ *
+ * These are imported from node_modules rather than linked from Google Fonts on
+ * purpose. `capacitor.config.ts` locks `allowNavigation` to Supabase and
+ * Stripe, so a <link> to fonts.googleapis.com silently fails on device and the
+ * app falls back to the system face — which is exactly the state the app was
+ * in before this. Bundling ships the fonts inside the binary, so type renders
+ * identically on web, iOS, Android, and offline.
+ *
+ * Latin subsets only: ~148 kB total across all five faces. The full packages
+ * carry Vietnamese, Greek and Cyrillic ranges that would otherwise be bundled
+ * into the native app and never used.
+ */
+
+/* Display — Fraunces, on its optical-size axis. Warmth at large sizes is the
+   whole reason it's here; the opsz axis is what provides it. */
+@font-face {
+  font-family: 'Fraunces Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/fraunces/files/fraunces-latin-opsz-normal.woff2') format('woff2-variations');
+}
+
+/* UI — Instrument Sans, weight axis only. */
+@font-face {
+  font-family: 'Instrument Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+/* Data — IBM Plex Mono. Every lab value, reference range and cycle day renders
+   in this: unambiguous 0/O and 1/l matter when the number is a test result. */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+}
