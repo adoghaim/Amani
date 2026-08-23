@@ -1230,7 +1230,13 @@ export function ReportView() {
           {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
-              <div className="bg-theme-text px-6 py-5">
+              {/*
+                Deep plum, not near-black. A single #2A1F23 block dropped into an
+                otherwise warm light page reads as a copy-paste accident; the
+                accent is still high-contrast enough to carry the headline but
+                belongs to the palette, so it reads as deliberate emphasis.
+              */}
+              <div className="bg-theme-accent px-6 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
                   <Sparkles className="w-4 h-4 text-theme-primary-light" />
                   <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani analysis</span>

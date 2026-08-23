@@ -71,7 +71,7 @@ function FlagCard({ flag }: { flag: FlagItem }) {
           </div>
           <div className="flex flex-wrap gap-1 mt-1">
             {flag.biomarkers_involved.map(b => (
-              <span key={b} className="text-xs text-theme-muted-text-2 bg-theme-surface/70 rounded px-1.5 py-0.5 border border-white">
+              <span key={b} className="text-xs text-theme-muted-text-2 bg-theme-surface/70 rounded px-1.5 py-0.5 border border-theme-surface">
                 {formatBiomarkerName(b)}
               </span>
             ))}
@@ -84,7 +84,7 @@ function FlagCard({ flag }: { flag: FlagItem }) {
       </button>
       {expanded && (
         <div className="px-4 pb-4 pt-0">
-          <div className="border-t border-white/60 pt-3">
+          <div className="border-t border-theme-surface/60 pt-3">
             <p className="text-sm text-theme-text leading-relaxed">{flag.description}</p>
           </div>
         </div>

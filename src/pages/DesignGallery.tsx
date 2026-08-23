@@ -18,6 +18,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { CycleMark } from '../components/CycleMark';
+import { BiomarkerCard } from '../components/BiomarkerCard';
 import type { CyclePhase } from '../types';
 
 const PHASES: CyclePhase[] = ['menstrual', 'follicular', 'ovulatory', 'luteal'];
@@ -119,6 +120,38 @@ export function DesignGallery() {
           <div className="grid sm:grid-cols-2 gap-5 max-w-3xl">
             <Card><p className="text-sm">Flat by default — no elevation claim.</p></Card>
             <Card elevated><p className="text-sm">Elevated, for content that outranks its neighbours.</p></Card>
+          </div>
+        </Section>
+
+        <Section title="Biomarker card — in range, watch, below range">
+          <div className="grid lg:grid-cols-3 gap-5">
+            <BiomarkerCard
+              name="estradiol" value={142} unit="pg/mL"
+              labRefMin={26} labRefMax={165} cyclePhase="luteal"
+              historicalValues={[
+                { date: '2025-10-19', value: 96 },
+                { date: '2026-01-02', value: 118 },
+                { date: '2026-03-14', value: 142 },
+              ]}
+            />
+            <BiomarkerCard
+              name="tsh" value={4.12} unit="mIU/L"
+              labRefMin={0.45} labRefMax={4.5}
+              historicalValues={[
+                { date: '2025-10-19', value: 2.4 },
+                { date: '2026-01-02', value: 3.3 },
+                { date: '2026-03-14', value: 4.12 },
+              ]}
+            />
+            <BiomarkerCard
+              name="ferritin" value={18} unit="ng/mL"
+              labRefMin={15} labRefMax={150}
+              historicalValues={[
+                { date: '2025-10-19', value: 41 },
+                { date: '2026-01-02', value: 28 },
+                { date: '2026-03-14', value: 18 },
+              ]}
+            />
           </div>
         </Section>
 

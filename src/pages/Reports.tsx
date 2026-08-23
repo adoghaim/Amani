@@ -147,7 +147,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
           >
             {deleting ? (
               <>
-                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <span className="w-3.5 h-3.5 border-2 border-theme-surface/40 border-t-white rounded-full animate-spin" />
                 Deleting...
               </>
             ) : (

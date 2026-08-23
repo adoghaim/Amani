@@ -99,16 +99,29 @@ function RangeBar({
           style={{ left: `${optLeft}%`, width: `${optWidth}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-theme-text border-2 border-white shadow-sm z-10"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-theme-accent border-2 border-theme-surface shadow-theme-sm z-10"
           style={{ left: `calc(${valuePos}% - 6px)` }}
         />
       </div>
-      <div className="flex justify-between text-[10px] text-theme-muted-text-3 mt-1">
+      {/*
+        Range labels are captions, not data. They were coloured green and blue,
+        which put two more hues into a row that already carries a status pill, a
+        trend arrow and the bar's own banding — and the green read as "in range"
+        when it was only naming the optimal band. A small legend dot carries the
+        mapping; the text stays in muted ink.
+      */}
+      <div className="flex justify-between font-mono text-[10px] text-theme-muted-text-3 mt-1 tabular-nums">
         <span>{formatRangeLabel(clinMin ?? optMin)}</span>
         <div className="flex gap-3 text-center items-center">
-          <span className="text-theme-flag-ok">Opt: {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-theme-flag-ok" aria-hidden="true" />
+            Opt {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}
+          </span>
           {clinMin !== null && clinMax !== null && (
-            <span className="text-theme-info">Lab: {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-theme-info" aria-hidden="true" />
+              Lab {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}
+            </span>
           )}
           {isExtreme && (
             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border">
@@ -234,16 +247,39 @@ export function BiomarkerCard({
               {pill.label}
             </div>
             {trendDir && (
-              <span className={`text-xs font-medium ${trendDir === 'up' ? 'text-theme-flag-low' : 'text-theme-flag-ok'}`}>
+              /*
+                Direction is not valence. This coloured every increase red and
+                every decrease green, so a ferritin recovering from 18 toward
+                its range rendered as a red warning arrow while a rising TSH and
+                a rising estradiol looked identical. Whether "up" is good
+                depends on the analyte and where it started, which this arrow
+                does not know — so it reports direction in neutral ink and lets
+                the status pill carry the judgement.
+              */
+              <span
+                className="text-xs font-medium text-theme-muted-text-2"
+                title={trendDir === 'up' ? 'Higher than last panel' : 'Lower than last panel'}
+              >
                 {trendDir === 'up' ? '↑' : '↓'}
+                <span className="sr-only">
+                  {trendDir === 'up' ? 'Higher than last panel' : 'Lower than last panel'}
+                </span>
               </span>
             )}
           </div>
+          {/*
+            The measurement wears the data face. This is exactly where mono
+            earns its keep — an unambiguous 0/O and 1/l matter when the number
+            is a test result, and tabular figures let two panels be compared
+            down a column.
+          */}
           <div className="flex items-baseline gap-1.5 text-theme-muted-text-2">
-            <span className="text-xl font-bold text-theme-text">{formattedValue}</span>
-            <span className="text-xs">{unit}</span>
+            <span className="font-mono text-xl text-theme-text tabular-nums">{formattedValue}</span>
+            <span className="font-mono text-xs">{unit}</span>
             {labRefMin !== null && labRefMax !== null && (
-              <span className="text-xs text-theme-muted-text-3">· lab ref: {labRefMin}–{labRefMax}</span>
+              <span className="font-mono text-xs text-theme-muted-text-3 tabular-nums">
+                · ref {labRefMin}–{labRefMax}
+              </span>
             )}
           </div>
           {(() => {
