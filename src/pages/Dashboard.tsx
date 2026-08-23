@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Button } from '../components/Button';
 import {
   Droplets,
   Plus,
@@ -335,91 +336,107 @@ export function Dashboard() {
 
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text">Dashboard</h1>
-            <p className="text-sm text-theme-muted-text mt-0.5">Your health overview at a glance</p>
+            <h1 className="text-3xl">Dashboard</h1>
+            <p className="text-sm text-theme-muted-text-2 mt-1">Where you are, and what your last panel said.</p>
           </div>
           <Link to="/app/new">
-            <button
-              disabled={!canCreateReport}
-              className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
-            >
+            <Button size="md" disabled={!canCreateReport} className="gap-2">
               <Plus className="w-4 h-4" />
-              New lab report
-            </button>
+              New panel
+            </Button>
           </Link>
         </div>
 
-        {userProfile?.subscription_status !== 'active' && (
-          <Link to="/app/pricing" className="block mb-5">
-            <div className="flex items-center justify-between gap-4 bg-theme-surface border border-theme-border rounded-xl px-5 py-4 hover:border-theme-primary hover:shadow-sm transition-all">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-theme-flag-low inline-block"></span>
-                  Founders Launch
-                </span>
-                <span className="text-sm text-theme-text font-medium">
-                  <span className="text-theme-muted-text-4 line-through mr-1.5">$19.99/mo</span>
-                  $9.99/mo &nbsp;&middot;&nbsp;
-                  <span className="text-theme-muted-text-4 line-through mr-1.5">$199.99/yr</span>
-                  $99.99/yr
-                </span>
-              </div>
-              <span className="text-sm font-medium text-theme-primary shrink-0">View pricing &rarr;</span>
-            </div>
-          </Link>
-        )}
+        {/*
+          One notice, not four.
 
-        {showTrialBanner && (
-          <div className="mb-5 bg-gradient-to-r from-theme-surface-2 to-theme-background-tint border border-theme-border rounded-2xl px-5 py-4">
-            <h3 className="text-base font-semibold text-theme-text mb-1">Keep your health timeline intact</h3>
-            <p className="text-sm text-theme-muted-text mb-3">
-              {trialDaysRemaining === 1 ? '1 day' : `${trialDaysRemaining} days`} left in your trial.
-            </p>
-            <Link to="/app/billing">
-              <button className="px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors">
-                Continue tracking
-              </button>
-            </Link>
-          </div>
-        )}
+          These were four independent blocks that could all render at once —
+          pricing promo, trial countdown, trial-expired warning and the context
+          nudge — pushing the actual dashboard below the fold behind a stack of
+          banners. They are now prioritised, and only the most urgent shows.
+          Someone whose trial has expired does not need to be told how many days
+          are left in it.
+        */}
+        {(() => {
+          if (!canCreateReport) {
+            return (
+              <Notice tone="watch">
+                <p className="text-sm text-theme-flag-watch">
+                  Your trial has ended.{' '}
+                  <Link to="/app/pricing" className="underline font-medium hover:no-underline">
+                    See pricing
+                  </Link>{' '}
+                  to keep uploading panels.
+                </p>
+              </Notice>
+            );
+          }
 
-        {!canCreateReport && (
-          <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl px-5 py-4 mb-5">
-            <p className="text-sm text-theme-flag-watch">
-              Your trial has expired.{' '}
-              <Link to="/app/pricing" className="text-theme-flag-watch underline font-medium">View pricing</Link> to continue.
-            </p>
-          </div>
-        )}
+          if (showTrialBanner) {
+            return (
+              <Notice>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base mb-0.5">Keep your timeline intact</h3>
+                    <p className="text-sm text-theme-muted-text-2">
+                      <span className="font-mono tabular-nums">{trialDaysRemaining}</span>
+                      {trialDaysRemaining === 1 ? ' day' : ' days'} left in your trial.
+                    </p>
+                  </div>
+                  <Link to="/app/billing">
+                    <Button size="sm">Continue</Button>
+                  </Link>
+                </div>
+              </Notice>
+            );
+          }
 
-        {showContextNudge && (
-          <div className="mb-5 bg-gradient-to-r from-theme-surface-2 to-theme-background-tint border border-theme-border rounded-2xl px-5 py-4 flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <h3 className="text-base font-semibold text-theme-text mb-1">Add context to your labs</h3>
-              <p className="text-sm text-theme-muted-text mb-3">Tracking even one change helps explain future results.</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={openStartPeriod}
-                  className="px-3 py-1.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors"
-                >
-                  Add cycle start
-                </button>
-                <Link to="/app/tracker">
-                  <button className="px-3 py-1.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl border border-theme-border hover:bg-theme-surface-hover transition-colors">
-                    Add intervention
+          if (showContextNudge) {
+            return (
+              <Notice>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base mb-0.5">Add context to your labs</h3>
+                    <p className="text-sm text-theme-muted-text-2 mb-3">
+                      Tracking even one change helps explain future results.
+                    </p>
+                    <div className="flex flex-wrap gap-2.5">
+                      <Button size="sm" onClick={openStartPeriod}>Add cycle start</Button>
+                      <Link to="/app/tracker">
+                        <Button size="sm" variant="secondary">Add intervention</Button>
+                      </Link>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { sessionStorage.setItem('contextNudgeDismissed', 'true'); setShowContextNudge(false); }}
+                    aria-label="Dismiss"
+                    className="shrink-0 w-11 h-11 -mr-2 -mt-2 flex items-center justify-center rounded-lg text-theme-muted-text hover:bg-theme-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary"
+                  >
+                    <X className="w-4 h-4" />
                   </button>
-                </Link>
-              </div>
-            </div>
-            <button
-              onClick={() => { sessionStorage.setItem('contextNudgeDismissed', 'true'); setShowContextNudge(false); }}
-              aria-label="Dismiss"
-              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
-            >
-              <X className="w-4 h-4 text-theme-muted-text" />
-            </button>
-          </div>
-        )}
+                </div>
+              </Notice>
+            );
+          }
+
+          if (userProfile?.subscription_status !== 'active') {
+            return (
+              <Link to="/app/pricing" className="block mb-5 group">
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-theme-surface border border-theme-border rounded-xl px-5 py-4 transition-colors group-hover:border-theme-primary">
+                  <p className="text-sm text-theme-text">
+                    <span className="font-mono text-theme-muted-text-4 line-through mr-1.5 tabular-nums">$19.99</span>
+                    <span className="font-mono tabular-nums">$9.99</span> a month, or{' '}
+                    <span className="font-mono text-theme-muted-text-4 line-through mr-1.5 tabular-nums">$199.99</span>
+                    <span className="font-mono tabular-nums">$99.99</span> a year
+                  </p>
+                  <span className="text-sm font-medium text-theme-primary shrink-0">See pricing &rarr;</span>
+                </div>
+              </Link>
+            );
+          }
+
+          return null;
+        })()}
 
         <div className="space-y-5">
           <TodayCard
@@ -637,5 +654,22 @@ function QuickLogButton({
       {icon}
       {label}
     </button>
+  );
+}
+
+/** A single dashboard notice. Neutral by default; `watch` for the one case
+ *  that is actually blocking — an ended trial. */
+function Notice({ tone = 'neutral', children }: { tone?: 'neutral' | 'watch'; children: React.ReactNode }) {
+  return (
+    <div
+      className={[
+        'mb-5 rounded-2xl border px-5 py-4',
+        tone === 'watch'
+          ? 'bg-theme-flag-watch-bg border-theme-flag-watch-border'
+          : 'bg-theme-surface border-theme-border',
+      ].join(' ')}
+    >
+      {children}
+    </div>
   );
 }
