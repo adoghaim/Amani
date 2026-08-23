@@ -29,6 +29,8 @@ const Billing        = lazyWithRetry(() => import('./pages/Billing').then(m => (
 const Settings       = lazyWithRetry(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const ParserDebugger = lazyWithRetry(() => import('./pages/ParserDebugger').then(m => ({ default: m.ParserDebugger })))
 const Onboarding    = lazyWithRetry(() => import('./pages/Onboarding'))
+const NotFound = lazyWithRetry(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })))
+
 const DesignGallery = lazyWithRetry(() => import('./pages/DesignGallery').then(m => ({ default: m.DesignGallery })))
 
 const enableParserDebugger = import.meta.env.DEV
@@ -92,6 +94,10 @@ function AppRoutes() {
         {enableParserDebugger && (
           <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
         )}
+
+        {/* Last, so it only catches what no other route matched. Without it a
+            typo under /app/* rendered an empty Suspense boundary forever. */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
   )
