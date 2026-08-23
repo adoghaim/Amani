@@ -76,12 +76,12 @@ export function RecommendedLabs({
   const visible = expanded || !hasMore ? ranked : ranked.slice(0, TOP_N);
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E9D6DA] p-6">
+    <div className="bg-theme-surface rounded-2xl border border-theme-border p-6">
       <div className="flex items-center gap-2 mb-1">
-        <FlaskConical className="w-5 h-5 text-[#C97C8B]" />
-        <h2 className="text-lg font-semibold text-[#2A1F23]">Recommended Labs</h2>
+        <FlaskConical className="w-5 h-5 text-theme-primary" />
+        <h2 className="text-lg font-semibold text-theme-text">Recommended labs</h2>
       </div>
-      <p className="text-sm text-[#7A6570]">
+      <p className="text-sm text-theme-muted-text-2">
         {ranked.length} {ranked.length === 1 ? 'lab' : 'labs'} suggested based on this report
       </p>
 
@@ -89,17 +89,17 @@ export function RecommendedLabs({
         {visible.map(item => (
           <div
             key={`${item.category}-${item.name}`}
-            className="flex items-start gap-2.5 bg-[#FDF4F6] border border-[#E9D6DA] rounded-lg px-3 py-2.5"
+            className="flex items-start gap-2.5 bg-theme-background-tint border border-theme-border rounded-lg px-3 py-2.5"
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-[#C97C8B] mt-1.5 shrink-0" />
+            <div className="w-1.5 h-1.5 rounded-full bg-theme-primary mt-1.5 shrink-0" />
             <div>
-              <div className="text-sm font-medium text-[#2A1F23]">
+              <div className="text-sm font-medium text-theme-text">
                 {getDisplayName(item.name)}
               </div>
-              <div className="text-[11px] uppercase tracking-wide text-[#9A8A90] mt-0.5">
+              <div className="text-[11px] uppercase tracking-wide text-theme-muted-text-3 mt-0.5">
                 {CATEGORY_DISPLAY[item.category].shortLabel}
               </div>
-              <div className="text-xs text-[#7A6570] mt-0.5">{item.reason}</div>
+              <div className="text-xs text-theme-muted-text-2 mt-0.5">{item.reason}</div>
             </div>
           </div>
         ))}
@@ -109,7 +109,7 @@ export function RecommendedLabs({
         <button
           type="button"
           onClick={() => setExpanded(prev => !prev)}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-[#C97C8B] hover:text-[#A85F6E] transition-colors"
+          className="mt-3 w-full flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-theme-primary hover:text-theme-primary-dark transition-colors"
         >
           {expanded ? (
             <>

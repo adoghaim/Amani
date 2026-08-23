@@ -34,6 +34,8 @@ const Privacy        = lazyWithRetry(() => import('./pages/Privacy').then(m => (
 const Terms          = lazyWithRetry(() => import('./pages/Terms').then(m => ({ default: m.Terms })))
 const Contact        = lazyWithRetry(() => import('./pages/Contact').then(m => ({ default: m.Contact })))
 const NotFound       = lazyWithRetry(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })))
+const DesignGallery = lazyWithRetry(() => import('./pages/DesignGallery').then(m => ({ default: m.DesignGallery })))
+
 const enableParserDebugger = import.meta.env.DEV
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -87,6 +89,9 @@ function AppRoutes() {
         <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/settings" element={<ProtectedRoute><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
+        {enableParserDebugger && (
+          <Route path="/dev/design" element={<DesignGallery />} />
+        )}
         {enableParserDebugger && (
           <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
         )}

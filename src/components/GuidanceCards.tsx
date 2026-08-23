@@ -74,7 +74,7 @@ export function GuidanceCards({ cards }: GuidanceCardsProps) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
         <LayoutGrid className="w-3.5 h-3.5 text-theme-muted-text-2" />
-        <h2 className="text-sm font-semibold text-theme-text">Support Plan</h2>
+        <h2 className="text-sm font-semibold text-theme-text">Support plan</h2>
       </div>
       <p className="text-xs text-theme-muted-text-3 px-1">
         Practical food, tracking, and discussion topics based on this report

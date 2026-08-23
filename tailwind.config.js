@@ -28,6 +28,8 @@ export default {
           success: '#2F8F6B',
           warning: '#C78A2A',
           danger: '#B5475A',
+          /* Pressed/hover state for danger fills. */
+          'danger-dark': '#9E3A4C',
 
           /*
             Warm neutral ramp. The app carried ~1,100 usages of Tailwind's

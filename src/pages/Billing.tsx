@@ -233,7 +233,7 @@ export function Billing() {
                   <div className="space-y-2">
                     <p className="text-theme-text flex items-center gap-2">
                       <CheckCircle className="w-5 h-5 text-theme-success" />
-                      <span className="font-medium">Active Subscription</span>
+                      <span className="font-medium">Active subscription</span>
                     </p>
                     <p className="text-theme-text">
                       {source === 'ios'

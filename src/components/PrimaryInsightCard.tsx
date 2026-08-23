@@ -93,7 +93,7 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
         <div className="w-8 h-8 rounded-lg bg-theme-flag-low-bg flex items-center justify-center flex-shrink-0">
           <AlertTriangle className="w-4 h-4 text-theme-flag-low" />
         </div>
-        <h2 className="text-sm font-bold text-theme-flag-low">Primary Finding</h2>
+        <h2 className="text-sm font-bold text-theme-flag-low">Primary finding</h2>
         {isExtreme && (
           <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-theme-flag-low bg-theme-flag-low-bg border border-theme-flag-low-border px-2.5 py-1 rounded-full">
             {extremeLabel}

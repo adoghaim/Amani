@@ -59,7 +59,7 @@ export function WhatThisMeansCard({ aiText, topFindings, biggestChanges }: Props
   const hasAI = !!aiText;
 
   return (
-    <div className="rounded-2xl border border-theme-border-subtle bg-white overflow-hidden">
+    <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface overflow-hidden">
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-center gap-2.5 mb-4">
           <div className="w-7 h-7 rounded-lg bg-theme-primary/10 flex items-center justify-center flex-shrink-0">

@@ -13,7 +13,7 @@ export function YourHealthStory({ story }: YourHealthStoryProps) {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-base font-semibold text-theme-text">Your Health Story</h2>
+        <h2 className="text-base font-semibold text-theme-text">Your health story</h2>
         <p className="text-xs text-theme-muted-text-2 mt-0.5">
           A narrative summary of what this report shows
         </p>

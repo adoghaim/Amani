@@ -60,7 +60,7 @@ export function SocialAuthButton({
     'w-full h-11 rounded-xl border flex items-center justify-center gap-3 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed';
   const themeClasses = isApple
     ? 'bg-black text-white border-black hover:bg-theme-neutral-800'
-    : 'bg-white text-theme-neutral-800 border-theme-border hover:bg-theme-neutral-50';
+    : 'bg-theme-surface text-theme-neutral-800 border-theme-border hover:bg-theme-neutral-50';
 
   return (
     <button

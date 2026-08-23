@@ -206,7 +206,7 @@ export function ResetPassword() {
               />
 
               <Input
-                label="Confirm Password"
+                label="Confirm password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

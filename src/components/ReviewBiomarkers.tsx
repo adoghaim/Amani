@@ -82,10 +82,10 @@ function ItemCard({
       </div>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-theme-neutral-100 bg-white">
+        <div className="px-4 pb-4 border-t border-theme-neutral-100 bg-theme-surface">
           {item.source_snippet && (
             <div className="mt-4 p-3 bg-theme-neutral-50 rounded-lg border border-theme-neutral-200">
-              <label className="block text-[10px] font-bold text-theme-neutral-400 uppercase tracking-wider mb-1">Raw Report Context</label>
+              <label className="block text-[10px] font-bold text-theme-neutral-400 uppercase tracking-wider mb-1">Raw report context</label>
               <p className="text-sm font-mono text-theme-neutral-700 break-words leading-relaxed">
                 {item.source_snippet}
               </p>

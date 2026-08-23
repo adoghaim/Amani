@@ -128,7 +128,7 @@ function CollapsibleBlock({ label, children, defaultOpen = false }: {
         <span className="text-sm font-medium text-theme-neutral-700">{label}</span>
         {open ? <ChevronDown className="w-4 h-4 text-theme-neutral-400" /> : <ChevronRight className="w-4 h-4 text-theme-neutral-400" />}
       </button>
-      {open && <div className="p-4 bg-white">{children}</div>}
+      {open && <div className="p-4 bg-theme-surface">{children}</div>}
     </div>
   );
 }
@@ -206,9 +206,9 @@ function EditAnalyteModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+      <div className="bg-theme-surface rounded-xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between px-5 py-4 border-b border-theme-neutral-200">
-          <h3 className="font-semibold text-theme-neutral-900">Edit Analyte Row</h3>
+          <h3 className="font-semibold text-theme-neutral-900">Edit analyte row</h3>
           <button onClick={onClose} className="text-theme-neutral-400 hover:text-theme-neutral-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-4">
@@ -444,7 +444,7 @@ export function ParserDebugger() {
           <div className="w-px h-4 bg-theme-neutral-700" />
           <div className="flex items-center gap-2">
             <Bug className="w-4 h-4 text-theme-flag-watch" />
-            <span className="text-xs font-bold text-theme-neutral-200 tracking-wide uppercase">Parser Debug</span>
+            <span className="text-xs font-bold text-theme-neutral-200 tracking-wide uppercase">Parser debug</span>
             {report && <span className="text-xs text-theme-neutral-400 font-sans">— {report.report_date}</span>}
           </div>
         </div>
@@ -522,7 +522,7 @@ export function ParserDebugger() {
         <div className="flex-1 overflow-y-auto">
           {/* Search + filter toolbar */}
           {(activeStage === 2 || activeStage === 3 || activeStage === 4 || activeStage === 5) && (
-            <div className="bg-white border-b border-theme-neutral-200 px-6 py-3 flex items-center gap-3 sticky top-0 z-10">
+            <div className="bg-theme-surface border-b border-theme-neutral-200 px-6 py-3 flex items-center gap-3 sticky top-0 z-10">
               <div className="relative flex-1 max-w-xs">
                 <Search className="w-3.5 h-3.5 text-theme-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -556,7 +556,7 @@ export function ParserDebugger() {
 
           <div className="p-6 font-sans">
             {/* ─── STAGE 0: Raw extracted text (always visible, collapsible) ─── */}
-            <details className="mb-6 bg-white border border-theme-neutral-200 rounded-lg overflow-hidden group">
+            <details className="mb-6 bg-theme-surface border border-theme-neutral-200 rounded-lg overflow-hidden group">
               <summary className="flex items-center justify-between px-4 py-2.5 bg-theme-neutral-50 hover:bg-theme-neutral-100 cursor-pointer select-none transition-colors list-none">
                 <span className="flex items-center gap-2 text-sm font-medium text-theme-neutral-700">
                   <ChevronRight className="w-4 h-4 text-theme-neutral-400 group-open:hidden" />
@@ -603,7 +603,7 @@ export function ParserDebugger() {
                       ))}
                     </div>
 
-                    <div className="bg-white border border-theme-neutral-200 rounded-lg overflow-hidden">
+                    <div className="bg-theme-surface border border-theme-neutral-200 rounded-lg overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-2.5 border-b border-theme-neutral-100 bg-theme-neutral-50">
                         <span className="text-sm font-medium text-theme-neutral-700">Raw extracted text</span>
                         <div className="flex items-center gap-2">
@@ -644,7 +644,7 @@ export function ParserDebugger() {
                       <div
                         key={b.blockIndex}
                         className={`border rounded-lg overflow-hidden ${
-                          isSuspicious(b) ? 'border-theme-flag-watch-border bg-theme-flag-watch-bg/30' : 'border-theme-neutral-200 bg-white'
+                          isSuspicious(b) ? 'border-theme-flag-watch-border bg-theme-flag-watch-bg/30' : 'border-theme-neutral-200 bg-theme-surface'
                         }`}
                       >
                         <div className="flex items-start justify-between px-4 py-2.5">
@@ -781,7 +781,7 @@ export function ParserDebugger() {
                           className={`px-3 py-1.5 text-xs rounded-full transition-colors font-sans border ${
                             showOnlyExcluded
                               ? 'bg-theme-flag-watch-bg text-theme-flag-watch border-theme-flag-watch-border'
-                              : 'bg-white text-theme-neutral-600 border-theme-neutral-300 hover:bg-theme-neutral-50'
+                              : 'bg-theme-surface text-theme-neutral-600 border-theme-neutral-300 hover:bg-theme-neutral-50'
                           }`}
                         >
                           {showOnlyExcluded ? '✓ ' : ''}Show only excluded
@@ -816,7 +816,7 @@ export function ParserDebugger() {
                                 ? 'bg-theme-flag-watch-bg/50 hover:bg-theme-flag-watch-bg'
                                 : a.needs_review
                                   ? 'bg-theme-flag-watch-bg/40'
-                                  : 'bg-white hover:bg-theme-neutral-50';
+                                  : 'bg-theme-surface hover:bg-theme-neutral-50';
                               return (
                                 <tr key={a.id} className={rowClass}>
                                   <td className="px-3 py-2 font-mono text-theme-neutral-700 max-w-[200px] truncate">{a.raw_name}</td>
@@ -955,7 +955,7 @@ export function ParserDebugger() {
                             return (
                               <tr key={a.id} className={
                                 status === 'out_of_range' ? 'bg-theme-flag-low-bg' :
-                                status === 'borderline' ? 'bg-theme-flag-watch-bg' : 'bg-white'
+                                status === 'borderline' ? 'bg-theme-flag-watch-bg' : 'bg-theme-surface'
                               }>
                                 <td className="px-3 py-2 text-theme-neutral-400">{idx + 1}</td>
                                 <td className="px-3 py-2 font-mono text-theme-neutral-700">{a.raw_name}</td>

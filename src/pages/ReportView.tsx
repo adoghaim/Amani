@@ -1043,7 +1043,7 @@ export function ReportView() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#C97C8B]" />
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-primary" />
         </div>
       </Layout>
     );
@@ -1142,7 +1142,7 @@ export function ReportView() {
 
           {/* ── Processing ──────────────────────────────────────── */}
           {isProcessing && (
-            <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-5 flex items-center gap-4">
+            <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-6 py-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-theme-primary/10 flex items-center justify-center flex-shrink-0">
                 <Loader2 className="w-5 h-5 text-theme-primary animate-spin" />
               </div>
@@ -1221,7 +1221,7 @@ export function ReportView() {
 
           {/* ── AI loading indicator (ready/error but no interpretation yet) ─── */}
           {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && !rateLimitNotice && insightSummary && (
-            <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
+            <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
               <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>
             </div>
@@ -1233,7 +1233,7 @@ export function ReportView() {
               <div className="bg-theme-text px-6 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
                   <Sparkles className="w-4 h-4 text-theme-primary-light" />
-                  <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani Analysis</span>
+                  <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani analysis</span>
                   {insightSummary && (
                     <div className="ml-auto">
                       <ConfidenceBadge confidence={insightSummary.confidence} />
@@ -1512,7 +1512,7 @@ export function ReportView() {
 
               {/* Summary bullets: only when no primary_concern */}
               {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
-                <div className="bg-white px-6 py-5">
+                <div className="bg-theme-surface px-6 py-5">
                   <ul className="space-y-3">
                     {interpretation.summary_bullets.map((bullet, i) => (
                       <li key={i} className="flex items-start gap-3">
@@ -1573,7 +1573,7 @@ export function ReportView() {
           {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
             <div className="rounded-2xl border border-theme-neutral-200 overflow-hidden">
               <button
-                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-theme-neutral-50 transition-colors"
+                className="flex items-center justify-between w-full px-5 py-4 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                 onClick={() => setShowMoreDetails(v => !v)}
               >
                 <div className="flex items-center gap-2.5">
@@ -1590,7 +1590,7 @@ export function ReportView() {
                 <div className="border-t border-theme-neutral-100 px-5 py-5 space-y-6">
                   {(interpretation?.pattern_signals?.length ?? 0) > 0 && (
                     <div className="space-y-3">
-                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern Signals</p>
+                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern signals</p>
                       {interpretation!.pattern_signals!.map((signal, i) => {
                         const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low ?? PATTERN_CONFIDENCE_FALLBACK;
                         return (
@@ -1605,7 +1605,7 @@ export function ReportView() {
                             {signal.related_biomarkers?.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {signal.related_biomarkers.map((slug, j) => (
-                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-theme-neutral-200 text-theme-muted-text-2">
+                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-theme-surface/70 border border-theme-neutral-200 text-theme-muted-text-2">
                                     {getDisplayName(slug as BiomarkerName)}
                                   </span>
                                 ))}
@@ -1627,12 +1627,12 @@ export function ReportView() {
           {totalAnalyteCount > 0 && (
             <div className="rounded-2xl border border-theme-neutral-200 overflow-hidden">
               <button
-                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-theme-neutral-50 transition-colors"
+                className="flex items-center justify-between w-full px-5 py-4 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                 onClick={() => setShowFullPanel(v => !v)}
               >
                 <div className="flex items-center gap-2.5">
                   <Microscope className="w-4 h-4 text-theme-muted-text-2" />
-                  <span className="text-sm font-semibold text-theme-text">Full Lab Panel</span>
+                  <span className="text-sm font-semibold text-theme-text">Full lab panel</span>
                   <span className="text-xs text-theme-muted-text-3">({totalAnalyteCount} items)</span>
                 </div>
                 {showFullPanel
@@ -1678,10 +1678,10 @@ export function ReportView() {
             const hasExtraContext = !!(aiCycle?.estimated_cycle_day || aiCycle?.explanation || aiCycle?.confidence);
             if (!hasExtraContext) return null;
             return (
-              <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
+              <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-5 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
                   <CalendarDays className="w-4 h-4 text-theme-primary" />
-                  <h3 className="text-sm font-semibold text-theme-text">Cycle Context</h3>
+                  <h3 className="text-sm font-semibold text-theme-text">Cycle context</h3>
                   {aiCycle?.confidence && (
                     <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[aiCycle.confidence]}`}>
                       {aiCycle.confidence} confidence
@@ -1697,7 +1697,7 @@ export function ReportView() {
                   </div>
                   {aiCycle?.estimated_cycle_day && (
                     <div>
-                      <p className="text-xs text-theme-muted-text-3">Cycle Day</p>
+                      <p className="text-xs text-theme-muted-text-3">Cycle day</p>
                       <p className="text-sm font-semibold text-theme-text mt-0.5">{aiCycle.estimated_cycle_day}</p>
                     </div>
                   )}
@@ -1761,7 +1761,7 @@ export function ReportView() {
                     <div key={category} className="rounded-xl border border-theme-neutral-200 overflow-hidden">
                       <button
                         onClick={toggleCollapsed}
-                        className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-theme-neutral-50 transition-colors"
+                        className="flex items-center justify-between w-full px-4 py-3 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="text-sm font-semibold text-theme-text">
