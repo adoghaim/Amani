@@ -29,6 +29,8 @@ const Billing        = lazyWithRetry(() => import('./pages/Billing').then(m => (
 const Settings       = lazyWithRetry(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const ParserDebugger = lazyWithRetry(() => import('./pages/ParserDebugger').then(m => ({ default: m.ParserDebugger })))
 const Onboarding    = lazyWithRetry(() => import('./pages/Onboarding'))
+const DesignGallery = lazyWithRetry(() => import('./pages/DesignGallery').then(m => ({ default: m.DesignGallery })))
+
 const enableParserDebugger = import.meta.env.DEV
 
 function safeRedirectTarget(raw: string | null): string {
@@ -84,6 +86,9 @@ function AppRoutes() {
         <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/settings" element={<ProtectedRoute><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
+        {enableParserDebugger && (
+          <Route path="/dev/design" element={<DesignGallery />} />
+        )}
         {enableParserDebugger && (
           <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
         )}

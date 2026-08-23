@@ -78,7 +78,7 @@ export function WhatToDoNextCard({ items, existingNextSteps = [] }: Props) {
   const useGrouped = hasGroups && ungrouped.length <= filtered.length / 2;
 
   return (
-    <div className="rounded-2xl border border-theme-border-subtle bg-white overflow-hidden">
+    <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface overflow-hidden">
       <div className="px-5 py-4 border-b border-theme-border-inner">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-theme-flag-watch-bg flex items-center justify-center">

@@ -35,9 +35,9 @@ function getDayClasses(info: DayInfo, isToday: boolean): string {
     return `${base} bg-theme-flag-ok-bg hover:bg-theme-flag-ok-bg border border-theme-flag-ok-border`;
   }
   if (isToday) {
-    return `${base} bg-[#F6ECEB] border-2 border-[#C97C8B] hover:bg-[#EED9D9]`;
+    return `${base} bg-theme-surface-2 border-2 border-theme-primary hover:bg-theme-surface-hover`;
   }
-  return `${base} hover:bg-[#F6ECEB]`;
+  return `${base} hover:bg-theme-surface-2`;
 }
 
 function getDayNumberClasses(info: DayInfo, isToday: boolean): string {
@@ -46,7 +46,7 @@ function getDayNumberClasses(info: DayInfo, isToday: boolean): string {
   if (primary === 'predicted_period') return 'text-theme-flag-low font-medium text-sm';
   if (primary === 'ovulation') return 'text-theme-flag-watch font-semibold text-sm';
   if (primary === 'fertile_window') return 'text-theme-flag-ok font-medium text-sm';
-  if (isToday) return 'text-[#C97C8B] font-bold text-sm';
+  if (isToday) return 'text-theme-primary font-bold text-sm';
   return 'text-theme-neutral-700 text-sm';
 }
 
@@ -81,7 +81,7 @@ export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChang
         <span className={getDayNumberClasses(info, isToday)}>{d}</span>
         <div className="flex items-center justify-center gap-0.5 mt-0.5 flex-wrap">
           {info.hasLab && (
-            <TestTube2 className="w-2.5 h-2.5 text-[#C97C8B] shrink-0" />
+            <TestTube2 className="w-2.5 h-2.5 text-theme-primary shrink-0" />
           )}
           {info.hasSymptom && (
             <Zap className="w-2.5 h-2.5 text-theme-flag-watch shrink-0" />
@@ -95,27 +95,27 @@ export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChang
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9D6DA]">
+    <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
         <button
           onClick={prevMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F6ECEB] transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
         >
-          <ChevronLeft className="w-4 h-4 text-[#6B5B60]" />
+          <ChevronLeft className="w-4 h-4 text-theme-muted-text" />
         </button>
-        <h3 className="text-base font-semibold text-[#2A1F23]">{monthName}</h3>
+        <h3 className="text-base font-semibold text-theme-text">{monthName}</h3>
         <button
           onClick={nextMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F6ECEB] transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
         >
-          <ChevronRight className="w-4 h-4 text-[#6B5B60]" />
+          <ChevronRight className="w-4 h-4 text-theme-muted-text" />
         </button>
       </div>
 
       <div className="px-4 py-3">
         <div className="grid grid-cols-7 mb-1">
           {WEEKDAYS.map((wd) => (
-            <div key={wd} className="text-center text-xs font-medium text-[#6B5B60] py-1">
+            <div key={wd} className="text-center text-xs font-medium text-theme-muted-text py-1">
               {wd}
             </div>
           ))}
@@ -125,23 +125,23 @@ export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChang
         </div>
       </div>
 
-      <div className="px-5 py-3 border-t border-[#E9D6DA] bg-[#FFF8F7]">
+      <div className="px-5 py-3 border-t border-theme-border bg-theme-background">
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           <LegendItem color="bg-theme-flag-low" label="Period" />
           <LegendItem color="bg-theme-flag-low-bg border border-dashed border-theme-flag-low-border" label="Predicted period" />
           <LegendItem color="bg-theme-flag-watch-bg border border-theme-flag-watch-border" label="Estimated ovulation" />
           <LegendItem color="bg-theme-flag-ok-bg border border-theme-flag-ok-border" label="Fertile window" />
           <div className="flex items-center gap-1.5">
-            <TestTube2 className="w-3.5 h-3.5 text-[#C97C8B]" />
-            <span className="text-xs text-[#6B5B60]">Labs</span>
+            <TestTube2 className="w-3.5 h-3.5 text-theme-primary" />
+            <span className="text-xs text-theme-muted-text">Labs</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-theme-flag-watch" />
-            <span className="text-xs text-[#6B5B60]">Symptoms</span>
+            <span className="text-xs text-theme-muted-text">Symptoms</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Pill className="w-3.5 h-3.5 text-theme-flag-ok" />
-            <span className="text-xs text-[#6B5B60]">Intervention</span>
+            <span className="text-xs text-theme-muted-text">Intervention</span>
           </div>
         </div>
       </div>
@@ -153,7 +153,7 @@ function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <div className={`w-3.5 h-3.5 rounded-sm ${color}`} />
-      <span className="text-xs text-[#6B5B60]">{label}</span>
+      <span className="text-xs text-theme-muted-text">{label}</span>
     </div>
   );
 }

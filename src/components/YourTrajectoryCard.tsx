@@ -116,14 +116,14 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
     : 'How your numbers are moving since your last report';
 
   return (
-    <div className="rounded-2xl border border-theme-border-subtle bg-white overflow-hidden">
+    <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface overflow-hidden">
       <div className="px-5 py-4 border-b border-theme-border-inner">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-theme-cat-sleep flex items-center justify-center">
             <LineChart className="w-4 h-4 text-theme-cat-sleep" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-theme-text">Your Trajectory</h2>
+            <h2 className="text-sm font-bold text-theme-text">Your trajectory</h2>
             <p className="text-xs text-theme-muted-text-3 mt-0.5">{subtitle}</p>
           </div>
         </div>

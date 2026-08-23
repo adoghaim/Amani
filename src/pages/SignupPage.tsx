@@ -1,50 +1,43 @@
-// Removed react
 import { SignupForm } from '../components/auth/SignupForm'
+import { AuthShell } from '../components/auth/AuthShell'
+import { CycleMark } from '../components/CycleMark'
 import { Link, useNavigate } from 'react-router-dom'
-import { Heart, ArrowLeft } from 'lucide-react'
+
+const INCLUDED = [
+  'Seven days free, no card to start',
+  'Every result read against your cycle',
+  'Trends across all your past panels',
+  'Questions to take to your appointment',
+];
 
 export function SignupPage() {
   const navigate = useNavigate()
   const params = new URLSearchParams(window.location.search)
   const redirect = params.get('redirect') || '/app'
 
-  const handleSuccess = () => {
-    navigate(redirect)
-  }
-
   return (
-    <div className="min-h-screen bg-theme-background flex flex-col">
-      <nav className="bg-theme-surface border-b border-theme-border px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 text-theme-muted-text hover:text-theme-text transition-colors text-sm">
-          <ArrowLeft className="w-4 h-4" />
-          Back to home
-        </Link>
-        <Link to="/" className="flex items-center gap-2">
-          <Heart className="w-5 h-5 text-theme-primary fill-theme-primary" />
-          <span className="text-base font-semibold text-theme-text">Amani</span>
-        </Link>
-        <div className="w-28" />
-      </nav>
-
-      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full">
-          <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm p-8">
-            <div className="mb-8 text-center">
-              <h1 className="text-2xl font-bold text-theme-text mb-1">
-                Start your free trial
-              </h1>
-              <p className="text-sm text-theme-muted-text">
-                Already have an account?{' '}
-                <Link to="/login" className="font-medium text-theme-primary hover:text-theme-primary-dark transition-colors">
-                  Sign in
-                </Link>
-              </p>
-            </div>
-
-            <SignupForm onSuccess={handleSuccess} />
-          </div>
-        </div>
-      </div>
-    </div>
+    <AuthShell
+      title="Start your trial"
+      subtitle={
+        <>
+          Already have an account?{' '}
+          <Link to="/login" className="text-theme-primary hover:text-theme-primary-dark transition-colors font-medium">
+            Log in
+          </Link>
+        </>
+      }
+      aside={
+        <ul className="space-y-3.5">
+          {INCLUDED.map(item => (
+            <li key={item} className="flex items-baseline gap-3 text-theme-text-body border-b border-theme-border-inner pb-3.5">
+              <CycleMark className="w-3.5 h-3.5 text-theme-primary shrink-0 translate-y-0.5" />
+              {item}
+            </li>
+          ))}
+        </ul>
+      }
+    >
+      <SignupForm onSuccess={() => navigate(redirect)} />
+    </AuthShell>
   )
 }

@@ -727,7 +727,7 @@ export function NewReport() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-theme-neutral-900 mb-8">New Lab Report</h1>
+        <h1 className="text-3xl font-bold text-theme-neutral-900 mb-8">New lab report</h1>
 
         <div className="flex flex-col items-center mb-8 gap-3">
           <div className="flex items-center">
@@ -893,7 +893,7 @@ export function NewReport() {
                   <FlaskConical className="w-6 h-6 text-theme-flag-ok" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-theme-neutral-900">Quest Diagnostics</p>
+                  <p className="font-semibold text-theme-neutral-900">Quest diagnostics</p>
                   <p className="text-sm text-theme-neutral-500 mt-0.5">Import from MyQuest portal</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-theme-neutral-400 group-hover:text-theme-flag-ok transition-colors" />
@@ -1089,7 +1089,7 @@ export function NewReport() {
                   type="date"
                   value={reportDate}
                   onChange={e => setReportDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-theme-neutral-900"
+                  className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-neutral-900"
                 />
                 <p className="mt-1 text-xs text-theme-neutral-400">Change this if you're backlogging an older report — last period start will re-sync from your tracker</p>
               </div>
@@ -1205,7 +1205,7 @@ export function NewReport() {
                       setPeriodAutoFilled(false);
                       userEditedPeriodRef.current = true;
                     }}
-                    className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-theme-neutral-900"
+                    className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-neutral-900"
                   />
                   {!lastPeriodDate && !fetchingPeriod && (
                     <p className="mt-1 text-xs text-theme-neutral-400">Add your last period start date for more accurate insights</p>
@@ -1230,7 +1230,7 @@ export function NewReport() {
                         onClick={() => toggleSymptom(symptom.value)}
                         className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
                           symptoms.includes(symptom.value)
-                            ? 'border-[#C97C8B] bg-[#C97C8B]/10 text-[#C97C8B] font-medium'
+                            ? 'border-theme-primary bg-theme-primary/10 text-theme-primary font-medium'
                             : 'border-theme-neutral-200 text-theme-neutral-600 hover:border-theme-neutral-300'
                         }`}
                         disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}

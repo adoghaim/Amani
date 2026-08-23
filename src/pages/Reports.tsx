@@ -106,7 +106,7 @@ interface DeleteModalProps {
 function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="px-6 py-5 border-b border-theme-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-theme-flag-low-bg flex items-center justify-center flex-shrink-0">
@@ -134,7 +134,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
           <button
             onClick={onCancel}
             disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-theme-text-body bg-white border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-theme-text-body bg-theme-surface border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -295,7 +295,7 @@ export function Reports() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text">Lab Reports</h1>
+            <h1 className="text-2xl font-bold text-theme-text">Lab reports</h1>
             <p className="text-sm text-theme-muted-text mt-1">
               {reports.length === 0
                 ? 'No reports yet'
@@ -324,7 +324,7 @@ export function Reports() {
         )}
 
         {reports.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-6 py-20 text-center">
+          <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm px-6 py-20 text-center">
             <div className="w-16 h-16 bg-theme-surface-2 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <TestTube2 className="w-8 h-8 text-theme-primary" />
             </div>
@@ -350,13 +350,13 @@ export function Reports() {
                   placeholder="Search by date or cycle phase..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-theme-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text placeholder:text-theme-muted-text-4"
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-theme-border rounded-xl bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text placeholder:text-theme-muted-text-4"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
-                className="px-3 py-2.5 text-sm border border-theme-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text min-w-[140px]"
+                className="px-3 py-2.5 text-sm border border-theme-border rounded-xl bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text min-w-[140px]"
               >
                 <option value="all">All statuses</option>
                 <option value="ready">Ready</option>
@@ -366,7 +366,7 @@ export function Reports() {
             </div>
 
             {filtered.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-6 py-16 text-center">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm px-6 py-16 text-center">
                 <Search className="w-8 h-8 text-theme-primary-faded mx-auto mb-3" />
                 <p className="text-sm font-medium text-theme-text-body">No reports match your filters</p>
                 <button
@@ -377,7 +377,7 @@ export function Reports() {
                 </button>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
                 <div className="hidden sm:grid grid-cols-[1fr_140px_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
                   <button
                     onClick={() => cycleSort('report_date')}

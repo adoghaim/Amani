@@ -106,9 +106,9 @@ export function PersonalContextCard() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
-            <h2 className="text-lg font-semibold text-theme-text">Personal Context</h2>
+            <h2 className="text-lg font-semibold text-theme-text">Personal context</h2>
             {saved && !editing && (
-              <span className="flex items-center gap-1.5 text-sm text-[#2F8F6B] font-medium">
+              <span className="flex items-center gap-1.5 text-sm text-theme-success font-medium">
                 <Check className="w-4 h-4" />
                 Saved
               </span>

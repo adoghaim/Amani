@@ -104,7 +104,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           loading={loading}
           className="w-full"
         >
-          Sign In
+          Sign in
         </Button>
       </form>
     </div>

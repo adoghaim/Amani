@@ -73,7 +73,7 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
         key={day}
         onClick={() => handleDayClick(day)}
         className={`h-20 border border-theme-neutral-200 p-2 text-left hover:bg-theme-surface-2 transition-colors ${
-          isToday ? 'bg-theme-surface-2 border-theme-primary/30' : 'bg-white'
+          isToday ? 'bg-theme-surface-2 border-theme-primary/30' : 'bg-theme-surface'
         }`}
       >
         <div className="flex flex-col h-full">
@@ -109,7 +109,7 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
   }
 
   return (
-    <div className="bg-white rounded-lg border border-theme-neutral-200">
+    <div className="bg-theme-surface rounded-lg border border-theme-neutral-200">
       <div className="flex items-center justify-between p-4 border-b border-theme-neutral-200">
         <h2 className="text-lg font-semibold text-theme-neutral-900">{monthName}</h2>
         <div className="flex gap-2">

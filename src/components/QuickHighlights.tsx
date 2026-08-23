@@ -62,7 +62,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
       <div className="space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <AlertCircle className="w-4 h-4 text-theme-text" />
-          <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
+          <h2 className="text-base font-semibold text-theme-text">Focus now</h2>
           <span className="text-xs text-theme-muted-text-3 ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
         </div>
         <div className="space-y-2">
@@ -114,7 +114,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <AlertCircle className="w-4 h-4 text-theme-text" />
-        <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
+        <h2 className="text-base font-semibold text-theme-text">Focus now</h2>
         <span className="text-xs text-theme-muted-text-3 ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
       </div>
       <div className="space-y-2">

@@ -123,7 +123,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         />
 
         <Input
-          label="Confirm Password"
+          label="Confirm password"
           type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
@@ -137,7 +137,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           loading={loading}
           className="w-full"
         >
-          Create Account
+          Create account
         </Button>
       </form>
     </div>

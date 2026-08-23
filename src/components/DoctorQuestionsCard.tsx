@@ -18,7 +18,7 @@ export function DoctorQuestionsCard({ questions }: Props) {
   };
 
   return (
-    <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
+    <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-5 py-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <MessageSquare className="w-4 h-4 text-theme-primary" />
@@ -26,7 +26,7 @@ export function DoctorQuestionsCard({ questions }: Props) {
         </div>
         <button
           onClick={copyAll}
-          className="flex items-center gap-1.5 text-xs text-theme-primary hover:text-[#a05a6a] font-medium transition-colors"
+          className="flex items-center gap-1.5 text-xs text-theme-primary hover:text-theme-primary-dark font-medium transition-colors"
         >
           {copied ? (
             <><CheckCircle2 className="w-3.5 h-3.5" /> Copied</>

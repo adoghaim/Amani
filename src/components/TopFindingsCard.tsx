@@ -8,24 +8,24 @@ type FindingStyle = {
 
 const SECONDARY_STYLE: Record<string, FindingStyle> = {
   out_of_range: {
-    bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+    bg: 'bg-theme-surface', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
     text: 'text-theme-text-body', badge: 'bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border', label: 'Outside Range',
     leftBar: 'bg-theme-flag-low-bg', iconBg: 'bg-theme-flag-low-bg', iconColor: 'text-theme-flag-low',
   },
   borderline: {
-    bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+    bg: 'bg-theme-surface', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
     text: 'text-theme-text-body', badge: 'bg-theme-flag-watch-bg text-theme-flag-watch border border-theme-flag-watch-border', label: 'Borderline',
     leftBar: 'bg-theme-flag-watch-bg', iconBg: 'bg-theme-flag-watch-bg', iconColor: 'text-theme-flag-watch',
   },
   optimal: {
-    bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+    bg: 'bg-theme-surface', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
     text: 'text-theme-text-body', badge: 'bg-theme-flag-ok-bg text-theme-flag-ok border border-theme-flag-ok-border', label: 'Optimal',
     leftBar: 'bg-theme-flag-ok-bg', iconBg: 'bg-theme-flag-ok-bg', iconColor: 'text-theme-flag-ok',
   },
 };
 
 const FALLBACK_FINDING_STYLE: FindingStyle = {
-  bg: 'bg-white', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
+  bg: 'bg-theme-surface', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
   text: 'text-theme-text-body', badge: 'bg-theme-flag-watch-bg text-theme-flag-watch border border-theme-flag-watch-border', label: 'Borderline',
   leftBar: 'bg-theme-flag-watch-bg', iconBg: 'bg-theme-flag-watch-bg', iconColor: 'text-theme-flag-watch',
 };

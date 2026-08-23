@@ -45,8 +45,8 @@ export function TodayCard({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
-      <div className="bg-gradient-to-br from-[#C97C8B] to-[#A85C6D] px-6 py-5">
+    <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-br from-theme-primary to-theme-primary-dark px-6 py-5">
         <p className="text-theme-flag-low text-xs font-medium uppercase tracking-wide mb-1">
           {dayOfWeek}
         </p>
@@ -61,7 +61,7 @@ export function TodayCard({
               </p>
             </div>
             <div className="text-right">
-              <span className="inline-block bg-white/20 text-white text-xs font-medium px-3 py-1 rounded-full">
+              <span className="inline-block bg-theme-surface/20 text-white text-xs font-medium px-3 py-1 rounded-full">
                 {phaseLabel(prediction.currentPhase)}
               </span>
             </div>
@@ -76,7 +76,7 @@ export function TodayCard({
 
       <div className="px-6 py-4 space-y-4">
         {prediction && (
-          <p className="text-sm text-[#6B5B60] leading-relaxed">
+          <p className="text-sm text-theme-muted-text leading-relaxed">
             {phaseDescription(prediction.currentPhase)}
           </p>
         )}
@@ -92,7 +92,7 @@ export function TodayCard({
             }
           />
           <StatChip
-            icon={<FlaskConical className="w-3.5 h-3.5 text-[#C97C8B]" />}
+            icon={<FlaskConical className="w-3.5 h-3.5 text-theme-primary" />}
             label="Last labs"
             value={
               lastReport
@@ -108,7 +108,7 @@ export function TodayCard({
         </div>
 
         {prediction && (
-          <div className="p-3 bg-[#FFF8F7] rounded-xl border border-[#E9D6DA]">
+          <div className="p-3 bg-theme-background rounded-xl border border-theme-border">
             <NarrativeBlock
               prediction={prediction}
               lastReport={lastReport}
@@ -120,7 +120,7 @@ export function TodayCard({
         <div className="flex gap-2 pt-1">
           <button
             onClick={primaryCTA.onClick}
-            className="flex items-center gap-1.5 flex-1 justify-center py-2.5 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors"
+            className="flex items-center gap-1.5 flex-1 justify-center py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors"
           >
             {primaryCTA.icon}
             {primaryCTA.label}
@@ -141,10 +141,10 @@ function StatChip({
   value: string;
 }) {
   return (
-    <div className="flex flex-col items-center text-center p-2.5 bg-[#FFF8F7] rounded-xl border border-[#E9D6DA]">
+    <div className="flex flex-col items-center text-center p-2.5 bg-theme-background rounded-xl border border-theme-border">
       <div className="mb-1">{icon}</div>
-      <p className="text-xs text-[#6B5B60] mb-0.5">{label}</p>
-      <p className="text-xs font-semibold text-[#2A1F23] leading-tight">{value}</p>
+      <p className="text-xs text-theme-muted-text mb-0.5">{label}</p>
+      <p className="text-xs font-semibold text-theme-text leading-tight">{value}</p>
     </div>
   );
 }
@@ -197,7 +197,7 @@ function NarrativeBlock({
   return (
     <div className="space-y-1.5">
       {lines.slice(0, 3).map((line, i) => (
-        <p key={i} className="text-xs text-[#6B5B60] leading-relaxed">
+        <p key={i} className="text-xs text-theme-muted-text leading-relaxed">
           {line}
         </p>
       ))}

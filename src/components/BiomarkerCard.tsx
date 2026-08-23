@@ -99,11 +99,11 @@ function RangeBar({
           style={{ left: `${optLeft}%`, width: `${optWidth}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#2A1F23] border-2 border-white shadow-sm z-10"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-theme-text border-2 border-white shadow-sm z-10"
           style={{ left: `calc(${valuePos}% - 6px)` }}
         />
       </div>
-      <div className="flex justify-between text-[10px] text-[#9A8A90] mt-1">
+      <div className="flex justify-between text-[10px] text-theme-muted-text-3 mt-1">
         <span>{formatRangeLabel(clinMin ?? optMin)}</span>
         <div className="flex gap-3 text-center items-center">
           <span className="text-theme-flag-ok">Opt: {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}</span>
@@ -221,14 +221,14 @@ export function BiomarkerCard({
   })();
 
   return (
-    <div className={`bg-white rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
+    <div className={`bg-theme-surface rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-theme-neutral-50/50 transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="text-sm font-semibold text-[#2A1F23]">{displayName}</span>
+            <span className="text-sm font-semibold text-theme-text">{displayName}</span>
             <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${pill.bg} ${pill.text} ${pill.border}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${pill.dot}`} />
               {pill.label}
@@ -239,11 +239,11 @@ export function BiomarkerCard({
               </span>
             )}
           </div>
-          <div className="flex items-baseline gap-1.5 text-[#7A6570]">
-            <span className="text-xl font-bold text-[#2A1F23]">{formattedValue}</span>
+          <div className="flex items-baseline gap-1.5 text-theme-muted-text-2">
+            <span className="text-xl font-bold text-theme-text">{formattedValue}</span>
             <span className="text-xs">{unit}</span>
             {labRefMin !== null && labRefMax !== null && (
-              <span className="text-xs text-[#9A8A90]">· lab ref: {labRefMin}–{labRefMax}</span>
+              <span className="text-xs text-theme-muted-text-3">· lab ref: {labRefMin}–{labRefMax}</span>
             )}
           </div>
           {(() => {
@@ -277,7 +277,7 @@ export function BiomarkerCard({
             <RangeBar value={value} optMin={optMin} optMax={optMax} clinMin={labRefMin ?? clinMin} clinMax={labRefMax ?? clinMax} />
           )}
         </div>
-        <div className="shrink-0 pt-0.5 text-[#9A8A90]">
+        <div className="shrink-0 pt-0.5 text-theme-muted-text-3">
           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </button>
@@ -306,11 +306,11 @@ export function BiomarkerCard({
           })()}
 
           {plainEnglishMeaning && (
-            <p className="text-sm text-[#4A3A40]">{plainEnglishMeaning}</p>
+            <p className="text-sm text-theme-text-body">{plainEnglishMeaning}</p>
           )}
 
           {timingNotes && (
-            <p className="text-xs text-[#7A6570] italic border-l-2 border-[#E9D6DA] pl-2">{timingNotes}</p>
+            <p className="text-xs text-theme-muted-text-2 italic border-l-2 border-theme-border pl-2">{timingNotes}</p>
           )}
 
           {cyclePhase && entry?.phaseRanges?.[cyclePhase] && (
@@ -321,11 +321,11 @@ export function BiomarkerCard({
 
           {commonNonAlarmReasons && commonNonAlarmReasons.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-[#2A1F23] uppercase tracking-wide mb-1.5">Common reasons for this result</h4>
+              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">Common reasons for this result</h4>
               <ul className="space-y-1">
                 {commonNonAlarmReasons.map((r, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-[#4A3A40]">
-                    <span className="text-[#C97C8B] mt-0.5 shrink-0">•</span>
+                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
+                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
                     <span>{r}</span>
                   </li>
                 ))}
@@ -335,11 +335,11 @@ export function BiomarkerCard({
 
           {whenCliniciansFollowUp && whenCliniciansFollowUp.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-[#2A1F23] uppercase tracking-wide mb-1.5">When clinicians may follow up</h4>
+              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">When clinicians may follow up</h4>
               <ul className="space-y-1">
                 {whenCliniciansFollowUp.map((item, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-[#4A3A40]">
-                    <span className="text-[#C97C8B] mt-0.5 shrink-0">•</span>
+                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
+                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
                     <span>{item}</span>
                   </li>
                 ))}

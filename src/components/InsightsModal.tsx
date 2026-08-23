@@ -46,28 +46,28 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+      <div className="bg-theme-surface rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
 
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#2A1F23] to-[#4a3040] px-6 py-5 flex-shrink-0">
+        <div className="bg-gradient-to-r from-theme-text to-theme-text-body px-6 py-5 flex-shrink-0">
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-5 h-5 text-[#E8B4BD]" />
-                <h2 className="text-lg font-semibold text-white">Your Health Story</h2>
+                <Sparkles className="w-5 h-5 text-theme-primary-light" />
+                <h2 className="text-lg font-semibold text-white">Your health story</h2>
               </div>
               {reportDates ? (
-                <p className="text-[#c4adb2] text-xs">
+                <p className="text-theme-muted-text-5 text-xs">
                   Comparing {formatDate(reportDates.previous)} → {formatDate(reportDates.current)}
-                  <span className="ml-1 text-[#a08890]">({reportDates.days_between} days)</span>
+                  <span className="ml-1 text-theme-muted-text-4">({reportDates.days_between} days)</span>
                 </p>
               ) : (
-                <p className="text-[#c4adb2] text-xs">Comparing your two most recent reports</p>
+                <p className="text-theme-muted-text-5 text-xs">Comparing your two most recent reports</p>
               )}
             </div>
             <button
               onClick={onClose}
-              className="text-[#c4adb2] hover:text-white transition-colors ml-4 flex-shrink-0"
+              className="text-theme-muted-text-5 hover:text-white transition-colors ml-4 flex-shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
@@ -79,7 +79,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
 
           {loading && (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <div className="w-12 h-12 rounded-full border-3 border-[#C97C8B]/20 border-t-[#C97C8B] animate-spin" style={{ borderWidth: 3 }} />
+              <div className="w-12 h-12 rounded-full border-3 border-theme-primary/20 border-t-theme-primary animate-spin" style={{ borderWidth: 3 }} />
               <div className="text-center">
                 <p className="font-medium text-theme-neutral-800 mb-1">Generating insights</p>
                 <p className="text-sm text-theme-neutral-500">Analyzing changes between your reports…</p>
@@ -101,8 +101,8 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
             <div className="space-y-6">
 
               {/* Summary */}
-              <div className="rounded-xl bg-gradient-to-br from-[#fdf6f7] to-theme-flag-low border border-[#e8dce0] p-5">
-                <p className="text-sm font-semibold text-[#2A1F23] mb-2 uppercase tracking-wide">What changed</p>
+              <div className="rounded-xl bg-gradient-to-br from-theme-background-tint to-theme-flag-low border border-theme-border-subtle p-5">
+                <p className="text-sm font-semibold text-theme-text mb-2 uppercase tracking-wide">What changed</p>
                 <p className="text-theme-neutral-700 leading-relaxed text-sm">{insights.summary}</p>
               </div>
 
@@ -112,7 +112,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
                   <p className="text-xs font-bold text-theme-neutral-400 uppercase tracking-widest mb-3">Notable biomarker changes</p>
                   <div className="space-y-3">
                     {insights.notable_changes.map((change, idx) => (
-                      <div key={idx} className="rounded-xl border border-theme-neutral-100 bg-white shadow-sm overflow-hidden">
+                      <div key={idx} className="rounded-xl border border-theme-neutral-100 bg-theme-surface shadow-sm overflow-hidden">
                         <div className="flex items-center gap-3 px-4 py-3 border-b border-theme-neutral-50">
                           <ChangeIcon text={change.change} />
                           <span className="font-semibold text-theme-neutral-900 text-sm">{change.biomarker}</span>
@@ -127,7 +127,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
                               <ul className="space-y-1.5">
                                 {change.possible_factors.map((factor, fidx) => (
                                   <li key={fidx} className="flex items-start gap-2">
-                                    <ArrowRight className="w-3 h-3 text-[#C97C8B] mt-1 flex-shrink-0" />
+                                    <ArrowRight className="w-3 h-3 text-theme-primary mt-1 flex-shrink-0" />
                                     <span className="text-xs text-theme-neutral-600 leading-relaxed">{factor}</span>
                                   </li>
                                 ))}
@@ -148,7 +148,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
                   <div className="space-y-2">
                     {insights.questions_to_ask.map((q, idx) => (
                       <div key={idx} className="flex items-start gap-3 p-3 rounded-lg bg-theme-neutral-50 hover:bg-theme-neutral-100 transition-colors">
-                        <span className="text-xs font-bold text-[#C97C8B] bg-[#C97C8B]/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-theme-primary bg-theme-primary/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
                           {idx + 1}
                         </span>
                         <p className="text-sm text-theme-neutral-700 leading-relaxed">{q}</p>
@@ -165,7 +165,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
                   <div className="space-y-2">
                     {insights.next_steps_general.map((step, idx) => (
                       <div key={idx} className="flex items-start gap-3">
-                        <CheckCircle2 className="w-4 h-4 text-[#C97C8B] flex-shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-4 h-4 text-theme-primary flex-shrink-0 mt-0.5" />
                         <p className="text-sm text-theme-neutral-700 leading-relaxed">{step}</p>
                       </div>
                     ))}
@@ -188,7 +188,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
         <div className="flex-shrink-0 border-t border-theme-neutral-100 px-6 py-4">
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-[#2A1F23] text-white text-sm font-medium hover:bg-[#3d2d32] transition-colors"
+            className="w-full py-2.5 rounded-xl bg-theme-text text-white text-sm font-medium hover:bg-theme-neutral-800 transition-colors"
           >
             Close
           </button>

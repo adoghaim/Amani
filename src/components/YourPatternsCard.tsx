@@ -63,7 +63,7 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
             <Activity className="w-3.5 h-3.5 text-theme-flag-ok" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-theme-flag-ok">Your Patterns</h2>
+            <h2 className="text-sm font-bold text-theme-flag-ok">Your patterns</h2>
             <p className="text-[11px] text-theme-flag-ok mt-0.5">
               Based on your {reportCount} previous report{reportCount !== 1 ? 's' : ''}
             </p>
@@ -77,7 +77,7 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
       <div className="px-5 py-4 space-y-3">
         {orderedPatterns.map((pattern, i) => (
           <div key={i} className="flex items-start gap-3">
-            <div className={`flex-shrink-0 mt-0.5 w-6 h-6 rounded-md bg-white border flex items-center justify-center shadow-sm ${patternIconBorder(pattern)}`}>
+            <div className={`flex-shrink-0 mt-0.5 w-6 h-6 rounded-md bg-theme-surface border flex items-center justify-center shadow-sm ${patternIconBorder(pattern)}`}>
               {patternIcon(pattern)}
             </div>
             <div className="flex-1 min-w-0">
