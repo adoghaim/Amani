@@ -125,7 +125,7 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-theme-neutral-900">Interventions</h3>
+        <h3 className="text-lg text-theme-neutral-900">Interventions</h3>
         {!showForm && (
           <Button onClick={() => setShowForm(true)} size="sm">
             <Plus className="w-4 h-4 mr-1" />

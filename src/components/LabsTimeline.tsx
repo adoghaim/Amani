@@ -127,7 +127,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
           <Card key={report.id}>
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-theme-text">{formatDate(report.report_date)}</h3>
+                <h3 className="text-lg text-theme-text">{formatDate(report.report_date)}</h3>
                 {report.lab_name && (
                   <p className="text-sm text-theme-muted-text">{report.lab_name}</p>
                 )}

@@ -216,7 +216,7 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
   return (
     <div className="space-y-6">
       <div className="bg-theme-info-bg border border-theme-info-border rounded-lg px-4 py-3">
-        <h3 className="font-semibold text-theme-info mb-1">
+        <h3 className="text-theme-info mb-1">
           {items.length} lab item{items.length !== 1 ? 's' : ''} extracted
         </h3>
         <p className="text-sm text-theme-info">
@@ -230,7 +230,7 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
           <div className="flex items-start gap-3 mb-4">
             <AlertCircle className="w-5 h-5 text-theme-flag-watch flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-bold text-theme-flag-watch uppercase tracking-wide">
+              <h3 className="text-sm text-theme-flag-watch uppercase tracking-wide">
                 Needs review ({reviewItems.length})
               </h3>
               <p className="text-xs text-theme-flag-watch mt-0.5">
@@ -257,7 +257,7 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
         <section>
           <div className="flex items-center gap-2 mb-3">
             <FlaskConical className="w-4 h-4 text-theme-flag-ok" />
-            <h3 className="text-sm font-bold text-theme-neutral-700 uppercase tracking-wide">Core Biomarkers ({coreItems.length})</h3>
+            <h3 className="text-sm text-theme-neutral-700 uppercase tracking-wide">Core Biomarkers ({coreItems.length})</h3>
             <span className="text-xs text-theme-neutral-400">Used for scoring & insights</span>
           </div>
           <div className="space-y-2">
@@ -286,7 +286,7 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
             onClick={() => setShowExtended(v => !v)}
           >
             <Microscope className="w-4 h-4 text-theme-info" />
-            <h3 className="text-sm font-bold text-theme-neutral-700 uppercase tracking-wide group-hover:text-theme-neutral-900 transition-colors">
+            <h3 className="text-sm text-theme-neutral-700 uppercase tracking-wide group-hover:text-theme-neutral-900 transition-colors">
               Extended Lab Items ({extendedItems.length})
             </h3>
             <span className="text-xs text-theme-neutral-400">Stored for history — not used in scoring</span>

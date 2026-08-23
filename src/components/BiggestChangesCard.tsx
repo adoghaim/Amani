@@ -172,7 +172,7 @@ export function BiggestChangesCard({ changes }: Props) {
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <Activity className="w-4 h-4 text-theme-text" />
-        <h2 className="text-base font-semibold text-theme-text">Biggest changes</h2>
+        <h2 className="text-base text-theme-text">Biggest changes</h2>
         <span className="text-xs text-theme-muted-text-3 ml-auto">vs. previous report</span>
       </div>
       <div className="space-y-2">

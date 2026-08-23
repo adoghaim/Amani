@@ -15,6 +15,8 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
+import { PageHeader } from '../components/PageHeader';
+import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
@@ -113,7 +115,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
               <AlertTriangle className="w-5 h-5 text-theme-flag-low" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-theme-text">Delete report?</h2>
+              <h2 className="text-base text-theme-text">Delete report?</h2>
               <p className="text-sm text-theme-muted-text mt-0.5">This cannot be undone.</p>
             </div>
           </div>
@@ -293,23 +295,22 @@ export function Reports() {
       )}
 
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-theme-text">Lab reports</h1>
-            <p className="text-sm text-theme-muted-text mt-1">
-              {reports.length === 0
-                ? 'No reports yet'
-                : `${reports.length} report${reports.length !== 1 ? 's' : ''} total`}
-            </p>
-          </div>
-          <Link
-            to="/app/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-theme-primary text-white text-sm font-semibold rounded-xl hover:bg-theme-primary-dark transition-colors shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            New report
-          </Link>
-        </div>
+        <PageHeader
+          title="Lab panels"
+          description={
+            reports.length === 0
+              ? 'Nothing uploaded yet.'
+              : `${reports.length} panel${reports.length !== 1 ? 's' : ''} on file.`
+          }
+          action={
+            <Link to="/app/new">
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                New panel
+              </Button>
+            </Link>
+          }
+        />
 
         {error && (
           <div className="mb-5 px-4 py-3 rounded-xl bg-theme-flag-low-bg border border-theme-flag-low-border flex items-start justify-between gap-3">
@@ -328,7 +329,7 @@ export function Reports() {
             <div className="w-16 h-16 bg-theme-surface-2 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <TestTube2 className="w-8 h-8 text-theme-primary" />
             </div>
-            <h3 className="text-lg font-semibold text-theme-text mb-2">No lab reports yet</h3>
+            <h3 className="text-lg text-theme-text mb-2">No lab reports yet</h3>
             <p className="text-sm text-theme-muted-text mb-6 max-w-xs mx-auto">
               Upload your first lab report to start tracking your biomarkers and getting AI insights.
             </p>

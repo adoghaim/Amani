@@ -76,7 +76,7 @@ export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket
             <ArrowRight className="w-4 h-4 text-theme-flag-watch" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-theme-text">Next best steps</h2>
+            <h2 className="text-sm text-theme-text">Next best steps</h2>
             <p className="text-xs text-theme-muted-text-3 mt-0.5">Practical next moves grouped by intent</p>
           </div>
         </div>
@@ -93,7 +93,7 @@ export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket
                 <span className={`w-6 h-6 rounded-md ${meta.iconBg} flex items-center justify-center`}>
                   <Icon className={`w-3.5 h-3.5 ${meta.iconColor}`} />
                 </span>
-                <h3 className="text-xs font-semibold text-theme-muted-text-2 uppercase tracking-wide">
+                <h3 className="text-xs text-theme-muted-text-2 uppercase tracking-wide">
                   {meta.label}
                 </h3>
               </div>

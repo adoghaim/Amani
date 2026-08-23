@@ -45,7 +45,7 @@ export function DerivedMetricsPanel({ metrics }: Props) {
   return (
     <div className="bg-theme-surface rounded-2xl border border-theme-border p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-theme-text">Derived metrics</h2>
+        <h2 className="text-lg text-theme-text">Derived metrics</h2>
         <p className="text-sm text-theme-muted-text-2 mt-1">
           Calculated from combinations of your biomarker values for deeper insight.
         </p>
@@ -62,7 +62,7 @@ export function DerivedMetricsPanel({ metrics }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <div className={`w-2 h-2 rounded-full shrink-0 ${status.dot}`} />
-                    <h3 className="text-sm font-semibold text-theme-text">{meta.label}</h3>
+                    <h3 className="text-sm text-theme-text">{meta.label}</h3>
                   </div>
                   <p className="text-xs text-theme-muted-text-2 mb-3">{meta.description}</p>
                   <p className="text-sm text-theme-text">{metric.interpretation}</p>

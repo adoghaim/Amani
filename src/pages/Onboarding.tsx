@@ -29,7 +29,7 @@ export function Onboarding() {
   if (!userProfile) return <Loading />;
 
   return (
-    <div className="min-h-screen bg-theme-background flex flex-col">
+    <div className="min-h-dvh bg-theme-background flex flex-col safe-top safe-bottom">
       <header className="px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-center">
         <div className="flex items-center gap-2">
           <Heart className="w-5 h-5 text-theme-primary fill-theme-primary" />

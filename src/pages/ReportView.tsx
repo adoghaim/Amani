@@ -951,7 +951,7 @@ export function ReportView() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <h1 className="text-xl font-bold text-theme-neutral-900 mb-4">Report not found</h1>
+          <h1 className="text-xl text-theme-neutral-900 mb-4">Report not found</h1>
           <Link to="/app"><Button>Back to Dashboard</Button></Link>
         </div>
       </Layout>
@@ -975,7 +975,7 @@ export function ReportView() {
         {/* ── A. Header ──────────────────────────────────────────── */}
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text tracking-tight">
+            <h1 className="text-2xl text-theme-text tracking-tight">
               Lab Report: {formatDate(report.report_date)}
             </h1>
             <p className="text-sm text-theme-muted-text-3 mt-1">
@@ -1106,7 +1106,7 @@ export function ReportView() {
                     </div>
                   )}
                 </div>
-                <h2 className="text-lg font-semibold text-white leading-snug">
+                <h2 className="text-lg text-white leading-snug">
                   {(() => {
                     const ctx = insightSummary ? getOpeningContext(insightSummary) : null;
                     const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
@@ -1512,7 +1512,7 @@ export function ReportView() {
                     .sort(([a], [b]) => a === 'Unmapped' ? 1 : b === 'Unmapped' ? -1 : a.localeCompare(b))
                     .map(([cat, items]) => (
                       <div key={cat}>
-                        <h3 className="text-xs font-bold text-theme-neutral-400 uppercase tracking-widest mb-2">{cat}</h3>
+                        <h3 className="text-xs text-theme-neutral-400 uppercase tracking-widest mb-2">{cat}</h3>
                         <div className="divide-y divide-theme-neutral-100">
                           {items.map(item => <AnalyteRow key={item.id} analyte={item} />)}
                         </div>
@@ -1547,7 +1547,7 @@ export function ReportView() {
               <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-5 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
                   <CalendarDays className="w-4 h-4 text-theme-primary" />
-                  <h3 className="text-sm font-semibold text-theme-text">Cycle context</h3>
+                  <h3 className="text-sm text-theme-text">Cycle context</h3>
                   {aiCycle?.confidence && (
                     <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[aiCycle.confidence]}`}>
                       {aiCycle.confidence} confidence
@@ -1584,7 +1584,7 @@ export function ReportView() {
           {biomarkers.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-base font-semibold text-theme-text">
+                <h2 className="text-base text-theme-text">
                   Health Systems
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-theme-primary">

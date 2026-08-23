@@ -63,7 +63,7 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
             <Activity className="w-3.5 h-3.5 text-theme-flag-ok" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-theme-flag-ok">Your patterns</h2>
+            <h2 className="text-sm text-theme-flag-ok">Your patterns</h2>
             <p className="text-[11px] text-theme-flag-ok mt-0.5">
               Based on your {reportCount} previous report{reportCount !== 1 ? 's' : ''}
             </p>

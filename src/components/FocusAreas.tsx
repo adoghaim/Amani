@@ -43,7 +43,7 @@ export function FocusAreas({ focusAreas }: FocusAreasProps) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
         <Compass className="w-3.5 h-3.5 text-theme-muted-text-2" />
-        <h2 className="text-sm font-semibold text-theme-text">Focus areas</h2>
+        <h2 className="text-sm text-theme-text">Focus areas</h2>
       </div>
       <p className="text-xs text-theme-muted-text-3 px-1">
         Where to direct your attention from this report.
@@ -62,7 +62,7 @@ export function FocusAreas({ focusAreas }: FocusAreasProps) {
               key={area.id}
               className="bg-theme-surface rounded-xl border border-theme-border px-4 py-4"
             >
-              <h3 className="text-sm font-semibold text-theme-text leading-snug">
+              <h3 className="text-sm text-theme-text leading-snug">
                 {area.title}
               </h3>
               <p className="text-xs text-theme-muted-text-2 leading-relaxed mt-1.5">

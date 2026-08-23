@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
+import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
@@ -203,11 +204,11 @@ export function Settings() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-theme-neutral-900 mb-8">Settings</h1>
+        <PageHeader title="Settings" description="Your account, notifications and data." />
 
         <div className="space-y-6">
           <Card>
-            <h2 className="text-xl font-semibold text-theme-neutral-900 mb-4">Account information</h2>
+            <h2 className="text-xl text-theme-neutral-900 mb-4">Account information</h2>
             <div className="space-y-3">
               <div>
                 <span className="text-sm font-medium text-theme-neutral-700">Email:</span>
@@ -239,7 +240,7 @@ export function Settings() {
                   <Bell className="w-4 h-4 text-theme-primary" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-theme-neutral-900">Reminder preferences</h2>
+                  <h2 className="text-lg text-theme-neutral-900">Reminder preferences</h2>
                   <p className="text-xs text-theme-muted-text">
                     In-app notifications. Mobile push support coming soon.
                   </p>
@@ -320,7 +321,7 @@ export function Settings() {
                 <ShieldCheck className="w-5 h-5 text-theme-flag-ok" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-theme-neutral-900 mb-1">
+                <h2 className="text-lg text-theme-neutral-900 mb-1">
                   Data Privacy & Security
                 </h2>
                 <p className="text-sm text-theme-neutral-600 leading-relaxed">
@@ -342,7 +343,7 @@ export function Settings() {
                 <Trash2 className="w-6 h-6 text-theme-flag-low" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-semibold text-theme-neutral-900 mb-2">Delete my data</h2>
+                <h2 className="text-xl text-theme-neutral-900 mb-2">Delete my data</h2>
                 <p className="text-theme-neutral-600 mb-4">
                   Permanently delete all your health data and account. This action cannot be undone.
                 </p>
@@ -356,7 +357,7 @@ export function Settings() {
                       <div className="flex items-start gap-2 mb-3">
                         <AlertTriangle className="w-5 h-5 text-theme-flag-low mt-0.5" />
                         <div>
-                          <h3 className="font-semibold text-theme-flag-low mb-1">
+                          <h3 className="text-theme-flag-low mb-1">
                             Warning: This action is permanent
                           </h3>
                           <p className="text-sm text-theme-flag-low">Deleting your data will:</p>

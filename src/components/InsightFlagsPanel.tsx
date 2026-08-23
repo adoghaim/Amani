@@ -108,7 +108,7 @@ export function InsightFlagsPanel({ flags }: Props) {
   return (
     <div className="bg-theme-surface rounded-2xl border border-theme-border p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-theme-text">Clinical insight flags</h2>
+        <h2 className="text-lg text-theme-text">Clinical insight flags</h2>
         <p className="text-sm text-theme-muted-text-2 mt-1">
           Pattern-based observations from your biomarker combination. Tap each flag for details.
         </p>

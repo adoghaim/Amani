@@ -85,7 +85,7 @@ export function WhatToDoNextCard({ items, existingNextSteps = [] }: Props) {
             <ArrowRight className="w-4 h-4 text-theme-flag-watch" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-theme-text">What to Do Next</h2>
+            <h2 className="text-sm text-theme-text">What to Do Next</h2>
             <p className="text-xs text-theme-muted-text-3 mt-0.5">Practical next moves based on this report</p>
           </div>
         </div>
@@ -105,7 +105,7 @@ export function WhatToDoNextCard({ items, existingNextSteps = [] }: Props) {
                     <span className={`w-6 h-6 rounded-md ${meta.bg} flex items-center justify-center`}>
                       <Icon className={`w-3.5 h-3.5 ${meta.iconColor}`} />
                     </span>
-                    <h3 className="text-xs font-semibold text-theme-muted-text-2 uppercase tracking-wide">{meta.label}</h3>
+                    <h3 className="text-xs text-theme-muted-text-2 uppercase tracking-wide">{meta.label}</h3>
                   </div>
                   <ul className="space-y-1.5 ml-8">
                     {bucketItems.map((item, i) => (

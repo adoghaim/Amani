@@ -103,7 +103,7 @@ export function TrackerCalendar({ dayMap, onDayClick, currentMonth, onMonthChang
         >
           <ChevronLeft className="w-4 h-4 text-theme-muted-text" />
         </button>
-        <h3 className="text-base font-semibold text-theme-text">{monthName}</h3>
+        <h3 className="text-base text-theme-text">{monthName}</h3>
         <button
           onClick={nextMonth}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"

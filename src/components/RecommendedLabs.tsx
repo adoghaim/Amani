@@ -79,7 +79,7 @@ export function RecommendedLabs({
     <div className="bg-theme-surface rounded-2xl border border-theme-border p-6">
       <div className="flex items-center gap-2 mb-1">
         <FlaskConical className="w-5 h-5 text-theme-primary" />
-        <h2 className="text-lg font-semibold text-theme-text">Recommended labs</h2>
+        <h2 className="text-lg text-theme-text">Recommended labs</h2>
       </div>
       <p className="text-sm text-theme-muted-text-2">
         {ranked.length} {ranked.length === 1 ? 'lab' : 'labs'} suggested based on this report

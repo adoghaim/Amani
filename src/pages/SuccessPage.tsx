@@ -18,14 +18,14 @@ export function SuccessPage() {
   }, [refetch])
 
   return (
-    <div className="min-h-screen bg-theme-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-dvh bg-theme-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 safe-top safe-bottom">
       <div className="max-w-md w-full text-center">
         <div className="bg-theme-surface rounded-lg shadow-lg p-8 border border-theme-border">
           <div className="flex justify-center mb-6">
             <CheckCircle className="h-16 w-16 text-theme-flag-ok" />
           </div>
           
-          <h1 className="text-2xl font-bold text-theme-text mb-4">
+          <h1 className="text-2xl text-theme-text mb-4">
             Payment Successful!
           </h1>
           
