@@ -1,12 +1,23 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { PricingCard } from '../components/pricing/PricingCard'
+import { IapPaywall } from '../components/pricing/IapPaywall'
 import { stripeProducts } from '../stripe-config'
+import { isNative } from '../lib/native'
 
 export function PricingPage() {
+  const navigate = useNavigate()
   const yearly = stripeProducts.find(p => p.interval === 'year')
   const monthly = stripeProducts.find(p => p.interval === 'month')
   const ordered = [yearly, monthly].filter(Boolean) as typeof stripeProducts
+
+  /*
+    The one branch that keeps this app in the App Store. Guideline 3.1.1
+    requires digital content unlocking in-app functionality to be sold through
+    in-app purchase, so the native builds must never reach Stripe Checkout —
+    which is exactly what `PricingCard` opens.
+  */
+  const native = isNative()
 
   return (
     <div className="min-h-screen bg-theme-background py-16">
@@ -28,15 +39,19 @@ export function PricingPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
-          {ordered.map((product, index) => (
-            <PricingCard
-              key={product.id}
-              product={product}
-              isPopular={index === 0}
-            />
-          ))}
-        </div>
+        {native ? (
+          <IapPaywall onEntitled={() => navigate('/app')} />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
+            {ordered.map((product, index) => (
+              <PricingCard
+                key={product.id}
+                product={product}
+                isPopular={index === 0}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

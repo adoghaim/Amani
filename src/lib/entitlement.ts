@@ -9,11 +9,15 @@
  * This module is pure — no Supabase, no network, no clock — so every branch is
  * unit testable.
  *
- * MIRROR of `supabase/functions/_shared/entitlement.ts`, following the same
- * convention as `src/lib/errors.ts` / `_shared/errors.ts`. The server copy is
- * authoritative — it is the security boundary. This copy drives UX, so the
- * client does not bounce a paying App Store user the server would have let in.
+ * `resolveEntitlement` is a MIRROR of
+ * `supabase/functions/_shared/entitlement.ts`, following the same convention as
+ * `src/lib/errors.ts` / `_shared/errors.ts`. The server copy is authoritative —
+ * it is the security boundary. This copy drives UX, so the client does not
+ * bounce a paying App Store user the server would have let in.
  * `src/lib/entitlement.test.ts` fails if the two ever disagree.
+ *
+ * `clientAllowSandbox()` at the bottom is client-only and has no server twin:
+ * the server reads its own `ALLOW_SANDBOX_IAP`.
  */
 
 /** Stripe statuses that entitle. `past_due` is included deliberately: a failed
@@ -104,4 +108,18 @@ export function resolveEntitlement(input: EntitlementInput): EntitlementResult {
     allowed: false,
     reason: hadPaidRelationship ? "no_subscription" : "trial_expired",
   };
+}
+
+/**
+ * Whether this build lets sandbox StoreKit/Play purchases entitle. Mirrors the
+ * server's `ALLOW_SANDBOX_IAP`; keep the two set the same or the client and the
+ * edge functions will disagree about who is a subscriber.
+ *
+ * Every client-side `resolveEntitlement` call passes this — the gate in front
+ * of `/app/new` and the billing screen included. When they disagreed, a sandbox
+ * tester past their 7-day trial saw "Active Subscription" on /app/billing and
+ * was bounced straight back to it from every paid feature.
+ */
+export function clientAllowSandbox(): boolean {
+  return import.meta.env.VITE_ALLOW_SANDBOX_IAP === "true";
 }

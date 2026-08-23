@@ -1,0 +1,26 @@
+# Amani — https://amanibiometrics.com
+#
+# Everything under /app/ is behind auth and personal to one user, so there is
+# nothing there for a crawler to index and every URL would 404 or redirect.
+# /success and /reset-password carry one-time tokens in the query string, which
+# should never end up in a search index or a referrer log.
+#
+# Netlify serves this file as-is; the SPA fallback in public/_redirects only
+# applies to paths with no real file behind them.
+
+User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /login
+Allow: /signup
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /dev/
+Disallow: /success
+Disallow: /reset-password
+
+Sitemap: https://amanibiometrics.com/sitemap.xml

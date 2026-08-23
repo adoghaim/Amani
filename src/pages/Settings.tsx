@@ -17,6 +17,18 @@ import {
 } from 'lucide-react';
 import { NotificationPreferences } from '../types';
 import { PersonalContextCard } from '../features/settings/PersonalContextCard';
+import { openExternalUrl } from '../lib/native';
+import { storeSubscriptionsUrl } from '../lib/iap';
+
+/**
+ * A store subscription the server refused to delete the account around.
+ * Shape mirrors the 409 body from `delete-user-data`.
+ */
+interface StoreSubscriptionWarning {
+  platform: 'ios' | 'android';
+  product_id: string;
+  expires_at: string | null;
+}
 
 export function Settings() {
   const { user, userProfile } = useAuth();
@@ -25,6 +37,13 @@ export function Settings() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  /*
+    Non-null once the server has told us the account has a live App Store / Play
+    subscription. Deleting the account does not cancel it — only the customer
+    can, in their store settings — so the second confirmation exists to make
+    sure nobody deletes their way into paying for an app they can't log into.
+  */
+  const [storeSubs, setStoreSubs] = useState<StoreSubscriptionWarning[] | null>(null);
 
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null);
   const [notifLoading, setNotifLoading] = useState(true);
@@ -115,7 +134,7 @@ export function Settings() {
     }
   };
 
-  const handleDeleteData = async () => {
+  const handleDeleteData = async (acknowledgeStoreSubscriptions = false) => {
     if (deleteConfirmText !== 'DELETE') {
       setError('Please type DELETE to confirm');
       return;
@@ -139,6 +158,9 @@ export function Settings() {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          acknowledge_store_subscriptions: acknowledgeStoreSubscriptions,
+        }),
       });
 
       if (!response.ok) {
@@ -146,6 +168,22 @@ export function Settings() {
         // Any non-2xx here means the deletion is INCOMPLETE — surface the
         // error so the user can retry rather than pretending it succeeded.
         const data = await response.json().catch(() => ({ error: 'Failed to delete account' }));
+
+        /*
+          409 is not a failure — nothing was deleted. The account has a live
+          store subscription the server won't silently orphan. Show what it is,
+          link to the place it can actually be cancelled, and require a second
+          deliberate confirmation.
+        */
+        if (
+          response.status === 409 &&
+          data.code === 'store_subscription_acknowledgement_required'
+        ) {
+          setStoreSubs((data.store_subscriptions ?? []) as StoreSubscriptionWarning[]);
+          setDeleting(false);
+          return;
+        }
+
         throw new Error(data.error || 'Failed to delete account');
       }
 
@@ -371,6 +409,47 @@ export function Settings() {
                       </div>
                     </div>
 
+                    {storeSubs && storeSubs.length > 0 && (
+                      <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-amber-900 mb-1">
+                              Your subscription will keep billing
+                            </h3>
+                            <p className="text-sm text-amber-900">
+                              This account has an active subscription billed by{' '}
+                              {storeSubs[0]?.platform === 'ios' ? 'Apple' : 'Google'}.{' '}
+                              <strong>Deleting your account does not cancel it.</strong> Only you
+                              can cancel it, from your store account settings — and once the
+                              account is gone, this app can no longer help you find it.
+                            </p>
+                            <p className="text-sm text-amber-900 mt-2">
+                              Cancel it first, then come back and delete.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {storeSubs.map((sub) => (
+                                <Button
+                                  key={`${sub.platform}-${sub.product_id}`}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    openExternalUrl(
+                                      storeSubscriptionsUrl(sub.platform, sub.product_id),
+                                    )
+                                  }
+                                >
+                                  {sub.platform === 'ios'
+                                    ? 'Manage in the App Store'
+                                    : 'Manage in Google Play'}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {error && (
                       <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                         {error}
@@ -393,10 +472,17 @@ export function Settings() {
                     <div className="flex gap-3">
                       <Button
                         variant="danger"
-                        onClick={handleDeleteData}
+                        // The second press carries the acknowledgement. Derived
+                        // from state rather than a checkbox so the warning is
+                        // always shown before it can possibly be true.
+                        onClick={() => handleDeleteData(storeSubs !== null)}
                         disabled={deleting || deleteConfirmText !== 'DELETE'}
                       >
-                        {deleting ? 'Deleting...' : 'Yes, Delete My Data'}
+                        {deleting
+                          ? 'Deleting...'
+                          : storeSubs !== null
+                            ? 'Delete anyway — I’ll cancel my subscription myself'
+                            : 'Yes, Delete My Data'}
                       </Button>
                       <Button
                         variant="secondary"
@@ -404,6 +490,7 @@ export function Settings() {
                           setShowDeleteConfirm(false);
                           setDeleteConfirmText('');
                           setError('');
+                          setStoreSubs(null);
                         }}
                       >
                         Cancel

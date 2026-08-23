@@ -11,50 +11,50 @@ This document outlines the strict rules and validation logic for how nutrients a
 
 ## Allowed Nutrients (Allow-List)
 
-Nutrients may ONLY be mentioned if they are in this allow-list AND directly related to a lab value or symptom:
+Nutrients may ONLY be discussed as supplements if they are in this allow-list AND directly related to a lab value or symptom. The list is `ALLOWED_NUTRIENTS` in `supabase/functions/_shared/nutrient-policy.ts`, and it is **enforced, not advisory**: `validateInterpretationOutput` flags any supplementation language that does not name one of these nine.
 
-- **vitamin D** (vitamin_d)
-- **vitamin B12** (b12)
-- **folate** (folate)
-- **iron** (iron)
-- **magnesium** (magnesium)
-- **omega-3** (omega_3)
-- **iodine** (iodine)
+- **vitamin D**
+- **vitamin B12**
+- **folate**
+- **iron**
+- **magnesium**
+- **omega-3**
+- **iodine**
+- **selenium**
+- **zinc**
+
+Five extra spellings resolve to an entry above (`b12`, `cobalamin`, `vitamin d3`, `cholecalciferol`, `folic acid`). Hyphen and space variants such as `omega 3` are matched automatically, as are plurals.
+
+> **Open question for the product owner.** Selenium and zinc have been in the code's allow-list and in its prompt list since the module was written, but were never in this document's list of seven. They are enforced as allowed today. Narrowing enforcement back to seven would also mean decoupling `ALLOWED_NUTRIENTS_PROMPT_LIST` from `ALLOWED_NUTRIENTS`, because the system prompt uses that string as the list of nutrient names the model must **not** put in `what_you_can_do_now` — shrinking it would let the model name selenium and zinc there.
 
 ## Banned Content
 
 ### 1. Banned Herbal/Alternative Supplements
 
-These supplements must NEVER be mentioned:
+These are a violation on bare mention, with no supplementation context required. The list is `BANNED_SUPPLEMENTS` (26 terms) plus `BANNED_SUPPLEMENT_ABBREVIATIONS` (2) in `_shared/nutrient-policy.ts`:
 
-- Ashwagandha
-- Maca
-- Vitex (chasteberry)
-- DIM (diindolylmethane)
-- Evening primrose oil
-- Black cohosh
-- Any adaptogen
-- Any herbal supplement
+ashwagandha, maca, vitex, chasteberry, chaste tree, diindolylmethane, evening primrose, black cohosh, rhodiola, ginseng, saw palmetto, berberine, inositol, n-acetylcysteine, n-acetyl cysteine, red clover, dong quai, licorice root, milk thistle, st john's wort, st. john's wort, tribulus, fenugreek, melatonin, adaptogen, 5-htp.
+
+Abbreviations are matched separately and **case-sensitively** with word boundaries, so the supplement `DIM` is caught without flagging the ordinary adjective "dim": `DIM`, `NAC`.
+
+The deny-list is the second layer, not the first. Anything nobody thought to list is caught by the allow-list rule above, which fails closed on supplementation language that names no allow-listed nutrient.
 
 ### 2. Banned Prescriptive Language
 
-The following words and phrases are FORBIDDEN:
+The following are forbidden when aimed at something ingestible: "take", "start taking", "begin taking", "consume", "swallow", "prescribe"/"prescribed", each followed by an article or a number.
 
-- "take"
-- "start"
-- "increase"
-- "decrease"
-- "recommended"
-- "prescribe"
+These fire only when the same string also carries substance context — a supplement/vitamin/mineral/pill/capsule/tablet/dose word, a dosage unit, or a named nutrient. Without that guard the validator flags ordinary English ("energy and focus are the first things to **take a** hit") and sends a clean report to the non-AI fallback for no reason.
 
 ### 3. Banned Dosage/Timing Language
 
 Never include:
 
-- Specific dosage units (IU, mg, mcg, g, mL)
-- Frequency terms (daily, twice, per day, every day)
-- Timing instructions (morning, evening, with food)
+- Specific dosage units (IU, mg, mcg, µg/ug, g, mL, grams, milligrams, micrograms) adjacent to a number
+- Frequency terms (daily, twice a/per day, once a day, per day, every day/morning/night/evening)
+- Timing instructions (with food, on an empty stomach)
 - Brand names or product recommendations
+
+**Lab concentrations are not dosages.** `95 mg/dL`, `13.2 g/dL` and `45 µg/dL` are measurements the interpretation is supposed to quote, so the dosage pattern exempts a volume denominator (`/dL`, `/L`, `/mL`). A per-mass dosing expression such as `5 mg/kg` is still flagged. Frequency terms, like prescriptive verbs, require substance context in the same string — "track your energy daily" is not a dosing instruction.
 
 ## Required Language Patterns
 
@@ -103,11 +103,15 @@ The validator lives in `supabase/functions/_shared/nutrient-policy.ts` and is in
 
 `_shared/nutrient-policy.ts` exports:
 
-- `ALLOWED_NUTRIENTS_PROMPT_LIST` — interpolated into the prompt's "supplements allowed" line so the prompt cannot drift from the validator.
-- `BANNED_SUPPLEMENTS` — array of banned herbal/adaptogen names.
-- Internal regexes for dosage units, prescriptive verbs, and dosing-frequency words.
-- `validateInterpretationOutput(parsed)` → `{ valid, violations }`.
-- `sanitizeViolations(parsed)` → filters `what_you_can_do_now` and `what_to_do_next` arrays of items containing any violation pattern.
+- `ALLOWED_NUTRIENTS` — the enforced allow-list (9 nutrients), and `ALLOWED_NUTRIENT_ALIASES` (5 alternate spellings).
+- `ALLOWED_NUTRIENTS_PROMPT_LIST` — **derived** from `ALLOWED_NUTRIENTS` (`.join(", ")`) and interpolated into the system prompt, so the prompt cannot drift from what is enforced.
+- `BANNED_SUPPLEMENTS` and `BANNED_SUPPLEMENT_ABBREVIATIONS` — banned herbal/adaptogen/nutraceutical names.
+- Internal regexes for dosage units, prescriptive verbs, dosing-frequency words, supplementation context, and substance context.
+- `findTextViolations(text)` → `string[]` for one freeform string. The shared primitive both of the below are built on.
+- `validateInterpretationOutput(parsed)` → `{ valid, violations }`, checked per string across a recursive walk of the whole object.
+- `sanitizeViolations(parsed)` → `Record<string, unknown> | null`. See the fail-closed contract below.
+
+`_shared/nutrient-policy.test.ts` is the regression net for all of the above. Run `npm test` after any change to this module.
 
 Any change to the allow-list, banned patterns, or phrasing rules goes in `_shared/nutrient-policy.ts` only — and the edge function must be redeployed.
 
@@ -115,16 +119,24 @@ Any change to the allow-list, banned patterns, or phrasing rules goes in `_share
 
 1. **First call** — OpenAI generates the interpretation; server runs `validateInterpretationOutput`.
 2. **If violations are detected** — server logs the violations, appends a stricter reminder to the prompt, and calls OpenAI a second time.
-3. **If the second response also violates** — server runs `sanitizeViolations` to drop offending items from `what_you_can_do_now` and `what_to_do_next`, then returns the sanitized output. Other freeform fields are left intact (the validator's first line of defense is the regenerate retry; sanitization is the fail-closed floor).
+3. **If the second response also violates** — server runs `sanitizeViolations`, which:
+   1. filters every **top-level array of strings** (`what_you_can_do_now`, `what_to_do_next`, `questions_for_doctor`), dropping items that carry a violation. These are advice lists, so losing one item costs nothing else;
+   2. re-validates the whole object;
+   3. returns `null` if anything still violates. Scalar strings and strings nested inside objects — `headline`, `overall_interpretation`, `primary_concern.summary`, `key_findings[].explanation` — carry the clinical content and cannot be partially edited without either mangling the medicine or silently keeping unsafe text, so the interpretation is discarded instead.
+
+**The `null` contract.** `tryOpenAI` returns `null`, the handler logs "OpenAI failed, using fallback" and calls `generateFallbackInterpretation` — deterministic, template-driven, no AI text. The user still gets a report; it is just not the AI one. Any future caller of `sanitizeViolations` MUST handle `null` the same way. Returning the object unchanged is what this replaced: a violation in `overall_interpretation` was detected on both attempts and then persisted untouched, while the log claimed it had sanitized.
 
 ### Banned patterns
 
-The validator scans every freeform string in the parsed output (recursive walk) for:
+The validator walks every freeform string in the parsed output and checks each one independently (so a match cannot be assembled across two unrelated fields). Per string:
 
-1. **Dosage units**: `IU`, `mg`, `mcg`, `µg`/`ug`, `g`, `mL`/`ml`, `grams`, `milligrams`, `micrograms` — when adjacent to a number.
-2. **Banned supplements**: ashwagandha, maca, vitex, chasteberry, diindolylmethane, evening primrose, black cohosh, rhodiola, ginseng, saw palmetto.
-3. **Prescriptive verb patterns**: `take`, `start taking`, `begin taking`, `consume`, `swallow`, `prescribe(d)` — when followed by an article or a digit.
-4. **Dosing frequency**: `daily`, `twice a/per day`, `every day/morning/night/evening`, `once a day`, `per day`, `with food`, `on an empty stomach`.
+1. **Dosage units** — `IU`, `mg`, `mcg`, `µg`/`ug`, `g`, `mL`/`ml`, `grams`, `milligrams`, `micrograms` adjacent to a number, except when followed by a volume denominator (`/dL`, `/L`, `/mL`), which makes it a lab concentration rather than a dose. Unconditional.
+2. **Banned supplements** — the 26 terms and 2 abbreviations listed above. Unconditional.
+3. **Prescriptive verb patterns** — `take`, `start taking`, `begin taking`, `consume`, `swallow`, `prescribe(d)` followed by an article or a digit. Requires substance context in the same string.
+4. **Dosing frequency** — `daily`, `twice a/per day`, `every day/morning/night/evening`, `once a day`, `per day`, `with food`, `on an empty stomach`. Requires substance context in the same string.
+5. **Unlisted nutrient** — supplementation language (`supplement`/`supplements`/`supplementing`/`supplementation`) in a string that names no allow-listed nutrient. This is the allow-list rule, and it is what makes the policy fail closed on berberine, inositol, red clover, dong quai and everything else nobody enumerated.
+
+Violations are reported as `code:match` strings, deduplicated across the object.
 
 ## Examples
 
@@ -143,57 +155,47 @@ Tied to a flagged lab value, consultative framing, no dosage, no prescriptive ve
 | "Take 2000 IU of vitamin D daily" | dosage unit (`IU`) + frequency (`daily`) + prescriptive verb (`take`) |
 | "You should start taking a vitamin D supplement" | prescriptive verb (`start taking`) |
 | "Consider an ashwagandha or rhodiola stack for stress" | banned supplements |
-| "Magnesium is important for overall health, ask your provider about a supplement" | not tied to a specific lab value or symptom — semantic, not regex; the prompt rejects this, the validator does not |
-| "Some clinicians discuss zinc supplementation" | `zinc` is not in the canonical allow-list |
+| "Magnesium is important for overall health, ask your provider about a supplement" | **passes the validator.** `magnesium` is allow-listed; "not tied to a specific lab value" is semantic, not regex, so only the prompt rejects this |
+| "Some clinicians discuss berberine supplementation" | banned supplement, and supplementation naming no allow-listed nutrient |
+| "Ask your provider about calcium supplementation" | `calcium` is not in the allow-list, so the supplementation rule fails closed |
 
 ## Implementation Files
 
 - **Policy module (single source of truth)**: `/supabase/functions/_shared/nutrient-policy.ts`
-  - Exports `ALLOWED_NUTRIENTS_PROMPT_LIST`, `BANNED_SUPPLEMENTS`, banned-pattern regexes
-  - Exports `validateInterpretationOutput()` and `sanitizeViolations()`
+  - Exports `ALLOWED_NUTRIENTS` (enforced), `ALLOWED_NUTRIENTS_PROMPT_LIST` (derived from it), `BANNED_SUPPLEMENTS`, `BANNED_SUPPLEMENT_ABBREVIATIONS`, banned-pattern regexes
+  - Exports `findTextViolations()`, `validateInterpretationOutput()` and `sanitizeViolations()`
+- **Tests**: `/supabase/functions/_shared/nutrient-policy.test.ts`
 - **Edge function (consumer)**: `/supabase/functions/generate-interpretation/index.ts`
   - Imports from the policy module above
   - Interpolates `ALLOWED_NUTRIENTS_PROMPT_LIST` into the system prompt
-  - Calls `validateInterpretationOutput()` after every OpenAI response; regenerates on first violation; calls `sanitizeViolations()` on second violation
+  - Calls `validateInterpretationOutput()` after every OpenAI response; regenerates on first violation; calls `sanitizeViolations()` on second violation and treats a `null` result as "no usable AI output", falling back to the deterministic interpretation
 
 ## Monitoring and Logging
 
-When validation fails, the system logs:
-- Which violations were detected
-- Whether a retry was attempted
-- Whether the nutrient section was removed
+When validation fails, the edge function logs the violations on each attempt. Check function logs for:
 
-Check edge function logs for:
 ```
-"Nutrient content validation failed: [violations]"
-"Attempting regeneration with stricter prompt..."
-"Setting nutrient_topics_to_discuss to empty array due to validation failures"
+[generate-interpretation] nutrient validation failed (attempt 1): <violations>
+[generate-interpretation] nutrient validation failed (attempt 2), sanitizing: <violations>
+[generate-interpretation] OpenAI failed, using fallback
 ```
+
+The third line after the second is the fail-closed path: sanitization could not save the output and the deterministic fallback was served. A rising rate there means the prompt and the validator have drifted apart, not that users are at risk.
 
 ## UI Display
 
-The nutrient discussion section is displayed in the report view with:
+There is no dedicated nutrient section in the report UI. `nutrient_topics_to_discuss` survives only as an optional field on a TypeScript interface (`src/types/index.ts`); nothing writes it and nothing renders it.
 
-**Section Title**: "Nutrient topics to discuss with your clinician"
-
-**Disclaimer Text**: "Conversation starters only — your clinician can advise what's appropriate for you."
-
-**Content Display**: For each nutrient topic:
-- Nutrient name (formatted for display)
-- "Why this came up" explanation
-- Discussion prompt text
-
-The section only appears if `nutrient_topics_to_discuss` array is not empty.
+Food and nutrient discussion is owned by the **Support Plan** card (`src/components/GuidanceCards.tsx`, built deterministically by `src/lib/cards/buildCards.ts`) — not by the AI. The system prompt correspondingly forbids the model from naming foods, nutrients, or the word "supplement" in `what_you_can_do_now` and `what_to_do_next`.
 
 ## Updates and Maintenance
 
 To modify these guidelines:
 
-1. Update the allow-list in this document
-2. Update the system prompt in `generate-interpretation/index.ts`
-3. Update validation patterns in the `validateNutrientContent()` function
-4. Deploy the updated edge function
-5. Test with various lab scenarios to ensure compliance
+1. Edit `ALLOWED_NUTRIENTS` / `BANNED_SUPPLEMENTS` / the regexes in `supabase/functions/_shared/nutrient-policy.ts`. That module is the only place policy lives; the prompt list derives from it.
+2. Update `supabase/functions/_shared/nutrient-policy.test.ts` and run `npm test`.
+3. Update this document to match.
+4. Deploy the edge function: `supabase functions deploy generate-interpretation`. The policy module is bundled with it, so a policy change is inert until this runs.
 
 ## Rationale
 

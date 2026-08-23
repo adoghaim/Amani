@@ -1,11 +1,12 @@
 import { LoginForm } from '../components/auth/LoginForm'
+import { safeRedirectTarget } from '../lib/redirect'
 import { Link, useNavigate } from 'react-router-dom'
 import { Heart, ArrowLeft } from 'lucide-react'
 
 export function LoginPage() {
   const navigate = useNavigate()
   const params = new URLSearchParams(window.location.search)
-  const redirect = params.get('redirect') || '/app'
+  const redirect = safeRedirectTarget(params.get('redirect'))
 
   const handleSuccess = () => {
     navigate(redirect)

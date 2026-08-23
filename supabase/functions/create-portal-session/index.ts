@@ -63,17 +63,36 @@ Deno.serve(async (req: Request) => {
       });
       customerId = customer.id;
 
-      await supabase
+      // Service role, deliberately: `supabase` above is the anon key carrying
+      // the caller's JWT, so it acts as `authenticated`, and
+      // `stripe_customer_id` is no longer writable by that role (see
+      // 20260823000000_lock_users_privileged_columns.sql — a client that can
+      // write it can point their row at somebody else's Stripe customer).
+      //
+      // The error is checked rather than discarded: silently failing here
+      // means a brand new Stripe customer on every visit to the portal.
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+
+      const { error: linkError } = await supabaseAdmin
         .from("users")
         .update({ stripe_customer_id: customerId })
         .eq("id", user.id);
+
+      if (linkError) {
+        console.error("[create-portal-session] failed to persist stripe_customer_id:", linkError.message);
+      }
     }
 
     const origin = req.headers.get("origin") || "http://localhost:5173";
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${origin}/billing`,
+      // `/app/billing` — the only billing route App.tsx declares. `/billing`
+      // renders the NotFound page, so every portal session used to end there.
+      return_url: `${origin}/app/billing`,
     });
 
     return new Response(

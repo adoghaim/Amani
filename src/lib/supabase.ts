@@ -1,7 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? 'https://eyfvqdnczorscwveaadv.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5ZnZxZG5jem9yc2N3dmVhYWR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0NTEwMjksImV4cCI6MjA4NDAyNzAyOX0.4sEp3Z2D3BNSPjaX57HhEUr_yRTX8BUHayjZkY8X4CI'
+/*
+  No fallback to the production project. The anon key is public by design, so
+  the old `?? '<prod url/key>'` literals were never a key leak — the danger was
+  that they were silent. A renamed or missing env var on a Netlify preview
+  branch would compile cleanly against PRODUCTION, and whoever was testing the
+  preview would write real users' rows.
+
+  Failing at import is the loud version of that. Every environment now has to
+  declare where it points, including local dev: copy `.env.example` to `.env`.
+*/
+function requireEnv(name: string, value: string | undefined): string {
+  if (!value) {
+    throw new Error(
+      `Missing ${name}. Copy .env.example to .env for local dev, or set it in ` +
+        `the Netlify site environment. Note that VITE_* values are baked in at ` +
+        `build time, so changing one needs a rebuild, not just a redeploy.`
+    )
+  }
+  return value
+}
+
+const supabaseUrl = requireEnv('VITE_SUPABASE_URL', import.meta.env.VITE_SUPABASE_URL)
+const supabaseAnonKey = requireEnv('VITE_SUPABASE_ANON_KEY', import.meta.env.VITE_SUPABASE_ANON_KEY)
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

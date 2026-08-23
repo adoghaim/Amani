@@ -29,7 +29,11 @@ Orphan rule: remove imports/vars/functions that *your* change made unused. Leave
 Every changed line in the diff should trace back to the user's request.
 
 ### 4. Goal-driven execution — the verify loop
-This repo has **no automated test runner**. Validation is `npm run lint`, `npm run typecheck`, `npm run build`, plus manual flow testing. After any non-trivial change, run all three and report results. For UI changes, run `npm run dev` and exercise the changed flow in a browser before reporting "done."
+Validation is `npm run lint`, `npm run typecheck`, `npm test` (Vitest — suites under `src/` and `supabase/functions/_shared/`), and `npm run build`. After any non-trivial change, run all four and report results. For UI changes, run `npm run dev` and exercise the changed flow in a browser before reporting "done."
+
+Coverage is uneven, so treat a green suite as necessary, not sufficient. The pure `_shared/*.ts` modules and `src/lib/scoring/scoreBiomarker.ts` are well covered; the parser has snapshot tests that pin current behaviour rather than assert correctness; the Deno edge-function handlers have none.
+
+`npm run typecheck` does NOT cover `supabase/functions/` — those are Deno, excluded from `tsconfig.app.json`, and Supabase deploys them without type-checking. They carry pre-existing type errors. To check one: `deno check --node-modules-dir=none supabase/functions/<name>/index.ts`.
 
 For multi-step tasks, write a numbered plan where each step has an explicit `verify:` line — the plan is not done until every verify passes.
 
@@ -39,11 +43,11 @@ For multi-step tasks, write a numbered plan where each step has an explicit `ver
 
 ### A. The medical-boundary rules (highest-stakes area in the repo)
 
-`NUTRIENT_GUIDELINES.md` defines the human-readable spec: a 7-item allow-list of nutrients, banned prescriptive verbs (e.g. "take", "supplement with"), banned dosage units, and required consultative phrasing.
+`NUTRIENT_GUIDELINES.md` defines the human-readable spec: a 9-nutrient allow-list, a banned-supplement list, banned prescriptive verbs (e.g. "take", "supplement with"), banned dosage units, and required consultative phrasing. Enforcement is allow-list-first: supplementation language naming no allow-listed nutrient is itself a violation, so an unlisted supplement fails closed rather than passing unnoticed.
 
 **Single source of truth: `supabase/functions/_shared/nutrient-policy.ts`.** That module exports the canonical allow-list, banned-supplement list, and the regexes for dosage units, prescriptive verbs, and dosing-frequency words. Both the system prompt (via `ALLOWED_NUTRIENTS_PROMPT_LIST` interpolation) and the runtime validator (`validateInterpretationOutput`) consume the same constants — they cannot drift.
 
-**Runtime flow** in `generate-interpretation/index.ts`: every OpenAI response runs through `validateInterpretationOutput()`. On the first violation, the prompt is augmented with the specific violation list and the model is called again. If the second attempt still violates, `sanitizeViolations()` filters offending items out of the `what_you_can_do_now` and `what_to_do_next` arrays before persisting. Don't change this fail-closed flow without explicit user approval.
+**Runtime flow** in `generate-interpretation/index.ts`: every OpenAI response runs through `validateInterpretationOutput()`. On the first violation, the prompt is augmented with the specific violation list and the model is called again. If the second attempt still violates, `sanitizeViolations()` filters offending items out of the top-level string arrays, re-validates the whole object, and returns `null` when a violation survives in a scalar or nested field (e.g. `overall_interpretation`). `tryOpenAI` propagates that `null` and the handler serves `generateFallbackInterpretation` instead, so the user still gets a report — the deterministic one. Any new caller must handle `null` the same way. Don't change this fail-closed flow without explicit user approval.
 
 **Rules when working in this area:**
 - Allow-list / banned-pattern changes go in `_shared/nutrient-policy.ts` only. Update `NUTRIENT_GUIDELINES.md` in the same commit so the spec doc matches.

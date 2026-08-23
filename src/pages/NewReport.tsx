@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +38,77 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
 ];
 
 type GuidedStep = 'choose' | 'instructions' | 'upload';
+
+/*
+  Mark a report as terminally failed.
+
+  Two things were wrong with the inline writes this replaces.
+
+  1. They never ran. A PostgREST builder only issues its request when something
+     calls `.then()` on it, so a bare `supabase.from(...).update(...).eq(...)`
+     statement is dead code. Every un-awaited status write in this file silently
+     did nothing, which is why a failed upload sat at 'processing' until
+     ReportView's 90s poll timeout gave up and flipped it to 'ready'.
+
+  2. The interpretation failure path wrote 'ready'. The server's catch writes
+     'error' for the same event, so the two writers disagreed about one column
+     and a failed interpretation could display as a finished report.
+
+  So: write 'error', matching the server, and make it a compare-and-set on
+  status = 'processing'. Whatever the edge function wrote always wins — including
+  a successful 'ready' the client never saw because the invoke timed out after
+  the function had already finished. This only fills in a terminal status when
+  the server never got to write one at all.
+*/
+async function markReportFailed(reportId: string | null): Promise<void> {
+  if (!reportId) return;
+  const { error } = await supabase
+    .from('lab_reports')
+    .update({ status: 'error' })
+    .eq('id', reportId)
+    .eq('status', 'processing');
+  if (error) console.error('[NewReport] Failed to mark report as errored:', error);
+}
+
+/*
+  A 429 is not a failed report, so it must not reach `markReportFailed`.
+
+  `generate-interpretation` returns 429 for "over your daily quota" and
+  deliberately leaves `lab_reports.status` untouched: the analytes are parsed
+  and saved, only today's AI budget is spent, and the condition clears at
+  midnight. Stamping 'error' here would undo that choice on the client and tell
+  a user her upload was corrupted.
+
+  Returns the server's message on a 429 and null on anything else. The
+  FunctionsHttpError unwrapping mirrors `handle402` in utils/subscription.ts —
+  which every call site runs first, and which returns without reading the body
+  unless the status is 402, so the response is still unconsumed here.
+*/
+async function rateLimitMessage(err: unknown): Promise<string | null> {
+  if (!(err instanceof FunctionsHttpError)) return null;
+  if (err.context?.status !== 429) return null;
+  try {
+    const body = await (err.context as Response).json() as { error?: string };
+    if (typeof body.error === 'string' && body.error.length > 0) return body.error;
+  } catch {
+    // ignore parse failure
+  }
+  return 'Daily analysis limit reached. Please try again tomorrow.';
+}
+
+/*
+  Hand the quota message to ReportView. This page navigates to the report the
+  moment the interpretation request is fired, so the 429 lands after it is gone
+  and it can no longer render anything. ReportView reads the same key and shows
+  the quota notice instead of a generic "AI summary failed".
+*/
+function noteInterpRateLimit(reportId: string, message: string): void {
+  try {
+    sessionStorage.setItem(`interpRateLimit:${reportId}`, message);
+  } catch {
+    // Storage unavailable (private mode) — the notice is a nicety, not a gate.
+  }
+}
 
 export function NewReport() {
   const { user } = useAuth();
@@ -550,7 +622,12 @@ export function NewReport() {
             .insert(biomarkerInserts);
 
           if (biomarkerError) {
-            console.error('[NewReport] Biomarkers save failed:', biomarkerError);
+            // Must throw, like the report_analytes insert below. Swallowing
+            // this used to let the upload continue: the report landed in
+            // history looking complete, got an AI interpretation over an empty
+            // panel, and showed nothing flagged — a user would read that as
+            // "my results are normal". Fail loudly so she can retry instead.
+            throw new Error(`Failed to save biomarkers: ${biomarkerError.message}`);
           }
         }
 
@@ -650,10 +727,15 @@ export function NewReport() {
         if (interpError) {
           const redirect = await handle402(interpError);
           if (redirect) { navigate(redirect, { replace: true }); return; }
-          supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
+          const limitMessage = await rateLimitMessage(interpError);
+          if (limitMessage) {
+            if (createdReportId) noteInterpRateLimit(createdReportId, limitMessage);
+            return;
+          }
+          void markReportFailed(createdReportId);
         }
       }).catch(() => {
-        supabase.from('lab_reports').update({ status: 'ready' }).eq('id', createdReportId);
+        void markReportFailed(createdReportId);
       });
 
       setSubmitStep('complete');
@@ -671,9 +753,7 @@ export function NewReport() {
       setSubmitStep(null);
       submittingRef.current = false;
 
-      if (createdReportId) {
-        supabase.from('lab_reports').update({ status: 'error' }).eq('id', createdReportId);
-      }
+      void markReportFailed(createdReportId);
     }
   };
 
