@@ -96,8 +96,9 @@ function AppRoutes() {
           <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
         )}
 
-        {/* Catch-all. Without it an unmatched path renders null — a blank
-            white screen with no way back. Keep this last. */}
+        {/* Last, so it only catches what no other route matched. Without it an
+            unmatched path rendered null — a typo under /app/* sat on an empty
+            Suspense boundary forever, with no way back. Keep this last. */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
