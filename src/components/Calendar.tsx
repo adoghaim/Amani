@@ -111,7 +111,7 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
   return (
     <div className="bg-theme-surface rounded-lg border border-theme-neutral-200">
       <div className="flex items-center justify-between p-4 border-b border-theme-neutral-200">
-        <h2 className="text-lg font-semibold text-theme-neutral-900">{monthName}</h2>
+        <h2 className="text-lg text-theme-neutral-900">{monthName}</h2>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={previousMonth}>
             <ChevronLeft className="w-4 h-4" />

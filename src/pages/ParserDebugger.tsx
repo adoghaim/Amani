@@ -103,7 +103,7 @@ function SectionHeader({ icon: Icon, title, count, subtitle }: {
         <Icon className="w-4.5 h-4.5 text-theme-neutral-200" style={{ width: 18, height: 18 }} />
       </div>
       <div>
-        <h2 className="text-lg font-semibold text-theme-neutral-900 flex items-center gap-2">
+        <h2 className="text-lg text-theme-neutral-900 flex items-center gap-2">
           {title}
           {count !== undefined && (
             <span className="text-sm font-mono bg-theme-neutral-100 text-theme-neutral-600 px-2 py-0.5 rounded">{count}</span>
@@ -208,7 +208,7 @@ function EditAnalyteModal({
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-theme-surface rounded-xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between px-5 py-4 border-b border-theme-neutral-200">
-          <h3 className="font-semibold text-theme-neutral-900">Edit analyte row</h3>
+          <h3 className="text-theme-neutral-900">Edit analyte row</h3>
           <button onClick={onClose} className="text-theme-neutral-400 hover:text-theme-neutral-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-4">
@@ -416,7 +416,7 @@ export function ParserDebugger() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-theme-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-theme-neutral-50 flex items-center justify-center">
         <div className="animate-spin w-6 h-6 border-2 border-theme-neutral-800 border-t-transparent rounded-full" />
       </div>
     );
@@ -424,7 +424,7 @@ export function ParserDebugger() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-theme-neutral-50 flex items-center justify-center p-8">
+      <div className="min-h-dvh bg-theme-neutral-50 flex items-center justify-center p-8">
         <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-xl p-6 max-w-md text-center">
           <AlertCircle className="w-8 h-8 text-theme-flag-low mx-auto mb-3" />
           <p className="text-theme-flag-low font-medium">{error}</p>
@@ -434,7 +434,7 @@ export function ParserDebugger() {
   }
 
   return (
-    <div className="min-h-screen bg-theme-neutral-50 font-mono text-sm">
+    <div className="min-h-dvh bg-theme-neutral-50 font-mono text-sm">
       {/* Top bar */}
       <div className="bg-theme-neutral-900 text-theme-neutral-100 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg">
         <div className="flex items-center gap-4">
@@ -928,7 +928,7 @@ export function ParserDebugger() {
                   {/* Included items */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-theme-neutral-800">
+                      <h3 className="text-sm text-theme-neutral-800">
                         Included in AI prompt
                         <span className="ml-2 text-xs font-mono bg-theme-flag-ok-bg text-theme-flag-ok px-2 py-0.5 rounded">{aiInputItems.included.length}</span>
                       </h3>

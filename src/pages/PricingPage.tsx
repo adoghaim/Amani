@@ -20,7 +20,7 @@ export function PricingPage() {
   const native = isNative()
 
   return (
-    <div className="min-h-screen bg-theme-background py-16">
+    <div className="min-h-dvh bg-theme-background py-16">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
           to="/app"
@@ -30,12 +30,11 @@ export function PricingPage() {
           Back to Dashboard
         </Link>
 
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-theme-text mb-3">
-            Choose your plan
-          </h1>
-          <p className="text-theme-muted-text text-base">
-            Founders Launch pricing available for a limited time.
+        <div className="mb-10">
+          <h1 className="text-4xl mb-3">Choose your plan</h1>
+          <p className="text-theme-muted-text-2 max-w-prose">
+            Both plans include everything. Seven days free first, and you can cancel from
+            inside the app.
           </p>
         </div>
 

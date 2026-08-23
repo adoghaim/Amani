@@ -44,7 +44,7 @@ export function SystemSummaryCards({ systems, activeCategory, onCategoryClick }:
   return (
     <div className="bg-theme-surface rounded-2xl border border-theme-border p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-theme-text">Health systems</h2>
+        <h2 className="text-lg text-theme-text">Health systems</h2>
         <p className="text-sm text-theme-muted-text-2 mt-1">
           Scored against Amani optimal ranges. Select a system to filter biomarkers.
         </p>

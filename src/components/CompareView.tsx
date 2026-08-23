@@ -102,7 +102,7 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
           <div className="bg-theme-surface-2 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
             <ArrowUp className="w-10 h-10 text-theme-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-theme-text mb-2">Your progress will appear here</h3>
+          <h3 className="text-lg text-theme-text mb-2">Your progress will appear here</h3>
           <p className="text-sm text-theme-muted-text max-w-md mx-auto">
             Once you upload another lab report, you'll be able to see how your biomarkers shift over time.
           </p>
@@ -114,7 +114,7 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="text-xl font-semibold text-theme-text mb-6">Your progress</h3>
+        <h3 className="text-xl text-theme-text mb-6">Your progress</h3>
         <div className="grid grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-theme-text mb-2">

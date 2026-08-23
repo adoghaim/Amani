@@ -89,7 +89,7 @@ export function PeriodLogModal({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
-          <h2 className="text-base font-semibold text-theme-text">{title}</h2>
+          <h2 className="text-base text-theme-text">{title}</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"

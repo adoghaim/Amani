@@ -194,10 +194,10 @@ export function Landing() {
           <div className="rounded-2xl border border-theme-border bg-theme-surface p-7 flex flex-col">
             <p className="font-mono text-xs uppercase tracking-[0.14em] text-theme-muted-text-3 mb-4">Monthly</p>
             <p className="mb-1">
-              <span className="font-mono text-4xl text-theme-text tabular-nums">$9.99</span>
+              <span className="text-4xl text-theme-text tabular-nums font-medium">$9.99</span>
               <span className="text-theme-muted-text-2 text-sm ml-1">/month</span>
             </p>
-            <p className="font-mono text-sm text-theme-muted-text-4 line-through mb-7">$19.99</p>
+            <p className="text-sm text-theme-muted-text-4 line-through tabular-nums mb-7">$19.99</p>
             <Link to="/signup" className="mt-auto">
               <Button variant="outline" className="w-full">Start free trial</Button>
             </Link>
@@ -209,10 +209,10 @@ export function Landing() {
             </span>
             <p className="font-mono text-xs uppercase tracking-[0.14em] text-theme-primary mb-4">Yearly</p>
             <p className="mb-1">
-              <span className="font-mono text-4xl text-theme-text tabular-nums">$99.99</span>
+              <span className="text-4xl text-theme-text tabular-nums font-medium">$99.99</span>
               <span className="text-theme-muted-text-2 text-sm ml-1">/year</span>
             </p>
-            <p className="font-mono text-sm text-theme-muted-text-4 line-through mb-7">$199.99</p>
+            <p className="text-sm text-theme-muted-text-4 line-through tabular-nums mb-7">$199.99</p>
             <Link to="/signup" className="mt-auto">
               <Button className="w-full">Start free trial</Button>
             </Link>

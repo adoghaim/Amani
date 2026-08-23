@@ -86,7 +86,7 @@ export function WhatToWatchCard({ signals }: Props) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
         <Eye className="w-3.5 h-3.5 text-theme-muted-text-2" />
-        <h2 className="text-sm font-semibold text-theme-text">What to Watch</h2>
+        <h2 className="text-sm text-theme-text">What to Watch</h2>
       </div>
       <p className="text-xs text-theme-muted-text-3 px-1">
         These patterns are based on your current results and may be useful to track over time.

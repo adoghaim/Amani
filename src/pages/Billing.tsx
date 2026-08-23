@@ -1,4 +1,5 @@
 import { Layout } from '../components/Layout';
+import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
@@ -215,9 +216,7 @@ export function Billing() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-theme-text mb-8">
-          Billing & Subscription
-        </h1>
+        <PageHeader title="Billing" description="Your plan, payment method and invoices." />
 
         <div className="space-y-6">
           <Card>
@@ -226,7 +225,7 @@ export function Billing() {
                 <CreditCard className="w-6 h-6 text-theme-primary" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-semibold text-theme-text mb-2">
+                <h2 className="text-xl text-theme-text mb-2">
                   Current Plan
                 </h2>
                 {active ? (
@@ -277,7 +276,7 @@ export function Billing() {
           </Card>
 
           <Card>
-            <h2 className="text-xl font-semibold text-theme-text mb-4">
+            <h2 className="text-xl text-theme-text mb-4">
               Plan Details
             </h2>
             <div className="space-y-3">
@@ -301,7 +300,7 @@ export function Billing() {
           </Card>
 
           <Card>
-            <h2 className="text-xl font-semibold text-theme-text mb-4">
+            <h2 className="text-xl text-theme-text mb-4">
               Manage Subscription
             </h2>
             <p className="text-theme-muted-text mb-4">
@@ -337,7 +336,7 @@ export function Billing() {
 
           {!active && userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
             <Card className="bg-theme-surface-2 border-theme-border">
-              <h3 className="font-semibold text-theme-text mb-2">
+              <h3 className="text-theme-text mb-2">
                 Your trial is active
               </h3>
               <p className="text-theme-text">

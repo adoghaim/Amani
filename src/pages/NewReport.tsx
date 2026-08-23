@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
+import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { ReviewBiomarkers } from '../components/ReviewBiomarkers';
@@ -807,7 +808,7 @@ export function NewReport() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-theme-neutral-900 mb-8">New lab report</h1>
+        <PageHeader title="New panel" description="Upload a PDF or a photo. We read it, then place it against your cycle." />
 
         <div className="flex flex-col items-center mb-8 gap-3">
           <div className="flex items-center">
@@ -837,7 +838,7 @@ export function NewReport() {
         {/* ── STEP 1: Upload ─────────────────────────────────────────────── */}
         {step === 1 && !guidedStep && (
           <Card>
-            <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Upload your official report</h2>
+            <h2 className="text-2xl text-theme-neutral-900 mb-1">Upload your official report</h2>
             <p className="text-sm text-theme-neutral-500 mb-6">Import directly from your lab portal, or upload any PDF or image.</p>
 
             {/* Offline banner */}
@@ -960,7 +961,7 @@ export function NewReport() {
         {step === 1 && guidedStep === 'choose' && (
           <Card>
             <div className="mb-6">
-              <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Import your lab results</h2>
+              <h2 className="text-2xl text-theme-neutral-900 mb-1">Import your lab results</h2>
               <p className="text-sm text-theme-neutral-500">Bring in an official report from your lab portal.</p>
             </div>
 
@@ -1013,7 +1014,7 @@ export function NewReport() {
                     <FlaskConical className="w-6 h-6 text-theme-flag-ok" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-theme-neutral-900">Import from Quest</h2>
+                    <h2 className="text-xl text-theme-neutral-900">Import from Quest</h2>
                     <p className="text-sm text-theme-neutral-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
                   </div>
                 </div>
@@ -1062,7 +1063,7 @@ export function NewReport() {
                     <FlaskConical className="w-6 h-6 text-theme-info" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-theme-neutral-900">Import from Labcorp</h2>
+                    <h2 className="text-xl text-theme-neutral-900">Import from Labcorp</h2>
                     <p className="text-sm text-theme-neutral-500 mt-0.5">Follow the steps below, then upload your PDF here</p>
                   </div>
                 </div>
@@ -1129,7 +1130,7 @@ export function NewReport() {
             {/* ── Section 1: Amani Understanding ─────────────────────────── */}
             <Card>
               <div className="mb-5">
-                <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Review your report</h2>
+                <h2 className="text-2xl text-theme-neutral-900 mb-1">Review your report</h2>
                 <p className="text-sm text-theme-neutral-500">
                   We extracted your report details automatically — review anything below before saving.
                 </p>
@@ -1259,7 +1260,7 @@ export function NewReport() {
                 {/* Cycle context */}
                 <div>
                   <div className="mb-3">
-                    <h3 className="text-base font-semibold text-theme-neutral-900 mb-0.5">
+                    <h3 className="text-base text-theme-neutral-900 mb-0.5">
                       Cycle context <span className="text-theme-neutral-400 font-normal text-sm">(optional)</span>
                     </h3>
                     <p className="text-xs text-theme-neutral-500">This helps Amani interpret your results more accurately</p>
@@ -1298,7 +1299,7 @@ export function NewReport() {
                 {/* Symptoms */}
                 <div>
                   <div className="mb-3">
-                    <h3 className="text-base font-semibold text-theme-neutral-900 mb-0.5">
+                    <h3 className="text-base text-theme-neutral-900 mb-0.5">
                       Any symptoms? <span className="text-theme-neutral-400 font-normal text-sm">(optional)</span>
                     </h3>
                     <p className="text-xs text-theme-neutral-500">Select up to 5 — helps personalize your insights</p>
@@ -1346,7 +1347,7 @@ export function NewReport() {
         {step === 3 && (
           <Card>
             <div className="mb-5">
-              <h2 className="text-2xl font-semibold text-theme-neutral-900 mb-1">Confirm your markers</h2>
+              <h2 className="text-2xl text-theme-neutral-900 mb-1">Confirm your markers</h2>
               <p className="text-sm text-theme-neutral-500">Review what Amani found — edit, remove, or add anything before saving.</p>
             </div>
 
@@ -1447,7 +1448,7 @@ export function NewReport() {
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-theme-neutral-900">
+                <h2 className="text-2xl text-theme-neutral-900">
                   {submitStep === 'complete' ? 'Report imported' : "We're reading your report"}
                 </h2>
                 <p className="text-theme-neutral-500 max-w-sm mx-auto">

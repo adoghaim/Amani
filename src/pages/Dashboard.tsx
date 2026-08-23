@@ -458,7 +458,7 @@ export function Dashboard() {
 
           <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-theme-border">
-              <h3 className="text-sm font-semibold text-theme-text">Quick log</h3>
+              <h3 className="text-sm text-theme-text">Quick log</h3>
             </div>
             <div className="px-5 py-4">
               <div className="flex flex-wrap gap-2">
@@ -487,7 +487,7 @@ export function Dashboard() {
 
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-theme-text">Recent lab reports</h2>
+              <h2 className="text-base text-theme-text">Recent lab reports</h2>
               <Link to="/app/reports" className="flex items-center gap-1 text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
                 View all <ArrowRight className="w-4 h-4" />
               </Link>
@@ -496,7 +496,7 @@ export function Dashboard() {
             {reports.length === 0 ? (
               <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm px-5 py-12 text-center">
                 <TestTube2 className="w-12 h-12 text-theme-primary-faded mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-theme-text mb-1">No lab reports yet</h3>
+                <h3 className="text-base text-theme-text mb-1">No lab reports yet</h3>
                 <p className="text-sm text-theme-muted-text mb-4">Upload your first lab report to get started.</p>
                 {canCreateReport && (
                   <Link to="/app/new">
@@ -579,7 +579,7 @@ export function Dashboard() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
-              <h2 className="text-base font-semibold text-theme-text">Add note</h2>
+              <h2 className="text-base text-theme-text">Add note</h2>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"

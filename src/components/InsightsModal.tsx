@@ -54,7 +54,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <Sparkles className="w-5 h-5 text-theme-primary-light" />
-                <h2 className="text-lg font-semibold text-white">Your health story</h2>
+                <h2 className="text-lg text-white">Your health story</h2>
               </div>
               {reportDates ? (
                 <p className="text-theme-muted-text-5 text-xs">

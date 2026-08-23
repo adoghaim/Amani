@@ -107,7 +107,7 @@ export function ResetPassword() {
 
   if (pageState === 'loading') {
     return (
-      <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
+      <div className="min-h-dvh bg-theme-background flex items-center justify-center px-4 safe-top safe-bottom">
         <div className="text-theme-muted-text">Verifying reset link...</div>
       </div>
     );
@@ -115,7 +115,7 @@ export function ResetPassword() {
 
   if (pageState === 'request') {
     return (
-      <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
+      <div className="min-h-dvh bg-theme-background flex items-center justify-center px-4 safe-top safe-bottom">
         <div className="w-full max-w-md">
           {logo}
           <Card>
@@ -135,7 +135,7 @@ export function ResetPassword() {
             ) : (
               <form onSubmit={handleRequestReset} className="space-y-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-theme-text mb-1">Reset your password</h2>
+                  <h2 className="text-xl text-theme-text mb-1">Reset your password</h2>
                   <p className="text-sm text-theme-muted-text">
                     Enter your email and we'll send you a reset link.
                   </p>
@@ -176,7 +176,7 @@ export function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
+    <div className="min-h-dvh bg-theme-background flex items-center justify-center px-4 safe-top safe-bottom">
       <div className="w-full max-w-md">
         {logo}
         <Card>
@@ -187,7 +187,7 @@ export function ResetPassword() {
           ) : (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div>
-                <h2 className="text-xl font-semibold text-theme-text mb-1">Set new password</h2>
+                <h2 className="text-xl text-theme-text mb-1">Set new password</h2>
               </div>
 
               {error && (

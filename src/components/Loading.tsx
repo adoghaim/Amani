@@ -7,7 +7,7 @@
  * is known.
  *
  * The mark is the cycle ring from the app icon, drawn once. min-h-dvh rather
- * than min-h-screen — on iOS Safari and inside the Capacitor webview, 100vh
+ * than min-h-dvh — on iOS Safari and inside the Capacitor webview, 100vh
  * includes the browser chrome and the layout jumps when it hides.
  */
 export function Loading({ label = 'Loading' }: { label?: string }) {

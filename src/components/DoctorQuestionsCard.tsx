@@ -22,7 +22,7 @@ export function DoctorQuestionsCard({ questions }: Props) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <MessageSquare className="w-4 h-4 text-theme-primary" />
-          <h3 className="text-sm font-semibold text-theme-text">Questions for Your Doctor</h3>
+          <h3 className="text-sm text-theme-text">Questions for Your Doctor</h3>
         </div>
         <button
           onClick={copyAll}

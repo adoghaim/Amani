@@ -123,7 +123,7 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
             <LineChart className="w-4 h-4 text-theme-cat-sleep" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-theme-text">Your trajectory</h2>
+            <h2 className="text-sm text-theme-text">Your trajectory</h2>
             <p className="text-xs text-theme-muted-text-3 mt-0.5">{subtitle}</p>
           </div>
         </div>

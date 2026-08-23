@@ -65,7 +65,7 @@ export function WhatThisMeansCard({ aiText, topFindings, biggestChanges }: Props
           <div className="w-7 h-7 rounded-lg bg-theme-primary/10 flex items-center justify-center flex-shrink-0">
             <FileText className="w-4 h-4 text-theme-primary" />
           </div>
-          <h2 className="text-sm font-bold text-theme-text">Interpretation</h2>
+          <h2 className="text-sm text-theme-text">Interpretation</h2>
           {hasAI && (
             <span className="ml-auto text-xs font-medium text-theme-muted-text-2 tracking-wide">
               AI Analysis
