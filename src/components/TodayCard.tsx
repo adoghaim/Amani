@@ -1,20 +1,35 @@
-import { Activity, Upload, Plus, Droplets, FlaskConical } from 'lucide-react';
-import { CyclePrediction, LabReport, Intervention, PeriodLog } from '../types';
-import {
-  phaseLabel,
-  phaseDescription,
-  formatDateShort,
-  formatDate,
-} from '../utils/cyclePredictor';
+import { Upload, Plus, Droplets, FlaskConical, Activity, Zap } from 'lucide-react';
+import { CyclePrediction, LabReport, Intervention, PeriodLog, SymptomLog } from '../types';
+import { formatDateShort } from '../utils/cyclePredictor';
+import { CycleDial } from './CycleDial';
+import { phaseLabel, phaseStyle } from '../lib/cyclePhase';
+
+/**
+ * Today, and the one thing worth doing about it.
+ *
+ * This card and CycleSummary used to render side by side on both the dashboard
+ * and the tracker, showing the same cycle day, phase, next period, last panel
+ * and intervention count — and this card then restated all of it a third time
+ * in a prose NarrativeBlock underneath. Three presentations of four facts.
+ *
+ * They are now one component. The dial and the phase tint come from the same
+ * source as everywhere else, so a phase looks identical on every screen.
+ */
 
 interface TodayCardProps {
   prediction: CyclePrediction | null;
   lastReport: LabReport | null;
   activeInterventions: Intervention[];
   lastPeriodLog: PeriodLog | null;
+  periodLogs?: PeriodLog[];
+  symptomLogsThisCycle?: SymptomLog[];
   onLogPeriod: () => void;
   onAddSymptom: () => void;
   onUploadLabs: () => void;
+}
+
+function daysUntil(date: Date): number {
+  return Math.ceil((date.getTime() - Date.now()) / 86_400_000);
 }
 
 export function TodayCard({
@@ -22,185 +37,121 @@ export function TodayCard({
   lastReport,
   activeInterventions,
   lastPeriodLog,
+  periodLogs = [],
+  symptomLogsThisCycle = [],
   onLogPeriod,
   onAddSymptom,
   onUploadLabs,
 }: TodayCardProps) {
-  const today = new Date();
-  const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
-  const todayLabel = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const phase = prediction?.currentPhase ?? 'unknown';
+  const style = phaseStyle(phase);
+  const until = prediction ? daysUntil(new Date(prediction.nextPeriodStart)) : null;
 
   const hasNoPeriod = !lastPeriodLog;
   const hasNoLabs = !lastReport;
 
-  let primaryCTA: { label: string; onClick: () => void; icon: React.ReactNode } =
-    { label: 'Log period', onClick: onLogPeriod, icon: <Droplets className="w-4 h-4" /> };
-
-  if (hasNoPeriod) {
-    primaryCTA = { label: 'Log first period', onClick: onLogPeriod, icon: <Droplets className="w-4 h-4" /> };
-  } else if (hasNoLabs) {
-    primaryCTA = { label: 'Upload labs', onClick: onUploadLabs, icon: <Upload className="w-4 h-4" /> };
-  } else if (prediction && prediction.currentPhase === 'menstrual') {
-    primaryCTA = { label: 'Log symptoms', onClick: onAddSymptom, icon: <Plus className="w-4 h-4" /> };
-  }
+  // The single action that most advances an incomplete picture — an account
+  // with no period logged cannot be placed in a cycle at all, so that comes
+  // first; a placed cycle with no panel needs labs next.
+  let primaryCTA = { label: 'Log period', onClick: onLogPeriod, icon: <Droplets className="w-4 h-4" /> };
+  if (hasNoPeriod) primaryCTA = { label: 'Log your first period', onClick: onLogPeriod, icon: <Droplets className="w-4 h-4" /> };
+  else if (hasNoLabs) primaryCTA = { label: 'Upload a panel', onClick: onUploadLabs, icon: <Upload className="w-4 h-4" /> };
+  else if (phase === 'menstrual') primaryCTA = { label: 'Log symptoms', onClick: onAddSymptom, icon: <Plus className="w-4 h-4" /> };
 
   return (
-    <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
-      <div className="bg-gradient-to-br from-theme-primary to-theme-primary-dark px-6 py-5">
-        <p className="text-theme-flag-low text-xs font-medium uppercase tracking-wide mb-1">
-          {dayOfWeek}
-        </p>
-        <p className="text-white text-sm mb-3">{todayLabel}</p>
-
-        {prediction ? (
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-white/70 text-xs mb-0.5">Cycle day</p>
-              <p className="text-white text-4xl font-bold leading-none">
-                {prediction.currentCycleDay}
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="inline-block bg-theme-surface/20 text-white text-xs font-medium px-3 py-1 rounded-full">
-                {phaseLabel(prediction.currentPhase)}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p className="text-white text-lg font-semibold">Start tracking your cycle</p>
-            <p className="text-theme-flag-low text-sm mt-1">Log your period to get personalized insights</p>
-          </div>
-        )}
+    <section className="bg-theme-surface rounded-2xl border border-theme-border overflow-hidden">
+      <div className={`flex items-center gap-5 px-5 sm:px-6 py-5 ${style.surface}`}>
+        <CycleDial
+          day={prediction?.currentCycleDay ?? null}
+          length={prediction?.cycleLength ?? 28}
+          phase={phase}
+          size={88}
+        />
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-theme-muted-text-2 mb-1">
+            Cycle day
+          </p>
+          <h2 className={`font-display text-2xl leading-tight ${style.text}`}>
+            {phaseLabel(phase)}
+          </h2>
+          <p className="text-sm text-theme-text-body mt-1">
+            {style.note}
+            {until != null && until >= 0 && (
+              <>
+                {' '}Next period in{' '}
+                <span className="font-mono tabular-nums">{until}</span>
+                {until === 1 ? ' day.' : ' days.'}
+              </>
+            )}
+          </p>
+        </div>
       </div>
 
-      <div className="px-6 py-4 space-y-4">
-        {prediction && (
-          <p className="text-sm text-theme-muted-text leading-relaxed">
-            {phaseDescription(prediction.currentPhase)}
-          </p>
-        )}
-
-        <div className="grid grid-cols-3 gap-3">
-          <StatChip
-            icon={<Droplets className="w-3.5 h-3.5 text-theme-flag-low" />}
-            label="Next period"
-            value={
-              prediction
-                ? `~${formatDateShort(prediction.nextPeriodStart)}`
-                : 'No data'
-            }
+      <div className="px-5 sm:px-6 py-5 space-y-5">
+        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4">
+          <Fact
+            icon={<Droplets className="w-3.5 h-3.5 text-theme-phase-menstrual" />}
+            label="Last period"
+            value={lastPeriodLog ? formatDateShort(new Date(lastPeriodLog.start_date)) : 'Not logged'}
           />
-          <StatChip
+          <Fact
             icon={<FlaskConical className="w-3.5 h-3.5 text-theme-primary" />}
-            label="Last labs"
-            value={
-              lastReport
-                ? formatDateShort(new Date(lastReport.report_date))
-                : 'None yet'
-            }
+            label="Last panel"
+            value={lastReport ? formatDateShort(new Date(lastReport.report_date)) : 'None yet'}
           />
-          <StatChip
+          <Fact
             icon={<Activity className="w-3.5 h-3.5 text-theme-flag-ok" />}
             label="Interventions"
             value={activeInterventions.length > 0 ? `${activeInterventions.length} active` : 'None'}
           />
-        </div>
+          <Fact
+            icon={<Zap className="w-3.5 h-3.5 text-theme-flag-watch" />}
+            label="Symptoms"
+            value={
+              symptomLogsThisCycle.length > 0
+                ? `${symptomLogsThisCycle.length} day${symptomLogsThisCycle.length !== 1 ? 's' : ''}`
+                : 'None logged'
+            }
+          />
+        </dl>
 
         {prediction && (
-          <div className="p-3 bg-theme-background rounded-xl border border-theme-border">
-            <NarrativeBlock
-              prediction={prediction}
-              lastReport={lastReport}
-              activeInterventions={activeInterventions}
-            />
-          </div>
+          <dl className="grid grid-cols-3 gap-x-4 pt-4 border-t border-theme-border-inner">
+            <Stat value={prediction.cycleLength} label="Avg cycle" />
+            <Stat value={prediction.periodLength} label="Avg period" />
+            <Stat value={periodLogs.length} label="Periods logged" />
+          </dl>
         )}
 
-        <div className="flex gap-2 pt-1">
-          <button
-            onClick={primaryCTA.onClick}
-            className="flex items-center gap-1.5 flex-1 justify-center py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors"
-          >
-            {primaryCTA.icon}
-            {primaryCTA.label}
-          </button>
-        </div>
+        <button
+          onClick={primaryCTA.onClick}
+          className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark active:scale-[0.99] motion-reduce:active:scale-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-surface"
+        >
+          {primaryCTA.icon}
+          {primaryCTA.label}
+        </button>
       </div>
+    </section>
+  );
+}
+
+function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-theme-muted-text-3 mb-1">
+        {icon}
+        <span className="truncate">{label}</span>
+      </dt>
+      <dd className="text-sm text-theme-text">{value}</dd>
     </div>
   );
 }
 
-function StatChip({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="flex flex-col items-center text-center p-2.5 bg-theme-background rounded-xl border border-theme-border">
-      <div className="mb-1">{icon}</div>
-      <p className="text-xs text-theme-muted-text mb-0.5">{label}</p>
-      <p className="text-xs font-semibold text-theme-text leading-tight">{value}</p>
-    </div>
-  );
-}
-
-function NarrativeBlock({
-  prediction,
-  lastReport,
-  activeInterventions,
-}: {
-  prediction: CyclePrediction;
-  lastReport: LabReport | null;
-  activeInterventions: Intervention[];
-}) {
-  const daysToNext = Math.round(
-    (prediction.nextPeriodStart.getTime() - new Date().setHours(0, 0, 0, 0)) /
-      (1000 * 60 * 60 * 24)
-  );
-
-  const lines: string[] = [];
-
-  if (prediction.currentPhase === 'menstrual') {
-    lines.push(`You're currently in your menstrual phase — day ${prediction.currentCycleDay} of your cycle.`);
-  } else if (prediction.currentPhase === 'follicular') {
-    lines.push(`You're in the follicular phase. Estrogen is building.`);
-  } else if (prediction.currentPhase === 'ovulatory') {
-    lines.push(`You're approaching or in ovulation — your fertile window is now.`);
-  } else {
-    lines.push(`You're in the luteal phase. Your next period is estimated in ${daysToNext} day${daysToNext !== 1 ? 's' : ''}.`);
-  }
-
-  if (daysToNext > 0 && daysToNext <= 5 && prediction.currentPhase !== 'menstrual') {
-    lines.push(`Your next period is estimated in ${daysToNext} day${daysToNext !== 1 ? 's' : ''}.`);
-  }
-
-  if (lastReport) {
-    const labPhase = (lastReport.estimated_cycle_phase as string) || null;
-    if (labPhase && labPhase !== 'unknown') {
-      lines.push(
-        `Your last labs were drawn during the ${labPhase} phase on ${formatDate(new Date(lastReport.report_date))}.`
-      );
-    }
-  }
-
-  if (activeInterventions.length > 0) {
-    lines.push(
-      `${activeInterventions.length} active intervention${activeInterventions.length !== 1 ? 's' : ''} in progress.`
-    );
-  }
-
-  return (
-    <div className="space-y-1.5">
-      {lines.slice(0, 3).map((line, i) => (
-        <p key={i} className="text-xs text-theme-muted-text leading-relaxed">
-          {line}
-        </p>
-      ))}
+    <div>
+      <dd className="font-mono text-xl text-theme-text tabular-nums leading-none">{value}</dd>
+      <dt className="text-[11px] text-theme-muted-text-2 mt-1.5">{label}</dt>
     </div>
   );
 }
