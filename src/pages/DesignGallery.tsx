@@ -12,8 +12,8 @@
  * never runs against real data, and spelling out every column would obscure
  * what is actually being previewed.
  */
-import { CycleSummary } from '../components/CycleSummary';
 import { CycleDial } from '../components/CycleDial';
+import { TodayCard } from '../components/TodayCard';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -76,22 +76,27 @@ export function DesignGallery() {
           </div>
         </Section>
 
-        <Section title="Cycle summary">
-          <div className="max-w-md">
+
+
+        <Section title="Today card">
+          <div className="max-w-xl">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <CycleSummary {...(sample as any)} prediction={prediction} />
+            <TodayCard {...(sample as any)} prediction={prediction} onLogPeriod={() => {}} onAddSymptom={() => {}} onUploadLabs={() => {}} />
           </div>
         </Section>
 
-        <Section title="Cycle summary — no data logged">
-          <div className="max-w-md">
-            <CycleSummary
-              lastPeriodLog={null}
-              periodLogs={[]}
+        <Section title="Today card — nothing logged yet">
+          <div className="max-w-xl">
+            <TodayCard
+              prediction={null}
               lastReport={null}
               activeInterventions={[]}
+              lastPeriodLog={null}
+              periodLogs={[]}
               symptomLogsThisCycle={[]}
-              prediction={null}
+              onLogPeriod={() => {}}
+              onAddSymptom={() => {}}
+              onUploadLabs={() => {}}
             />
           </div>
         </Section>

@@ -19,7 +19,6 @@ import { Loading } from '../components/Loading';
 import { errorMessage } from '../lib/errors';
 import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
-import { CycleSummary } from '../components/CycleSummary';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
@@ -444,6 +443,8 @@ export function Dashboard() {
             lastReport={lastReport}
             activeInterventions={activeInterventions}
             lastPeriodLog={lastPeriodLog}
+            periodLogs={periodLogs}
+            symptomLogsThisCycle={symptomLogsThisCycle}
             onLogPeriod={openStartPeriod}
             onAddSymptom={openAddSymptom}
             onUploadLabs={() => navigate('/app/new')}
@@ -462,28 +463,18 @@ export function Dashboard() {
             </div>
             <div className="px-5 py-4">
               <div className="flex flex-wrap gap-2">
-                <QuickLogButton icon={<Droplets className="w-4 h-4" />} label="Period start" onClick={openStartPeriod} variant="rose" />
-                <QuickLogButton icon={<Droplets className="w-4 h-4 opacity-60" />} label="Period end" onClick={openEndPeriod} variant="rose-light" />
-                <QuickLogButton icon={<Plus className="w-4 h-4" />} label="Add symptom" onClick={openAddSymptom} variant="amber" />
+                <QuickLogButton icon={<Droplets className="w-4 h-4" />} label="Period start" onClick={openStartPeriod} emphasis />
+                <QuickLogButton icon={<Droplets className="w-4 h-4 opacity-60" />} label="Period end" onClick={openEndPeriod} />
+                <QuickLogButton icon={<Plus className="w-4 h-4" />} label="Add symptom" onClick={openAddSymptom} />
                 <QuickLogButton
                   icon={<StickyNote className="w-4 h-4" />}
                   label="Add note"
                   onClick={() => setNoteModal({ open: true, defaultDate: dateToKey(today) })}
-                  variant="neutral"
                 />
-                <QuickLogButton icon={<Upload className="w-4 h-4" />} label="Upload labs" onClick={() => navigate('/app/new')} variant="teal" />
+                <QuickLogButton icon={<Upload className="w-4 h-4" />} label="Upload labs" onClick={() => navigate('/app/new')} />
               </div>
             </div>
           </div>
-
-          <CycleSummary
-            lastPeriodLog={lastPeriodLog}
-            periodLogs={periodLogs}
-            lastReport={lastReport}
-            activeInterventions={activeInterventions}
-            symptomLogsThisCycle={symptomLogsThisCycle}
-            prediction={prediction}
-          />
 
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -632,24 +623,33 @@ export function Dashboard() {
 }
 
 function QuickLogButton({
-  icon, label, onClick, variant,
+  icon, label, onClick, emphasis = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
-  variant: 'rose' | 'rose-light' | 'amber' | 'teal' | 'neutral';
+  /** The most likely next action gets the filled treatment. At most one. */
+  emphasis?: boolean;
 }) {
-  const classes = {
-    rose: 'bg-theme-flag-low text-white hover:bg-theme-flag-low',
-    'rose-light': 'bg-theme-flag-low-bg text-theme-flag-low hover:bg-theme-flag-low-bg border border-dashed border-theme-flag-low-border',
-    amber: 'bg-theme-flag-watch-bg text-theme-flag-watch hover:bg-theme-flag-watch-bg border border-theme-flag-watch-border',
-    teal: 'bg-theme-flag-ok-bg text-theme-flag-ok hover:bg-theme-flag-ok-bg border border-theme-flag-ok-border',
-    neutral: 'bg-theme-surface-2 text-theme-muted-text hover:bg-theme-surface-hover border border-theme-border',
-  };
+  /*
+    These were five different colours — flag-low, flag-watch, flag-ok and two
+    more — which meant "Upload labs" was green and "Add symptom" was amber. The
+    three status tokens are reserved for whether a result is in range; using
+    them as button decoration told the user a panel upload was "good" and
+    logging a symptom was a "warning". They are all just actions, so they all
+    look like actions.
+  */
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${classes[variant]}`}
+      className={[
+        'inline-flex items-center gap-2 px-4 min-h-[44px] rounded-xl text-sm font-medium',
+        'transition-all duration-150 active:scale-[0.98] motion-reduce:active:scale-100',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-surface',
+        emphasis
+          ? 'bg-theme-primary text-white hover:bg-theme-primary-dark'
+          : 'bg-theme-surface-2 text-theme-text hover:bg-theme-surface-hover border border-theme-border',
+      ].join(' ')}
     >
       {icon}
       {label}

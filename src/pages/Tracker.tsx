@@ -16,7 +16,6 @@ import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
 import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
-import { CycleSummary } from '../components/CycleSummary';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { InsightsModal } from '../components/InsightsModal';
@@ -473,6 +472,8 @@ export function Tracker() {
               lastReport={lastReport}
               activeInterventions={activeInterventions}
               lastPeriodLog={lastPeriodLog}
+              periodLogs={periodLogs}
+              symptomLogsThisCycle={symptomLogsThisCycle}
               onLogPeriod={openStartPeriod}
               onAddSymptom={openAddSymptom}
               onUploadLabs={() => navigate('/app/new')}
@@ -526,15 +527,6 @@ export function Tracker() {
                 </div>
               </div>
             </div>
-
-            <CycleSummary
-              lastPeriodLog={lastPeriodLog}
-              periodLogs={periodLogs}
-              lastReport={lastReport}
-              activeInterventions={activeInterventions}
-              symptomLogsThisCycle={symptomLogsThisCycle}
-              prediction={prediction}
-            />
           </div>
         )}
 

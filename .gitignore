@@ -62,3 +62,6 @@ ruvector.db
 .github/hooks/
 .github/agents/
 .codex/
+
+# Output of tools/preview (visual check screenshots)
+preview-shots/
