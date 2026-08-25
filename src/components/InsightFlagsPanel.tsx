@@ -64,28 +64,28 @@ function FlagCard({ flag }: { flag: FlagItem }) {
         <Icon className={`w-4 h-4 shrink-0 ${config.iconColor}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-[#2A1F23]">{flag.title}</span>
+            <span className="text-sm font-semibold text-[#0D2033]">{flag.title}</span>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${config.badge}`}>
               {config.label}
             </span>
           </div>
           <div className="flex flex-wrap gap-1 mt-1">
             {flag.biomarkers_involved.map(b => (
-              <span key={b} className="text-xs text-[#7A6570] bg-white/70 rounded px-1.5 py-0.5 border border-white">
+              <span key={b} className="text-xs text-[#685F69] bg-white/70 rounded px-1.5 py-0.5 border border-white">
                 {formatBiomarkerName(b)}
               </span>
             ))}
           </div>
         </div>
         {expanded
-          ? <ChevronUp className="w-4 h-4 text-[#9A8A90] shrink-0" />
-          : <ChevronDown className="w-4 h-4 text-[#9A8A90] shrink-0" />
+          ? <ChevronUp className="w-4 h-4 text-[#6D626D] shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-[#6D626D] shrink-0" />
         }
       </button>
       {expanded && (
         <div className="px-4 pb-4 pt-0">
           <div className="border-t border-white/60 pt-3">
-            <p className="text-sm text-[#2A1F23] leading-relaxed">{flag.description}</p>
+            <p className="text-sm text-[#0D2033] leading-relaxed">{flag.description}</p>
           </div>
         </div>
       )}
@@ -106,10 +106,10 @@ export function InsightFlagsPanel({ flags }: Props) {
   const sorted = [...discuss, ...caution, ...info];
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E9D6DA] p-6">
+    <div className="bg-white rounded-2xl border border-[#E2D4DA] p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-[#2A1F23]">Clinical Insight Flags</h2>
-        <p className="text-sm text-[#7A6570] mt-1">
+        <h2 className="text-lg font-semibold text-[#0D2033]">Clinical Insight Flags</h2>
+        <p className="text-sm text-[#685F69] mt-1">
           Pattern-based observations from your biomarker combination. Tap each flag for details.
         </p>
       </div>
@@ -118,7 +118,7 @@ export function InsightFlagsPanel({ flags }: Props) {
           <FlagCard key={flag.rule_id} flag={flag} />
         ))}
       </div>
-      <p className="text-xs text-[#9A8A90] mt-4 italic">
+      <p className="text-xs text-[#6D626D] mt-4 italic">
         These flags are educational pattern observations, not diagnoses. Always discuss results with your healthcare provider.
       </p>
     </div>

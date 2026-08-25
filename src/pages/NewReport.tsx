@@ -1089,7 +1089,7 @@ export function NewReport() {
                   type="date"
                   value={reportDate}
                   onChange={e => setReportDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#95617C]/30 focus:border-[#95617C] text-gray-900"
                 />
                 <p className="mt-1 text-xs text-gray-400">Change this if you're backlogging an older report — last period start will re-sync from your tracker</p>
               </div>
@@ -1205,7 +1205,7 @@ export function NewReport() {
                       setPeriodAutoFilled(false);
                       userEditedPeriodRef.current = true;
                     }}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-gray-900"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#95617C]/30 focus:border-[#95617C] text-gray-900"
                   />
                   {!lastPeriodDate && !fetchingPeriod && (
                     <p className="mt-1 text-xs text-gray-400">Add your last period start date for more accurate insights</p>
@@ -1230,7 +1230,7 @@ export function NewReport() {
                         onClick={() => toggleSymptom(symptom.value)}
                         className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
                           symptoms.includes(symptom.value)
-                            ? 'border-[#C97C8B] bg-[#C97C8B]/10 text-[#C97C8B] font-medium'
+                            ? 'border-[#95617C] bg-[#95617C]/10 text-[#95617C] font-medium'
                             : 'border-gray-200 text-gray-600 hover:border-gray-300'
                         }`}
                         disabled={!symptoms.includes(symptom.value) && symptoms.length >= 5}

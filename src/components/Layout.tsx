@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './Button';
+import { AmaniLogo } from './AmaniLogo';
 import {
-  Heart,
   LayoutDashboard,
   FileText,
   CalendarDays,
@@ -32,12 +32,9 @@ export function Layout({ children }: LayoutProps) {
       <nav className="hidden sm:block bg-theme-surface border-b border-theme-border shadow-sm safe-top">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <NavLink to="/app" className="text-xl font-semibold text-theme-text">
-                Amani
-              </NavLink>
-            </div>
+            <NavLink to="/app" aria-label="Amani dashboard">
+              <AmaniLogo size="md" />
+            </NavLink>
             <div className="flex items-center gap-6">
               {NAV_LINKS.map(({ to, label, exact }) => (
                 <NavLink
@@ -64,10 +61,9 @@ export function Layout({ children }: LayoutProps) {
       {/* ── Mobile top bar ───────────────────────────────────────────────── */}
       <header className="sm:hidden bg-theme-surface border-b border-theme-border shadow-sm safe-top">
         <div className="flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-2">
-            <Heart className="w-5 h-5 text-theme-primary fill-theme-primary" />
-            <span className="text-lg font-semibold text-theme-text">Amani</span>
-          </div>
+          <NavLink to="/app" aria-label="Amani dashboard">
+            <AmaniLogo size="sm" />
+          </NavLink>
           <button
             onClick={signOut}
             aria-label="Sign out"

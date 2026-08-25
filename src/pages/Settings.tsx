@@ -235,12 +235,12 @@ export function Settings() {
           <Card>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-[#F6ECEB] rounded-full flex items-center justify-center">
-                  <Bell className="w-4 h-4 text-[#C97C8B]" />
+                <div className="w-9 h-9 bg-[#F2E9EC] rounded-full flex items-center justify-center">
+                  <Bell className="w-4 h-4 text-[#95617C]" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Reminder Preferences</h2>
-                  <p className="text-xs text-[#6B5B60]">
+                  <p className="text-xs text-[#625A64]">
                     In-app notifications. Mobile push support coming soon.
                   </p>
                 </div>
@@ -248,19 +248,19 @@ export function Settings() {
             </div>
 
             {notifLoading ? (
-              <div className="text-sm text-[#6B5B60] py-2">Loading preferences...</div>
+              <div className="text-sm text-[#625A64] py-2">Loading preferences...</div>
             ) : (
               <div className="space-y-4">
                 {reminders.map(({ key, label, description }) => (
                   <div key={key} className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-[#2A1F23]">{label}</p>
-                      <p className="text-xs text-[#6B5B60]">{description}</p>
+                      <p className="text-sm font-medium text-[#0D2033]">{label}</p>
+                      <p className="text-xs text-[#625A64]">{description}</p>
                     </div>
                     <button
                       onClick={() => updatePref(key, !(prefs[key] as boolean))}
                       className={`shrink-0 w-11 h-6 rounded-full transition-colors duration-200 relative ${
-                        prefs[key] ? 'bg-[#C97C8B]' : 'bg-gray-200'
+                        prefs[key] ? 'bg-[#95617C]' : 'bg-gray-200'
                       }`}
                     >
                       <span
@@ -272,15 +272,15 @@ export function Settings() {
                   </div>
                 ))}
 
-                <div className="pt-2 border-t border-[#E9D6DA]">
-                  <label className="block text-xs font-medium text-[#6B5B60] mb-2">
+                <div className="pt-2 border-t border-[#E2D4DA]">
+                  <label className="block text-xs font-medium text-[#625A64] mb-2">
                     Preferred reminder time
                   </label>
                   <input
                     type="time"
                     value={prefs.reminder_time || '08:00'}
                     onChange={(e) => updatePref('reminder_time', e.target.value)}
-                    className="px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23]"
+                    className="px-3 py-2 text-sm border border-[#E2D4DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#95617C]/30 focus:border-[#95617C] text-[#0D2033]"
                   />
                 </div>
 
@@ -301,10 +301,10 @@ export function Settings() {
                   )}
                 </div>
 
-                <div className="p-3 bg-[#FFF8F7] border border-[#E9D6DA] rounded-xl">
+                <div className="p-3 bg-[#FBF7F5] border border-[#E2D4DA] rounded-xl">
                   <div className="flex items-start gap-2">
-                    <BellOff className="w-4 h-4 text-[#6B5B60] mt-0.5 shrink-0" />
-                    <p className="text-xs text-[#6B5B60] leading-relaxed">
+                    <BellOff className="w-4 h-4 text-[#625A64] mt-0.5 shrink-0" />
+                    <p className="text-xs text-[#625A64] leading-relaxed">
                       Reminders currently appear as in-app notifications. Native mobile push
                       notifications are planned and will use these same preferences when available.
                     </p>

@@ -20,9 +20,9 @@ export function CycleSummary({
   prediction,
 }: CycleSummaryProps) {
   return (
-    <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#E9D6DA]">
-        <h3 className="text-sm font-semibold text-[#2A1F23]">Cycle & Labs Summary</h3>
+    <div className="bg-white rounded-2xl border border-[#E2D4DA] shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-[#E2D4DA]">
+        <h3 className="text-sm font-semibold text-[#0D2033]">Cycle & Labs Summary</h3>
       </div>
 
       <div className="px-5 py-4 space-y-3">
@@ -39,7 +39,7 @@ export function CycleSummary({
         />
 
         <SummaryRow
-          icon={<FlaskConical className="w-4 h-4 text-[#C97C8B]" />}
+          icon={<FlaskConical className="w-4 h-4 text-[#95617C]" />}
           label="Last labs"
           value={
             lastReport
@@ -51,9 +51,9 @@ export function CycleSummary({
         />
 
         {lastReport && lastReport.estimated_cycle_phase && lastReport.estimated_cycle_phase !== 'unknown' && (
-          <div className="text-xs text-[#6B5B60] pl-7 -mt-1">
+          <div className="text-xs text-[#625A64] pl-7 -mt-1">
             Drawn during the{' '}
-            <span className="font-medium text-[#C97C8B]">
+            <span className="font-medium text-[#95617C]">
               {lastReport.estimated_cycle_phase}
             </span>{' '}
             phase
@@ -82,20 +82,20 @@ export function CycleSummary({
         />
 
         {prediction && (
-          <div className="pt-2 border-t border-[#E9D6DA]">
-            <p className="text-xs text-[#6B5B60] mb-2 font-medium">Cycle stats</p>
+          <div className="pt-2 border-t border-[#E2D4DA]">
+            <p className="text-xs text-[#625A64] mb-2 font-medium">Cycle stats</p>
             <div className="grid grid-cols-3 gap-2">
-              <div className="text-center p-2 bg-[#FFF8F7] rounded-lg">
-                <p className="text-sm font-bold text-[#2A1F23]">{prediction.cycleLength}</p>
-                <p className="text-xs text-[#6B5B60]">Avg cycle</p>
+              <div className="text-center p-2 bg-[#FBF7F5] rounded-lg">
+                <p className="text-sm font-bold text-[#0D2033]">{prediction.cycleLength}</p>
+                <p className="text-xs text-[#625A64]">Avg cycle</p>
               </div>
-              <div className="text-center p-2 bg-[#FFF8F7] rounded-lg">
-                <p className="text-sm font-bold text-[#2A1F23]">{prediction.periodLength}</p>
-                <p className="text-xs text-[#6B5B60]">Avg period</p>
+              <div className="text-center p-2 bg-[#FBF7F5] rounded-lg">
+                <p className="text-sm font-bold text-[#0D2033]">{prediction.periodLength}</p>
+                <p className="text-xs text-[#625A64]">Avg period</p>
               </div>
-              <div className="text-center p-2 bg-[#FFF8F7] rounded-lg">
-                <p className="text-sm font-bold text-[#2A1F23]">{periodLogs.length}</p>
-                <p className="text-xs text-[#6B5B60]">Periods logged</p>
+              <div className="text-center p-2 bg-[#FBF7F5] rounded-lg">
+                <p className="text-sm font-bold text-[#0D2033]">{periodLogs.length}</p>
+                <p className="text-xs text-[#625A64]">Periods logged</p>
               </div>
             </div>
           </div>
@@ -118,8 +118,8 @@ function SummaryRow({
     <div className="flex items-start gap-3">
       <div className="mt-0.5 shrink-0">{icon}</div>
       <div className="min-w-0">
-        <p className="text-xs text-[#6B5B60] leading-none mb-0.5">{label}</p>
-        <p className="text-sm text-[#2A1F23] font-medium leading-snug">{value}</p>
+        <p className="text-xs text-[#625A64] leading-none mb-0.5">{label}</p>
+        <p className="text-sm text-[#0D2033] font-medium leading-snug">{value}</p>
       </div>
     </div>
   );

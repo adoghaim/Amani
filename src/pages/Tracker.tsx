@@ -436,29 +436,29 @@ export function Tracker() {
       <div className="max-w-5xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#2A1F23]">Tracker</h1>
-            <p className="text-sm text-[#6B5B60] mt-0.5">
+            <h1 className="text-2xl font-bold text-[#0D2033]">Tracker</h1>
+            <p className="text-sm text-[#625A64] mt-0.5">
               Your cycle, labs, and interventions in one view
             </p>
           </div>
           <button
             onClick={() => navigate('/app/settings')}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#E9D6DA] hover:bg-[#F6ECEB] transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#E2D4DA] hover:bg-[#F2E9EC] transition-colors"
             title="Notification preferences"
           >
-            <Bell className="w-4 h-4 text-[#6B5B60]" />
+            <Bell className="w-4 h-4 text-[#625A64]" />
           </button>
         </div>
 
-        <div className="flex gap-1 mb-6 p-1 bg-[#F6ECEB] rounded-xl">
+        <div className="flex gap-1 mb-6 p-1 bg-[#F2E9EC] rounded-xl">
           {(['tracker', 'labs', 'interventions'] as ActiveTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2 text-sm font-medium rounded-lg capitalize transition-all duration-150 ${
                 activeTab === tab
-                  ? 'bg-white text-[#2A1F23] shadow-sm'
-                  : 'text-[#6B5B60] hover:text-[#2A1F23]'
+                  ? 'bg-white text-[#0D2033] shadow-sm'
+                  : 'text-[#625A64] hover:text-[#0D2033]'
               }`}
             >
               {tab}
@@ -485,9 +485,9 @@ export function Tracker() {
               onMonthChange={setCalendarMonth}
             />
 
-            <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-[#E9D6DA]">
-                <h3 className="text-sm font-semibold text-[#2A1F23]">Quick log</h3>
+            <div className="bg-white rounded-2xl border border-[#E2D4DA] shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-[#E2D4DA]">
+                <h3 className="text-sm font-semibold text-[#0D2033]">Quick log</h3>
               </div>
               <div className="px-5 py-4">
                 <div className="flex flex-wrap gap-2">
@@ -541,11 +541,11 @@ export function Tracker() {
         {activeTab === 'labs' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-base font-semibold text-[#2A1F23] mb-4">Compare Labs</h2>
+              <h2 className="text-base font-semibold text-[#0D2033] mb-4">Compare Labs</h2>
               <CompareView reports={reports} biomarkersByReport={biomarkersByReport} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-[#2A1F23] mb-4">Labs Timeline</h2>
+              <h2 className="text-base font-semibold text-[#0D2033] mb-4">Labs Timeline</h2>
               <LabsTimeline
                 reports={reports}
                 biomarkersByReport={biomarkersByReport}
@@ -586,18 +586,18 @@ export function Tracker() {
       {noteModal.open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9D6DA]">
-              <h2 className="text-base font-semibold text-[#2A1F23]">Add note</h2>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E2D4DA]">
+              <h2 className="text-base font-semibold text-[#0D2033]">Add note</h2>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F6ECEB] transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F2E9EC] transition-colors"
               >
-                <FileText className="w-4 h-4 text-[#6B5B60]" />
+                <FileText className="w-4 h-4 text-[#625A64]" />
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">Date</label>
+                <label className="block text-xs font-medium text-[#625A64] mb-1.5">Date</label>
                 <input
                   type="date"
                   value={noteModal.defaultDate}
@@ -605,17 +605,17 @@ export function Tracker() {
                     setNoteModal((prev) => ({ ...prev, defaultDate: e.target.value }))
                   }
                   max={dateToKey(today)}
-                  className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23]"
+                  className="w-full px-3 py-2 text-sm border border-[#E2D4DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#95617C]/30 focus:border-[#95617C] text-[#0D2033]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">Note</label>
+                <label className="block text-xs font-medium text-[#625A64] mb-1.5">Note</label>
                 <textarea
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={4}
                   placeholder="Write a note..."
-                  className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23] resize-none placeholder:text-[#A8969C]"
+                  className="w-full px-3 py-2 text-sm border border-[#E2D4DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#95617C]/30 focus:border-[#95617C] text-[#0D2033] resize-none placeholder:text-[#716670]"
                 />
               </div>
             </div>
@@ -623,13 +623,13 @@ export function Tracker() {
               <button
                 onClick={handleSaveNote}
                 disabled={savingNote || !noteText.trim()}
-                className="flex-1 py-2.5 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors disabled:opacity-50"
+                className="flex-1 py-2.5 bg-[#95617C] text-white text-sm font-medium rounded-xl hover:bg-[#765068] transition-colors disabled:opacity-50"
               >
                 {savingNote ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="flex-1 py-2.5 bg-[#F6ECEB] text-[#6B5B60] text-sm font-medium rounded-xl hover:bg-[#EED9D9] transition-colors"
+                className="flex-1 py-2.5 bg-[#F2E9EC] text-[#625A64] text-sm font-medium rounded-xl hover:bg-[#E9DBE0] transition-colors"
               >
                 Cancel
               </button>
@@ -666,7 +666,7 @@ function QuickLogButton({
     'rose-light': 'bg-rose-100 text-rose-600 hover:bg-rose-200 border border-dashed border-rose-300',
     amber: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200',
     teal: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200',
-    neutral: 'bg-[#F6ECEB] text-[#6B5B60] hover:bg-[#EED9D9] border border-[#E9D6DA]',
+    neutral: 'bg-[#F2E9EC] text-[#625A64] hover:bg-[#E9DBE0] border border-[#E2D4DA]',
   };
 
   return (

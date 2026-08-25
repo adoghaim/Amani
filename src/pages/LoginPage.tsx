@@ -1,6 +1,7 @@
 import { LoginForm } from '../components/auth/LoginForm'
+import { AmaniLogo } from '../components/AmaniLogo'
 import { Link, useNavigate } from 'react-router-dom'
-import { Heart, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -18,9 +19,8 @@ export function LoginPage() {
           <ArrowLeft className="w-4 h-4" />
           Back to home
         </Link>
-        <Link to="/" className="flex items-center gap-2">
-          <Heart className="w-5 h-5 text-theme-primary fill-theme-primary" />
-          <span className="text-base font-semibold text-theme-text">Amani</span>
+        <Link to="/" aria-label="Amani home">
+          <AmaniLogo size="sm" />
         </Link>
         <div className="w-28" />
       </nav>

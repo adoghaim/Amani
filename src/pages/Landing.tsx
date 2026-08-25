@@ -1,6 +1,7 @@
-import { Heart, Upload, MessageCircle, FileText, CheckCircle } from 'lucide-react';
+import { Upload, MessageCircle, FileText, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { AmaniLogo } from '../components/AmaniLogo';
 
 export function Landing() {
   return (
@@ -8,10 +9,9 @@ export function Landing() {
       <nav className="bg-theme-surface border-b border-theme-border shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <span className="text-xl font-semibold text-theme-text">Amani</span>
-            </div>
+            <Link to="/" aria-label="Amani home">
+              <AmaniLogo size="md" />
+            </Link>
             <div className="flex items-center gap-4">
               <Link to="/login">
                 <Button variant="ghost" size="sm">
@@ -29,6 +29,7 @@ export function Landing() {
       </nav>
 
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
+        <AmaniLogo lockup size="lg" className="mx-auto mb-8" />
         <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-4 py-1.5 mb-6">
           <CheckCircle className="w-4 h-4 text-emerald-600" />
           <span className="text-emerald-700 text-sm font-semibold">7-day free trial — no credit card required to sign up</span>
@@ -175,10 +176,7 @@ export function Landing() {
       <footer className="bg-theme-surface border-t border-theme-border py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Heart className="w-5 h-5 text-theme-primary fill-theme-primary" />
-              <span className="text-theme-text font-semibold">Amani</span>
-            </div>
+            <AmaniLogo size="sm" />
             <div className="flex gap-6 text-sm text-theme-muted-text">
               <a href="#" className="hover:text-theme-text transition-colors">Privacy</a>
               <a href="#" className="hover:text-theme-text transition-colors">Terms</a>

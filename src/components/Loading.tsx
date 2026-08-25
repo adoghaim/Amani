@@ -26,7 +26,7 @@ export function Loading({ label = 'Loading' }: { label?: string }) {
         <path
           d="M16 4 a12 12 0 0 1 10.4 6"
           fill="none"
-          stroke="#C97C8B"
+          stroke="#95617C"
           strokeWidth="3"
           strokeLinecap="round"
         />

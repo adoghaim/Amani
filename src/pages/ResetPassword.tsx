@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { Heart } from 'lucide-react';
+import { AmaniLogo } from '../components/AmaniLogo';
 
 type PageState = 'loading' | 'ready' | 'request';
 
@@ -98,10 +98,7 @@ export function ResetPassword() {
 
   const logo = (
     <div className="text-center mb-8">
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <Heart className="w-8 h-8 text-theme-primary fill-theme-primary" />
-        <span className="text-2xl font-semibold text-theme-text">Amani</span>
-      </div>
+      <AmaniLogo lockup size="md" className="mx-auto mb-4" />
     </div>
   );
 
