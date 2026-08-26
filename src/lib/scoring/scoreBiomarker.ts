@@ -60,8 +60,35 @@ export function computeLabStatus(
   refMax: number | null,
 ): LabStatus {
   if (refMin === null && refMax === null) return 'unknown';
-  const range = (refMax ?? Infinity) - (refMin ?? -Infinity);
-  const buffer = range * 0.08;
+
+  /*
+    The buffer is what separates "just outside the range" (borderline) from
+    "clearly outside it" (out of range).
+
+    It used to be `((refMax ?? Infinity) - (refMin ?? -Infinity)) * 0.08`, which
+    is Infinity whenever only ONE bound is given — and then `value < refMin -
+    Infinity` and `value > refMax + Infinity` are both permanently false, so a
+    one-sided range could only ever return borderline_*, never out_of_range_*.
+
+    One-sided ranges are the norm on real reports: LDL "<100", HDL ">40",
+    triglycerides "<150", hsCRP "<3". So an LDL of 400 scored borderline_high.
+    That fed `isOptimizationOnly` (ReportView.tsx, buildInsightSummary.ts), which
+    softens "Top Priority" to "Main Focus" — the reassuring tone on a panel that
+    warranted the opposite.
+
+    With one bound there is no range width to take 8% of, so take 8% of the
+    bound itself. It keeps the two-sided behaviour byte-identical and gives the
+    one-sided case a proportionate buffer (LDL <100 → 100-108 borderline, >108
+    out of range).
+
+    NOTE: 8% is inherited from the two-sided path, not a clinical threshold.
+    Worth a clinician's review — see also the per-analyte panic-value tier that
+    does not exist yet.
+  */
+  const hasBothBounds = refMin !== null && refMax !== null;
+  const buffer = hasBothBounds
+    ? (refMax - refMin) * 0.08
+    : Math.abs((refMax ?? refMin) as number) * 0.08;
   if (refMin !== null && value < refMin) {
     return value < refMin - buffer ? 'out_of_range_low' : 'borderline_low';
   }

@@ -2,7 +2,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17.7.0";
 import { errorMessage } from "../_shared/errors.ts";
-import { deleteUserAccount, type AccountDeletionActions } from "../_shared/account-deletion.ts";
+import {
+  deleteUserAccount,
+  StoreSubscriptionAcknowledgementRequiredError,
+  type AccountDeletionActions,
+  type StoreSubscriptionRecord,
+} from "../_shared/account-deletion.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,6 +54,23 @@ Deno.serve(async (req: Request) => {
     const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-11-20.acacia" }) : null;
 
     const actions: AccountDeletionActions = {
+      async listStoreSubscriptions(userId) {
+        // Unfiltered on purpose — which statuses still bill is policy, and it
+        // lives in ../_shared/account-deletion.ts where it can be tested.
+        const { data, error } = await supabase
+          .from("iap_subscriptions")
+          .select("platform, product_id, status, expires_at, environment")
+          .eq("user_id", userId);
+
+        /*
+          Fail rather than assume "no subscriptions". A read error here would
+          otherwise skip the warning entirely and delete the account of someone
+          Apple is still charging — the exact outcome this check exists for.
+        */
+        if (error) throw new Error(`Reading iap_subscriptions failed: ${error.message}`);
+        return (data ?? []) as StoreSubscriptionRecord[];
+      },
+
       async getStripeCustomerId(userId) {
         // Prefer stripe_customers (current); fall back to users.stripe_customer_id (legacy).
         const { data: linked } = await supabase
@@ -159,6 +181,23 @@ Deno.serve(async (req: Request) => {
           if (error) throw new Error(`Deleting ${table} failed: ${error.message}`);
         }
 
+        /*
+          `iap_subscriptions` is deliberately absent from the list above.
+
+          Every table listed there also has ON DELETE CASCADE on auth.users;
+          they are deleted explicitly anyway so that a user's *health data* is
+          gone even if the final auth deletion fails. That reasoning does not
+          transfer to entitlement rows: deleting them early and then failing at
+          deleteAuthUser would leave a live account with its subscription record
+          erased — a paying customer locked out of what they bought, by the
+          cleanup meant to help them.
+
+          So it rides the cascade instead (see
+          20260821000000_add_iap_subscriptions.sql:26 — user_id REFERENCES
+          auth.users(id) ON DELETE CASCADE), which fires at the one moment the
+          account genuinely ceases to exist.
+        */
+
         // The user's profile row itself. Kept last so the above cleanups can
         // still reference the id if any FK were to require it (none currently
         // do, but the ordering is intentional).
@@ -172,13 +211,42 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    await deleteUserAccount(actions, user.id);
+    // Body is optional — a client that sends nothing simply hasn't acknowledged.
+    const body = await req.json().catch(() => ({}));
+    const acknowledged = body?.acknowledge_store_subscriptions === true;
+
+    await deleteUserAccount(actions, user.id, {
+      acknowledgedStoreSubscriptions: acknowledged,
+    });
 
     return new Response(
       JSON.stringify({ success: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: unknown) {
+    /*
+      Not a failure: the user has a live store subscription and hasn't been told
+      that deleting the account won't stop it. Nothing has been deleted. 409 and
+      the subscription list, so the client can name the store and link to the
+      right settings screen; `retry: false` because retrying the identical
+      request will land here again — the client must come back acknowledged.
+    */
+    if (error instanceof StoreSubscriptionAcknowledgementRequiredError) {
+      return new Response(
+        JSON.stringify({
+          error: error.message,
+          code: error.code,
+          retry: false,
+          store_subscriptions: error.subscriptions.map((s) => ({
+            platform: s.platform,
+            product_id: s.productId,
+            expires_at: s.expiresAt,
+          })),
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     console.error("Error deleting user account:", error);
     return new Response(
       JSON.stringify({ error: errorMessage(error, "Failed to delete account"), retry: true }),

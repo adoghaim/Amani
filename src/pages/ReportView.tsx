@@ -39,7 +39,51 @@ import {
   CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
+
+/*
+  A 429 from `generate-interpretation` means "over your daily AI quota", not
+  "this report failed". The edge function returns it without touching
+  `lab_reports.status` on purpose — the lab values are saved and intact, and the
+  limit clears at midnight — so nothing on this page may mark the report errored
+  or show the generic failure card for one.
+
+  Returns the server's message on a 429, null on anything else. The
+  FunctionsHttpError unwrapping mirrors `handle402` in utils/subscription.ts,
+  which runs first at every call site and leaves the body unread unless the
+  status is 402.
+*/
+async function rateLimitMessage(err: unknown): Promise<string | null> {
+  if (!(err instanceof FunctionsHttpError)) return null;
+  if (err.context?.status !== 429) return null;
+  try {
+    const body = await (err.context as Response).json() as { error?: string };
+    if (typeof body.error === 'string' && body.error.length > 0) return body.error;
+  } catch {
+    // ignore parse failure
+  }
+  return 'Daily analysis limit reached. Please try again tomorrow.';
+}
+
+/* NewReport writes this key when the upload's interpretation request is
+   rate-limited, because the 429 arrives after it has already navigated here. */
+function readInterpRateLimit(reportId: string): string | null {
+  try {
+    return sessionStorage.getItem(`interpRateLimit:${reportId}`);
+  } catch {
+    return null;
+  }
+}
+
+function writeInterpRateLimit(reportId: string, message: string | null): void {
+  try {
+    if (message) sessionStorage.setItem(`interpRateLimit:${reportId}`, message);
+    else sessionStorage.removeItem(`interpRateLimit:${reportId}`);
+  } catch {
+    // Storage unavailable (private mode) — the notice degrades to no notice.
+  }
+}
 
 const CATEGORY_ORDER: BiomarkerCategory[] = [
   'hormones', 'thyroid', 'metabolic', 'lipids', 'liver', 'kidney', 'inflammation', 'nutrients', 'blood',
@@ -339,6 +383,7 @@ export function ReportView() {
   const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
+  const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
   const interpPollingActive = useRef(false);
   const interpRetryFired = useRef(false);
 
@@ -352,6 +397,15 @@ export function ReportView() {
     const TIMEOUT_MS = 90000;
     const interval = setInterval(async () => {
       elapsed += POLL_INTERVAL;
+      // Read fresh: NewReport writes this after navigating here, so it can
+      // appear at any tick. Stopping here is what keeps the timeout branch
+      // below from branding a rate-limited report as failed.
+      const limitMessage = readInterpRateLimit(reportId);
+      if (limitMessage) {
+        clearInterval(interval);
+        setRateLimitNotice(limitMessage);
+        return;
+      }
       const { data } = await supabase
         .from('lab_reports').select('status').eq('id', reportId).maybeSingle();
       if (data && data.status !== 'processing') {
@@ -369,7 +423,23 @@ export function ReportView() {
       }
       if (elapsed >= TIMEOUT_MS) {
         clearInterval(interval);
-        await supabase.from('lab_reports').update({ status: 'ready' }).eq('id', reportId);
+        /*
+          The poll gave up, so we do NOT know the interpretation succeeded — and
+          writing 'ready' here used to claim that it had. A report whose
+          interpretation genuinely failed then rendered as a finished report with
+          nothing in it, which for a lab-interpretation product is the worst way
+          to be wrong: it looks like "nothing to flag" rather than "this did not
+          run". Write the terminal status that is actually true instead.
+
+          Compare-and-set on 'processing' so the server always wins: if the edge
+          function already wrote 'ready' or 'error' and we simply missed it on
+          the last poll, this update matches no row and leaves that result alone.
+        */
+        await supabase
+          .from('lab_reports')
+          .update({ status: 'error' })
+          .eq('id', reportId)
+          .eq('status', 'processing');
         fetchReport();
       }
     }, POLL_INTERVAL);
@@ -411,7 +481,13 @@ export function ReportView() {
         if (invokeErr) {
           const redirect = await handle402(invokeErr);
           if (redirect && !cancelled) { navigate(redirect, { replace: true }); return; }
+          const limitMessage = await rateLimitMessage(invokeErr);
           interpPollingActive.current = false;
+          if (limitMessage) {
+            writeInterpRateLimit(reportId, limitMessage);
+            if (!cancelled) setRateLimitNotice(limitMessage);
+            return;
+          }
           setInterpGaveUp(true);
           return;
         }
@@ -477,6 +553,8 @@ export function ReportView() {
     if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
     if (analytesData) setReportAnalytes(analytesData as ReportAnalyte[]);
     if (interpretationData?.json_output) {
+      writeInterpRateLimit(reportId, null);
+      setRateLimitNotice(null);
       setInterpretation(normalizeInterpretation(interpretationData.json_output));
     }
 
@@ -885,8 +963,20 @@ export function ReportView() {
     if (userProfile?.subscription_status !== 'active' && !isTrialActive()) return;
     setRegenerating(true);
     setError('');
+    const priorStatus = report.status;
+    writeInterpRateLimit(reportId, null);
+    setRateLimitNotice(null);
     try {
-      await supabase.from('interpretations').delete().eq('lab_report_id', reportId);
+      /*
+        Deliberately NOT deleting the existing interpretation first.
+        `generate-interpretation` upserts on `lab_report_id`, which is UNIQUE
+        (20260312070949_add_interpretation_source_and_unique_constraint.sql), so
+        a successful run replaces the row on its own. Deleting up front opened a
+        window where any failure — a 429 on the daily cap, a dropped connection,
+        a 500 — destroyed the interpretation the user already had and could not
+        get back, since the retry that would have replaced it is the thing that
+        just failed.
+      */
       await supabase.from('lab_reports').update({
         status: 'processing',
         regeneration_count: report.regeneration_count + 1,
@@ -900,7 +990,19 @@ export function ReportView() {
       if (interpError) {
         const redirect = await handle402(interpError);
         if (redirect) { navigate(redirect, { replace: true }); return; }
-        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+        const limitMessage = await rateLimitMessage(interpError);
+        if (limitMessage) {
+          // The request never reached the model, so put back the status and the
+          // retry we spent optimistically above and tell her why instead.
+          await supabase.from('lab_reports').update({
+            status: priorStatus,
+            regeneration_count: report.regeneration_count,
+          }).eq('id', reportId);
+          writeInterpRateLimit(reportId, limitMessage);
+          setRateLimitNotice(limitMessage);
+        } else {
+          await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
+        }
       } else if (!fnData?.success) {
         await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       }
@@ -961,7 +1063,10 @@ export function ReportView() {
   const canRegenerate = report.regeneration_count < 3 && (userProfile?.subscription_status === 'active' || isTrialActive());
   const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
   const hasError = report.status === 'error';
-  const isProcessing = report.status === 'processing' || regenerating;
+  // A rate-limited report sits at 'processing' because the server refused to
+  // start rather than failed — but nothing is coming, so stop hiding her lab
+  // values behind a spinner that will never resolve.
+  const isProcessing = (report.status === 'processing' || regenerating) && !rateLimitNotice;
 
   const resolvedLabSource: LabSource = (() => {
     if (report.lab_source && report.lab_source !== 'unknown') return report.lab_source;
@@ -1048,8 +1153,37 @@ export function ReportView() {
             </div>
           )}
 
+          {/* ── Daily AI limit reached ──────────────────────────── */}
+          {rateLimitNotice && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">Daily analysis limit reached</p>
+                  <p className="text-xs text-amber-700 mt-1 leading-relaxed">{rateLimitNotice}</p>
+                </div>
+              </div>
+              {(biomarkers.length > 0 || reportAnalytes.length > 0) && (
+                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-100/60 rounded-lg px-3 py-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                  <span>{reportAnalytes.length || biomarkers.length} lab values detected. Your data is saved and intact below.</span>
+                </div>
+              )}
+              {canRegenerate && (
+                <button
+                  onClick={handleRegenerate}
+                  disabled={regenerating}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+                  {regenerating ? 'Retrying...' : 'Try again'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* ── Error state ─────────────────────────────────────── */}
-          {hasError && !interpretation && interpGaveUp && (() => {
+          {hasError && !interpretation && interpGaveUp && !rateLimitNotice && (() => {
             const hasData = biomarkers.length > 0 || reportAnalytes.length > 0;
             const reason = !hasData
               ? 'No lab values were extracted. The PDF may be image-based.'
@@ -1086,7 +1220,7 @@ export function ReportView() {
           })()}
 
           {/* ── AI loading indicator (ready/error but no interpretation yet) ─── */}
-          {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && insightSummary && (
+          {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && !rateLimitNotice && insightSummary && (
             <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
               <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>

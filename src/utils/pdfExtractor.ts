@@ -18,6 +18,20 @@ async function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
   return pdfjsPromise;
 }
 
+/*
+  A lab PDF is attacker-influenceable input: the user uploads whatever a portal
+  (or anyone else) handed her. pdfjs-dist defaults `isEvalSupported` to true,
+  which lets a crafted font program reach `Function` during rendering —
+  GHSA-hq66-cqwq-w95j, "arbitrary JavaScript execution upon opening a malicious
+  PDF". Turning eval off closes that path; the cost is slower font rendering,
+  which does not matter here because we only extract text and rasterise for OCR.
+
+  This is the cheap half of the mitigation. The advisory is fixed in pdfjs-dist
+  6.2.108, a semver-major bump from the pinned 5.x — that upgrade is a separate,
+  scoped change because it touches the parser's regression surface.
+*/
+const PDF_HARDENING = { isEvalSupported: false } as const;
+
 export interface PDFPageText {
   pageNumber: number;
   text: string;
@@ -91,7 +105,7 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
   try {
     const arrayBuffer = await file.arrayBuffer();
     const pdfjsLib = await loadPdfJs();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, ...PDF_HARDENING }).promise;
 
     const pages: PDFPageText[] = [];
 
@@ -121,7 +135,7 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
 export async function convertPDFToImages(file: File): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await loadPdfJs();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, ...PDF_HARDENING }).promise;
   const images: string[] = [];
 
   for (let i = 1; i <= pdf.numPages; i++) {

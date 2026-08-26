@@ -56,4 +56,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Google Play Billing. The Play Billing Library merges this permission from
+         its own manifest, so builds work without it, but declaring it here keeps
+         the app's billing capability visible in the merged manifest Play Console
+         inspects on upload. The library itself arrives transitively via
+         @revenuecat/purchases-capacitor (purchases-hybrid-common); see
+         android/capacitor.settings.gradle, which `npx cap sync` regenerates. -->
+    <uses-permission android:name="com.android.vending.BILLING" />
 </manifest>

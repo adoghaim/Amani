@@ -62,3 +62,4 @@ ruvector.db
 .github/hooks/
 .github/agents/
 .codex/
+deno.lock

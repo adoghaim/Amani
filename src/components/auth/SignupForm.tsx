@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../Button'
@@ -140,6 +141,34 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           Create Account
         </Button>
       </form>
+
+      {/*
+        Onboarding asks for reproductive status, symptoms and known conditions
+        within a minute of this button, so the policies covering that have to
+        be reachable before the account exists — not buried in Settings after.
+        Worded to cover the OAuth buttons above as well as the email form, so
+        one line does for every route into an account.
+
+        A statement rather than a blocking checkbox: the checkbox is the right
+        pattern when a specific separate consent is being captured, and adding
+        one here would gate the OAuth buttons too, which sit above it. If a
+        lawyer decides an explicit affirmative consent is required for health
+        data, this is the place it goes, and `users.has_consented` already
+        exists in the schema to record it.
+      */}
+      <p className="text-xs text-theme-muted-text text-center leading-relaxed">
+        By creating an account — including with Google or Apple — you agree to our{' '}
+        <Link to="/terms" className="text-theme-primary-dark underline hover:text-theme-accent">
+          Terms of Service
+        </Link>{' '}
+        and{' '}
+        <Link to="/privacy" className="text-theme-primary-dark underline hover:text-theme-accent">
+          Privacy Policy
+        </Link>
+        . Amani stores the lab results and health details you choose to share, and sends lab
+        values to OpenAI to generate explanations. It is educational only and is not medical
+        advice.
+      </p>
     </div>
   )
 }

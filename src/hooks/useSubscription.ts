@@ -1,6 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { getProductByPriceId } from '../stripe-config'
+/*
+  `src/lib/entitlement.ts` is the client's copy of the decision the server makes
+  in `_shared/entitlement.ts`; `src/lib/entitlement.test.ts` runs both over a
+  full matrix and fails the moment they disagree. Every client-side entitlement
+  question goes through the `src/lib` copy — reaching across into the
+  edge-function tree from here as well would mean two import paths for one
+  answer, and the failure mode of drift is a paying customer shown a paywall.
+*/
+import {
+  clientAllowSandbox,
+  resolveEntitlement,
+  type IapRecord,
+} from '../lib/entitlement'
 
 export interface Subscription {
   customer_id: string | null
@@ -14,50 +27,161 @@ export interface Subscription {
   payment_method_last4: string | null
 }
 
+/** One `iap_subscriptions` row, as the client is allowed to read it. */
+export interface IapSubscription {
+  platform: 'ios' | 'android'
+  product_id: string
+  status: string
+  expires_at: string | null
+  environment: string
+}
+
+/**
+ * Where this user's access comes from. `Billing.tsx` branches on it, because
+ * only Stripe subscriptions can be managed from inside the app — Apple and
+ * Google both require the user to be sent to the system settings screen.
+ */
+export type SubscriptionSource = 'stripe' | 'ios' | 'android' | 'trial' | 'none'
+
+/** Does this single IAP row entitle right now? Asked of `resolveEntitlement`
+ *  rather than re-implemented, so there is only ever one status list. */
+function iapEntitles(record: IapRecord, now: number): boolean {
+  const result = resolveEntitlement({
+    stripeStatus: null,
+    iapRecords: [record],
+    trialStartDate: null,
+    now,
+    allowSandbox: clientAllowSandbox(),
+  })
+  return result.allowed && result.reason === 'active_iap'
+}
+
 export function useSubscription() {
   const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [iapSubscriptions, setIapSubscriptions] = useState<IapSubscription[]>([])
+  /** The one row currently entitling, not just any row for the platform — an
+   *  account can hold an expired row and an active one for the same store. */
+  const [activeIap, setActiveIap] = useState<IapSubscription | null>(null)
+  const [source, setSource] = useState<SubscriptionSource>('none')
+  const [entitled, setEntitled] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchSubscription()
-  }, [])
-
-  const fetchSubscription = async () => {
+  const fetchSubscription = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('stripe_user_subscriptions')
-        .select('*')
-        .maybeSingle()
+      const { data: { user } } = await supabase.auth.getUser()
 
-      if (error) {
-        console.error('Error fetching subscription:', error)
+      if (!user) {
+        setSubscription(null)
+        setIapSubscriptions([])
+        setActiveIap(null)
+        setSource('none')
+        setEntitled(false)
         return
       }
 
-      setSubscription(data)
+      const [stripeResult, iapResult, userResult] = await Promise.all([
+        supabase.from('stripe_user_subscriptions').select('*').maybeSingle(),
+        supabase
+          .from('iap_subscriptions')
+          .select('platform, product_id, status, expires_at, environment')
+          .eq('user_id', user.id),
+        supabase.from('users').select('trial_start_date').eq('id', user.id).maybeSingle(),
+      ])
+
+      if (stripeResult.error) {
+        console.error('Error fetching subscription:', stripeResult.error)
+      }
+
+      /*
+        A failed IAP read must not quietly downgrade a paying App Store customer
+        to "no subscription" — treating the error as an empty result set would
+        send them to a paywall for something they already bought. Keep the last
+        known state instead and let the next refetch correct it.
+      */
+      if (iapResult.error) {
+        console.error('Error fetching IAP subscriptions:', iapResult.error)
+        return
+      }
+
+      const stripe = (stripeResult.data ?? null) as Subscription | null
+      const iap = (iapResult.data ?? []) as IapSubscription[]
+      const trialStartDate =
+        (userResult.data as { trial_start_date?: string | null } | null)?.trial_start_date ?? null
+
+      const now = Date.now()
+      const records: IapRecord[] = iap.map((row) => ({
+        status: row.status,
+        expires_at: row.expires_at,
+        environment: row.environment,
+      }))
+
+      const entitlement = resolveEntitlement({
+        stripeStatus: stripe?.subscription_status ?? null,
+        iapRecords: records,
+        trialStartDate,
+        now,
+        allowSandbox: clientAllowSandbox(),
+      })
+
+      setSubscription(stripe)
+      setIapSubscriptions(iap)
+      setEntitled(entitlement.allowed)
+
+      if (!entitlement.allowed) {
+        setActiveIap(null)
+        setSource('none')
+      } else if (entitlement.reason === 'active_subscription') {
+        setActiveIap(null)
+        setSource('stripe')
+      } else if (entitlement.reason === 'active_iap') {
+        // Which storefront actually entitles decides where "manage" sends them,
+        // and which row does decides the plan and renewal date shown for it.
+        const live = iap.find((row, i) => {
+          const record = records[i]
+          return record !== undefined && iapEntitles(record, now) && !!row.platform
+        })
+        setActiveIap(live ?? null)
+        setSource(live?.platform ?? 'none')
+      } else {
+        setActiveIap(null)
+        setSource('trial')
+      }
     } catch (error) {
       console.error('Error fetching subscription:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchSubscription()
+  }, [fetchSubscription])
 
   const getActivePlan = () => {
     if (!subscription?.price_id) return null
-    
+
     const product = getProductByPriceId(subscription.price_id)
     return product?.name || null
   }
 
-  const isActive = () => {
-    return subscription?.subscription_status === 'active'
-  }
+  /** A paid, currently-entitling subscription from any storefront. The app-level
+   *  trial is deliberately not "active" — callers use it to decide whether to
+   *  offer an upgrade. */
+  const isActive = () => source === 'stripe' || source === 'ios' || source === 'android'
+
+  /** The store product currently entitling, when the source is a native store. */
+  const activeIapProductId = () => activeIap?.product_id ?? null
 
   return {
     subscription,
+    iapSubscriptions,
+    activeIap,
+    source,
+    entitled,
     loading,
     getActivePlan,
     isActive,
+    activeIapProductId,
     refetch: fetchSubscription
   }
 }

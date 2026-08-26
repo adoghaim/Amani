@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Loading } from './Loading';
-import { checkSubscriptionLive } from '../utils/subscription';
+import { checkSubscriptionLive, type SubscriptionRedirect } from '../utils/subscription';
 
 interface SubscriptionGateProps {
   children: ReactNode;
@@ -10,7 +10,7 @@ interface SubscriptionGateProps {
 type GateState =
   | { status: 'loading' }
   | { status: 'allowed' }
-  | { status: 'blocked'; redirectTo: '/billing' | '/pricing' };
+  | { status: 'blocked'; redirectTo: SubscriptionRedirect };
 
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const [state, setState] = useState<GateState>({ status: 'loading' });

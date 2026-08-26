@@ -25,6 +25,8 @@
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/instrument-sans": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@revenuecat/purchases-capacitor": "^13.4.1",
+    "@sentry/react": "^10.70.0",
     "@supabase/supabase-js": "^2.105.1",
     "lucide-react": "^0.344.0",
     "pdfjs-dist": "^5.7.284",

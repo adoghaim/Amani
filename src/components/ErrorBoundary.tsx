@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
+import * as Sentry from '@sentry/react'
 
 interface Props {
   children: ReactNode
@@ -17,9 +18,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Until P1-3 (Sentry) lands, console is the only signal — ship-it
-    // observability beats a silent white screen.
+    // Sentry is a no-op unless VITE_SENTRY_DSN is set (see main.tsx), so the
+    // console line stays: it is the only signal in dev and deploy previews.
     console.error('[ErrorBoundary]', error, info.componentStack)
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: info.componentStack } },
+    })
   }
 
   render(): ReactNode {

@@ -8,6 +8,8 @@ import {
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
+import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
+import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
 import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
 import {
@@ -112,6 +114,50 @@ function classifyAnalyte(a: AnalyteData): AnalyteStatus {
     if (op === ">" || op === ">=" || op === "> OR =") return v >= val ? "in_range" : "out_of_range";
   }
   return "unknown";
+}
+
+/*
+  How far outside its reference range a value sits, normalised so different
+  analytes are comparable: 1.0 means "one full range-width outside the range".
+
+  This exists because the caller used to take the first six out-of-range
+  analytes in the order Postgres returned them — `.order("raw_name")`, i.e.
+  ALPHABETICAL. With more than six abnormal results the rest were dropped
+  before the model ever saw them, so whether a dangerous value reached the
+  interpretation depended on its first letter. The same ordering also fed the
+  headline, which called `top_out_of_range[0]` "the most notable finding".
+
+  NOTE: this is a magnitude measure, not a clinical severity scale. It does not
+  know that potassium is more urgent than cholesterol. A real panic-value tier
+  needs clinician-set per-analyte thresholds; this only guarantees that the
+  most deviant results are the ones that survive truncation.
+*/
+function deviationScore(a: AnalyteData): number {
+  const v = Number(a.value_numeric);
+  if (!Number.isFinite(v)) return 0;
+
+  if (a.normalized_min !== null && a.normalized_max !== null) {
+    const min = Number(a.normalized_min);
+    const max = Number(a.normalized_max);
+    const width = max - min;
+    // A zero-width range would divide by zero; fall back to absolute distance.
+    if (!Number.isFinite(width) || width <= 0) {
+      return Math.max(min - v, v - max, 0);
+    }
+    if (v < min) return (min - v) / width;
+    if (v > max) return (v - max) / width;
+    return 0;
+  }
+
+  if (a.normalized_operator && a.normalized_operator_value !== null) {
+    const val = Number(a.normalized_operator_value);
+    if (!Number.isFinite(val) || val === 0) return 0;
+    const op = a.normalized_operator;
+    if (op === "<" || op === "<=" || op === "< OR =") return v > val ? (v - val) / Math.abs(val) : 0;
+    if (op === ">" || op === ">=" || op === "> OR =") return v < val ? (val - v) / Math.abs(val) : 0;
+  }
+
+  return 0;
 }
 
 function slug(a: AnalyteData): string {
@@ -557,9 +603,17 @@ function computeReportFacts(analytes: AnalyteData[], report: LabReportData): Rep
   if (pregnant) contextNotes.push("Currently pregnant.");
   if (onBC) contextNotes.push("On hormonal birth control.");
 
+  /*
+    Sort by deviation before truncating. `report_analytes` arrives ordered by
+    `raw_name`, so without this the six survivors — and `top_out_of_range[0]`,
+    which the headline names as "the most notable finding" — were chosen
+    alphabetically.
+  */
+  const bySeverity = (x: AnalyteData, y: AnalyteData) => deviationScore(y) - deviationScore(x);
+
   return {
-    top_out_of_range: outOfRange.slice(0, 6),
-    top_borderline: borderline.slice(0, 5),
+    top_out_of_range: [...outOfRange].sort(bySeverity).slice(0, 6),
+    top_borderline: [...borderline].sort(bySeverity).slice(0, 5),
     reassuring_in_range: reassuring,
     matched_patterns: detectPatterns(analytes, report),
     missing_followup_labs: computeMissingFollowupLabs(analytes),
@@ -1078,7 +1132,26 @@ Required schema:
     "[generate-interpretation] nutrient validation failed (attempt 2), sanitizing:",
     secondCheck.violations.join(", "),
   );
-  return sanitizeViolations(second) as AIInterpretationOutput;
+  /*
+    `sanitizeViolations` returns null when a violation survives in a scalar or
+    nested field it cannot filter — the fail-closed path. Keep that null visible
+    to the type checker instead of casting it away: the caller's `if (aiResult)`
+    is what routes to `generateFallbackInterpretation`, and a future refactor
+    that stops checking must fail to compile rather than persist unsafe content.
+  */
+  const sanitized = sanitizeViolations(second);
+  if (sanitized === null) {
+    // Distinct from the OpenAI-failure logs above: OpenAI answered fine and the
+    // policy discarded the answer. Without its own line this is indistinguishable
+    // from an API outage in the logs, so nobody can tell how often a paying user
+    // gets the deterministic fallback because of a validator false positive.
+    console.warn(
+      "[generate-interpretation] policy discarded a usable OpenAI interpretation (sanitize failed closed):",
+      secondCheck.violations.join(", "),
+    );
+    return null;
+  }
+  return sanitized as AIInterpretationOutput;
 }
 
 async function callOpenAIOnce(
@@ -1177,7 +1250,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    await checkAndIncrementRateLimit(supabase, user.id, "generate-interpretation", 20);
+    await enforceRateLimit(createRateLimitStore(supabase), {
+      userId: user.id,
+      endpoint: "generate-interpretation",
+      limitPerDay: 20,
+    });
 
     const body = await req.json().catch(() => null);
     const parsedBody = GenerateInterpretationRequestSchema.safeParse(body);
@@ -1374,6 +1451,17 @@ Deno.serve(async (req: Request) => {
   } catch (err: unknown) {
     const message = errorMessage(err, "Internal server error");
     console.error("[generate-interpretation] Fatal error:", message);
+
+    // Ahead of the status write on purpose. Being over your daily quota says
+    // nothing about the report — marking it "error" would permanently brand an
+    // intact report as failed for a condition that clears at midnight.
+    if (isRateLimitExceeded(err)) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     if (reportId) {
       try {
         await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
@@ -1381,38 +1469,10 @@ Deno.serve(async (req: Request) => {
         // Best-effort status update only.
       }
     }
-    return new Response(JSON.stringify({ error: "Internal server error", detail: message }), {
+    // The message is logged above, not returned: it is an internal string
+    // (Postgres errors, OpenAI responses) with nothing a client can act on.
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
-
-async function checkAndIncrementRateLimit(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  endpoint: string,
-  limitPerDay: number,
-): Promise<void> {
-  const windowStart = new Date();
-  windowStart.setHours(0, 0, 0, 0);
-
-  const { data: existing } = await supabase
-    .from("rate_limits")
-    .select("id, count")
-    .eq("user_id", userId)
-    .eq("endpoint", endpoint)
-    .gte("window_start", windowStart.toISOString())
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.count >= limitPerDay) throw new Error("RATE_LIMIT_EXCEEDED");
-    await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
-  } else {
-    await supabase.from("rate_limits").insert({
-      user_id: userId,
-      endpoint,
-      window_start: windowStart.toISOString(),
-      count: 1,
-    });
-  }
-}

@@ -180,9 +180,9 @@ export function Landing() {
               <span className="text-theme-text font-semibold">Amani</span>
             </div>
             <div className="flex gap-6 text-sm text-theme-muted-text">
-              <a href="#" className="hover:text-theme-text transition-colors">Privacy</a>
-              <a href="#" className="hover:text-theme-text transition-colors">Terms</a>
-              <a href="#" className="hover:text-theme-text transition-colors">Contact</a>
+              <Link to="/privacy" className="hover:text-theme-text transition-colors">Privacy</Link>
+              <Link to="/terms" className="hover:text-theme-text transition-colors">Terms</Link>
+              <Link to="/contact" className="hover:text-theme-text transition-colors">Contact</Link>
             </div>
           </div>
         </div>

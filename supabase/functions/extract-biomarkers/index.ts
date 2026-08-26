@@ -4,6 +4,8 @@ import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { ExtractBiomarkersRequestSchema } from "../_shared/schemas/requests.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
+import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
+import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -264,7 +266,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    await checkAndIncrementRateLimit(supabaseAdmin, user.id, "extract-biomarkers", 20);
+    await enforceRateLimit(createRateLimitStore(supabaseAdmin), {
+      userId: user.id,
+      endpoint: "extract-biomarkers",
+      limitPerDay: 20,
+    });
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
@@ -561,7 +567,7 @@ CONFIDENCE:
   } catch (error: unknown) {
     console.error("Error extracting biomarkers:", error);
 
-    if (error instanceof Error && error.message === "RATE_LIMIT_EXCEEDED") {
+    if (isRateLimitExceeded(error)) {
       return new Response(
         JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -574,36 +580,6 @@ CONFIDENCE:
     );
   }
 });
-
-async function checkAndIncrementRateLimit(
-  supabase: SupabaseClient,
-  userId: string,
-  endpoint: string,
-  limitPerDay: number
-): Promise<void> {
-  const windowStart = new Date();
-  windowStart.setHours(0, 0, 0, 0);
-
-  const { data: existing } = await supabase
-    .from("rate_limits")
-    .select("id, count")
-    .eq("user_id", userId)
-    .eq("endpoint", endpoint)
-    .gte("window_start", windowStart.toISOString())
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.count >= limitPerDay) throw new Error("RATE_LIMIT_EXCEEDED");
-    await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
-  } else {
-    await supabase.from("rate_limits").insert({
-      user_id: userId,
-      endpoint,
-      window_start: windowStart.toISOString(),
-      count: 1,
-    });
-  }
-}
 
 function applySanityChecks(items: ReportAnalyte[]): ReportAnalyte[] {
   return items.map(item => {

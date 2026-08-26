@@ -135,6 +135,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
 
     if (data.user) {
+      // Belt to the handle_new_user trigger's braces: the trigger already
+      // created this row inside the auth.users insert, so this is only a
+      // fallback for the case where it did not.
+      //
+      // ignoreDuplicates makes the conflict path DO NOTHING rather than an
+      // UPDATE, and subscription_status is gone from the payload — neither it
+      // nor email is client-writable any more (see
+      // 20260823000000_lock_users_privileged_columns.sql), and the trigger and
+      // the column default both set it to 'trial' regardless.
       await supabase
         .from('users')
         .upsert(
@@ -142,9 +151,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: data.user.id,
             email: data.user.email!,
             has_consented: true,
-            subscription_status: 'trial',
           },
-          { onConflict: 'id' }
+          { onConflict: 'id', ignoreDuplicates: true }
         );
     }
   };
@@ -185,6 +193,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  /**
+   * Starts the 7-day trial clock, which the client cannot write directly.
+   *
+   * `trial_start_date` used to be part of the onboarding UPDATE payload, but
+   * RLS gates rows and not columns: any user could PATCH their own row and hand
+   * themselves a fresh trial every week, and the server-side entitlement check
+   * reads that same column. It is no longer granted to `authenticated` (see
+   * supabase/migrations/20260823000000_lock_users_privileged_columns.sql).
+   *
+   * `start_trial_if_unset` is a SECURITY DEFINER function that writes the
+   * column only while it is NULL, so calling it twice cannot buy more trial.
+   * Returns an error message, or null on success.
+   */
+  const startTrialIfNeeded = async (currentTrialStart: string | null): Promise<string | null> => {
+    if (currentTrialStart != null) return null;
+    const { error } = await supabase.rpc('start_trial_if_unset');
+    return error?.message ?? null;
+  };
+
   const markOnboardingComplete = async (answers: OnboardingAnswers): Promise<{ error: string | null }> => {
     if (!user) return { error: 'No user' };
 
@@ -202,20 +229,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       known_conditions: answers.known_conditions,
     };
 
-    if (currentTrialStart == null) {
-      payload.trial_start_date = new Date().toISOString();
-    }
-
     const { error } = await supabase
       .from('users')
       .update(payload)
       .eq('id', user.id);
 
-    if (!error) {
-      await fetchUserProfile(user.id);
-    }
+    if (error) return { error: error.message };
 
-    return { error: error?.message ?? null };
+    const trialError = await startTrialIfNeeded(currentTrialStart);
+    if (trialError) return { error: trialError };
+
+    await fetchUserProfile(user.id);
+    return { error: null };
   };
 
   const markOnboardingSkipped = async (): Promise<{ error: string | null }> => {
@@ -223,24 +248,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const currentTrialStart = (userProfile as User & { trial_start_date?: string | null } | null)?.trial_start_date ?? null;
 
-    const payload: Record<string, unknown> = {
-      onboarding_skipped: true,
-    };
-
-    if (currentTrialStart == null) {
-      payload.trial_start_date = new Date().toISOString();
-    }
-
     const { error } = await supabase
       .from('users')
-      .update(payload)
+      .update({ onboarding_skipped: true })
       .eq('id', user.id);
 
-    if (!error) {
-      await fetchUserProfile(user.id);
-    }
+    if (error) return { error: error.message };
 
-    return { error: error?.message ?? null };
+    const trialError = await startTrialIfNeeded(currentTrialStart);
+    if (trialError) return { error: trialError };
+
+    await fetchUserProfile(user.id);
+    return { error: null };
   };
 
   const value = {

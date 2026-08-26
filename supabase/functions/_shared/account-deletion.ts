@@ -14,6 +14,10 @@
  *
  * Order and rationale, per step:
  *
+ *   0. `listStoreSubscriptions` — refuse to proceed, before touching anything,
+ *      while the user has a live App Store / Play subscription they have not
+ *      acknowledged. Neither store lets a server cancel one, so silent
+ *      deletion would leave them paying for an account that no longer exists.
  *   1. `getStripeCustomerId` — check both `stripe_customers` (new) and
  *      `users.stripe_customer_id` (legacy). Either can be present.
  *   2. `cancelStripeSubscriptions` — cancel any active/trialing/past_due
@@ -38,7 +42,105 @@
  * idempotency, not failure.
  */
 
+/**
+ * An `iap_subscriptions` row as the deletion flow needs to read it.
+ * Deliberately the raw column shape — the filtering policy below is what gets
+ * tested, so the port must not pre-filter.
+ */
+export interface StoreSubscriptionRecord {
+  platform: string;
+  product_id: string;
+  status: string;
+  expires_at: string | null;
+  environment: string;
+}
+
+/** A store subscription that will keep charging after the account is gone. */
+export interface ActiveStoreSubscription {
+  platform: "ios" | "android";
+  productId: string;
+  expiresAt: string | null;
+}
+
+export const STORE_SUBSCRIPTION_ACK_CODE = "store_subscription_acknowledgement_required";
+
+/**
+ * Thrown before anything is deleted when the user still has a live store
+ * subscription and has not been told about it.
+ *
+ * Not a failure — a stop. The handler turns it into a 409 carrying the
+ * subscription list so the client can show a specific warning and offer a
+ * deep link to the right store settings screen.
+ */
+export class StoreSubscriptionAcknowledgementRequiredError extends Error {
+  readonly code = STORE_SUBSCRIPTION_ACK_CODE;
+  readonly subscriptions: readonly ActiveStoreSubscription[];
+
+  constructor(subscriptions: readonly ActiveStoreSubscription[]) {
+    super(
+      "This account has an active subscription billed by " +
+        `${subscriptions.some((s) => s.platform === "ios") ? "Apple" : "Google"}. ` +
+        "Deleting the account does not cancel it — you must cancel it in your " +
+        "store account settings or you will continue to be charged.",
+    );
+    this.name = "StoreSubscriptionAcknowledgementRequiredError";
+    this.subscriptions = subscriptions;
+  }
+}
+
+/**
+ * Statuses that mean the store has stopped charging. Everything else — including
+ * `paused`, which Google resumes and bills again on its own — is a live billing
+ * relationship that outlives the account.
+ *
+ * Deliberately NOT the entitlement status set from `entitlement.ts`. That one
+ * answers "may this person use the app"; this one answers "will Apple or Google
+ * charge them again". `paused` is exactly where the two diverge: no access, but
+ * a future charge.
+ */
+const BILLING_HAS_STOPPED = new Set(["expired", "revoked"]);
+
+/**
+ * Picks out the subscriptions that will keep billing after deletion.
+ *
+ * Sandbox rows are excluded because they never charge real money — warning a
+ * TestFlight tester about a phantom bill is noise, and the `environment` column
+ * exists precisely so the two can be told apart.
+ */
+export function selectBillingStoreSubscriptions(
+  records: readonly StoreSubscriptionRecord[],
+): ActiveStoreSubscription[] {
+  return records
+    .filter((r) => r.environment !== "sandbox")
+    .filter((r) => !BILLING_HAS_STOPPED.has(r.status))
+    .filter((r): r is StoreSubscriptionRecord & { platform: "ios" | "android" } =>
+      r.platform === "ios" || r.platform === "android"
+    )
+    .map((r) => ({
+      platform: r.platform,
+      productId: r.product_id,
+      expiresAt: r.expires_at,
+    }));
+}
+
+export interface DeleteAccountOptions {
+  /**
+   * The user has seen the store-subscription warning and chose to continue
+   * anyway. Set only from an explicit second confirmation in the UI — never
+   * defaulted true, or the warning silently stops existing.
+   */
+  acknowledgedStoreSubscriptions?: boolean;
+}
+
 export interface AccountDeletionActions {
+  /**
+   * Every `iap_subscriptions` row for the user, unfiltered.
+   *
+   * Read before anything is deleted: neither Apple nor Google lets a server
+   * cancel a subscription on the user's behalf, so the only honest thing this
+   * flow can do is refuse to proceed silently.
+   */
+  listStoreSubscriptions(userId: string): Promise<readonly StoreSubscriptionRecord[]>;
   /** Look up the Stripe customer_id from both new and legacy locations. */
   getStripeCustomerId(userId: string): Promise<string | null>;
   /** Cancel any subscription in an active/trialing/past_due state. */
@@ -58,7 +160,32 @@ export interface AccountDeletionActions {
 export async function deleteUserAccount(
   actions: AccountDeletionActions,
   userId: string,
+  options: DeleteAccountOptions = {},
 ): Promise<void> {
+  /*
+    Store subscriptions first, before a single destructive call.
+
+    Stripe subscriptions get cancelled below because Stripe lets a server do
+    that. Apple does not — there is no App Store Server API endpoint to cancel
+    an auto-renewable subscription, by design; only the customer can, from
+    their own account settings. Google *does* expose
+    purchases.subscriptionsv2.cancel, but it needs Play Developer API
+    credentials that this project does not hold (they live in RevenueCat), so
+    it is not wired up here either.
+
+    That leaves exactly one honest behaviour: find out, tell the user in
+    specific terms, and refuse to continue until they say they understand.
+    Deleting the account silently would leave someone paying Apple every month
+    for an app they can no longer log into — the same defect PR #18 fixed for
+    Stripe, one storefront over.
+  */
+  const storeRecords = await actions.listStoreSubscriptions(userId);
+  const stillBilling = selectBillingStoreSubscriptions(storeRecords);
+
+  if (stillBilling.length > 0 && !options.acknowledgedStoreSubscriptions) {
+    throw new StoreSubscriptionAcknowledgementRequiredError(stillBilling);
+  }
+
   const customerId = await actions.getStripeCustomerId(userId);
 
   if (customerId) {

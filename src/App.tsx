@@ -8,6 +8,7 @@ import { SubscriptionGate } from './components/SubscriptionGate'
 import { isNative, onAppUrlOpen } from './lib/native'
 import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
+import { safeRedirectTarget } from './lib/redirect'
 
 // Eagerly loaded — tiny pages used immediately on arrival
 import { Landing } from './pages/Landing'
@@ -29,16 +30,11 @@ const Billing        = lazyWithRetry(() => import('./pages/Billing').then(m => (
 const Settings       = lazyWithRetry(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const ParserDebugger = lazyWithRetry(() => import('./pages/ParserDebugger').then(m => ({ default: m.ParserDebugger })))
 const Onboarding    = lazyWithRetry(() => import('./pages/Onboarding'))
+const Privacy        = lazyWithRetry(() => import('./pages/Privacy').then(m => ({ default: m.Privacy })))
+const Terms          = lazyWithRetry(() => import('./pages/Terms').then(m => ({ default: m.Terms })))
+const Contact        = lazyWithRetry(() => import('./pages/Contact').then(m => ({ default: m.Contact })))
+const NotFound       = lazyWithRetry(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })))
 const enableParserDebugger = import.meta.env.DEV
-
-function safeRedirectTarget(raw: string | null): string {
-  if (!raw) return '/app'
-  // Reject anything that isn't an internal path: must start with a single "/",
-  // not "//" (protocol-relative), and not contain ":" or "@" (absolute URL or userinfo).
-  if (!raw.startsWith('/') || raw.startsWith('//')) return '/app'
-  if (raw.includes(':') || raw.includes('@')) return '/app'
-  return raw
-}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
@@ -74,6 +70,13 @@ function AppRoutes() {
         <Route path="/success" element={<SuccessPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
+        {/* Public and unauthenticated on purpose: App Store Review 3.1.2(a)
+            requires the Privacy and Terms links in the binary to resolve, and
+            they have to work for someone deciding whether to sign up at all. */}
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/contact" element={<Contact />} />
+
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
         <Route path="/app" element={<ProtectedRoute><OnboardingGate><Dashboard /></OnboardingGate></ProtectedRoute>} />
@@ -87,6 +90,10 @@ function AppRoutes() {
         {enableParserDebugger && (
           <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
         )}
+
+        {/* Catch-all. Without it an unmatched path renders null — a blank
+            white screen with no way back. Keep this last. */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
   )

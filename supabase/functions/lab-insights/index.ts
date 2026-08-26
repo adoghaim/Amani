@@ -3,6 +3,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
+import { checkUserSubscription } from "../_shared/subscription-guard.ts";
+import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
+import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +28,6 @@ type BiomarkerChange = {
   percent_change: number;
 };
 
-type SupabaseClient = ReturnType<typeof createClient>;
 type InterventionRow = {
   title: string;
   category: string;
@@ -88,13 +90,29 @@ Deno.serve(async (req: Request) => {
 
     const userId = user.id;
 
+    // This function bills us for an OpenAI call, so it gates on entitlement
+    // exactly like generate-interpretation / extract-biomarkers /
+    // parse-lab-report-ocr. Without this an expired trial kept generating.
+    const subCheck = await checkUserSubscription(supabaseAuth, userId);
+    if (!subCheck.allowed) {
+      console.log("[lab-insights] subscription check blocked:", subCheck.reason);
+      return new Response(
+        JSON.stringify({ error: "subscription_required", reason: subCheck.reason }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (!openaiApiKey) {
       throw new Error("OpenAI API key not configured");
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    await checkAndIncrementRateLimit(supabase, userId, "lab-insights", 30);
+    await enforceRateLimit(createRateLimitStore(supabase), {
+      userId,
+      endpoint: "lab-insights",
+      limitPerDay: 30,
+    });
 
     const body = await req.json().catch(() => null);
     const parsedBody = LabInsightsRequestSchema.safeParse(body);
@@ -292,7 +310,7 @@ Remember:
     );
   } catch (error: unknown) {
     console.error("Error generating insights:", error);
-    if (error instanceof Error && error.message === "RATE_LIMIT_EXCEEDED") {
+    if (isRateLimitExceeded(error)) {
       return new Response(
         JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -310,38 +328,3 @@ Remember:
     );
   }
 });
-
-async function checkAndIncrementRateLimit(
-  supabase: SupabaseClient,
-  userId: string,
-  endpoint: string,
-  limitPerDay: number
-): Promise<void> {
-  const windowStart = new Date();
-  windowStart.setHours(0, 0, 0, 0);
-
-  const { data: existing } = await supabase
-    .from("rate_limits")
-    .select("id, count")
-    .eq("user_id", userId)
-    .eq("endpoint", endpoint)
-    .gte("window_start", windowStart.toISOString())
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.count >= limitPerDay) {
-      throw new Error("RATE_LIMIT_EXCEEDED");
-    }
-    await supabase
-      .from("rate_limits")
-      .update({ count: existing.count + 1 })
-      .eq("id", existing.id);
-  } else {
-    await supabase.from("rate_limits").insert({
-      user_id: userId,
-      endpoint,
-      window_start: windowStart.toISOString(),
-      count: 1,
-    });
-  }
-}

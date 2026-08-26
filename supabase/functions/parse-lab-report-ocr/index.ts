@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
+import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
+import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -195,7 +197,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    await checkAndIncrementRateLimit(supabaseAdmin, user.id, "parse-lab-report-ocr", 20);
+    await enforceRateLimit(createRateLimitStore(supabaseAdmin), {
+      userId: user.id,
+      endpoint: "parse-lab-report-ocr",
+      limitPerDay: 20,
+    });
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
@@ -429,39 +435,17 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
     );
   } catch (error: unknown) {
     console.error("Error in OCR fallback:", error);
+
+    if (isRateLimitExceeded(error)) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: errorMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
-
-async function checkAndIncrementRateLimit(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  endpoint: string,
-  limitPerDay: number,
-): Promise<void> {
-  const windowStart = new Date();
-  windowStart.setHours(0, 0, 0, 0);
-
-  const { data: existing } = await supabase
-    .from("rate_limits")
-    .select("id, count")
-    .eq("user_id", userId)
-    .eq("endpoint", endpoint)
-    .gte("window_start", windowStart.toISOString())
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.count >= limitPerDay) throw new Error("RATE_LIMIT_EXCEEDED");
-    await supabase.from("rate_limits").update({ count: existing.count + 1 }).eq("id", existing.id);
-  } else {
-    await supabase.from("rate_limits").insert({
-      user_id: userId,
-      endpoint,
-      window_start: windowStart.toISOString(),
-      count: 1,
-    });
-  }
-}

@@ -18,10 +18,24 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
-# Authenticated client → checkout/portal flows. Each function additionally
-# calls `auth.getUser()` itself; verify_jwt = true is the gateway-level check.
+# RevenueCat webhook. RevenueCat sends the shared secret from the dashboard in
+# the `Authorization` header, not a Supabase JWT, so verify_jwt MUST be false
+# or every delivery 401s at the gateway before the handler can check it. Same
+# reasoning as stripe-webhook above: the function authenticates itself, and it
+# fails closed when REVENUECAT_WEBHOOK_AUTH is unset.
+[functions.iap-webhook]
+verify_jwt = false
+
+# Authenticated client → checkout/portal/purchase-verification flows. Each
+# function additionally calls `auth.getUser()` itself; verify_jwt = true is the
+# gateway-level check.
 [functions.stripe-checkout]
 verify_jwt = true
 
 [functions.create-portal-session]
+verify_jwt = true
+
+# Called by the app right after a store purchase or a restore. The user id is
+# taken from this JWT, never from the request body.
+[functions.verify-iap-purchase]
 verify_jwt = true

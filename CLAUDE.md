@@ -18,7 +18,7 @@ Amani is a women's health lab-interpretation app: users upload lab PDFs/photos, 
 
 Before opening a PR run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Document manual validation steps in the PR (especially for parser, scoring, or interpretation changes).
 
-Four suites, 32 tests: `src/utils/parser/parser.test.ts` (snapshot harness over 5 lab-source fixtures), `src/lib/deepLinks.test.ts`, and `supabase/functions/_shared/{stripe-idempotency,account-deletion}.test.ts`. The edge-function suites set the pattern worth copying for new server logic: keep the ordering and policy in a pure `_shared/*.ts` module behind an injected actions port, with no Deno or Stripe imports, so Vitest can drive it with fakes and the Deno handler stays a thin wiring layer.
+Suites live beside the code they cover — `src/utils/parser/parser.test.ts` (snapshot harness over 5 lab-source fixtures), `src/lib/deepLinks.test.ts`, `src/lib/scoring/scoreBiomarker.test.ts`, and several under `supabase/functions/_shared/`. Run `npm test` for the current count rather than trusting a number here. Two suites are the medical guardrails and should never be allowed to go red: `_shared/nutrient-policy.test.ts` (interpretation safety) and `src/lib/scoring/scoreBiomarker.test.ts` (biomarker flagging). The edge-function suites set the pattern worth copying for new server logic: keep the ordering and policy in a pure `_shared/*.ts` module behind an injected actions port, with no Deno or Stripe imports, so Vitest can drive it with fakes and the Deno handler stays a thin wiring layer.
 
 ## Architecture
 
@@ -35,7 +35,11 @@ Upload → extract → score → interpret → persist → render.
 
 ### Medical boundaries (load-bearing — don't bypass)
 
-`NUTRIENT_GUIDELINES.md` defines hard rules for nutrient/supplement language in interpretations: a 7-item allow-list, banned prescriptive verbs and dosage units, and required consultative phrasing. **The single source of truth for the policy is `supabase/functions/_shared/nutrient-policy.ts`** — it exports `ALLOWED_NUTRIENTS_PROMPT_LIST` (interpolated into the system prompt), the banned-pattern regexes, `validateInterpretationOutput()`, and `sanitizeViolations()`. `generate-interpretation/index.ts` calls the validator after every OpenAI response; on violation it regenerates once with a stricter reminder, and if the second attempt still violates it sanitizes by filtering offending items out of `what_you_can_do_now` and `what_to_do_next`. Any change to the allow-list or banned patterns goes in `_shared/nutrient-policy.ts` only — and the edge function must be redeployed.
+`NUTRIENT_GUIDELINES.md` defines hard rules for nutrient/supplement language in interpretations: a 9-nutrient allow-list, a banned-supplement list, banned prescriptive verbs and dosage units, and required consultative phrasing. **The single source of truth for the policy is `supabase/functions/_shared/nutrient-policy.ts`** — it exports `ALLOWED_NUTRIENTS` (the enforced allow-list, from which `ALLOWED_NUTRIENTS_PROMPT_LIST` is derived and interpolated into the system prompt), `BANNED_SUPPLEMENTS`, the banned-pattern regexes, `findTextViolations()`, `validateInterpretationOutput()`, and `sanitizeViolations()`. Enforcement is allow-list-first: supplementation language that names no allow-listed nutrient is a violation, so an unlisted supplement (berberine, inositol, red clover) fails closed instead of passing unnoticed.
+
+`generate-interpretation/index.ts` calls the validator after every OpenAI response; on violation it regenerates once with a stricter reminder, and if the second attempt still violates it sanitizes. **`sanitizeViolations()` returns `Record<string, unknown> | null`** — it drops offending items from top-level string arrays, re-validates the whole object, and returns `null` rather than persisting a violation left in a scalar or nested field such as `overall_interpretation` or `key_findings[].explanation`. `tryOpenAI` propagates that `null` and the handler serves `generateFallbackInterpretation` instead, so the user still gets a report — just the deterministic one. Any new caller must handle `null` the same way.
+
+Any change to the allow-list or banned patterns goes in `_shared/nutrient-policy.ts` only — covered by `_shared/nutrient-policy.test.ts`, and the edge function must be redeployed.
 
 ### Capacitor / native bridging
 
@@ -47,7 +51,7 @@ Upload → extract → score → interpret → persist → render.
 
 ### Supabase client
 
-`src/lib/supabase.ts` exports the singleton client and a hand-maintained `Database` type covering `users` and the `stripe_user_subscriptions` view. The file ships **fallback URL/anon-key literals** so dev builds work without `.env` — set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` to override. The `Database` type is partial; most table access is untyped — keep new types narrow rather than fabricating a full schema.
+`src/lib/supabase.ts` exports the singleton client and a hand-maintained `Database` type covering `users` and the `stripe_user_subscriptions` view. **`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are required** — there are no fallback literals any more, and `requireEnv` throws at module import when either is missing, so a build with an unset var white-screens instead of silently pointing at the production project. Copy `.env.example` to `.env` for local dev, and set both in **every** Netlify deploy context (Deploy Previews and Branch deploys as well as Production) — `VITE_*` values are baked in at build time, so a change needs a rebuild, not just a redeploy. The `Database` type is partial; most table access is untyped — keep new types narrow rather than fabricating a full schema.
 
 ### Stripe
 

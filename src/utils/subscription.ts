@@ -1,7 +1,7 @@
 import type { User } from '../types';
 import { supabase } from '../lib/supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { resolveEntitlement, type IapRecord } from '../lib/entitlement';
+import { clientAllowSandbox, resolveEntitlement, type IapRecord } from '../lib/entitlement';
 
 /**
  * Check whether the user has an active subscription or valid trial.
@@ -45,9 +45,18 @@ export function canCreateReport(userProfile: User | null): boolean {
   return userProfile.subscription_status === 'active' || isTrialActive(userProfile);
 }
 
+/**
+ * Redirect targets must be paths that `src/App.tsx` actually declares.
+ * These were `/billing` for a long time, which is not a route — React Router
+ * matched nothing and rendered a blank page at exactly the moment a lapsed
+ * subscriber was being sent somewhere to pay. See `subscription.test.ts`,
+ * which pins both literals against the route table.
+ */
+export type SubscriptionRedirect = '/app/billing' | '/pricing';
+
 export type ClientSubscriptionState =
   | { allowed: true }
-  | { allowed: false; redirectTo: '/billing' | '/pricing' };
+  | { allowed: false; redirectTo: SubscriptionRedirect };
 
 /**
  * Check subscription state live from Supabase, across all three storefronts
@@ -57,8 +66,8 @@ export type ClientSubscriptionState =
  * cannot drift — see the parity test in `lib/entitlement.test.ts`.
  *
  * Returns the redirect target:
- *   - /billing  — had a paid subscription that lapsed
- *   - /pricing  — never subscribed
+ *   - /app/billing  — had a paid subscription that lapsed
+ *   - /pricing      — never subscribed
  */
 export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> {
   const [{ data: subData }, { data: iapData, error: iapError }, { data: userData }] =
@@ -69,10 +78,10 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
     ]);
 
   // A failed IAP read must not silently demote a paying App Store customer to
-  // "never subscribed" and route them to /pricing. Send them to /billing, where
-  // existing customers belong, and let the server's 402 be the real gate.
+  // "never subscribed" and route them to /pricing. Send them to /app/billing,
+  // where existing customers belong, and let the server's 402 be the real gate.
   if (iapError) {
-    return { allowed: false, redirectTo: '/billing' };
+    return { allowed: false, redirectTo: '/app/billing' };
   }
 
   const result = resolveEntitlement({
@@ -80,8 +89,10 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
     iapRecords: (iapData ?? []) as IapRecord[],
     trialStartDate: userData?.trial_start_date ?? null,
     now: Date.now(),
-    // Sandbox never entitles in the shipped client; the server decides for real.
-    allowSandbox: false,
+    // Same flag `useSubscription` reads. A sandbox build that disagreed with it
+    // here showed the billing screen an active subscription and then bounced
+    // the tester out of every feature that subscription buys.
+    allowSandbox: clientAllowSandbox(),
   });
 
   if (result.allowed) return { allowed: true };
@@ -90,7 +101,7 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
   // users want the billing screen, not the marketing pricing page.
   return {
     allowed: false,
-    redirectTo: result.reason === 'no_subscription' ? '/billing' : '/pricing',
+    redirectTo: result.reason === 'no_subscription' ? '/app/billing' : '/pricing',
   };
 }
 
@@ -100,7 +111,7 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
  */
 export async function handle402(
   err: unknown,
-): Promise<'/billing' | '/pricing' | null> {
+): Promise<SubscriptionRedirect | null> {
   if (!(err instanceof FunctionsHttpError)) return null;
   if (err.context?.status !== 402) return null;
 
@@ -119,5 +130,5 @@ export async function handle402(
     .maybeSingle();
 
   if (reason === 'onboarding_incomplete') return null;
-  return data?.subscription_status !== null && data !== null ? '/billing' : '/pricing';
+  return data?.subscription_status !== null && data !== null ? '/app/billing' : '/pricing';
 }

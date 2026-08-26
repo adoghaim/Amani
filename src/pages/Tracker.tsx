@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import { handle402 } from '../utils/subscription';
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
 import { TodayCard } from '../components/TodayCard';
@@ -393,6 +395,17 @@ export function Tracker() {
         },
         body: JSON.stringify({ currentReportId: reportId, previousReportId }),
       });
+      // lab-insights answers 402 when the trial or subscription has lapsed.
+      // `handle402` reads the invoke-style error, and this call uses raw fetch,
+      // so hand it the Response wrapped the way `functions.invoke` would.
+      if (res.status === 402) {
+        const redirect = await handle402(new FunctionsHttpError(res));
+        if (redirect) {
+          setShowInsightsModal(false);
+          navigate(redirect, { replace: true });
+          return;
+        }
+      }
       if (!res.ok) throw new Error('Failed to generate insights');
       const data = await res.json();
       setInsightsData(data);
