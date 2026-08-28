@@ -17,6 +17,14 @@ const BASE = process.argv[2] ?? 'http://localhost:5199';
 const OUT = process.argv[3] ?? 'preview-shots';
 
 const SCREENS = [
+  // Public routes — no harness fixtures needed, but they carry the identity.
+  { name: 'landing',    path: '/',                                 full: true },
+  { name: 'login',      path: '/login',                            full: true },
+  { name: 'signup',     path: '/signup',                           full: true },
+  { name: 'pricing',    path: '/pricing',                          full: true },
+  { name: 'not-found',  path: '/this-route-does-not-exist',        full: false },
+  { name: 'onboarding', path: '/onboarding',                       full: true },
+  // Signed-in app.
   { name: 'dashboard',  path: '/app',                              full: true },
   { name: 'reports',    path: '/app/reports',                      full: true },
   { name: 'report-view',path: `/app/reports/${REPORT_IDS.march}`,  full: true },
