@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
+import { AmaniLogo } from '../AmaniLogo';
 import { ArrowLeft } from 'lucide-react';
-import { CycleMark } from '../CycleMark';
 
 interface AuthShellProps {
   title: string;
@@ -27,8 +27,7 @@ export function AuthShell({ title, subtitle, children, aside, footer }: AuthShel
             Back
           </Link>
           <Link to="/" className="flex items-center gap-2.5">
-            <CycleMark className="w-5 h-5 text-theme-primary" />
-            <span className="font-display text-lg text-theme-text">Amani</span>
+            <AmaniLogo size="sm" />
           </Link>
           {/* Balances the back link so the mark sits optically centred. */}
           <span className="w-[52px]" aria-hidden="true" />

@@ -17,7 +17,7 @@ import { TodayCard } from '../components/TodayCard';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { CycleMark } from '../components/CycleMark';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { BiomarkerCard } from '../components/BiomarkerCard';
 import type { CyclePhase } from '../types';
 
@@ -54,7 +54,7 @@ export function DesignGallery() {
     <div className="min-h-dvh bg-theme-background">
       <div className="max-w-5xl mx-auto px-6 py-12">
         <header className="mb-12 flex items-center gap-3">
-          <CycleMark className="w-7 h-7 text-theme-primary" />
+          <AmaniLogo markOnly size="md" />
           <div>
             <h1 className="text-3xl leading-none">Design gallery</h1>
             <p className="text-sm text-theme-muted-text-2 mt-1.5">Dev only. Shared components against fixed sample data.</p>

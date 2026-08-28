@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { CycleMark } from '../components/CycleMark';
 
 /*
@@ -68,8 +69,7 @@ export function Landing() {
       <nav className="border-b border-theme-border-inner">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
           <span className="flex items-center gap-2.5">
-            <CycleMark className="w-6 h-6 text-theme-primary" />
-            <span className="font-display text-xl text-theme-text">Amani</span>
+            <AmaniLogo size="sm" />
           </span>
           <div className="flex items-center gap-2">
             <Link to="/login">
@@ -115,14 +115,14 @@ export function Landing() {
             <div className="rounded-2xl border border-theme-border bg-theme-surface p-6 sm:p-7 shadow-theme-lg">
               <div className="flex items-center gap-4 pb-5 mb-5 border-b border-theme-border-inner">
                 <svg viewBox="0 0 100 100" className="w-16 h-16 shrink-0" role="img" aria-label="Cycle day 21 of 28, luteal phase">
-                  <circle cx="50" cy="50" r="41" fill="none" stroke="#EFDFE2" strokeWidth="8" />
+                  <circle cx="50" cy="50" r="41" fill="none" stroke="#E1C1D0" strokeWidth="8" />
                   <circle
-                    cx="50" cy="50" r="41" fill="none" stroke="#C97C8B" strokeWidth="8"
+                    cx="50" cy="50" r="41" fill="none" stroke="#95617C" strokeWidth="8"
                     strokeLinecap="round" strokeDasharray="257.6" strokeDashoffset="64.4"
                     transform="rotate(-90 50 50)"
                   />
-                  <text x="50" y="47" textAnchor="middle" className="font-mono" fontSize="21" fill="#2A1F23">21</text>
-                  <text x="50" y="63" textAnchor="middle" className="font-mono" fontSize="9" fill="#A8969C" letterSpacing="1">OF 28</text>
+                  <text x="50" y="47" textAnchor="middle" className="font-mono" fontSize="21" fill="#0D2033">21</text>
+                  <text x="50" y="63" textAnchor="middle" className="font-mono" fontSize="9" fill="#716F82" letterSpacing="1">OF 28</text>
                 </svg>
                 <div>
                   <p className="font-display text-xl text-theme-accent leading-tight">Luteal phase</p>
@@ -252,10 +252,7 @@ export function Landing() {
 
       <footer className="border-t border-theme-border-inner">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 flex flex-col sm:flex-row justify-between items-center gap-5">
-          <span className="flex items-center gap-2.5">
-            <CycleMark className="w-5 h-5 text-theme-primary" />
-            <span className="font-display text-theme-text">Amani</span>
-          </span>
+          <AmaniLogo size="sm" />
           <div className="flex gap-7 text-sm text-theme-muted-text-2">
             <Link to="/privacy" className="hover:text-theme-text transition-colors">Privacy</Link>
             <Link to="/terms" className="hover:text-theme-text transition-colors">Terms</Link>

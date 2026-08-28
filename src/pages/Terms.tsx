@@ -19,7 +19,8 @@
   ============================================================================
 */
 
-import { Heart, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
 import { STRIPE_PRODUCTS } from '../stripe-config';
 
@@ -35,8 +36,7 @@ export function Terms() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16">
             <Link to="/" className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <span className="text-xl font-semibold text-theme-text">Amani</span>
+              <AmaniLogo size="sm" />
             </Link>
           </div>
         </div>

@@ -1231,7 +1231,7 @@ export function ReportView() {
           {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
               {/*
-                Deep plum, not near-black. A single #2A1F23 block dropped into an
+                Deep plum, not near-black. A single #0D2033 block dropped into an
                 otherwise warm light page reads as a copy-paste accident; the
                 accent is still high-contrast enough to carry the headline but
                 belongs to the palette, so it reads as deliberate emphasis.

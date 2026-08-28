@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
+import { AmaniLogo } from './AmaniLogo';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './Button';
-import { CycleMark } from './CycleMark';
 import {
   LayoutDashboard,
   FileText,
@@ -35,8 +35,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <NavLink to="/app" className="flex items-center gap-2.5">
-              <CycleMark className="w-6 h-6 text-theme-primary" />
-              <span className="font-display text-xl text-theme-text">Amani</span>
+              <AmaniLogo size="sm" />
             </NavLink>
             <div className="flex items-center gap-1">
               {NAV_LINKS.map(({ to, label, exact }) => (
@@ -79,8 +78,7 @@ export function Layout({ children }: LayoutProps) {
       <header className="sm:hidden bg-theme-surface border-b border-theme-border-inner safe-top">
         <div className="flex items-center justify-between px-4 h-14">
           <span className="flex items-center gap-2">
-            <CycleMark className="w-5 h-5 text-theme-primary" />
-            <span className="font-display text-lg text-theme-text">Amani</span>
+            <AmaniLogo size="sm" />
           </span>
           <button
             onClick={signOut}

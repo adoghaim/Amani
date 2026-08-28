@@ -16,7 +16,7 @@ const KEY_BIOMARKERS = ['ferritin', 'vitamin d', 'vitamin_d', 'tsh', 'hba1c', 'l
 const getCategoryColor = (category: string): string => {
   const colors: Record<string, string> = {
     // Fixed order, never cycled. These five hues were validated for
-    // colour-vision separation and contrast against the #FFF8F7 ground —
+    // colour-vision separation and contrast against the #FBF7F5 ground —
     // separation comes from lightness variation as much as hue. Each always
     // renders with its text label, which is what lets the lighter supplement
     // tone sit below 3:1 legally.

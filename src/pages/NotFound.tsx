@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { CycleMark } from '../components/CycleMark';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -28,7 +28,7 @@ export function NotFound() {
   return (
     <div className="min-h-dvh bg-theme-background flex items-center justify-center px-5 safe-top safe-bottom">
       <div className="max-w-md w-full">
-        <CycleMark className="w-8 h-8 text-theme-primary mb-6" />
+        <AmaniLogo markOnly size="md" className="mb-6" />
         <p className="font-mono text-xs uppercase tracking-[0.16em] text-theme-muted-text-3 mb-3">
           Error 404
         </p>
