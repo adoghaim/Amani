@@ -14,6 +14,7 @@ import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod 
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
+import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
@@ -119,6 +120,12 @@ export function NewReport() {
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [aiRefining, setAiRefining] = useState(false);
+  /*
+    Set when the gate decided the local parse was good enough to skip the model.
+    Surfaced in the parser debugger so a skipped refinement is visible rather
+    than silent — a silent skip is indistinguishable from a broken call.
+  */
+  const [aiSkipReason, setAiSkipReason] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [isOffline, setIsOffline] = useState(false);
   const [cameraCapturing, setCameraCapturing] = useState(false);
@@ -185,6 +192,7 @@ export function NewReport() {
     setParserDebug(null);
     setDetectedLabSource('unknown');
     setAiRefining(false);
+    setAiSkipReason(null);
     setExtracting(false);
   };
 
@@ -344,7 +352,22 @@ export function NewReport() {
           if (heuristics.isWeak) {
             void startPdfOcrFallback(file, runId);
           } else {
-            void triggerAiRefinement(text, runId);
+            /*
+              The parser is the primary path and the model is the safety net, so
+              only pay for `extract-biomarkers` when the local parse actually
+              shows a problem. decideAiRefinement fails open: anything ambiguous
+              still refines.
+            */
+            const decision = decideAiRefinement({
+              items: localItems,
+              heuristics,
+              detectedSource: debugOut.detectedSource,
+            });
+            if (decision.refine) {
+              void triggerAiRefinement(text, runId);
+            } else {
+              setAiSkipReason(decision.reason);
+            }
           }
         }
       } else if (file.type.startsWith('image/')) {
@@ -1355,6 +1378,13 @@ export function NewReport() {
               <div className="flex items-center gap-2 bg-theme-info-bg border border-theme-info-border text-theme-info px-4 py-2.5 rounded-lg mb-4 text-sm">
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                 <span>AI is refining extracted values in the background — results will update automatically.</span>
+              </div>
+            )}
+
+            {/* Dev-only: a skipped refinement should be visible, not silent. */}
+            {import.meta.env.DEV && aiSkipReason && (
+              <div className="flex items-center gap-2 bg-theme-neutral-50 border border-theme-neutral-200 text-theme-neutral-600 px-4 py-2.5 rounded-lg mb-4 text-xs font-mono">
+                <span>AI refinement skipped — {aiSkipReason}</span>
               </div>
             )}
 
