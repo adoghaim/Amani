@@ -145,13 +145,13 @@ export function IapPaywall({ onEntitled }: IapPaywallProps) {
       )}
 
       {state.phase === 'error' && (
-        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+        <div className="flex items-start gap-3 p-4 bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg">
+          <AlertCircle className="w-5 h-5 text-theme-flag-low mt-0.5 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-sm text-red-700">{state.message}</p>
+            <p className="text-sm text-theme-flag-low">{state.message}</p>
             <button
               onClick={load}
-              className="mt-2 text-sm font-medium text-red-700 underline underline-offset-2"
+              className="mt-2 text-sm font-medium text-theme-flag-low underline underline-offset-2"
             >
               Try again
             </button>

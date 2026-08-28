@@ -120,7 +120,7 @@ export function SymptomLogModal({
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               placeholder="Anything else worth noting..."
-              className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-4"
+              className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
             />
           </div>
         </div>

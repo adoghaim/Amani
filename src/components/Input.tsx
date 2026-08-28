@@ -31,7 +31,7 @@ export function Input({
         // py-2 gave ~36px, which is a miss on a phone more often than not.
         className={[
           'block w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border bg-theme-surface',
-          'text-theme-text placeholder:text-theme-muted-text-4',
+          'text-theme-text placeholder:text-theme-muted-text-3',
           'transition-shadow duration-150',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:border-theme-primary',
           numeric ? 'font-mono tabular-nums' : '',

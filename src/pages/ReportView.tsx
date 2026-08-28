@@ -1155,17 +1155,17 @@ export function ReportView() {
 
           {/* ── Daily AI limit reached ──────────────────────────── */}
           {rateLimitNotice && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+            <div className="rounded-2xl border border-theme-flag-watch-border bg-theme-flag-watch-bg p-5 space-y-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-amber-900">Daily analysis limit reached</p>
-                  <p className="text-xs text-amber-700 mt-1 leading-relaxed">{rateLimitNotice}</p>
+                  <p className="text-sm font-semibold text-theme-flag-watch">Daily analysis limit reached</p>
+                  <p className="text-xs text-theme-flag-watch mt-1 leading-relaxed">{rateLimitNotice}</p>
                 </div>
               </div>
               {(biomarkers.length > 0 || reportAnalytes.length > 0) && (
-                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-100/60 rounded-lg px-3 py-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                <div className="flex items-center gap-2 text-xs text-theme-flag-watch bg-theme-flag-watch-bg/60 rounded-lg px-3 py-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-theme-flag-ok flex-shrink-0" />
                   <span>{reportAnalytes.length || biomarkers.length} lab values detected. Your data is saved and intact below.</span>
                 </div>
               )}
@@ -1173,7 +1173,7 @@ export function ReportView() {
                 <button
                   onClick={handleRegenerate}
                   disabled={regenerating}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-60"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-theme-warning text-white text-sm font-semibold rounded-xl hover:bg-theme-warning-dark transition-colors disabled:opacity-60"
                 >
                   <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
                   {regenerating ? 'Retrying...' : 'Try again'}
@@ -1238,8 +1238,8 @@ export function ReportView() {
               */}
               <div className="bg-theme-accent px-6 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
-                  <Sparkles className="w-4 h-4 text-theme-primary-light" />
-                  <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani analysis</span>
+                  <Sparkles className="w-4 h-4 text-theme-primary" />
+                  <span className="text-xs font-medium text-theme-muted-text-3 uppercase tracking-widest">Amani analysis</span>
                   {insightSummary && (
                     <div className="ml-auto">
                       <ConfidenceBadge confidence={insightSummary.confidence} />
@@ -1826,7 +1826,7 @@ export function ReportView() {
           {/* ── H. Disclaimer ───────────────────────────────────── */}
           {interpretation && (
             <div className="flex items-start gap-3 px-4 py-4">
-              <Info className="w-3.5 h-3.5 text-theme-neutral-300 flex-shrink-0 mt-0.5" />
+              <Info className="w-3.5 h-3.5 text-theme-neutral-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-muted-text-3 leading-relaxed italic">{interpretation.disclaimer}</p>
             </div>
           )}

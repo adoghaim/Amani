@@ -53,21 +53,21 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-5 h-5 text-theme-primary-light" />
+                <Sparkles className="w-5 h-5 text-theme-primary" />
                 <h2 className="text-lg text-white">Your health story</h2>
               </div>
               {reportDates ? (
-                <p className="text-theme-muted-text-5 text-xs">
+                <p className="text-theme-muted-text-3 text-xs">
                   Comparing {formatDate(reportDates.previous)} → {formatDate(reportDates.current)}
-                  <span className="ml-1 text-theme-muted-text-4">({reportDates.days_between} days)</span>
+                  <span className="ml-1 text-theme-muted-text-3">({reportDates.days_between} days)</span>
                 </p>
               ) : (
-                <p className="text-theme-muted-text-5 text-xs">Comparing your two most recent reports</p>
+                <p className="text-theme-muted-text-3 text-xs">Comparing your two most recent reports</p>
               )}
             </div>
             <button
               onClick={onClose}
-              className="text-theme-muted-text-5 hover:text-white transition-colors ml-4 flex-shrink-0"
+              className="text-theme-muted-text-3 hover:text-white transition-colors ml-4 flex-shrink-0"
             >
               <X className="w-5 h-5" />
             </button>

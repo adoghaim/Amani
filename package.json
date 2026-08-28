@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "cap:sync": "BUILD_TARGET=native vite build && npx cap sync",
     "preview:shots": "node tools/preview/shoot.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "validate:contrast": "node tools/contrast/validate.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

@@ -1443,7 +1443,7 @@ export function NewReport() {
               <div className="relative">
                 <div className="w-20 h-20 border-4 border-theme-flag-ok-border border-t-teal-600 rounded-full animate-spin" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <CheckCircle className={`w-10 h-10 transition-all duration-1000 ${submitStep === 'complete' ? 'text-theme-flag-ok opacity-100 scale-100' : 'text-theme-neutral-200 opacity-0 scale-50'}`} />
+                  <CheckCircle className={`w-10 h-10 transition-all duration-1000 ${submitStep === 'complete' ? 'text-theme-flag-ok opacity-100 scale-100' : 'text-theme-neutral-500 opacity-0 scale-50'}`} />
                 </div>
               </div>
 

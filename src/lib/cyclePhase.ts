@@ -17,7 +17,7 @@ export const PHASE_STYLE: Record<CyclePhase | 'unknown', { arc: string; text: st
   pregnancy_t1: { arc: 'text-theme-phase-follicular', text: 'text-theme-phase-follicular', surface: 'bg-theme-phase-follicular-bg', note: 'First trimester. Many ranges shift in pregnancy.' },
   pregnancy_t2: { arc: 'text-theme-phase-ovulatory',  text: 'text-theme-phase-ovulatory',  surface: 'bg-theme-phase-ovulatory-bg',  note: 'Second trimester. Many ranges shift in pregnancy.' },
   pregnancy_t3: { arc: 'text-theme-phase-luteal',     text: 'text-theme-phase-luteal',     surface: 'bg-theme-phase-luteal-bg',     note: 'Third trimester. Many ranges shift in pregnancy.' },
-  unknown:    { arc: 'text-theme-muted-text-4',     text: 'text-theme-muted-text',       surface: 'bg-theme-surface-2',           note: 'Log a period to place your cycle.' },
+  unknown:    { arc: 'text-theme-muted-text-3',     text: 'text-theme-muted-text',       surface: 'bg-theme-surface-2',           note: 'Log a period to place your cycle.' },
 };
 
 export const PHASE_LABEL: Record<CyclePhase | 'unknown', string> = {

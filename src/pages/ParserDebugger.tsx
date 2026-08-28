@@ -100,7 +100,7 @@ function SectionHeader({ icon: Icon, title, count, subtitle }: {
   return (
     <div className="flex items-start gap-3 mb-6">
       <div className="w-9 h-9 rounded-lg bg-theme-neutral-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Icon className="w-4.5 h-4.5 text-theme-neutral-200" style={{ width: 18, height: 18 }} />
+        <Icon className="w-4.5 h-4.5 text-theme-neutral-500" style={{ width: 18, height: 18 }} />
       </div>
       <div>
         <h2 className="text-lg text-theme-neutral-900 flex items-center gap-2">
@@ -436,15 +436,15 @@ export function ParserDebugger() {
   return (
     <div className="min-h-dvh bg-theme-neutral-50 font-mono text-sm">
       {/* Top bar */}
-      <div className="bg-theme-neutral-900 text-theme-neutral-100 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg">
+      <div className="bg-theme-neutral-900 text-theme-neutral-500 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-lg">
         <div className="flex items-center gap-4">
-          <Link to={`/app/reports/${reportId}`} className="flex items-center gap-1.5 text-theme-neutral-400 hover:text-theme-neutral-200 transition-colors text-xs">
+          <Link to={`/app/reports/${reportId}`} className="flex items-center gap-1.5 text-theme-neutral-400 hover:text-theme-neutral-500 transition-colors text-xs">
             <ArrowLeft className="w-3.5 h-3.5" />Back to report
           </Link>
           <div className="w-px h-4 bg-theme-neutral-700" />
           <div className="flex items-center gap-2">
             <Bug className="w-4 h-4 text-theme-flag-watch" />
-            <span className="text-xs font-bold text-theme-neutral-200 tracking-wide uppercase">Parser debug</span>
+            <span className="text-xs font-bold text-theme-neutral-500 tracking-wide uppercase">Parser debug</span>
             {report && <span className="text-xs text-theme-neutral-400 font-sans">— {report.report_date}</span>}
           </div>
         </div>
@@ -477,18 +477,18 @@ export function ParserDebugger() {
 
       {/* Stats banner */}
       <div className="bg-theme-neutral-800 px-6 py-3 flex items-center gap-6 text-xs border-b border-theme-neutral-700">
-        <div className="text-theme-neutral-300">File: <span className="text-white">{debugRecord?.file_name ?? 'Unknown'}</span></div>
-        <div className="text-theme-neutral-300">Pages: <span className="text-white">{debugRecord?.page_count ?? '?'}</span></div>
-        <div className="text-theme-neutral-300">Lines: <span className="text-white">{debugRecord ? (debugRecord.raw_text ?? '').split('\n').length : '?'}</span></div>
+        <div className="text-theme-neutral-500">File: <span className="text-white">{debugRecord?.file_name ?? 'Unknown'}</span></div>
+        <div className="text-theme-neutral-500">Pages: <span className="text-white">{debugRecord?.page_count ?? '?'}</span></div>
+        <div className="text-theme-neutral-500">Lines: <span className="text-white">{debugRecord ? (debugRecord.raw_text ?? '').split('\n').length : '?'}</span></div>
         <div className="w-px h-4 bg-theme-neutral-600" />
-        <div className="text-theme-neutral-300">Blocks: <span className="text-white">{stats.totalBlocks}</span></div>
+        <div className="text-theme-neutral-500">Blocks: <span className="text-white">{stats.totalBlocks}</span></div>
         <div className="text-theme-flag-ok">Matched: {stats.matched}</div>
         {stats.misses > 0 && <div className="text-theme-flag-watch">Misses: {stats.misses}</div>}
         {stats.rejects > 0 && <div className="text-theme-flag-low">Rejects: {stats.rejects}</div>}
         {stats.parseErrors > 0 && <div className="text-theme-flag-low">Parse errors: {stats.parseErrors}</div>}
         {stats.suspicious > 0 && <div className="text-theme-flag-watch">Suspicious: {stats.suspicious}</div>}
         <div className="w-px h-4 bg-theme-neutral-600" />
-        <div className="text-theme-neutral-300">Stored: <span className="text-white">{stats.totalAnalytes}</span></div>
+        <div className="text-theme-neutral-500">Stored: <span className="text-white">{stats.totalAnalytes}</span></div>
         <div className="text-theme-flag-ok">Mapped: {stats.mapped}</div>
         {stats.unmapped > 0 && <div className="text-theme-flag-low">Unmapped: {stats.unmapped}</div>}
         {stats.needsReview > 0 && <div className="text-theme-flag-watch">Review: {stats.needsReview}</div>}
@@ -504,7 +504,7 @@ export function ParserDebugger() {
               className={`flex items-start gap-2.5 px-4 py-3.5 text-left transition-colors border-b border-theme-neutral-800 ${
                 activeStage === s.id
                   ? 'bg-theme-neutral-700 text-white border-l-2 border-l-amber-400'
-                  : 'text-theme-neutral-400 hover:bg-theme-neutral-800 hover:text-theme-neutral-200'
+                  : 'text-theme-neutral-400 hover:bg-theme-neutral-800 hover:text-theme-neutral-500'
               }`}
             >
               <div className="flex-shrink-0 mt-0.5">
@@ -830,17 +830,17 @@ export function ParserDebugger() {
                                   <td className="px-3 py-2">
                                     {a.is_core
                                       ? <CheckCircle className="w-3.5 h-3.5 text-theme-flag-ok" />
-                                      : <span className="text-theme-neutral-300">—</span>}
+                                      : <span className="text-theme-neutral-500">—</span>}
                                   </td>
                                   <td className="px-3 py-2">
                                     {!isExcluded
-                                      ? <span className="text-theme-neutral-300">—</span>
+                                      ? <span className="text-theme-neutral-500">—</span>
                                       : <span className="font-mono text-theme-neutral-400 italic">{excludedReason}</span>}
                                   </td>
                                   <td className="px-3 py-2">
                                     {a.needs_review
                                       ? <AlertTriangle className="w-3.5 h-3.5 text-theme-flag-watch" />
-                                      : <span className="text-theme-neutral-300">—</span>}
+                                      : <span className="text-theme-neutral-500">—</span>}
                                   </td>
                                 </tr>
                               );
@@ -971,7 +971,7 @@ export function ParserDebugger() {
                                   }`}>{status}</span>
                                 </td>
                                 <td className="px-3 py-2">
-                                  {a.is_core ? <CheckCircle className="w-3.5 h-3.5 text-theme-flag-ok" /> : <span className="text-theme-neutral-300">—</span>}
+                                  {a.is_core ? <CheckCircle className="w-3.5 h-3.5 text-theme-flag-ok" /> : <span className="text-theme-neutral-500">—</span>}
                                 </td>
                               </tr>
                             );

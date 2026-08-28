@@ -21,7 +21,7 @@ const LABEL_CONFIG: Record<ReportConfidence['label'], {
     text: 'text-white/80',
   },
   low: {
-    badge: 'bg-theme-neutral-500/20 text-theme-neutral-300 border-theme-neutral-500/30',
+    badge: 'bg-theme-neutral-500/20 text-theme-neutral-500 border-theme-neutral-500/30',
     dot: 'bg-theme-neutral-400',
     panel: 'bg-black/25 border-white/15',
     text: 'text-white/70',

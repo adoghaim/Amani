@@ -88,7 +88,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
           cards without that gap. Mono stays where it earns its keep — lab
           values, where 0/O and 1/l have to be unambiguous.
         */}
-        <p className="text-sm text-theme-muted-text-4 line-through tabular-nums">
+        <p className="text-sm text-theme-muted-text-3 line-through tabular-nums">
           {fmt(product.beforePrice)}
         </p>
         <p className="flex items-baseline gap-1.5 mt-1">

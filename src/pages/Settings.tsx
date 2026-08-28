@@ -411,21 +411,21 @@ export function Settings() {
                     </div>
 
                     {storeSubs && storeSubs.length > 0 && (
-                      <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
+                      <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-lg p-4">
                         <div className="flex items-start gap-2">
-                          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <AlertTriangle className="w-5 h-5 text-theme-flag-watch mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
-                            <h3 className="font-semibold text-amber-900 mb-1">
+                            <h3 className="font-semibold text-theme-flag-watch mb-1">
                               Your subscription will keep billing
                             </h3>
-                            <p className="text-sm text-amber-900">
+                            <p className="text-sm text-theme-flag-watch">
                               This account has an active subscription billed by{' '}
                               {storeSubs[0]?.platform === 'ios' ? 'Apple' : 'Google'}.{' '}
                               <strong>Deleting your account does not cancel it.</strong> Only you
                               can cancel it, from your store account settings — and once the
                               account is gone, this app can no longer help you find it.
                             </p>
-                            <p className="text-sm text-amber-900 mt-2">
+                            <p className="text-sm text-theme-flag-watch mt-2">
                               Cancel it first, then come back and delete.
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2">

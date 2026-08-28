@@ -50,7 +50,7 @@ export function Privacy() {
           Back to home
         </Link>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-10">
+        <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl p-5 mb-10">
           <h2 className="text-base font-semibold text-theme-text mb-1">
             Draft — pending legal review
           </h2>

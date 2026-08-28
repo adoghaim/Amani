@@ -32,11 +32,11 @@ function SpecimenRow({
     <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 items-baseline">
       <div>
         <span className="text-sm font-medium text-theme-text">{name}</span>
-        <span className="block font-mono text-[11px] text-theme-muted-text-4 mt-0.5">{range}</span>
+        <span className="block font-mono text-[11px] text-theme-muted-text-3 mt-0.5">{range}</span>
       </div>
       <div className="text-right">
         <span className="font-mono text-base text-theme-text tabular-nums">{value}</span>
-        <span className="block font-mono text-[10px] text-theme-muted-text-4">{unit}</span>
+        <span className="block font-mono text-[10px] text-theme-muted-text-3">{unit}</span>
       </div>
       <div className="col-span-2 h-1 rounded-full bg-theme-surface-2 relative overflow-hidden">
         <span
@@ -197,7 +197,7 @@ export function Landing() {
               <span className="text-4xl text-theme-text tabular-nums font-medium">$9.99</span>
               <span className="text-theme-muted-text-2 text-sm ml-1">/month</span>
             </p>
-            <p className="text-sm text-theme-muted-text-4 line-through tabular-nums mb-7">$19.99</p>
+            <p className="text-sm text-theme-muted-text-3 line-through tabular-nums mb-7">$19.99</p>
             <Link to="/signup" className="mt-auto">
               <Button variant="outline" className="w-full">Start free trial</Button>
             </Link>
@@ -212,7 +212,7 @@ export function Landing() {
               <span className="text-4xl text-theme-text tabular-nums font-medium">$99.99</span>
               <span className="text-theme-muted-text-2 text-sm ml-1">/year</span>
             </p>
-            <p className="text-sm text-theme-muted-text-4 line-through tabular-nums mb-7">$199.99</p>
+            <p className="text-sm text-theme-muted-text-3 line-through tabular-nums mb-7">$199.99</p>
             <Link to="/signup" className="mt-auto">
               <Button className="w-full">Start free trial</Button>
             </Link>

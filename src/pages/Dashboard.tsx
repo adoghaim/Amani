@@ -423,9 +423,9 @@ export function Dashboard() {
               <Link to="/app/pricing" className="block mb-5 group">
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-theme-surface border border-theme-border rounded-xl px-5 py-4 transition-colors group-hover:border-theme-primary">
                   <p className="text-sm text-theme-text">
-                    <span className="font-mono text-theme-muted-text-4 line-through mr-1.5 tabular-nums">$19.99</span>
+                    <span className="font-mono text-theme-muted-text-3 line-through mr-1.5 tabular-nums">$19.99</span>
                     <span className="font-mono tabular-nums">$9.99</span> a month, or{' '}
-                    <span className="font-mono text-theme-muted-text-4 line-through mr-1.5 tabular-nums">$199.99</span>
+                    <span className="font-mono text-theme-muted-text-3 line-through mr-1.5 tabular-nums">$199.99</span>
                     <span className="font-mono tabular-nums">$99.99</span> a year
                   </p>
                   <span className="text-sm font-medium text-theme-primary shrink-0">See pricing &rarr;</span>
@@ -523,14 +523,14 @@ export function Dashboard() {
                             {(() => {
                               const reportBiomarkers = biomarkersByReport[report.id];
                               return reportBiomarkers ? (
-                                <div className="text-xs text-theme-muted-text-4 mt-1.5">
+                                <div className="text-xs text-theme-muted-text-3 mt-1.5">
                                   {reportBiomarkers.length} biomarkers
                                 </div>
                               ) : null;
                             })()}
                           </div>
                         </div>
-                        <ArrowRight className="w-4 h-4 text-theme-muted-text-4 mt-0.5" />
+                        <ArrowRight className="w-4 h-4 text-theme-muted-text-3 mt-0.5" />
                       </div>
                     </div>
                   </Link>
@@ -596,7 +596,7 @@ export function Dashboard() {
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={4}
                   placeholder="Write a note..."
-                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-4"
+                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
                 />
               </div>
             </div>

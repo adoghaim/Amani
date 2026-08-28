@@ -43,7 +43,7 @@ export function Contact() {
           Back to home
         </Link>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-10">
+        <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl p-5 mb-10">
           <h2 className="text-base font-semibold text-theme-text mb-1">
             Draft — pending review
           </h2>
@@ -134,9 +134,9 @@ export function Contact() {
             </p>
           </div>
 
-          <div className="bg-rose-50 border border-rose-200 rounded-xl p-6">
+          <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-xl p-6">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-theme-flag-low shrink-0 mt-0.5" />
               <div>
                 <h2 className="text-lg font-semibold text-theme-text mb-1">
                   We cannot help with a medical emergency

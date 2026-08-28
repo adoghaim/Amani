@@ -345,13 +345,13 @@ export function Reports() {
           <>
             <div className="flex flex-col sm:flex-row gap-3 mb-5">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted-text-4" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted-text-3" />
                 <input
                   type="text"
                   placeholder="Search by date or cycle phase..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-theme-border rounded-xl bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text placeholder:text-theme-muted-text-4"
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-theme-border rounded-xl bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text placeholder:text-theme-muted-text-3"
                 />
               </div>
               <select
@@ -420,9 +420,9 @@ export function Reports() {
                               {formatDate(report.report_date)}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs text-theme-muted-text-4">Uploaded {timeAgo(report.upload_date)}</span>
+                              <span className="text-xs text-theme-muted-text-3">Uploaded {timeAgo(report.upload_date)}</span>
                               {report.lab_source && report.lab_source !== 'unknown' && (
-                                <span className="inline-flex items-center gap-0.5 text-[11px] text-theme-muted-text-4">
+                                <span className="inline-flex items-center gap-0.5 text-[11px] text-theme-muted-text-3">
                                   <FlaskConical className="w-2.5 h-2.5" />
                                   {report.lab_source === 'quest' ? 'Quest' : 'Labcorp'}
                                 </span>
@@ -435,7 +435,7 @@ export function Reports() {
                           <div className="text-sm text-theme-text-body">
                             {timeAgo(report.upload_date)}
                           </div>
-                          <div className="text-xs text-theme-muted-text-4 mt-0.5">
+                          <div className="text-xs text-theme-muted-text-3 mt-0.5">
                             {formatDateShort(report.upload_date.slice(0, 10))}
                           </div>
                         </Link>
@@ -447,7 +447,7 @@ export function Reports() {
                         <Link to={`/app/reports/${report.id}`} className="hidden sm:block">
                           <PhaseBadge phase={report.estimated_cycle_phase} />
                           {(!report.estimated_cycle_phase || report.estimated_cycle_phase === 'unknown') && (
-                            <span className="text-xs text-theme-muted-text-4">—</span>
+                            <span className="text-xs text-theme-muted-text-3">—</span>
                           )}
                         </Link>
 
@@ -456,7 +456,7 @@ export function Reports() {
                             {markerCount > 0 ? markerCount : '—'}
                           </span>
                           {markerCount > 0 && (
-                            <span className="text-xs text-theme-muted-text-4">items</span>
+                            <span className="text-xs text-theme-muted-text-3">items</span>
                           )}
                         </Link>
 
@@ -469,14 +469,14 @@ export function Reports() {
                             <Link
                               to={`/app/reports/${report.id}`}
                               aria-label="View report"
-                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-hover text-theme-muted-text-4 hover:text-theme-primary transition-colors"
+                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-hover text-theme-muted-text-3 hover:text-theme-primary transition-colors"
                             >
                               <ArrowRight className="w-4 h-4" />
                             </Link>
                             <button
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget(report); }}
                               aria-label="Delete report"
-                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-flag-low-bg text-theme-muted-text-4 hover:text-theme-danger transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-flag-low-bg text-theme-muted-text-3 hover:text-theme-danger transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -488,7 +488,7 @@ export function Reports() {
                 </div>
 
                 <div className="px-5 py-3 border-t border-theme-border-inner bg-theme-background-tint">
-                  <p className="text-xs text-theme-muted-text-4">
+                  <p className="text-xs text-theme-muted-text-3">
                     Showing {filtered.length} of {reports.length} report{reports.length !== 1 ? 's' : ''}
                   </p>
                 </div>

@@ -58,7 +58,7 @@ export function CycleDial({
       </text>
       <text
         x="50" y="63" textAnchor="middle"
-        className="fill-theme-muted-text-4 font-mono"
+        className="fill-theme-muted-text-3 font-mono"
         fontSize="8.5" letterSpacing="1"
       >
         OF {safeLength}
