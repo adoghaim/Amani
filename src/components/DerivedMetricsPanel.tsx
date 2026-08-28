@@ -29,10 +29,10 @@ const METRIC_META: Record<string, { label: string; description: string; optimalL
 };
 
 function getStatusColor(value: number, low: number, high: number) {
-  if (value >= low && value <= high) return { dot: 'bg-green-400', text: 'text-green-700', badge: 'bg-green-50 border-green-200', label: 'Optimal' };
+  if (value >= low && value <= high) return { dot: 'bg-theme-flag-ok', text: 'text-theme-flag-ok', badge: 'bg-theme-flag-ok-bg border-theme-flag-ok-border', label: 'Optimal' };
   const pctOutside = Math.abs(value > high ? (value - high) / high : (low - value) / (low || 1));
-  if (pctOutside < 0.3) return { dot: 'bg-amber-400', text: 'text-amber-700', badge: 'bg-amber-50 border-amber-200', label: 'Borderline' };
-  return { dot: 'bg-orange-400', text: 'text-orange-700', badge: 'bg-orange-50 border-orange-200', label: 'Outside optimal' };
+  if (pctOutside < 0.3) return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Borderline' };
+  return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Outside optimal' };
 }
 
 interface Props {
@@ -43,10 +43,10 @@ export function DerivedMetricsPanel({ metrics }: Props) {
   if (metrics.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E9D6DA] p-6">
+    <div className="bg-theme-surface rounded-2xl border border-theme-border p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-[#2A1F23]">Derived Metrics</h2>
-        <p className="text-sm text-[#7A6570] mt-1">
+        <h2 className="text-lg text-theme-text">Derived metrics</h2>
+        <p className="text-sm text-theme-muted-text-2 mt-1">
           Calculated from combinations of your biomarker values for deeper insight.
         </p>
       </div>
@@ -62,17 +62,17 @@ export function DerivedMetricsPanel({ metrics }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <div className={`w-2 h-2 rounded-full shrink-0 ${status.dot}`} />
-                    <h3 className="text-sm font-semibold text-[#2A1F23]">{meta.label}</h3>
+                    <h3 className="text-sm text-theme-text">{meta.label}</h3>
                   </div>
-                  <p className="text-xs text-[#7A6570] mb-3">{meta.description}</p>
-                  <p className="text-sm text-[#2A1F23]">{metric.interpretation}</p>
+                  <p className="text-xs text-theme-muted-text-2 mb-3">{meta.description}</p>
+                  <p className="text-sm text-theme-text">{metric.interpretation}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-2xl font-bold text-[#2A1F23]">
+                  <div className="text-2xl font-bold text-theme-text">
                     {metric.value}{meta.unit}
                   </div>
                   <div className={`text-xs font-medium mt-1 ${status.text}`}>{status.label}</div>
-                  <div className="text-xs text-[#9A8A90] mt-0.5">
+                  <div className="text-xs text-theme-muted-text-3 mt-0.5">
                     Optimal: {meta.optimalLow}–{meta.optimalHigh}{meta.unit}
                   </div>
                 </div>
@@ -81,7 +81,7 @@ export function DerivedMetricsPanel({ metrics }: Props) {
           );
         })}
       </div>
-      <p className="text-xs text-[#9A8A90] mt-4 italic">
+      <p className="text-xs text-theme-muted-text-3 mt-4 italic">
         Derived metrics are educational calculations and not diagnostic values. Always discuss with your healthcare provider.
       </p>
     </div>

@@ -87,46 +87,46 @@ export function PeriodLogModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9D6DA]">
-          <h2 className="text-base font-semibold text-[#2A1F23]">{title}</h2>
+      <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
+          <h2 className="text-base text-theme-text">{title}</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F6ECEB] transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
           >
-            <X className="w-4 h-4 text-[#6B5B60]" />
+            <X className="w-4 h-4 text-theme-muted-text" />
           </button>
         </div>
 
         <div className="px-5 py-4 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">Start date</label>
+            <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Start date</label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               max={todayKey}
               disabled={mode === 'end'}
-              className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23] disabled:bg-[#F6ECEB] disabled:text-[#6B5B60]"
+              className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text disabled:bg-theme-surface-2 disabled:text-theme-muted-text"
             />
           </div>
 
           {(mode === 'end' || mode === 'edit') && (
             <div>
-              <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">End date</label>
+              <label className="block text-xs font-medium text-theme-muted-text mb-1.5">End date</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 min={startDate}
                 max={todayKey}
-                className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23]"
+                className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-[#6B5B60] mb-2">Flow intensity</label>
+            <label className="block text-xs font-medium text-theme-muted-text mb-2">Flow intensity</label>
             <div className="grid grid-cols-2 gap-2">
               {FLOW_OPTIONS.map(({ key, label, desc }) => (
                 <button
@@ -134,8 +134,8 @@ export function PeriodLogModal({
                   onClick={() => setFlow(flow === key ? null : key)}
                   className={`flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all duration-150 ${
                     flow === key
-                      ? 'bg-rose-50 border-rose-400 text-rose-700'
-                      : 'border-[#E9D6DA] text-[#6B5B60] hover:border-[#C97C8B] hover:bg-[#FFF8F7]'
+                      ? 'bg-theme-flag-low-bg border-theme-flag-low-border text-theme-flag-low'
+                      : 'border-theme-border text-theme-muted-text hover:border-theme-primary hover:bg-theme-background'
                   }`}
                 >
                   <span className="text-sm font-medium">{label}</span>
@@ -146,7 +146,7 @@ export function PeriodLogModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">
+            <label className="block text-xs font-medium text-theme-muted-text mb-1.5">
               Notes <span className="font-normal">(optional)</span>
             </label>
             <textarea
@@ -154,7 +154,7 @@ export function PeriodLogModal({
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="Any notes about this period..."
-              className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23] resize-none placeholder:text-[#A8969C]"
+              className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
             />
           </div>
         </div>
@@ -163,13 +163,13 @@ export function PeriodLogModal({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 py-2.5 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors disabled:opacity-50"
+            className="flex-1 py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 bg-[#F6ECEB] text-[#6B5B60] text-sm font-medium rounded-xl hover:bg-[#EED9D9] transition-colors"
+            className="flex-1 py-2.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl hover:bg-theme-surface-hover transition-colors"
           >
             Cancel
           </button>

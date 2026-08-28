@@ -22,7 +22,8 @@
   ============================================================================
 */
 
-import { Heart, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
 
 const LAST_UPDATED = '23 August 2026';
@@ -34,8 +35,7 @@ export function Privacy() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16">
             <Link to="/" className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <span className="text-xl font-semibold text-theme-text">Amani</span>
+              <AmaniLogo size="sm" />
             </Link>
           </div>
         </div>
@@ -50,7 +50,7 @@ export function Privacy() {
           Back to home
         </Link>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-10">
+        <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl p-5 mb-10">
           <h2 className="text-base font-semibold text-theme-text mb-1">
             Draft — pending legal review
           </h2>

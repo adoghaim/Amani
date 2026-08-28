@@ -14,19 +14,19 @@ interface ChipTone {
 
 const CHIP_TONES: Record<'food' | 'topic' | 'track', ChipTone> = {
   food: {
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    border: 'border-emerald-100',
+    bg: 'bg-theme-flag-ok-bg',
+    text: 'text-theme-flag-ok',
+    border: 'border-theme-flag-ok-border',
   },
   topic: {
-    bg: 'bg-violet-50',
-    text: 'text-violet-700',
-    border: 'border-violet-100',
+    bg: 'bg-theme-cat-sleep',
+    text: 'text-theme-cat-sleep',
+    border: 'border-theme-cat-sleep',
   },
   track: {
-    bg: 'bg-sky-50',
-    text: 'text-sky-700',
-    border: 'border-sky-100',
+    bg: 'bg-theme-info-bg',
+    text: 'text-theme-info',
+    border: 'border-theme-info-border',
   },
 };
 
@@ -74,7 +74,7 @@ export function GuidanceCards({ cards }: GuidanceCardsProps) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
         <LayoutGrid className="w-3.5 h-3.5 text-theme-muted-text-2" />
-        <h2 className="text-sm font-semibold text-theme-text">Support Plan</h2>
+        <h2 className="text-sm text-theme-text">Support plan</h2>
       </div>
       <p className="text-xs text-theme-muted-text-3 px-1">
         Practical food, tracking, and discussion topics based on this report
@@ -95,7 +95,7 @@ export function GuidanceCards({ cards }: GuidanceCardsProps) {
                 className="w-full flex items-start gap-3 text-left"
               >
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-theme-text leading-snug">
+                  <h3 className="text-sm text-theme-text leading-snug">
                     {card.title}
                   </h3>
                   <p className="text-xs text-theme-muted-text-2 leading-relaxed mt-1.5">

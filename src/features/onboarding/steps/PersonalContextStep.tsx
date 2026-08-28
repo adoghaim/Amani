@@ -34,7 +34,7 @@ export function PersonalContextStep({
 
   return (
     <div className="flex flex-col">
-      <h1 className="text-xl sm:text-2xl font-bold text-theme-text mb-1">
+      <h1 className="text-xl sm:text-2xl text-theme-text mb-1">
         Tell Amani a little about you
       </h1>
       <p className="text-sm text-theme-muted-text mb-5">

@@ -23,10 +23,10 @@ export const STATUS_PILL_CONFIG: Record<StatusPillVariant, {
   border: string;
   dot: string;
 }> = {
-  optimal:       { label: 'Optimal',          bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  normal:        { label: 'Normal',            bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200',   dot: 'bg-blue-400' },
-  borderline_low:  { label: 'Borderline Low',  bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',  dot: 'bg-amber-400' },
-  borderline_high: { label: 'Borderline High', bg: 'bg-orange-50',  text: 'text-orange-700',  border: 'border-orange-200', dot: 'bg-orange-400' },
-  out_of_range:  { label: 'Outside Optimal',   bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-200',    dot: 'bg-red-500' },
-  unknown:       { label: 'No Range',          bg: 'bg-gray-100',   text: 'text-gray-600',    border: 'border-gray-200',   dot: 'bg-gray-400' },
+  optimal:       { label: 'Optimal',          bg: 'bg-theme-flag-ok-bg', text: 'text-theme-flag-ok', border: 'border-theme-flag-ok-border', dot: 'bg-theme-flag-ok' },
+  normal:        { label: 'Normal',            bg: 'bg-theme-info-bg',    text: 'text-theme-info',    border: 'border-theme-info-border',   dot: 'bg-theme-info' },
+  borderline_low:  { label: 'Borderline Low',  bg: 'bg-theme-flag-watch-bg',   text: 'text-theme-flag-watch',   border: 'border-theme-flag-watch-border',  dot: 'bg-theme-flag-watch' },
+  borderline_high: { label: 'Borderline High', bg: 'bg-theme-flag-watch-bg',  text: 'text-theme-flag-watch',  border: 'border-theme-flag-watch-border', dot: 'bg-theme-flag-watch' },
+  out_of_range:  { label: 'Outside Optimal',   bg: 'bg-theme-flag-low-bg',     text: 'text-theme-flag-low',     border: 'border-theme-flag-low-border',    dot: 'bg-theme-flag-low' },
+  unknown:       { label: 'No Range',          bg: 'bg-theme-neutral-100',   text: 'text-theme-neutral-600',    border: 'border-theme-neutral-200',   dot: 'bg-theme-neutral-400' },
 };

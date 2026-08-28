@@ -61,56 +61,54 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
   const intervalLabel = product.interval === 'year' ? '/yr' : '/mo'
 
   return (
-    <div className={`relative rounded-2xl border-2 ${isPopular ? 'border-theme-primary shadow-xl' : 'border-theme-border shadow-sm'} bg-theme-surface p-8 flex flex-col`}>
-      <div className="absolute -top-3 left-6">
-        <span className="bg-theme-primary text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide uppercase">
-          Founders Launch
-        </span>
-      </div>
-
+    <div
+      className={[
+        'relative rounded-2xl bg-theme-surface p-7 flex flex-col',
+        // Emphasis on the recommended tier comes from border weight and the
+        // filled CTA, not from a taller card — matched heights let the two
+        // prices sit on the same line and stay comparable.
+        isPopular ? 'border-2 border-theme-primary' : 'border border-theme-border',
+      ].join(' ')}
+    >
+      {/* One badge, on one card. It was on both, which emphasised nothing. */}
       {isPopular && (
-        <div className="absolute -top-3 right-6">
-          <span className="bg-theme-text text-white text-xs font-semibold px-3 py-1 rounded-full tracking-wide">
-            Best Value
-          </span>
-        </div>
+        <span className="absolute -top-3 left-6 bg-theme-accent text-white font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded">
+          Best value
+        </span>
       )}
 
-      <div className="mt-4">
-        <h3 className="text-lg font-semibold text-theme-text mb-1">
-          {product.name}
-        </h3>
-        <p className="text-sm text-theme-muted-text mb-6">
-          {product.description}
+      <h3 className="text-lg mb-1">{product.name}</h3>
+      <p className="text-sm text-theme-muted-text-2 mb-7">{product.description}</p>
+
+      <div className="mb-7">
+        {/*
+          Tabular figures, but NOT the mono face. Plex Mono gives the decimal
+          point a full monospace cell, so at display size "$99.99" reads as
+          "$99 . 99". Tabular sans keeps the digits aligned between the two
+          cards without that gap. Mono stays where it earns its keep — lab
+          values, where 0/O and 1/l have to be unambiguous.
+        */}
+        <p className="text-sm text-theme-muted-text-3 line-through tabular-nums">
+          {fmt(product.beforePrice)}
         </p>
+        <p className="flex items-baseline gap-1.5 mt-1">
+          <span className="text-4xl text-theme-text tabular-nums font-medium">{fmt(product.price)}</span>
+          <span className="text-theme-muted-text-2 text-sm">{intervalLabel}</span>
+        </p>
+      </div>
 
-        <div className="mb-8">
-          <div className="flex items-baseline gap-2">
-            <span className="text-sm text-theme-muted-text line-through">
-              {fmt(product.beforePrice)}
-            </span>
-          </div>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-4xl font-bold text-theme-text">
-              {fmt(product.price)}
-            </span>
-            <span className="text-theme-muted-text text-sm">
-              {intervalLabel}
-            </span>
-          </div>
-        </div>
-
+      <div className="mt-auto">
         <Button
           onClick={handleSubscribe}
           loading={loading}
           variant={isPopular ? 'primary' : 'outline'}
           className="w-full"
         >
-          Get Started
+          Start free trial
         </Button>
 
         {error && (
-          <p className="mt-3 text-sm text-theme-danger text-center">{error}</p>
+          <p className="mt-3 text-sm text-theme-flag-low text-center">{error}</p>
         )}
       </div>
     </div>

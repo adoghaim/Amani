@@ -83,19 +83,19 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
     directionTone === 'worsen' ? ArrowUpRight :
     Minus;
   const directionClasses =
-    directionTone === 'improve' ? 'text-emerald-700 bg-emerald-100 border-emerald-200' :
-    directionTone === 'worsen' ? 'text-amber-700 bg-amber-100 border-amber-200' :
-    'text-gray-700 bg-gray-100 border-gray-200';
+    directionTone === 'improve' ? 'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border' :
+    directionTone === 'worsen' ? 'text-theme-flag-watch bg-theme-flag-watch-bg border-theme-flag-watch-border' :
+    'text-theme-neutral-700 bg-theme-neutral-100 border-theme-neutral-200';
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-red-200 bg-red-50">
-      <div className="px-5 pt-4 pb-3 border-b border-red-100 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
-          <AlertTriangle className="w-4 h-4 text-red-600" />
+    <div className="rounded-2xl overflow-hidden border border-theme-flag-low-border bg-theme-flag-low-bg">
+      <div className="px-5 pt-4 pb-3 border-b border-theme-flag-low-border flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-lg bg-theme-flag-low-bg flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-4 h-4 text-theme-flag-low" />
         </div>
-        <h2 className="text-sm font-bold text-red-900">Primary Finding</h2>
+        <h2 className="text-sm text-theme-flag-low">Primary finding</h2>
         {isExtreme && (
-          <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-red-700 bg-red-100 border border-red-300 px-2.5 py-1 rounded-full">
+          <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-theme-flag-low bg-theme-flag-low-bg border border-theme-flag-low-border px-2.5 py-1 rounded-full">
             {extremeLabel}
           </span>
         )}
@@ -104,23 +104,23 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
       <div className="px-5 py-4">
         <div className="flex items-start gap-4">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-red-900 mb-1">{finding.displayName}</p>
-            <p className="text-sm text-red-800 leading-relaxed">{explanation}</p>
+            <p className="text-sm font-semibold text-theme-flag-low mb-1">{finding.displayName}</p>
+            <p className="text-sm text-theme-flag-low leading-relaxed">{explanation}</p>
           </div>
 
           <div className="flex-shrink-0 text-right min-w-[80px]">
             <div className="flex items-center gap-1 justify-end mb-0.5">
               {finding.direction === 'low'
-                ? <TrendingDown className="w-4 h-4 text-red-500" />
-                : <TrendingUp className="w-4 h-4 text-red-500" />
+                ? <TrendingDown className="w-4 h-4 text-theme-flag-low" />
+                : <TrendingUp className="w-4 h-4 text-theme-flag-low" />
               }
-              <span className={`tabular-nums leading-none font-bold text-red-900 ${isExtreme ? 'text-3xl' : 'text-2xl'}`}>
+              <span className={`tabular-nums leading-none font-bold text-theme-flag-low ${isExtreme ? 'text-3xl' : 'text-2xl'}`}>
                 {finding.value}
               </span>
             </div>
-            <span className="text-xs text-red-600 font-medium">{finding.unit}</span>
+            <span className="text-xs text-theme-flag-low font-medium">{finding.unit}</span>
             {finding.rangeLabel && (
-              <p className={`text-red-500 mt-1 font-medium ${isExtreme ? 'text-[11px]' : 'text-[10px]'}`}>
+              <p className={`text-theme-flag-low mt-1 font-medium ${isExtreme ? 'text-[11px]' : 'text-[10px]'}`}>
                 Range: {finding.rangeLabel}
               </p>
             )}
@@ -128,23 +128,23 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
         </div>
 
         {hasPrior && delta && (
-          <div className="mt-4 pt-4 border-t border-red-200/70 grid grid-cols-3 gap-3">
+          <div className="mt-4 pt-4 border-t border-theme-flag-low-border/70 grid grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] font-semibold text-red-600/80 uppercase tracking-wider">Current</p>
-              <p className="text-sm font-bold text-red-900 mt-0.5 tabular-nums">
+              <p className="text-[10px] font-semibold text-theme-flag-low/80 uppercase tracking-wider">Current</p>
+              <p className="text-sm font-bold text-theme-flag-low mt-0.5 tabular-nums">
                 {delta.currentValue}
-                <span className="text-xs text-red-500 font-normal ml-1">{delta.unit}</span>
+                <span className="text-xs text-theme-flag-low font-normal ml-1">{delta.unit}</span>
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold text-red-600/80 uppercase tracking-wider">Previous</p>
-              <p className="text-sm font-bold text-red-900 mt-0.5 tabular-nums">
+              <p className="text-[10px] font-semibold text-theme-flag-low/80 uppercase tracking-wider">Previous</p>
+              <p className="text-sm font-bold text-theme-flag-low mt-0.5 tabular-nums">
                 {delta.previousValue}
-                <span className="text-xs text-red-500 font-normal ml-1">{delta.unit}</span>
+                <span className="text-xs text-theme-flag-low font-normal ml-1">{delta.unit}</span>
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold text-red-600/80 uppercase tracking-wider">Direction</p>
+              <p className="text-[10px] font-semibold text-theme-flag-low/80 uppercase tracking-wider">Direction</p>
               <span className={`inline-flex items-center gap-1 mt-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${directionClasses}`}>
                 <DirectionIcon className="w-3 h-3" />
                 {directionLabel || 'No change data'}
@@ -154,18 +154,18 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
         )}
 
         {biomarkerExplanation && (
-          <div className="mt-4 pt-4 border-t border-red-200/70">
+          <div className="mt-4 pt-4 border-t border-theme-flag-low-border/70">
             <button
               type="button"
               onClick={() => setExplanationOpen(o => !o)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold text-red-700 hover:text-red-900 transition-colors"
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-theme-flag-low hover:text-theme-flag-low transition-colors"
             >
               <BookOpen className="w-3 h-3" />
               <span>What this marker means</span>
               {explanationOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
             </button>
             {explanationOpen && (
-              <p className="mt-2 text-xs text-red-800/90 leading-relaxed">{biomarkerExplanation}</p>
+              <p className="mt-2 text-xs text-theme-flag-low/90 leading-relaxed">{biomarkerExplanation}</p>
             )}
           </div>
         )}

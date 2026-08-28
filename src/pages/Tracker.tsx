@@ -18,7 +18,6 @@ import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
 import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
-import { CycleSummary } from '../components/CycleSummary';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { InsightsModal } from '../components/InsightsModal';
@@ -449,29 +448,29 @@ export function Tracker() {
       <div className="max-w-5xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#2A1F23]">Tracker</h1>
-            <p className="text-sm text-[#6B5B60] mt-0.5">
-              Your cycle, labs, and interventions in one view
+            <h1 className="text-3xl leading-tight">Tracker</h1>
+            <p className="text-sm text-theme-muted-text-2 mt-1.5">
+              Your cycle, panels and interventions on one timeline.
             </p>
           </div>
           <button
             onClick={() => navigate('/app/settings')}
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#E9D6DA] hover:bg-[#F6ECEB] transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-xl border border-theme-border hover:bg-theme-surface-2 transition-colors"
             title="Notification preferences"
           >
-            <Bell className="w-4 h-4 text-[#6B5B60]" />
+            <Bell className="w-4 h-4 text-theme-muted-text" />
           </button>
         </div>
 
-        <div className="flex gap-1 mb-6 p-1 bg-[#F6ECEB] rounded-xl">
+        <div className="flex gap-1 mb-6 p-1 bg-theme-surface-2 rounded-xl">
           {(['tracker', 'labs', 'interventions'] as ActiveTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2 text-sm font-medium rounded-lg capitalize transition-all duration-150 ${
                 activeTab === tab
-                  ? 'bg-white text-[#2A1F23] shadow-sm'
-                  : 'text-[#6B5B60] hover:text-[#2A1F23]'
+                  ? 'bg-theme-surface text-theme-text shadow-sm'
+                  : 'text-theme-muted-text hover:text-theme-text'
               }`}
             >
               {tab}
@@ -486,6 +485,8 @@ export function Tracker() {
               lastReport={lastReport}
               activeInterventions={activeInterventions}
               lastPeriodLog={lastPeriodLog}
+              periodLogs={periodLogs}
+              symptomLogsThisCycle={symptomLogsThisCycle}
               onLogPeriod={openStartPeriod}
               onAddSymptom={openAddSymptom}
               onUploadLabs={() => navigate('/app/new')}
@@ -498,9 +499,9 @@ export function Tracker() {
               onMonthChange={setCalendarMonth}
             />
 
-            <div className="bg-white rounded-2xl border border-[#E9D6DA] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-[#E9D6DA]">
-                <h3 className="text-sm font-semibold text-[#2A1F23]">Quick log</h3>
+            <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-theme-border">
+                <h3 className="text-sm text-theme-text">Quick log</h3>
               </div>
               <div className="px-5 py-4">
                 <div className="flex flex-wrap gap-2">
@@ -539,26 +540,17 @@ export function Tracker() {
                 </div>
               </div>
             </div>
-
-            <CycleSummary
-              lastPeriodLog={lastPeriodLog}
-              periodLogs={periodLogs}
-              lastReport={lastReport}
-              activeInterventions={activeInterventions}
-              symptomLogsThisCycle={symptomLogsThisCycle}
-              prediction={prediction}
-            />
           </div>
         )}
 
         {activeTab === 'labs' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-base font-semibold text-[#2A1F23] mb-4">Compare Labs</h2>
+              <h2 className="text-base text-theme-text mb-4">Compare labs</h2>
               <CompareView reports={reports} biomarkersByReport={biomarkersByReport} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-[#2A1F23] mb-4">Labs Timeline</h2>
+              <h2 className="text-base text-theme-text mb-4">Labs timeline</h2>
               <LabsTimeline
                 reports={reports}
                 biomarkersByReport={biomarkersByReport}
@@ -598,19 +590,19 @@ export function Tracker() {
 
       {noteModal.open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9D6DA]">
-              <h2 className="text-base font-semibold text-[#2A1F23]">Add note</h2>
+          <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
+              <h2 className="text-base text-theme-text">Add note</h2>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F6ECEB] transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
               >
-                <FileText className="w-4 h-4 text-[#6B5B60]" />
+                <FileText className="w-4 h-4 text-theme-muted-text" />
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">Date</label>
+                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Date</label>
                 <input
                   type="date"
                   value={noteModal.defaultDate}
@@ -618,17 +610,17 @@ export function Tracker() {
                     setNoteModal((prev) => ({ ...prev, defaultDate: e.target.value }))
                   }
                   max={dateToKey(today)}
-                  className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23]"
+                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6B5B60] mb-1.5">Note</label>
+                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Note</label>
                 <textarea
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={4}
                   placeholder="Write a note..."
-                  className="w-full px-3 py-2 text-sm border border-[#E9D6DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#C97C8B]/30 focus:border-[#C97C8B] text-[#2A1F23] resize-none placeholder:text-[#A8969C]"
+                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
                 />
               </div>
             </div>
@@ -636,13 +628,13 @@ export function Tracker() {
               <button
                 onClick={handleSaveNote}
                 disabled={savingNote || !noteText.trim()}
-                className="flex-1 py-2.5 bg-[#C97C8B] text-white text-sm font-medium rounded-xl hover:bg-[#A85C6D] transition-colors disabled:opacity-50"
+                className="flex-1 py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
               >
                 {savingNote ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="flex-1 py-2.5 bg-[#F6ECEB] text-[#6B5B60] text-sm font-medium rounded-xl hover:bg-[#EED9D9] transition-colors"
+                className="flex-1 py-2.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl hover:bg-theme-surface-hover transition-colors"
               >
                 Cancel
               </button>
@@ -675,11 +667,11 @@ function QuickLogButton({
   variant: 'rose' | 'rose-light' | 'amber' | 'teal' | 'neutral';
 }) {
   const classes = {
-    rose: 'bg-rose-500 text-white hover:bg-rose-600',
-    'rose-light': 'bg-rose-100 text-rose-600 hover:bg-rose-200 border border-dashed border-rose-300',
-    amber: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200',
-    teal: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200',
-    neutral: 'bg-[#F6ECEB] text-[#6B5B60] hover:bg-[#EED9D9] border border-[#E9D6DA]',
+    rose: 'bg-theme-flag-low text-white hover:bg-theme-flag-low',
+    'rose-light': 'bg-theme-flag-low-bg text-theme-flag-low hover:bg-theme-flag-low-bg border border-dashed border-theme-flag-low-border',
+    amber: 'bg-theme-flag-watch-bg text-theme-flag-watch hover:bg-theme-flag-watch-bg border border-theme-flag-watch-border',
+    teal: 'bg-theme-flag-ok-bg text-theme-flag-ok hover:bg-theme-flag-ok-bg border border-theme-flag-ok-border',
+    neutral: 'bg-theme-surface-2 text-theme-muted-text hover:bg-theme-surface-hover border border-theme-border',
   };
 
   return (

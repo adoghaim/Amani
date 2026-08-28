@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
@@ -6,7 +7,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { Heart } from 'lucide-react';
 
 type PageState = 'loading' | 'ready' | 'request';
 
@@ -98,16 +98,13 @@ export function ResetPassword() {
 
   const logo = (
     <div className="text-center mb-8">
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <Heart className="w-8 h-8 text-theme-primary fill-theme-primary" />
-        <span className="text-2xl font-semibold text-theme-text">Amani</span>
-      </div>
+      <AmaniLogo lockup size="sm" className="mx-auto mb-4" />
     </div>
   );
 
   if (pageState === 'loading') {
     return (
-      <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
+      <div className="min-h-dvh bg-theme-background flex items-center justify-center px-4 safe-top safe-bottom">
         <div className="text-theme-muted-text">Verifying reset link...</div>
       </div>
     );
@@ -115,13 +112,13 @@ export function ResetPassword() {
 
   if (pageState === 'request') {
     return (
-      <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
+      <div className="min-h-dvh bg-theme-background flex items-center justify-center px-4 safe-top safe-bottom">
         <div className="w-full max-w-md">
           {logo}
           <Card>
             {requestSent ? (
               <div className="space-y-4">
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border text-theme-flag-ok px-4 py-3 rounded-lg text-sm">
                   Password reset email sent! Check your inbox and click the link to set a new password.
                 </div>
                 <button
@@ -135,14 +132,14 @@ export function ResetPassword() {
             ) : (
               <form onSubmit={handleRequestReset} className="space-y-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-theme-text mb-1">Reset your password</h2>
+                  <h2 className="text-xl text-theme-text mb-1">Reset your password</h2>
                   <p className="text-sm text-theme-muted-text">
                     Enter your email and we'll send you a reset link.
                   </p>
                 </div>
 
                 {requestError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg text-sm">
                     {requestError}
                   </div>
                 )}
@@ -176,22 +173,22 @@ export function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-theme-background flex items-center justify-center px-4">
+    <div className="min-h-dvh bg-theme-background flex items-center justify-center px-4 safe-top safe-bottom">
       <div className="w-full max-w-md">
         {logo}
         <Card>
           {success ? (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border text-theme-flag-ok px-4 py-3 rounded-lg text-sm">
               Password updated successfully! Redirecting to login...
             </div>
           ) : (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div>
-                <h2 className="text-xl font-semibold text-theme-text mb-1">Set new password</h2>
+                <h2 className="text-xl text-theme-text mb-1">Set new password</h2>
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
@@ -206,7 +203,7 @@ export function ResetPassword() {
               />
 
               <Input
-                label="Confirm Password"
+                label="Confirm password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

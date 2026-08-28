@@ -5,76 +5,128 @@ export default {
     extend: {
       colors: {
         theme: {
-          primary: '#C97C8B',
-          'primary-dark': '#A85C6D',
-          'primary-light': '#E8B4BD',
-          'primary-faded': '#D4A8B0',
-          accent: '#7A3E55',
-          background: '#FFF8F7',
-          'background-tint': '#fdf7f8',
-          surface: '#FFFFFF',
-          'surface-2': '#F6ECEB',
-          'surface-hover': '#EED9D9',
-          text: '#2A1F23',
-          'text-body': '#4A3A40',
-          'muted-text': '#6B5B60',
-          'muted-text-2': '#7A6570',
-          'muted-text-3': '#9A8A90',
-          'muted-text-4': '#A8969C',
-          'muted-text-5': '#c4adb2',
-          border: '#E9D6DA',
-          'border-subtle': '#e8dce0',
-          'border-inner': '#f0e6ea',
-          success: '#2F8F6B',
-          warning: '#C78A2A',
-          danger: '#B5475A',
+          /*
+            THE AMANI BRAND PALETTE — midnight navy, lunar mauve, warm ivory.
+
+            Every value below was derived in OKLCH and solved to a contrast
+            target, not picked by eye. Re-run tools/contrast/validate.mjs after
+            any change; it fails the build if a token used as text drops below
+            4.5:1 against the surface it actually sits on.
+          */
+          primary: '#95617C',            /* lunar mauve, the brand anchor */
+          'primary-dark': '#7A4963',       /* hover / pressed */
+          'primary-light': '#E1C1D0',      /* tints and fills */
+          'primary-faded': '#AD8197',      /* secondary / disabled */
+          accent: '#0D2033',             /* midnight navy */
+
+          background: '#FBF7F5',         /* warm ivory, the ground */
+          'background-tint': '#F5F0F3',
+          surface: '#FFFCFB',            /* cards sit ABOVE the ground, not below */
+          'surface-2': '#EDE5EB',
+          'surface-hover': '#E7D8E2',
 
           /*
-            Warm neutral ramp. The app carried ~1,100 usages of Tailwind's
-            `gray`, `slate` and `zinc` — all cool-biased — sitting on a warm
-            rose ground, which is what made the UI read muddy. These are the
-            same lightness steps tinted toward the rose, so they sit on the
-            background instead of fighting it. Replace gray-N with neutral-N.
+            Text ramp: navy at the dark end, drifting toward the mauve as it
+            lightens, so faint text still reads as part of the brand rather
+            than as grey. Usage audit showed ALL of these land on text-xs /
+            text-sm body copy, so every step clears 4.5:1 — 15.5, 10, 7.0,
+            5.6, 4.6 against the ground.
+
+            The old -4 (2.67:1) and -5 (2.01:1) steps were illegible and have
+            been folded into -3. That is a reduction in levels, not a
+            flattening: the five remaining steps stay perceptually distinct.
           */
-          'neutral-50':  '#FBF7F7',
-          'neutral-100': '#F4EEEE',
-          'neutral-200': '#E7DDDF',
-          'neutral-300': '#D5C7CA',
-          'neutral-400': '#A8969C',
-          'neutral-500': '#837177',
-          'neutral-600': '#665459',
-          'neutral-700': '#4A3A40',
-          'neutral-800': '#332830',
-          'neutral-900': '#2A1F23',
+          text: '#0D2033',
+          'text-body': '#323F54',
+          'muted-text': '#4D5569',
+          'muted-text-2': '#606377',
+          'muted-text-3': '#716F82',
+
+          border: '#D2C6CF',
+          'border-subtle': '#E3DBE0',
+          'border-inner': '#EDE8EB',
+
+          success: '#197F5C',
+          warning: '#986600',
+          danger: '#B94A5D',
+          'warning-dark': '#7F4E00',
+          'danger-dark': '#9E3247',
 
           /*
-            Muted semantics. A flagged biomarker should inform, not alarm —
-            someone reading a low ferritin is already anxious. These are the
-            success/warning/danger hues desaturated and darkened to stay
-            legible on the warm ground without shouting.
+            Neutral ramp, re-tinted from the old rose (hue ~340) onto the
+            brand's navy/mauve axis. It carries two roles and the split is
+            deliberate: 50-300 are surfaces and borders, 400-900 are text.
+            Only the text half needs AA, and the text half is exactly where it
+            failed before — neutral-400 had 78 text usages at 2.63:1 and
+            neutral-500 had 49 at 4.29:1.
           */
-          'flag-ok': '#2F8F6B',
-          'flag-ok-bg': '#EAF4EF',
-          'flag-watch': '#B07C25',
-          'flag-watch-bg': '#FAF2E3',
-          'flag-low': '#B5475A',
-          'flag-low-bg': '#FBEDEF',
+          'neutral-50': '#F6F3F6',
+          'neutral-100': '#EEE8ED',
+          'neutral-200': '#DAD3D8',
+          'neutral-300': '#BBB1B9',
+          'neutral-400': '#736F7C',
+          'neutral-500': '#626071',
+          'neutral-600': '#4E4F63',
+          'neutral-700': '#333B4E',
+          'neutral-800': '#202E42',
+          'neutral-900': '#0D2033',
 
           /*
-            Cycle phases. The organising idea of the redesign: results are read
-            against where someone is in their cycle, so phase needs to be a
-            first-class token rather than an ad-hoc colour at each call site.
-            Warm through the follicular rise, brightest at ovulation, deeper
-            through the luteal fall.
+            Flag states. Each foreground is solved against its OWN tinted
+            background, which is where they are actually rendered — the
+            previous set passed against the page ground and failed on the
+            tint (flag-ok 3.55, flag-watch 3.28, info 3.56).
           */
-          'phase-menstrual': '#A85C6D',
-          'phase-menstrual-bg': '#F7E7EA',
-          'phase-follicular': '#C08A6B',
-          'phase-follicular-bg': '#F9EEE6',
-          'phase-ovulatory': '#C97C8B',
-          'phase-ovulatory-bg': '#FBEEF0',
-          'phase-luteal': '#7A3E55',
-          'phase-luteal-bg': '#F4E6EA',
+          'flag-ok': '#077754',
+          'flag-ok-bg': '#E4EEE9',
+          'flag-ok-border': '#BCD6C9',
+          'flag-watch': '#905D00',
+          'flag-watch-bg': '#F3EBE1',
+          'flag-watch-border': '#DFCDB6',
+          'flag-low': '#B04356',
+          'flag-low-bg': '#F9E8EA',
+          'flag-low-border': '#EFC6CA',
+
+          /* Informational, not a status — kept distinct from the three flags. */
+          'info': '#097099',
+          'info-bg': '#E3EDF4',
+          'info-border': '#BBD3E2',
+
+          /*
+            Categorical hues for intervention types. Rendered as the LABEL TEXT
+            in LabsTimeline, not as bare chips, so 4.5:1 applies to all five —
+            the previous note claiming 2.71:1 was acceptable was wrong.
+
+            Chosen by search, not by eye: hue held within 15 deg of its
+            semantic (green still means diet) while the five contrast targets
+            are spread so the set separates by LIGHTNESS as well as hue. Hue
+            spacing alone collapses under protanopia. Worst-case OKLab dE
+            across normal/protan/deutan/tritan vision is 0.090. That is
+            slightly under the 0.10 comfort threshold, which is acceptable
+            here only because the chip always spells out the category name —
+            colour is redundant encoding (WCAG 1.4.1), never the sole cue.
+            Do not reuse these as bare colour swatches.
+          */
+          'cat-medication': '#943E5D',
+          'cat-supplement': '#643E00',
+          'cat-diet': '#5F6E08',
+          'cat-exercise': '#10779F',
+          'cat-sleep': '#4F4498',
+
+          /*
+            Cycle phases, re-derived onto the brand axis (they were all rose
+            before, hue 337-348). The narrative survives the move: lightest at
+            ovulation, deepest through the luteal fall toward the navy. All
+            four are used as text, so all four clear AA.
+          */
+          'phase-menstrual': '#8D435E',
+          'phase-menstrual-bg': '#F5E8EB',
+          'phase-follicular': '#945843',
+          'phase-follicular-bg': '#F3E9E6',
+          'phase-ovulatory': '#955276',
+          'phase-ovulatory-bg': '#F4E8ED',
+          'phase-luteal': '#414379',
+          'phase-luteal-bg': '#E9EAF4',
         },
       },
       fontFamily: {
@@ -88,12 +140,12 @@ export default {
       },
       boxShadow: {
         /*
-          Shadows tinted with the ground's hue rather than neutral black, so
+          Shadows tinted with the ground's ink rather than neutral black, so
           elevation reads as part of the surface instead of dirt on top of it.
         */
-        'theme-sm': '0 1px 2px rgba(42, 31, 35, 0.05)',
-        'theme': '0 1px 2px rgba(42, 31, 35, 0.05), 0 4px 12px -6px rgba(42, 31, 35, 0.14)',
-        'theme-lg': '0 1px 2px rgba(42, 31, 35, 0.05), 0 16px 40px -24px rgba(42, 31, 35, 0.34)',
+        'theme-sm': '0 1px 2px rgba(13, 32, 51, 0.05)',
+        'theme': '0 1px 2px rgba(13, 32, 51, 0.05), 0 4px 12px -6px rgba(13, 32, 51, 0.14)',
+        'theme-lg': '0 1px 2px rgba(13, 32, 51, 0.05), 0 16px 40px -24px rgba(13, 32, 51, 0.34)',
       },
     },
   },

@@ -102,7 +102,7 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
           <div className="bg-theme-surface-2 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
             <ArrowUp className="w-10 h-10 text-theme-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-theme-text mb-2">Your progress will appear here</h3>
+          <h3 className="text-lg text-theme-text mb-2">Your progress will appear here</h3>
           <p className="text-sm text-theme-muted-text max-w-md mx-auto">
             Once you upload another lab report, you'll be able to see how your biomarkers shift over time.
           </p>
@@ -114,7 +114,7 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="text-xl font-semibold text-theme-text mb-6">Your Progress</h3>
+        <h3 className="text-xl text-theme-text mb-6">Your progress</h3>
         <div className="grid grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-theme-text mb-2">
@@ -155,9 +155,9 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
         </div>
 
         {highlights.length > 0 && (
-          <div className="mt-6 p-5 rounded-2xl border border-theme-primary/20 bg-gradient-to-br from-theme-surface-2 to-pink-50 shadow-sm" id="biggest-changes">
+          <div className="mt-6 p-5 rounded-2xl border border-theme-primary/20 bg-gradient-to-br from-theme-surface-2 to-theme-cat-medication shadow-sm" id="biggest-changes">
             <p className="text-xs font-medium text-theme-muted-text mb-3">Here's what shifted between these labs</p>
-            <h4 className="text-base font-semibold text-theme-text mb-3">Notable Shifts</h4>
+            <h4 className="text-base font-semibold text-theme-text mb-3">Notable shifts</h4>
             <ul className="text-sm text-theme-text space-y-2 mb-4">
               {highlights.map((h, idx) => (
                 <li key={idx} className="flex items-start gap-2">

@@ -1,4 +1,5 @@
 import { Layout } from '../components/Layout';
+import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
@@ -215,9 +216,7 @@ export function Billing() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-theme-text mb-8">
-          Billing & Subscription
-        </h1>
+        <PageHeader title="Billing" description="Your plan, payment method and invoices." />
 
         <div className="space-y-6">
           <Card>
@@ -226,14 +225,14 @@ export function Billing() {
                 <CreditCard className="w-6 h-6 text-theme-primary" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-semibold text-theme-text mb-2">
+                <h2 className="text-xl text-theme-text mb-2">
                   Current Plan
                 </h2>
                 {active ? (
                   <div className="space-y-2">
                     <p className="text-theme-text flex items-center gap-2">
                       <CheckCircle className="w-5 h-5 text-theme-success" />
-                      <span className="font-medium">Active Subscription</span>
+                      <span className="font-medium">Active subscription</span>
                     </p>
                     <p className="text-theme-text">
                       {source === 'ios'
@@ -277,7 +276,7 @@ export function Billing() {
           </Card>
 
           <Card>
-            <h2 className="text-xl font-semibold text-theme-text mb-4">
+            <h2 className="text-xl text-theme-text mb-4">
               Plan Details
             </h2>
             <div className="space-y-3">
@@ -301,7 +300,7 @@ export function Billing() {
           </Card>
 
           <Card>
-            <h2 className="text-xl font-semibold text-theme-text mb-4">
+            <h2 className="text-xl text-theme-text mb-4">
               Manage Subscription
             </h2>
             <p className="text-theme-muted-text mb-4">
@@ -312,9 +311,9 @@ export function Billing() {
                   : 'Subscribe to unlock full access to all features.'}
             </p>
             {error && (
-              <div className="flex items-start gap-3 p-4 mb-4 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="flex items-start gap-3 p-4 mb-4 bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg">
+                <AlertCircle className="w-5 h-5 text-theme-flag-low mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-theme-flag-low">{error}</p>
               </div>
             )}
             <div className="flex flex-wrap items-center gap-3">
@@ -337,7 +336,7 @@ export function Billing() {
 
           {!active && userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
             <Card className="bg-theme-surface-2 border-theme-border">
-              <h3 className="font-semibold text-theme-text mb-2">
+              <h3 className="text-theme-text mb-2">
                 Your trial is active
               </h3>
               <p className="text-theme-text">

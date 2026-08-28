@@ -7,22 +7,22 @@ interface FocusAreasProps {
 
 const STATUS_DOT: Record<FocusAreaMarker['status'], { dot: string; chipBg: string; chipText: string; chipBorder: string }> = {
   attention: {
-    dot: 'bg-rose-500',
-    chipBg: 'bg-rose-50',
-    chipText: 'text-rose-700',
-    chipBorder: 'border-rose-100',
+    dot: 'bg-theme-flag-low',
+    chipBg: 'bg-theme-flag-low-bg',
+    chipText: 'text-theme-flag-low',
+    chipBorder: 'border-theme-flag-low-border',
   },
   monitor: {
-    dot: 'bg-amber-400',
-    chipBg: 'bg-amber-50',
-    chipText: 'text-amber-700',
-    chipBorder: 'border-amber-100',
+    dot: 'bg-theme-flag-watch',
+    chipBg: 'bg-theme-flag-watch-bg',
+    chipText: 'text-theme-flag-watch',
+    chipBorder: 'border-theme-flag-watch-border',
   },
   reassuring: {
-    dot: 'bg-emerald-500',
-    chipBg: 'bg-emerald-50',
-    chipText: 'text-emerald-700',
-    chipBorder: 'border-emerald-100',
+    dot: 'bg-theme-flag-ok',
+    chipBg: 'bg-theme-flag-ok-bg',
+    chipText: 'text-theme-flag-ok',
+    chipBorder: 'border-theme-flag-ok-border',
   },
 };
 
@@ -43,7 +43,7 @@ export function FocusAreas({ focusAreas }: FocusAreasProps) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
         <Compass className="w-3.5 h-3.5 text-theme-muted-text-2" />
-        <h2 className="text-sm font-semibold text-theme-text">Focus Areas</h2>
+        <h2 className="text-sm text-theme-text">Focus areas</h2>
       </div>
       <p className="text-xs text-theme-muted-text-3 px-1">
         Where to direct your attention from this report.
@@ -62,7 +62,7 @@ export function FocusAreas({ focusAreas }: FocusAreasProps) {
               key={area.id}
               className="bg-theme-surface rounded-xl border border-theme-border px-4 py-4"
             >
-              <h3 className="text-sm font-semibold text-theme-text leading-snug">
+              <h3 className="text-sm text-theme-text leading-snug">
                 {area.title}
               </h3>
               <p className="text-xs text-theme-muted-text-2 leading-relaxed mt-1.5">

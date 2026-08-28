@@ -20,35 +20,35 @@ interface Props {
 
 const FINDING_STATUS_STYLE = {
   discuss: {
-    bg: 'bg-red-50',
-    border: 'border-red-100',
-    dot: 'bg-red-500',
-    text: 'text-red-700',
-    badge: 'bg-red-100 text-red-700',
+    bg: 'bg-theme-flag-low-bg',
+    border: 'border-theme-flag-low-border',
+    dot: 'bg-theme-flag-low',
+    text: 'text-theme-flag-low',
+    badge: 'bg-theme-flag-low-bg text-theme-flag-low',
     label: 'Discuss',
   },
   monitor: {
-    bg: 'bg-amber-50',
-    border: 'border-amber-100',
-    dot: 'bg-amber-400',
-    text: 'text-amber-700',
-    badge: 'bg-amber-100 text-amber-700',
+    bg: 'bg-theme-flag-watch-bg',
+    border: 'border-theme-flag-watch-border',
+    dot: 'bg-theme-flag-watch',
+    text: 'text-theme-flag-watch',
+    badge: 'bg-theme-flag-watch-bg text-theme-flag-watch',
     label: 'Monitor',
   },
   reassuring: {
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-100',
-    dot: 'bg-emerald-500',
-    text: 'text-emerald-700',
-    badge: 'bg-emerald-100 text-emerald-700',
+    bg: 'bg-theme-flag-ok-bg',
+    border: 'border-theme-flag-ok-border',
+    dot: 'bg-theme-flag-ok',
+    text: 'text-theme-flag-ok',
+    badge: 'bg-theme-flag-ok-bg text-theme-flag-ok',
     label: 'Reassuring',
   },
   attention: {
-    bg: 'bg-orange-50',
-    border: 'border-orange-100',
-    dot: 'bg-orange-500',
-    text: 'text-orange-700',
-    badge: 'bg-orange-100 text-orange-700',
+    bg: 'bg-theme-flag-watch-bg',
+    border: 'border-theme-flag-watch-border',
+    dot: 'bg-theme-flag-watch',
+    text: 'text-theme-flag-watch',
+    badge: 'bg-theme-flag-watch-bg text-theme-flag-watch',
     label: 'Needs Attention',
   },
 };
@@ -62,7 +62,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
       <div className="space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <AlertCircle className="w-4 h-4 text-theme-text" />
-          <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
+          <h2 className="text-base text-theme-text">Focus now</h2>
           <span className="text-xs text-theme-muted-text-3 ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
         </div>
         <div className="space-y-2">
@@ -114,7 +114,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <AlertCircle className="w-4 h-4 text-theme-text" />
-        <h2 className="text-base font-semibold text-theme-text">Focus Now</h2>
+        <h2 className="text-base text-theme-text">Focus now</h2>
         <span className="text-xs text-theme-muted-text-3 ml-auto">{flagged.length} item{flagged.length !== 1 ? 's' : ''} worth reviewing</span>
       </div>
       <div className="space-y-2">

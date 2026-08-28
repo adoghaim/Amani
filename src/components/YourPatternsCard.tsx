@@ -8,39 +8,39 @@ interface YourPatternsCardProps {
 
 function patternIcon(pattern: PersonalPattern): React.ReactNode {
   if (pattern.type === 'symptom') {
-    return <Link2 className="w-3.5 h-3.5 text-amber-600" />;
+    return <Link2 className="w-3.5 h-3.5 text-theme-flag-watch" />;
   }
   if (pattern.type === 'baseline') {
-    return <Activity className="w-3.5 h-3.5 text-teal-600" />;
+    return <Activity className="w-3.5 h-3.5 text-theme-flag-ok" />;
   }
   if (pattern.type === 'trend') {
     const trendDir = pattern.supportingData?.trendResult?.trendDirection;
     if (pattern.severity === 'info' && trendDir === 'falling') {
-      return <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />;
+      return <TrendingDown className="w-3.5 h-3.5 text-theme-flag-ok" />;
     }
     if (pattern.severity === 'info' && trendDir === 'rising') {
-      return <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />;
+      return <TrendingUp className="w-3.5 h-3.5 text-theme-flag-ok" />;
     }
     if (pattern.severity === 'caution') {
-      return <AlertCircle className="w-3.5 h-3.5 text-amber-600" />;
+      return <AlertCircle className="w-3.5 h-3.5 text-theme-flag-watch" />;
     }
-    return <TrendingUp className="w-3.5 h-3.5 text-sky-600" />;
+    return <TrendingUp className="w-3.5 h-3.5 text-theme-info" />;
   }
-  return <Activity className="w-3.5 h-3.5 text-teal-600" />;
+  return <Activity className="w-3.5 h-3.5 text-theme-flag-ok" />;
 }
 
 function patternIconBorder(pattern: PersonalPattern): string {
-  if (pattern.type === 'symptom') return 'border-amber-100';
-  if (pattern.type === 'baseline') return 'border-teal-100';
-  if (pattern.type === 'trend' && pattern.severity === 'info') return 'border-emerald-100';
-  if (pattern.type === 'trend' && pattern.severity === 'caution') return 'border-amber-100';
-  return 'border-teal-100';
+  if (pattern.type === 'symptom') return 'border-theme-flag-watch-border';
+  if (pattern.type === 'baseline') return 'border-theme-flag-ok-border';
+  if (pattern.type === 'trend' && pattern.severity === 'info') return 'border-theme-flag-ok-border';
+  if (pattern.type === 'trend' && pattern.severity === 'caution') return 'border-theme-flag-watch-border';
+  return 'border-theme-flag-ok-border';
 }
 
 const PATTERN_DOT_CLASS: Record<PersonalPatternType, string> = {
-  symptom: 'bg-amber-400',
-  trend:   'bg-sky-400',
-  baseline:'bg-teal-400',
+  symptom: 'bg-theme-flag-watch',
+  trend:   'bg-theme-info',
+  baseline:'bg-theme-flag-ok',
 };
 
 export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProps) {
@@ -56,20 +56,20 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
   const hasCautionTrend   = trendPatterns.some(p => p.severity === 'caution');
 
   return (
-    <div className="rounded-2xl border border-teal-100 bg-teal-50/40 overflow-hidden">
-      <div className="px-5 py-4 border-b border-teal-100 flex items-center justify-between">
+    <div className="rounded-2xl border border-theme-flag-ok-border bg-theme-flag-ok-bg/40 overflow-hidden">
+      <div className="px-5 py-4 border-b border-theme-flag-ok-border flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
-            <Activity className="w-3.5 h-3.5 text-teal-700" />
+          <div className="w-7 h-7 rounded-lg bg-theme-flag-ok-bg flex items-center justify-center flex-shrink-0">
+            <Activity className="w-3.5 h-3.5 text-theme-flag-ok" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-teal-900">Your Patterns</h2>
-            <p className="text-[11px] text-teal-600 mt-0.5">
+            <h2 className="text-sm text-theme-flag-ok">Your patterns</h2>
+            <p className="text-[11px] text-theme-flag-ok mt-0.5">
               Based on your {reportCount} previous report{reportCount !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
-        <span className="text-[11px] font-medium text-teal-600 bg-teal-100 px-2.5 py-1 rounded-full">
+        <span className="text-[11px] font-medium text-theme-flag-ok bg-theme-flag-ok-bg px-2.5 py-1 rounded-full">
           {orderedPatterns.length} insight{orderedPatterns.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -77,13 +77,13 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
       <div className="px-5 py-4 space-y-3">
         {orderedPatterns.map((pattern, i) => (
           <div key={i} className="flex items-start gap-3">
-            <div className={`flex-shrink-0 mt-0.5 w-6 h-6 rounded-md bg-white border flex items-center justify-center shadow-sm ${patternIconBorder(pattern)}`}>
+            <div className={`flex-shrink-0 mt-0.5 w-6 h-6 rounded-md bg-theme-surface border flex items-center justify-center shadow-sm ${patternIconBorder(pattern)}`}>
               {patternIcon(pattern)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-teal-900 leading-relaxed">{pattern.summary}</p>
+              <p className="text-sm text-theme-flag-ok leading-relaxed">{pattern.summary}</p>
               {i < orderedPatterns.length - 1 && (
-                <div className="mt-3 border-t border-teal-100" />
+                <div className="mt-3 border-t border-theme-flag-ok-border" />
               )}
             </div>
           </div>
@@ -95,31 +95,31 @@ export function YourPatternsCard({ patterns, reportCount }: YourPatternsCardProp
           {orderedPatterns.some(p => p.type === 'symptom') && (
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${PATTERN_DOT_CLASS.symptom}`} />
-              <span className="text-[10px] text-teal-600">Symptom connection</span>
+              <span className="text-[10px] text-theme-flag-ok">Symptom connection</span>
             </div>
           )}
           {hasImprovingTrend && (
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="text-[10px] text-teal-600">Improving trend</span>
+              <span className="w-2 h-2 rounded-full bg-theme-flag-ok" />
+              <span className="text-[10px] text-theme-flag-ok">Improving trend</span>
             </div>
           )}
           {hasCautionTrend && (
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              <span className="text-[10px] text-teal-600">Trend worth watching</span>
+              <span className="w-2 h-2 rounded-full bg-theme-flag-watch" />
+              <span className="text-[10px] text-theme-flag-ok">Trend worth watching</span>
             </div>
           )}
           {!hasImprovingTrend && !hasCautionTrend && orderedPatterns.some(p => p.type === 'trend') && (
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${PATTERN_DOT_CLASS.trend}`} />
-              <span className="text-[10px] text-teal-600">Trend over time</span>
+              <span className="text-[10px] text-theme-flag-ok">Trend over time</span>
             </div>
           )}
           {orderedPatterns.some(p => p.type === 'baseline') && (
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${PATTERN_DOT_CLASS.baseline}`} />
-              <span className="text-[10px] text-teal-600">vs. your baseline</span>
+              <span className="text-[10px] text-theme-flag-ok">vs. your baseline</span>
             </div>
           )}
         </div>

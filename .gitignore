@@ -63,3 +63,6 @@ ruvector.db
 .github/agents/
 .codex/
 deno.lock
+
+# Output of tools/preview (visual check screenshots)
+preview-shots/

@@ -108,30 +108,30 @@ const CORE_BIOMARKER_CATEGORIES_UI: Record<string, string> = {
 type StatusStyle = { bg: string; text: string; dot: string; label: string };
 
 const STATUS_STYLE: Record<string, StatusStyle> = {
-  in_range:    { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'In range' },
-  out_of_range:{ bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500',     label: 'Out of range' },
-  borderline:  { bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400',   label: 'Borderline' },
-  unknown:     { bg: 'bg-gray-100',   text: 'text-gray-500',    dot: 'bg-gray-400',    label: 'No range' },
+  in_range:    { bg: 'bg-theme-flag-ok-bg', text: 'text-theme-flag-ok', dot: 'bg-theme-flag-ok', label: 'In range' },
+  out_of_range:{ bg: 'bg-theme-flag-low-bg',     text: 'text-theme-flag-low',     dot: 'bg-theme-flag-low',     label: 'Out of range' },
+  borderline:  { bg: 'bg-theme-flag-watch-bg',   text: 'text-theme-flag-watch',   dot: 'bg-theme-flag-watch',   label: 'Borderline' },
+  unknown:     { bg: 'bg-theme-neutral-100',   text: 'text-theme-neutral-500',    dot: 'bg-theme-neutral-400',    label: 'No range' },
 };
 
-const STATUS_STYLE_FALLBACK: StatusStyle = { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', label: 'No range' };
+const STATUS_STYLE_FALLBACK: StatusStyle = { bg: 'bg-theme-neutral-100', text: 'text-theme-neutral-500', dot: 'bg-theme-neutral-400', label: 'No range' };
 
 const CONFIDENCE_STYLE: Record<string, string> = {
-  high:   'text-emerald-700 bg-emerald-50 border-emerald-200',
-  medium: 'text-amber-700 bg-amber-50 border-amber-200',
-  low:    'text-gray-500 bg-gray-100 border-gray-200',
+  high:   'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border',
+  medium: 'text-theme-flag-watch bg-theme-flag-watch-bg border-theme-flag-watch-border',
+  low:    'text-theme-neutral-500 bg-theme-neutral-100 border-theme-neutral-200',
 };
 
 type PatternConfidenceStyle = { bg: string; text: string; border: string; label: string };
 
 const PATTERN_CONFIDENCE_STYLE: Record<string, PatternConfidenceStyle> = {
-  high:   { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-100',   label: 'High confidence' },
-  medium: { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100',  label: 'Medium confidence' },
-  low:    { bg: 'bg-gray-50',   text: 'text-gray-600',   border: 'border-gray-200',   label: 'Low confidence' },
+  high:   { bg: 'bg-theme-flag-low-bg',   text: 'text-theme-flag-low',   border: 'border-theme-flag-low-border',   label: 'High confidence' },
+  medium: { bg: 'bg-theme-flag-watch-bg',  text: 'text-theme-flag-watch',  border: 'border-theme-flag-watch-border',  label: 'Medium confidence' },
+  low:    { bg: 'bg-theme-neutral-50',   text: 'text-theme-neutral-600',   border: 'border-theme-neutral-200',   label: 'Low confidence' },
 };
 
 const PATTERN_CONFIDENCE_FALLBACK: PatternConfidenceStyle = {
-  bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', label: 'Low confidence',
+  bg: 'bg-theme-neutral-50', text: 'text-theme-neutral-600', border: 'border-theme-neutral-200', label: 'Low confidence',
 };
 
 interface OpeningContext {
@@ -283,22 +283,22 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
   const label = analyte.display_name || analyte.raw_name;
   const isUnmapped = analyte.parse_status === 'unmapped';
   return (
-    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors">
+    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-theme-neutral-50 transition-colors">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-gray-900 truncate">{label}</p>
+          <p className="text-sm font-medium text-theme-neutral-900 truncate">{label}</p>
           {isUnmapped && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">unmapped</span>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-theme-neutral-100 text-theme-neutral-500 flex-shrink-0">unmapped</span>
           )}
         </div>
         {analyte.raw_reference_range && (
-          <p className="text-xs text-gray-400 mt-0.5">Ref: {analyte.raw_reference_range}</p>
+          <p className="text-xs text-theme-neutral-400 mt-0.5">Ref: {analyte.raw_reference_range}</p>
         )}
       </div>
       <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <span className="text-sm font-semibold text-gray-900 tabular-nums">
+        <span className="text-sm font-semibold text-theme-neutral-900 tabular-nums">
           {analyte.raw_value_text ?? analyte.value_numeric}
-          {analyte.unit && <span className="text-gray-500 font-normal ml-1 text-xs">{analyte.unit}</span>}
+          {analyte.unit && <span className="text-theme-neutral-500 font-normal ml-1 text-xs">{analyte.unit}</span>}
         </span>
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
@@ -1043,7 +1043,7 @@ export function ReportView() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#C97C8B]" />
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-primary" />
         </div>
       </Layout>
     );
@@ -1053,7 +1053,7 @@ export function ReportView() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <h1 className="text-xl font-bold text-gray-900 mb-4">Report not found</h1>
+          <h1 className="text-xl text-theme-neutral-900 mb-4">Report not found</h1>
           <Link to="/app"><Button>Back to Dashboard</Button></Link>
         </div>
       </Layout>
@@ -1080,7 +1080,7 @@ export function ReportView() {
         {/* ── A. Header ──────────────────────────────────────────── */}
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text tracking-tight">
+            <h1 className="text-2xl text-theme-text tracking-tight">
               Lab Report: {formatDate(report.report_date)}
             </h1>
             <p className="text-sm text-theme-muted-text-3 mt-1">
@@ -1093,7 +1093,7 @@ export function ReportView() {
             </p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {cyclePhase && (
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 border border-rose-200 text-rose-700 capitalize">
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low capitalize">
                   {cyclePhase.replace(/_/g, ' ')} phase
                 </span>
               )}
@@ -1104,8 +1104,8 @@ export function ReportView() {
               {resolvedLabSource !== 'unknown' && (
                 <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
                   resolvedLabSource === 'quest'
-                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                    : 'text-sky-700 bg-sky-50 border-sky-200'
+                    ? 'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border'
+                    : 'text-theme-info bg-theme-info-bg border-theme-info-border'
                 }`}>
                   <FlaskConical className="w-3 h-3" />
                   Imported from {resolvedLabSource === 'quest' ? 'Quest' : 'Labcorp'}
@@ -1133,7 +1133,7 @@ export function ReportView() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">
+          <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-xl mb-6 text-sm">
             {error}
           </div>
         )}
@@ -1142,7 +1142,7 @@ export function ReportView() {
 
           {/* ── Processing ──────────────────────────────────────── */}
           {isProcessing && (
-            <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-5 flex items-center gap-4">
+            <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-6 py-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-theme-primary/10 flex items-center justify-center flex-shrink-0">
                 <Loader2 className="w-5 h-5 text-theme-primary animate-spin" />
               </div>
@@ -1155,17 +1155,17 @@ export function ReportView() {
 
           {/* ── Daily AI limit reached ──────────────────────────── */}
           {rateLimitNotice && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+            <div className="rounded-2xl border border-theme-flag-watch-border bg-theme-flag-watch-bg p-5 space-y-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-amber-900">Daily analysis limit reached</p>
-                  <p className="text-xs text-amber-700 mt-1 leading-relaxed">{rateLimitNotice}</p>
+                  <p className="text-sm font-semibold text-theme-flag-watch">Daily analysis limit reached</p>
+                  <p className="text-xs text-theme-flag-watch mt-1 leading-relaxed">{rateLimitNotice}</p>
                 </div>
               </div>
               {(biomarkers.length > 0 || reportAnalytes.length > 0) && (
-                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-100/60 rounded-lg px-3 py-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                <div className="flex items-center gap-2 text-xs text-theme-flag-watch bg-theme-flag-watch-bg/60 rounded-lg px-3 py-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-theme-flag-ok flex-shrink-0" />
                   <span>{reportAnalytes.length || biomarkers.length} lab values detected. Your data is saved and intact below.</span>
                 </div>
               )}
@@ -1173,7 +1173,7 @@ export function ReportView() {
                 <button
                   onClick={handleRegenerate}
                   disabled={regenerating}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-60"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-theme-warning text-white text-sm font-semibold rounded-xl hover:bg-theme-warning-dark transition-colors disabled:opacity-60"
                 >
                   <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
                   {regenerating ? 'Retrying...' : 'Try again'}
@@ -1189,17 +1189,17 @@ export function ReportView() {
               ? 'No lab values were extracted. The PDF may be image-based.'
               : 'The AI analysis timed out or hit an error. Your lab data is intact below.';
             return (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-4">
+              <div className="rounded-2xl border border-theme-flag-low-border bg-theme-flag-low-bg p-5 space-y-4">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-theme-flag-low flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-red-900">AI summary failed</p>
-                    <p className="text-xs text-red-700 mt-1 leading-relaxed">{reason}</p>
+                    <p className="text-sm font-semibold text-theme-flag-low">AI summary failed</p>
+                    <p className="text-xs text-theme-flag-low mt-1 leading-relaxed">{reason}</p>
                   </div>
                 </div>
                 {hasData && (
-                  <div className="flex items-center gap-2 text-xs text-red-600 bg-red-100/60 rounded-lg px-3 py-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                  <div className="flex items-center gap-2 text-xs text-theme-flag-low bg-theme-flag-low-bg/60 rounded-lg px-3 py-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-theme-flag-ok flex-shrink-0" />
                     <span>{reportAnalytes.length || biomarkers.length} lab values detected. Your data is intact below.</span>
                   </div>
                 )}
@@ -1207,13 +1207,13 @@ export function ReportView() {
                   <button
                     onClick={handleRegenerate}
                     disabled={regenerating}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-theme-flag-low text-white text-sm font-semibold rounded-xl hover:bg-theme-flag-low transition-colors disabled:opacity-60"
                   >
                     <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
                     {regenerating ? 'Retrying...' : `Retry summary (${3 - report.regeneration_count} of 3 left)`}
                   </button>
                 ) : (
-                  <p className="text-xs text-red-600">All retry attempts used. Your lab data is visible below.</p>
+                  <p className="text-xs text-theme-flag-low">All retry attempts used. Your lab data is visible below.</p>
                 )}
               </div>
             );
@@ -1221,7 +1221,7 @@ export function ReportView() {
 
           {/* ── AI loading indicator (ready/error but no interpretation yet) ─── */}
           {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && !rateLimitNotice && insightSummary && (
-            <div className="rounded-2xl border border-theme-border-subtle bg-white px-6 py-4 flex items-center gap-3">
+            <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
               <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>
             </div>
@@ -1230,17 +1230,23 @@ export function ReportView() {
           {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
-              <div className="bg-theme-text px-6 py-5">
+              {/*
+                Deep plum, not near-black. A single #0D2033 block dropped into an
+                otherwise warm light page reads as a copy-paste accident; the
+                accent is still high-contrast enough to carry the headline but
+                belongs to the palette, so it reads as deliberate emphasis.
+              */}
+              <div className="bg-theme-accent px-6 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
-                  <Sparkles className="w-4 h-4 text-theme-primary-light" />
-                  <span className="text-xs font-medium text-theme-muted-text-5 uppercase tracking-widest">Amani Analysis</span>
+                  <Sparkles className="w-4 h-4 text-theme-primary" />
+                  <span className="text-xs font-medium text-theme-muted-text-3 uppercase tracking-widest">Amani analysis</span>
                   {insightSummary && (
                     <div className="ml-auto">
                       <ConfidenceBadge confidence={insightSummary.confidence} />
                     </div>
                   )}
                 </div>
-                <h2 className="text-lg font-semibold text-white leading-snug">
+                <h2 className="text-lg text-white leading-snug">
                   {(() => {
                     const ctx = insightSummary ? getOpeningContext(insightSummary) : null;
                     const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
@@ -1357,17 +1363,17 @@ export function ReportView() {
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-emerald-500/15">
-                          <AlertTriangle className="w-5 h-5 text-emerald-600" />
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-flag-ok/15">
+                          <AlertTriangle className="w-5 h-5 text-theme-flag-ok" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-emerald-600">
+                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-theme-flag-ok">
                             {topPriorityLabel}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
                           </p>
-                          <p className="text-xs text-emerald-700 leading-relaxed border-l-2 border-emerald-400/60 pl-3">
+                          <p className="text-xs text-theme-flag-ok leading-relaxed border-l-2 border-theme-flag-ok-border/60 pl-3">
                             {subnote}
                           </p>
                         </div>
@@ -1390,22 +1396,22 @@ export function ReportView() {
                   return (
                     <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-amber-500/15">
-                          <AlertTriangle className="w-5 h-5 text-amber-600" />
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-flag-watch/15">
+                          <AlertTriangle className="w-5 h-5 text-theme-flag-watch" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-amber-600">
+                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-theme-flag-watch">
                             {topPriorityLabel}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
                           </p>
                           {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-amber-400/60 pl-3">
+                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-flag-watch-border/60 pl-3">
                               {aiWhyItMatters}
                             </p>
                           ) : (
-                            <p className="text-xs text-amber-700 leading-relaxed border-l-2 border-amber-400/60 pl-3">
+                            <p className="text-xs text-theme-flag-watch leading-relaxed border-l-2 border-theme-flag-watch-border/60 pl-3">
                               {subnote}
                             </p>
                           )}
@@ -1512,7 +1518,7 @@ export function ReportView() {
 
               {/* Summary bullets: only when no primary_concern */}
               {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
-                <div className="bg-white px-6 py-5">
+                <div className="bg-theme-surface px-6 py-5">
                   <ul className="space-y-3">
                     {interpretation.summary_bullets.map((bullet, i) => (
                       <li key={i} className="flex items-start gap-3">
@@ -1571,9 +1577,9 @@ export function ReportView() {
 
           {/* ── E. More Details (Pattern Signals, Flags, Derived) ── */}
           {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
-            <div className="rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="rounded-2xl border border-theme-neutral-200 overflow-hidden">
               <button
-                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-between w-full px-5 py-4 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                 onClick={() => setShowMoreDetails(v => !v)}
               >
                 <div className="flex items-center gap-2.5">
@@ -1582,15 +1588,15 @@ export function ReportView() {
                   <span className="text-xs text-theme-muted-text-3">signals, flags, derived metrics</span>
                 </div>
                 {showMoreDetails
-                  ? <ChevronDown className="w-4 h-4 text-gray-400" />
-                  : <ChevronRight className="w-4 h-4 text-gray-400" />
+                  ? <ChevronDown className="w-4 h-4 text-theme-neutral-400" />
+                  : <ChevronRight className="w-4 h-4 text-theme-neutral-400" />
                 }
               </button>
               {showMoreDetails && (
-                <div className="border-t border-gray-100 px-5 py-5 space-y-6">
+                <div className="border-t border-theme-neutral-100 px-5 py-5 space-y-6">
                   {(interpretation?.pattern_signals?.length ?? 0) > 0 && (
                     <div className="space-y-3">
-                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern Signals</p>
+                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern signals</p>
                       {interpretation!.pattern_signals!.map((signal, i) => {
                         const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low ?? PATTERN_CONFIDENCE_FALLBACK;
                         return (
@@ -1605,7 +1611,7 @@ export function ReportView() {
                             {signal.related_biomarkers?.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {signal.related_biomarkers.map((slug, j) => (
-                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-theme-muted-text-2">
+                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-theme-surface/70 border border-theme-neutral-200 text-theme-muted-text-2">
                                     {getDisplayName(slug as BiomarkerName)}
                                   </span>
                                 ))}
@@ -1625,29 +1631,29 @@ export function ReportView() {
 
           {/* ── F. Full Lab Panel (accordion) ───────────────────── */}
           {totalAnalyteCount > 0 && (
-            <div className="rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="rounded-2xl border border-theme-neutral-200 overflow-hidden">
               <button
-                className="flex items-center justify-between w-full px-5 py-4 text-left bg-white hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-between w-full px-5 py-4 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                 onClick={() => setShowFullPanel(v => !v)}
               >
                 <div className="flex items-center gap-2.5">
                   <Microscope className="w-4 h-4 text-theme-muted-text-2" />
-                  <span className="text-sm font-semibold text-theme-text">Full Lab Panel</span>
+                  <span className="text-sm font-semibold text-theme-text">Full lab panel</span>
                   <span className="text-xs text-theme-muted-text-3">({totalAnalyteCount} items)</span>
                 </div>
                 {showFullPanel
-                  ? <ChevronDown className="w-4 h-4 text-gray-400" />
-                  : <ChevronRight className="w-4 h-4 text-gray-400" />
+                  ? <ChevronDown className="w-4 h-4 text-theme-neutral-400" />
+                  : <ChevronRight className="w-4 h-4 text-theme-neutral-400" />
                 }
               </button>
               {showFullPanel && (
-                <div className="px-5 pb-5 pt-1 border-t border-gray-100 space-y-6">
+                <div className="px-5 pb-5 pt-1 border-t border-theme-neutral-100 space-y-6">
                   {Object.entries(analytesForDisplay)
                     .sort(([a], [b]) => a === 'Unmapped' ? 1 : b === 'Unmapped' ? -1 : a.localeCompare(b))
                     .map(([cat, items]) => (
                       <div key={cat}>
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{cat}</h3>
-                        <div className="divide-y divide-gray-100">
+                        <h3 className="text-xs text-theme-neutral-400 uppercase tracking-widest mb-2">{cat}</h3>
+                        <div className="divide-y divide-theme-neutral-100">
                           {items.map(item => <AnalyteRow key={item.id} analyte={item} />)}
                         </div>
                       </div>
@@ -1678,10 +1684,10 @@ export function ReportView() {
             const hasExtraContext = !!(aiCycle?.estimated_cycle_day || aiCycle?.explanation || aiCycle?.confidence);
             if (!hasExtraContext) return null;
             return (
-              <div className="rounded-2xl border border-theme-border-subtle bg-white px-5 py-5">
+              <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-5 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
                   <CalendarDays className="w-4 h-4 text-theme-primary" />
-                  <h3 className="text-sm font-semibold text-theme-text">Cycle Context</h3>
+                  <h3 className="text-sm text-theme-text">Cycle context</h3>
                   {aiCycle?.confidence && (
                     <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[aiCycle.confidence]}`}>
                       {aiCycle.confidence} confidence
@@ -1697,7 +1703,7 @@ export function ReportView() {
                   </div>
                   {aiCycle?.estimated_cycle_day && (
                     <div>
-                      <p className="text-xs text-theme-muted-text-3">Cycle Day</p>
+                      <p className="text-xs text-theme-muted-text-3">Cycle day</p>
                       <p className="text-sm font-semibold text-theme-text mt-0.5">{aiCycle.estimated_cycle_day}</p>
                     </div>
                   )}
@@ -1718,7 +1724,7 @@ export function ReportView() {
           {biomarkers.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-base font-semibold text-theme-text">
+                <h2 className="text-base text-theme-text">
                   Health Systems
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-theme-primary">
@@ -1758,17 +1764,17 @@ export function ReportView() {
                     });
                   };
                   return (
-                    <div key={category} className="rounded-xl border border-gray-200 overflow-hidden">
+                    <div key={category} className="rounded-xl border border-theme-neutral-200 overflow-hidden">
                       <button
                         onClick={toggleCollapsed}
-                        className="flex items-center justify-between w-full px-4 py-3 text-left bg-white hover:bg-gray-50 transition-colors"
+                        className="flex items-center justify-between w-full px-4 py-3 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="text-sm font-semibold text-theme-text">
                             {CATEGORY_DISPLAY[category].label}
                           </span>
                           {flaggedCount > 0 && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-flag-watch-bg text-theme-flag-watch">
                               {flaggedCount} outside optimal
                             </span>
                           )}
@@ -1776,13 +1782,13 @@ export function ReportView() {
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs text-theme-muted-text-3">{items.length}</span>
                           {isCollapsed
-                            ? <ChevronRight className="w-4 h-4 text-gray-400" />
-                            : <ChevronDown className="w-4 h-4 text-gray-400" />
+                            ? <ChevronRight className="w-4 h-4 text-theme-neutral-400" />
+                            : <ChevronDown className="w-4 h-4 text-theme-neutral-400" />
                           }
                         </div>
                       </button>
                       {!isCollapsed && (
-                        <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-2">
+                        <div className="px-4 pb-4 pt-1 border-t border-theme-neutral-100 space-y-2">
                           {items.map(b => {
                             const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
                             const personalization = biomarkerPersonalizationMap.get(b.name);
@@ -1820,7 +1826,7 @@ export function ReportView() {
           {/* ── H. Disclaimer ───────────────────────────────────── */}
           {interpretation && (
             <div className="flex items-start gap-3 px-4 py-4">
-              <Info className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 mt-0.5" />
+              <Info className="w-3.5 h-3.5 text-theme-neutral-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-muted-text-3 leading-relaxed italic">{interpretation.disclaimer}</p>
             </div>
           )}

@@ -7,7 +7,7 @@
  * is known.
  *
  * The mark is the cycle ring from the app icon, drawn once. min-h-dvh rather
- * than min-h-screen — on iOS Safari and inside the Capacitor webview, 100vh
+ * than min-h-dvh — on iOS Safari and inside the Capacitor webview, 100vh
  * includes the browser chrome and the layout jumps when it hides.
  */
 export function Loading({ label = 'Loading' }: { label?: string }) {
@@ -18,15 +18,17 @@ export function Loading({ label = 'Loading' }: { label?: string }) {
       aria-live="polite"
     >
       <svg
-        className="w-9 h-9 animate-spin motion-reduce:animate-none"
+        className="w-9 h-9 animate-spin motion-reduce:animate-none text-theme-primary"
         viewBox="0 0 32 32"
         aria-hidden="true"
       >
-        <circle cx="16" cy="16" r="12" fill="none" stroke="#EAD2D7" strokeWidth="3" />
+        {/* Track and arc both derive from the token via currentColor, so the
+            spinner follows the palette instead of pinning two hex literals. */}
+        <circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.22" />
         <path
           d="M16 4 a12 12 0 0 1 10.4 6"
           fill="none"
-          stroke="#C97C8B"
+          stroke="currentColor"
           strokeWidth="3"
           strokeLinecap="round"
         />

@@ -23,12 +23,12 @@ const CATEGORIES: { value: InterventionCategory; label: string }[] = [
 
 const getCategoryColor = (category: InterventionCategory): string => {
   const colors = {
-    supplement: 'bg-purple-100 text-purple-800',
-    diet: 'bg-green-100 text-green-800',
-    exercise: 'bg-blue-100 text-blue-800',
-    medication: 'bg-red-100 text-red-800',
-    sleep: 'bg-indigo-100 text-indigo-800',
-    other: 'bg-gray-100 text-gray-800',
+    supplement: 'bg-theme-cat-sleep text-theme-cat-sleep',
+    diet: 'bg-theme-flag-ok-bg text-theme-flag-ok',
+    exercise: 'bg-theme-info-bg text-theme-info',
+    medication: 'bg-theme-flag-low-bg text-theme-flag-low',
+    sleep: 'bg-theme-cat-sleep text-theme-cat-sleep',
+    other: 'bg-theme-neutral-100 text-theme-neutral-800',
   };
   return colors[category];
 };
@@ -125,7 +125,7 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900">Interventions</h3>
+        <h3 className="text-lg text-theme-neutral-900">Interventions</h3>
         {!showForm && (
           <Button onClick={() => setShowForm(true)} size="sm">
             <Plus className="w-4 h-4 mr-1" />
@@ -135,11 +135,11 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
       </div>
 
       {showFirstInterventionMessage && (
-        <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
-          <p className="text-sm font-medium text-teal-900">
+        <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border rounded-lg p-4">
+          <p className="text-sm font-medium text-theme-flag-ok">
             We'll track how this overlaps with future labs.
           </p>
-          <p className="text-xs text-teal-700 mt-1">
+          <p className="text-xs text-theme-flag-ok mt-1">
             Your intervention will appear in the timeline alongside your lab results.
           </p>
         </div>
@@ -149,13 +149,13 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
         <Card>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex justify-between items-center mb-4">
-              <h4 className="font-medium text-gray-900">
+              <h4 className="font-medium text-theme-neutral-900">
                 {editingId ? 'Edit Intervention' : 'New Intervention'}
               </h4>
               <button
                 type="button"
                 onClick={resetForm}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-theme-neutral-400 hover:text-theme-neutral-600"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -170,7 +170,7 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-neutral-700 mb-1">
                 Category
               </label>
               <select
@@ -178,7 +178,7 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
                 onChange={(e) =>
                   setFormData({ ...formData, category: e.target.value as InterventionCategory })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-theme-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-theme-flag-ok-border"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat.value} value={cat.value}>
@@ -205,14 +205,14 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-neutral-700 mb-1">
                 Notes (optional)
               </label>
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-theme-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-theme-flag-ok-border"
                 placeholder="Any additional details..."
               />
             </div>
@@ -231,7 +231,7 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
 
       {sortedInterventions.length === 0 ? (
         <Card>
-          <div className="text-center py-8 text-gray-600">
+          <div className="text-center py-8 text-theme-neutral-600">
             <p className="mb-2">No interventions tracked yet</p>
             <p className="text-sm">Add an intervention to track what changed between labs</p>
           </div>
@@ -243,7 +243,7 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <h4 className="font-medium text-gray-900">{intervention.title}</h4>
+                    <h4 className="font-medium text-theme-neutral-900">{intervention.title}</h4>
                     <span
                       className={`px-2 py-1 text-xs font-medium rounded ${getCategoryColor(
                         intervention.category
@@ -252,7 +252,7 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
                       {intervention.category}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-theme-neutral-600">
                     <span>Started {formatDate(intervention.start_date)}</span>
                     {intervention.end_date ? (
                       <span> • Ended {formatDate(intervention.end_date)}</span>
@@ -261,19 +261,19 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
                     )}
                   </div>
                   {intervention.notes && (
-                    <p className="text-sm text-gray-600 mt-2">{intervention.notes}</p>
+                    <p className="text-sm text-theme-neutral-600 mt-2">{intervention.notes}</p>
                   )}
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(intervention)}
-                    className="text-gray-400 hover:text-teal-600"
+                    className="text-theme-neutral-400 hover:text-theme-flag-ok"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(intervention.id)}
-                    className="text-gray-400 hover:text-red-600"
+                    className="text-theme-neutral-400 hover:text-theme-flag-low"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

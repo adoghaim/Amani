@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Button } from '../components/Button';
 import {
   Droplets,
   Plus,
@@ -18,7 +19,6 @@ import { Loading } from '../components/Loading';
 import { errorMessage } from '../lib/errors';
 import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
-import { CycleSummary } from '../components/CycleSummary';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
@@ -294,9 +294,9 @@ export function Dashboard() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'processing': return <Clock className="w-4 h-4 text-yellow-600" />;
-      case 'ready': return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'error': return <XCircle className="w-4 h-4 text-red-600" />;
+      case 'processing': return <Clock className="w-4 h-4 text-theme-flag-watch" />;
+      case 'ready': return <CheckCircle className="w-4 h-4 text-theme-flag-ok" />;
+      case 'error': return <XCircle className="w-4 h-4 text-theme-flag-low" />;
       default: return null;
     }
   };
@@ -318,11 +318,11 @@ export function Dashboard() {
     <Layout>
       <div className="max-w-5xl mx-auto">
         {error && (
-          <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 flex items-start justify-between gap-3">
-            <div className="text-sm text-red-700 flex-1">{error}</div>
+          <div className="mb-5 px-4 py-3 rounded-xl bg-theme-flag-low-bg border border-theme-flag-low-border flex items-start justify-between gap-3">
+            <div className="text-sm text-theme-flag-low flex-1">{error}</div>
             <button
               onClick={() => setError(null)}
-              className="text-sm font-medium text-red-700 underline hover:no-underline whitespace-nowrap"
+              className="text-sm font-medium text-theme-flag-low underline hover:no-underline whitespace-nowrap"
             >
               Dismiss
             </button>
@@ -335,91 +335,107 @@ export function Dashboard() {
 
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text">Dashboard</h1>
-            <p className="text-sm text-theme-muted-text mt-0.5">Your health overview at a glance</p>
+            <h1 className="text-3xl">Dashboard</h1>
+            <p className="text-sm text-theme-muted-text-2 mt-1">Where you are, and what your last panel said.</p>
           </div>
           <Link to="/app/new">
-            <button
-              disabled={!canCreateReport}
-              className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
-            >
+            <Button size="md" disabled={!canCreateReport} className="gap-2">
               <Plus className="w-4 h-4" />
-              New lab report
-            </button>
+              New panel
+            </Button>
           </Link>
         </div>
 
-        {userProfile?.subscription_status !== 'active' && (
-          <Link to="/app/pricing" className="block mb-5">
-            <div className="flex items-center justify-between gap-4 bg-white border border-theme-border rounded-xl px-5 py-4 hover:border-theme-primary hover:shadow-sm transition-all">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
-                  Founders Launch
-                </span>
-                <span className="text-sm text-theme-text font-medium">
-                  <span className="text-theme-muted-text-4 line-through mr-1.5">$19.99/mo</span>
-                  $9.99/mo &nbsp;&middot;&nbsp;
-                  <span className="text-theme-muted-text-4 line-through mr-1.5">$199.99/yr</span>
-                  $99.99/yr
-                </span>
-              </div>
-              <span className="text-sm font-medium text-theme-primary shrink-0">View pricing &rarr;</span>
-            </div>
-          </Link>
-        )}
+        {/*
+          One notice, not four.
 
-        {showTrialBanner && (
-          <div className="mb-5 bg-gradient-to-r from-theme-surface-2 to-theme-background-tint border border-theme-border rounded-2xl px-5 py-4">
-            <h3 className="text-base font-semibold text-theme-text mb-1">Keep your health timeline intact</h3>
-            <p className="text-sm text-theme-muted-text mb-3">
-              {trialDaysRemaining === 1 ? '1 day' : `${trialDaysRemaining} days`} left in your trial.
-            </p>
-            <Link to="/app/billing">
-              <button className="px-4 py-2 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors">
-                Continue tracking
-              </button>
-            </Link>
-          </div>
-        )}
+          These were four independent blocks that could all render at once —
+          pricing promo, trial countdown, trial-expired warning and the context
+          nudge — pushing the actual dashboard below the fold behind a stack of
+          banners. They are now prioritised, and only the most urgent shows.
+          Someone whose trial has expired does not need to be told how many days
+          are left in it.
+        */}
+        {(() => {
+          if (!canCreateReport) {
+            return (
+              <Notice tone="watch">
+                <p className="text-sm text-theme-flag-watch">
+                  Your trial has ended.{' '}
+                  <Link to="/app/pricing" className="underline font-medium hover:no-underline">
+                    See pricing
+                  </Link>{' '}
+                  to keep uploading panels.
+                </p>
+              </Notice>
+            );
+          }
 
-        {!canCreateReport && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-4 mb-5">
-            <p className="text-sm text-yellow-800">
-              Your trial has expired.{' '}
-              <Link to="/app/pricing" className="text-yellow-900 underline font-medium">View pricing</Link> to continue.
-            </p>
-          </div>
-        )}
+          if (showTrialBanner) {
+            return (
+              <Notice>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base mb-0.5">Keep your timeline intact</h3>
+                    <p className="text-sm text-theme-muted-text-2">
+                      <span className="font-mono tabular-nums">{trialDaysRemaining}</span>
+                      {trialDaysRemaining === 1 ? ' day' : ' days'} left in your trial.
+                    </p>
+                  </div>
+                  <Link to="/app/billing">
+                    <Button size="sm">Continue</Button>
+                  </Link>
+                </div>
+              </Notice>
+            );
+          }
 
-        {showContextNudge && (
-          <div className="mb-5 bg-gradient-to-r from-theme-surface-2 to-theme-background-tint border border-theme-border rounded-2xl px-5 py-4 flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <h3 className="text-base font-semibold text-theme-text mb-1">Add context to your labs</h3>
-              <p className="text-sm text-theme-muted-text mb-3">Tracking even one change helps explain future results.</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={openStartPeriod}
-                  className="px-3 py-1.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors"
-                >
-                  Add cycle start
-                </button>
-                <Link to="/app/tracker">
-                  <button className="px-3 py-1.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl border border-theme-border hover:bg-theme-surface-hover transition-colors">
-                    Add intervention
+          if (showContextNudge) {
+            return (
+              <Notice>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base mb-0.5">Add context to your labs</h3>
+                    <p className="text-sm text-theme-muted-text-2 mb-3">
+                      Tracking even one change helps explain future results.
+                    </p>
+                    <div className="flex flex-wrap gap-2.5">
+                      <Button size="sm" onClick={openStartPeriod}>Add cycle start</Button>
+                      <Link to="/app/tracker">
+                        <Button size="sm" variant="secondary">Add intervention</Button>
+                      </Link>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { sessionStorage.setItem('contextNudgeDismissed', 'true'); setShowContextNudge(false); }}
+                    aria-label="Dismiss"
+                    className="shrink-0 w-11 h-11 -mr-2 -mt-2 flex items-center justify-center rounded-lg text-theme-muted-text hover:bg-theme-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary"
+                  >
+                    <X className="w-4 h-4" />
                   </button>
-                </Link>
-              </div>
-            </div>
-            <button
-              onClick={() => { sessionStorage.setItem('contextNudgeDismissed', 'true'); setShowContextNudge(false); }}
-              aria-label="Dismiss"
-              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
-            >
-              <X className="w-4 h-4 text-theme-muted-text" />
-            </button>
-          </div>
-        )}
+                </div>
+              </Notice>
+            );
+          }
+
+          if (userProfile?.subscription_status !== 'active') {
+            return (
+              <Link to="/app/pricing" className="block mb-5 group">
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-theme-surface border border-theme-border rounded-xl px-5 py-4 transition-colors group-hover:border-theme-primary">
+                  <p className="text-sm text-theme-text">
+                    <span className="font-mono text-theme-muted-text-3 line-through mr-1.5 tabular-nums">$19.99</span>
+                    <span className="font-mono tabular-nums">$9.99</span> a month, or{' '}
+                    <span className="font-mono text-theme-muted-text-3 line-through mr-1.5 tabular-nums">$199.99</span>
+                    <span className="font-mono tabular-nums">$99.99</span> a year
+                  </p>
+                  <span className="text-sm font-medium text-theme-primary shrink-0">See pricing &rarr;</span>
+                </div>
+              </Link>
+            );
+          }
+
+          return null;
+        })()}
 
         <div className="space-y-5">
           <TodayCard
@@ -427,6 +443,8 @@ export function Dashboard() {
             lastReport={lastReport}
             activeInterventions={activeInterventions}
             lastPeriodLog={lastPeriodLog}
+            periodLogs={periodLogs}
+            symptomLogsThisCycle={symptomLogsThisCycle}
             onLogPeriod={openStartPeriod}
             onAddSymptom={openAddSymptom}
             onUploadLabs={() => navigate('/app/new')}
@@ -439,47 +457,37 @@ export function Dashboard() {
             onMonthChange={setCalendarMonth}
           />
 
-          <div className="bg-white rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+          <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-theme-border">
-              <h3 className="text-sm font-semibold text-theme-text">Quick log</h3>
+              <h3 className="text-sm text-theme-text">Quick log</h3>
             </div>
             <div className="px-5 py-4">
               <div className="flex flex-wrap gap-2">
-                <QuickLogButton icon={<Droplets className="w-4 h-4" />} label="Period start" onClick={openStartPeriod} variant="rose" />
-                <QuickLogButton icon={<Droplets className="w-4 h-4 opacity-60" />} label="Period end" onClick={openEndPeriod} variant="rose-light" />
-                <QuickLogButton icon={<Plus className="w-4 h-4" />} label="Add symptom" onClick={openAddSymptom} variant="amber" />
+                <QuickLogButton icon={<Droplets className="w-4 h-4" />} label="Period start" onClick={openStartPeriod} emphasis />
+                <QuickLogButton icon={<Droplets className="w-4 h-4 opacity-60" />} label="Period end" onClick={openEndPeriod} />
+                <QuickLogButton icon={<Plus className="w-4 h-4" />} label="Add symptom" onClick={openAddSymptom} />
                 <QuickLogButton
                   icon={<StickyNote className="w-4 h-4" />}
                   label="Add note"
                   onClick={() => setNoteModal({ open: true, defaultDate: dateToKey(today) })}
-                  variant="neutral"
                 />
-                <QuickLogButton icon={<Upload className="w-4 h-4" />} label="Upload labs" onClick={() => navigate('/app/new')} variant="teal" />
+                <QuickLogButton icon={<Upload className="w-4 h-4" />} label="Upload labs" onClick={() => navigate('/app/new')} />
               </div>
             </div>
           </div>
 
-          <CycleSummary
-            lastPeriodLog={lastPeriodLog}
-            periodLogs={periodLogs}
-            lastReport={lastReport}
-            activeInterventions={activeInterventions}
-            symptomLogsThisCycle={symptomLogsThisCycle}
-            prediction={prediction}
-          />
-
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-theme-text">Recent Lab Reports</h2>
+              <h2 className="text-base text-theme-text">Recent lab reports</h2>
               <Link to="/app/reports" className="flex items-center gap-1 text-sm text-theme-primary hover:text-theme-primary-dark font-medium transition-colors">
                 View all <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
             {reports.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-5 py-12 text-center">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm px-5 py-12 text-center">
                 <TestTube2 className="w-12 h-12 text-theme-primary-faded mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-theme-text mb-1">No lab reports yet</h3>
+                <h3 className="text-base text-theme-text mb-1">No lab reports yet</h3>
                 <p className="text-sm text-theme-muted-text mb-4">Upload your first lab report to get started.</p>
                 {canCreateReport && (
                   <Link to="/app/new">
@@ -494,7 +502,7 @@ export function Dashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {reports.slice(0, 6).map((report) => (
                   <Link key={report.id} to={`/app/reports/${report.id}`} className="block">
-                    <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-5 py-4 hover:shadow-md hover:border-theme-primary/40 transition-all cursor-pointer border-l-4 border-l-theme-primary">
+                    <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm px-5 py-4 hover:shadow-md hover:border-theme-primary/40 transition-all cursor-pointer border-l-4 border-l-theme-primary">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3 flex-1">
                           <div className="bg-theme-surface-2 p-2 rounded-lg">
@@ -515,14 +523,14 @@ export function Dashboard() {
                             {(() => {
                               const reportBiomarkers = biomarkersByReport[report.id];
                               return reportBiomarkers ? (
-                                <div className="text-xs text-theme-muted-text-4 mt-1.5">
+                                <div className="text-xs text-theme-muted-text-3 mt-1.5">
                                   {reportBiomarkers.length} biomarkers
                                 </div>
                               ) : null;
                             })()}
                           </div>
                         </div>
-                        <ArrowRight className="w-4 h-4 text-theme-muted-text-4 mt-0.5" />
+                        <ArrowRight className="w-4 h-4 text-theme-muted-text-3 mt-0.5" />
                       </div>
                     </div>
                   </Link>
@@ -560,9 +568,9 @@ export function Dashboard() {
 
       {noteModal.open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+          <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
-              <h2 className="text-base font-semibold text-theme-text">Add note</h2>
+              <h2 className="text-base text-theme-text">Add note</h2>
               <button
                 onClick={() => setNoteModal({ open: false, defaultDate: '' })}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
@@ -588,7 +596,7 @@ export function Dashboard() {
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={4}
                   placeholder="Write a note..."
-                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-4"
+                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
                 />
               </div>
             </div>
@@ -615,27 +623,53 @@ export function Dashboard() {
 }
 
 function QuickLogButton({
-  icon, label, onClick, variant,
+  icon, label, onClick, emphasis = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
-  variant: 'rose' | 'rose-light' | 'amber' | 'teal' | 'neutral';
+  /** The most likely next action gets the filled treatment. At most one. */
+  emphasis?: boolean;
 }) {
-  const classes = {
-    rose: 'bg-rose-500 text-white hover:bg-rose-600',
-    'rose-light': 'bg-rose-100 text-rose-600 hover:bg-rose-200 border border-dashed border-rose-300',
-    amber: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200',
-    teal: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200',
-    neutral: 'bg-theme-surface-2 text-theme-muted-text hover:bg-theme-surface-hover border border-theme-border',
-  };
+  /*
+    These were five different colours — flag-low, flag-watch, flag-ok and two
+    more — which meant "Upload labs" was green and "Add symptom" was amber. The
+    three status tokens are reserved for whether a result is in range; using
+    them as button decoration told the user a panel upload was "good" and
+    logging a symptom was a "warning". They are all just actions, so they all
+    look like actions.
+  */
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${classes[variant]}`}
+      className={[
+        'inline-flex items-center gap-2 px-4 min-h-[44px] rounded-xl text-sm font-medium',
+        'transition-all duration-150 active:scale-[0.98] motion-reduce:active:scale-100',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-surface',
+        emphasis
+          ? 'bg-theme-primary text-white hover:bg-theme-primary-dark'
+          : 'bg-theme-surface-2 text-theme-text hover:bg-theme-surface-hover border border-theme-border',
+      ].join(' ')}
     >
       {icon}
       {label}
     </button>
+  );
+}
+
+/** A single dashboard notice. Neutral by default; `watch` for the one case
+ *  that is actually blocking — an ended trial. */
+function Notice({ tone = 'neutral', children }: { tone?: 'neutral' | 'watch'; children: React.ReactNode }) {
+  return (
+    <div
+      className={[
+        'mb-5 rounded-2xl border px-5 py-4',
+        tone === 'watch'
+          ? 'bg-theme-flag-watch-bg border-theme-flag-watch-border'
+          : 'bg-theme-surface border-theme-border',
+      ].join(' ')}
+    >
+      {children}
+    </div>
   );
 }

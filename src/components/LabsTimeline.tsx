@@ -15,12 +15,17 @@ const KEY_BIOMARKERS = ['ferritin', 'vitamin d', 'vitamin_d', 'tsh', 'hba1c', 'l
 
 const getCategoryColor = (category: string): string => {
   const colors: Record<string, string> = {
-    supplement: 'bg-purple-50 text-purple-700 border-purple-200',
-    diet: 'bg-green-50 text-green-700 border-green-200',
-    exercise: 'bg-blue-50 text-blue-700 border-blue-200',
-    medication: 'bg-rose-50 text-rose-700 border-rose-200',
-    sleep: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    other: 'bg-theme-surface-2 text-theme-muted-text border-theme-border',
+    // Fixed order, never cycled. These five hues were validated for
+    // colour-vision separation and contrast against the #FBF7F5 ground —
+    // separation comes from lightness variation as much as hue. Each always
+    // renders with its text label, which is what lets the lighter supplement
+    // tone sit below 3:1 legally.
+    supplement: 'bg-theme-surface text-theme-cat-supplement border-theme-cat-supplement/30',
+    diet:       'bg-theme-surface text-theme-cat-diet border-theme-cat-diet/30',
+    exercise:   'bg-theme-surface text-theme-cat-exercise border-theme-cat-exercise/30',
+    medication: 'bg-theme-surface text-theme-cat-medication border-theme-cat-medication/30',
+    sleep:      'bg-theme-surface text-theme-cat-sleep border-theme-cat-sleep/30',
+    other:      'bg-theme-surface-2 text-theme-muted-text border-theme-border',
   };
   return colors[category] ?? colors.other ?? 'bg-theme-surface-2 text-theme-muted-text border-theme-border';
 };
@@ -122,7 +127,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
           <Card key={report.id}>
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-theme-text">{formatDate(report.report_date)}</h3>
+                <h3 className="text-lg text-theme-text">{formatDate(report.report_date)}</h3>
                 {report.lab_name && (
                   <p className="text-sm text-theme-muted-text">{report.lab_name}</p>
                 )}
@@ -151,7 +156,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
             </div>
 
             {index === 0 && sortedReports.length === 1 && (
-              <div className="mb-6 bg-gradient-to-r from-theme-surface-2 to-pink-50 border border-theme-border rounded-xl p-4 shadow-sm">
+              <div className="mb-6 bg-gradient-to-r from-theme-surface-2 to-theme-cat-medication border border-theme-border rounded-xl p-4 shadow-sm">
                 <p className="text-sm font-medium text-theme-text">This is your baseline. Everything builds from here.</p>
                 <p className="text-xs text-theme-muted-text mt-2">
                   Upload another lab report to see how your biomarkers change over time.

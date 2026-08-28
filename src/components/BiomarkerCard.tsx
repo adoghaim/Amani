@@ -89,29 +89,42 @@ function RangeBar({
 
   return (
     <div className="mt-3">
-      <div className="relative h-3 rounded-full bg-gray-100 overflow-visible">
+      <div className="relative h-3 rounded-full bg-theme-neutral-100 overflow-visible">
         <div
-          className="absolute h-full rounded-full bg-blue-100"
+          className="absolute h-full rounded-full bg-theme-info-bg"
           style={{ left: `${clinLeft}%`, width: `${clinWidth}%` }}
         />
         <div
-          className="absolute h-full rounded-full bg-emerald-200"
+          className="absolute h-full rounded-full bg-theme-flag-ok-bg"
           style={{ left: `${optLeft}%`, width: `${optWidth}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#2A1F23] border-2 border-white shadow-sm z-10"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-theme-accent border-2 border-theme-surface shadow-theme-sm z-10"
           style={{ left: `calc(${valuePos}% - 6px)` }}
         />
       </div>
-      <div className="flex justify-between text-[10px] text-[#9A8A90] mt-1">
+      {/*
+        Range labels are captions, not data. They were coloured green and blue,
+        which put two more hues into a row that already carries a status pill, a
+        trend arrow and the bar's own banding — and the green read as "in range"
+        when it was only naming the optimal band. A small legend dot carries the
+        mapping; the text stays in muted ink.
+      */}
+      <div className="flex justify-between font-mono text-[10px] text-theme-muted-text-3 mt-1 tabular-nums">
         <span>{formatRangeLabel(clinMin ?? optMin)}</span>
         <div className="flex gap-3 text-center items-center">
-          <span className="text-emerald-600">Opt: {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-theme-flag-ok" aria-hidden="true" />
+            Opt {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}
+          </span>
           {clinMin !== null && clinMax !== null && (
-            <span className="text-blue-500">Lab: {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-theme-info" aria-hidden="true" />
+              Lab {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}
+            </span>
           )}
           {isExtreme && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-50 text-red-600 border border-red-200">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border">
               {isExtremeHigh ? 'Far above range' : 'Far below range'}
             </span>
           )}
@@ -148,20 +161,20 @@ function DualStatusSection({
           {amaniPill.label}
         </div>
         {hasBoth && labStatus !== 'in_range' && (
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-gray-200 bg-gray-50 text-gray-600">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-600">
             Lab ref: {labStatus.replace(/_/g, ' ')}
           </div>
         )}
         {hasBoth && labStatus === 'in_range' && amaniStatus !== 'optimal' && (
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-gray-200 bg-gray-50 text-gray-500">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-500">
             Within lab ref range
           </div>
         )}
       </div>
       {isNormalNotOptimal && (
-        <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-          <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
-          <p className="text-xs text-blue-700">
+        <div className="flex items-start gap-1.5 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2">
+          <Info className="w-3.5 h-3.5 text-theme-info mt-0.5 shrink-0" />
+          <p className="text-xs text-theme-info">
             This result is within the standard lab reference range but below the Amani optimal threshold.
             Being "normal" and being "optimal" are different — Amani uses tighter ranges for peak health.
           </p>
@@ -221,29 +234,52 @@ export function BiomarkerCard({
   })();
 
   return (
-    <div className={`bg-white rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
+    <div className={`bg-theme-surface rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-gray-50/50 transition-colors"
+        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-theme-neutral-50/50 transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="text-sm font-semibold text-[#2A1F23]">{displayName}</span>
+            <span className="text-sm font-semibold text-theme-text">{displayName}</span>
             <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${pill.bg} ${pill.text} ${pill.border}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${pill.dot}`} />
               {pill.label}
             </div>
             {trendDir && (
-              <span className={`text-xs font-medium ${trendDir === 'up' ? 'text-rose-500' : 'text-emerald-600'}`}>
+              /*
+                Direction is not valence. This coloured every increase red and
+                every decrease green, so a ferritin recovering from 18 toward
+                its range rendered as a red warning arrow while a rising TSH and
+                a rising estradiol looked identical. Whether "up" is good
+                depends on the analyte and where it started, which this arrow
+                does not know — so it reports direction in neutral ink and lets
+                the status pill carry the judgement.
+              */
+              <span
+                className="text-xs font-medium text-theme-muted-text-2"
+                title={trendDir === 'up' ? 'Higher than last panel' : 'Lower than last panel'}
+              >
                 {trendDir === 'up' ? '↑' : '↓'}
+                <span className="sr-only">
+                  {trendDir === 'up' ? 'Higher than last panel' : 'Lower than last panel'}
+                </span>
               </span>
             )}
           </div>
-          <div className="flex items-baseline gap-1.5 text-[#7A6570]">
-            <span className="text-xl font-bold text-[#2A1F23]">{formattedValue}</span>
-            <span className="text-xs">{unit}</span>
+          {/*
+            The measurement wears the data face. This is exactly where mono
+            earns its keep — an unambiguous 0/O and 1/l matter when the number
+            is a test result, and tabular figures let two panels be compared
+            down a column.
+          */}
+          <div className="flex items-baseline gap-1.5 text-theme-muted-text-2">
+            <span className="font-mono text-xl text-theme-text tabular-nums">{formattedValue}</span>
+            <span className="font-mono text-xs">{unit}</span>
             {labRefMin !== null && labRefMax !== null && (
-              <span className="text-xs text-[#9A8A90]">· lab ref: {labRefMin}–{labRefMax}</span>
+              <span className="font-mono text-xs text-theme-muted-text-3 tabular-nums">
+                · ref {labRefMin}–{labRefMax}
+              </span>
             )}
           </div>
           {(() => {
@@ -263,10 +299,10 @@ export function BiomarkerCard({
             return (
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 {baselineLabel && (
-                  <span className="text-[10px] text-teal-600 font-medium">{baselineLabel}</span>
+                  <span className="text-[10px] text-theme-flag-ok font-medium">{baselineLabel}</span>
                 )}
                 {showTrendPill && (
-                  <span className="text-[10px] text-sky-600 font-medium">
+                  <span className="text-[10px] text-theme-info font-medium">
                     Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
                   </span>
                 )}
@@ -277,13 +313,13 @@ export function BiomarkerCard({
             <RangeBar value={value} optMin={optMin} optMax={optMax} clinMin={labRefMin ?? clinMin} clinMax={labRefMax ?? clinMax} />
           )}
         </div>
-        <div className="shrink-0 pt-0.5 text-[#9A8A90]">
+        <div className="shrink-0 pt-0.5 text-theme-muted-text-3">
           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
+        <div className="px-4 pb-4 space-y-3 border-t border-theme-neutral-100 pt-3">
           <DualStatusSection
             amaniStatus={amaniStatus}
             labRefMin={labRefMin}
@@ -295,37 +331,37 @@ export function BiomarkerCard({
             const explanation = getBiomarkerExplanation(name);
             if (!explanation) return null;
             return (
-              <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
-                <BookOpen className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2.5">
+                <BookOpen className="w-3.5 h-3.5 text-theme-info mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Why this matters</p>
-                  <p className="text-xs text-blue-800 leading-relaxed">{explanation}</p>
+                  <p className="text-[10px] font-bold text-theme-info uppercase tracking-widest mb-1">Why this matters</p>
+                  <p className="text-xs text-theme-info leading-relaxed">{explanation}</p>
                 </div>
               </div>
             );
           })()}
 
           {plainEnglishMeaning && (
-            <p className="text-sm text-[#4A3A40]">{plainEnglishMeaning}</p>
+            <p className="text-sm text-theme-text-body">{plainEnglishMeaning}</p>
           )}
 
           {timingNotes && (
-            <p className="text-xs text-[#7A6570] italic border-l-2 border-[#E9D6DA] pl-2">{timingNotes}</p>
+            <p className="text-xs text-theme-muted-text-2 italic border-l-2 border-theme-border pl-2">{timingNotes}</p>
           )}
 
           {cyclePhase && entry?.phaseRanges?.[cyclePhase] && (
-            <div className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 text-xs text-rose-700">
+            <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg px-3 py-2 text-xs text-theme-flag-low">
               Showing cycle-adjusted ranges for the <span className="font-semibold capitalize">{cyclePhase}</span> phase.
             </div>
           )}
 
           {commonNonAlarmReasons && commonNonAlarmReasons.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-[#2A1F23] uppercase tracking-wide mb-1.5">Common reasons for this result</h4>
+              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">Common reasons for this result</h4>
               <ul className="space-y-1">
                 {commonNonAlarmReasons.map((r, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-[#4A3A40]">
-                    <span className="text-[#C97C8B] mt-0.5 shrink-0">•</span>
+                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
+                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
                     <span>{r}</span>
                   </li>
                 ))}
@@ -335,11 +371,11 @@ export function BiomarkerCard({
 
           {whenCliniciansFollowUp && whenCliniciansFollowUp.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-[#2A1F23] uppercase tracking-wide mb-1.5">When clinicians may follow up</h4>
+              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">When clinicians may follow up</h4>
               <ul className="space-y-1">
                 {whenCliniciansFollowUp.map((item, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-[#4A3A40]">
-                    <span className="text-[#C97C8B] mt-0.5 shrink-0">•</span>
+                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
+                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
                     <span>{item}</span>
                   </li>
                 ))}

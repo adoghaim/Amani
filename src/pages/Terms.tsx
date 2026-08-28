@@ -19,7 +19,8 @@
   ============================================================================
 */
 
-import { Heart, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
 import { STRIPE_PRODUCTS } from '../stripe-config';
 
@@ -35,8 +36,7 @@ export function Terms() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16">
             <Link to="/" className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <span className="text-xl font-semibold text-theme-text">Amani</span>
+              <AmaniLogo size="sm" />
             </Link>
           </div>
         </div>
@@ -51,7 +51,7 @@ export function Terms() {
           Back to home
         </Link>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-10">
+        <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl p-5 mb-10">
           <h2 className="text-base font-semibold text-theme-text mb-1">
             Draft — pending legal review
           </h2>
@@ -67,7 +67,7 @@ export function Terms() {
         <p className="text-theme-muted-text mb-10">Last updated {LAST_UPDATED}</p>
 
         <div className="space-y-10 text-theme-text-body leading-relaxed">
-          <section className="bg-rose-50 border border-rose-200 rounded-xl p-5">
+          <section className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-xl p-5">
             <h2 className="text-lg font-semibold text-theme-text mb-2">
               Read this first: Amani is not medical care
             </h2>
@@ -274,7 +274,7 @@ export function Terms() {
               consequential losses arising from your use of the service, and our total liability
               is limited to the amount you paid us in the twelve months before the claim.
             </p>
-            <p className="text-sm bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-sm bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-lg p-4">
               <strong className="text-theme-text">Draft note:</strong> nothing in this section is
               intended to limit liability for death or personal injury caused by negligence,
               for fraud, or for anything else that cannot lawfully be excluded — and some
@@ -287,7 +287,7 @@ export function Terms() {
             <h2 className="text-xl font-semibold text-theme-text mb-3">
               Governing law and disputes
             </h2>
-            <p className="text-sm bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-sm bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-lg p-4">
               <strong className="text-theme-text">Draft note:</strong> the governing jurisdiction
               and the dispute-resolution mechanism are deliberately left blank rather than
               guessed at. They depend on where Amani is legally established, which is not

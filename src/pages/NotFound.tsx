@@ -1,90 +1,79 @@
-/*
-  Catch-all for unmatched routes.
-  Until this existed, `src/App.tsx` had no `<Route path="*">`, so any path the
-  route table did not match rendered nothing at all — a white screen with no
-  explanation and no way back. That was not a hypothetical: every "you need to
-  pay" branch in `src/utils/subscription.ts` navigated to `/billing`, which was
-  never a declared route, so lapsed subscribers were sent straight into it.
-
-  That bug is fixed at the source, but a catch-all is the backstop: a mistyped
-  URL, a stale link in an old email, or a route renamed in a future refactor
-  should land somewhere that tells the user what happened.
-*/
-
-import { Heart, Compass } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { AmaniLogo } from '../components/AmaniLogo';
+import { useAuth } from '../contexts/AuthContext';
 
+/**
+ * Catch-all for unmatched routes.
+ *
+ * Without this, a typo under /app/* fell through every <Route> and rendered
+ * nothing — the Suspense fallback with no lazy import to resolve, so the user
+ * sat on a blank screen indefinitely with no way back.
+ *
+ * It is also the backstop for stale links. That was not hypothetical: every
+ * "you need to pay" branch in src/utils/subscription.ts used to navigate to
+ * /billing, a route that was never declared, so lapsed subscribers were sent
+ * straight into the blank screen. That is fixed at the source now, but a
+ * mistyped URL, an old email link, or a route renamed in a future refactor
+ * should still land somewhere that explains itself.
+ *
+ * Sends signed-in users to the dashboard and everyone else to the landing
+ * page, because "go home" means different places depending on who is asking.
+ */
 export function NotFound() {
   const { user } = useAuth();
-
-  // Signed-in users belong back in the app; everyone else at the front door.
-  const homePath = user ? '/app' : '/';
-  const homeLabel = user ? 'Back to your dashboard' : 'Back to home';
+  const location = useLocation();
+  const home = user ? '/app' : '/';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-theme-background to-theme-surface-2 flex flex-col">
-      <nav className="bg-theme-surface border-b border-theme-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16">
-            <Link to={homePath} className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <span className="text-xl font-semibold text-theme-text">Amani</span>
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-dvh bg-theme-background flex items-center justify-center px-5 safe-top safe-bottom">
+      <div className="max-w-md w-full">
+        <AmaniLogo markOnly size="md" className="mb-6" />
+        <p className="font-mono text-xs uppercase tracking-[0.16em] text-theme-muted-text-3 mb-3">
+          Error 404
+        </p>
+        <h1 className="text-3xl mb-3">This page doesn&rsquo;t exist</h1>
+        <p className="text-theme-muted-text-2 mb-2">
+          Nothing lives at{' '}
+          <code className="font-mono text-sm text-theme-text break-all">{location.pathname}</code>.
+        </p>
+        {/* A 404 in a health app can read as "my results are gone". Say plainly that they are not. */}
+        <p className="text-theme-muted-text-2 mb-8">
+          It may have moved, or the link may have been mistyped. Nothing has happened to
+          your data.
+        </p>
 
-      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-20">
-        <div className="max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-theme-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Compass className="w-8 h-8 text-theme-primary" />
-          </div>
-
-          <p className="text-sm font-semibold text-theme-muted-text uppercase tracking-wider mb-3">
-            Page not found
-          </p>
-          <h1 className="text-3xl font-bold text-theme-text mb-3">
-            This page doesn&rsquo;t exist
-          </h1>
-          <p className="text-theme-muted-text mb-8">
-            The link may be out of date, or the address may have a typo in it. Nothing has
-            happened to your data.
-          </p>
-
-          <Link to={homePath}>
-            <Button size="lg" className="w-full sm:w-auto">
-              {homeLabel}
-            </Button>
+        <div className="flex flex-wrap gap-3">
+          <Link to={home}>
+            <Button>{user ? 'Back to dashboard' : 'Back to home'}</Button>
           </Link>
-
-          <div className="flex flex-wrap justify-center gap-5 mt-8 text-sm text-theme-muted-text">
-            {user ? (
-              <>
-                <Link to="/app/reports" className="hover:text-theme-text transition-colors">
-                  Your reports
-                </Link>
-                <Link to="/app/settings" className="hover:text-theme-text transition-colors">
-                  Settings
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="hover:text-theme-text transition-colors">
-                  Log in
-                </Link>
-                <Link to="/pricing" className="hover:text-theme-text transition-colors">
-                  Pricing
-                </Link>
-              </>
-            )}
-            <Link to="/contact" className="hover:text-theme-text transition-colors">
-              Contact us
+          {user && (
+            <Link to="/app/reports">
+              <Button variant="outline">View your panels</Button>
             </Link>
-          </div>
+          )}
         </div>
-      </main>
+
+        <div className="flex flex-wrap gap-5 mt-8 text-sm text-theme-muted-text-2">
+          {user ? (
+            <Link to="/app/settings" className="hover:text-theme-text transition-colors">
+              Settings
+            </Link>
+          ) : (
+            <>
+              <Link to="/login" className="hover:text-theme-text transition-colors">
+                Log in
+              </Link>
+              <Link to="/pricing" className="hover:text-theme-text transition-colors">
+                Pricing
+              </Link>
+            </>
+          )}
+          <Link to="/contact" className="hover:text-theme-text transition-colors">
+            Contact us
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

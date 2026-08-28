@@ -21,7 +21,7 @@ export function HealthGoalsStep({ value, onChange, onNext, onBack }: HealthGoals
 
   return (
     <div className="flex flex-col">
-      <h1 className="text-2xl sm:text-3xl font-bold text-theme-text mb-2">
+      <h1 className="text-2xl sm:text-3xl text-theme-text mb-2">
         What are you hoping to understand?
       </h1>
       <p className="text-sm text-theme-muted-text mb-6">

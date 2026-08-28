@@ -25,6 +25,12 @@
   */
   h1, h2, h3 {
     @apply font-display text-theme-text;
+    /*
+      600, not 700. Fraunces at bold is very heavy — on a warm ground it reads
+      as shouting rather than as emphasis. The optical-size axis is what gives
+      headings presence here, so weight can stay restrained.
+    */
+    font-weight: 600;
     font-variation-settings: 'opsz' 40;
     letter-spacing: -0.015em;
     text-wrap: balance;

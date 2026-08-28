@@ -6,12 +6,12 @@ const BOUNDARY_CROSSING_STYLE: Record<string, {
   bg: string; border: string; text: string; badge: string; label: string;
 }> = {
   improved: {
-    bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700',
-    badge: 'bg-emerald-100 text-emerald-700', label: 'Improved',
+    bg: 'bg-theme-flag-ok-bg', border: 'border-theme-flag-ok-border', text: 'text-theme-flag-ok',
+    badge: 'bg-theme-flag-ok-bg text-theme-flag-ok', label: 'Improved',
   },
   worsened: {
-    bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-700',
-    badge: 'bg-red-100 text-red-700', label: 'Moved out of range',
+    bg: 'bg-theme-flag-low-bg', border: 'border-theme-flag-low-border', text: 'text-theme-flag-low',
+    badge: 'bg-theme-flag-low-bg text-theme-flag-low', label: 'Moved out of range',
   },
 };
 
@@ -19,20 +19,20 @@ const TRAJECTORY_STYLE: Record<string, {
   bg: string; border: string; text: string; badge: string; label: string;
 }> = {
   improving_still_high: {
-    bg: 'bg-teal-50', border: 'border-teal-100', text: 'text-teal-700',
-    badge: 'bg-teal-100 text-teal-700', label: 'Improving, still elevated',
+    bg: 'bg-theme-flag-ok-bg', border: 'border-theme-flag-ok-border', text: 'text-theme-flag-ok',
+    badge: 'bg-theme-flag-ok-bg text-theme-flag-ok', label: 'Improving, still elevated',
   },
   improving_still_low: {
-    bg: 'bg-teal-50', border: 'border-teal-100', text: 'text-teal-700',
-    badge: 'bg-teal-100 text-teal-700', label: 'Improving, still low',
+    bg: 'bg-theme-flag-ok-bg', border: 'border-theme-flag-ok-border', text: 'text-theme-flag-ok',
+    badge: 'bg-theme-flag-ok-bg text-theme-flag-ok', label: 'Improving, still low',
   },
   worsening_still_high: {
-    bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700',
-    badge: 'bg-orange-100 text-orange-700', label: 'Worsening, still elevated',
+    bg: 'bg-theme-flag-watch-bg', border: 'border-theme-flag-watch-border', text: 'text-theme-flag-watch',
+    badge: 'bg-theme-flag-watch-bg text-theme-flag-watch', label: 'Worsening, still elevated',
   },
   worsening_still_low: {
-    bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700',
-    badge: 'bg-orange-100 text-orange-700', label: 'Worsening, still low',
+    bg: 'bg-theme-flag-watch-bg', border: 'border-theme-flag-watch-border', text: 'text-theme-flag-watch',
+    badge: 'bg-theme-flag-watch-bg text-theme-flag-watch', label: 'Worsening, still low',
   },
 };
 
@@ -40,16 +40,16 @@ const SIGNIFICANCE_STYLE: Record<string, {
   bg: string; border: string; text: string; badge: string; label: string; iconColor: string;
 }> = {
   significant: {
-    bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700',
-    badge: 'bg-red-100 text-red-700', label: 'Significant Change', iconColor: 'text-red-500',
+    bg: 'bg-theme-flag-low-bg', border: 'border-theme-flag-low-border', text: 'text-theme-flag-low',
+    badge: 'bg-theme-flag-low-bg text-theme-flag-low', label: 'Significant Change', iconColor: 'text-theme-flag-low',
   },
   moderate: {
-    bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700',
-    badge: 'bg-amber-100 text-amber-700', label: 'Moderate Change', iconColor: 'text-amber-500',
+    bg: 'bg-theme-flag-watch-bg', border: 'border-theme-flag-watch-border', text: 'text-theme-flag-watch',
+    badge: 'bg-theme-flag-watch-bg text-theme-flag-watch', label: 'Moderate Change', iconColor: 'text-theme-flag-watch',
   },
   minor: {
-    bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-600',
-    badge: 'bg-gray-100 text-gray-600', label: 'Minor Change', iconColor: 'text-gray-400',
+    bg: 'bg-theme-neutral-50', border: 'border-theme-neutral-200', text: 'text-theme-neutral-600',
+    badge: 'bg-theme-neutral-100 text-theme-neutral-600', label: 'Minor Change', iconColor: 'text-theme-neutral-400',
   },
 };
 
@@ -58,8 +58,8 @@ type ChangeStyle = {
 };
 
 const FALLBACK_STYLE: ChangeStyle = {
-  bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-600',
-  badge: 'bg-gray-100 text-gray-600', label: 'Minor Change', iconColor: 'text-gray-400',
+  bg: 'bg-theme-neutral-50', border: 'border-theme-neutral-200', text: 'text-theme-neutral-600',
+  badge: 'bg-theme-neutral-100 text-theme-neutral-600', label: 'Minor Change', iconColor: 'text-theme-neutral-400',
 };
 
 function getChangeStyle(change: BiggestChange): ChangeStyle {
@@ -107,9 +107,9 @@ function getSubtitle(change: BiggestChange): string | null {
 }
 
 function TrendIcon({ direction, colorClass }: { direction: 'up' | 'down' | 'stable'; colorClass?: string }) {
-  if (direction === 'up') return <TrendingUp className={`w-4 h-4 ${colorClass ?? 'text-rose-500'}`} />;
-  if (direction === 'down') return <TrendingDown className={`w-4 h-4 ${colorClass ?? 'text-sky-500'}`} />;
-  return <Minus className="w-4 h-4 text-gray-400" />;
+  if (direction === 'up') return <TrendingUp className={`w-4 h-4 ${colorClass ?? 'text-theme-flag-low'}`} />;
+  if (direction === 'down') return <TrendingDown className={`w-4 h-4 ${colorClass ?? 'text-theme-info'}`} />;
+  return <Minus className="w-4 h-4 text-theme-neutral-400" />;
 }
 
 function buildSummaryLine(changes: BiggestChange[]): string | null {
@@ -172,7 +172,7 @@ export function BiggestChangesCard({ changes }: Props) {
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <Activity className="w-4 h-4 text-theme-text" />
-        <h2 className="text-base font-semibold text-theme-text">Biggest Changes</h2>
+        <h2 className="text-base text-theme-text">Biggest changes</h2>
         <span className="text-xs text-theme-muted-text-3 ml-auto">vs. previous report</span>
       </div>
       <div className="space-y-2">
@@ -186,7 +186,7 @@ export function BiggestChangesCard({ changes }: Props) {
             <div key={change.key} className={`rounded-xl border overflow-hidden ${style.bg} ${style.border}`}>
               <div className="px-4 pt-3 pb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {isSignificant && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+                  {isSignificant && <AlertCircle className="w-3.5 h-3.5 text-theme-flag-low" />}
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${style.text}`}>{style.label}</span>
                 </div>
               </div>
@@ -200,7 +200,7 @@ export function BiggestChangesCard({ changes }: Props) {
                     ) : (
                       <>
                         <span className="text-theme-muted-text-2">{change.previousValue}</span>
-                        <ArrowRight className="w-3 h-3 text-gray-400" />
+                        <ArrowRight className="w-3 h-3 text-theme-neutral-400" />
                       </>
                     )}
                     <span className="font-bold text-theme-text">{change.currentValue}</span>

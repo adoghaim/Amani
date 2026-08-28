@@ -15,7 +15,8 @@
   ============================================================================
 */
 
-import { Heart, ArrowLeft, Mail, ShieldCheck, LifeBuoy, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Mail, ShieldCheck, LifeBuoy, AlertTriangle } from 'lucide-react';
+import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
 
 const LAST_UPDATED = '23 August 2026';
@@ -27,8 +28,7 @@ export function Contact() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16">
             <Link to="/" className="flex items-center gap-2">
-              <Heart className="w-6 h-6 text-theme-primary fill-theme-primary" />
-              <span className="text-xl font-semibold text-theme-text">Amani</span>
+              <AmaniLogo size="sm" />
             </Link>
           </div>
         </div>
@@ -43,7 +43,7 @@ export function Contact() {
           Back to home
         </Link>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-10">
+        <div className="bg-theme-flag-watch-bg border border-theme-flag-watch-border rounded-xl p-5 mb-10">
           <h2 className="text-base font-semibold text-theme-text mb-1">
             Draft — pending review
           </h2>
@@ -134,9 +134,9 @@ export function Contact() {
             </p>
           </div>
 
-          <div className="bg-rose-50 border border-rose-200 rounded-xl p-6">
+          <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-xl p-6">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-theme-flag-low shrink-0 mt-0.5" />
               <div>
                 <h2 className="text-lg font-semibold text-theme-text mb-1">
                   We cannot help with a medical emergency

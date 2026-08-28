@@ -31,7 +31,7 @@ export function Button({
     secondary:
       'bg-theme-surface-2 hover:bg-theme-surface-hover text-theme-text border border-theme-border focus-visible:ring-theme-primary',
     danger:
-      'bg-theme-danger hover:bg-[#9E3A4C] text-white focus-visible:ring-theme-danger',
+      'bg-theme-danger hover:bg-theme-danger-dark text-white focus-visible:ring-theme-danger',
     ghost:
       'bg-transparent hover:bg-theme-surface-2 text-theme-muted-text shadow-none focus-visible:ring-theme-primary',
     outline:

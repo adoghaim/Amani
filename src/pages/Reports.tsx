@@ -15,6 +15,8 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
+import { PageHeader } from '../components/PageHeader';
+import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
@@ -53,27 +55,27 @@ function timeAgo(dateStr: string) {
 function StatusBadge({ status }: { status: string }) {
   if (status === 'ready') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-theme-flag-ok-bg text-theme-flag-ok border border-theme-flag-ok-border">
         <CheckCircle className="w-3 h-3" /> Ready
       </span>
     );
   }
   if (status === 'processing') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100">
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-theme-flag-watch-bg text-theme-flag-watch border border-theme-flag-watch-border">
         <Clock className="w-3 h-3 animate-pulse" /> Processing
       </span>
     );
   }
   if (status === 'error') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-100">
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border">
         <XCircle className="w-3 h-3" /> Error
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200">
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-theme-neutral-50 text-theme-neutral-600 border border-theme-neutral-200">
       <Clock className="w-3 h-3" /> {status}
     </span>
   );
@@ -82,12 +84,12 @@ function StatusBadge({ status }: { status: string }) {
 function PhaseBadge({ phase }: { phase?: string | null }) {
   if (!phase || phase === 'unknown') return null;
   const colors: Record<string, string> = {
-    menstrual: 'bg-rose-50 text-rose-700 border-rose-100',
-    follicular: 'bg-sky-50 text-sky-700 border-sky-100',
-    ovulatory: 'bg-teal-50 text-teal-700 border-teal-100',
-    luteal: 'bg-violet-50 text-violet-700 border-violet-100',
+    menstrual: 'bg-theme-flag-low-bg text-theme-flag-low border-theme-flag-low-border',
+    follicular: 'bg-theme-info-bg text-theme-info border-theme-info-border',
+    ovulatory: 'bg-theme-flag-ok-bg text-theme-flag-ok border-theme-flag-ok-border',
+    luteal: 'bg-theme-cat-sleep text-theme-cat-sleep border-theme-cat-sleep',
   };
-  const cls = colors[phase] ?? 'bg-gray-50 text-gray-600 border-gray-200';
+  const cls = colors[phase] ?? 'bg-theme-neutral-50 text-theme-neutral-600 border-theme-neutral-200';
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border capitalize ${cls}`}>
       {phase}
@@ -106,14 +108,14 @@ interface DeleteModalProps {
 function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="px-6 py-5 border-b border-theme-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
+            <div className="w-10 h-10 rounded-xl bg-theme-flag-low-bg flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="w-5 h-5 text-theme-flag-low" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-theme-text">Delete report?</h2>
+              <h2 className="text-base text-theme-text">Delete report?</h2>
               <p className="text-sm text-theme-muted-text mt-0.5">This cannot be undone.</p>
             </div>
           </div>
@@ -125,27 +127,27 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
             , including all biomarkers and AI insights. This action cannot be reversed.
           </p>
           {error && (
-            <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">
+            <div className="mt-3 px-3 py-2 rounded-lg bg-theme-flag-low-bg border border-theme-flag-low-border text-sm text-theme-flag-low">
               {error}
             </div>
           )}
         </div>
-        <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
+        <div className="px-6 py-4 bg-theme-neutral-50 flex justify-end gap-3 border-t border-theme-neutral-100">
           <button
             onClick={onCancel}
             disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-theme-text-body bg-white border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-theme-text-body bg-theme-surface border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-xl hover:bg-red-600 transition-colors disabled:opacity-60 flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium text-white bg-theme-flag-low rounded-xl hover:bg-theme-flag-low transition-colors disabled:opacity-60 flex items-center gap-2"
           >
             {deleting ? (
               <>
-                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <span className="w-3.5 h-3.5 border-2 border-theme-surface/40 border-t-white rounded-full animate-spin" />
                 Deleting...
               </>
             ) : (
@@ -293,30 +295,29 @@ export function Reports() {
       )}
 
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-theme-text">Lab Reports</h1>
-            <p className="text-sm text-theme-muted-text mt-1">
-              {reports.length === 0
-                ? 'No reports yet'
-                : `${reports.length} report${reports.length !== 1 ? 's' : ''} total`}
-            </p>
-          </div>
-          <Link
-            to="/app/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-theme-primary text-white text-sm font-semibold rounded-xl hover:bg-theme-primary-dark transition-colors shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            New report
-          </Link>
-        </div>
+        <PageHeader
+          title="Lab panels"
+          description={
+            reports.length === 0
+              ? 'Nothing uploaded yet.'
+              : `${reports.length} panel${reports.length !== 1 ? 's' : ''} on file.`
+          }
+          action={
+            <Link to="/app/new">
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                New panel
+              </Button>
+            </Link>
+          }
+        />
 
         {error && (
-          <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-100 flex items-start justify-between gap-3">
-            <div className="text-sm text-red-700 flex-1">{error}</div>
+          <div className="mb-5 px-4 py-3 rounded-xl bg-theme-flag-low-bg border border-theme-flag-low-border flex items-start justify-between gap-3">
+            <div className="text-sm text-theme-flag-low flex-1">{error}</div>
             <button
               onClick={fetchData}
-              className="text-sm font-medium text-red-700 underline hover:no-underline whitespace-nowrap"
+              className="text-sm font-medium text-theme-flag-low underline hover:no-underline whitespace-nowrap"
             >
               Retry
             </button>
@@ -324,11 +325,11 @@ export function Reports() {
         )}
 
         {reports.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-6 py-20 text-center">
+          <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm px-6 py-20 text-center">
             <div className="w-16 h-16 bg-theme-surface-2 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <TestTube2 className="w-8 h-8 text-theme-primary" />
             </div>
-            <h3 className="text-lg font-semibold text-theme-text mb-2">No lab reports yet</h3>
+            <h3 className="text-lg text-theme-text mb-2">No lab reports yet</h3>
             <p className="text-sm text-theme-muted-text mb-6 max-w-xs mx-auto">
               Upload your first lab report to start tracking your biomarkers and getting AI insights.
             </p>
@@ -344,19 +345,19 @@ export function Reports() {
           <>
             <div className="flex flex-col sm:flex-row gap-3 mb-5">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted-text-4" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted-text-3" />
                 <input
                   type="text"
                   placeholder="Search by date or cycle phase..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-theme-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text placeholder:text-theme-muted-text-4"
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-theme-border rounded-xl bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text placeholder:text-theme-muted-text-3"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
-                className="px-3 py-2.5 text-sm border border-theme-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text min-w-[140px]"
+                className="px-3 py-2.5 text-sm border border-theme-border rounded-xl bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text min-w-[140px]"
               >
                 <option value="all">All statuses</option>
                 <option value="ready">Ready</option>
@@ -366,7 +367,7 @@ export function Reports() {
             </div>
 
             {filtered.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-theme-border shadow-sm px-6 py-16 text-center">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm px-6 py-16 text-center">
                 <Search className="w-8 h-8 text-theme-primary-faded mx-auto mb-3" />
                 <p className="text-sm font-medium text-theme-text-body">No reports match your filters</p>
                 <button
@@ -377,7 +378,7 @@ export function Reports() {
                 </button>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
                 <div className="hidden sm:grid grid-cols-[1fr_140px_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
                   <button
                     onClick={() => cycleSort('report_date')}
@@ -419,9 +420,9 @@ export function Reports() {
                               {formatDate(report.report_date)}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs text-theme-muted-text-4">Uploaded {timeAgo(report.upload_date)}</span>
+                              <span className="text-xs text-theme-muted-text-3">Uploaded {timeAgo(report.upload_date)}</span>
                               {report.lab_source && report.lab_source !== 'unknown' && (
-                                <span className="inline-flex items-center gap-0.5 text-[11px] text-theme-muted-text-4">
+                                <span className="inline-flex items-center gap-0.5 text-[11px] text-theme-muted-text-3">
                                   <FlaskConical className="w-2.5 h-2.5" />
                                   {report.lab_source === 'quest' ? 'Quest' : 'Labcorp'}
                                 </span>
@@ -434,7 +435,7 @@ export function Reports() {
                           <div className="text-sm text-theme-text-body">
                             {timeAgo(report.upload_date)}
                           </div>
-                          <div className="text-xs text-theme-muted-text-4 mt-0.5">
+                          <div className="text-xs text-theme-muted-text-3 mt-0.5">
                             {formatDateShort(report.upload_date.slice(0, 10))}
                           </div>
                         </Link>
@@ -446,7 +447,7 @@ export function Reports() {
                         <Link to={`/app/reports/${report.id}`} className="hidden sm:block">
                           <PhaseBadge phase={report.estimated_cycle_phase} />
                           {(!report.estimated_cycle_phase || report.estimated_cycle_phase === 'unknown') && (
-                            <span className="text-xs text-theme-muted-text-4">—</span>
+                            <span className="text-xs text-theme-muted-text-3">—</span>
                           )}
                         </Link>
 
@@ -455,7 +456,7 @@ export function Reports() {
                             {markerCount > 0 ? markerCount : '—'}
                           </span>
                           {markerCount > 0 && (
-                            <span className="text-xs text-theme-muted-text-4">items</span>
+                            <span className="text-xs text-theme-muted-text-3">items</span>
                           )}
                         </Link>
 
@@ -468,14 +469,14 @@ export function Reports() {
                             <Link
                               to={`/app/reports/${report.id}`}
                               aria-label="View report"
-                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-hover text-theme-muted-text-4 hover:text-theme-primary transition-colors"
+                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-surface-hover text-theme-muted-text-3 hover:text-theme-primary transition-colors"
                             >
                               <ArrowRight className="w-4 h-4" />
                             </Link>
                             <button
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget(report); }}
                               aria-label="Delete report"
-                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-red-50 text-theme-muted-text-4 hover:text-theme-danger transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-theme-flag-low-bg text-theme-muted-text-3 hover:text-theme-danger transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -487,7 +488,7 @@ export function Reports() {
                 </div>
 
                 <div className="px-5 py-3 border-t border-theme-border-inner bg-theme-background-tint">
-                  <p className="text-xs text-theme-muted-text-4">
+                  <p className="text-xs text-theme-muted-text-3">
                     Showing {filtered.length} of {reports.length} report{reports.length !== 1 ? 's' : ''}
                   </p>
                 </div>

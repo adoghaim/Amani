@@ -59,7 +59,7 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
 
   const days = [];
   for (let i = 0; i < firstDay; i++) {
-    days.push(<div key={`empty-${i}`} className="h-20 bg-gray-50" />);
+    days.push(<div key={`empty-${i}`} className="h-20 bg-theme-neutral-50" />);
   }
 
   for (let day = 1; day <= daysInMonth; day++) {
@@ -72,12 +72,12 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
       <button
         key={day}
         onClick={() => handleDayClick(day)}
-        className={`h-20 border border-gray-200 p-2 text-left hover:bg-theme-surface-2 transition-colors ${
-          isToday ? 'bg-theme-surface-2 border-theme-primary/30' : 'bg-white'
+        className={`h-20 border border-theme-neutral-200 p-2 text-left hover:bg-theme-surface-2 transition-colors ${
+          isToday ? 'bg-theme-surface-2 border-theme-primary/30' : 'bg-theme-surface'
         }`}
       >
         <div className="flex flex-col h-full">
-          <span className={`text-sm font-medium ${isToday ? 'text-theme-primary' : 'text-gray-700'}`}>
+          <span className={`text-sm font-medium ${isToday ? 'text-theme-primary' : 'text-theme-neutral-700'}`}>
             {day}
           </span>
           <div className="flex gap-1 mt-1 flex-wrap">
@@ -96,9 +96,9 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
                 {event.type === 'lab' ? (
                   <TestTube2 className="w-3 h-3 text-theme-primary" />
                 ) : event.type === 'period_start' ? (
-                  <Droplet className="w-3 h-3 text-pink-600 fill-pink-600" />
+                  <Droplet className="w-3 h-3 text-theme-cat-medication fill-theme-cat-medication" />
                 ) : (
-                  <Droplet className="w-3 h-3 text-pink-400" />
+                  <Droplet className="w-3 h-3 text-theme-cat-medication" />
                 )}
               </div>
             ))}
@@ -109,9 +109,9 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">{monthName}</h2>
+    <div className="bg-theme-surface rounded-lg border border-theme-neutral-200">
+      <div className="flex items-center justify-between p-4 border-b border-theme-neutral-200">
+        <h2 className="text-lg text-theme-neutral-900">{monthName}</h2>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={previousMonth}>
             <ChevronLeft className="w-4 h-4" />
@@ -124,25 +124,25 @@ export function Calendar({ events, onDateClick, currentMonth: initialMonth }: Ca
       <div className="p-4">
         <div className="grid grid-cols-7 gap-1 mb-1">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <div key={day} className="text-center text-xs font-medium text-gray-600 py-2">
+            <div key={day} className="text-center text-xs font-medium text-theme-neutral-600 py-2">
               {day}
             </div>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1">{days}</div>
       </div>
-      <div className="flex gap-4 p-4 border-t border-gray-200 text-sm">
+      <div className="flex gap-4 p-4 border-t border-theme-neutral-200 text-sm">
         <div className="flex items-center gap-2">
           <TestTube2 className="w-4 h-4 text-theme-primary" />
-          <span className="text-gray-700">Lab report</span>
+          <span className="text-theme-neutral-700">Lab report</span>
         </div>
         <div className="flex items-center gap-2">
-          <Droplet className="w-4 h-4 text-pink-600 fill-pink-600" />
-          <span className="text-gray-700">Period start</span>
+          <Droplet className="w-4 h-4 text-theme-cat-medication fill-theme-cat-medication" />
+          <span className="text-theme-neutral-700">Period start</span>
         </div>
         <div className="flex items-center gap-2">
-          <Droplet className="w-4 h-4 text-pink-400" />
-          <span className="text-gray-700">Period end</span>
+          <Droplet className="w-4 h-4 text-theme-cat-medication" />
+          <span className="text-theme-neutral-700">Period end</span>
         </div>
       </div>
     </div>

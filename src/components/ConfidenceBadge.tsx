@@ -9,21 +9,21 @@ const LABEL_CONFIG: Record<ReportConfidence['label'], {
   text: string;
 }> = {
   high: {
-    badge: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30',
-    dot: 'bg-emerald-400',
-    panel: 'bg-theme-text border-white/10',
+    badge: 'bg-theme-flag-ok/20 text-theme-flag-ok border-theme-flag-ok-border/30',
+    dot: 'bg-theme-flag-ok',
+    panel: 'bg-black/25 border-white/15',
     text: 'text-white/80',
   },
   medium: {
-    badge: 'bg-amber-500/20 text-amber-200 border-amber-500/30',
-    dot: 'bg-amber-400',
-    panel: 'bg-theme-text border-white/10',
+    badge: 'bg-theme-flag-watch/20 text-theme-flag-watch border-theme-flag-watch-border/30',
+    dot: 'bg-theme-flag-watch',
+    panel: 'bg-black/25 border-white/15',
     text: 'text-white/80',
   },
   low: {
-    badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
-    dot: 'bg-gray-400',
-    panel: 'bg-theme-text border-white/10',
+    badge: 'bg-theme-neutral-500/20 text-theme-neutral-500 border-theme-neutral-500/30',
+    dot: 'bg-theme-neutral-400',
+    panel: 'bg-black/25 border-white/15',
     text: 'text-white/70',
   },
 };
@@ -51,7 +51,7 @@ export function ConfidenceBadge({ confidence }: Props) {
 
       {expanded && (
         <div className={`mt-2 rounded-xl border p-3 space-y-2 ${cfg.panel}`}>
-          <div className="space-y-1 pb-2 border-b border-white/10">
+          <div className="space-y-1 pb-2 border-b border-theme-surface/10">
             {confidence.coverageCount > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-white/50">Coverage</span>
