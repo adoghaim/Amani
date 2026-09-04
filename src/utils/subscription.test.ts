@@ -28,15 +28,19 @@ const declaredRoutes = new Set(
     .map((m) => m[1]),
 );
 
+const USER_ID = '11111111-1111-4111-8111-111111111111';
+
 const fake = vi.hoisted(() => ({
   stripeRow: null as { subscription_status: string | null } | null,
   iapRows: [] as unknown[],
   iapError: null as { message: string } | null,
   trialStartDate: null as string | null,
+  betaRow: null as unknown,
+  betaError: null as { message: string } | null,
 }));
 
 vi.mock('../lib/supabase', () => {
-  // `iap_subscriptions` is awaited directly; the other two go through
+  // `iap_subscriptions` is awaited directly; the other three go through
   // `.maybeSingle()`. One thenable object covers both shapes.
   const query = (table: string) => ({
     then: (onFulfilled: (value: unknown) => unknown) =>
@@ -44,13 +48,18 @@ vi.mock('../lib/supabase', () => {
         data: fake.iapError ? null : fake.iapRows,
         error: table === 'iap_subscriptions' ? fake.iapError : null,
       }).then(onFulfilled),
-    maybeSingle: async () => ({
-      data:
-        table === 'stripe_user_subscriptions'
-          ? fake.stripeRow
-          : { trial_start_date: fake.trialStartDate },
-      error: null,
-    }),
+    maybeSingle: async () => {
+      if (table === 'stripe_user_subscriptions') {
+        return { data: fake.stripeRow, error: null };
+      }
+      if (table === 'iap_beta_testers') {
+        return { data: fake.betaError ? null : fake.betaRow, error: fake.betaError };
+      }
+      return {
+        data: { id: '11111111-1111-4111-8111-111111111111', trial_start_date: fake.trialStartDate },
+        error: null,
+      };
+    },
   });
 
   return { supabase: { from: (table: string) => ({ select: () => query(table) }) } };
@@ -73,7 +82,18 @@ beforeEach(() => {
   fake.iapRows = [];
   fake.iapError = null;
   fake.trialStartDate = LAPSED_TRIAL_START;
+  fake.betaRow = null;
+  fake.betaError = null;
 });
+
+/** A live sandbox receipt, the kind a TestFlight or Play internal tester holds. */
+const sandboxReceipt = {
+  status: 'active',
+  expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+  environment: 'sandbox',
+  platform: 'ios',
+  product_id: 'com.amani.health.premium.monthly',
+};
 
 describe('App.tsx route table', () => {
   it('declares the billing route these redirects point at', () => {
@@ -115,6 +135,50 @@ describe('checkSubscriptionLive', () => {
   it('allows an active subscriber without redirecting anywhere', async () => {
     fake.stripeRow = { subscription_status: 'active' };
 
+    await expect(checkSubscriptionLive()).resolves.toEqual({ allowed: true });
+  });
+
+  it('lets an allowlisted sandbox tester through the gate', async () => {
+    fake.iapRows = [sandboxReceipt];
+    fake.betaRow = { user_id: USER_ID, platform: 'apple', expires_at: null, enabled: true };
+
+    await expect(checkSubscriptionLive()).resolves.toEqual({ allowed: true });
+  });
+
+  it('stops a sandbox purchase by someone who is not on the allowlist', async () => {
+    fake.iapRows = [sandboxReceipt];
+
+    await expect(checkSubscriptionLive()).resolves.toEqual({
+      allowed: false,
+      redirectTo: '/app/billing',
+    });
+  });
+
+  it('stops an allowlisted tester whose row is disabled', async () => {
+    fake.iapRows = [sandboxReceipt];
+    fake.betaRow = { user_id: USER_ID, platform: 'both', expires_at: null, enabled: false };
+
+    await expect(checkSubscriptionLive()).resolves.toEqual({
+      allowed: false,
+      redirectTo: '/app/billing',
+    });
+  });
+
+  it('fails a failed allowlist read closed without demoting a real purchase', async () => {
+    /*
+      A broken read on the beta table may only ever remove the sandbox
+      exception. The production receipt in the same result set still entitles —
+      denying outright here would lock out App Store customers over a table that
+      exists purely for testers.
+    */
+    fake.betaError = { message: 'network' };
+    fake.iapRows = [sandboxReceipt];
+    await expect(checkSubscriptionLive()).resolves.toEqual({
+      allowed: false,
+      redirectTo: '/app/billing',
+    });
+
+    fake.iapRows = [sandboxReceipt, { ...sandboxReceipt, environment: 'production' }];
     await expect(checkSubscriptionLive()).resolves.toEqual({ allowed: true });
   });
 

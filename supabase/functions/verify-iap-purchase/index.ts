@@ -21,7 +21,12 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
 import { fetchWithBackoff } from '../_shared/fetchWithBackoff.ts';
-import { resolveEntitlement, type IapRecord } from '../_shared/entitlement.ts';
+import { loadBetaTester, type BetaAllowlistActions } from '../_shared/beta-allowlist.ts';
+import {
+  BETA_TESTER_COLUMNS,
+  resolveEntitlement,
+  type IapRecord,
+} from '../_shared/entitlement.ts';
 import {
   normalizeSubscriberPayload,
   persistIapSubscriptions,
@@ -42,7 +47,27 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 );
 
-const allowSandbox = () => Deno.env.get('ALLOW_SANDBOX_IAP') === 'true';
+/*
+  There is no `ALLOW_SANDBOX_IAP` any more. It was one env boolean that let every
+  sandbox receipt in existence entitle every user holding one, and sandbox
+  receipts are free to mint. Sandbox entitlement now comes from a per-tester
+  `iap_beta_testers` row written with the service role — see migration
+  20260903120000 and the rule in ../_shared/entitlement.ts.
+*/
+const betaAllowlist: BetaAllowlistActions = {
+  async findBetaTesterRow(userId: string) {
+    const { data, error } = await supabase
+      .from('iap_beta_testers')
+      .select(BETA_TESTER_COLUMNS)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    // Thrown so `loadBetaTester` can tell a failed read apart from "not a
+    // tester" and log it; either way the sandbox receipt will not entitle.
+    if (error) throw new Error(`iap_beta_testers read failed: ${error.message}`);
+    return data;
+  },
+};
 
 function corsResponse(body: object | null, status = 200) {
   const headers = {
@@ -183,6 +208,37 @@ Deno.serve(async (req) => {
       );
     }
 
+    const iapRecords = subscriptions.map(
+      (s): IapRecord => ({
+        status: s.status,
+        expires_at: s.expiresAt,
+        environment: s.environment,
+        // Carried through for the sandbox beta rule, which matches the
+        // tester's storefront and refuses products we do not sell.
+        platform: s.platform,
+        product_id: s.productId,
+      }),
+    );
+
+    /*
+      Only reads `iap_beta_testers` when this purchase is actually a sandbox
+      one; a real App Store purchase never consults the allowlist. Fails closed
+      on a read error — the sandbox receipt then reports `entitled: false`,
+      which is also what the guard will say on the next paid screen, so the two
+      never disagree.
+    */
+    const betaTester = await loadBetaTester(
+      betaAllowlist,
+      user.id,
+      iapRecords,
+      (error) =>
+        console.error(
+          `[verify-iap-purchase] iap_beta_testers read failed for ${user.id}; ` +
+            'sandbox receipts will not entitle until it recovers:',
+          error,
+        ),
+    );
+
     /*
       Answers "did the purchase land", not "is this user entitled" — Stripe and
       the app-level trial are not consulted here. `_shared/subscription-guard.ts`
@@ -191,16 +247,11 @@ Deno.serve(async (req) => {
     */
     const entitlement = resolveEntitlement({
       stripeStatus: null,
-      iapRecords: subscriptions.map(
-        (s): IapRecord => ({
-          status: s.status,
-          expires_at: s.expiresAt,
-          environment: s.environment,
-        }),
-      ),
+      iapRecords,
       trialStartDate: null,
       now,
-      allowSandbox: allowSandbox(),
+      userId: user.id,
+      betaTester,
     });
 
     return corsResponse({

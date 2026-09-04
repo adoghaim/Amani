@@ -175,6 +175,9 @@ Deno.serve(async (req: Request) => {
           "reminders",
           "audit_events",
           "rate_limits",
+          // Sandbox-IAP beta allowlist. See the note below on why this one is
+          // swept explicitly while `iap_subscriptions` is not.
+          "iap_beta_testers",
         ];
         for (const table of tables) {
           const { error } = await supabase.from(table).delete().eq("user_id", userId);
@@ -196,6 +199,18 @@ Deno.serve(async (req: Request) => {
           20260821000000_add_iap_subscriptions.sql:26 — user_id REFERENCES
           auth.users(id) ON DELETE CASCADE), which fires at the one moment the
           account genuinely ceases to exist.
+
+          `iap_beta_testers` IS in the list above, and the difference is what
+          the row would cost if deletion then failed halfway. An erased
+          `iap_subscriptions` row locks a paying customer out of something they
+          bought. An erased beta row costs a tester the sandbox exception and
+          nothing else — they still have their trial and any real purchase — and
+          it is one service-role insert to restore. Meanwhile leaving it behind
+          is the worse outcome of the two: a live pass for an account that no
+          longer exists, which is exactly the "beta pass that outlives the beta"
+          the table's own comment warns about. It also cascades on
+          auth.users, so the explicit delete is belt-and-braces rather than the
+          only mechanism.
         */
 
         // The user's profile row itself. Kept last so the above cleanups can
