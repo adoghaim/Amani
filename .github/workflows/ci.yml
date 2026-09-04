@@ -40,3 +40,22 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  migrations:
+    name: Migration behaviour (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # `introductory_deep_access_claims` is a money-related, concurrency-
+      # sensitive table: it decides who gets a paid AI interpretation for free.
+      # Reading the SQL is not enough — the first version of that migration
+      # passed review and would have broken `DELETE FROM lab_reports` in
+      # production, because ON DELETE SET NULL is an UPDATE and the immutability
+      # trigger rejected it. Only running it caught that. This job keeps the
+      # constraint, trigger and advisory-lock behaviour under test permanently.
+      #
+      # ubuntu-latest ships Docker, so no setup step is needed.
+      - name: Verify migration behaviour
+        run: ./supabase/migrations/__verification__/run.sh
