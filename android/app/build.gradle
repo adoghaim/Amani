@@ -19,7 +19,11 @@ android {
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            // '!*.map' keeps Vite's source maps out of the shipped app. vite.config.ts
+            // uses sourcemap: 'hidden', so no bundle references them — inside the APK
+            // they are dead weight (~5 MB raw) that also hands the original TypeScript
+            // to anyone who unzips the binary. The web deploy still emits them.
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:!*.map'
         }
     }
     signingConfigs {
@@ -35,10 +39,10 @@ android {
     buildTypes {
         release {
             if (keystorePropertiesFile.exists()) {
-                signingConfig signingConfigs.release
+                signingConfig = signingConfigs.release
             }
             minifyEnabled true
-            shrinkResources true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
