@@ -73,6 +73,24 @@ if [ "$survived" != "0" ]; then
   exit 1
 fi
 
+echo "==> interpretations.tier column"
+docker cp "$HERE/../20260904000000_interpretations_tier_column.sql" "$CONTAINER:/tmp/tier.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/tier.sql >/dev/null
+psql_f -q -c "INSERT INTO users (id) VALUES ('44444444-4444-4444-8444-444444444444');
+              INSERT INTO lab_reports (id, user_id) VALUES ('cccccccc-1111-4111-8111-111111111111','44444444-4444-4444-8444-444444444444');" >/dev/null
+# NULL tier (a row written before Free/Plus existed) must be accepted.
+psql_f -q -c "INSERT INTO interpretations (lab_report_id, json_output) VALUES ('cccccccc-1111-4111-8111-111111111111','{}'::jsonb);" >/dev/null
+# 'free' and 'plus' accepted, anything else refused.
+psql_f -q -c "UPDATE interpretations SET tier='free' WHERE lab_report_id='cccccccc-1111-4111-8111-111111111111';" >/dev/null
+psql_f -q -c "UPDATE interpretations SET tier='plus' WHERE lab_report_id='cccccccc-1111-4111-8111-111111111111';" >/dev/null
+if psql_f -q -c "UPDATE interpretations SET tier='enterprise' WHERE lab_report_id='cccccccc-1111-4111-8111-111111111111';" >/dev/null 2>&1; then
+  echo "FAIL: interpretations_tier_check accepted an unknown tier" >&2
+  exit 1
+fi
+# Applying twice must be a no-op, not an error.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/tier.sql >/dev/null
+echo "    NULL/free/plus accepted, unknown tier refused, migration is idempotent"
+
 echo "==> concurrency: two uploads racing for one remaining credit"
 psql_f -q -c "
   DELETE FROM introductory_deep_access_claims;
