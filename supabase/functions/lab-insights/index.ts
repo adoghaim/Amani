@@ -4,6 +4,7 @@ import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
+import { parseLabInsightsCompletion } from "../_shared/lab-insights-output.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 
@@ -292,7 +293,25 @@ Remember:
     }
 
     const openaiData = await openaiResponse.json();
-    const insights = JSON.parse(openaiData.choices[0].message.content);
+
+    /*
+      Previously: `JSON.parse(openaiData.choices[0].message.content)` straight
+      into the response body. That threw a TypeError on an empty `choices`
+      array, and — worse — shipped unvalidated model output to the client. A
+      `notable_changes` element missing its `change` field crashes
+      InsightsModal's ChangeIcon, which blanks the whole app because
+      ErrorBoundary is mounted at the root. The shipped 1.0.3 native builds have
+      that unguarded call and cannot be updated, so the guarantee has to be made
+      here.
+    */
+    const insights = parseLabInsightsCompletion(openaiData);
+    if (!insights) {
+      console.error("[lab-insights] Unusable model response");
+      return new Response(
+        JSON.stringify({ error: "Could not generate insights. Please try again." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     return new Response(
       JSON.stringify({
