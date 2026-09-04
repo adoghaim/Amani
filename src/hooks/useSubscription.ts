@@ -10,8 +10,10 @@ import { getProductByPriceId } from '../stripe-config'
   answer, and the failure mode of drift is a paying customer shown a paywall.
 */
 import {
-  clientAllowSandbox,
+  BETA_TESTER_COLUMNS,
   resolveEntitlement,
+  toBetaTester,
+  type BetaTester,
   type IapRecord,
 } from '../lib/entitlement'
 
@@ -44,14 +46,21 @@ export interface IapSubscription {
 export type SubscriptionSource = 'stripe' | 'ios' | 'android' | 'trial' | 'none'
 
 /** Does this single IAP row entitle right now? Asked of `resolveEntitlement`
- *  rather than re-implemented, so there is only ever one status list. */
-function iapEntitles(record: IapRecord, now: number): boolean {
+ *  rather than re-implemented, so there is only ever one status list — and one
+ *  copy of the sandbox beta-allowlist rule. */
+function iapEntitles(
+  record: IapRecord,
+  now: number,
+  userId: string,
+  betaTester: BetaTester | null,
+): boolean {
   const result = resolveEntitlement({
     stripeStatus: null,
     iapRecords: [record],
     trialStartDate: null,
     now,
-    allowSandbox: clientAllowSandbox(),
+    userId,
+    betaTester,
   })
   return result.allowed && result.reason === 'active_iap'
 }
@@ -79,13 +88,32 @@ export function useSubscription() {
         return
       }
 
-      const [stripeResult, iapResult, userResult] = await Promise.all([
+      const [stripeResult, iapResult, userResult, betaResult] = await Promise.all([
         supabase.from('stripe_user_subscriptions').select('*').maybeSingle(),
         supabase
           .from('iap_subscriptions')
           .select('platform, product_id, status, expires_at, environment')
           .eq('user_id', user.id),
         supabase.from('users').select('trial_start_date').eq('id', user.id).maybeSingle(),
+        /*
+          The user's own sandbox-beta row, if any. Server-written and RLS-scoped
+          to `auth.uid()`; reading it is what lets this hook reach the same
+          conclusion the server guard does for a TestFlight / Play internal-test
+          purchase. Under the old `VITE_ALLOW_SANDBOX_IAP` flag the two had to be
+          kept in step by hand, and when they drifted a tester saw "Active
+          Subscription" here and was bounced out of every paid screen.
+
+          Read unconditionally rather than only when a sandbox row is present:
+          it is one more RLS-scoped single-row lookup inside a Promise.all that
+          already does three, and a conditional is one more thing to get wrong on
+          the client. The server, which is the actual security boundary, does
+          skip it — see _shared/beta-allowlist.ts.
+        */
+        supabase
+          .from('iap_beta_testers')
+          .select(BETA_TESTER_COLUMNS)
+          .eq('user_id', user.id)
+          .maybeSingle(),
       ])
 
       if (stripeResult.error) {
@@ -108,11 +136,21 @@ export function useSubscription() {
       const trialStartDate =
         (userResult.data as { trial_start_date?: string | null } | null)?.trial_start_date ?? null
 
+      /*
+        A failed beta read is not fatal here: `toBetaTester(null)` is null, so
+        the sandbox exception simply does not apply and a production
+        subscription is untouched. That matches the server, which fails closed
+        the same narrow way.
+      */
+      const betaTester = betaResult.error ? null : toBetaTester(betaResult.data)
+
       const now = Date.now()
       const records: IapRecord[] = iap.map((row) => ({
         status: row.status,
         expires_at: row.expires_at,
         environment: row.environment,
+        platform: row.platform,
+        product_id: row.product_id,
       }))
 
       const entitlement = resolveEntitlement({
@@ -120,7 +158,8 @@ export function useSubscription() {
         iapRecords: records,
         trialStartDate,
         now,
-        allowSandbox: clientAllowSandbox(),
+        userId: user.id,
+        betaTester,
       })
 
       setSubscription(stripe)
@@ -138,7 +177,11 @@ export function useSubscription() {
         // and which row does decides the plan and renewal date shown for it.
         const live = iap.find((row, i) => {
           const record = records[i]
-          return record !== undefined && iapEntitles(record, now) && !!row.platform
+          return (
+            record !== undefined &&
+            iapEntitles(record, now, user.id, betaTester) &&
+            !!row.platform
+          )
         })
         setActiveIap(live ?? null)
         setSource(live?.platform ?? 'none')
