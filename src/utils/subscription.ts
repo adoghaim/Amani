@@ -1,7 +1,12 @@
 import type { User } from '../types';
 import { supabase } from '../lib/supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { clientAllowSandbox, resolveEntitlement, type IapRecord } from '../lib/entitlement';
+import {
+  BETA_TESTER_COLUMNS,
+  resolveEntitlement,
+  toBetaTester,
+  type IapRecord,
+} from '../lib/entitlement';
 
 /**
  * Check whether the user has an active subscription or valid trial.
@@ -70,12 +75,24 @@ export type ClientSubscriptionState =
  *   - /pricing      — never subscribed
  */
 export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> {
-  const [{ data: subData }, { data: iapData, error: iapError }, { data: userData }] =
-    await Promise.all([
-      supabase.from('stripe_user_subscriptions').select('subscription_status').maybeSingle(),
-      supabase.from('iap_subscriptions').select('status, expires_at, environment'),
-      supabase.from('users').select('trial_start_date').maybeSingle(),
-    ]);
+  const [
+    { data: subData },
+    { data: iapData, error: iapError },
+    { data: userData },
+    { data: betaData, error: betaError },
+  ] = await Promise.all([
+    supabase.from('stripe_user_subscriptions').select('subscription_status').maybeSingle(),
+    // `platform` and `product_id` feed the sandbox beta rule, which matches a
+    // tester's storefront and refuses products Amani does not sell. Without
+    // them a sandbox receipt cannot entitle — the rule fails closed.
+    supabase
+      .from('iap_subscriptions')
+      .select('status, expires_at, environment, platform, product_id'),
+    supabase.from('users').select('id, trial_start_date').maybeSingle(),
+    // The caller's own sandbox-beta row. RLS scopes both of these to
+    // auth.uid(), which is why neither needs an explicit .eq().
+    supabase.from('iap_beta_testers').select(BETA_TESTER_COLUMNS).maybeSingle(),
+  ]);
 
   // A failed IAP read must not silently demote a paying App Store customer to
   // "never subscribed" and route them to /pricing. Send them to /app/billing,
@@ -84,15 +101,25 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
     return { allowed: false, redirectTo: '/app/billing' };
   }
 
+  /*
+    A failed beta read only ever removes the sandbox exception — never a real
+    purchase — so unlike `iapError` it is not a redirect on its own. Same narrow
+    fail-closed the server uses in _shared/beta-allowlist.ts.
+  */
+  const betaTester = betaError ? null : toBetaTester(betaData);
+
   const result = resolveEntitlement({
     stripeStatus: subData?.subscription_status ?? null,
     iapRecords: (iapData ?? []) as IapRecord[],
     trialStartDate: userData?.trial_start_date ?? null,
     now: Date.now(),
-    // Same flag `useSubscription` reads. A sandbox build that disagreed with it
-    // here showed the billing screen an active subscription and then bounced
-    // the tester out of every feature that subscription buys.
-    allowSandbox: clientAllowSandbox(),
+    // Sandbox entitlement is a per-user, server-owned allowlist row now, not the
+    // build-time `VITE_ALLOW_SANDBOX_IAP` boolean this used to read. Client and
+    // server see the same row, so they cannot reach different answers — the old
+    // flag drifting is what once showed a tester an active subscription on the
+    // billing screen and then bounced them out of every feature it buys.
+    userId: (userData?.id as string | undefined) ?? null,
+    betaTester,
   });
 
   if (result.allowed) return { allowed: true };
