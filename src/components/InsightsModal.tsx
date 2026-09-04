@@ -30,8 +30,12 @@ function formatDate(dateString: string): string {
   });
 }
 
-function ChangeIcon({ text }: { text: string }) {
-  const lower = text.toLowerCase();
+function ChangeIcon({ text }: { text?: string | null }) {
+  // Defence in depth. The server now guarantees a non-empty string here
+  // (_shared/lab-insights-output.ts), which is what protects the shipped native
+  // builds that cannot be updated. This guard covers anything already cached on
+  // a device from before that fix.
+  const lower = (text ?? '').toLowerCase();
   if (lower.includes('increased') || lower.includes('rose') || lower.includes('higher') || lower.includes('went up')) {
     return <TrendingUp className="w-4 h-4 text-theme-flag-watch" />;
   }
