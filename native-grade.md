@@ -190,11 +190,13 @@ npx cap open android   # Android Studio → Generate Signed Bundle
 
 | Artifact | Size | Signing |
 |---|---|---|
-| `artifacts/android/Amani-1.0.4-release.aab` | 8.9 MB | Upload key, `jarsigner: jar verified` |
-| `artifacts/android/Amani-1.0.4-release.apk` | 7.0 MB | APK Signature Scheme v2 |
-| `artifacts/android/Amani-1.0.4-debug.apk` | 15.3 MB | Android debug key |
+| `artifacts/android/Amani-1.0.4-build7-release.aab` | 8.9 MB | Upload key, `jarsigner: jar verified` |
+| `artifacts/android/Amani-1.0.4-build7-release.apk` | 7.0 MB | `apksigner: Verifies`, v2 scheme, 1 signer |
+| `artifacts/android/Amani-1.0.4-build7-debug.apk` | 15.3 MB | Android debug key |
 
-Verified independently on the release APK: `package name='com.amani.health' versionCode='6' versionName='1.0.4'`, minSdk 24, compileSdk 36, and `eyfvqdnczorscwveaadv` as the only Supabase URL inside the shipped bundle.
+Verified independently on the release APK: `package name='com.amani.health' versionCode='7' versionName='1.0.4'`, minSdk 24, compileSdk 36, `eyfvqdnczorscwveaadv` as the only Supabase URL inside the shipped bundle, and zero `.map` files.
+
+**Build 6 was superseded and deleted.** It was produced before #37, #41, #42, #43 and #45 merged, so it lacked the sandbox IAP allowlist and its client entitlement changes, the lab-insights output validation, and the insights error boundary. Build 7 is the only current set — marketing version stays 1.0.4 because it has never shipped anywhere.
 
 Toolchain: Gradle 8.14.3 → **8.14.5**, AGP 8.13.0 → **8.13.2** (both the terminal patch of the 8.x series — there is no AGP 8.14, it jumps to 9.x), Kotlin 2.0.21 (Gradle-bundled; the app declares no Kotlin plugin), JDK 21, build-tools 36.0.0, Capacitor 8.5.1. No major migration was attempted.
 
