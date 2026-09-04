@@ -16,14 +16,46 @@
  *     column GRANT on `users` let a client write its own `subscription_status`;
  *   - the reason someone has 0, 1 or 2 left is auditable after the fact.
  *
- * ## When a claim may be created
+ * ## The persistence contract: premium output and the ledger commit together
  *
- * Only after all three of: the parse cleared the confidence bar, the AI
- * interpretation succeeded, and it persisted. A failed parse, a model error, a
- * timeout mid-write — none of them spend a credit. `recordIntroductoryClaim`
- * takes that evidence as a required argument rather than trusting the call
- * site to have checked, so the ordering rule is enforced by the type, not by a
- * comment.
+ * An earlier draft of this module recorded the claim *after* the interpretation
+ * had already been returned, and treated a failed claim write as non-fatal on
+ * the reasoning that the user should not lose a report they had received. That
+ * was wrong, and it is worth spelling out why, because the reasoning sounds
+ * user-friendly:
+ *
+ *   if the claim insert is broken for an hour, every Free user keeps receiving
+ *   full AI interpretations, because generation succeeds and nothing ever
+ *   records that a credit was spent. A broken ledger becomes unlimited Plus.
+ *
+ * Quota decisions are server-side and fail closed. So the interpretation and
+ * the claim reach a committed state *together*, in one transaction, before any
+ * premium result is returned:
+ *
+ *     AI generation succeeds
+ *            |
+ *          BEGIN
+ *            save interpretation
+ *            insert claim, if this draw consumes one
+ *          COMMIT
+ *            |
+ *     return the full interpretation
+ *
+ * If that transaction fails the user loses nothing — no credit, no half-written
+ * state — and can retry; Amani eats one AI call, which is the cheap side of the
+ * trade. If the response dies *after* the commit, the unique constraint on
+ * (user_id, blood_draw_id) makes the retry idempotent.
+ *
+ * Note the ordering that follows from this: **there is no outcome in which a
+ * premium result is served without the ledger having committed.** `commitDeepAccess`
+ * is the only way to reach one, it never swallows a failure, and
+ * `introductory-access.test.ts` asserts that invariant directly.
+ *
+ * PostgREST cannot express a multi-statement transaction, so the single
+ * `commitDeepAccess` port action is backed by one Postgres function rather than
+ * two client calls. That is a hard requirement of this contract, not an
+ * implementation preference — two round trips reintroduce exactly the window
+ * this design exists to close.
  *
  * ## Where the limit is actually enforced
  *
@@ -32,16 +64,15 @@
  * `20260903000000_introductory_deep_access_claims.sql`, which takes a per-user
  * advisory lock and refuses the third row. Two concurrent uploads of two
  * different draws would both read `count = 1` here and both believe they hold
- * the last credit — only the DB can settle that, so only the DB is trusted to.
+ * the last credit — only the DB can settle that, so only the DB is trusted to,
+ * and the request that loses the race is served the Free-shaped result rather
+ * than the premium one it thought it had earned.
  *
  * All I/O is behind `IntroductoryAccessActions` so tests drive the flow with
  * fakes, the same pattern as `account-deletion.ts` and `stripe-idempotency.ts`.
  */
 
-import {
-  FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS,
-  type Tier,
-} from "./tier.ts";
+import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS, type Tier } from "./tier.ts";
 import type { EvidenceTier } from "./blood-draw-identity.ts";
 
 export interface ClaimRecord {
@@ -52,12 +83,17 @@ export interface ClaimRecord {
   claimed_at: string;
 }
 
-export interface RecordClaimInput {
+/** Everything the one transactional write needs. */
+export interface CommitDeepAccessInput {
   userId: string;
   /** Hashed canonical key from `hashDrawKey`, never the readable one. */
   bloodDrawId: string;
   reportId: string;
   evidenceTier: EvidenceTier;
+  /** The generated interpretation, persisted in the same transaction. */
+  interpretation: unknown;
+  /** False for Plus and for a draw that already holds a claim. */
+  consumeCredit: boolean;
 }
 
 /** Every database touch this module needs, injected so it stays testable. */
@@ -67,13 +103,21 @@ export interface IntroductoryAccessActions {
   /** How many claims the user has spent, lifetime. */
   countClaims(userId: string): Promise<number>;
   /**
-   * Insert a claim. Must be idempotent on (user_id, blood_draw_id) — resolve
-   * `already_claimed` rather than throwing when the row exists, and
-   * `limit_reached` when the database refuses a third row.
+   * Persist the interpretation and consume the credit **in one transaction**.
+   *
+   * Implementations MUST be a single atomic call — a Postgres function, not two
+   * PostgREST requests — and MUST throw on infrastructure failure rather than
+   * reporting success. Resolve:
+   *
+   *   `committed`       both writes landed
+   *   `already_claimed` interpretation saved; the claim already existed
+   *                     (idempotent retry, or a draw claimed earlier)
+   *   `limit_reached`   the ledger refused the claim, so NOTHING was persisted
+   *                     as premium and the caller must serve the Free result
    */
-  insertClaim(
-    input: RecordClaimInput,
-  ): Promise<"inserted" | "already_claimed" | "limit_reached">;
+  commitDeepAccess(
+    input: CommitDeepAccessInput,
+  ): Promise<"committed" | "already_claimed" | "limit_reached">;
 }
 
 export type DeepAccessDecision =
@@ -82,12 +126,12 @@ export type DeepAccessDecision =
     /**
      * `plus`            — subscriber, no metering
      * `existing_claim`  — this draw is already claimed; regeneration is free
-     * `credit_available`— spends one of the introductory credits on success
+     * `credit_available`— spends one of the introductory credits on commit
      */
     reason: "plus" | "existing_claim" | "credit_available";
     claimsUsed: number;
     claimsRemaining: number;
-    /** True when a successful generation should write a claim afterwards. */
+    /** True when committing this draw should also write a claim. */
     consumesCredit: boolean;
   }
   | {
@@ -107,6 +151,9 @@ export interface DeepAccessInput {
 
 /**
  * Decides whether this draw gets a full AI interpretation.
+ *
+ * Advisory only — it runs before the model call so we do not pay OpenAI for
+ * output nobody may see. The binding decision is `commitDeepAccess`.
  *
  * Order matters. The existing-claim check runs before the budget check so that
  * a user who has spent both credits still gets deep access when they revisit —
@@ -169,50 +216,82 @@ function remaining(used: number): number {
 }
 
 /**
- * Proof that a deep interpretation actually reached the user.
+ * Proof that generation actually produced something worth persisting.
  *
- * Required by `recordIntroductoryClaim` so a credit cannot be spent on work
- * that failed. All three must be true; anything else is a no-op.
+ * Required by `commitDeepAccess` so a credit cannot be spent on work that
+ * failed. Both must be true; anything else commits nothing.
+ *
+ * There is deliberately no `interpretationPersisted` field any more. Persistence
+ * is no longer something that happened before the claim — it happens *with* the
+ * claim, inside `commitDeepAccess`, which is the whole point of the contract.
  */
 export interface DeepAccessCompletion {
   /** The parse cleared the confidence bar — we did not interpret garbage. */
   parseConfident: boolean;
   /** The model returned a usable interpretation. */
   interpretationGenerated: boolean;
-  /** It was written to `interpretations` and will be there on reload. */
-  interpretationPersisted: boolean;
 }
 
-export type ClaimOutcome =
-  | "claimed"
-  | "already_claimed"
-  | "not_completed"
-  | "not_consumable"
-  | "limit_reached";
+export type CommitOutcome =
+  | {
+    /** The interpretation is durably stored. Only now may it be returned. */
+    committed: true;
+    creditConsumed: boolean;
+  }
+  | {
+    committed: false;
+    reason: "generation_incomplete" | "introductory_access_exhausted";
+  };
+
+export interface CommitRequest {
+  userId: string;
+  bloodDrawId: string;
+  reportId: string;
+  evidenceTier: EvidenceTier;
+  interpretation: unknown;
+}
 
 /**
- * Writes the claim, after the fact.
+ * Commits the interpretation and the claim together, and reports whether the
+ * premium result may be served.
  *
- * Returns rather than throws: failing to record a claim must never fail the
- * request. The user already has their interpretation at this point, and losing
- * the ledger row costs Amani one credit's worth of API spend — a strictly
- * better outcome than a 500 on a report that actually succeeded.
+ * The caller's rule is simply: return the deep interpretation if and only if
+ * this resolves `committed: true`. Every other outcome means serve the Free
+ * result. An infrastructure failure throws and must be propagated as an error —
+ * never caught and downgraded into a premium response.
  */
-export async function recordIntroductoryClaim(
+export async function commitDeepAccess(
   actions: IntroductoryAccessActions,
   decision: DeepAccessDecision,
   completion: DeepAccessCompletion,
-  input: RecordClaimInput,
-): Promise<ClaimOutcome> {
-  if (!decision.granted || !decision.consumesCredit) return "not_consumable";
+  request: CommitRequest,
+): Promise<CommitOutcome> {
+  if (!decision.granted) {
+    return { committed: false, reason: "introductory_access_exhausted" };
+  }
 
-  const completed = completion.parseConfident &&
-    completion.interpretationGenerated &&
-    completion.interpretationPersisted;
-  if (!completed) return "not_completed";
+  if (!completion.parseConfident || !completion.interpretationGenerated) {
+    return { committed: false, reason: "generation_incomplete" };
+  }
 
-  const result = await actions.insertClaim(input);
-  if (result === "inserted") return "claimed";
-  if (result === "already_claimed") return "already_claimed";
-  return "limit_reached";
+  // Throws propagate deliberately. A failed transaction must surface as an
+  // error the user can retry, not as a premium response with no ledger entry.
+  const result = await actions.commitDeepAccess({
+    ...request,
+    consumeCredit: decision.consumesCredit,
+  });
+
+  if (result === "committed") {
+    return { committed: true, creditConsumed: decision.consumesCredit };
+  }
+
+  if (result === "already_claimed") {
+    // Idempotent retry, or a draw claimed earlier. The interpretation is
+    // stored; no second credit was spent.
+    return { committed: true, creditConsumed: false };
+  }
+
+  // The ledger refused — this request lost the race for the last credit and
+  // nothing was persisted as premium. Fail closed.
+  return { committed: false, reason: "introductory_access_exhausted" };
 }

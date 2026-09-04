@@ -58,6 +58,11 @@ ruvector.db
 # `npx impeccable install` to activate it regardless. Keep it out of the repo.
 .agents/skills/impeccable/
 .claude/skills/impeccable/
+
+# Agent worktrees. Created under .claude/ by background agents; each is a full
+# second checkout of this repo, so an unguarded `git add -A` would commit a
+# duplicate tree. Never versioned.
+.claude/worktrees/
 .github/skills/
 .github/hooks/
 .github/agents/

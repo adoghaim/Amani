@@ -88,7 +88,7 @@ describe('golden compatibility — freemium inactive is a no-op', () => {
       expect(decision.allowances.deepInterpretation).toEqual({ kind: 'unlimited' });
       expect(decision.allowances.fullComparison).toEqual({ kind: 'unlimited' });
       expect(decision.allowances.aiQuestions).toEqual({ kind: 'unlimited' });
-      expect(decision.allowances.trendsAndCorrelations).toEqual({ kind: 'unlimited' });
+      expect(decision.allowances.revealedTrendInsights).toEqual({ kind: 'unlimited' });
     }
   });
 });
@@ -124,13 +124,15 @@ describe('freemium active', () => {
     }
   });
 
-  it('meters the Free tier at the frozen limits', () => {
+  it('meters the Free tier at the frozen beta limits', () => {
     const decision = client({
       entitlement: { allowed: false, reason: 'trial_expired' },
       freemiumActive: true,
     });
     expect(decision.allowances.deepInterpretation).toEqual({ kind: 'lifetime', limit: 2 });
     expect(decision.allowances.fullComparison).toEqual({ kind: 'lifetime', limit: 1 });
+    expect(decision.allowances.aiQuestions).toEqual({ kind: 'monthly', limit: 5 });
+    expect(decision.allowances.revealedTrendInsights).toEqual({ kind: 'lifetime', limit: 1 });
   });
 });
 
@@ -149,6 +151,26 @@ describe('the medical floor is not a tier feature', () => {
       fullHistory: true,
       deterministicInterpretation: true,
     });
+  });
+
+  it('meters trend ANALYSIS, never biomarker visibility', () => {
+    /*
+      The allowance is deliberately called `revealedTrendInsights` and not
+      anything shaped like `trendBiomarkers`. A limit named for a count of
+      biomarkers invites a future reader to implement "show only N biomarkers",
+      which breaks the floor. All biomarkers stay visible on Free; only the
+      premium analysis about them is metered. If a rename is ever proposed here,
+      this test is the argument against it.
+    */
+    const free = client({
+      entitlement: { allowed: false, reason: 'trial_expired' },
+      freemiumActive: true,
+    });
+    expect(free.allowances.floor.rawValues).toBe(true);
+    expect(free.allowances.floor.abnormalFlags).toBe(true);
+    expect(free.allowances.floor.fullHistory).toBe(true);
+    expect(Object.keys(free.allowances)).not.toContain('trendsAndCorrelations');
+    expect(Object.keys(free.allowances)).toContain('revealedTrendInsights');
   });
 
   it('is frozen against mutation', () => {

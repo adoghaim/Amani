@@ -64,13 +64,18 @@ export const FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS = 2;
 export const FREE_FULL_COMPARISONS = 1;
 
 /*
-  The two limits below are PROVISIONAL. The spec freezes that Free's AI
-  questions and trend depth are "limited"; it does not name the numbers. These
-  are placeholders chosen to be obviously non-zero and obviously not unlimited.
-  Change them here — nothing else reads a literal.
+  Beta limits, frozen 2026-09-04.
+
+  `FREE_REVEALED_TREND_INSIGHTS` is named for what it actually meters: how many
+  premium trend *analyses* are revealed. It is deliberately NOT named for a
+  count of biomarkers. Every biomarker and every raw result stays visible on
+  Free — that is `MEDICAL_FLOOR`, above — and a limit named
+  `FREE_TREND_BIOMARKERS` would read, to someone skimming this file in six
+  months, as permission to show only three of them. It is not. What is metered
+  is the analysis about them, never their visibility.
 */
 export const FREE_AI_QUESTIONS_PER_MONTH = 5;
-export const FREE_TREND_BIOMARKERS = 3;
+export const FREE_REVEALED_TREND_INSIGHTS = 1;
 
 export type Quota =
   | { kind: "unlimited" }
@@ -89,8 +94,8 @@ export interface Allowances {
   fullComparison: Quota;
   /** Follow-up questions against a report. */
   aiQuestions: Quota;
-  /** How many biomarkers trend/correlation views may span. */
-  trendsAndCorrelations: Quota;
+  /** How many premium trend analyses are revealed. Not a biomarker cap. */
+  revealedTrendInsights: Quota;
 }
 
 export const PLUS_ALLOWANCES: Allowances = Object.freeze({
@@ -98,7 +103,7 @@ export const PLUS_ALLOWANCES: Allowances = Object.freeze({
   deepInterpretation: UNLIMITED,
   fullComparison: UNLIMITED,
   aiQuestions: UNLIMITED,
-  trendsAndCorrelations: UNLIMITED,
+  revealedTrendInsights: UNLIMITED,
 });
 
 export const FREE_ALLOWANCES: Allowances = Object.freeze({
@@ -115,9 +120,9 @@ export const FREE_ALLOWANCES: Allowances = Object.freeze({
     kind: "monthly",
     limit: FREE_AI_QUESTIONS_PER_MONTH,
   }),
-  trendsAndCorrelations: Object.freeze({
-    kind: "capped",
-    limit: FREE_TREND_BIOMARKERS,
+  revealedTrendInsights: Object.freeze({
+    kind: "lifetime",
+    limit: FREE_REVEALED_TREND_INSIGHTS,
   }),
 });
 

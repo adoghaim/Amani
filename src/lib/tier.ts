@@ -35,9 +35,13 @@ export const FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS = 2;
 /** Full before/after comparisons on Free, once comparable data exists. Frozen. */
 export const FREE_FULL_COMPARISONS = 1;
 
-/* Provisional — the spec freezes that these are "limited", not the numbers. */
+/*
+  Beta limits, frozen 2026-09-04. Named for the analysis being metered, never
+  for a count of biomarkers — every biomarker stays visible on Free. See the
+  server copy for why the naming matters.
+*/
 export const FREE_AI_QUESTIONS_PER_MONTH = 5;
-export const FREE_TREND_BIOMARKERS = 3;
+export const FREE_REVEALED_TREND_INSIGHTS = 1;
 
 export type Quota =
   | { kind: "unlimited" }
@@ -52,7 +56,7 @@ export interface Allowances {
   deepInterpretation: Quota;
   fullComparison: Quota;
   aiQuestions: Quota;
-  trendsAndCorrelations: Quota;
+  revealedTrendInsights: Quota;
 }
 
 export const PLUS_ALLOWANCES: Allowances = Object.freeze({
@@ -60,7 +64,7 @@ export const PLUS_ALLOWANCES: Allowances = Object.freeze({
   deepInterpretation: UNLIMITED,
   fullComparison: UNLIMITED,
   aiQuestions: UNLIMITED,
-  trendsAndCorrelations: UNLIMITED,
+  revealedTrendInsights: UNLIMITED,
 });
 
 export const FREE_ALLOWANCES: Allowances = Object.freeze({
@@ -77,9 +81,9 @@ export const FREE_ALLOWANCES: Allowances = Object.freeze({
     kind: "monthly",
     limit: FREE_AI_QUESTIONS_PER_MONTH,
   }),
-  trendsAndCorrelations: Object.freeze({
-    kind: "capped",
-    limit: FREE_TREND_BIOMARKERS,
+  revealedTrendInsights: Object.freeze({
+    kind: "lifetime",
+    limit: FREE_REVEALED_TREND_INSIGHTS,
   }),
 });
 
