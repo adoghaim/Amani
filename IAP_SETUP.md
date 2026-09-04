@@ -206,8 +206,9 @@ would give Android users 14 days.
 **Setup → License testing.** Add the Google accounts that will test purchases.
 Licence testers are charged nothing, renew on an accelerated clock (a monthly
 subscription renews every 5 minutes), and their purchases arrive at RevenueCat
-flagged as sandbox — which is exactly what `iap_subscriptions.environment` and
-`ALLOW_SANDBOX_IAP` exist to keep out of production.
+flagged as sandbox — which is exactly what `iap_subscriptions.environment`
+exists to keep out of production. To let one of those testers actually unlock
+paid screens, add them to `iap_beta_testers` (§9.1).
 
 ### 7.5 Service account for RevenueCat
 
@@ -328,10 +329,11 @@ supabase secrets set REVENUECAT_WEBHOOK_AUTH=<the §8.6 header value>
 |---|---|---|
 | `REVENUECAT_SECRET_API_KEY` | RevenueCat → API keys → **Secret** key (`sk_...`) | `verify-iap-purchase`, to read the subscriber record server-side |
 | `REVENUECAT_WEBHOOK_AUTH` | You generate it (§8.6) | `iap-webhook`, to authenticate deliveries |
-| `ALLOW_SANDBOX_IAP` | optional, `true` only in a staging project | `subscription-guard`, `verify-iap-purchase` |
 
 The secret key is **not** the SDK key. Never put `sk_...` in `.env` or in the
 client bundle — it can read and modify every subscriber in the project.
+
+There is no `ALLOW_SANDBOX_IAP` secret any more — see §9.1.
 
 ### Vite environment variables (client, and safe to ship)
 
@@ -339,7 +341,6 @@ client bundle — it can read and modify every subscriber in the project.
 |---|---|
 | `VITE_REVENUECAT_IOS_KEY` | RevenueCat → API keys → Apple App Store **public** key (`appl_...`) |
 | `VITE_REVENUECAT_ANDROID_KEY` | RevenueCat → API keys → Google Play **public** key (`goog_...`) |
-| `VITE_ALLOW_SANDBOX_IAP` | optional, `true` only for a sandbox-testing build |
 
 These are public SDK keys and are meant to be in the app bundle. With them
 unset, `isIapConfigured()` is false and the paywall says in-app purchase isn't
@@ -347,6 +348,73 @@ available rather than crashing — so a web-only build needs nothing here.
 
 **They are baked in at build time.** Changing one means a rebuild
 (`npm run cap:sync`) and a new binary, not just a redeploy.
+
+`VITE_ALLOW_SANDBOX_IAP` is gone too — §9.1.
+
+---
+
+## 9.1 Letting a beta tester's sandbox purchase actually unlock the app
+
+A sandbox purchase — TestFlight, or a Play licence tester — lands in
+`iap_subscriptions` with `environment = 'sandbox'`, and by default that
+entitles nobody. Testers still get Amani's own 7-day trial, but once it lapses
+they cannot exercise a single paid screen, which is most of what there is to
+test.
+
+`iap_beta_testers` is the exception list. **One row per tester, keyed by their
+Amani `auth.users.id`, written with the service role.** There is no UI and no
+env var; it is a deliberate, auditable insert.
+
+```sql
+-- Find the tester's account id
+select id, email from auth.users where email = 'tester@example.com';
+
+-- Grant sandbox entitlement for 90 days, both storefronts
+insert into iap_beta_testers (user_id, platform, expires_at)
+values ('00000000-0000-0000-0000-000000000000', 'both', now() + interval '90 days');
+```
+
+| Column | Values | Notes |
+|---|---|---|
+| `user_id` | `auth.users.id` | Primary key. Not an email — a tester's store account is not their Amani account, and the two drift. |
+| `platform` | `apple` / `google` / `both` | `apple` covers iOS receipts, `google` covers Android. |
+| `expires_at` | timestamptz, or NULL | NULL means never expires. Set a date for anyone who is not permanent staff. |
+| `enabled` | boolean, default `true` | The kill switch. |
+
+**Revoking:** prefer `update iap_beta_testers set enabled = false where user_id = '…'`
+over a delete, so the row and its history stay visible. Both take effect on the
+tester's next request — nothing is cached and no rebuild is needed.
+
+**The exact rule.** A sandbox receipt entitles if and only if ALL of:
+
+1. `iap_subscriptions.environment = 'sandbox'`, and that column is only ever
+   written by the service role from a server-side store verification — never
+   from anything a device sends;
+2. the user has a row here;
+3. the row is `enabled`;
+4. the row has not expired (NULL = no expiry);
+5. the row's `platform` covers the receipt's storefront;
+6. the receipt's `product_id` is one of the two products in
+   `src/lib/iap-config.ts`.
+
+Enforcement is in `supabase/functions/_shared/entitlement.ts`, mirrored to
+`src/lib/entitlement.ts` so the app and the server agree.
+
+**Production receipts are untouched by all of this.** The allowlist is only
+consulted inside the sandbox branch, and `_shared/beta-allowlist.ts` does not
+even read the table for a user with no sandbox receipt. Adding, expiring,
+disabling or deleting a row cannot change what a real App Store or Play
+customer is entitled to.
+
+**Why not the old flag.** This replaced `ALLOW_SANDBOX_IAP` /
+`VITE_ALLOW_SANDBOX_IAP`, one boolean per side that turned sandbox entitlement
+on for the entire project. Set in production it would have let every sandbox
+receipt in existence entitle whoever held it, and sandbox receipts are free to
+mint. The client copy also had to be kept in step by hand and was baked into
+the bundle at build time; when the two drifted, a tester saw "Active
+Subscription" on `/app/billing` and was then bounced out of every feature that
+subscription buys. Neither variable exists any more — if you find one set on a
+Supabase project or a Netlify context, delete it; nothing reads it.
 
 ---
 
@@ -362,15 +430,35 @@ authenticates itself with the shared secret) and `true` for
 `verify-iap-purchase` (it is called by the signed-in app).
 
 The `iap_subscriptions` table itself already exists — migration
-`20260821000000_add_iap_subscriptions.sql`. No new migration is needed.
+`20260821000000_add_iap_subscriptions.sql`.
+
+`iap_beta_testers` (§9.1) needs `supabase db push` once, for migration
+`20260903120000_add_iap_beta_testers.sql`. Both `verify-iap-purchase` and every
+function that calls `_shared/subscription-guard.ts` read it, so redeploy those
+after pushing:
+
+```bash
+supabase db push
+supabase functions deploy verify-iap-purchase
+supabase functions deploy generate-interpretation
+supabase functions deploy extract-biomarkers
+supabase functions deploy lab-insights
+supabase functions deploy parse-lab-report-ocr
+supabase functions deploy delete-user-data
+```
 
 ---
 
 ## 11. What to test, and in what order
 
 Sandbox purchases never touch production entitlement (`environment = 'sandbox'`
-is filtered out unless `ALLOW_SANDBOX_IAP` is on), so testing is safe but you
-must watch the right database rows.
+is filtered out unless the purchasing user has an `iap_beta_testers` row — §9.1),
+so testing is safe but you must watch the right database rows.
+
+Steps 2–7 below only need the row in `iap_subscriptions`; they work whether or
+not the tester is allowlisted. **Step 8 and anything behind the paywall need
+the §9.1 row** — without it a sandbox tester past their 7-day trial is treated
+as unsubscribed, which is correct behaviour and not a bug to chase.
 
 1. **Products load.** Open the paywall on a device. Two cards, both showing the
    store's own localized prices. An empty list means §0.1 (Apple) or §7.1
