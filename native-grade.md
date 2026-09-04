@@ -1,6 +1,6 @@
 # Amani — Native-Platform Roadmap
 
-Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-09-03. ✅ shipped · ⏳ blocked on user decision · ⬜ not started.
+Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-09-04. ✅ shipped · ⏳ blocked on user decision · ⬜ not started.
 
 (Updated 2026-08-21: **N0-3 and N1-6 are done.** The privacy manifest shipped with build 5 (PR #17) and universal/app links shipped in PR #20. `amanibiometrics.com` is confirmed live on Netlify, which is what unblocked N1-6.)
 
@@ -11,6 +11,16 @@ Good: PR #33 shipped the real Amani identity across both platforms — launcher 
 Bad: **N0-8** — the two IAP edge functions were written in PR #32 but never deployed, so in-app purchase verification 404s on device today. That is a hard store blocker and it is the one native item that is pure code.
 
 The native store blockers now are: **N0-4** keystore rotation (yours), **N0-8** IAP function deploy (mine to run, but the Supabase CLI on this machine is not logged in — `supabase login` first), the `assetlinks.json` Play App Signing SHA-256 (yours), the Apple Associated Domains capability (yours), and **N2-5** dark/tinted icon polish (split).
+
+**Night of 2026-09-03 — both platforms built for the first time from a clean checkout.**
+
+The toolchain was not installed on this machine at all: no JDK, no Android SDK, and `xcode-select` pointed at CommandLineTools rather than the Xcode that was sitting in `/Applications`. Installed JDK 21 + Android cmdline-tools, and reached Xcode 26.4.1 via `DEVELOPER_DIR` (no sudo, no `xcode-select --switch`).
+
+`android/gradlew` was committed **non-executable** (mode 100644), so `./gradlew` failed with "permission denied" on any fresh clone — which is why the Android project had never been built here. Fixed in #38.
+
+Version is now **1.0.4 / build 6** on both platforms (was 1.0.3 / build 5), so a test device recognises these as new builds.
+
+**Android: all three artifacts built and signed** with the existing upload key, which was never rotated or modified. **iOS: simulator, unsigned device Release, and an unsigned archive all build; signed export is blocked on Apple account state, not on code.** Details in the sections below.
 
 The headline finding when the audit ran was: **Capacitor plugins are aliased to web stubs in production builds** — Camera, Browser, Network, Android back button silently no-op on device. **That is now fixed** (N0-1 below). The bundle that `cap:sync` pushed into `ios/App/App/public/` and `android/app/src/main/assets/public/` now reaches the real `@capacitor/*` packages on device.
 
@@ -25,7 +35,7 @@ The headline finding when the audit ran was: **Capacitor plugins are aliased to 
 - ✅ **N0-5** `android:allowBackup="false"` on the `<application>` tag.
 - ✅ **N0-6** `android:usesCleartextTraffic="false"` explicit + `network_security_config.xml` referenced from manifest. Base config blocks cleartext, trusts only system CAs.
 - ✅ **N0-7** Android `minifyEnabled true` + `shrinkResources true` in release buildType; `proguard-rules.pro` populated with Capacitor + Cordova-shim + WebView-JS-interface keep rules + line-number preservation for crash symbolication.
-- ⬜ **N0-8** **IAP purchase verification is not deployed.** `verify-iap-purchase` and `iap-webhook` shipped as source in PR #32 and are declared in `config.toml`, but neither exists on the live project — verified 2026-09-03, both return `{"code":"NOT_FOUND"}`. `src/lib/iap.ts:394` POSTs to `verify-iap-purchase`, so a StoreKit or Play purchase on device would 404 and never grant entitlement: the user is charged and gets nothing. Web billing is unaffected (Stripe path). Fix: `supabase functions deploy verify-iap-purchase && supabase functions deploy iap-webhook`, then re-probe. Must land before any store build.
+- ⬜ **N0-8** **IAP purchase verification is STILL not deployed** (re-checked 2026-09-04 — `supabase login` was never run, so no deploy was possible overnight). `verify-iap-purchase` and `iap-webhook` shipped as source in PR #32 and are declared in `config.toml`, but neither exists on the live project — verified 2026-09-03, both return `{"code":"NOT_FOUND"}`. `src/lib/iap.ts:394` POSTs to `verify-iap-purchase`, so a StoreKit or Play purchase on device would 404 and never grant entitlement: the user is charged and gets nothing. Web billing is unaffected (Stripe path). Fix: `supabase functions deploy verify-iap-purchase && supabase functions deploy iap-webhook`, then re-probe. Must land before any store build.
 - ✅ **N1-1** FileProvider scope narrowed — `cache-path path="images/"` and `external-files-path path="Pictures/"` instead of wildcard.
 - ✅ **N1-2** `capacitor.config.ts` hardened — `androidScheme: 'https'`, `allowNavigation: ['*.supabase.co', '*.stripe.com']`, `webContentsDebuggingEnabled: false` on both platforms, `limitsNavigationsToAppBoundDomains: true` on iOS.
 - ✅ **N1-3** AndroidBackHandler `rootRoutes` now includes `/pricing`, `/success`, `/reset-password`.
@@ -42,7 +52,7 @@ The headline finding when the audit ran was: **Capacitor plugins are aliased to 
 - ✅ **N2-2** `ITSAppUsesNonExemptEncryption = false` added — skips per-submission TestFlight export-compliance prompt.
 - ⬜ **N2-3** Capacitor sub-plugin SPM pinning audit — only core `capacitor-swift-pm` is exact-pinned; sub-plugins resolve via `node_modules` paths (relies on `package-lock.json`). Low priority verification.
 - ⏳ **N2-4** `DEVELOPMENT_TEAM` hardcoded in `project.pbxproj`. **Your call**: extract to `.xcconfig` or leave as-is for the simpler single-developer flow.
-- ⏳ **N2-5** AppIcon dark/tinted variants for iOS 18 + dark-mode splash image. **Partly unblocked by PR #33.** `AppIcon.appiconset/Contents.json` still declares exactly one universal light image, but `public/brand/amani-app-icon-dark.png` (1024×1024) is now in the repo, so the **dark** appearance is wiring I can do. The **tinted** appearance needs a grayscale master, and the dark splash needs a dark 2732×2732 raster — those still need design assets.
+- ⏳ **N2-5** AppIcon dark/tinted variants + dark splash. **Dark icon is DONE** — wired into the asset catalog in PR #42 and verified in the *compiled* `Assets.car` (`assetutil` reports both renditions, the dark one carrying `UIAppearanceDark`), not merely in the JSON. **Tinted still needs a grayscale 1024×1024 master and the splash needs a dark 2732×2732 raster** — the three `Splash.imageset` PNGs are byte-identical with no `appearances` key, so dark mode currently gets the light splash. Nothing was auto-generated. Remainder of the original entry: **Partly unblocked by PR #33.** `AppIcon.appiconset/Contents.json` still declares exactly one universal light image, but `public/brand/amani-app-icon-dark.png` (1024×1024) is now in the repo, so the **dark** appearance is wiring I can do. The **tinted** appearance needs a grayscale master, and the dark splash needs a dark 2732×2732 raster — those still need design assets.
 - ⏳ **N2-6** `applicationDidEnterBackground` doesn't blur sensitive content (app-switcher snapshot retains visible biomarkers). **Needs decision**: `@capacitor/privacy-screen` plugin (~5 min) or manual overlay.
 - ⬜ **N3-1** Audit found `@capacitor/preferences` referenced in comments — **none found** in current codebase (false positive). No action needed.
 - ⬜ **N3-2** Build artifact `app-release.aab` in working tree — `.gitignore`'d (verified), but worth `./gradlew clean` before commits/backups.
@@ -171,3 +181,52 @@ grep "Camera not available on web" dist/assets/*.js   # expect: empty
 npx cap open ios       # Xcode → Archive → Distribute
 npx cap open android   # Android Studio → Generate Signed Bundle
 ```
+
+---
+
+## Beta build status — 2026-09-04
+
+### Android — artifacts ready
+
+| Artifact | Size | Signing |
+|---|---|---|
+| `artifacts/android/Amani-1.0.4-release.aab` | 8.9 MB | Upload key, `jarsigner: jar verified` |
+| `artifacts/android/Amani-1.0.4-release.apk` | 7.0 MB | APK Signature Scheme v2 |
+| `artifacts/android/Amani-1.0.4-debug.apk` | 15.3 MB | Android debug key |
+
+Verified independently on the release APK: `package name='com.amani.health' versionCode='6' versionName='1.0.4'`, minSdk 24, compileSdk 36, and `eyfvqdnczorscwveaadv` as the only Supabase URL inside the shipped bundle.
+
+Toolchain: Gradle 8.14.3 → **8.14.5**, AGP 8.13.0 → **8.13.2** (both the terminal patch of the 8.x series — there is no AGP 8.14, it jumps to 9.x), Kotlin 2.0.21 (Gradle-bundled; the app declares no Kotlin plugin), JDK 21, build-tools 36.0.0, Capacitor 8.5.1. No major migration was attempted.
+
+Two fixes found while building (PR #43): the Gradle deprecation warning was **ours**, not AGP's — `signingConfig` and `shrinkResources` used Groovy space-assignment; adding `=` cleared it. And `cap sync` was copying 67 `.map` files into the APK, shipping the original TypeScript to anyone who unzipped it — excluded, release APK dropped 8.26 → 7.00 MB.
+
+**Not verified: the app was never installed or run.** The passing release build and `lintVitalRelease` are static evidence only. Nothing was submitted to Play.
+
+### iOS — archive ready, signing blocked upstream
+
+| Artifact | Size | Status |
+|---|---|---|
+| `artifacts/ios/Amani-unsigned.xcarchive` | 70 MB | Built, `CFBundleShortVersionString 1.0.4`, `CFBundleVersion 6` |
+| `artifacts/ios/Amani-Biometrics-device-unsigned.app` | 29 MB | arm64 Release, unsigned |
+| `artifacts/ios/Amani-Biometrics-simulator.app` | 42 MB | Debug |
+
+Signed device build, signed archive and IPA export all **failed on Apple account state**, not on code — the unsigned Release building cleanly for arm64 is what proves that. Three human steps, in order:
+
+1. **Agree to the latest Program License Agreement** at developer.apple.com/account. This is the root blocker; it is why `-allowProvisioningUpdates` could not regenerate a profile.
+2. **Enable Associated Domains on App ID `com.amani.health`.** Both installed profiles were decoded and neither grants `com.apple.developer.associated-domains`.
+3. **Create an Apple Distribution certificate.** The only keychain identity is `Apple Development`; TestFlight needs distribution.
+
+Then re-archive — no code change required. The entitlement was deliberately **not** stripped to force a green build, since `src/lib/deepLinks.ts` depends on it and that would have traded a visible failure for broken universal links and password-reset redirects.
+
+`IPHONEOS_DEPLOYMENT_TARGET = 15.0` was audited and left alone: every plugin and `CapApp-SPM` declares `iOS(.v15)` and the archived binary reports `minos 15.0`. Raising it drops devices and buys nothing.
+
+### Still needs a human
+
+- **`public/.well-known/assetlinks.json` still contains `REPLACE_WITH_PLAY_APP_SIGNING_SHA256`**, so Android app links silently fall back to the browser. It needs the **Play App Signing** SHA-256 from Play Console → Setup → App signing, *not* the upload key. For local pre-Play testing the upload fingerprint is `AE:45:54:E8:D7:74:C0:B6:E8:C8:BC:31:1F:C6:9C:3E:6D:D2:C9:F5:71:8A:1E:8D:51:05:DA:AE:B7:37:57:30`; once Play signing is active, list both.
+- The three Apple account steps above.
+- `supabase login`, so the two IAP edge functions can finally be deployed.
+- Sentry DSN, and the `amanibiometrics.com/reset-password` allowlist in Supabase Auth.
+
+### Caveat on both artifact sets
+
+`.env` in the build environment predates `.env.example` and lacks `VITE_REVENUECAT_IOS_KEY`, `VITE_ALLOW_SANDBOX_IAP` and `VITE_FREEMIUM_ACTIVE`. These builds therefore have **RevenueCat unconfigured and freemium off**. Fine for install-and-navigate testing; re-check before a real TestFlight or Play submission that exercises purchases.

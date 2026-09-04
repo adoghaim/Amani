@@ -6,7 +6,7 @@ The biggest finding across all audits was: **the medical-safety guardrail descri
 
 ## Progress tracker
 
-Status as of 2026-09-03. ✅ shipped **and deployed** · ⏳ blocked on user input · ⬜ not started.
+Status as of 2026-09-04. ✅ shipped **and deployed** · ⏳ blocked on user input · ⬜ not started.
 
 The web app is live on Netlify at `amanibiometrics.com`, serving the redesign and the Amani identity. `main` and `claude_work` are both at `d426759`. No open PRs. Tests 432/432, typecheck clean, build ok as of 2026-09-03.
 
@@ -91,6 +91,20 @@ Triggered by a Codex zip review that identified four launch blockers. Verified e
 - ✅ **S7-7** Redesign + Amani identity consolidated onto main — PR #33. `feat/redesign`'s 7 commits replayed onto main, 4 conflicts resolved by hand. Palette re-solved in OKLCH against a contrast target rather than swapped: `neutral-400` (78 text usages) 2.63:1 → 4.59:1, `neutral-500` (49 usages) 4.29:1 → 5.75:1, `cat-supplement` 2.67:1 → 9.22:1. `tools/contrast/validate.mjs` enforces it and runs in CI (54/54). The app had been carrying three marks — an invented CycleMark, a leftover lucide Heart on six pages, and the real logo — and now carries one across eleven sites. Full native icon set: launcher icons 48–192, adaptive foregrounds inside Android's guaranteed-visible circle at all five densities, iOS 1024×1024 with no alpha. Backend byte-identical to main. Known limitation: `public/favicon.svg` still carries the old cycle geometry — the supplied artwork is raster only, so replacing it needs a vector master.
 - ✅ **S7-8** AI refinement gate — PR #34. `extract-biomarkers` fired on every confident parse, so we paid OpenAI to re-do work the local parser had already done cleanly. `decideAiRefinement` (pure, 15 tests) skips refinement only when the heuristics did not flag the parse weak, ≥10 items parsed, no `parse_error`/`needs_review`, ≤15% unmapped, ≤25% low confidence, and the lab layout was recognised. Fails **open**: a missing signal counts as a failure, so `detectedSource: undefined` refines exactly like `'unknown'`. Measured saving on the fixture corpus is zero (all 5 fixtures are truncated samples below the 10-item floor, and the thresholds were deliberately not loosened to manufacture a win) — the real hit rate is unknown until it sees production uploads.
 
+### Sprint 8 — night of 2026-09-03: freemium foundation, native beta builds
+
+Run autonomously overnight across three lanes. **Nothing here changes production behaviour**: `FREEMIUM_ACTIVE` is unset everywhere, so `resolveTier` resolves every caller to Plus and reproduces the pre-freemium 402 exactly.
+
+- ✅ **S8-1** Tier + allowance model and the Introductory Deep Access ledger — PR #36, merged. `_shared/tier.ts` (mirrored client-side), `_shared/blood-draw-identity.ts`, `_shared/introductory-access.ts`, migration `20260903000000`. Metering is per blood *draw*, identified from server-extracted evidence (accession → lab+collection datetime → lab+collection date → file hash → report id); `lab_reports.report_date` is never an input because it is client-writable. Credits are an append-only claim ledger, not a counter — idempotent by unique `(user_id, blood_draw_id)`, auditable, with no client-writable "remaining" field.
+- ✅ **S8-2** Atomic commit contract — PR #36 follow-up. The first draft recorded the claim *after* returning the interpretation and treated a failed claim write as non-fatal, which meant a broken ledger would have become unlimited Free AI. The interpretation and the claim now commit together before any premium output is returned. Because PostgREST cannot express a multi-statement transaction, the port action must be backed by a single Postgres function — a requirement of the contract, written into the module.
+- ✅ **S8-3** Migration verification harness — `supabase/migrations/__verification__/run.sh`, now a CI job. It found a bug ordinary review missed: `ON DELETE SET NULL` is implemented as an UPDATE, so the immutability trigger rejected it and `DELETE FROM lab_reports` would have failed outright for any user holding a claim. It also proves the per-user advisory lock: two transactions racing for one remaining credit leave the ledger at 2 rows, not 3.
+- ✅ **S8-4** Harness CI race — PR #40. The job I added turned `main` red: `pg_isready` answers yes to the temporary server `initdb` runs, which then shuts down. Now waits on a query that actually succeeds.
+- ⬜ **S8-5** Tier-shaped interpretations + medical floor — **PR #39, open.** `generate-interpretation` does not return the interpretation; it writes `interpretations.json_output` and clients read the row, so tiering is *row* shaping. Free skips the model entirely rather than getting a trimmed response — `InterpretationSchema` requires every field, so a shallower prompt would fail `safeParse` and land on the fallback by accident. `shapeInterpretation` returns one of two whole payloads by reference, making field-level stripping unrepresentable. Tier is a column, not a payload field, because `sanitizeViolations` filters every top-level string array in `json_output`.
+- ⬜ **S8-6** `lab-insights` output validation — **PR #41, open.** The only OpenAI path with no output validation. A `notable_changes` element missing its `change` field crashes `InsightsModal`'s `ChangeIcon`, and because `ErrorBoundary` is mounted at the app root with no per-route boundary, that blanks the **entire app**. Live bug, reachable today from one malformed model response, and unfixable client-side for the shipped native builds.
+- ⬜ **S8-7** Sandbox IAP beta allowlist — **PR #37, open.** Replaces the global `ALLOW_SANDBOX_IAP` boolean with `iap_beta_testers`, keyed on user id with platform, enabled flag and expiry. Sandbox receipts entitle only for an active allowlisted tester; production receipts never consult it.
+
+**Freemium remains OFF in production.** PRs 3 and 4 (ledger wiring behind the atomic RPC; then the actual Free default) are not written.
+
 ### Deploy status — verified 2026-09-03
 
 **Database: done.** 37 local == 37 remote, 0 pending — pushed and verified after PR #32. Do not re-prove this without evidence it changed.
@@ -120,6 +134,8 @@ supabase functions deploy iap-webhook
 `config.toml` already declares both correctly (`iap-webhook` `verify_jwt = false` — it authenticates by store signature, not a Supabase JWT; `verify-iap-purchase` `verify_jwt = true`).
 
 Still open, all blocked on user input: **P1-3** Sentry DSN · **P1-5** run `supabase gen types` and commit · **P1-8** production CORS origins.
+
+**IAP functions are still not deployed** (re-checked 2026-09-04). `supabase login` was never run on this machine — `~/.supabase` holds no access token — so no deploy was possible overnight. This is the single blocker that converts a pile of ready code into working mobile purchases.
 
 Run after any web-bundle change that needs to reach the native apps:
 
