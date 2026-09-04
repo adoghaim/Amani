@@ -1,16 +1,29 @@
 #!/usr/bin/env bash
 #
-# Applies 20260903000000_introductory_deep_access_claims.sql to a throwaway
-# Postgres and checks that the ledger behaves. Needs Docker; touches nothing
-# remote.
+# Applies money-related migrations to a throwaway Postgres and checks that what
+# they built actually behaves. Needs Docker; touches nothing remote.
 #
 #   ./supabase/migrations/__verification__/run.sh
 #
-# Written because the first version of that migration passed review and would
-# have broken production: `report_id ... ON DELETE SET NULL` is implemented as
-# an UPDATE, so the immutability trigger rejected it and `DELETE FROM
-# lab_reports` failed for any user holding a claim. Nothing but running the SQL
-# was going to catch that.
+# Two cases, each in its own database inside one container:
+#
+#   1. 20260903000000_introductory_deep_access_claims.sql — the ledger.
+#      Written because the first version of that migration passed review and
+#      would have broken production: `report_id ... ON DELETE SET NULL` is
+#      implemented as an UPDATE, so the immutability trigger rejected it and
+#      `DELETE FROM lab_reports` failed for any user holding a claim. Nothing
+#      but running the SQL was going to catch that.
+#
+#   2. 20260903120000_add_iap_beta_testers.sql — the sandbox-IAP beta
+#      allowlist. A write to that table is a free subscription, so its RLS
+#      policy and its table grants are the security boundary. The grants in
+#      particular cannot be checked by reading: Supabase's ALTER DEFAULT
+#      PRIVILEGES hands `authenticated` full DML on every new table in `public`,
+#      so a table that looks locked in its own CREATE statement is wide open
+#      unless a later REVOKE says otherwise.
+#
+# Separate databases because the two need different fixtures — see the header of
+# iap-beta-testers.prelude.sql.
 #
 # Exits non-zero on the first unexpected result.
 
@@ -19,6 +32,7 @@ set -euo pipefail
 CONTAINER=amani-pgtest-verify
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATION="$HERE/../20260903000000_introductory_deep_access_claims.sql"
+IAP_MIGRATION="$HERE/../20260903120000_add_iap_beta_testers.sql"
 USER_1='11111111-1111-4111-8111-111111111111'
 USER_3='33333333-3333-4333-8333-333333333333'
 
@@ -31,21 +45,34 @@ docker run -d --name "$CONTAINER" \
   -e POSTGRES_PASSWORD=test -e POSTGRES_DB=amani \
   postgres:15-alpine >/dev/null
 
-# NOT pg_isready. The postgres image runs a TEMPORARY server during initdb, and
-# pg_isready answers "yes" to it — then that server shuts down and the real one
-# starts, so the next command dies with "the database system is shutting down".
-# That raced green locally and red in CI. The only readiness signal that cannot
-# lie is a query that actually succeeds against the final server.
+# Two waits, not one. The official image runs a TEMPORARY server during initdb,
+# on the same unix socket, and `pg_isready` answers yes to it — connect during
+# that window and the real restart pulls the socket out from under you
+# ("FATAL: the database system is shutting down", which is exactly how this job
+# failed on main). So: wait for the entrypoint to say it has finished
+# initialising, and only then poll for a connection that actually works.
 ready=0
-for _ in $(seq 1 90); do
-  if docker exec "$CONTAINER" psql -U postgres -d amani -c 'SELECT 1' >/dev/null 2>&1; then
-    ready=1
-    break
+for _ in $(seq 1 120); do
+  if docker logs "$CONTAINER" 2>&1 | grep -q 'PostgreSQL init process complete'; then
+    ready=1; break
   fi
-  sleep 1
+  sleep 0.5
 done
-if [ "$ready" != "1" ]; then
-  echo "FAIL: postgres never became queryable" >&2
+if [ "$ready" != 1 ]; then
+  echo "FAIL: postgres never finished initialising" >&2
+  docker logs "$CONTAINER" 2>&1 | tail -20 >&2
+  exit 1
+fi
+
+ready=0
+for _ in $(seq 1 120); do
+  if docker exec "$CONTAINER" psql -U postgres -d amani -qtAc 'select 1' >/dev/null 2>&1; then
+    ready=1; break
+  fi
+  sleep 0.5
+done
+if [ "$ready" != 1 ]; then
+  echo "FAIL: postgres never accepted a connection" >&2
   docker logs "$CONTAINER" 2>&1 | tail -20 >&2
   exit 1
 fi
@@ -95,3 +122,28 @@ fi
 
 echo
 echo "PASS: ledger holds at 2 claims under concurrency, and every constraint fired."
+
+# ── Case 2: iap_beta_testers ─────────────────────────────────────────────────
+
+echo
+echo "==> iap_beta_testers: shape, constraints, RLS and grants"
+
+# Its own database: this case needs `auth.users` as a real FK target, an
+# `auth.uid()` that reads the session GUC, and Supabase's default privileges —
+# none of which belong in the ledger's fixture, and the last of which would
+# quietly change what case 1 is testing.
+docker exec -e PGOPTIONS='-c client_min_messages=warning' "$CONTAINER" \
+  psql -q -U postgres -d amani -c "CREATE DATABASE iap_beta" >/dev/null
+
+docker cp "$HERE/iap-beta-testers.prelude.sql" "$CONTAINER:/tmp/iap-prelude.sql" >/dev/null
+docker cp "$IAP_MIGRATION" "$CONTAINER:/tmp/iap-migration.sql" >/dev/null
+docker cp "$HERE/iap-beta-testers.verify.sql" "$CONTAINER:/tmp/iap-verify.sql" >/dev/null
+
+psql_iap() { docker exec -i "$CONTAINER" psql -U postgres -d iap_beta "$@"; }
+
+psql_iap -v ON_ERROR_STOP=1 -q -f /tmp/iap-prelude.sql
+psql_iap -v ON_ERROR_STOP=1 -q -f /tmp/iap-migration.sql >/dev/null
+psql_iap -v ON_ERROR_STOP=1 -q -f /tmp/iap-verify.sql
+
+echo
+echo "PASS: both verification cases."
