@@ -1,4 +1,5 @@
 import { X, AlertCircle, TrendingUp, TrendingDown, Minus, Sparkles, ArrowRight, CheckCircle2, Info } from 'lucide-react';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface Insight {
   summary: string;
@@ -43,6 +44,34 @@ function ChangeIcon({ text }: { text?: string | null }) {
     return <TrendingDown className="w-4 h-4 text-theme-info" />;
   }
   return <Minus className="w-4 h-4 text-theme-neutral-400" />;
+}
+
+/**
+ * Rendered instead of the insights body if anything in it throws.
+ *
+ * The app-wide ErrorBoundary is mounted at the root of App.tsx with no
+ * per-route boundary, so before this existed a throw anywhere in this modal
+ * took the whole app down to a "Something went wrong / Reload" screen. The
+ * server now guarantees the shape (_shared/lab-insights-output.ts), which is
+ * what protects already-shipped native builds — this is the second line, for
+ * anything that guarantee does not cover.
+ *
+ * Scoped INSIDE the modal body deliberately, so the header and both close
+ * buttons survive and the user can dismiss it. A boundary wrapped around the
+ * whole modal would replace the chrome too and leave them stuck.
+ */
+function InsightsRenderError() {
+  return (
+    <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-xl p-4 flex items-start gap-3">
+      <AlertCircle className="w-5 h-5 text-theme-flag-low flex-shrink-0 mt-0.5" />
+      <div>
+        <p className="font-medium text-theme-flag-low text-sm">Could not display these insights</p>
+        <p className="text-sm text-theme-flag-low mt-1">
+          Your lab results and history are unaffected. Close this and try again.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export function InsightsModal({ isOpen, onClose, insights, reportDates, loading, error }: InsightsModalProps) {
@@ -102,6 +131,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
           )}
 
           {insights && !loading && !error && (
+            <ErrorBoundary fallback={<InsightsRenderError />}>
             <div className="space-y-6">
 
               {/* Summary */}
@@ -185,6 +215,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
                 </p>
               </div>
             </div>
+            </ErrorBoundary>
           )}
         </div>
 
