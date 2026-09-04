@@ -168,6 +168,10 @@ Deno.serve(async (req: Request) => {
           "interventions",
           "cycle_events",
           "parser_debug",
+          // Introductory Deep Access ledger. Also reachable via the CASCADE on
+          // users.id, but swept explicitly so erasure does not depend on the
+          // order the auth identity happens to go in.
+          "introductory_deep_access_claims",
           "lab_reports",
           "period_logs",
           "symptom_logs",
