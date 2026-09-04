@@ -71,3 +71,6 @@ deno.lock
 
 # Output of tools/preview (visual check screenshots)
 preview-shots/
+
+# Build artifacts for manual install/distribution. Large binaries, never versioned.
+artifacts/
