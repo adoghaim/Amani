@@ -2,11 +2,13 @@
 
 Synthesized from four parallel audits (security, reliability/observability, code quality / type safety, performance / DX). Each item is a ready-to-paste prompt for Claude Code. Severity reflects user/business risk, not code-aesthetic preference.
 
-The biggest finding across all audits: **the medical-safety guardrail described in `CLAUDE.md` and `NUTRIENT_GUIDELINES.md` (`validateNutrientContent()`) does not exist in code.** Confirmed via grep on `generate-interpretation/index.ts` — zero matches. The spec also drifts between three sources. This is P0 below.
+The biggest finding across all audits was: **the medical-safety guardrail described in `CLAUDE.md` and `NUTRIENT_GUIDELINES.md` (`validateNutrientContent()`) does not exist in code.** Confirmed via grep on `generate-interpretation/index.ts` — zero matches. The spec also drifted between three sources. **Resolved in Sprint 1 (P0-2)** — `supabase/functions/_shared/nutrient-policy.ts` is now the single source of truth, covered by 122 tests. The paragraph is kept for the record; the P0-2 entry below describes the fix.
 
 ## Progress tracker
 
-Status as of 2026-08-21. ✅ shipped **and deployed** · ⏳ blocked on user input · ⬜ not started.
+Status as of 2026-09-03. ✅ shipped **and deployed** · ⏳ blocked on user input · ⬜ not started.
+
+The web app is live on Netlify at `amanibiometrics.com`, serving the redesign and the Amani identity. `main` and `claude_work` are both at `d426759`. No open PRs. Tests 432/432, typecheck clean, build ok as of 2026-09-03.
 
 ### Sprint 1 — P0 ship-blockers (8 of 8)
 
@@ -68,7 +70,7 @@ Triggered by a Codex zip review that identified four launch blockers. Verified e
 **Nits discovered during 2026-08-05 verification (backlog, not blocking):**
 - Onboarding state model is loose: `onboarding_completed` and `onboarding_skipped` are not mutually exclusive; can both be true. `markOnboardingComplete()` and `markOnboardingSkipped()` in `AuthContext.tsx` each set their own flag without clearing the other. Gate accepts either as "past onboarding," so no UX bug — but funnel metrics like "% completed" would undercount skip-then-complete users.
 - UX perception mismatch on `UploadIntroStep.tsx`: primary CTA "Upload Lab Report" (→ `completed=true`, navigates `/app/new`) vs. small text link "Skip for now" (→ `skipped=true`, navigates `/app`). Users perceive Skip as completion. If completion tracking matters downstream, either reconcile the semantics or rename the CTA.
-- No 404 catch-all route in `App.tsx` — a typo under `/app/*` shows a blank Suspense screen forever instead of a NotFound page.
+- ~~No 404 catch-all route in `App.tsx`~~ — **fixed.** `NotFound` is lazy-loaded and wired to `path="*"` (`src/App.tsx:36`, `:102`); PR #33 replaced it with the redesign's version (native safe-area handling, shows the attempted path).
 
 ### Sprint 6 — 2026-08-11 → 2026-08-21: reliability, store-blockers, native deep links
 
@@ -78,17 +80,44 @@ Triggered by a Codex zip review that identified four launch blockers. Verified e
 - ✅ **S6-4** Hosting recorded in-repo — PR #19. Netlify is the web host; the failing `Vercel` PR check was only firing because commits were authored by a second GitHub account (`mawad2`) that lacks Vercel project access. Re-authoring as `adoghaim` cleared it; no Vercel check has appeared since.
 - ✅ **S6-5** Universal links + app links (native **N1-6**) — PR #20. Also fixed a latent bug: `VITE_APP_URL` was set nowhere, so both redirect call sites fell back to `window.location.origin`, which inside a Capacitor webview is `https://localhost` — the password-reset email and Stripe `success_url` pointed at dead links on device. New `src/lib/appUrl.ts` and `src/lib/deepLinks.ts` (pure, 11 tests, doubles as the trust boundary for OS-supplied URLs).
 
-### Deploy status — verified against the live project 2026-08-21
+### Sprint 7 — 2026-08-22 → 2026-08-28: authorization hole, brand consolidation, AI cost gate
 
-**Nothing is pending.** The old "pending deploys" list here was stale; the work had already shipped.
+- ✅ **S7-1** Privileged columns were client-writable — PR #32. No migration ever narrowed Postgres' default GRANT on `users`, so the UPDATE policy scoped by `auth.uid() = id` gated the **row** while leaving every **column** writable — including `subscription_status` and `trial_start_date`, the two inputs to the server-side subscription guard. A weekly PATCH bought unlimited AI generations billed to our OpenAI key. `rate_limits` had the same shape. Migrations `20260823000000_lock_users_privileged_columns.sql`, `20260823010000_atomic_rate_limits.sql`, `20260826000000_privileged_columns_client_compat.sql`.
+- ✅ **S7-2** Client-compat layer for the lockdown — PR #32. Revoking outright is the right end state but is not wire-compatible with the shipped native bundle (1.0.3, build 5): `markOnboardingComplete()` puts `trial_start_date` in the same UPDATE as the onboarding fields, and Postgres denies the whole statement when one column is not granted, so onboarding would have silently stopped persisting on device. Those columns are granted back and made inert by BEFORE triggers on INSERT **and** UPDATE that overwrite them with the server's value; `trial_start_date` may make exactly one server-stamped `NULL → now()` transition, so it can be neither replayed nor backdated. The Stripe linkage columns stay revoked outright. Migrations and frontend can deploy in either order. Verified by pgTAP 28/28 against the full migration history.
+- ✅ **S7-3** Rate limiter had self-destructed — PR #32. No unique constraint → duplicate rows → `.maybeSingle()` errored → the error was discarded → it stopped counting entirely.
+- ✅ **S7-4** Trials started at signup, not at onboarding — PR #32. `start_trial_if_unset()` was dead code while `trial_start_date` still carried `DEFAULT now()`. `DROP DEFAULT` added.
+- ✅ **S7-5** Launch-blocking legal + UX fixes — PR #32. Privacy page claimed an exhaustive processor list while the RevenueCat SDK received account ids (GDPR Art. 13/14 gap, App Store 5.1.1(i) trigger); Stripe portal `return_url` pointed at `/billing`, a route that never existed; a 429 was shown to users as "your upload failed"; `lab-insights`' 402 was invisible to its only caller.
+- ✅ **S7-6** IAP verification + entitlement modules — PR #32. `verify-iap-purchase` and `iap-webhook` edge functions plus `_shared/iap-verification.ts` (96 tests) and `_shared/entitlement.ts` (20 tests). **Code only — neither function is deployed. See Deploy status below.**
+- ✅ **S7-7** Redesign + Amani identity consolidated onto main — PR #33. `feat/redesign`'s 7 commits replayed onto main, 4 conflicts resolved by hand. Palette re-solved in OKLCH against a contrast target rather than swapped: `neutral-400` (78 text usages) 2.63:1 → 4.59:1, `neutral-500` (49 usages) 4.29:1 → 5.75:1, `cat-supplement` 2.67:1 → 9.22:1. `tools/contrast/validate.mjs` enforces it and runs in CI (54/54). The app had been carrying three marks — an invented CycleMark, a leftover lucide Heart on six pages, and the real logo — and now carries one across eleven sites. Full native icon set: launcher icons 48–192, adaptive foregrounds inside Android's guaranteed-visible circle at all five densities, iOS 1024×1024 with no alpha. Backend byte-identical to main. Known limitation: `public/favicon.svg` still carries the old cycle geometry — the supplied artwork is raster only, so replacing it needs a vector master.
+- ✅ **S7-8** AI refinement gate — PR #34. `extract-biomarkers` fired on every confident parse, so we paid OpenAI to re-do work the local parser had already done cleanly. `decideAiRefinement` (pure, 15 tests) skips refinement only when the heuristics did not flag the parse weak, ≥10 items parsed, no `parse_error`/`needs_review`, ≤15% unmapped, ≤25% low confidence, and the lab layout was recognised. Fails **open**: a missing signal counts as a failure, so `detectedSource: undefined` refines exactly like `'unknown'`. Measured saving on the fixture corpus is zero (all 5 fixtures are truncated samples below the 10-item floor, and the thresholds were deliberately not loosened to manufacture a win) — the real hit rate is unknown until it sees production uploads.
+
+### Deploy status — verified 2026-09-03
+
+**Database: done.** 37 local == 37 remote, 0 pending — pushed and verified after PR #32. Do not re-prove this without evidence it changed.
+
+**Edge functions: 8 of 10 deployed. The two IAP functions have never been deployed.**
+
+Probed read-only on 2026-09-03 (`OPTIONS` against `/functions/v1/<name>`; a deployed function answers 200/204, an undeployed name returns `{"code":"NOT_FOUND"}` — confirmed against the retired `create-checkout-session` and a nonsense name as controls):
 
 ```
-migrations              32 local == 32 remote (supabase migration list --linked)
-config.toml verify_jwt  matches remote on all 6 declared functions
-edge functions          every deploy timestamp post-dates its last source change
+extract-biomarkers      200      iap-webhook           404  NOT_FOUND
+parse-lab-report-ocr    200      verify-iap-purchase   404  NOT_FOUND
+generate-interpretation 200
+lab-insights            200
+stripe-webhook          204
+stripe-checkout         204
+create-portal-session   200
+delete-user-data        200
 ```
 
-Last deploy of each function: `delete-user-data` v7 (2026-08-21, this sprint), `stripe-webhook` v12 and `extract-biomarkers` v45 (2026-08-13), `generate-interpretation` v118 and `parse-lab-report-ocr` v8 (2026-08-05), `lab-insights` v8 / `stripe-checkout` v7 (2026-05-01, unchanged since).
+That gap is live-breaking on native only: `src/lib/iap.ts:394` POSTs to `verify-iap-purchase`, so a StoreKit/Play purchase today would 404 and never grant entitlement. It is not a web blocker — web billing goes through Stripe. Fix before any store build ships:
+
+```
+supabase functions deploy verify-iap-purchase
+supabase functions deploy iap-webhook
+```
+
+`config.toml` already declares both correctly (`iap-webhook` `verify_jwt = false` — it authenticates by store signature, not a Supabase JWT; `verify-iap-purchase` `verify_jwt = true`).
 
 Still open, all blocked on user input: **P1-3** Sentry DSN · **P1-5** run `supabase gen types` and commit · **P1-8** production CORS origins.
 
@@ -97,6 +126,35 @@ Run after any web-bundle change that needs to reach the native apps:
 ```
 npm run cap:sync   # push web bundle into android/ and ios/
 ```
+
+---
+
+## Not built yet
+
+### Freemium — Amani Free + Plus (specced, frozen, zero implementation)
+
+The tiering model below is **final and agreed**. No code exists for it. Do not start implementation until asked.
+
+**Free, forever:**
+- unlimited uploads
+- raw data + abnormal flags always visible
+- deterministic interpretation on every report
+- full AI interpretation on the first **2 unique successful reports**
+- one full before/after comparison once there are comparable reports
+- limited AI questions
+- limited trends / correlations
+
+**Plus:** the deeper AI intelligence stays on.
+
+Today the app is all-or-nothing behind `_shared/subscription-guard.ts` (Stripe `active`/`trialing`/`past_due`, or a trial started < 7 days ago) with `SubscriptionGate` wrapping `/app/new`. Freemium replaces that binary with per-feature metering, so it touches the guard, the gate, the entitlement module, and the pricing page together.
+
+### Production E2E fresh-user test — not run
+
+The beta signup walkthrough has never completed end to end. The last attempt's watcher timed out because the `beta1` account was never created, so signup → onboarding → upload → parse → interpretation has not been proven against production. Required before beta.
+
+### Stripe is intentionally in test mode
+
+Not a bug. Live keys are a deliberate pre-launch step, not an oversight to "fix" mid-sprint.
 
 ---
 

@@ -1,14 +1,22 @@
 # Amani — Native-Platform Roadmap
 
-Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-08-21. ✅ shipped · ⏳ blocked on user decision · ⬜ not started.
+Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-09-03. ✅ shipped · ⏳ blocked on user decision · ⬜ not started.
 
-(Updated 2026-08-21: **N0-3 and N1-6 are done.** The privacy manifest shipped with build 5 (PR #17) and universal/app links shipped in PR #20. Remaining store-blockers are **N0-4** keystore rotation and **N2-5** dark-mode assets — both need you, neither is code. `amanibiometrics.com` is confirmed live on Netlify, which is what unblocked N1-6.)
+(Updated 2026-08-21: **N0-3 and N1-6 are done.** The privacy manifest shipped with build 5 (PR #17) and universal/app links shipped in PR #20. `amanibiometrics.com` is confirmed live on Netlify, which is what unblocked N1-6.)
+
+**Updated 2026-09-03.** Two things changed since that note, one good and one bad.
+
+Good: PR #33 shipped the real Amani identity across both platforms — launcher icons 48–192, adaptive foregrounds inside Android's guaranteed-visible circle at all five densities, round icons genuinely masked, iOS 1024×1024 with no alpha, and new splash rasters on both platforms. It also left a **1024×1024 dark icon master in the repo** at `public/brand/amani-app-icon-dark.png`, which downgrades **N2-5** from "needs design assets" to "needs wiring" for the dark appearance (see N2-5 below).
+
+Bad: **N0-8** — the two IAP edge functions were written in PR #32 but never deployed, so in-app purchase verification 404s on device today. That is a hard store blocker and it is the one native item that is pure code.
+
+The native store blockers now are: **N0-4** keystore rotation (yours), **N0-8** IAP function deploy (mine), the `assetlinks.json` Play App Signing SHA-256 (yours), the Apple Associated Domains capability (yours), and **N2-5** dark/tinted icon polish (split).
 
 The headline finding when the audit ran was: **Capacitor plugins are aliased to web stubs in production builds** — Camera, Browser, Network, Android back button silently no-op on device. **That is now fixed** (N0-1 below). The bundle that `cap:sync` pushed into `ios/App/App/public/` and `android/app/src/main/assets/public/` now reaches the real `@capacitor/*` packages on device.
 
 ## Progress tracker
 
-### Critical / High — mechanical fixes (12 of 13 shipped)
+### Critical / High — mechanical fixes (12 of 14 shipped)
 
 - ✅ **N0-1** Vite stub aliases gated to `command === 'serve'` — production bundle now contains real `Capacitor.isNativePlatform` checks, not the stubs. Verified.
 - ✅ **N0-2** iOS `NSCameraUsageDescription` + `NSPhotoLibraryUsageDescription` added with health-app-specific copy. `NSPhotoLibraryAddUsageDescription` deliberately omitted (`captureLabPhoto` doesn't pass `saveToGallery: true`).
@@ -17,6 +25,7 @@ The headline finding when the audit ran was: **Capacitor plugins are aliased to 
 - ✅ **N0-5** `android:allowBackup="false"` on the `<application>` tag.
 - ✅ **N0-6** `android:usesCleartextTraffic="false"` explicit + `network_security_config.xml` referenced from manifest. Base config blocks cleartext, trusts only system CAs.
 - ✅ **N0-7** Android `minifyEnabled true` + `shrinkResources true` in release buildType; `proguard-rules.pro` populated with Capacitor + Cordova-shim + WebView-JS-interface keep rules + line-number preservation for crash symbolication.
+- ⬜ **N0-8** **IAP purchase verification is not deployed.** `verify-iap-purchase` and `iap-webhook` shipped as source in PR #32 and are declared in `config.toml`, but neither exists on the live project — verified 2026-09-03, both return `{"code":"NOT_FOUND"}`. `src/lib/iap.ts:394` POSTs to `verify-iap-purchase`, so a StoreKit or Play purchase on device would 404 and never grant entitlement: the user is charged and gets nothing. Web billing is unaffected (Stripe path). Fix: `supabase functions deploy verify-iap-purchase && supabase functions deploy iap-webhook`, then re-probe. Must land before any store build.
 - ✅ **N1-1** FileProvider scope narrowed — `cache-path path="images/"` and `external-files-path path="Pictures/"` instead of wildcard.
 - ✅ **N1-2** `capacitor.config.ts` hardened — `androidScheme: 'https'`, `allowNavigation: ['*.supabase.co', '*.stripe.com']`, `webContentsDebuggingEnabled: false` on both platforms, `limitsNavigationsToAppBoundDomains: true` on iOS.
 - ✅ **N1-3** AndroidBackHandler `rootRoutes` now includes `/pricing`, `/success`, `/reset-password`.
@@ -33,7 +42,7 @@ The headline finding when the audit ran was: **Capacitor plugins are aliased to 
 - ✅ **N2-2** `ITSAppUsesNonExemptEncryption = false` added — skips per-submission TestFlight export-compliance prompt.
 - ⬜ **N2-3** Capacitor sub-plugin SPM pinning audit — only core `capacitor-swift-pm` is exact-pinned; sub-plugins resolve via `node_modules` paths (relies on `package-lock.json`). Low priority verification.
 - ⏳ **N2-4** `DEVELOPMENT_TEAM` hardcoded in `project.pbxproj`. **Your call**: extract to `.xcconfig` or leave as-is for the simpler single-developer flow.
-- ⏳ **N2-5** AppIcon dark/tinted variants for iOS 18 + dark-mode splash image. **Needs design assets** — can't generate.
+- ⏳ **N2-5** AppIcon dark/tinted variants for iOS 18 + dark-mode splash image. **Partly unblocked by PR #33.** `AppIcon.appiconset/Contents.json` still declares exactly one universal light image, but `public/brand/amani-app-icon-dark.png` (1024×1024) is now in the repo, so the **dark** appearance is wiring I can do. The **tinted** appearance needs a grayscale master, and the dark splash needs a dark 2732×2732 raster — those still need design assets.
 - ⏳ **N2-6** `applicationDidEnterBackground` doesn't blur sensitive content (app-switcher snapshot retains visible biomarkers). **Needs decision**: `@capacitor/privacy-screen` plugin (~5 min) or manual overlay.
 - ⬜ **N3-1** Audit found `@capacitor/preferences` referenced in comments — **none found** in current codebase (false positive). No action needed.
 - ⬜ **N3-2** Build artifact `app-release.aab` in working tree — `.gitignore`'d (verified), but worth `./gradlew clean` before commits/backups.
@@ -47,7 +56,7 @@ npm run build
 npm run cap:sync     # ← already ran; bundle in ios/ and android/ is up to date
 
 # Native rebuild + ship
-npx cap open ios       # Xcode → Archive → Distribute (after you complete N0-4, N2-5, and the Apple Associated Domains capability)
+npx cap open ios       # Xcode → Archive → Distribute (after N0-8 deploy, N0-4, N2-5, and the Apple Associated Domains capability)
 npx cap open android   # Android Studio → Generate Signed Bundle (after N0-4)
 ```
 
@@ -72,6 +81,9 @@ Apple requires this for App Store submissions since May 2024. Submissions withou
 
 ### N0-6 ⬜ `usesCleartextTraffic` not explicit; no `networkSecurityConfig`
 `AndroidManifest.xml:4-10`. Default is `false` on targetSdk 36, but no explicit hardening and no certificate pinning for Supabase. Fix: set `android:usesCleartextTraffic="false"` explicitly + create `res/xml/network_security_config.xml` with `cleartextTrafficPermitted="false"` and reference it from the manifest.
+
+### N0-8 ⬜ IAP purchase verification is not deployed
+`supabase/functions/verify-iap-purchase/` (220 LOC) and `supabase/functions/iap-webhook/` (155 LOC) shipped as source in PR #32, backed by `_shared/iap-verification.ts` (96 tests) and `_shared/entitlement.ts` (20 tests), and both are declared in `supabase/config.toml`. Neither has ever been deployed to the live project — verified read-only 2026-09-03 by `OPTIONS` probe: both return `{"code":"NOT_FOUND"}` while all eight other functions answer 200/204. `src/lib/iap.ts:394` POSTs to `verify-iap-purchase`, so on device a completed StoreKit or Play purchase 404s and never grants entitlement — the user is charged and gets nothing, which is also an App Store 3.1.1 / Play Billing review failure. Web billing is unaffected (Stripe path, separate functions, deployed). Fix: `supabase functions deploy verify-iap-purchase && supabase functions deploy iap-webhook`, then re-probe. Blocks every store build.
 
 ### N0-7 ⬜ ProGuard/R8 disabled for release
 `android/app/build.gradle:40` — `minifyEnabled false`. Capacitor + plugin code ships unobfuscated. Fix: enable `minifyEnabled true` + `shrinkResources true` in `buildTypes.release`, populate `proguard-rules.pro` with Capacitor's keep rules (`-keep class com.getcapacitor.** { *; }` etc.).
@@ -121,7 +133,11 @@ Supabase password-reset emails set `redirectTo` to `window.location.origin/reset
 `ios/App/App.xcodeproj/project.pbxproj:300, 323` — team ID `954V925LL8` committed. Not a secret (team IDs are public on signed binaries) but ties every contributor's local build to that team. **Needs your input**: do you want me to extract to `.xcconfig` or leave as-is? The current setup is the simpler choice for a small team.
 
 ### N2-5 ⏳ AppIcon and Splash incomplete for iOS 18
-`ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json` — only the 1024x1024 marketing icon. iOS 18 expects optional `dark` and `tinted` variants. Splash imageset has identical PNGs for light/dark. **Needs design assets** — I can't generate these.
+`ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json` still declares exactly one image — the 1024×1024 universal marketing icon, re-rendered with the real brand mark in PR #33. iOS 18 expects optional `dark` and `tinted` appearances alongside it. The Splash imageset carries three PNGs, but they are the same image at 1x/2x/3x with no `appearances` key, so dark mode gets the light splash.
+
+Re-checked 2026-09-03: PR #33 left `public/brand/amani-app-icon-dark.png` (1024×1024) in the repo. **The dark appearance is now just wiring** — add the file to the appiconset and give it `"appearances": [{"appearance": "luminosity", "value": "dark"}]`. I can do that.
+
+Still needs assets from you: a **grayscale** master for the `tinted` appearance (iOS composites it, so a color image renders wrong), and a dark 2732×2732 splash raster.
 
 ### N2-6 ⏳ `applicationDidEnterBackground` doesn't blur sensitive content
 `AppDelegate.swift:19-22`. iOS captures an app-switcher snapshot when the user backgrounds the app — currently retains visible biomarkers and AI interpretations. **Needs decision**: install `@capacitor/privacy-screen` (~5 min) or write the overlay manually. HIPAA-style hygiene gap, not a hard rejection.
