@@ -10,7 +10,7 @@ Good: PR #33 shipped the real Amani identity across both platforms — launcher 
 
 Bad: **N0-8** — the two IAP edge functions were written in PR #32 but never deployed, so in-app purchase verification 404s on device today. That is a hard store blocker and it is the one native item that is pure code.
 
-The native store blockers now are: **N0-4** keystore rotation (yours), **N0-8** IAP function deploy (mine), the `assetlinks.json` Play App Signing SHA-256 (yours), the Apple Associated Domains capability (yours), and **N2-5** dark/tinted icon polish (split).
+The native store blockers now are: **N0-4** keystore rotation (yours), **N0-8** IAP function deploy (mine to run, but the Supabase CLI on this machine is not logged in — `supabase login` first), the `assetlinks.json` Play App Signing SHA-256 (yours), the Apple Associated Domains capability (yours), and **N2-5** dark/tinted icon polish (split).
 
 The headline finding when the audit ran was: **Capacitor plugins are aliased to web stubs in production builds** — Camera, Browser, Network, Android back button silently no-op on device. **That is now fixed** (N0-1 below). The bundle that `cap:sync` pushed into `ios/App/App/public/` and `android/app/src/main/assets/public/` now reaches the real `@capacitor/*` packages on device.
 
