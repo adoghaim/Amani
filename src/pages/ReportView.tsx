@@ -381,6 +381,13 @@ export function ReportView() {
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+  /*
+    Which tier the STORED row was written at. Null means it predates Free/Plus,
+    which reads as Plus — the same fail-open-on-shape rule as
+    normalizeTierForClient. Drives the "Generate full Amani analysis" offer
+    below, never access to anything.
+  */
+  const [interpretationTier, setInterpretationTier] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
@@ -423,11 +430,12 @@ export function ReportView() {
         fetchReport();
         const { data: interpData } = await supabase
           .from('interpretations')
-          .select('id, json_output')
+          .select('id, json_output, tier')
           .eq('lab_report_id', reportId)
           .maybeSingle();
         if (interpData?.json_output) {
           setInterpretation(normalizeInterpretation(interpData.json_output));
+          setInterpretationTier((interpData as { tier?: string | null }).tier ?? null);
         }
         return;
       }
@@ -471,7 +479,7 @@ export function ReportView() {
       try {
         const { data: existing } = await supabase
           .from('interpretations')
-          .select('id, json_output')
+          .select('id, json_output, tier')
           .eq('lab_report_id', reportId)
           .maybeSingle();
 
@@ -480,6 +488,7 @@ export function ReportView() {
         if (existing?.json_output) {
           interpPollingActive.current = false;
           setInterpretation(normalizeInterpretation(existing.json_output));
+          setInterpretationTier((existing as { tier?: string | null }).tier ?? null);
           return;
         }
 
@@ -510,13 +519,14 @@ export function ReportView() {
           elapsed += POLL_INTERVAL;
           const { data } = await supabase
             .from('interpretations')
-            .select('id, json_output')
+            .select('id, json_output, tier')
             .eq('lab_report_id', reportId)
             .maybeSingle();
           if (data?.json_output) {
             clearInterval(pollInterval!);
             interpPollingActive.current = false;
             setInterpretation(normalizeInterpretation(data.json_output));
+            setInterpretationTier((data as { tier?: string | null }).tier ?? null);
             return;
           }
           if (elapsed >= TIMEOUT_MS) {
@@ -566,6 +576,7 @@ export function ReportView() {
       writeInterpRateLimit(reportId, null);
       setRateLimitNotice(null);
       setInterpretation(normalizeInterpretation(interpretationData.json_output));
+      setInterpretationTier((interpretationData as { tier?: string | null }).tier ?? null);
     }
 
     setLoading(false);
@@ -1059,6 +1070,23 @@ export function ReportView() {
   }
 
   const canRegenerate = report.regeneration_count < 3 && entitled;
+  /*
+    This report was written at the Free tier, so it holds the deterministic
+    interpretation rather than the AI one. A Plus subscriber can turn it into
+    the full analysis on demand.
+
+    Deliberately NOT automatic on upgrade: regenerating a whole history at once
+    would be a surprise OpenAI bill and a load spike, for reports the user may
+    never open again. One click, on the report they are actually looking at.
+
+    Plus spends no Introductory Deep Access credit for this — decideIntroductoryAccess
+    returns `plus` with consumesCredit false — but `regeneration_count` still
+    caps it at 3, which is the existing abuse control and applies unchanged.
+
+    Null tier means the row predates Free/Plus and is already an AI
+    interpretation, so no offer is shown.
+  */
+  const canUpgradeInterpretation = canRegenerate && interpretationTier === 'free';
   const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
   const hasError = report.status === 'error';
   // A rate-limited report sits at 'processing' because the server refused to
@@ -1118,9 +1146,20 @@ export function ReportView() {
           </div>
           <div className="flex gap-2 flex-shrink-0">
             {canRegenerate && (
-              <Button variant="secondary" size="sm" onClick={handleRegenerate} disabled={regenerating}>
-                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
-                Regenerate ({3 - report.regeneration_count} left)
+              <Button
+                variant={canUpgradeInterpretation ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={handleRegenerate}
+                disabled={regenerating}
+              >
+                {canUpgradeInterpretation ? (
+                  <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
+                ) : (
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
+                )}
+                {canUpgradeInterpretation
+                  ? 'Generate full Amani analysis'
+                  : `Regenerate (${3 - report.regeneration_count} left)`}
               </Button>
             )}
             <Button variant="danger" size="sm" onClick={handleDelete}>
