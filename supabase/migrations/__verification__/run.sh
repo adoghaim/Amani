@@ -31,10 +31,24 @@ docker run -d --name "$CONTAINER" \
   -e POSTGRES_PASSWORD=test -e POSTGRES_DB=amani \
   postgres:15-alpine >/dev/null
 
-for _ in $(seq 1 60); do
-  docker exec "$CONTAINER" pg_isready -U postgres -d amani >/dev/null 2>&1 && break
+# NOT pg_isready. The postgres image runs a TEMPORARY server during initdb, and
+# pg_isready answers "yes" to it — then that server shuts down and the real one
+# starts, so the next command dies with "the database system is shutting down".
+# That raced green locally and red in CI. The only readiness signal that cannot
+# lie is a query that actually succeeds against the final server.
+ready=0
+for _ in $(seq 1 90); do
+  if docker exec "$CONTAINER" psql -U postgres -d amani -c 'SELECT 1' >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
   sleep 1
 done
+if [ "$ready" != "1" ]; then
+  echo "FAIL: postgres never became queryable" >&2
+  docker logs "$CONTAINER" 2>&1 | tail -20 >&2
+  exit 1
+fi
 
 psql_f() { docker exec -i "$CONTAINER" psql -U postgres -d amani "$@"; }
 
