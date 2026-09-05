@@ -8,6 +8,12 @@ import {
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
+import { resolveTier } from "../_shared/tier.ts";
+import {
+  findFloorViolations,
+  shapeInterpretation,
+  shouldRequestDeepInterpretation,
+} from "../_shared/response-shaping.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
@@ -94,6 +100,14 @@ interface ReportFacts {
 }
 
 type AIInterpretationOutput = Record<string, unknown>;
+
+/**
+ * Master switch for Amani Free. Off everywhere until the production fresh-user
+ * E2E test is green; while it is off `resolveTier` resolves every caller to
+ * Plus and reproduces the pre-freemium 402 exactly, so this function behaves
+ * byte for byte as it did before tiering existed.
+ */
+const freemiumActive = () => Deno.env.get("FREEMIUM_ACTIVE") === "true";
 
 // ─── Classification ───────────────────────────────────────────────────────────
 
@@ -1285,10 +1299,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const subCheck = await checkUserSubscription(supabaseUser, user.id);
-    if (!subCheck.allowed) {
-      debugLog("[generate-interpretation] subscription check blocked:", subCheck.reason);
+    const tierDecision = resolveTier({
+      entitlement: subCheck,
+      freemiumActive: freemiumActive(),
+    });
+    if (tierDecision.gate.gate === "block") {
+      debugLog("[generate-interpretation] subscription check blocked:", tierDecision.gate.reason);
       return new Response(
-        JSON.stringify({ error: "subscription_required", reason: subCheck.reason }),
+        JSON.stringify({ error: "subscription_required", reason: tierDecision.gate.reason }),
         { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -1390,38 +1408,78 @@ Deno.serve(async (req: Request) => {
       primaryContext.current_status === "in_range"
     );
 
-    let interpretationJson: AIInterpretationOutput;
-    let source = "fallback";
+    /*
+      Whether this draw is entitled to the full AI interpretation.
 
-    if (openaiApiKey && analytes.length > 0 && report) {
+      Plus always is. A Free user is entitled only while Introductory Deep
+      Access credits remain — but that decision reads the claim ledger, which is
+      PR 3. Until then this is `tier === "plus"`, and since `freemiumActive()` is
+      false everywhere, every caller resolves Plus and this is unconditionally
+      true. Behaviour is unchanged.
+    */
+    const deepAccessGranted = tierDecision.tier === "plus";
+
+    // The floor, as a thunk. Only evaluated on the branch that persists it, so
+    // this keeps running exactly as often as it did before tiering — on a
+    // skipped or failed model call, never on a successful one.
+    const deterministicInterpretation = (): AIInterpretationOutput => report
+      ? generateFallbackInterpretation(report as LabReportData, analytes, primaryContext)
+      : {
+          headline: "Lab data could not be loaded for this report.",
+          summary_bullets: [],
+          top_findings: [],
+          pattern_signals: [],
+          cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" },
+          questions_for_doctor: [],
+          disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
+        };
+
+
+    let aiInterpretation: AIInterpretationOutput | null = null;
+
+    if (shouldRequestDeepInterpretation(deepAccessGranted, !!openaiApiKey, analytes.length > 0) && report) {
       console.log("[generate-interpretation] Trying OpenAI...");
-      const aiResult = await tryOpenAI(openaiApiKey, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly);
+      const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly);
       if (aiResult) {
         // Guarantee overall_interpretation is grounded in deterministic primary_context
         if (primaryContext) {
           aiResult.overall_interpretation = aiResult.overall_interpretation ?? formatPrimarySummary(primaryContext);
         }
-        interpretationJson = aiResult;
-        source = "ai";
+        aiInterpretation = aiResult;
         console.log("[generate-interpretation] OpenAI succeeded");
       } else {
         console.log("[generate-interpretation] OpenAI failed, using fallback");
-        interpretationJson = generateFallbackInterpretation(report as LabReportData, analytes, primaryContext);
       }
+    } else if (!deepAccessGranted) {
+      // A Free user past their introductory credits costs zero OpenAI spend.
+      console.log("[generate-interpretation] Deep access not granted — deterministic interpretation");
     } else {
       console.log("[generate-interpretation] Using fallback (no key or no analytes)");
-      interpretationJson = report
-        ? generateFallbackInterpretation(report as LabReportData, analytes, primaryContext)
-        : {
-            headline: "Lab data could not be loaded for this report.",
-            summary_bullets: [],
-            top_findings: [],
-            pattern_signals: [],
-            cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" },
-            questions_for_doctor: [],
-            disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
-          };
     }
+
+    const shaped = shapeInterpretation({
+      tier: tierDecision.tier,
+      deepAccessGranted,
+      aiInterpretation,
+      deterministicInterpretation,
+    });
+
+    /*
+      The medical floor is checked on whatever is about to be persisted, at every
+      tier. A violation is logged and the row is still written: it means our
+      shaping is wrong, and withholding the report on top of that would punish
+      the user for our bug by denying them their own lab data.
+    */
+    const floorViolations = findFloorViolations(shaped.payload);
+    if (floorViolations.length > 0) {
+      console.error(
+        "[generate-interpretation] MEDICAL FLOOR VIOLATION — persisting anyway:",
+        JSON.stringify({ reportId, tier: shaped.tier, depth: shaped.depth, floorViolations }),
+      );
+    }
+
+    const interpretationJson = shaped.payload;
+    const source = shaped.source;
 
     const { error: upsertError } = await supabase
       .from("interpretations")
@@ -1429,6 +1487,7 @@ Deno.serve(async (req: Request) => {
         lab_report_id: reportId,
         json_output: interpretationJson,
         interpretation_source: source,
+        tier: shaped.tier,
         generated_at: new Date().toISOString(),
         disclaimer_version: "1.0",
       }, { onConflict: "lab_report_id" });
@@ -1442,7 +1501,7 @@ Deno.serve(async (req: Request) => {
     }
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
-    console.log("[generate-interpretation] Done — status: ready, source:", source);
+    console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
 
     return new Response(JSON.stringify({ success: true, source }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
