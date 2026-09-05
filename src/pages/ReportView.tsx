@@ -3,7 +3,6 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import { BiomarkerCard } from '../components/BiomarkerCard';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
@@ -41,6 +40,7 @@ import {
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
+import { useSubscription } from '../hooks/useSubscription';
 
 /*
   A 429 from `generate-interpretation` means "over your daily AI quota", not
@@ -363,7 +363,17 @@ function systemContextPhrase(key: BiomarkerName | null): string | null {
 
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
-  const { userProfile } = useAuth();
+  /*
+    `entitled` is the union of Stripe, StoreKit, Play Billing and the trial —
+    the same decision the server's subscription-guard makes. The regeneration
+    gate below used `userProfile.subscription_status === 'active'`, but nothing
+    in the codebase ever writes that column: it is `DEFAULT 'trial'` in
+    20260216193045 and no edge function, webhook or trigger updates it. So the
+    gate collapsed to "is the 7-day trial still running", and every paying
+    subscriber — Stripe, Apple and Google alike — silently lost the ability to
+    regenerate a report.
+  */
+  const { entitled } = useSubscription();
   const navigate = useNavigate();
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
@@ -960,7 +970,7 @@ export function ReportView() {
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
-    if (userProfile?.subscription_status !== 'active' && !isTrialActive()) return;
+    if (!entitled) return;
     setRegenerating(true);
     setError('');
     const priorStatus = report.status;
@@ -1021,18 +1031,6 @@ export function ReportView() {
     if (!error) navigate('/app', { replace: true });
   };
 
-  const isTrialActive = () => {
-    if (!userProfile) return false;
-    if (userProfile.subscription_status === 'active') return true;
-    if (userProfile.subscription_status === 'trial') {
-      if (!userProfile.trial_start_date) return false;
-      const trialStart = new Date(userProfile.trial_start_date);
-      const days = Math.floor((Date.now() - trialStart.getTime()) / 86400000);
-      return days < 7;
-    }
-    return false;
-  };
-
   const formatDate = (d: string) => {
     if (!d) return '—';
     const base = d.length === 10 ? d + 'T12:00:00' : d;
@@ -1060,7 +1058,7 @@ export function ReportView() {
     );
   }
 
-  const canRegenerate = report.regeneration_count < 3 && (userProfile?.subscription_status === 'active' || isTrialActive());
+  const canRegenerate = report.regeneration_count < 3 && entitled;
   const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
   const hasError = report.status === 'error';
   // A rate-limited report sits at 'processing' because the server refused to
