@@ -5,7 +5,7 @@
   This policy was written from the code: the schema in
   supabase/migrations/, the onboarding fields in src/features/onboarding/,
   the OpenAI calls in supabase/functions/generate-interpretation/ and
-  parse-lab-report-ocr/, the Sentry configuration in src/main.tsx, the
+  parse-lab-report-ocr/, the Sentry configuration in src/lib/observability/, the
   RevenueCat calls in src/lib/iap.ts and
   supabase/functions/_shared/iap-verification.ts, and the deletion protocol in
   supabase/functions/_shared/account-deletion.ts. It is accurate to what the
@@ -327,9 +327,13 @@ export function Privacy() {
                   It is deliberately configured not to see your health data. Session replay —
                   the feature that records what is on screen — is switched off, because this app
                   displays lab results. Console logs are excluded from reports, because our
-                  parser logs the text it reads out of your lab file. Authentication tokens and
-                  query strings are stripped from every URL before a report is sent, and the
-                  option to attach identifying request data is disabled.
+                  parser logs the text it reads out of your lab file. Every report is passed
+                  through a scrubber before it is sent: authentication tokens and query strings
+                  are stripped from URLs, report and account identifiers in a web address are
+                  replaced with a placeholder, email addresses are removed, and the on-screen
+                  labels of whatever you tapped are dropped from the record of your actions. Your
+                  account is not identified to Sentry, and the option to attach identifying
+                  request data is disabled.
                 </p>
               </div>
 

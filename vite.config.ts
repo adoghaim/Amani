@@ -1,5 +1,20 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+
+/*
+  Release identifier stamped into every Sentry event (see
+  src/lib/observability/initSentry.ts). Without it, two deploys of the same
+  version are indistinguishable and a minified frame can resolve against the
+  wrong uploaded source map — which is the whole point of `sourcemap: 'hidden'`
+  below. Netlify exposes the commit as COMMIT_REF; local builds fall back to
+  the bare version.
+*/
+const { version } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf-8'),
+) as { version: string };
+const commit = process.env.COMMIT_REF ?? process.env.GITHUB_SHA;
+const appRelease = commit ? `amani@${version}+${commit.slice(0, 7)}` : `amani@${version}`;
 
 // https://vitejs.dev/config/
 //
@@ -21,6 +36,9 @@ export default defineConfig(({ command }) => ({
     routes client-side, including for inbound universal links.
   */
   base: process.env.BUILD_TARGET === 'native' ? './' : '/',
+  define: {
+    __APP_RELEASE__: JSON.stringify(appRelease),
+  },
   optimizeDeps: {
     exclude: ['lucide-react', '@capacitor/app', '@capacitor/browser', '@capacitor/camera', '@capacitor/network', '@capacitor/core'],
   },
