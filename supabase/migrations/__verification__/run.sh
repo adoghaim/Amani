@@ -118,6 +118,25 @@ fi
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/tier.sql >/dev/null
 echo "    NULL/free/plus accepted, unknown tier refused, migration is idempotent"
 
+echo "==> commit_deep_access: interpretation and credit commit together"
+docker cp "$HERE/../20260905000000_commit_deep_access_rpc.sql" "$CONTAINER:/tmp/rpc.sql" >/dev/null
+docker cp "$HERE/commit-deep-access.verify.sql" "$CONTAINER:/tmp/rpc-verify.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/rpc.sql >/dev/null
+psql_f -f /tmp/rpc-verify.sql 2>&1 | grep -v '^$'
+
+# The assertion that matters most: a refused claim leaves NO interpretation.
+refused=$(psql_f -tA -c "SELECT count(*) FROM interpretations WHERE json_output->>'headline' = 'MUST NOT EXIST';")
+if [ "$refused" != "0" ]; then
+  echo "FAIL: limit_reached persisted an interpretation ($refused rows) — the premium row leaked past a refused credit" >&2
+  exit 1
+fi
+authexec=$(psql_f -tA -c "SELECT has_function_privilege('authenticated','commit_deep_access(uuid,uuid,text,text,jsonb,text,text,boolean)','EXECUTE');")
+if [ "$authexec" != "f" ]; then
+  echo "FAIL: authenticated can execute commit_deep_access — the ledger is client-reachable" >&2
+  exit 1
+fi
+echo "    refused claims persist nothing; authenticated cannot execute it"
+
 echo "==> concurrency: two uploads racing for one remaining credit"
 psql_f -q -c "
   DELETE FROM introductory_deep_access_claims;
@@ -139,7 +158,7 @@ if [ "$final" != "2" ]; then
 fi
 
 echo
-echo "PASS: ledger holds at 2 claims under concurrency, and every constraint fired."
+echo "PASS: ledger holds at 2 claims under concurrency, commit_deep_access is atomic, and every constraint fired."
 
 # ── Case 2: iap_beta_testers ─────────────────────────────────────────────────
 

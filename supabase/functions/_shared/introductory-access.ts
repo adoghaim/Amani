@@ -249,6 +249,8 @@ export interface CommitRequest {
   reportId: string;
   evidenceTier: EvidenceTier;
   interpretation: unknown;
+  /** What is actually being persisted. Only a deep row can spend a credit. */
+  depth: "deep" | "standard";
 }
 
 /**
@@ -266,23 +268,30 @@ export async function commitDeepAccess(
   completion: DeepAccessCompletion,
   request: CommitRequest,
 ): Promise<CommitOutcome> {
-  if (!decision.granted) {
-    return { committed: false, reason: "introductory_access_exhausted" };
-  }
+  /*
+    Completion evidence gates the CREDIT, not the persistence.
 
-  if (!completion.parseConfident || !completion.interpretationGenerated) {
-    return { committed: false, reason: "generation_incomplete" };
-  }
+    Every request must still end with an interpretation row — that is the
+    medical floor, and a user whose parse produced nothing usable still needs
+    the deterministic read rather than a report stuck at 'processing' forever.
+    What failed work must not do is cost a credit.
+
+    So a credit is spent only when all of: the caller was granted one, the
+    parse cleared the bar, the model produced something, and what is actually
+    being persisted is the deep row. A standard row never spends a credit even
+    if one was available.
+  */
+  const earned = completion.parseConfident &&
+    completion.interpretationGenerated &&
+    request.depth === "deep";
+  const consumeCredit = decision.granted && decision.consumesCredit && earned;
 
   // Throws propagate deliberately. A failed transaction must surface as an
   // error the user can retry, not as a premium response with no ledger entry.
-  const result = await actions.commitDeepAccess({
-    ...request,
-    consumeCredit: decision.consumesCredit,
-  });
+  const result = await actions.commitDeepAccess({ ...request, consumeCredit });
 
   if (result === "committed") {
-    return { committed: true, creditConsumed: decision.consumesCredit };
+    return { committed: true, creditConsumed: consumeCredit };
   }
 
   if (result === "already_claimed") {
@@ -291,7 +300,12 @@ export async function commitDeepAccess(
     return { committed: true, creditConsumed: false };
   }
 
-  // The ledger refused — this request lost the race for the last credit and
-  // nothing was persisted as premium. Fail closed.
+  /*
+    The ledger refused: this request lost the race for the last credit, and the
+    transaction rolled back so NOTHING was persisted. The user must still get
+    their floor, so commit again without a credit. The caller is responsible for
+    having reshaped the payload to the standard tier before this point — which
+    is why `depth` is part of the request.
+  */
   return { committed: false, reason: "introductory_access_exhausted" };
 }
