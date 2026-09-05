@@ -88,7 +88,11 @@ const REQUEST: CommitRequest = {
   reportId: 'report-9',
   evidenceTier: 'accession',
   interpretation: { overall_interpretation: 'ok' },
+  depth: 'deep',
 };
+
+/** What gets persisted when the deep path was not taken. */
+const STANDARD_REQUEST: CommitRequest = { ...REQUEST, depth: 'standard' };
 
 describe('decideIntroductoryAccess', () => {
   it('never meters a Plus subscriber, and costs no database round trip', async () => {
@@ -217,51 +221,71 @@ describe('commitDeepAccess — the interpretation and the credit land together',
   });
 });
 
-describe('commitDeepAccess — nothing commits on failed work', () => {
-  it('commits nothing when the parse was not confident', async () => {
-    const { actions, rows, stored, calls } = fakeActions();
+describe('completion evidence gates the CREDIT, never the interpretation', () => {
+  /*
+    Every request must still end with an interpretation row — that is the
+    medical floor, and a user whose parse produced nothing usable still needs
+    the deterministic read rather than a report stuck at 'processing' forever.
+    What failed work must not do is cost a credit.
+  */
+  it('persists but spends nothing when the parse was not confident', async () => {
+    const { actions, rows, stored } = fakeActions();
     const decision = await decideIntroductoryAccess(actions, {
       tier: 'free', userId: USER, bloodDrawId: DRAW,
     });
     const outcome = await commitDeepAccess(
-      actions, decision, { ...GENERATED, parseConfident: false }, REQUEST,
+      actions, decision, { ...GENERATED, parseConfident: false }, STANDARD_REQUEST,
     );
-    expect(outcome).toEqual({ committed: false, reason: 'generation_incomplete' });
-    expect(rows).toHaveLength(0);
-    expect(stored).toHaveLength(0);
-    expect(calls.commit).toBe(0);
+    expect(outcome).toEqual({ committed: true, creditConsumed: false });
+    expect(rows).toHaveLength(0);          // no credit spent
+    expect(stored).toHaveLength(1);        // but the floor was persisted
   });
 
-  it('commits nothing when the model failed', async () => {
-    const { actions, rows, calls } = fakeActions();
+  it('persists but spends nothing when the model failed', async () => {
+    const { actions, rows, stored } = fakeActions();
     const decision = await decideIntroductoryAccess(actions, {
       tier: 'free', userId: USER, bloodDrawId: DRAW,
     });
     const outcome = await commitDeepAccess(
-      actions, decision, { ...GENERATED, interpretationGenerated: false }, REQUEST,
+      actions, decision, { ...GENERATED, interpretationGenerated: false }, STANDARD_REQUEST,
     );
-    expect(outcome).toEqual({ committed: false, reason: 'generation_incomplete' });
+    expect(outcome).toEqual({ committed: true, creditConsumed: false });
     expect(rows).toHaveLength(0);
-    expect(calls.commit).toBe(0);
+    expect(stored).toHaveLength(1);
   });
 
-  it('commits nothing when access was already denied', async () => {
-    const { actions, rows, calls } = fakeActions([claim('x'.repeat(64)), claim('y'.repeat(64))]);
+  it('never spends a credit on a standard row, even when one was available', async () => {
+    // A Free user with credits left whose model call failed gets the
+    // deterministic read for free — they did not receive the thing they
+    // would have been charged for.
+    const { actions, rows } = fakeActions();
+    const decision = await decideIntroductoryAccess(actions, {
+      tier: 'free', userId: USER, bloodDrawId: DRAW,
+    });
+    expect(decision.consumesCredit).toBe(true);
+    const outcome = await commitDeepAccess(actions, decision, GENERATED, STANDARD_REQUEST);
+    expect(outcome).toEqual({ committed: true, creditConsumed: false });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('persists the Free result when access was already exhausted', async () => {
+    const { actions, rows, stored } = fakeActions([claim('x'.repeat(64)), claim('y'.repeat(64))]);
     const decision = await decideIntroductoryAccess(actions, {
       tier: 'free', userId: USER, bloodDrawId: DRAW,
     });
     expect(decision.granted).toBe(false);
-    const outcome = await commitDeepAccess(actions, decision, GENERATED, REQUEST);
-    expect(outcome).toEqual({ committed: false, reason: 'introductory_access_exhausted' });
-    expect(rows).toHaveLength(2);
-    expect(calls.commit).toBe(0);
+    const outcome = await commitDeepAccess(actions, decision, GENERATED, STANDARD_REQUEST);
+    expect(outcome).toEqual({ committed: true, creditConsumed: false });
+    expect(rows).toHaveLength(2);          // unchanged
+    expect(stored).toHaveLength(1);        // they still get their report
   });
 
   it('fails closed when the request loses the race for the last credit', async () => {
     /*
       Two uploads of two different draws both read count = 1 and both believe
-      they hold the last credit. The database settles it. The loser must be
-      served the Free result, NOT the premium one it thought it had earned.
+      they hold the last credit. The database settles it, the transaction rolls
+      back, and nothing is persisted — the caller must reshape to the Free
+      result and commit again.
     */
     const { actions, stored } = fakeActions([claim('x'.repeat(64)), claim('y'.repeat(64))]);
     const staleDecision = {
@@ -314,11 +338,16 @@ describe('a broken ledger must not become unlimited Plus', () => {
     let checked = 0;
     for (const decision of decisions) {
       for (const completion of completions) {
-        const { actions, calls } = fakeActions();
+        const { actions, calls, rows } = fakeActions();
         const outcome = await commitDeepAccess(actions, decision, completion, REQUEST);
         checked++;
-        if (outcome.committed) expect(calls.commit).toBe(1);
-        else expect(calls.commit).toBe(0);
+        // Persistence is always attempted; the ledger is only touched when a
+        // credit was genuinely earned.
+        expect(calls.commit).toBe(1);
+        const earned = completion.parseConfident && completion.interpretationGenerated;
+        const shouldSpend = decision.granted && decision.consumesCredit && earned;
+        if (outcome.committed) expect(outcome.creditConsumed).toBe(shouldSpend);
+        expect(rows.length).toBe(shouldSpend ? 1 : 0);
       }
     }
     expect(checked).toBe(16);

@@ -14,6 +14,15 @@ import {
   shapeInterpretation,
   shouldRequestDeepInterpretation,
 } from "../_shared/response-shaping.ts";
+import {
+  commitDeepAccess,
+  decideIntroductoryAccess,
+  type IntroductoryAccessActions,
+} from "../_shared/introductory-access.ts";
+import {
+  deriveBloodDrawIdentity,
+  hashDrawKey,
+} from "../_shared/blood-draw-identity.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
@@ -1313,7 +1322,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: report } = await supabase
       .from("lab_reports")
-      .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")
+      .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context, file_url")
       .eq("id", reportId)
       .maybeSingle();
 
@@ -1409,15 +1418,88 @@ Deno.serve(async (req: Request) => {
     );
 
     /*
-      Whether this draw is entitled to the full AI interpretation.
+      Introductory Deep Access.
 
-      Plus always is. A Free user is entitled only while Introductory Deep
-      Access credits remain — but that decision reads the claim ledger, which is
-      PR 3. Until then this is `tier === "plus"`, and since `freemiumActive()` is
-      false everywhere, every caller resolves Plus and this is unconditionally
-      true. Behaviour is unchanged.
+      All I/O is behind this port so the policy in `_shared/introductory-access.ts`
+      stays pure and testable. `commitDeepAccess` is a single Postgres function
+      rather than two requests, because PostgREST cannot express the transaction
+      the contract requires — the interpretation and the credit must land
+      together or not at all.
     */
-    const deepAccessGranted = tierDecision.tier === "plus";
+    const introActions: IntroductoryAccessActions = {
+      async findClaim(userId, bloodDrawId) {
+        const { data } = await supabase
+          .from("introductory_deep_access_claims")
+          .select("user_id, blood_draw_id, report_id, evidence_tier, claimed_at")
+          .eq("user_id", userId)
+          .eq("blood_draw_id", bloodDrawId)
+          .maybeSingle();
+        return (data ?? null) as never;
+      },
+      async countClaims(userId) {
+        const { count } = await supabase
+          .from("introductory_deep_access_claims")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId);
+        return count ?? 0;
+      },
+      async commitDeepAccess(input) {
+        const { data, error } = await supabase.rpc("commit_deep_access", {
+          p_user_id: input.userId,
+          p_report_id: input.reportId,
+          p_blood_draw_id: input.bloodDrawId,
+          p_evidence_tier: input.evidenceTier,
+          p_interpretation: input.interpretation,
+          p_source: input.depth === "deep" ? "ai" : "fallback",
+          p_tier: tierDecision.tier,
+          p_consume_credit: input.consumeCredit,
+        });
+        // Throw rather than degrade: a failed transaction must surface as an
+        // error the user can retry, never as a premium response with no ledger
+        // entry. See the contract in _shared/introductory-access.ts.
+        if (error) throw new Error(`commit_deep_access failed: ${error.message}`);
+        return data as "committed" | "already_claimed" | "limit_reached";
+      },
+    };
+
+    /*
+      Which blood draw this is.
+
+      Only derived for Free, because only Free can spend a credit — a Plus
+      request would pay a storage read for an identity nothing consumes. The
+      content hash of the uploaded file is the strongest evidence available
+      here: the server does not keep the raw report text in production
+      (`parser_debug` is written only in DEV), so the accession and
+      collection-date tiers have nothing to read. Re-uploading the same file
+      therefore still resolves to the same draw and cannot burn a second credit.
+    */
+    let contentHash: string | null = null;
+    if (tierDecision.tier === "free" && report?.file_url) {
+      try {
+        const { data: fileBlob } = await supabase.storage
+          .from("lab-files")
+          .download(report.file_url as string);
+        if (fileBlob) {
+          const digest = await crypto.subtle.digest("SHA-256", await fileBlob.arrayBuffer());
+          contentHash = Array.from(new Uint8Array(digest))
+            .map((b) => b.toString(16).padStart(2, "0")).join("");
+        }
+      } catch (err) {
+        // Identity falls back to the report id, which resolves in the user's
+        // favour: the draw counts as new and stays eligible.
+        debugLog("[generate-interpretation] draw-identity file read failed:", errorMessage(err));
+      }
+    }
+
+    const drawIdentity = deriveBloodDrawIdentity(null, { reportId, contentHash });
+    const bloodDrawId = await hashDrawKey(drawIdentity.key);
+
+    const accessDecision = await decideIntroductoryAccess(introActions, {
+      tier: tierDecision.tier,
+      userId: user.id,
+      bloodDrawId,
+    });
+    const deepAccessGranted = accessDecision.granted;
 
     // The floor, as a thunk. Only evaluated on the branch that persists it, so
     // this keeps running exactly as often as it did before tiering — on a
@@ -1478,22 +1560,61 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const interpretationJson = shaped.payload;
-    const source = shaped.source;
 
-    const { error: upsertError } = await supabase
-      .from("interpretations")
-      .upsert({
-        lab_report_id: reportId,
-        json_output: interpretationJson,
-        interpretation_source: source,
-        tier: shaped.tier,
-        generated_at: new Date().toISOString(),
-        disclaimer_version: "1.0",
-      }, { onConflict: "lab_report_id" });
+    /*
+      Persist the interpretation and the credit together.
 
-    if (upsertError) {
-      console.error("[generate-interpretation] Upsert error:", upsertError.message);
+      A throw here is deliberate and must reach the user as an error: the
+      alternative is serving a premium interpretation that the ledger never
+      recorded, which is how a broken ledger becomes unlimited Free.
+    */
+    let finalShaped = shaped;
+    try {
+      let commit = await commitDeepAccess(introActions, accessDecision, {
+        parseConfident: analytes.length > 0,
+        interpretationGenerated: aiInterpretation !== null,
+      }, {
+        userId: user.id,
+        bloodDrawId,
+        reportId,
+        evidenceTier: drawIdentity.tier,
+        interpretation: shaped.payload,
+        depth: shaped.depth,
+      });
+
+      if (!commit.committed && commit.reason === "introductory_access_exhausted") {
+        /*
+          Lost the race for the last credit between the pre-flight check and the
+          commit, so the transaction rolled back and nothing was written. The
+          user still gets their floor: reshape to the standard tier and commit
+          again without a credit.
+        */
+        console.log("[generate-interpretation] Lost the race for the last credit — serving the standard interpretation");
+        finalShaped = shapeInterpretation({
+          tier: tierDecision.tier,
+          deepAccessGranted: false,
+          aiInterpretation: null,
+          deterministicInterpretation,
+        });
+        commit = await commitDeepAccess(introActions, {
+          granted: true, reason: "existing_claim",
+          claimsUsed: accessDecision.claimsUsed, claimsRemaining: 0, consumesCredit: false,
+        }, { parseConfident: analytes.length > 0, interpretationGenerated: false }, {
+          userId: user.id,
+          bloodDrawId,
+          reportId,
+          evidenceTier: drawIdentity.tier,
+          interpretation: finalShaped.payload,
+          depth: finalShaped.depth,
+        });
+      }
+
+      if (!commit.committed) {
+        throw new Error(`interpretation not committed: ${commit.reason}`);
+      }
+      debugLog("[generate-interpretation] committed, credit consumed:", commit.creditConsumed);
+    } catch (err) {
+      console.error("[generate-interpretation] Commit error:", errorMessage(err));
       await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
       return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1501,9 +1622,9 @@ Deno.serve(async (req: Request) => {
     }
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
-    console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
+    console.log("[generate-interpretation] Done — status: ready, source:", finalShaped.source, "tier:", finalShaped.tier, "depth:", finalShaped.depth);
 
-    return new Response(JSON.stringify({ success: true, source }), {
+    return new Response(JSON.stringify({ success: true, source: finalShaped.source }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
