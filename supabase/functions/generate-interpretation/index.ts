@@ -1419,10 +1419,10 @@ Deno.serve(async (req: Request) => {
     */
     const deepAccessGranted = tierDecision.tier === "plus";
 
-    // The floor. Computed for every request regardless of tier, so there is
-    // always something to persist even when the model is skipped or fails.
-    // Pure and local — no I/O, no token spend.
-    const deterministicInterpretation: AIInterpretationOutput = report
+    // The floor, as a thunk. Only evaluated on the branch that persists it, so
+    // this keeps running exactly as often as it did before tiering — on a
+    // skipped or failed model call, never on a successful one.
+    const deterministicInterpretation = (): AIInterpretationOutput => report
       ? generateFallbackInterpretation(report as LabReportData, analytes, primaryContext)
       : {
           headline: "Lab data could not be loaded for this report.",
@@ -1433,6 +1433,7 @@ Deno.serve(async (req: Request) => {
           questions_for_doctor: [],
           disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
         };
+
 
     let aiInterpretation: AIInterpretationOutput | null = null;
 
