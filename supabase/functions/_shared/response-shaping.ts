@@ -65,8 +65,17 @@ export interface ShapeInput {
   deepAccessGranted: boolean;
   /** The validated model output, or null when it was never requested or failed. */
   aiInterpretation: InterpretationPayload | null;
-  /** The rule-based interpretation. Always present — it is the floor. */
-  deterministicInterpretation: InterpretationPayload;
+  /**
+   * The rule-based interpretation, as a thunk.
+   *
+   * A thunk rather than a value so it is computed only on the branch that
+   * actually uses it. Before tiering, `generateFallbackInterpretation` ran only
+   * when OpenAI failed; passing it eagerly would have made it run on every
+   * request including successful Plus ones, so a latent throw in it would have
+   * started breaking reports that previously succeeded. Same code, same
+   * frequency, no new failure surface.
+   */
+  deterministicInterpretation: () => InterpretationPayload;
 }
 
 export interface ShapedInterpretation {
@@ -99,7 +108,7 @@ export function shapeInterpretation(input: ShapeInput): ShapedInterpretation {
   }
 
   return {
-    payload: deterministicInterpretation,
+    payload: deterministicInterpretation(),
     depth: "standard",
     source: "fallback",
     tier,

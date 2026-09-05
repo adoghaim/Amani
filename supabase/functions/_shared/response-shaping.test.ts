@@ -51,7 +51,7 @@ const DETERMINISTIC_PAYLOAD: InterpretationPayload = Object.freeze({
 
 const base = {
   aiInterpretation: AI_PAYLOAD,
-  deterministicInterpretation: DETERMINISTIC_PAYLOAD,
+  deterministicInterpretation: () => DETERMINISTIC_PAYLOAD,
 };
 
 describe('shapeInterpretation — selects a whole payload, never edits one', () => {
@@ -83,6 +83,49 @@ describe('shapeInterpretation — selects a whole payload, never edits one', () 
         }
       }
     }
+  });
+});
+
+describe('shapeInterpretation — the deterministic payload is built lazily', () => {
+  it('does NOT build it when the deep interpretation is used', () => {
+    /*
+      Before tiering, generateFallbackInterpretation ran only when OpenAI
+      failed. If shaping evaluated it eagerly it would run on every request
+      including successful Plus ones, so a latent throw inside it would start
+      breaking reports that previously succeeded. This asserts the frequency is
+      unchanged.
+    */
+    let built = 0;
+    shapeInterpretation({
+      tier: 'plus',
+      deepAccessGranted: true,
+      aiInterpretation: AI_PAYLOAD,
+      deterministicInterpretation: () => { built++; return DETERMINISTIC_PAYLOAD; },
+    });
+    expect(built).toBe(0);
+  });
+
+  it('builds it exactly once when it is used', () => {
+    let built = 0;
+    const result = shapeInterpretation({
+      tier: 'free',
+      deepAccessGranted: false,
+      aiInterpretation: AI_PAYLOAD,
+      deterministicInterpretation: () => { built++; return DETERMINISTIC_PAYLOAD; },
+    });
+    expect(built).toBe(1);
+    expect(result.payload).toBe(DETERMINISTIC_PAYLOAD);
+  });
+
+  it('builds it when the model failed, even for Plus', () => {
+    let built = 0;
+    shapeInterpretation({
+      tier: 'plus',
+      deepAccessGranted: true,
+      aiInterpretation: null,
+      deterministicInterpretation: () => { built++; return DETERMINISTIC_PAYLOAD; },
+    });
+    expect(built).toBe(1);
   });
 });
 
