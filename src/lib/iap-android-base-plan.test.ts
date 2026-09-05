@@ -9,6 +9,7 @@ import { resolveEntitlement as serverResolve } from '../../supabase/functions/_s
 
 const NOW = Date.parse('2026-09-05T00:00:00Z');
 const FUTURE = new Date(NOW + 86_400_000).toISOString();
+const EXPIRED_TRIAL = new Date(NOW - 8 * 86_400_000).toISOString();
 const USER = '11111111-1111-4111-8111-111111111111';
 const MONTHLY = 'com.amani.health.premium.monthly';
 const PLAY_MONTHLY = `${MONTHLY}:monthly`;
@@ -70,7 +71,7 @@ describe('Google Play base-plan identifiers', () => {
           product_id: PLAY_MONTHLY,
         },
       ],
-      trialStartDate: null,
+      trialStartDate: EXPIRED_TRIAL,
       now: NOW,
       userId: USER,
       betaTester: {
