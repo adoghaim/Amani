@@ -369,3 +369,29 @@ export function toBetaTester(row: unknown): BetaTester | null {
 
   return { user_id: userId, platform, expires_at: expiresAt, enabled: r.enabled === true };
 }
+
+/**
+ * Narrows an untrusted `complimentary_entitlements` row into a
+ * `ComplimentaryGrant`, or null.
+ *
+ * Mirrors `toBetaTester`. The point is that the row reaches the resolver as a
+ * checked shape rather than an `as never` cast — a grant of free permanent
+ * access should not be the one thing smuggled past the type system. Anything
+ * unexpected becomes null, which denies.
+ */
+export function toComplimentaryGrant(row: unknown): ComplimentaryGrant | null {
+  if (typeof row !== "object" || row === null || Array.isArray(row)) return null;
+
+  const r = row as Record<string, unknown>;
+
+  const userId = typeof r.user_id === "string" && r.user_id.length > 0 ? r.user_id : null;
+  if (userId === null) return null;
+
+  if (typeof r.reason !== "string") return null;
+
+  const rawExpiry = r.expires_at;
+  if (rawExpiry !== null && rawExpiry !== undefined && typeof rawExpiry !== "string") return null;
+  const expiresAt = typeof rawExpiry === "string" ? rawExpiry : null;
+
+  return { user_id: userId, reason: r.reason, expires_at: expiresAt, enabled: r.enabled === true };
+}

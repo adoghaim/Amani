@@ -1,6 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loadBetaTester, type BetaAllowlistActions } from "./beta-allowlist.ts";
-import { BETA_TESTER_COLUMNS, resolveEntitlement, type IapRecord } from "./entitlement.ts";
+import {
+  BETA_TESTER_COLUMNS,
+  resolveEntitlement,
+  toComplimentaryGrant,
+  type IapRecord,
+} from "./entitlement.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -144,7 +149,7 @@ export async function checkUserSubscription(
       now: Date.now(),
       userId,
       betaTester,
-      complimentary: (compRow ?? null) as never,
+      complimentary: toComplimentaryGrant(compRow),
     });
   } catch (err) {
     console.error("[subscription-guard] DB read failed, failing closed:", err);
