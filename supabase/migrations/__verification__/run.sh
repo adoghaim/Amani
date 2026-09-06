@@ -118,6 +118,36 @@ fi
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/tier.sql >/dev/null
 echo "    NULL/free/plus accepted, unknown tier refused, migration is idempotent"
 
+echo "==> complimentary_entitlements: shape, constraints and locks"
+docker cp "$HERE/../20260905120000_complimentary_entitlements.sql" "$CONTAINER:/tmp/comp.sql" >/dev/null
+docker cp "$HERE/complimentary-entitlements.verify.sql" "$CONTAINER:/tmp/comp-verify.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/comp.sql >/dev/null
+psql_f -f /tmp/comp-verify.sql 2>&1 | grep -v '^$'
+
+# The property the whole design rests on: a user session cannot write this table.
+for priv in INSERT UPDATE DELETE; do
+  has=$(psql_f -tA -c "SELECT count(*) FROM information_schema.role_table_grants
+        WHERE table_name='complimentary_entitlements' AND grantee='authenticated'
+          AND privilege_type='$priv';")
+  if [ "$has" != "0" ]; then
+    echo "FAIL: authenticated holds $priv on complimentary_entitlements — a user could self-grant free access" >&2
+    exit 1
+  fi
+done
+anongrants=$(psql_f -tA -c "SELECT count(*) FROM information_schema.role_table_grants
+             WHERE table_name='complimentary_entitlements' AND grantee='anon';")
+if [ "$anongrants" != "0" ]; then
+  echo "FAIL: anon holds $anongrants privilege(s) on complimentary_entitlements" >&2
+  exit 1
+fi
+writepolicies=$(psql_f -tA -c "SELECT count(*) FROM pg_policies
+                WHERE tablename='complimentary_entitlements' AND cmd <> 'SELECT';")
+if [ "$writepolicies" != "0" ]; then
+  echo "FAIL: complimentary_entitlements has $writepolicies non-SELECT RLS policy" >&2
+  exit 1
+fi
+echo "    authenticated cannot INSERT/UPDATE/DELETE; anon has nothing; no write policy"
+
 echo "==> concurrency: two uploads racing for one remaining credit"
 psql_f -q -c "
   DELETE FROM introductory_deep_access_claims;

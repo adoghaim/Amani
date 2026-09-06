@@ -88,7 +88,7 @@ export function useSubscription() {
         return
       }
 
-      const [stripeResult, iapResult, userResult, betaResult] = await Promise.all([
+      const [stripeResult, iapResult, userResult, betaResult, complimentaryResult] = await Promise.all([
         supabase.from('stripe_user_subscriptions').select('*').maybeSingle(),
         supabase
           .from('iap_subscriptions')
@@ -112,6 +112,16 @@ export function useSubscription() {
         supabase
           .from('iap_beta_testers')
           .select(BETA_TESTER_COLUMNS)
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        /*
+          Complimentary grants — reviewers, press, support. RLS narrows this to
+          the caller's own row, and there is no write policy, so reading it here
+          cannot become a way to grant one.
+        */
+        supabase
+          .from('complimentary_entitlements')
+          .select('user_id, reason, expires_at, enabled')
           .eq('user_id', user.id)
           .maybeSingle(),
       ])
@@ -160,6 +170,7 @@ export function useSubscription() {
         now,
         userId: user.id,
         betaTester,
+        complimentary: (complimentaryResult.data ?? null) as never,
       })
 
       setSubscription(stripe)

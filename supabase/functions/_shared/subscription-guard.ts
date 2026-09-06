@@ -7,7 +7,10 @@ type SupabaseClient = ReturnType<typeof createClient>;
 // Re-exported so existing importers keep their type without knowing that the
 // decision moved into entitlement.ts.
 export type SubscriptionCheckResult =
-  | { allowed: true; reason: "active_subscription" | "active_iap" | "trial" }
+  | {
+      allowed: true;
+      reason: "active_subscription" | "active_iap" | "complimentary" | "trial";
+    }
   | {
       allowed: false;
       reason: "trial_expired" | "onboarding_incomplete" | "no_subscription";
@@ -110,6 +113,30 @@ export async function checkUserSubscription(
         ),
     );
 
+    /*
+      Complimentary grants: reviewers, press, support goodwill. Read
+      unconditionally — unlike the beta allowlist there is no receipt to gate
+      on, and a reviewer has no purchase at all.
+
+      A read failure is fatal rather than silently ignored. Treating it as "no
+      grant" would hand a store reviewer a paywall mid-review, which is the one
+      moment that is expensive to get wrong; failing closed on the whole check
+      at least surfaces as an error we can see.
+    */
+    const { data: compRow, error: compError } = await supabase
+      .from("complimentary_entitlements")
+      .select("user_id, reason, expires_at, enabled")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (compError) {
+      console.error(
+        "[subscription-guard] complimentary_entitlements read failed, failing closed:",
+        compError,
+      );
+      return { allowed: false, reason: "no_subscription" };
+    }
+
     return resolveEntitlement({
       stripeStatus: subResult.data?.subscription_status ?? null,
       iapRecords,
@@ -117,6 +144,7 @@ export async function checkUserSubscription(
       now: Date.now(),
       userId,
       betaTester,
+      complimentary: (compRow ?? null) as never,
     });
   } catch (err) {
     console.error("[subscription-guard] DB read failed, failing closed:", err);
