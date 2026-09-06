@@ -3,7 +3,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
-import { useSubscription } from '../hooks/useSubscription';
+import { useSubscription, sourceHasManageablePurchase } from '../hooks/useSubscription';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +29,13 @@ export function Billing() {
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
 
   const active = isActive();
+  /*
+    Full access with no purchase behind it. They must not be shown trial
+    countdowns or upgrade prompts, and must not be offered to "manage" a
+    subscription they never bought — there is no Stripe customer and no store
+    row to send them to.
+  */
+  const complimentary = !sourceHasManageablePurchase(source) && active;
 
   /*
     Which storefront the entitlement came from, when it came from a native one.
@@ -80,6 +87,7 @@ export function Billing() {
   };
 
   const manageLabel = () => {
+    if (complimentary) return 'Complimentary access';
     if (!active) return 'Subscribe Now';
     if (source === 'ios') return 'Manage in the App Store';
     if (source === 'android') return 'Manage in Google Play';
@@ -87,6 +95,10 @@ export function Billing() {
   };
 
   const handleManageSubscription = async () => {
+    // Defence in depth: the button is not rendered for complimentary access,
+    // but nothing here should ever try to manage a purchase that doesn't exist.
+    if (complimentary) return;
+
     if (!active) {
       navigate('/app/pricing');
       return;
@@ -228,7 +240,20 @@ export function Billing() {
                 <h2 className="text-xl text-theme-text mb-2">
                   Current Plan
                 </h2>
-                {active ? (
+                {complimentary ? (
+                  <div className="space-y-2">
+                    <p className="text-theme-text flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-theme-success" />
+                      <span className="font-medium">Complimentary access</span>
+                    </p>
+                    <p className="text-theme-text">
+                      Every Amani feature is unlocked on this account.
+                    </p>
+                    <p className="text-theme-muted-text text-sm">
+                      There is no subscription or payment attached, and nothing expires.
+                    </p>
+                  </div>
+                ) : active ? (
                   <div className="space-y-2">
                     <p className="text-theme-text flex items-center gap-2">
                       <CheckCircle className="w-5 h-5 text-theme-success" />
@@ -317,12 +342,20 @@ export function Billing() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={handleManageSubscription} disabled={loading}>
-                <Calendar className="w-5 h-5 mr-2" />
-                {loading ? 'Loading...' : manageLabel()}
-              </Button>
+              {/*
+                No manage button for complimentary access. There is no Stripe
+                customer and no store row behind it, so every destination this
+                button has — the portal, the App Store, Google Play — would
+                either error or show an unrelated account.
+              */}
+              {!complimentary && (
+                <Button onClick={handleManageSubscription} disabled={loading}>
+                  <Calendar className="w-5 h-5 mr-2" />
+                  {loading ? 'Loading...' : manageLabel()}
+                </Button>
+              )}
 
-              {isNative() && (
+              {isNative() && !complimentary && (
                 <Button variant="outline" onClick={handleRestore} loading={restoring}>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Restore Purchases

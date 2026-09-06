@@ -13,9 +13,63 @@ import {
   BETA_TESTER_COLUMNS,
   resolveEntitlement,
   toBetaTester,
+  toComplimentaryGrant,
   type BetaTester,
+  type EntitlementResult,
   type IapRecord,
 } from '../lib/entitlement'
+
+/**
+ * Which source label an entitlement result maps to.
+ *
+ * Pure and exported so the mapping is testable without mounting the hook —
+ * `vitest` runs in a node environment here and there is no React testing
+ * harness. It also keeps the one branch that matters honest: a `complimentary`
+ * result must not fall through to `'trial'`, which is what it did when the
+ * reason was first added and the union was not.
+ *
+ * `entitlingPlatform` is the storefront of the IAP row that actually entitles,
+ * and is only consulted for `active_iap`.
+ */
+export function sourceForEntitlement(
+  result: EntitlementResult,
+  entitlingPlatform: SubscriptionSource | null = null,
+): SubscriptionSource {
+  if (!result.allowed) return 'none'
+  switch (result.reason) {
+    case 'active_subscription':
+      return 'stripe'
+    case 'active_iap':
+      return entitlingPlatform ?? 'none'
+    case 'complimentary':
+      return 'complimentary'
+    case 'trial':
+      return 'trial'
+    default:
+      // Unreachable today. A future reason must be mapped deliberately rather
+      // than silently inheriting whichever branch happens to be last.
+      return 'none'
+  }
+}
+
+/** Sources that represent full, non-lapsing access. */
+export function sourceIsActive(source: SubscriptionSource): boolean {
+  return (
+    source === 'stripe' ||
+    source === 'ios' ||
+    source === 'android' ||
+    source === 'complimentary'
+  )
+}
+
+/**
+ * Whether the UI may offer to manage a purchase. Complimentary access has no
+ * Stripe customer and no store row, so every management destination would
+ * either error or show an unrelated account.
+ */
+export function sourceHasManageablePurchase(source: SubscriptionSource): boolean {
+  return source === 'stripe' || source === 'ios' || source === 'android'
+}
 
 export interface Subscription {
   customer_id: string | null
@@ -43,7 +97,22 @@ export interface IapSubscription {
  * only Stripe subscriptions can be managed from inside the app — Apple and
  * Google both require the user to be sent to the system settings screen.
  */
-export type SubscriptionSource = 'stripe' | 'ios' | 'android' | 'trial' | 'none'
+/**
+ * Which relationship is entitling this user right now.
+ *
+ * `complimentary` is full access with no payment — store reviewers, press,
+ * support goodwill. It is deliberately its own value rather than being folded
+ * into 'stripe': the UI must not offer to "manage" a subscription nobody
+ * bought, and must not show trial-expiry or upgrade messaging to someone whose
+ * access never lapses.
+ */
+export type SubscriptionSource =
+  | 'stripe'
+  | 'ios'
+  | 'android'
+  | 'complimentary'
+  | 'trial'
+  | 'none'
 
 /** Does this single IAP row entitle right now? Asked of `resolveEntitlement`
  *  rather than re-implemented, so there is only ever one status list — and one
@@ -170,36 +239,40 @@ export function useSubscription() {
         now,
         userId: user.id,
         betaTester,
-        complimentary: (complimentaryResult.data ?? null) as never,
+        complimentary: toComplimentaryGrant(complimentaryResult.data),
       })
 
       setSubscription(stripe)
       setIapSubscriptions(iap)
       setEntitled(entitlement.allowed)
 
-      if (!entitlement.allowed) {
-        setActiveIap(null)
-        setSource('none')
-      } else if (entitlement.reason === 'active_subscription') {
-        setActiveIap(null)
-        setSource('stripe')
-      } else if (entitlement.reason === 'active_iap') {
-        // Which storefront actually entitles decides where "manage" sends them,
-        // and which row does decides the plan and renewal date shown for it.
-        const live = iap.find((row, i) => {
-          const record = records[i]
-          return (
-            record !== undefined &&
-            iapEntitles(record, now, user.id, betaTester) &&
-            !!row.platform
-          )
-        })
-        setActiveIap(live ?? null)
-        setSource(live?.platform ?? 'none')
-      } else {
-        setActiveIap(null)
-        setSource('trial')
-      }
+      /*
+        Which storefront actually entitles decides where "manage" sends them,
+        and which row does decides the plan and renewal date shown for it. Only
+        an IAP entitlement has one; every other source has no store row.
+      */
+      const live =
+        entitlement.allowed && entitlement.reason === 'active_iap'
+          ? iap.find((row, i) => {
+              const record = records[i]
+              return (
+                record !== undefined &&
+                iapEntitles(record, now, user.id, betaTester) &&
+                !!row.platform
+              )
+            })
+          : undefined
+
+      setActiveIap(live ?? null)
+      // One mapping, shared with the tests, so the hook and the pure function
+      // cannot drift — which is how `complimentary` first fell through to
+      // 'trial'.
+      setSource(
+        sourceForEntitlement(
+          entitlement,
+          (live?.platform as SubscriptionSource | undefined) ?? null,
+        ),
+      )
     } catch (error) {
       console.error('Error fetching subscription:', error)
     } finally {
@@ -221,7 +294,14 @@ export function useSubscription() {
   /** A paid, currently-entitling subscription from any storefront. The app-level
    *  trial is deliberately not "active" — callers use it to decide whether to
    *  offer an upgrade. */
-  const isActive = () => source === 'stripe' || source === 'ios' || source === 'android'
+  /**
+   * Full, non-lapsing access. Complimentary counts: a reviewer holds exactly
+   * the same access a subscriber does, and everything gated on this — the
+   * billing status card, upgrade prompts — should treat them identically.
+   * Where the two must differ is *purchase management*, which reads `source`
+   * rather than this.
+   */
+  const isActive = () => sourceIsActive(source)
 
   /** The store product currently entitling, when the source is a native store. */
   const activeIapProductId = () => activeIap?.product_id ?? null
