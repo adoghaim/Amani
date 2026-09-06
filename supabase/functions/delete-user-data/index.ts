@@ -172,6 +172,9 @@ Deno.serve(async (req: Request) => {
           // users.id, but swept explicitly so erasure does not depend on the
           // order the auth identity happens to go in.
           "introductory_deep_access_claims",
+          // Complimentary grant. Also reachable via the CASCADE on users.id,
+          // but swept explicitly so erasure does not depend on FK ordering.
+          "complimentary_entitlements",
           "lab_reports",
           "period_logs",
           "symptom_logs",
