@@ -32,6 +32,7 @@ const ParserDebugger = lazyWithRetry(() => import('./pages/ParserDebugger').then
 const Onboarding    = lazyWithRetry(() => import('./pages/Onboarding'))
 const Privacy        = lazyWithRetry(() => import('./pages/Privacy').then(m => ({ default: m.Privacy })))
 const Terms          = lazyWithRetry(() => import('./pages/Terms').then(m => ({ default: m.Terms })))
+const DeleteAccount  = lazyWithRetry(() => import('./pages/DeleteAccount').then(m => ({ default: m.DeleteAccount })))
 const Contact        = lazyWithRetry(() => import('./pages/Contact').then(m => ({ default: m.Contact })))
 const NotFound       = lazyWithRetry(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })))
 const DesignGallery = lazyWithRetry(() => import('./pages/DesignGallery').then(m => ({ default: m.DesignGallery })))
@@ -78,6 +79,11 @@ function AppRoutes() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/contact" element={<Contact />} />
+        {/* Google Play requires the account-deletion URL to be readable without
+            signing in — a reviewer, or someone locked out of their account, has
+            to be able to reach it. Linking to /app/settings instead would
+            bounce a signed-out visitor to the login screen. */}
+        <Route path="/delete-account" element={<DeleteAccount />} />
 
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
