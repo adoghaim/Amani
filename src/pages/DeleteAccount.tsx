@@ -141,20 +141,32 @@ export function DeleteAccount() {
           </div>
         </section>
 
+        {/*
+          themilkytech@gmail.com is deliberate and temporary. The
+          amanibiometrics.com mailbox does not exist yet, and a compliance page
+          that names a bouncing address is worse than one that names none —
+          Google or a locked-out user emails it, nothing arrives, and the
+          deletion path we just promised does not work. This is the same address
+          already given to Google Play, so the two stay consistent.
+
+          Swap to support@ or privacy@amanibiometrics.com once domain mail is
+          live, and check Contact.tsx, Privacy.tsx and Terms.tsx at the same
+          time — they all still name unreachable addresses.
+        */}
         <section className="mb-10">
           <h2 className="text-lg text-theme-text mb-3">If you cannot sign in</h2>
           <p className="text-theme-text mb-3">
-            If you have lost access to your account and cannot reach Settings, email us and we
-            will delete it for you. Write from the address you signed up with where possible, so
-            we can identify the account without asking you for more personal information than
-            necessary.
+            If you have lost access to your account and cannot reach Settings, email us from the
+            address associated with your Amani account and ask us to delete it. Writing from that
+            address lets us identify the account without asking you for more personal information
+            than necessary.
           </p>
           <a
-            href="mailto:privacy@amanibiometrics.com"
+            href="mailto:themilkytech@gmail.com"
             className="inline-flex items-center gap-2 text-theme-primary-dark underline underline-offset-2 hover:text-theme-accent"
           >
             <Mail className="h-4 w-4" />
-            privacy@amanibiometrics.com
+            themilkytech@gmail.com
           </a>
         </section>
 
