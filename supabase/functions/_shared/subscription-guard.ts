@@ -134,12 +134,27 @@ export async function checkUserSubscription(
       .eq("user_id", userId)
       .maybeSingle();
 
+    /*
+      A failed read here is treated as "no grant", NOT as a denial.
+
+      The first version failed the whole check closed, reasoning that a reviewer
+      hitting a paywall mid-review is expensive. That was the wrong trade, and
+      reviewing it before merge is what caught it: complimentary access is an
+      ADDITIVE source, so a failure to read it must never remove access that
+      Stripe, a store receipt or the trial already granted.
+
+      The blast radii are not comparable. Denying on error takes access from
+      EVERY user — including paying ones — the moment this table is unreadable,
+      which includes the window where the function is deployed before its
+      migration has run. Treating it as absent costs access only to the handful
+      of complimentary accounts we control and can re-check by hand.
+    */
     if (compError) {
       console.error(
-        "[subscription-guard] complimentary_entitlements read failed, failing closed:",
+        "[subscription-guard] complimentary_entitlements read failed; " +
+          "treating as no grant. Paid and trial entitlement are unaffected:",
         compError,
       );
-      return { allowed: false, reason: "no_subscription" };
     }
 
     return resolveEntitlement({
@@ -149,7 +164,7 @@ export async function checkUserSubscription(
       now: Date.now(),
       userId,
       betaTester,
-      complimentary: toComplimentaryGrant(compRow),
+      complimentary: compError ? null : toComplimentaryGrant(compRow),
     });
   } catch (err) {
     console.error("[subscription-guard] DB read failed, failing closed:", err);
