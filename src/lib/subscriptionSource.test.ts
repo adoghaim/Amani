@@ -4,8 +4,8 @@ import {
   sourceHasManageablePurchase,
   sourceIsActive,
   type SubscriptionSource,
-} from './useSubscription';
-import type { EntitlementResult } from '../lib/entitlement';
+} from './subscriptionSource';
+import type { EntitlementResult } from './entitlement';
 
 /**
  * The bug these exist for: `resolveEntitlement` gained a `complimentary` reason
