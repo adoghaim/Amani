@@ -1,5 +1,5 @@
+import { Modal } from './Modal';
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { FlowIntensity, PeriodLog } from '../types';
 
 const FLOW_OPTIONS: { key: FlowIntensity; label: string; desc: string }[] = [
@@ -86,19 +86,29 @@ export function PeriodLogModal({
       : 'Edit period';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
-          <h2 className="text-base text-theme-text">{title}</h2>
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      footer={
+        <>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
+            className="flex-1 py-2.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl hover:bg-theme-surface-hover transition-colors"
           >
-            <X className="w-4 h-4 text-theme-muted-text" />
+            Cancel
           </button>
-        </div>
-
-        <div className="px-5 py-4 space-y-4">
+        </>
+      }
+    >
+      <div className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Start date</label>
             <input
@@ -157,24 +167,7 @@ export function PeriodLogModal({
               className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
             />
           </div>
-        </div>
-
-        <div className="px-5 pb-5 flex gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl hover:bg-theme-surface-hover transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }
