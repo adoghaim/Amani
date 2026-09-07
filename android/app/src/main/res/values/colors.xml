@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Amani's page background, identical to the theme-color meta in index.html
+        and the `background` token in tailwind.config.js. Declared here so the
+        native window chrome and the web page cannot drift apart.
+    -->
+    <color name="amaniBackground">#FBF7F5</color>
+</resources>
