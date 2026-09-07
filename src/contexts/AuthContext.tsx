@@ -62,15 +62,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let initializedFromSession = false;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      initializedFromSession = true;
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserProfile(session.user.id).then(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
+    /*
+      `setLoading(false)` must be reachable on every path. It previously lived
+      only inside the success callbacks, so a rejection anywhere in this chain —
+      a storage adapter that throws, a cold start on a dead network — left
+      `loading` true forever, and both route guards in App.tsx render a spinner
+      while it is. That is an unrecoverable state: no error, no retry, no way
+      out but reinstalling.
+
+      A user with no session is indistinguishable from a user whose session
+      could not be read, and both should land on the login screen rather than an
+      eternal spinner, so the catch deliberately clears the user too.
+    */
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        initializedFromSession = true;
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchUserProfile(session.user.id);
+        }
+      })
+      .catch((error) => {
+        initializedFromSession = true;
+        console.error('[AuthContext] Could not read the stored session:', error);
+        setUser(null);
+        setUserProfile(null);
+      })
+      .finally(() => setLoading(false));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       (async () => {
