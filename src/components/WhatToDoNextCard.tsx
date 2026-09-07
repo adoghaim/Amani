@@ -51,7 +51,7 @@ function dedup(items: string[], existing: string[]): string[] {
 
 const BUCKET_META: Record<Bucket, { label: string; icon: typeof Eye; iconColor: string; bg: string }> = {
   track: { label: 'Track', icon: Eye, iconColor: 'text-theme-info', bg: 'bg-theme-info-bg' },
-  discuss: { label: 'Discuss with your provider', icon: MessageSquareText, iconColor: 'text-theme-cat-sleep', bg: 'bg-theme-cat-sleep' },
+  discuss: { label: 'Discuss with your provider', icon: MessageSquareText, iconColor: 'text-theme-cat-sleep', bg: 'bg-theme-cat-sleep-bg' },
   retest: { label: 'Prepare for next labs', icon: FlaskConical, iconColor: 'text-theme-flag-ok', bg: 'bg-theme-flag-ok-bg' },
 };
 
