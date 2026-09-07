@@ -47,6 +47,42 @@ export interface NormalizedIapSubscription {
   expiresAt: string | null;
   environment: IapEnvironment;
   raw: unknown;
+  /*
+    Webhook event identity. Null for the subscriber-payload path
+    (verify-iap-purchase), which is a point-in-time read of current state rather
+    than an event in a stream — it has nothing to be out of order with, and no
+    id to deduplicate.
+  */
+  eventId?: string | null;
+  /** When the event occurred, ISO. The ordering high-water mark. */
+  eventAt?: string | null;
+}
+
+/**
+ * Should a patch derived from this event be applied to this row?
+ *
+ * Pure, so every branch is testable without a database.
+ *
+ * The rule is "not older than what we already applied", not "strictly newer":
+ * RevenueCat can emit two events with the same millisecond, and refusing the
+ * second would silently drop a real state change.
+ *
+ * Both unknowns fail OPEN, deliberately. An event with no timestamp, or a row
+ * with no mark, means we cannot order them — and discarding a real cancellation
+ * because it lacked a field would be worse than applying it late. The mark only
+ * advances on events that carry a timestamp, so one malformed event cannot
+ * poison ordering for the ones after it.
+ */
+export function isEventFresh(
+  rowLastEventAt: string | null | undefined,
+  eventAt: string | null | undefined,
+): boolean {
+  if (!rowLastEventAt) return true;
+  if (!eventAt) return true;
+  const previous = Date.parse(rowLastEventAt);
+  const incoming = Date.parse(eventAt);
+  if (Number.isNaN(previous) || Number.isNaN(incoming)) return true;
+  return incoming >= previous;
 }
 
 /** The subset of an existing row the write policy needs to see. */
@@ -55,6 +91,8 @@ export interface IapSubscriptionRow {
   user_id: string;
   platform: string;
   product_id: string;
+  /** Ordering high-water mark. Absent on rows written before this existed. */
+  last_event_at?: string | null;
   store_subscription_id: string;
   status: string;
   expires_at: string | null;
@@ -229,6 +267,14 @@ export function normalizeRevenueCatEvent(body: unknown, now: number): WebhookNor
   const type = str(event.type)?.toUpperCase();
   if (!type) return { kind: "ignored", reason: "missing event type" };
 
+  /*
+    Event identity, used for deduplication and ordering. Both are optional in
+    the type because the subscriber-payload path has neither, and both degrade
+    to "apply it" rather than "drop it" — see isEventFresh.
+  */
+  const eventId = str(event.id);
+  const eventAt = isoFromMs(event.event_timestamp_ms);
+
   // RevenueCat's dashboard "send test event" button. Never a real purchase.
   if (type === "TEST") return { kind: "ignored", reason: "test event" };
 
@@ -290,6 +336,8 @@ export function normalizeRevenueCatEvent(body: unknown, now: number): WebhookNor
       expiresAt: resolved.expiresAt,
       environment: toEnvironment(event.environment),
       raw: body,
+      eventId,
+      eventAt,
     },
   };
 }
@@ -423,6 +471,17 @@ export interface IapStore {
   ): Promise<IapSubscriptionRow | null>;
   insert(subscription: NormalizedIapSubscription): Promise<void>;
   update(id: string, patch: IapRowPatch): Promise<void>;
+  /**
+   * Records an event id as processed. Resolves true if this delivery claimed
+   * it, false if it had already been claimed — i.e. a duplicate.
+   *
+   * Optional: the subscriber-payload path has no event ids, and a caller that
+   * does not supply this simply gets no deduplication. The ordering guard
+   * already makes a duplicate harmless — it re-applies an identical patch — so
+   * this is about not doing the write twice and about being able to answer
+   * "did we ever receive this event" afterwards.
+   */
+  claimEvent?(eventId: string): Promise<boolean>;
 }
 
 /**
@@ -437,12 +496,22 @@ export interface IapRowPatch {
   expires_at: string | null;
   environment: IapEnvironment;
   raw: unknown;
+  /** Ordering mark. Present only when the event carried a timestamp. */
+  last_event_at?: string;
+  last_event_id?: string | null;
 }
 
 export type PersistOutcome =
   | { action: "inserted" }
   | { action: "updated"; id: string; matchedBy: "store_subscription" | "user_product" }
-  | { action: "rejected"; reason: "ownership_conflict"; ownerUserId: string };
+  | { action: "rejected"; reason: "ownership_conflict"; ownerUserId: string }
+  /*
+    The row already reflects a NEWER event, so this one is discarded. Not an
+    error: out-of-order delivery is normal for a webhook with retries, and this
+    is the outcome that keeps a replayed backlog from rewinding subscription
+    state.
+  */
+  | { action: "stale"; id: string; appliedAt: string | null };
 
 /**
  * Writes one normalised subscription, refusing to move it between accounts.
@@ -474,6 +543,14 @@ export async function persistIapSubscription(
     expires_at: subscription.expiresAt,
     environment: subscription.environment,
     raw: subscription.raw,
+    /*
+      Only advance the mark on events that actually carry a timestamp. A
+      malformed event still applies its patch (see isEventFresh) but must not
+      move the watermark, or it would make every later event look stale.
+    */
+    ...(subscription.eventAt
+      ? { last_event_at: subscription.eventAt, last_event_id: subscription.eventId ?? null }
+      : {}),
   };
 
   const byStore = await store.findByStoreSubscription(
@@ -488,6 +565,16 @@ export async function persistIapSubscription(
         reason: "ownership_conflict",
         ownerUserId: byStore.user_id,
       };
+    }
+
+    /*
+      Ordering guard. A CANCELLATION delivered after the RENEWAL that superseded
+      it would otherwise overwrite a live subscription with a cancelled one, and
+      the user would lose access they had paid for. This is the case that makes
+      releasing RevenueCat's retry backlog safe.
+    */
+    if (!isEventFresh(byStore.last_event_at, subscription.eventAt)) {
+      return { action: "stale", id: byStore.id, appliedAt: byStore.last_event_at ?? null };
     }
 
     await store.update(byStore.id, patch);
@@ -508,6 +595,9 @@ export async function persistIapSubscription(
   );
 
   if (byProduct) {
+    if (!isEventFresh(byProduct.last_event_at, subscription.eventAt)) {
+      return { action: "stale", id: byProduct.id, appliedAt: byProduct.last_event_at ?? null };
+    }
     await store.update(byProduct.id, patch);
     return { action: "updated", id: byProduct.id, matchedBy: "user_product" };
   }

@@ -83,6 +83,21 @@ const iapStore: IapStore = {
     const { error } = await supabase.from('iap_subscriptions').update(patch).eq('id', id);
     if (error) throw new Error(`iap_subscriptions update failed: ${error.message}`);
   },
+
+  /*
+    Insert-and-see. `on conflict do nothing` means a duplicate delivery inserts
+    no row, and the absent returned row is how we know. A failure here throws
+    rather than assuming "new": treating an unreadable ledger as "not seen
+    before" would reprocess the whole backlog on every retry.
+  */
+  async claimEvent(eventId: string) {
+    const { data, error } = await supabase
+      .from('processed_iap_events')
+      .upsert({ event_id: eventId }, { onConflict: 'event_id', ignoreDuplicates: true })
+      .select('event_id');
+    if (error) throw new Error(`processed_iap_events claim failed: ${error.message}`);
+    return (data?.length ?? 0) > 0;
+  },
 };
 
 Deno.serve(async (req) => {
@@ -120,6 +135,22 @@ Deno.serve(async (req) => {
     }
 
     const subscription = result.subscription;
+
+    /*
+      Deduplicate before writing. RevenueCat retries for hours on a non-2xx, and
+      this function has been returning 503 to every delivery for as long as
+      REVENUECAT_WEBHOOK_AUTH has been unset — so the first successful run will
+      receive a backlog containing repeats. 200 on a duplicate: it is already
+      applied, and asking for it again gains nothing.
+    */
+    if (subscription.eventId && iapStore.claimEvent) {
+      const claimed = await iapStore.claimEvent(subscription.eventId);
+      if (!claimed) {
+        console.info(`[iap-webhook] duplicate delivery of event ${subscription.eventId}`);
+        return Response.json({ received: true, ignored: 'duplicate_event' });
+      }
+    }
+
     const outcome = await persistIapSubscription(iapStore, subscription);
 
     if (outcome.action === 'rejected') {
@@ -137,6 +168,19 @@ Deno.serve(async (req) => {
           `row belongs to ${outcome.ownerUserId}. No row was reassigned.`,
       );
       return Response.json({ received: true, ignored: 'ownership_conflict' });
+    }
+
+    if (outcome.action === 'stale') {
+      /*
+        The row already reflects a newer event. Normal for a replayed backlog,
+        and the outcome that stops a late CANCELLATION rewinding a live
+        subscription. Logged at info because it is expected, not a fault.
+      */
+      console.info(
+        `[iap-webhook] stale event for ${subscription.platform}/${subscription.productId}: ` +
+          `row already at ${outcome.appliedAt}, event at ${subscription.eventAt}. Not applied.`,
+      );
+      return Response.json({ received: true, ignored: 'stale_event' });
     }
 
     console.info(
