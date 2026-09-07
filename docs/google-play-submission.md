@@ -78,7 +78,7 @@ Runners-up, if you want a different emphasis:
 | 70 | `Your lab results, explained in plain language with your cycle in mind.` |
 | 80 | `Lab results, explained — with your cycle in mind. Educational, never diagnostic.` |
 
-### 1.3 Full description — 3,175 characters (limit 4000)
+### 1.3 Full description — 3,446 characters (limit 4000)
 
 Every claim here is checkable against the code; the evidence table is §1.4.
 
@@ -115,7 +115,7 @@ Amani is educational. It does not diagnose conditions, it does not treat them, a
 
 YOUR DATA
 
-No ads. No advertising or analytics trackers. Your data is never sold. To read and explain a report, your lab values are sent to OpenAI — along with the report itself when a photo is uploaded or our own parser cannot read it, and the name of anything you log in the Tracker when you ask for insights comparing two reports. Our privacy policy says so plainly and names every other company involved. Everything travels over an encrypted connection. From Settings you can delete your files, your reports, your interpretations, your logs, your profile, and your login, in one step.
+No ads. No advertising or analytics trackers. Your data is never sold. To read and explain a report, your lab values are sent to OpenAI — along with the report itself when a photo is uploaded or a PDF cannot be read confidently, the text we extracted when our parse looks unreliable, and the name of anything you log in the Tracker when you ask for insights comparing two reports. Our privacy policy says so plainly and names every other company involved. Everything travels over an encrypted connection. From Settings you can delete your files, your reports, your interpretations, your logs, your profile, and your login, in one step.
 
 Amani is not a HIPAA covered entity — the privacy policy explains what that means for you. Amani is intended for adults 18 and over.
 
@@ -294,14 +294,30 @@ is the service-provider carve-out:
 | Company | What it receives | Evidence |
 |---|---|---|
 | Supabase | All app data — database, storage, auth, edge functions | `src/lib/supabase.ts`; Privacy policy: "They act as our processor and do not use your data for their own purposes." |
-| OpenAI | Biomarker names/values/units/ranges, cycle context, a short profile block (first name, age range, sex at birth, reproductive status, goals, symptoms); **the report itself** — images when a photo is uploaded, or the full extracted text when the local parse is weak (`extract-biomarkers` sends `{ text }`, not only images); **and the title and category of Tracker interventions** active in the compared window, sent by `lab-insights` | `supabase/functions/generate-interpretation/`, `extract-biomarkers/`, `lab-insights/`, `parse-lab-report-ocr/`; Privacy policy OpenAI block |
-
-> **Corrected 2026-09-07.** This row previously listed only images, and the privacy policy stated that supplements are never sent to OpenAI. Both were wrong once the Tracker shipped: `lab-insights/index.ts` reads `interventions` and interpolates `title` and `category` — a set that includes `supplement` and `medication` — into the prompt, and `extract-biomarkers` sends full raw text rather than images alone. The claim was true of the *onboarding* profile fields, which `generate-interpretation` genuinely excludes; it was never true of the Tracker. The feature is being kept and the disclosure made accurate, rather than the reverse.
+| OpenAI | Biomarker names/values/units/ranges, cycle context, a short profile block (first name, age range, sex at birth, reproductive status, goals, symptoms); **report images** when a photo is uploaded, and when a PDF parses weakly — `startPdfOcrFallback` renders its pages with `convertPDFToImages` and posts them to `parse-lab-report-ocr` as `base64Images`; **extracted report text** when the refinement gate opens, which `extract-biomarkers` receives as `{ text }`; **and the title and category of Tracker interventions** active in the compared window, sent by `lab-insights` | `generate-interpretation/`, `parse-lab-report-ocr/`, `extract-biomarkers/`, `lab-insights/`; Privacy policy OpenAI block |
 | Stripe | Email and payment details, web only. **No health data.** | `stripe-checkout` |
 | Apple / Google | Payment, in-app only. **No health data.** | Play Billing via RevenueCat |
 | RevenueCat | The Supabase `auth.users.id` as `appUserID`, store transaction/subscription ids, product id, subscription state, app/OS version, a device identifier, store country. **No lab values, biomarkers, symptoms, cycle data or interpretations, and no email.** | `src/lib/iap.ts:148` (`appUserID: userId`); Privacy policy RevenueCat block |
 | Sentry | Error, code path, page. Session Replay **off**, console breadcrumbs **off**, query strings stripped, `sendDefaultPii: false`. Only active when `VITE_SENTRY_DSN` is set. | `src/main.tsx:35-58` |
 | Netlify | Web request metadata / IP. No health data stored. | Privacy policy |
+
+> **Corrected 2026-09-07.** The OpenAI row previously listed only images, and the privacy policy
+> stated that supplements are never sent to OpenAI. Both were wrong.
+>
+> The supplements claim was true of the *onboarding* profile fields, which `generate-interpretation`
+> genuinely excludes, and never true of the Tracker: `lab-insights/index.ts:201` reads
+> `interventions` and `:240` interpolates `title` and `category` — a set including `supplement`
+> and `medication` — into the prompt.
+>
+> The transmission description was wrong in a second way, corrected again after review: images and
+> text travel by two *different* paths, not one. A weak PDF parse triggers `startPdfOcrFallback`,
+> which renders the pages via `convertPDFToImages` and sends **images** to `parse-lab-report-ocr`.
+> Extracted **text** goes to `extract-biomarkers` only when `decideAiRefinement` opens the gate,
+> which is a separate condition. An earlier draft tied full-text transmission to PDFs that could
+> not be parsed, which is precisely backwards.
+>
+> The intervention-insights feature is kept and the disclosure made accurate, rather than the
+> reverse.
 
 **DECISION.** The service-provider carve-out is a legal judgment, not a code fact.
 It is the standard and defensible reading for every company above, and the privacy

@@ -26,7 +26,7 @@ import { ArrowLeft } from 'lucide-react';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
 
-const LAST_UPDATED = '23 August 2026';
+const LAST_UPDATED = '7 September 2026';
 
 export function Privacy() {
   return (
@@ -251,13 +251,14 @@ export function Privacy() {
                   status, health goals, and the symptoms you asked us to keep in mind.
                 </p>
                 <p className="text-sm mb-2">
-                  If you upload a photo rather than a machine-readable PDF, or if our own parser
-                  cannot read the file confidently,{' '}
-                  <strong className="text-theme-text">
-                    the report itself is sent to OpenAI
-                  </strong>{' '}
-                  to be read &mdash; the images if you photographed it, or the full extracted
-                  text if you uploaded a PDF we could not parse on our own. Either contains
+                  Your report itself may also be sent to OpenAI, by one of two routes.{' '}
+                  <strong className="text-theme-text">Images</strong> are sent when you upload a
+                  photo, and also when you upload a PDF our own parser cannot read confidently
+                  &mdash; in that case we render its pages to images and send those to be read.
+                  Separately,{' '}
+                  <strong className="text-theme-text">the text we extracted</strong> from a
+                  report may be sent when our parser did read it but the result looks
+                  unreliable, so the model can check our work. Either way, what is sent contains
                   whatever your lab printed, which typically includes your name and date of
                   birth.
                 </p>
