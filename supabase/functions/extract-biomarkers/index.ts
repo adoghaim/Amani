@@ -478,14 +478,16 @@ CONFIDENCE:
 
         const { analyte, matchedVia } = resolveCanonicalByLabel(rawName, gptSlug, analyteMap, synonymMap);
 
-        if (rawName.toUpperCase().includes('TPO') || rawName.toUpperCase().includes('THYROID PEROX')) {
-          console.log('[TPO DEBUG] raw_name:', JSON.stringify(rawName), '| gptSlug:', gptSlug, '| matched analyte:', analyte?.slug ?? 'NONE', '| via:', matchedVia);
-          const candidates = normalizeRawName(rawName);
-          console.log('[TPO DEBUG] candidates:', candidates);
-          for (const c of candidates) {
-            console.log('[TPO DEBUG] synonymMap.get(', JSON.stringify(c), ')=', synonymMap.get(c) ?? 'MISS');
-          }
-        }
+        /*
+          The `[TPO DEBUG]` block that used to sit here printed the verbatim
+          biomarker label off the user's report into Supabase's function logs,
+          which are retained and readable in the dashboard. "This account was
+          tested for thyroid peroxidase antibodies" is health data, and it was
+          leftover instrumentation from a single synonym-matching investigation
+          (docs/tpo-history-audit.sql), not telemetry anything depends on.
+          Removed rather than gated: there is no DEBUG flag in this function, and
+          adding one would keep a PHI sink one env var away from firing.
+        */
 
         const canonicalSlug = analyte?.slug ?? null;
         const isCore = canonicalSlug ? CORE_BIOMARKER_SLUGS.has(canonicalSlug) : false;

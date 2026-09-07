@@ -167,7 +167,14 @@ async function processEvent(event: Stripe.Event) {
   const { customer: customerId } = stripeData;
 
   if (!customerId || typeof customerId !== 'string') {
-    console.error(`No customer received on event: ${JSON.stringify(event)}`);
+    /*
+      Identify the event, do not dump it. A serialized Stripe event carries
+      `customer_details` — email, name, phone and billing address — plus the
+      payment metadata, and Supabase's function logs are retained and readable
+      in the dashboard. The id and type are what you need to pull the full
+      object from the Stripe dashboard when this fires.
+    */
+    console.error(`No customer received on event ${event.id} (${event.type})`);
   } else {
     let isSubscription = true;
 

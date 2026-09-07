@@ -120,9 +120,21 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
 
     const fullText = pages.map(p => p.text).join('\n\n');
 
-    console.log(`[pdfExtractor] Extracted ${pdf.numPages} pages, ${fullText.length} chars total`);
-    if (pages.length > 0 && pages[0]) {
-      console.log('[pdfExtractor] Page 1 preview (first 500 chars):', pages[0].text.substring(0, 500));
+    /*
+      Dev-only. The first 500 characters of a lab report are its header block —
+      patient name, date of birth, MRN, ordering physician — so in a production
+      build this line wrote PHI into the browser console and, on Capacitor, into
+      the Android device log, where any app with READ_LOGS or anyone with adb can
+      read it. `src/lib/observability/scrub.ts` already drops console breadcrumbs
+      because of this line; that closed the Sentry egress path but left the
+      device log itself. The page-count line goes behind the same gate because it
+      exists only to make the preview line readable.
+    */
+    if (import.meta.env.DEV) {
+      console.log(`[pdfExtractor] Extracted ${pdf.numPages} pages, ${fullText.length} chars total`);
+      if (pages.length > 0 && pages[0]) {
+        console.log('[pdfExtractor] Page 1 preview (first 500 chars):', pages[0].text.substring(0, 500));
+      }
     }
 
     return { fullText, pages, totalPages: pdf.numPages };
