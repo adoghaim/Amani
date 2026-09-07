@@ -252,19 +252,33 @@ export function Privacy() {
                 </p>
                 <p className="text-sm mb-2">
                   If you upload a photo rather than a machine-readable PDF, or if our own parser
-                  cannot read the file,{' '}
+                  cannot read the file confidently,{' '}
                   <strong className="text-theme-text">
-                    the images of your lab report are sent to OpenAI
+                    the report itself is sent to OpenAI
                   </strong>{' '}
-                  to be read. That image contains whatever your lab printed on it, which
-                  typically includes your name and date of birth.
+                  to be read &mdash; the images if you photographed it, or the full extracted
+                  text if you uploaded a PDF we could not parse on our own. Either contains
+                  whatever your lab printed, which typically includes your name and date of
+                  birth.
+                </p>
+                <p className="text-sm mb-2">
+                  If you use the Tracker to log something you are taking or doing &mdash; a
+                  supplement, a medication, a diet or sleep change &mdash;{' '}
+                  <strong className="text-theme-text">
+                    the name and category of that entry are sent to OpenAI
+                  </strong>{' '}
+                  when you ask for insights comparing two reports. That is what lets us say
+                  whether a marker moved during a window when you were taking something. Only
+                  entries active during the window being compared are included, and only their
+                  name, category and dates &mdash; not any notes you attached.
                 </p>
                 <p className="text-sm">
-                  We deliberately do not send OpenAI your email address, your password, your
-                  supplements, or your known conditions. OpenAI states that data submitted
-                  through its API is not used to train its models and is retained only for a
-                  limited period for abuse monitoring; we rely on that commitment but we do not
-                  control it.
+                  We do not send OpenAI your email address or your password. The supplements and
+                  conditions you entered during onboarding are also not sent &mdash; those are a
+                  separate profile field from anything you log in the Tracker. OpenAI states that
+                  data submitted through its API is not used to train its models and is retained
+                  only for a limited period for abuse monitoring; we rely on that commitment but
+                  we do not control it.
                 </p>
               </div>
 

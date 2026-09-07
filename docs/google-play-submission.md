@@ -115,7 +115,7 @@ Amani is educational. It does not diagnose conditions, it does not treat them, a
 
 YOUR DATA
 
-No ads. No advertising or analytics trackers. Your data is never sold. To read and explain a report, your lab values — and, for photo uploads, the images themselves — are sent to OpenAI; our privacy policy says so plainly and names every other company involved. Everything travels over an encrypted connection. From Settings you can delete your files, your reports, your interpretations, your logs, your profile, and your login, in one step.
+No ads. No advertising or analytics trackers. Your data is never sold. To read and explain a report, your lab values are sent to OpenAI — along with the report itself when a photo is uploaded or our own parser cannot read it, and the name of anything you log in the Tracker when you ask for insights comparing two reports. Our privacy policy says so plainly and names every other company involved. Everything travels over an encrypted connection. From Settings you can delete your files, your reports, your interpretations, your logs, your profile, and your login, in one step.
 
 Amani is not a HIPAA covered entity — the privacy policy explains what that means for you. Amani is intended for adults 18 and over.
 
@@ -150,7 +150,7 @@ Amani Plus is a subscription. Your first 7 days are free.
 | "never tell you to take… never give a dose" | `_shared/nutrient-policy.ts` — `DOSAGE_REGEX`, `PRESCRIPTIVE_VERB_REGEX`, `FREQUENCY_REGEX` (§7 below) |
 | Emergency line | `src/pages/Terms.tsx:90-96`, `src/pages/Contact.tsx:143-152` |
 | No ads / no analytics SDKs | `src/pages/Privacy.tsx` ("no advertising SDKs and no product-analytics SDKs"); confirmed against `package.json` dependencies |
-| Lab values and photos go to OpenAI | `src/pages/Privacy.tsx`, OpenAI subprocessor block |
+| Lab values, report text/images, and Tracker entry names go to OpenAI | `src/pages/Privacy.tsx`, OpenAI subprocessor block |
 | Encrypted in transit | `android:usesCleartextTraffic="false"` + `network_security_config.xml` (`cleartextTrafficPermitted="false"`); `limitsNavigationsToAppBoundDomains: true` in `capacitor.config.ts` |
 | One-step deletion | `src/pages/Settings.tsx:384-500` → `supabase/functions/delete-user-data` (§4.4) |
 | Not a HIPAA covered entity | `src/pages/Privacy.tsx`, dedicated section |
@@ -294,7 +294,9 @@ is the service-provider carve-out:
 | Company | What it receives | Evidence |
 |---|---|---|
 | Supabase | All app data — database, storage, auth, edge functions | `src/lib/supabase.ts`; Privacy policy: "They act as our processor and do not use your data for their own purposes." |
-| OpenAI | Biomarker names/values/units/ranges, cycle context, a short profile block (first name, age range, sex at birth, reproductive status, goals, symptoms); **and lab report images** when a photo is uploaded or the local parse fails | `supabase/functions/generate-interpretation/`, `parse-lab-report-ocr/`; Privacy policy OpenAI block |
+| OpenAI | Biomarker names/values/units/ranges, cycle context, a short profile block (first name, age range, sex at birth, reproductive status, goals, symptoms); **the report itself** — images when a photo is uploaded, or the full extracted text when the local parse is weak (`extract-biomarkers` sends `{ text }`, not only images); **and the title and category of Tracker interventions** active in the compared window, sent by `lab-insights` | `supabase/functions/generate-interpretation/`, `extract-biomarkers/`, `lab-insights/`, `parse-lab-report-ocr/`; Privacy policy OpenAI block |
+
+> **Corrected 2026-09-07.** This row previously listed only images, and the privacy policy stated that supplements are never sent to OpenAI. Both were wrong once the Tracker shipped: `lab-insights/index.ts` reads `interventions` and interpolates `title` and `category` — a set that includes `supplement` and `medication` — into the prompt, and `extract-biomarkers` sends full raw text rather than images alone. The claim was true of the *onboarding* profile fields, which `generate-interpretation` genuinely excludes; it was never true of the Tracker. The feature is being kept and the disclosure made accurate, rather than the reverse.
 | Stripe | Email and payment details, web only. **No health data.** | `stripe-checkout` |
 | Apple / Google | Payment, in-app only. **No health data.** | Play Billing via RevenueCat |
 | RevenueCat | The Supabase `auth.users.id` as `appUserID`, store transaction/subscription ids, product id, subscription state, app/OS version, a device identifier, store country. **No lab values, biomarkers, symptoms, cycle data or interpretations, and no email.** | `src/lib/iap.ts:148` (`appUserID: userId`); Privacy policy RevenueCat block |
