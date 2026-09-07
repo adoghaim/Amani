@@ -111,7 +111,23 @@ export default {
           'cat-supplement': '#643E00',
           'cat-diet': '#5F6E08',
           'cat-exercise': '#10779F',
+          /*
+            cat-sleep is the only categorical hue that also gets used as a chip
+            and icon-block background, so unlike its siblings it needs the same
+            -bg / -border pair the flag-* tokens have. Without them the three
+            call sites reached for the base colour as background AND foreground,
+            painting solid indigo blocks with invisible text inside.
+
+            Derived at the mean lightness and saturation of flag-ok-bg,
+            flag-low-bg and info-bg so it reads as a sibling rather than a new
+            colour: base-on-bg 6.47:1 (AA needs 4.5), border-on-bg 1.43:1
+            (siblings sit at ~1.3). tools/contrast/validate.mjs now checks
+            cat-sleep against cat-sleep-bg automatically, because it prefers a
+            token's own -bg over the page surface when one exists.
+          */
           'cat-sleep': '#4F4498',
+          'cat-sleep-bg': '#E7E5F4',
+          'cat-sleep-border': '#C3BEE3',
 
           /*
             Cycle phases, re-derived onto the brand axis (they were all rose

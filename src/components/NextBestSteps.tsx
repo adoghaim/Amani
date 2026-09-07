@@ -26,7 +26,7 @@ const BUCKET_META: Record<NextStepBucket, {
     label: 'Discuss',
     icon: MessageSquare,
     iconColor: 'text-theme-cat-sleep',
-    iconBg: 'bg-theme-cat-sleep',
+    iconBg: 'bg-theme-cat-sleep-bg',
   },
   support: {
     label: 'Support',
