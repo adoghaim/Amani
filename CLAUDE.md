@@ -79,3 +79,20 @@ Frontend product/price catalog is hard-coded in `src/stripe-config.ts`. Checkout
 
 - `.env` (Vite, client-exposed): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STRIPE_PUBLISHABLE_KEY`.
 - Supabase Edge Function secrets (server-only): `OPENAI_API_KEY` (required for `generate-interpretation`), Stripe secret keys for webhook/checkout functions. Never put these in `.env` or source.
+
+
+## Second Brain
+
+Durable project context for Amani lives in the private `adoghaim/Second-Brain`
+repository (an Obsidian vault). Before substantial work, load it by following that
+vault's `80 Skills/Load Project Context.md`; at the end, prepare an update per its
+`80 Skills/Update Second Brain.md`.
+
+- **Code agent proves → Second Brain records.** Prepare a Brain update; never write into
+  the vault from this repository.
+- **Live repository and runtime evidence override the Brain.** Report the discrepancy.
+- **Never silently resolve a `[Pending]`** — it marks something nobody has established.
+- **No secrets in the Brain.** Variable names, never values.
+- **Merges, deploys and releases require explicit owner approval.**
+
+Everything else in this file remains authoritative for repository-specific guidance.
