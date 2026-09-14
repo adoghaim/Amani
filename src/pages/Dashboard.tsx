@@ -301,13 +301,14 @@ export function Dashboard() {
     `entitled: false` until its query settles, which is indistinguishable from
     having no subscription. See lib/dashboardEntitlement.ts.
   */
-  const { canCreateReport, showTrialEndedNotice, showUpsell } = resolveDashboardEntitlementView({
-    subscriptionLoading,
-    entitled,
-    source,
-  });
   const trialDaysRemaining = getTrialDaysRemaining(userProfile);
-  const showTrialBanner = trialDaysRemaining !== null && trialDaysRemaining <= 3;
+  const { canCreateReport, showTrialEndedNotice, showUpsell, showTrialCountdown } =
+    resolveDashboardEntitlementView({
+      subscriptionLoading,
+      entitled,
+      source,
+      trialDaysRemaining,
+    });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -388,7 +389,7 @@ export function Dashboard() {
             );
           }
 
-          if (showTrialBanner) {
+          if (showTrialCountdown) {
             return (
               <Notice>
                 <div className="flex flex-wrap items-center justify-between gap-4">

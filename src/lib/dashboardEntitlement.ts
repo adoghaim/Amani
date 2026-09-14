@@ -1,6 +1,16 @@
 /*
   What the Dashboard may claim about entitlement, and when.
 
+  Every entitlement-driven element on that page is decided here, so there is one
+  place to check that they agree with each other and with the server. Two bugs
+  put it here, both the same shape — a subscription question answered by
+  something that was not the subscription:
+
+    - the "trial has ended" notice and the disabled CTA, answered by `entitled`
+      while it was still loading and therefore still false;
+    - the trial countdown, answered by `userProfile.subscription_status`, a dead
+      column that reads 'trial' forever.
+
   `useSubscription` starts at `entitled: false, source: 'none'` and resolves on
   its own clock — a query independent of the Dashboard's own data fetch. The
   Dashboard read `entitled` without reading `loading`, so in the window between
@@ -32,6 +42,12 @@
 
 import type { SubscriptionSource } from '../hooks/useSubscription';
 
+/**
+ * The countdown is a nudge, not a status readout: it appears only in the last
+ * few days, when there is something left to act on.
+ */
+export const TRIAL_COUNTDOWN_THRESHOLD_DAYS = 3;
+
 export interface DashboardEntitlementInput {
   /** `loading` from `useSubscription`: true until that query settles. */
   subscriptionLoading: boolean;
@@ -39,6 +55,12 @@ export interface DashboardEntitlementInput {
   entitled: boolean;
   /** `source` from `useSubscription`: which of those is doing the entitling. */
   source: SubscriptionSource;
+  /**
+   * `getTrialDaysRemaining(userProfile)`; null when there is no trial clock.
+   * Consulted only once `source` has confirmed a trial is what is actually
+   * entitling this user — see `showTrialCountdown` below for why.
+   */
+  trialDaysRemaining: number | null;
 }
 
 export interface DashboardEntitlementView {
@@ -48,20 +70,46 @@ export interface DashboardEntitlementView {
   showTrialEndedNotice: boolean;
   /** The pricing banner. Evaluated only once `canCreateReport` is true. */
   showUpsell: boolean;
+  /** The "N days left in your trial" countdown. */
+  showTrialCountdown: boolean;
 }
 
 export function resolveDashboardEntitlementView({
   subscriptionLoading,
   entitled,
   source,
+  trialDaysRemaining,
 }: DashboardEntitlementInput): DashboardEntitlementView {
   if (subscriptionLoading) {
     return {
       canCreateReport: true,
       showTrialEndedNotice: false,
       showUpsell: false,
+      showTrialCountdown: false,
     };
   }
+
+  /*
+    `source`, not `userProfile.subscription_status`.
+
+    `getTrialDaysRemaining` returns a number whenever `subscription_status ===
+    'trial'` and a `trial_start_date` exists. That column is `DEFAULT 'trial'`
+    and nothing writes it — the same dead source of truth #63 removed from every
+    other subscription decision on this page — so it still reads 'trial' after
+    someone pays. A subscriber who bought inside their first week was therefore
+    told "3 days left in your trial" while actively paying for a subscription.
+
+    Asking `source === 'trial'` asks the authoritative union instead. It is an
+    allow-list, which is why the `'complimentary'` source #56 adds needs no
+    change here: anything that is not literally a trial gets no trial countdown,
+    by construction rather than by remembering to add another exclusion.
+
+    `entitled &&` is redundant today — `useSubscription` sets `source: 'none'`
+    whenever entitlement fails, so an expired trial cannot reach this line — but
+    it makes "no countdown for an expired trial" a property of this function
+    rather than one inherited from a hook two modules away.
+  */
+  const onGenuineTrial = entitled && source === 'trial';
 
   return {
     canCreateReport: entitled,
@@ -72,5 +120,9 @@ export function resolveDashboardEntitlementView({
       the loading branch above is new behaviour.
     */
     showUpsell: !entitled || source === 'trial',
+    showTrialCountdown:
+      onGenuineTrial &&
+      trialDaysRemaining !== null &&
+      trialDaysRemaining <= TRIAL_COUNTDOWN_THRESHOLD_DAYS,
   };
 }
