@@ -119,7 +119,7 @@ psql_f -v ON_ERROR_STOP=1 -q -f /tmp/tier.sql >/dev/null
 echo "    NULL/free/plus accepted, unknown tier refused, migration is idempotent"
 
 echo "==> complimentary_entitlements: shape, constraints and locks"
-docker cp "$HERE/../20260905120000_complimentary_entitlements.sql" "$CONTAINER:/tmp/comp.sql" >/dev/null
+docker cp "$HERE/../20260914000000_complimentary_entitlements.sql" "$CONTAINER:/tmp/comp.sql" >/dev/null
 docker cp "$HERE/complimentary-entitlements.verify.sql" "$CONTAINER:/tmp/comp-verify.sql" >/dev/null
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/comp.sql >/dev/null
 psql_f -f /tmp/comp-verify.sql 2>&1 | grep -v '^$'

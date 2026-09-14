@@ -5,6 +5,7 @@ import {
   BETA_TESTER_COLUMNS,
   resolveEntitlement,
   toBetaTester,
+  toComplimentaryGrant,
   type IapRecord,
 } from '../lib/entitlement';
 
@@ -80,6 +81,7 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
     { data: iapData, error: iapError },
     { data: userData },
     { data: betaData, error: betaError },
+    { data: complimentaryData, error: complimentaryError },
   ] = await Promise.all([
     supabase.from('stripe_user_subscriptions').select('subscription_status').maybeSingle(),
     // `platform` and `product_id` feed the sandbox beta rule, which matches a
@@ -89,9 +91,13 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
       .from('iap_subscriptions')
       .select('status, expires_at, environment, platform, product_id'),
     supabase.from('users').select('id, trial_start_date').maybeSingle(),
-    // The caller's own sandbox-beta row. RLS scopes both of these to
-    // auth.uid(), which is why neither needs an explicit .eq().
+    // The caller's own sandbox-beta and complimentary rows. RLS scopes these
+    // to auth.uid(), which is why neither needs an explicit .eq().
     supabase.from('iap_beta_testers').select(BETA_TESTER_COLUMNS).maybeSingle(),
+    supabase
+      .from('complimentary_entitlements')
+      .select('user_id, reason, expires_at, enabled')
+      .maybeSingle(),
   ]);
 
   // A failed IAP read must not silently demote a paying App Store customer to
@@ -120,6 +126,8 @@ export async function checkSubscriptionLive(): Promise<ClientSubscriptionState> 
     // billing screen and then bounced them out of every feature it buys.
     userId: (userData?.id as string | undefined) ?? null,
     betaTester,
+    // A failed grant read removes only complimentary access, like the beta read.
+    complimentary: toComplimentaryGrant(complimentaryError ? null : complimentaryData),
   });
 
   if (result.allowed) return { allowed: true };

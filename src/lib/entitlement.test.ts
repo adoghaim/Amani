@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveEntitlement as client,
   toBetaTester as clientToBetaTester,
+  toComplimentaryGrant as clientToComplimentaryGrant,
   SOLD_IAP_PRODUCT_IDS as CLIENT_SOLD_PRODUCTS,
   BETA_TESTER_COLUMNS as CLIENT_BETA_COLUMNS,
   TRIAL_DURATION_MS,
@@ -10,6 +11,7 @@ import {
 import {
   resolveEntitlement as server,
   toBetaTester as serverToBetaTester,
+  toComplimentaryGrant as serverToComplimentaryGrant,
   SOLD_IAP_PRODUCT_IDS as SERVER_SOLD_PRODUCTS,
   BETA_TESTER_COLUMNS as SERVER_BETA_COLUMNS,
 } from '../../supabase/functions/_shared/entitlement';
@@ -141,6 +143,32 @@ describe('client/server entitlement parity', () => {
       expect(JSON.stringify(clientToBetaTester(row))).toBe(
         JSON.stringify(serverToBetaTester(row))
       );
+    }
+  });
+
+  it('agrees on how to read a complimentary_entitlements row', () => {
+    const grant = { user_id: USER, reason: 'store_reviewer', expires_at: null, enabled: true };
+    const cases = [
+      { row: null, expected: null },
+      { row: undefined, expected: null },
+      { row: [], expected: null },
+      { row: 'store_reviewer', expected: null },
+      { row: 42, expected: null },
+      { row: {}, expected: null },
+      { row: { reason: grant.reason, expires_at: null, enabled: true }, expected: null },
+      { row: { ...grant, user_id: '' }, expected: null },
+      { row: { ...grant, reason: 42 }, expected: null },
+      { row: { ...grant, expires_at: 1 }, expected: null },
+      { row: { ...grant, enabled: 'yes' }, expected: { ...grant, enabled: false } },
+      { row: { ...grant, enabled: 1 }, expected: { ...grant, enabled: false } },
+      { row: grant, expected: grant },
+      { row: { ...grant, expires_at: future }, expected: { ...grant, expires_at: future } },
+      { row: { ...grant, expires_at: undefined }, expected: grant },
+    ];
+
+    for (const { row, expected } of cases) {
+      expect(clientToComplimentaryGrant(row)).toEqual(serverToComplimentaryGrant(row));
+      expect(clientToComplimentaryGrant(row)).toEqual(expected);
     }
   });
 
