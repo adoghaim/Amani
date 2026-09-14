@@ -610,9 +610,12 @@ export function NewReport() {
       });
       const droppedRows = normalized.filter(i => !allItemsToSave.includes(i));
       if (droppedRows.length > 0) {
+        // Count only. The names are lifted verbatim off the user's report, so
+        // logging them writes biomarker data to the console and, on Capacitor,
+        // to the Android device log. The count is what tells you a parse
+        // regressed; `/dev/parser/:id` is where you look at which rows.
         console.warn(
-          `[NewReport] Dropped ${droppedRows.length} malformed parsed row(s) from save:`,
-          droppedRows.map(r => r.raw_biomarker_name ?? r.raw_name ?? '<missing raw_name>')
+          `[NewReport] Dropped ${droppedRows.length} malformed parsed row(s) from save`
         );
       }
       const scorableItemsToSave = allItemsToSave.filter(

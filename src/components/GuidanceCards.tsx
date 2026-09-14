@@ -19,9 +19,9 @@ const CHIP_TONES: Record<'food' | 'topic' | 'track', ChipTone> = {
     border: 'border-theme-flag-ok-border',
   },
   topic: {
-    bg: 'bg-theme-cat-sleep',
+    bg: 'bg-theme-cat-sleep-bg',
     text: 'text-theme-cat-sleep',
-    border: 'border-theme-cat-sleep',
+    border: 'border-theme-cat-sleep-border',
   },
   track: {
     bg: 'bg-theme-info-bg',

@@ -87,7 +87,7 @@ function PhaseBadge({ phase }: { phase?: string | null }) {
     menstrual: 'bg-theme-flag-low-bg text-theme-flag-low border-theme-flag-low-border',
     follicular: 'bg-theme-info-bg text-theme-info border-theme-info-border',
     ovulatory: 'bg-theme-flag-ok-bg text-theme-flag-ok border-theme-flag-ok-border',
-    luteal: 'bg-theme-cat-sleep text-theme-cat-sleep border-theme-cat-sleep',
+    luteal: 'bg-theme-cat-sleep-bg text-theme-cat-sleep border-theme-cat-sleep-border',
   };
   const cls = colors[phase] ?? 'bg-theme-neutral-50 text-theme-neutral-600 border-theme-neutral-200';
   return (
