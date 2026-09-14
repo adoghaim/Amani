@@ -257,6 +257,7 @@ export function Landing() {
             <Link to="/privacy" className="hover:text-theme-text transition-colors">Privacy</Link>
             <Link to="/terms" className="hover:text-theme-text transition-colors">Terms</Link>
             <Link to="/contact" className="hover:text-theme-text transition-colors">Contact</Link>
+            <Link to="/delete-account" className="hover:text-theme-text transition-colors">Delete account</Link>
           </div>
         </div>
       </footer>

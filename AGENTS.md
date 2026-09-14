@@ -38,3 +38,19 @@ The web app is hosted on **Netlify** (`amani-biometrics`, custom domain `amanibi
 ## Security & Configuration Tips
 
 Use `.env` for Vite variables such as `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and optional Stripe keys. Store Edge Function secrets such as `OPENAI_API_KEY` in Supabase, not in source control. Never commit user health data, lab files, API keys, or local build artifacts.
+
+
+## Second Brain
+
+Durable project context lives in the private `adoghaim/Second-Brain` repository (an
+Obsidian vault), shared across ChatGPT, Claude, Codex and other agents. Load it before
+substantial work via that vault's `80 Skills/Load Project Context.md`, and prepare an
+update at the end via `80 Skills/Update Second Brain.md`.
+
+- **Code agent proves → Second Brain records.** Never write into the vault from here.
+- **Live repository and runtime evidence override the Brain.**
+- **Never silently resolve a `[Pending]`.**
+- **No secrets in the Brain.** Variable names, never values.
+- **Consequential actions require explicit owner approval.**
+
+`CLAUDE.md` carries the same pointer alongside the repository-specific guidance.

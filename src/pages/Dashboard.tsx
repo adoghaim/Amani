@@ -24,6 +24,8 @@ import { SymptomLogModal } from '../components/SymptomLogModal';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
+import { resolveDashboardEntitlementView } from '../lib/dashboardEntitlement';
 import type { LabReport, PeriodLog, Intervention, Biomarker, SymptomLog, FlowIntensity, DailySymptom } from '../types';
 import {
   computeCyclePrediction,
@@ -31,7 +33,7 @@ import {
   dateToKey,
   toDateOnly,
 } from '../utils/cyclePredictor';
-import { isTrialActive, getTrialDaysRemaining } from '../utils/subscription';
+import { getTrialDaysRemaining } from '../utils/subscription';
 import { formatDate } from '../utils/formatters';
 
 type NoteModalState = { open: boolean; defaultDate: string };
@@ -39,6 +41,7 @@ type SymptomLogRow = Omit<SymptomLog, 'symptoms'> & { symptoms: unknown };
 
 export function Dashboard() {
   const { user, userProfile } = useAuth();
+  const { entitled, source, loading: subscriptionLoading } = useSubscription();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -288,7 +291,21 @@ export function Dashboard() {
     setSymptomModalOpen(true);
   };
 
-  const canCreateReport = userProfile?.subscription_status === 'active' || isTrialActive(userProfile);
+  /*
+    See SubscriptionStatus.tsx: `users.subscription_status` is never written, so
+    the old `=== 'active'` check was permanently false and this CTA was disabled
+    for every paying subscriber once their 7 days elapsed. `entitled` is the
+    Stripe / StoreKit / Play / trial union the server also uses.
+
+    `subscriptionLoading` matters as much as `entitled`: the hook reports
+    `entitled: false` until its query settles, which is indistinguishable from
+    having no subscription. See lib/dashboardEntitlement.ts.
+  */
+  const { canCreateReport, showTrialEndedNotice, showUpsell } = resolveDashboardEntitlementView({
+    subscriptionLoading,
+    entitled,
+    source,
+  });
   const trialDaysRemaining = getTrialDaysRemaining(userProfile);
   const showTrialBanner = trialDaysRemaining !== null && trialDaysRemaining <= 3;
 
@@ -357,7 +374,7 @@ export function Dashboard() {
           are left in it.
         */}
         {(() => {
-          if (!canCreateReport) {
+          if (showTrialEndedNotice) {
             return (
               <Notice tone="watch">
                 <p className="text-sm text-theme-flag-watch">
@@ -418,7 +435,7 @@ export function Dashboard() {
             );
           }
 
-          if (userProfile?.subscription_status !== 'active') {
+          if (showUpsell) {
             return (
               <Link to="/app/pricing" className="block mb-5 group">
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-theme-surface border border-theme-border rounded-xl px-5 py-4 transition-colors group-hover:border-theme-primary">

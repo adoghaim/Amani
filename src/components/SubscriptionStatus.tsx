@@ -1,11 +1,26 @@
 import { Crown, Clock, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
 
+/*
+  `users.subscription_status` is NOT the source of truth and never became one.
+  It is `DEFAULT 'trial'`, clamped by the triggers in 20260826000000, and
+  nothing writes it — so `=== 'active'` is permanently false and every paying
+  subscriber fell through to the "Trial expired" branch from day 8.
+
+  Same root cause as #50, which fixed ReportView's regeneration gate and did not
+  grep for the other call sites. This is one of them.
+
+  `entitled` and `source` come from `useSubscription`, which unions Stripe,
+  StoreKit, Play Billing and the trial — the same decision the server guard
+  makes.
+*/
 export function SubscriptionStatus() {
   const { userProfile, loading } = useAuth();
+  const { entitled, source, loading: subscriptionLoading } = useSubscription();
 
-  if (loading) {
+  if (loading || subscriptionLoading) {
     return (
       <div className="bg-theme-surface rounded-xl border border-theme-border p-4 animate-pulse">
         <div className="flex items-center gap-3">
@@ -21,16 +36,20 @@ export function SubscriptionStatus() {
 
   if (!userProfile) return null;
 
-  if (userProfile.subscription_status === 'active') {
+  // Entitled by something other than the trial: a paid subscription, or a
+  // complimentary grant. Either way there is nothing to upsell.
+  if (entitled && source !== 'trial') {
     return (
       <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border rounded-xl px-4 py-3 flex items-center gap-3">
         <Crown className="w-4 h-4 text-theme-flag-ok shrink-0" />
+        {/* #56 adds a 'complimentary' source; this label can distinguish it
+            once that merges. Kept generic here so this fix stays independent. */}
         <p className="text-sm text-theme-flag-ok font-medium">Active subscription</p>
       </div>
     );
   }
 
-  if (userProfile.subscription_status === 'trial') {
+  if (source === 'trial') {
     // Pre-onboarding: trial clock hasn't started yet — skip the badge.
     if (!userProfile.trial_start_date) return null;
     const trialStart = new Date(userProfile.trial_start_date);
@@ -63,7 +82,7 @@ export function SubscriptionStatus() {
       <div className="flex items-center gap-3">
         <AlertCircle className="w-4 h-4 text-theme-flag-watch shrink-0" />
         <p className="text-sm text-theme-flag-watch font-medium">
-          {userProfile.subscription_status === 'trial' ? 'Trial expired' : 'No active subscription'}
+          {userProfile.trial_start_date ? 'Trial expired' : 'No active subscription'}
         </p>
       </div>
       <Link

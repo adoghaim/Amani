@@ -47,8 +47,24 @@ export const IAP_PRODUCTS: readonly IapProduct[] = [
 
 export const IAP_PRODUCT_IDS: readonly string[] = IAP_PRODUCTS.map((p) => p.productId);
 
+/**
+ * RevenueCat exposes Google Play subscription products as
+ * `subscriptionId:basePlanId` (for example
+ * `com.amani.health.premium.monthly:monthly`). Apple exposes the bare product
+ * id. Amani's catalog is keyed by the cross-platform parent product id, so all
+ * comparisons must canonicalize the Play form first.
+ *
+ * Keep the raw RevenueCat identifier on the underlying `rcProduct` / persisted
+ * IAP row for audit. This helper is only for catalog matching and store URLs.
+ */
+export function normalizeIapProductId(productId: string): string {
+  const separator = productId.indexOf(':');
+  return separator === -1 ? productId : productId.slice(0, separator);
+}
+
 export function getIapProduct(productId: string): IapProduct | undefined {
-  return IAP_PRODUCTS.find((p) => p.productId === productId);
+  const canonicalId = normalizeIapProductId(productId);
+  return IAP_PRODUCTS.find((p) => p.productId === canonicalId);
 }
 
 /**

@@ -18,8 +18,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Sentry is a no-op unless VITE_SENTRY_DSN is set (see main.tsx), so the
-    // console line stays: it is the only signal in dev and deploy previews.
+    // Sentry is a no-op unless VITE_SENTRY_DSN is set (see
+    // src/lib/observability/initSentry.ts), so the console line stays: it is
+    // the only signal in dev and deploy previews. The componentStack below is
+    // React component names, and it is scrubbed with the rest of the event.
     console.error('[ErrorBoundary]', error, info.componentStack)
     Sentry.captureException(error, {
       contexts: { react: { componentStack: info.componentStack } },

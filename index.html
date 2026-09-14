@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content makes the on-screen keyboard shrink the
+         LAYOUT viewport, so 100dvh reflects what is actually visible while typing.
+         Without it dvh keeps reporting the full height and the keyboard simply
+         covers the bottom of a sheet — including its Save button. This is an
+         app-wide change, not a modal-only one: every fixed-bottom element now
+         sits above the keyboard rather than behind it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
 
     <title>Amani — understand your lab results</title>
     <meta name="description" content="Amani reads your hormone and blood panels, scores them against where you are in your cycle, and explains what they mean in plain language — so you can have a better conversation with your doctor." />

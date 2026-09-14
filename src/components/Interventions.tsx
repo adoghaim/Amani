@@ -23,11 +23,11 @@ const CATEGORIES: { value: InterventionCategory; label: string }[] = [
 
 const getCategoryColor = (category: InterventionCategory): string => {
   const colors = {
-    supplement: 'bg-theme-cat-sleep text-theme-cat-sleep',
+    supplement: 'bg-theme-cat-sleep-bg text-theme-cat-sleep',
     diet: 'bg-theme-flag-ok-bg text-theme-flag-ok',
     exercise: 'bg-theme-info-bg text-theme-info',
     medication: 'bg-theme-flag-low-bg text-theme-flag-low',
-    sleep: 'bg-theme-cat-sleep text-theme-cat-sleep',
+    sleep: 'bg-theme-cat-sleep-bg text-theme-cat-sleep',
     other: 'bg-theme-neutral-100 text-theme-neutral-800',
   };
   return colors[category];

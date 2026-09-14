@@ -137,6 +137,21 @@ function betaPlatformCovers(
 }
 
 /**
+ * RevenueCat keeps Google Play's base-plan identity in the persisted product id
+ * as `subscriptionId:basePlanId`. The sold-product catalog is deliberately
+ * keyed by the parent subscription id so it stays identical to iOS and
+ * `src/lib/iap-config.ts`. Normalize only Android receipts; an unexpected colon
+ * on iOS remains an unrecognised product and fails closed.
+ */
+function soldProductIdForReceipt(record: IapRecord): string | null {
+  if (typeof record.product_id !== "string") return null;
+  if (record.platform !== "android") return record.product_id;
+
+  const separator = record.product_id.indexOf(":");
+  return separator === -1 ? record.product_id : record.product_id.slice(0, separator);
+}
+
+/**
  * The frozen sandbox rule, in one place. A sandbox receipt entitles if and only
  * if ALL of these hold; every branch returns false, so an unexpected shape
  * fails closed rather than falling through to "allowed".
@@ -181,9 +196,12 @@ function sandboxReceiptPermitted(record: IapRecord, input: EntitlementInput): bo
   // (5) platform
   if (!betaPlatformCovers(tester.platform, record.platform)) return false;
 
-  // (6) a product we actually sell
-  if (typeof record.product_id !== "string") return false;
-  if (!SOLD_IAP_PRODUCT_IDS.includes(record.product_id)) return false;
+  // (6) a product we actually sell. Google Play records may carry the
+  // RevenueCat `:basePlanId` suffix; preserve that raw value in the row for
+  // audit, but compare the canonical parent subscription id here.
+  const soldProductId = soldProductIdForReceipt(record);
+  if (soldProductId === null) return false;
+  if (!SOLD_IAP_PRODUCT_IDS.includes(soldProductId)) return false;
 
   return true;
 }

@@ -119,7 +119,7 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
     <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface overflow-hidden">
       <div className="px-5 py-4 border-b border-theme-border-inner">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-theme-cat-sleep flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-theme-cat-sleep-bg flex items-center justify-center">
             <LineChart className="w-4 h-4 text-theme-cat-sleep" />
           </div>
           <div>

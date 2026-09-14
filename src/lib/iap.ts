@@ -32,7 +32,12 @@ import type {
 } from '@revenuecat/purchases-capacitor';
 
 import { isNative, platform } from './native';
-import { IAP_PRODUCT_IDS, getIapProduct, type BillingInterval } from './iap-config';
+import {
+  IAP_PRODUCT_IDS,
+  getIapProduct,
+  normalizeIapProductId,
+  type BillingInterval,
+} from './iap-config';
 import { supabase } from './supabase';
 import { errorMessage } from './errors';
 
@@ -77,6 +82,7 @@ export function iapPlatform(): 'ios' | 'android' | null {
  * match the ones StoreKit returns.
  */
 export interface IapStoreProduct {
+  /** Canonical Amani product id; Android's `:basePlanId` stays on `rcProduct`. */
   productId: string;
   interval: BillingInterval;
   title: string;
@@ -191,7 +197,10 @@ function toStoreProduct(
   if (!known) return null;
 
   return {
-    productId: product.identifier,
+    // RevenueCat's Android identifier is `subscriptionId:basePlanId`; expose
+    // Amani's canonical parent id to the rest of the UI while retaining the raw
+    // identifier on `rcProduct` for the actual purchase call.
+    productId: known.productId,
     interval: known.interval,
     title: product.title || known.fallbackName,
     description: product.description,
@@ -306,7 +315,7 @@ export async function purchaseIapProduct(productId: string): Promise<IapPurchase
     return { ok: false, cancelled: false, error: catalog.error ?? 'Could not reach the store' };
   }
 
-  const target = catalog.products.find((p) => p.productId === productId);
+  const target = catalog.products.find((p) => p.productId === normalizeIapProductId(productId));
   if (!target) {
     return {
       ok: false,
@@ -324,7 +333,11 @@ export async function purchaseIapProduct(productId: string): Promise<IapPurchase
       ? await Purchases.purchasePackage({ aPackage: target.rcPackage })
       : await Purchases.purchaseStoreProduct({ product: target.rcProduct });
 
-    return { ok: true, productId: result.productIdentifier, customerInfo: result.customerInfo };
+    return {
+      ok: true,
+      productId: normalizeIapProductId(result.productIdentifier),
+      customerInfo: result.customerInfo,
+    };
   } catch (err: unknown) {
     if (wasCancelled(err)) return { ok: false, cancelled: true };
     console.error('[iap] purchase failed:', err);
@@ -353,7 +366,10 @@ export async function restoreIapPurchases(): Promise<IapRestoreResult> {
   try {
     const { Purchases } = await import('@revenuecat/purchases-capacitor');
     const { customerInfo } = await Purchases.restorePurchases();
-    return { ok: true, activeProductIds: [...customerInfo.activeSubscriptions] };
+    return {
+      ok: true,
+      activeProductIds: [...customerInfo.activeSubscriptions].map(normalizeIapProductId),
+    };
   } catch (err: unknown) {
     console.error('[iap] restore failed:', err);
     return { ok: false, error: errorMessage(err, 'Could not restore purchases') };
@@ -448,6 +464,6 @@ export function storeSubscriptionsUrl(
 
   const base = 'https://play.google.com/store/account/subscriptions';
   return productId
-    ? `${base}?sku=${encodeURIComponent(productId)}&package=${PLAY_PACKAGE_NAME}`
+    ? `${base}?sku=${encodeURIComponent(normalizeIapProductId(productId))}&package=${PLAY_PACKAGE_NAME}`
     : base;
 }
