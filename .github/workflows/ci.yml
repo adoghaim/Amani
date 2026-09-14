@@ -11,6 +11,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  functions:
+    name: Edge function typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check edge functions (baseline ratchet)
+        run: bash docs/check-functions.sh deno
+
   check:
     name: Lint, typecheck, build
     runs-on: ubuntu-latest
