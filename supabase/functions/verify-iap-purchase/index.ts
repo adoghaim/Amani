@@ -28,6 +28,7 @@ import {
   type IapRecord,
 } from '../_shared/entitlement.ts';
 import {
+  IAP_ROW_COLUMNS,
   normalizeSubscriberPayload,
   persistIapSubscriptions,
   type IapPlatform,
@@ -84,13 +85,11 @@ function corsResponse(body: object | null, status = 200) {
   });
 }
 
-const ROW_COLUMNS = 'id, user_id, platform, product_id, store_subscription_id, status, expires_at, environment';
-
 const iapStore: IapStore = {
   async findByStoreSubscription(platform: IapPlatform, storeSubscriptionId: string) {
     const { data, error } = await supabase
       .from('iap_subscriptions')
-      .select(ROW_COLUMNS)
+      .select(IAP_ROW_COLUMNS)
       .eq('platform', platform)
       .eq('store_subscription_id', storeSubscriptionId)
       .maybeSingle();
@@ -104,7 +103,7 @@ const iapStore: IapStore = {
   async findByUserProduct(userId: string, platform: IapPlatform, productId: string) {
     const { data, error } = await supabase
       .from('iap_subscriptions')
-      .select(ROW_COLUMNS)
+      .select(IAP_ROW_COLUMNS)
       .eq('user_id', userId)
       .eq('platform', platform)
       .eq('product_id', productId)
@@ -124,14 +123,22 @@ const iapStore: IapStore = {
       expires_at: subscription.expiresAt,
       environment: subscription.environment,
       raw: subscription.raw,
+      ...(subscription.eventAt
+        ? { last_event_at: subscription.eventAt, last_event_id: subscription.eventId ?? null }
+        : {}),
     });
 
     if (error) throw new Error(`iap_subscriptions insert failed: ${error.message}`);
   },
 
   async update(id: string, patch: IapRowPatch) {
-    const { error } = await supabase.from('iap_subscriptions').update(patch).eq('id', id);
+    let query = supabase.from('iap_subscriptions').update(patch).eq('id', id);
+    if (patch.last_event_at) {
+      query = query.or(`last_event_at.is.null,last_event_at.lte.${patch.last_event_at}`);
+    }
+    const { data, error } = await query.select('id');
     if (error) throw new Error(`iap_subscriptions update failed: ${error.message}`);
+    return data?.length ?? 0;
   },
 };
 
