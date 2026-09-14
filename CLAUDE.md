@@ -15,6 +15,7 @@ Amani is a women's health lab-interpretation app: users upload lab PDFs/photos, 
 - `npm run typecheck` — `tsc --noEmit -p tsconfig.app.json`.
 - `npm test` — Vitest (`vitest.config.ts`). Runs in CI between typecheck and build.
 - `npm run cap:sync` — build then `npx cap sync` to push web assets into `android/` and `ios/`.
+- `npm run check:functions` — Deno type-check of the Supabase edge functions (`supabase/functions`), excluding a documented baseline of files that fail today; runs in CI as "Edge function typecheck". See `docs/edge-function-typecheck.md`.
 
 Before opening a PR run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Document manual validation steps in the PR (especially for parser, scoring, or interpretation changes).
 

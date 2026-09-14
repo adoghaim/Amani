@@ -18,6 +18,7 @@ Amani is a Vite React TypeScript application with Capacitor mobile targets and S
 - `npm run lint` runs ESLint over the repository.
 - `npm run typecheck` runs TypeScript without emitting files.
 - `npm run cap:sync` builds the web app and syncs Capacitor assets to native projects.
+- `npm run check:functions` type-checks the Supabase edge functions with Deno (CI job "Edge function typecheck"; see `docs/edge-function-typecheck.md`).
 
 ## Coding Style & Naming Conventions
 
