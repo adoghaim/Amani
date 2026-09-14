@@ -1,13 +1,21 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loadBetaTester, type BetaAllowlistActions } from "./beta-allowlist.ts";
-import { BETA_TESTER_COLUMNS, resolveEntitlement, type IapRecord } from "./entitlement.ts";
+import {
+  BETA_TESTER_COLUMNS,
+  resolveEntitlement,
+  toComplimentaryGrant,
+  type IapRecord,
+} from "./entitlement.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
 // Re-exported so existing importers keep their type without knowing that the
 // decision moved into entitlement.ts.
 export type SubscriptionCheckResult =
-  | { allowed: true; reason: "active_subscription" | "active_iap" | "trial" }
+  | {
+      allowed: true;
+      reason: "active_subscription" | "active_iap" | "complimentary" | "trial";
+    }
   | {
       allowed: false;
       reason: "trial_expired" | "onboarding_incomplete" | "no_subscription";
@@ -110,6 +118,45 @@ export async function checkUserSubscription(
         ),
     );
 
+    /*
+      Complimentary grants: reviewers, press, support goodwill. Read
+      unconditionally — unlike the beta allowlist there is no receipt to gate
+      on, and a reviewer has no purchase at all.
+
+      A read failure is fatal rather than silently ignored. Treating it as "no
+      grant" would hand a store reviewer a paywall mid-review, which is the one
+      moment that is expensive to get wrong; failing closed on the whole check
+      at least surfaces as an error we can see.
+    */
+    const { data: compRow, error: compError } = await supabase
+      .from("complimentary_entitlements")
+      .select("user_id, reason, expires_at, enabled")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    /*
+      A failed read here is treated as "no grant", NOT as a denial.
+
+      The first version failed the whole check closed, reasoning that a reviewer
+      hitting a paywall mid-review is expensive. That was the wrong trade, and
+      reviewing it before merge is what caught it: complimentary access is an
+      ADDITIVE source, so a failure to read it must never remove access that
+      Stripe, a store receipt or the trial already granted.
+
+      The blast radii are not comparable. Denying on error takes access from
+      EVERY user — including paying ones — the moment this table is unreadable,
+      which includes the window where the function is deployed before its
+      migration has run. Treating it as absent costs access only to the handful
+      of complimentary accounts we control and can re-check by hand.
+    */
+    if (compError) {
+      console.error(
+        "[subscription-guard] complimentary_entitlements read failed; " +
+          "treating as no grant. Paid and trial entitlement are unaffected:",
+        compError,
+      );
+    }
+
     return resolveEntitlement({
       stripeStatus: subResult.data?.subscription_status ?? null,
       iapRecords,
@@ -117,6 +164,7 @@ export async function checkUserSubscription(
       now: Date.now(),
       userId,
       betaTester,
+      complimentary: compError ? null : toComplimentaryGrant(compRow),
     });
   } catch (err) {
     console.error("[subscription-guard] DB read failed, failing closed:", err);

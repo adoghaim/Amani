@@ -90,10 +90,18 @@ export type EntitlementInput = {
    * service role and read by `user_id`.
    */
   betaTester?: BetaTester | null;
+  /**
+   * This user's `complimentary_entitlements` row, read server-side, or null.
+   * Grants full access with no payment — reviewers, press, support goodwill.
+   */
+  complimentary?: ComplimentaryGrant | null;
 };
 
 export type EntitlementResult =
-  | { allowed: true; reason: "active_subscription" | "active_iap" | "trial" }
+  | {
+      allowed: true;
+      reason: "active_subscription" | "active_iap" | "complimentary" | "trial";
+    }
   | {
       allowed: false;
       reason: "trial_expired" | "onboarding_incomplete" | "no_subscription";
@@ -219,6 +227,65 @@ function iapEntitles(record: IapRecord, input: EntitlementInput): boolean {
 }
 
 /**
+ * A `complimentary_entitlements` row, read server-side. Never derived from
+ * anything a device sent — the row is written only by the service role and read
+ * by `user_id`.
+ */
+export type ComplimentaryGrant = {
+  user_id: string;
+  reason: string;
+  expires_at: string | null;
+  enabled: boolean;
+};
+
+/** Reasons a complimentary grant may carry. Mirrors the CHECK constraint. */
+const COMPLIMENTARY_REASONS = new Set([
+  "store_review",
+  "press",
+  "support",
+  "internal",
+]);
+
+/**
+ * Does a complimentary grant entitle this user right now?
+ *
+ * Every branch returns false, so an unexpected shape fails closed. The rules
+ * mirror the beta allowlist deliberately — one pattern, not two:
+ *
+ *   1. a row exists
+ *   2. it is enabled (a paused grant keeps its row, reason and history)
+ *   3. it belongs to the user being evaluated
+ *   4. it has not expired (NULL = permanent, by design)
+ *   5. its reason is one we recognise
+ */
+function complimentaryEntitles(
+  grant: ComplimentaryGrant | null | undefined,
+  input: EntitlementInput,
+): boolean {
+  if (!grant) return false;
+  if (grant.enabled !== true) return false;
+
+  /*
+    The row must belong to the user being evaluated. Every caller already reads
+    it by `user_id`, so this can only fire on a bug — which is the point. A
+    future refactor that passes the wrong row denies rather than entitles.
+  */
+  const userId = input.userId;
+  if (typeof userId !== "string" || userId.length === 0) return false;
+  if (grant.user_id !== userId) return false;
+
+  if (grant.expires_at !== null && grant.expires_at !== undefined) {
+    const expiresAt = Date.parse(grant.expires_at);
+    if (Number.isNaN(expiresAt)) return false;
+    if (expiresAt <= input.now) return false;
+  }
+
+  if (!COMPLIMENTARY_REASONS.has(grant.reason)) return false;
+
+  return true;
+}
+
+/**
  * Resolves entitlement from all sources. Paid subscriptions are checked before
  * the trial so a paying user is never reported as "trial" — that distinction
  * drives the client's upgrade prompts.
@@ -232,6 +299,15 @@ export function resolveEntitlement(input: EntitlementInput): EntitlementResult {
 
   if (iapRecords.some((r) => iapEntitles(r, input))) {
     return { allowed: true, reason: "active_iap" };
+  }
+
+  /*
+    Complimentary access sits after both paid sources so a real payer is never
+    reported as complimentary, and before the trial so a reviewer's access does
+    not quietly expire after seven days.
+  */
+  if (complimentaryEntitles(input.complimentary, input)) {
+    return { allowed: true, reason: "complimentary" };
   }
 
   // No trial start means onboarding never completed — trial begins there, so
@@ -292,4 +368,30 @@ export function toBetaTester(row: unknown): BetaTester | null {
   const expiresAt = typeof rawExpiry === "string" ? rawExpiry : null;
 
   return { user_id: userId, platform, expires_at: expiresAt, enabled: r.enabled === true };
+}
+
+/**
+ * Narrows an untrusted `complimentary_entitlements` row into a
+ * `ComplimentaryGrant`, or null.
+ *
+ * Mirrors `toBetaTester`. The point is that the row reaches the resolver as a
+ * checked shape rather than an `as never` cast — a grant of free permanent
+ * access should not be the one thing smuggled past the type system. Anything
+ * unexpected becomes null, which denies.
+ */
+export function toComplimentaryGrant(row: unknown): ComplimentaryGrant | null {
+  if (typeof row !== "object" || row === null || Array.isArray(row)) return null;
+
+  const r = row as Record<string, unknown>;
+
+  const userId = typeof r.user_id === "string" && r.user_id.length > 0 ? r.user_id : null;
+  if (userId === null) return null;
+
+  if (typeof r.reason !== "string") return null;
+
+  const rawExpiry = r.expires_at;
+  if (rawExpiry !== null && rawExpiry !== undefined && typeof rawExpiry !== "string") return null;
+  const expiresAt = typeof rawExpiry === "string" ? rawExpiry : null;
+
+  return { user_id: userId, reason: r.reason, expires_at: expiresAt, enabled: r.enabled === true };
 }

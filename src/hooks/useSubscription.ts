@@ -13,9 +13,24 @@ import {
   BETA_TESTER_COLUMNS,
   resolveEntitlement,
   toBetaTester,
+  toComplimentaryGrant,
   type BetaTester,
   type IapRecord,
 } from '../lib/entitlement'
+
+import {
+  sourceForEntitlement,
+  sourceIsActive,
+  type SubscriptionSource,
+} from '../lib/subscriptionSource'
+
+// Re-exported so existing call sites keep importing these from the hook.
+export {
+  sourceForEntitlement,
+  sourceHasManageablePurchase,
+  sourceIsActive,
+  type SubscriptionSource,
+} from '../lib/subscriptionSource'
 
 export interface Subscription {
   customer_id: string | null
@@ -43,7 +58,6 @@ export interface IapSubscription {
  * only Stripe subscriptions can be managed from inside the app — Apple and
  * Google both require the user to be sent to the system settings screen.
  */
-export type SubscriptionSource = 'stripe' | 'ios' | 'android' | 'trial' | 'none'
 
 /** Does this single IAP row entitle right now? Asked of `resolveEntitlement`
  *  rather than re-implemented, so there is only ever one status list — and one
@@ -88,7 +102,7 @@ export function useSubscription() {
         return
       }
 
-      const [stripeResult, iapResult, userResult, betaResult] = await Promise.all([
+      const [stripeResult, iapResult, userResult, betaResult, complimentaryResult] = await Promise.all([
         supabase.from('stripe_user_subscriptions').select('*').maybeSingle(),
         supabase
           .from('iap_subscriptions')
@@ -112,6 +126,16 @@ export function useSubscription() {
         supabase
           .from('iap_beta_testers')
           .select(BETA_TESTER_COLUMNS)
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        /*
+          Complimentary grants — reviewers, press, support. RLS narrows this to
+          the caller's own row, and there is no write policy, so reading it here
+          cannot become a way to grant one.
+        */
+        supabase
+          .from('complimentary_entitlements')
+          .select('user_id, reason, expires_at, enabled')
           .eq('user_id', user.id)
           .maybeSingle(),
       ])
@@ -160,35 +184,40 @@ export function useSubscription() {
         now,
         userId: user.id,
         betaTester,
+        complimentary: toComplimentaryGrant(complimentaryResult.data),
       })
 
       setSubscription(stripe)
       setIapSubscriptions(iap)
       setEntitled(entitlement.allowed)
 
-      if (!entitlement.allowed) {
-        setActiveIap(null)
-        setSource('none')
-      } else if (entitlement.reason === 'active_subscription') {
-        setActiveIap(null)
-        setSource('stripe')
-      } else if (entitlement.reason === 'active_iap') {
-        // Which storefront actually entitles decides where "manage" sends them,
-        // and which row does decides the plan and renewal date shown for it.
-        const live = iap.find((row, i) => {
-          const record = records[i]
-          return (
-            record !== undefined &&
-            iapEntitles(record, now, user.id, betaTester) &&
-            !!row.platform
-          )
-        })
-        setActiveIap(live ?? null)
-        setSource(live?.platform ?? 'none')
-      } else {
-        setActiveIap(null)
-        setSource('trial')
-      }
+      /*
+        Which storefront actually entitles decides where "manage" sends them,
+        and which row does decides the plan and renewal date shown for it. Only
+        an IAP entitlement has one; every other source has no store row.
+      */
+      const live =
+        entitlement.allowed && entitlement.reason === 'active_iap'
+          ? iap.find((row, i) => {
+              const record = records[i]
+              return (
+                record !== undefined &&
+                iapEntitles(record, now, user.id, betaTester) &&
+                !!row.platform
+              )
+            })
+          : undefined
+
+      setActiveIap(live ?? null)
+      // One mapping, shared with the tests, so the hook and the pure function
+      // cannot drift — which is how `complimentary` first fell through to
+      // 'trial'.
+      setSource(
+        sourceForEntitlement(
+          entitlement,
+          (live?.platform as SubscriptionSource | undefined) ?? null,
+        ),
+      )
     } catch (error) {
       console.error('Error fetching subscription:', error)
     } finally {
@@ -210,7 +239,14 @@ export function useSubscription() {
   /** A paid, currently-entitling subscription from any storefront. The app-level
    *  trial is deliberately not "active" — callers use it to decide whether to
    *  offer an upgrade. */
-  const isActive = () => source === 'stripe' || source === 'ios' || source === 'android'
+  /**
+   * Full, non-lapsing access. Complimentary counts: a reviewer holds exactly
+   * the same access a subscriber does, and everything gated on this — the
+   * billing status card, upgrade prompts — should treat them identically.
+   * Where the two must differ is *purchase management*, which reads `source`
+   * rather than this.
+   */
+  const isActive = () => sourceIsActive(source)
 
   /** The store product currently entitling, when the source is a native store. */
   const activeIapProductId = () => activeIap?.product_id ?? null

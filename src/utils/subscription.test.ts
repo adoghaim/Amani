@@ -37,10 +37,12 @@ const fake = vi.hoisted(() => ({
   trialStartDate: null as string | null,
   betaRow: null as unknown,
   betaError: null as { message: string } | null,
+  complimentaryRow: null as unknown,
+  complimentaryError: null as { message: string } | null,
 }));
 
 vi.mock('../lib/supabase', () => {
-  // `iap_subscriptions` is awaited directly; the other three go through
+  // `iap_subscriptions` is awaited directly; the other four go through
   // `.maybeSingle()`. One thenable object covers both shapes.
   const query = (table: string) => ({
     then: (onFulfilled: (value: unknown) => unknown) =>
@@ -54,6 +56,12 @@ vi.mock('../lib/supabase', () => {
       }
       if (table === 'iap_beta_testers') {
         return { data: fake.betaError ? null : fake.betaRow, error: fake.betaError };
+      }
+      if (table === 'complimentary_entitlements') {
+        return {
+          data: fake.complimentaryError ? null : fake.complimentaryRow,
+          error: fake.complimentaryError,
+        };
       }
       return {
         data: { id: '11111111-1111-4111-8111-111111111111', trial_start_date: fake.trialStartDate },
@@ -84,6 +92,8 @@ beforeEach(() => {
   fake.trialStartDate = LAPSED_TRIAL_START;
   fake.betaRow = null;
   fake.betaError = null;
+  fake.complimentaryRow = null;
+  fake.complimentaryError = null;
 });
 
 /** A live sandbox receipt, the kind a TestFlight or Play internal tester holds. */
@@ -137,6 +147,50 @@ describe('checkSubscriptionLive', () => {
 
     await expect(checkSubscriptionLive()).resolves.toEqual({ allowed: true });
   });
+
+  it('allows an enabled, unexpired complimentary grant with a lapsed trial and no paid source', async () => {
+    fake.complimentaryRow = {
+      user_id: USER_ID,
+      reason: 'store_review',
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      enabled: true,
+    };
+
+    await expect(checkSubscriptionLive()).resolves.toEqual({ allowed: true });
+  });
+
+  it.each(['Stripe', 'IAP', 'trial'] as const)(
+    'preserves existing %s access without redirecting when the complimentary read fails',
+    async (source) => {
+      fake.complimentaryError = { message: 'network' };
+      if (source === 'Stripe') {
+        fake.stripeRow = { subscription_status: 'active' };
+      } else if (source === 'IAP') {
+        fake.iapRows = [{ ...sandboxReceipt, environment: 'production' }];
+      } else {
+        fake.trialStartDate = new Date(Date.now() - 86_400_000).toISOString();
+      }
+
+      await expect(checkSubscriptionLive()).resolves.toEqual({ allowed: true });
+    },
+  );
+
+  it.each(['disabled', 'expired'] as const)(
+    'redirects a %s complimentary grant with a lapsed trial to /pricing',
+    async (state) => {
+      fake.complimentaryRow = {
+        user_id: USER_ID,
+        reason: 'store_review',
+        expires_at: new Date(Date.now() + (state === 'expired' ? -1 : 1) * 86_400_000).toISOString(),
+        enabled: state !== 'disabled',
+      };
+
+      await expect(checkSubscriptionLive()).resolves.toEqual({
+        allowed: false,
+        redirectTo: '/pricing',
+      });
+    },
+  );
 
   it('lets an allowlisted sandbox tester through the gate', async () => {
     fake.iapRows = [sandboxReceipt];
