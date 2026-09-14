@@ -41,4 +41,4 @@ printf 'Discovered %s files; checking %s; baseline exclusions %s.\n' \
 if (( $# == 0 )); then
   set -- deno
 fi
-exec "$@" check --node-modules-dir=auto "${files[@]}"
+exec "$@" check --node-modules-dir=none --no-lock "${files[@]}"
