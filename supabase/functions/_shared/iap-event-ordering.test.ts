@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  IAP_ROW_COLUMNS,
   isEventFresh,
   normalizeRevenueCatEvent,
   persistIapSubscription,
@@ -68,21 +69,15 @@ function fakeStore(seed?: Partial<IapSubscriptionRow>) {
     } as IapSubscriptionRow
     : null;
 
-  const claimed = new Set<string>();
   const writes: IapRowPatch[] = [];
 
   const store: IapStore = {
     async findByStoreSubscription() { return row; },
     async findByUserProduct() { return null; },
     async insert() { /* recorded via outcome */ },
-    async update(_id, patch) { writes.push(patch); },
-    async claimEvent(eventId) {
-      if (claimed.has(eventId)) return false;
-      claimed.add(eventId);
-      return true;
-    },
+    async update(_id, patch) { writes.push(patch); return 1; },
   };
-  return { store, writes, claimed, row };
+  return { store, writes, row };
 }
 
 describe('isEventFresh — the ordering rule', () => {
@@ -197,12 +192,6 @@ describe('each event type survives being replayed out of order', () => {
 });
 
 describe('duplicate delivery', () => {
-  it('claims an event id once and refuses the second time', async () => {
-    const { store } = fakeStore({ last_event_at: null });
-    expect(await store.claimEvent!('evt_1')).toBe(true);
-    expect(await store.claimEvent!('evt_1')).toBe(false);
-  });
-
   it('is harmless even without the ledger, because the patch is identical', async () => {
     /*
       Belt and braces. The ledger stops the redundant write; the ordering guard
@@ -233,5 +222,26 @@ describe('the subscriber-payload path is unaffected', () => {
     const outcome = await persistIapSubscription(store, withoutIdentity);
     expect(outcome.action).toBe('updated');
     expect(writes).toHaveLength(1);
+  });
+});
+
+describe('production ordering contract', () => {
+  it('selects both ordering columns', () => {
+    expect(IAP_ROW_COLUMNS.split(', ')).toEqual(expect.arrayContaining(['last_event_at', 'last_event_id']));
+  });
+
+  it.each(['store_subscription', 'user_product'])('returns stale when the %s update loses the race', async (branch) => {
+    const { store, row } = fakeStore({ last_event_at: null });
+    if (branch === 'user_product') {
+      store.findByStoreSubscription = async () => null;
+      store.findByUserProduct = async () => row;
+    }
+    store.update = async (_id, patch) => {
+      expect(patch.last_event_at).toBe(new Date(NOW).toISOString());
+      return 0;
+    };
+    expect(await persistIapSubscription(store, normalized(event()))).toEqual({
+      action: 'stale', id: 'row-1', appliedAt: null,
+    });
   });
 });

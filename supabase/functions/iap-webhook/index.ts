@@ -19,8 +19,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
 import {
+  IAP_ROW_COLUMNS,
   normalizeRevenueCatEvent,
-  persistIapSubscription,
   verifyWebhookAuthorization,
   type IapPlatform,
   type IapRowPatch,
@@ -28,19 +28,18 @@ import {
   type IapSubscriptionRow,
   type NormalizedIapSubscription,
 } from '../_shared/iap-verification.ts';
+import { persistIapWebhookEvent, type EventClaimStore } from '../_shared/iap-idempotency.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 );
 
-const ROW_COLUMNS = 'id, user_id, platform, product_id, store_subscription_id, status, expires_at, environment';
-
 const iapStore: IapStore = {
   async findByStoreSubscription(platform: IapPlatform, storeSubscriptionId: string) {
     const { data, error } = await supabase
       .from('iap_subscriptions')
-      .select(ROW_COLUMNS)
+      .select(IAP_ROW_COLUMNS)
       .eq('platform', platform)
       .eq('store_subscription_id', storeSubscriptionId)
       .maybeSingle();
@@ -54,7 +53,7 @@ const iapStore: IapStore = {
   async findByUserProduct(userId: string, platform: IapPlatform, productId: string) {
     const { data, error } = await supabase
       .from('iap_subscriptions')
-      .select(ROW_COLUMNS)
+      .select(IAP_ROW_COLUMNS)
       .eq('user_id', userId)
       .eq('platform', platform)
       .eq('product_id', productId)
@@ -74,29 +73,93 @@ const iapStore: IapStore = {
       expires_at: subscription.expiresAt,
       environment: subscription.environment,
       raw: subscription.raw,
+      ...(subscription.eventAt
+        ? { last_event_at: subscription.eventAt, last_event_id: subscription.eventId ?? null }
+        : {}),
     });
 
     if (error) throw new Error(`iap_subscriptions insert failed: ${error.message}`);
   },
 
   async update(id: string, patch: IapRowPatch) {
-    const { error } = await supabase.from('iap_subscriptions').update(patch).eq('id', id);
+    let query = supabase.from('iap_subscriptions').update(patch).eq('id', id);
+    if (patch.last_event_at) {
+      query = query.or(`last_event_at.is.null,last_event_at.lte.${patch.last_event_at}`);
+    }
+    const { data, error } = await query.select('id');
     if (error) throw new Error(`iap_subscriptions update failed: ${error.message}`);
+    return data?.length ?? 0;
+  },
+};
+
+const eventClaimStore: EventClaimStore = {
+  async insertClaim({ eventId, claimedAt }) {
+    // The event_id primary key is the atomic gate: concurrent deliveries race
+    // here and exactly one INSERT survives, the rest come back 23505.
+    const { error } = await supabase.from('processed_iap_events').insert({
+      event_id: eventId,
+      status: 'processing',
+      claimed_at: claimedAt,
+      processed_at: null,
+    });
+
+    return { data: null, error };
   },
 
-  /*
-    Insert-and-see. `on conflict do nothing` means a duplicate delivery inserts
-    no row, and the absent returned row is how we know. A failure here throws
-    rather than assuming "new": treating an unreadable ledger as "not seen
-    before" would reprocess the whole backlog on every retry.
-  */
-  async claimEvent(eventId: string) {
+  async readClaim(eventId) {
     const { data, error } = await supabase
       .from('processed_iap_events')
-      .upsert({ event_id: eventId }, { onConflict: 'event_id', ignoreDuplicates: true })
+      .select('status, claimed_at')
+      .eq('event_id', eventId)
+      .maybeSingle();
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    return {
+      data: data ? { status: data.status, claimedAt: data.claimed_at } : null,
+      error: null,
+    };
+  },
+
+  async reclaimStale({ eventId, expectedClaimedAt, claimedAt }) {
+    // Compare-and-swap. Under READ COMMITTED, a racer that blocks on this row
+    // re-evaluates the WHERE clause once the winner commits, sees the new
+    // claimed_at, and matches zero rows.
+    const { data, error } = await supabase
+      .from('processed_iap_events')
+      .update({ status: 'processing', claimed_at: claimedAt, processed_at: null })
+      .eq('event_id', eventId)
+      .eq('status', 'processing')
+      .eq('claimed_at', expectedClaimedAt)
       .select('event_id');
-    if (error) throw new Error(`processed_iap_events claim failed: ${error.message}`);
-    return (data?.length ?? 0) > 0;
+
+    return { data: data?.length ?? null, error };
+  },
+
+  async markCompleted({ eventId, claimedAt, processedAt }) {
+    const { data, error } = await supabase
+      .from('processed_iap_events')
+      .update({ status: 'completed', processed_at: processedAt })
+      .eq('event_id', eventId)
+      .eq('status', 'processing')
+      .eq('claimed_at', claimedAt)
+      .select('event_id');
+
+    return { data: data?.length ?? null, error };
+  },
+
+  async deleteClaim({ eventId, claimedAt }) {
+    const { data, error } = await supabase
+      .from('processed_iap_events')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('status', 'processing')
+      .eq('claimed_at', claimedAt)
+      .select('event_id');
+
+    return { data: data?.length ?? null, error };
   },
 };
 
@@ -136,22 +199,10 @@ Deno.serve(async (req) => {
 
     const subscription = result.subscription;
 
-    /*
-      Deduplicate before writing. RevenueCat retries for hours on a non-2xx, and
-      this function has been returning 503 to every delivery for as long as
-      REVENUECAT_WEBHOOK_AUTH has been unset — so the first successful run will
-      receive a backlog containing repeats. 200 on a duplicate: it is already
-      applied, and asking for it again gains nothing.
-    */
-    if (subscription.eventId && iapStore.claimEvent) {
-      const claimed = await iapStore.claimEvent(subscription.eventId);
-      if (!claimed) {
-        console.info(`[iap-webhook] duplicate delivery of event ${subscription.eventId}`);
-        return Response.json({ received: true, ignored: 'duplicate_event' });
-      }
+    const outcome = await persistIapWebhookEvent(eventClaimStore, iapStore, subscription);
+    if (outcome.action === 'duplicate') {
+      return Response.json({ received: true, ignored: 'duplicate_event' });
     }
-
-    const outcome = await persistIapSubscription(iapStore, subscription);
 
     if (outcome.action === 'rejected') {
       /*

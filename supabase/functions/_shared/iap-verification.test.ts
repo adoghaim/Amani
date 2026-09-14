@@ -432,6 +432,7 @@ function fakeStore(rows: IapSubscriptionRow[] = []): FakeStore {
         row.product_id = patch.product_id;
         row.environment = patch.environment;
       }
+      return row ? 1 : 0;
     },
   };
   return store;

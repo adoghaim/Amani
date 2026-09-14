@@ -451,6 +451,9 @@ export function normalizeSubscriberPayload(
 
 // ─── Write policy ─────────────────────────────────────────────────────────
 
+export const IAP_ROW_COLUMNS = 'id, user_id, platform, product_id, store_subscription_id, status, expires_at, environment, last_event_at, last_event_id';
+
+
 /**
  * The four lookups/writes the policy needs. Errors are thrown by the
  * implementation (unlike the PostgREST-shaped `StoreResult` in
@@ -470,18 +473,8 @@ export interface IapStore {
     productId: string,
   ): Promise<IapSubscriptionRow | null>;
   insert(subscription: NormalizedIapSubscription): Promise<void>;
-  update(id: string, patch: IapRowPatch): Promise<void>;
-  /**
-   * Records an event id as processed. Resolves true if this delivery claimed
-   * it, false if it had already been claimed — i.e. a duplicate.
-   *
-   * Optional: the subscriber-payload path has no event ids, and a caller that
-   * does not supply this simply gets no deduplication. The ordering guard
-   * already makes a duplicate harmless — it re-applies an identical patch — so
-   * this is about not doing the write twice and about being able to answer
-   * "did we ever receive this event" afterwards.
-   */
-  claimEvent?(eventId: string): Promise<boolean>;
+  /** Conditional on patch.last_event_at when present; returns matched row count. */
+  update(id: string, patch: IapRowPatch): Promise<number>;
 }
 
 /**
@@ -577,7 +570,10 @@ export async function persistIapSubscription(
       return { action: "stale", id: byStore.id, appliedAt: byStore.last_event_at ?? null };
     }
 
-    await store.update(byStore.id, patch);
+    if (await store.update(byStore.id, patch) === 0) {
+      // The database observed a newer write after our read.
+      return { action: "stale", id: byStore.id, appliedAt: null };
+    }
     return { action: "updated", id: byStore.id, matchedBy: "store_subscription" };
   }
 
@@ -598,7 +594,10 @@ export async function persistIapSubscription(
     if (!isEventFresh(byProduct.last_event_at, subscription.eventAt)) {
       return { action: "stale", id: byProduct.id, appliedAt: byProduct.last_event_at ?? null };
     }
-    await store.update(byProduct.id, patch);
+    if (await store.update(byProduct.id, patch) === 0) {
+      // The database observed a newer write after our read.
+      return { action: "stale", id: byProduct.id, appliedAt: null };
+    }
     return { action: "updated", id: byProduct.id, matchedBy: "user_product" };
   }
 
