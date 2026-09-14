@@ -147,12 +147,12 @@ describe('client/server entitlement parity', () => {
   });
 
   it('agrees on how to read a complimentary_entitlements row', () => {
-    const grant = { user_id: USER, reason: 'store_reviewer', expires_at: null, enabled: true };
+    const grant = { user_id: USER, reason: 'store_review', expires_at: null, enabled: true };
     const cases = [
       { row: null, expected: null },
       { row: undefined, expected: null },
       { row: [], expected: null },
-      { row: 'store_reviewer', expected: null },
+      { row: 'store_review', expected: null },
       { row: 42, expected: null },
       { row: {}, expected: null },
       { row: { reason: grant.reason, expires_at: null, enabled: true }, expected: null },
