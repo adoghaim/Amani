@@ -1,6 +1,12 @@
 package com.amani.health;
 
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -42,7 +48,33 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        protectWebViewInsets();
         applyLightSystemBars();
+    }
+
+    /**
+     * Capacitor 8.5.1 normally delegates modern WebView insets to CSS. Not every
+     * route handles all four safe-area edges, so fit the whole WebView instead.
+     * Install after super.onCreate(), which registers SystemBars' own listener.
+     */
+    private void protectWebViewInsets() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return;
+
+        View container = (View) getBridge().getWebView().getParent();
+        ViewCompat.setOnApplyWindowInsetsListener(container, (view, insets) -> {
+            int safeTypes = WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout();
+            Insets safe = insets.getInsets(safeTypes);
+            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+            view.setPadding(safe.left, safe.top, safe.right, Math.max(safe.bottom, ime.bottom));
+
+            // Already applied above: do not let viewport-fit=cover / CSS safe-area
+            // padding or the WebView's keyboard handling apply the same space twice.
+            // Keep dispatching insets (rather than CONSUMED) for recalculation.
+            return new WindowInsetsCompat.Builder(insets)
+                    .setInsets(safeTypes | WindowInsetsCompat.Type.ime(), Insets.NONE)
+                    .build();
+        });
+        ViewCompat.requestApplyInsets(container);
     }
 
     @Override

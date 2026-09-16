@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { isNative } from '../../lib/native'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../Button'
@@ -82,26 +83,30 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         </Alert>
       )}
 
-      <div className="space-y-2">
-        <SocialAuthButton
-          provider="google"
-          label="Continue with Google"
-          onClick={() => handleOAuth(signInWithGoogle)}
-        />
-        {APPLE_OAUTH_ENABLED && (
-          <SocialAuthButton
-            provider="apple"
-            label="Continue with Apple"
-            onClick={() => handleOAuth(signInWithApple)}
-          />
-        )}
-      </div>
+      {!isNative() && (
+        <>
+          <div className="space-y-2">
+            <SocialAuthButton
+              provider="google"
+              label="Continue with Google"
+              onClick={() => handleOAuth(signInWithGoogle)}
+            />
+            {APPLE_OAUTH_ENABLED && (
+              <SocialAuthButton
+                provider="apple"
+                label="Continue with Apple"
+                onClick={() => handleOAuth(signInWithApple)}
+              />
+            )}
+          </div>
 
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-theme-border" />
-        <span className="text-xs text-theme-muted-text">or sign up with email</span>
-        <div className="flex-1 h-px bg-theme-border" />
-      </div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-theme-border" />
+            <span className="text-xs text-theme-muted-text">or sign up with email</span>
+            <div className="flex-1 h-px bg-theme-border" />
+          </div>
+        </>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Input
