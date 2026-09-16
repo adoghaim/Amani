@@ -6,16 +6,10 @@ plus the subscription identifier scheme (§9).
 | | |
 |---|---|
 | Package | `com.amani.health` (`capacitor.config.ts:4`, `android/app/build.gradle:13`) |
-| Marketing version | `1.0.4` (`package.json:4`, `android/app/build.gradle:17`) |
-| `versionCode` on `main` | **7** (`android/app/build.gradle:16`) — see the warning below |
+| Marketing version | `1.0.5` (`package.json:4`, `android/app/build.gradle:17`) |
+| `versionCode` | **10** (`android/app/build.gradle:16`) |
 | Web host | Netlify, `amanibiometrics.com` |
 | Track | Internal testing → closed beta |
-
-> **`versionCode` warning.** `main` still carries `versionCode 7`. `versionCode 8`
-> exists only on the unmerged branch `chore/native-build-8` (commit `efa4367`,
-> "chore(native): versionCode 8 / iOS build 8, marketing version stays 1.0.4").
-> **Build the AAB from a tree that has versionCode 8**, or Play rejects the upload
-> as a duplicate of build 7. `native-grade.md:59` already tracks this as N3-3.
 
 Everything below is derived from the code in this repository. Where a Play form
 asks something the code cannot answer, it is marked **DECISION** and listed again
@@ -23,27 +17,57 @@ in §10. Nothing here has been submitted to Play.
 
 ---
 
-## 0. Blockers that are not store-listing problems
+## 0. Mobile 1.0.5 release candidate
 
-These will not stop you filling in the forms, but they will make the beta useless
-if you ship before fixing them. Both are already tracked in `native-grade.md`.
+### 0.1 Release and backend checks
 
-1. **`verify-iap-purchase` and `iap-webhook` have never been deployed**
-   (`native-grade.md:38`, `native-grade.md:96`; last verified 2026-09-04). The
-   source ships in the repo and is declared in `supabase/config.toml`, but the
-   live project returns `{"code":"NOT_FOUND"}` for both. `src/lib/iap.ts:394`
-   POSTs to `verify-iap-purchase` after every purchase and every restore, so a
-   Play purchase would 404 and grant nothing — the tester is charged and gets
-   no access. Fix before the first internal-testing build that has a paywall:
-   ```
-   supabase functions deploy verify-iap-purchase
-   supabase functions deploy iap-webhook
-   ```
-2. **`public/.well-known/assetlinks.json` still contains
-   `REPLACE_WITH_PLAY_APP_SIGNING_SHA256`** (`native-grade.md:227`), so Android
-   App Links fall back to the browser and Supabase password-recovery links will
-   not reopen the app. Needs the **Play App Signing** SHA-256 from
-   Play Console → Setup → App integrity, not the upload key.
+The candidate is Android **1.0.5 / versionCode 10** and iOS **1.0.5 (9)**.
+The Lead builds both native candidates from the merge commit. The earlier
+September 4 claim that the IAP functions were undeployed is stale and is not a
+current deployment assertion. Confirm purchase/restore and webhook delivery in
+release QA; this offline source change does not verify live backend deployment.
+
+Native login and signup show email/password only: both social-login buttons and
+the divider are hidden. Web keeps Google and enables Apple only when
+`VITE_ENABLE_APPLE_OAUTH=true`.
+
+The Play edge-to-edge warnings on versionCode 9 refer to `android:statusBarColor` / `windowLightStatusBar`.
+These theme settings are kept deliberately for API 24–34 (see the `styles.xml` comment).
+On Android 15+, Capacitor 8.5.1 `SystemBars` (`insetsHandling=css`) supplies safe-area insets to CSS.
+Release QA must check every screen's top and bottom edges on an Android 15 device.
+Any obscured edge must be fixed in CSS with the existing `.safe-*` utilities, not in `MainActivity`.
+
+### 0.2 Android App Links
+
+`public/.well-known/assetlinks.json` now contains the owner-supplied **Play App
+Signing** SHA-256 for `com.amani.health` (not the upload key):
+`C0:12:D7:33:EF:60:15:97:70:31:A3:77:80:48:9B:17:8B:B4:21:55:09:7D:5D:51:25:3D:0A:ED:02:EE:C6:23`.
+After web deployment, verify domain association and a password-recovery App Link
+on the Play-installed build; the local JSON alone does not prove association.
+
+### 0.3 Android 15+ edge-to-edge
+
+The project targets SDK 36. `BridgeActivity.onCreate()` installs the no-action-bar
+theme and constructs the bridge, which registers Capacitor 8.5.1's built-in
+`SystemBars` plugin. Neither `MainActivity`'s existing icon-appearance calls nor
+`values/styles.xml` / `values-v27/styles.xml` inset content: the themes set light
+bar icons/backgrounds, not layout bounds.
+
+In the installed Capacitor source, `SystemBars.initWindowInsetsListener()` passes
+system-bar/cutout insets through on WebView 140+ with `viewport-fit=cover` (which
+`index.html` sets). Older WebViews on Android 15+ get parent padding instead.
+The app uses `.safe-top` / `.safe-bottom` utilities to consume CSS safe-area
+insets. `MainActivity` retains its base implementation, leaving Capacitor's
+listener and keyboard/viewport handling intact. No edge-to-edge opt-out is added.
+The Play warning is informational for this candidate: no device evidence shows
+obscured content, and device QA remains required before release.
+
+Source inspection is not device QA. On the merged RC, the Lead should check
+login/signup, account deletion, app headers/bottom navigation, and modals on
+Android 15/16 in portrait and landscape, with gesture and three-button navigation,
+and with the keyboard opening/closing. Confirm no overlap or double padding,
+and dark system-bar icons after resuming. Native compilation and these device
+checks are deferred to the Lead's build chain.
 
 ---
 
@@ -411,19 +435,13 @@ store, with a button that deep-links to the right store subscription screen
 **Web URL to enter in the form:**
 
 ```
-https://amanibiometrics.com/contact
+https://amanibiometrics.com/delete-account
 ```
 
-That page is public (no sign-in), names the app, has a dedicated
-"You can delete your data yourself" block describing the in-app route, and gives
-`privacy@amanibiometrics.com` for users who have already uninstalled — which is
-exactly the case Play's requirement exists for
-(`src/pages/Contact.tsx:122-135`, route registered at `src/App.tsx:80`).
-
-**DECISION.** If you would rather the URL be a page that is *only* about deletion,
-create `https://amanibiometrics.com/delete-account`. That is a new route and
-therefore a code change, which this task deliberately does not make. `/contact`
-satisfies the requirement as written; a dedicated page is a nicety.
+The dedicated public page explains the in-app deletion path, what gets deleted,
+the store-subscription caveat, and email assistance for users who cannot sign in.
+It already exists at `src/pages/DeleteAccount.tsx`, registered as `/delete-account`
+in `src/App.tsx`.
 
 **What `delete-user-data` actually deletes**, in order — from
 `supabase/functions/_shared/account-deletion.ts:160-203` and
@@ -522,7 +540,7 @@ price conversion for their countries or they cannot exercise the purchase flow a
 |---|---|---|
 | Privacy policy | `https://amanibiometrics.com/privacy` | `src/App.tsx:78` → `src/pages/Privacy.tsx` |
 | Terms of service | `https://amanibiometrics.com/terms` | `src/App.tsx:79` → `src/pages/Terms.tsx` |
-| Account deletion (Data safety) | `https://amanibiometrics.com/contact` | `src/App.tsx:80` → `src/pages/Contact.tsx` |
+| Account deletion (Data safety) | `https://amanibiometrics.com/delete-account` | `src/App.tsx` → `src/pages/DeleteAccount.tsx` |
 | Support email | `support@amanibiometrics.com` | `src/pages/Contact.tsx:83` |
 | Privacy contact | `privacy@amanibiometrics.com` | `src/pages/Contact.tsx:112`, `src/pages/Privacy.tsx` |
 | Website | `https://amanibiometrics.com` | Netlify |
@@ -845,9 +863,9 @@ redeploying. Insert one row per tester keyed on their `auth.users.id`
 
 | # | Decision | Where |
 |---|---|---|
-| 1 | Build the AAB from a tree with **versionCode 8** — `main` still has 7; 8 lives only on the unmerged `chore/native-build-8`. | header |
-| 2 | Deploy `verify-iap-purchase` and `iap-webhook` before any build with a paywall, or testers are charged and get nothing. | §0.1 |
-| 3 | Paste the Play App Signing SHA-256 into `public/.well-known/assetlinks.json`. | §0.2 |
+| 1 | Build Android 1.0.5 / versionCode 10 and iOS 1.0.5 (9) from the merge commit. | §0.1 |
+| 2 | Confirm purchase/restore and webhook delivery during release QA. | §0.1 |
+| 3 | Verify the deployed App Links association against the Play-installed candidate. Fingerprint is populated. | §0.2 |
 | 4 | Keep or cut the "Quest Diagnostics, Labcorp and Hone" sentence in the description — accurate, but names third-party brands. | §1.3 |
 | 5 | Trial wording: "Your first 7 days are free" is Amani's trial, not a Play offer. Keep, or soften. | §1.4 |
 | 6 | Re-open **Diseases and Conditions Management** on the health declaration the day the app ships anything condition-specific. | §2 |
@@ -855,14 +873,14 @@ redeploying. Insert one row per tester keyed on their `auth.users.id`
 | 8 | Where profile fields land in Data safety — split between "Other info" and "Health info" as recommended, or put everything under "Health info". | §4.3.1 |
 | 9 | Declare **App activity → App interactions** for Sentry breadcrumbs? Recommended yes. | §4.3.2 |
 | 10 | Declare **Approximate location** for RevenueCat's store country? Recommended no. | §4.3.3 |
-| 11 | Use `/contact` as the account-deletion URL, or build a dedicated `/delete-account` page (a code change, not made here). | §4.5 |
+| 11 | Enter `https://amanibiometrics.com/delete-account` as the account-deletion URL. | §4.5 |
 | 12 | Keep the "Draft — pending legal review" banner on the privacy policy, or complete the review first. | §6 |
 | 13 | If any beta tester is outside the US: keep them on the *internal* track, or add their country **and set Play prices for it**. | §5 |
 | 14 | Verify on a real Android device whether `PurchasesStoreProduct.identifier` carries the `:basePlanId` suffix. If it does, the Android paywall is empty and sandbox testers get no entitlement — fix in a separate PR. | §9.4(A) |
 | 15 | Customer-facing name: "Amani Plus" in Play display strings only. Do **not** rename the permanent product ids or the `premium` entitlement. | §9.4(C) |
 | 16 | `supabase db push` for `iap_beta_testers`, then insert a row per licence tester, before they can exercise a paid screen. | §9.4(E) |
 | 17 | Onboarding offers **"Under 18"** as an age range while the Terms require 18+. Remove the option, or be ready to explain it against an 18+ target-audience declaration. | §10, "could not determine" |
-| 18 | Confirm `VITE_ENABLE_APPLE_OAUTH` for the Android build before writing review instructions that mention Apple sign-in. Google sign-in is always shown. | §10, "could not determine" |
+| 18 | Supply email/password review credentials; native social-login buttons are hidden. | §0.1 |
 
 ### Things I could not determine from the code
 
@@ -892,10 +910,9 @@ redeploying. Insert one row per tester keyed on their `auth.users.id`
   `notification_preferences` rows exist for data-safety purposes while no
   notification is ever sent, and the app requests no notification permission.
   Nothing to declare; just do not let it creep into the listing.
-- **Google Sign-In is always available; Apple sign-in is flag-gated** behind
-  `VITE_ENABLE_APPLE_OAUTH` (`src/components/auth/SignupForm.tsx`). Confirm which
-  are actually live in the Android build before writing review instructions
-  around either.
+- **Native authentication uses email/password.** Google and Apple buttons are
+  hidden on iOS/Android; web keeps Google and flag-gated Apple. Review instructions
+  for the native candidate must use email/password credentials.
 - **Whether the Play merchant / payments profile is linked.** `IAP_SETUP.md` §7.1
   flags it as the same trap as Apple's Paid Applications Agreement: without it,
   Play Billing returns an empty product list and no error.
