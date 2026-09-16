@@ -31,6 +31,12 @@ Native login and signup show email/password only: both social-login buttons and
 the divider are hidden. Web keeps Google and enables Apple only when
 `VITE_ENABLE_APPLE_OAUTH=true`.
 
+The Play edge-to-edge warnings on versionCode 9 refer to `android:statusBarColor` / `windowLightStatusBar`.
+These theme settings are kept deliberately for API 24–34 (see the `styles.xml` comment).
+On Android 15+, Capacitor 8.5.1 `SystemBars` (`insetsHandling=css`) supplies safe-area insets to CSS.
+Release QA must check every screen's top and bottom edges on an Android 15 device.
+Any obscured edge must be fixed in CSS with the existing `.safe-*` utilities, not in `MainActivity`.
+
 ### 0.2 Android App Links
 
 `public/.well-known/assetlinks.json` now contains the owner-supplied **Play App
@@ -50,18 +56,11 @@ bar icons/backgrounds, not layout bounds.
 In the installed Capacitor source, `SystemBars.initWindowInsetsListener()` passes
 system-bar/cutout insets through on WebView 140+ with `viewport-fit=cover` (which
 `index.html` sets). Older WebViews on Android 15+ get parent padding instead.
-The main app layout uses top/bottom CSS safe-area padding, but public pages such
-as `/delete-account` do not, and the app does not use its left/right safe-area
-classes for landscape cutouts. Content could therefore be obscured on the
-modern-WebView path; the Play warning is not treated as merely informational.
-
-`MainActivity.protectWebViewInsets()` now replaces that parent listener after
-bridge creation on Android 15+ only. It pads all four edges for system bars and
-cutouts, uses the larger of keyboard and navigation-bar bottom insets, and
-passes zero handled insets to the WebView to avoid duplicate CSS/keyboard
-padding. It leaves Android 14 and earlier on Capacitor's existing behavior.
-No edge-to-edge opt-out is added; the window remains edge-to-edge while its
-WebView content fits the usable area.
+The app uses `.safe-top` / `.safe-bottom` utilities to consume CSS safe-area
+insets. `MainActivity` retains its base implementation, leaving Capacitor's
+listener and keyboard/viewport handling intact. No edge-to-edge opt-out is added.
+The Play warning is informational for this candidate: no device evidence shows
+obscured content, and device QA remains required before release.
 
 Source inspection is not device QA. On the merged RC, the Lead should check
 login/signup, account deletion, app headers/bottom navigation, and modals on
