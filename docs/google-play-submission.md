@@ -626,7 +626,7 @@ runs on every AI response, server-side, in
 
 ---
 
-## 8. Release notes — 1.0.4, internal / closed beta
+## 8. Release notes — 1.0.5 (10), internal / closed beta
 
 **Short (Play's "What's new", 500 char limit) — 346 characters:**
 
@@ -641,7 +641,7 @@ Please report anything that misreads a lab report or looks wrong. Amani is educa
 **Longer note for the internal-testing tester instructions:**
 
 ```
-Amani 1.0.4 — internal beta
+Amani 1.0.5 (10) — internal beta
 
 What to exercise:
 • Sign up, complete onboarding. The safety disclaimer is step 2 of 5 — confirm it appears.

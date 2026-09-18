@@ -1,5 +1,9 @@
 # Amani — Native-Platform Roadmap
 
+## Status 2026-09-17
+
+The [1.0.5 store submission package](docs/store-submission-1.0.5.md) is the current owner handoff. Per the Lead’s TASK-018 brief (2026-09-17), **N0-8 is closed: IAP functions deployed**; **N1-6’s Play App Signing fingerprint is published**, and the **Apple Associated Domains provisioning profile works**. iOS 1.0.5 (9) was uploaded; Android 1.0.5 (10) is built and signed, awaiting owner upload. **Xcode Cloud remains broken; its fix is in progress on `ci/xcode-cloud-post-clone`**, not completed here. See the package’s “Release basis” for upload/processing limits. The dated notes and checklist below are historical and are preserved unchanged.
+
 Synthesized from three parallel native audits (iOS App Store, Android Play Store, Capacitor cross-cutting). Status as of 2026-09-04. ✅ shipped · ⏳ blocked on user decision · ⬜ not started.
 
 (Updated 2026-08-21: **N0-3 and N1-6 are done.** The privacy manifest shipped with build 5 (PR #17) and universal/app links shipped in PR #20. `amanibiometrics.com` is confirmed live on Netlify, which is what unblocked N1-6.)
