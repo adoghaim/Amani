@@ -9,6 +9,8 @@ import {
   type IapRecord,
 } from "./entitlement.ts";
 
+type StripeSubscriptionRow = { subscription_status: string | null };
+
 type SupabaseClient = ReturnType<typeof createClient>;
 
 // Re-exported so existing importers keep their type without knowing that the
@@ -173,7 +175,7 @@ export async function checkUserSubscription(
     return resolveEntitlement({
       freemiumActive,
       onboarded: isOnboarded(userResult.data),
-      stripeStatus: subResult.data?.subscription_status ?? null,
+      stripeStatus: (subResult.data as StripeSubscriptionRow | null)?.subscription_status ?? null,
       iapRecords,
       trialStartDate: (userResult.data as { trial_start_date?: string | null } | null)?.trial_start_date ?? null,
       now: Date.now(),

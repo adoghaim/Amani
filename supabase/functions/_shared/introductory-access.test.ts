@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   commitDeepAccess,
+  commitGeneratedInterpretation,
   decideIntroductoryAccess,
   type ClaimRecord,
   type CommitDeepAccessInput,
@@ -57,7 +58,7 @@ function fakeActions(seed: ClaimRecord[] = [], opts: { failCommit?: boolean } = 
         return 'already_claimed';
       }
       if (input.consumeCredit) {
-        if (rows.filter((r) => r.user_id === input.userId).length >= 2) {
+        if (rows.filter((r) => r.user_id === input.userId).length >= 3) {
           // Trigger refuses; the whole transaction rolls back.
           return 'limit_reached';
         }
@@ -261,11 +262,11 @@ describe('commitDeepAccess — nothing commits on failed work', () => {
 
   it('fails closed when the request loses the race for the last credit', async () => {
     /*
-      Two uploads of two different draws both read count = 1 and both believe
+      Two uploads of two different draws both read count = 2 and both believe
       they hold the last credit. The database settles it. The loser must be
       served the Free result, NOT the premium one it thought it had earned.
     */
-    const { actions, stored } = fakeActions([claim('x'.repeat(64)), claim('y'.repeat(64))]);
+    const { actions, stored } = fakeActions([claim('x'.repeat(64)), claim('y'.repeat(64)), claim('z'.repeat(64))]);
     const staleDecision = {
       granted: true as const,
       reason: 'credit_available' as const,
@@ -324,5 +325,64 @@ describe('a broken ledger must not become unlimited Plus', () => {
       }
     }
     expect(checked).toBe(16);
+  });
+});
+
+describe('generation persistence wiring', () => {
+  const decision = { granted: true as const, reason: 'credit_available' as const,
+    claimsUsed: 2, claimsRemaining: 1, consumesCredit: true };
+  const input = { freemiumActive: true, tier: 'free' as const, decision,
+    completion: GENERATED, request: REQUEST };
+
+  it.each(['committed', 'already_claimed'] as const)('%s saves Plus without a second upsert', async outcome => {
+    const commit = vi.fn(async () => outcome);
+    expect(await commitGeneratedInterpretation({ commitDeepAccess: commit }, input))
+      .toEqual({ committed: true, tier: 'plus' });
+    expect(commit).toHaveBeenCalledOnce();
+    expect(commit).toHaveBeenCalledWith({ ...REQUEST, consumeCredit: true });
+  });
+  it('a last-slot loser must use the existing Free upsert, retaining the generated payload', async () => {
+    const commit = vi.fn(async () => 'limit_reached' as const);
+    expect(await commitGeneratedInterpretation({ commitDeepAccess: commit }, input))
+      .toEqual({ committed: false, tier: 'free' });
+    expect(commit.mock.calls[0]).toEqual([{ ...REQUEST, consumeCredit: true }]);
+  });
+  it.each([false, true])('Premium bypasses the RPC with flag %s (paid and complimentary)', async freemiumActive => {
+    const commit = vi.fn();
+    expect(await commitGeneratedInterpretation({ commitDeepAccess: commit }, {
+      ...input, freemiumActive, tier: 'plus', decision: null, request: null,
+    })).toEqual({ committed: false, tier: 'plus' });
+    expect(commit).not.toHaveBeenCalled();
+  });
+  it('flag off bypasses the RPC even for a Free input', async () => {
+    const commit = vi.fn();
+    expect(await commitGeneratedInterpretation({ commitDeepAccess: commit }, { ...input, freemiumActive: false }))
+      .toEqual({ committed: false, tier: 'free' });
+    expect(commit).not.toHaveBeenCalled();
+  });
+  it.each([
+    { parseConfident: false, interpretationGenerated: true },
+    { parseConfident: true, interpretationGenerated: false },
+  ])('failed generation/parse consumes nothing: %j', async completion => {
+    const commit = vi.fn();
+    expect(await commitGeneratedInterpretation({ commitDeepAccess: commit }, { ...input, completion }))
+      .toEqual({ committed: false, tier: 'free' });
+    expect(commit).not.toHaveBeenCalled();
+  });
+  it('a broken transaction propagates and cannot fall through to an upsert', async () => {
+    const commit = vi.fn(async () => { throw new Error('database offline'); });
+    await expect(commitGeneratedInterpretation({ commitDeepAccess: commit }, input))
+      .rejects.toThrow('database offline');
+  });
+  it('two stale decisions for the third slot yield one Plus and one Free', async () => {
+    const fake = fakeActions([claim('b'.repeat(64)), claim('c'.repeat(64))]);
+    const results = await Promise.all([
+      commitGeneratedInterpretation(fake.actions, input),
+      commitGeneratedInterpretation(fake.actions, { ...input,
+        request: { ...REQUEST, reportId: 'report-other', bloodDrawId: 'd'.repeat(64) } }),
+    ]);
+    expect(results).toEqual([{ committed: true, tier: 'plus' }, { committed: false, tier: 'free' }]);
+    expect(fake.rows).toHaveLength(3);
+    expect(fake.stored).toHaveLength(1);
   });
 });

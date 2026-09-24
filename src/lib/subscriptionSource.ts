@@ -12,6 +12,7 @@
  */
 
 import type { EntitlementResult } from './entitlement'
+import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from './tier'
 
 /**
  * Which relationship is entitling this user right now.
@@ -82,13 +83,22 @@ export function sourceHasManageablePurchase(source: SubscriptionSource): boolean
   return source === 'stripe' || source === 'ios' || source === 'android'
 }
 
-/** PR 2 will replace this reader with the per-user claim ledger. */
+/** Read-only lifetime claim usage, scoped by both user id and RLS. */
 export interface ComplimentaryUsage {
   used: number;
-  total: 3;
+  total: typeof FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS;
   remaining: number;
 }
 export type ComplimentaryUsageReader = (userId: string) => Promise<ComplimentaryUsage>;
-export const readComplimentaryUsage: ComplimentaryUsageReader = async () => ({
-  used: 0, total: 3, remaining: 3,
-});
+export const readComplimentaryUsage: ComplimentaryUsageReader = async (userId) => {
+  // Keep pure source mapping importable without browser environment variables.
+  const { supabase } = await import('./supabase');
+  const { count, error } = await supabase
+    .from('introductory_deep_access_claims')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  if (error) throw new Error(`Claim usage read failed: ${error.message}`);
+  if (count === null) throw new Error('Claim usage count missing');
+  const total = FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS;
+  return { used: count, total, remaining: Math.max(0, total - count) };
+};

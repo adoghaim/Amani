@@ -8,6 +8,15 @@ import {
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
+import {
+  commitGeneratedInterpretation,
+  decideIntroductoryAccess,
+  type ClaimRecord,
+  type CommitRequest,
+  type DeepAccessDecision,
+  type IntroductoryAccessActions,
+} from "../_shared/introductory-access.ts";
+import { deriveBloodDrawIdentity, hashDrawKey } from "../_shared/blood-draw-identity.ts";
 import { resolveTier } from "../_shared/tier.ts";
 import {
   findFloorViolations,
@@ -1408,16 +1417,73 @@ Deno.serve(async (req: Request) => {
       primaryContext.current_status === "in_range"
     );
 
-    /*
-      Whether this draw is entitled to the full AI interpretation.
-
-      Plus always is. A Free user is entitled only while Introductory Deep
-      Access credits remain — but that decision reads the claim ledger, which is
-      PR 3. Until then this is `tier === "plus"`, and since `freemiumActive()` is
-      false everywhere, every caller resolves Plus and this is unconditionally
-      true. Behaviour is unchanged.
-    */
-    const deepAccessGranted = tierDecision.tier === "plus";
+    // Only activated Free requests read the ledger or derive a draw identity.
+    // Keep the legacy generation predicate unchanged when the flag is off.
+    let accessDecision: DeepAccessDecision | null = null;
+    let claimRequest: Omit<CommitRequest, "interpretation"> | null = null;
+    const introActions: IntroductoryAccessActions = {
+      async findClaim(userId, bloodDrawId) {
+        const { data, error } = await supabase
+          .from("introductory_deep_access_claims")
+          .select("user_id, blood_draw_id, report_id, evidence_tier, claimed_at")
+          .eq("user_id", userId)
+          .or(`blood_draw_id.eq.${bloodDrawId},report_id.eq.${reportId}`)
+          .limit(1)
+          .maybeSingle();
+        if (error) throw new Error(`Claim read failed: ${error.message}`);
+        return data as ClaimRecord | null;
+      },
+      async countClaims(userId) {
+        const { count, error } = await supabase
+          .from("introductory_deep_access_claims")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId);
+        if (error) throw new Error(`Claim count failed: ${error.message}`);
+        if (count === null) throw new Error("Claim count missing");
+        return count;
+      },
+      async commitDeepAccess(input) {
+        const { data, error } = await supabase.rpc("commit_deep_access", {
+          p_user_id: input.userId,
+          p_report_id: input.reportId,
+          p_blood_draw_id: input.bloodDrawId,
+          p_evidence_tier: input.evidenceTier,
+          p_interpretation: input.interpretation,
+          p_source: "ai",
+          p_tier: "plus",
+          p_consume_credit: input.consumeCredit,
+        });
+        if (error) throw new Error(`commit_deep_access failed: ${error.message}`);
+        if (data !== "committed" && data !== "already_claimed" && data !== "limit_reached") {
+          throw new Error("Unexpected commit_deep_access outcome");
+        }
+        return data;
+      },
+    };
+    let deepAccessGranted = tierDecision.tier === "plus";
+    if (freemiumActive() && tierDecision.tier === "free") {
+      // Raw accession/collection evidence is not retained in production. Hash
+      // the stored upload; never use client-editable report_date as identity.
+      let contentHash: string | null = null;
+      const { data: fileReport, error: fileError } = await supabase
+        .from("lab_reports").select("file_url").eq("id", reportId).maybeSingle();
+      if (fileError) throw new Error(`Report identity read failed: ${fileError.message}`);
+      if (fileReport?.file_url) {
+        const { data: blob, error } = await supabase.storage.from("lab-files").download(fileReport.file_url);
+        if (error) throw new Error(`Report file read failed: ${error.message}`);
+        if (!blob) throw new Error("Report file missing");
+        const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+        contentHash = Array.from(new Uint8Array(digest))
+          .map(b => b.toString(16).padStart(2, "0")).join("");
+      }
+      const identity = deriveBloodDrawIdentity(null, { reportId, contentHash });
+      const bloodDrawId = await hashDrawKey(identity.key);
+      claimRequest = { userId: user.id, reportId, bloodDrawId, evidenceTier: identity.tier };
+      accessDecision = await decideIntroductoryAccess(introActions, {
+        tier: "free", userId: user.id, bloodDrawId,
+      });
+      deepAccessGranted = accessDecision.granted;
+    }
 
     // The floor, as a thunk. Only evaluated on the branch that persists it, so
     // this keeps running exactly as often as it did before tiering — on a
@@ -1481,6 +1547,22 @@ Deno.serve(async (req: Request) => {
     const interpretationJson = shaped.payload;
     const source = shaped.source;
 
+    let savedByLedger = false;
+    if (freemiumActive() && tierDecision.tier === "free") {
+      const committed = await commitGeneratedInterpretation(introActions, {
+        freemiumActive: true,
+        tier: tierDecision.tier,
+        decision: accessDecision,
+        completion: { parseConfident: analytes.length > 0, interpretationGenerated: aiInterpretation !== null },
+        request: claimRequest ? { ...claimRequest, interpretation: interpretationJson } : null,
+      });
+      savedByLedger = committed.committed;
+      shaped.tier = committed.tier;
+    }
+
+    // A race loser saves the already-generated payload with Free metadata.
+    // No always-generate or preview/shaping changes are introduced here.
+    if (!savedByLedger) {
     const { error: upsertError } = await supabase
       .from("interpretations")
       .upsert({
@@ -1498,6 +1580,8 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
     }
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
