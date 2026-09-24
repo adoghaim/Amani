@@ -320,13 +320,13 @@ export function resolveEntitlement(input: EntitlementInput): EntitlementResult {
   if (input.readError != null) {
     return { allowed: false, reason: "error", detail: input.readError };
   }
-  if (input.onboarded !== true) return { allowed: false, reason: "onboarding_incomplete" };
 
   // Exclude the old clock entirely: only the premium-source checks can allow.
   const premium = resolveLegacyEntitlement({ ...input, trialStartDate: null });
   if (premium.allowed && premium.reason !== "trial") {
     return { allowed: true, plan: "premium", reason: premium.reason, source: premium.reason };
   }
+  if (input.onboarded !== true) return { allowed: false, reason: "onboarding_incomplete" };
   return { allowed: true, plan: "free" };
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { clientFreemiumActive } from '../lib/tier'
+import { clientFreemiumActive, FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from '../lib/tier'
 import { supabase } from '../lib/supabase'
 import { getProductByPriceId } from '../stripe-config'
 /*
@@ -95,7 +95,7 @@ export function useSubscription() {
   const [loading, setLoading] = useState(true)
   const [plan, setPlan] = useState<ResolvedPlan>()
   const [error, setError] = useState<Error | null>(null)
-  const [complimentary, setComplimentary] = useState<ComplimentaryUsage>({ used: 0, total: 3, remaining: 3 })
+  const [complimentary, setComplimentary] = useState<ComplimentaryUsage>({ used: 0, total: FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS, remaining: FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS })
 
   const fetchSubscription = useCallback(async () => {
     const freemiumActive = clientFreemiumActive()
@@ -156,7 +156,9 @@ export function useSubscription() {
           .maybeSingle(),
       ])
 
-      const readError = [stripeResult, iapResult, userResult, betaResult, complimentaryResult]
+      const hasSandboxReceipt = (iapResult.data ?? []).some(row => row.environment === 'sandbox')
+      const readError = [stripeResult, iapResult, userResult,
+        ...(!freemiumActive || hasSandboxReceipt ? [betaResult] : []), complimentaryResult]
         .find(result => result.error)?.error
       if (readError) {
         setError(new Error(readError.message))
@@ -219,7 +221,7 @@ export function useSubscription() {
         setPlan(entitlement.plan ?? (entitlement.allowed ? 'premium' :
           entitlement.reason === 'onboarding_incomplete' ? undefined : 'free'))
       }
-      setComplimentary(await readComplimentaryUsage(user.id))
+      if (freemiumActive) setComplimentary(await readComplimentaryUsage(user.id))
 
       /*
         Which storefront actually entitles decides where "manage" sends them,

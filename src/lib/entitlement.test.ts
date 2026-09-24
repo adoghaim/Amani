@@ -280,7 +280,9 @@ describe('freemium activation parity', () => {
     { name: 'missing clock', input: { trialStartDate: null }, legacy: { allowed: false, reason: 'onboarding_incomplete' }, active: { allowed: true, plan: 'free' } },
     { name: 'invalid clock', input: { trialStartDate: 'invalid' }, legacy: { allowed: false, reason: 'onboarding_incomplete' }, active: { allowed: true, plan: 'free' } },
     { name: 'not onboarded', input: { onboarded: false }, legacy: { allowed: true, reason: 'trial' }, active: { allowed: false, reason: 'onboarding_incomplete' } },
-    { name: 'paid but not onboarded', input: { onboarded: false, stripeStatus: 'active' }, legacy: { allowed: true, reason: 'active_subscription' }, active: { allowed: false, reason: 'onboarding_incomplete' } },
+    { name: 'paid but not onboarded', input: { onboarded: false, stripeStatus: 'active' }, legacy: { allowed: true, reason: 'active_subscription' }, active: { allowed: true, plan: 'premium', reason: 'active_subscription', source: 'active_subscription' } },
+    { name: 'iap not onboarded', input: { onboarded: false, iapRecords: [{ ...sandbox, environment: 'production' }] }, legacy: { allowed: true, reason: 'active_iap' }, active: { allowed: true, plan: 'premium', reason: 'active_iap', source: 'active_iap' } },
+    { name: 'complimentary not onboarded', input: { onboarded: false, complimentary: { user_id: USER, reason: 'press', enabled: true, expires_at: null } }, legacy: { allowed: true, reason: 'complimentary' }, active: { allowed: true, plan: 'premium', reason: 'complimentary', source: 'complimentary' } },
     { name: 'read error', input: { readError: 'offline' }, legacy: { allowed: true, reason: 'trial' }, active: { allowed: false, reason: 'error', detail: 'offline' } },
   ];
   for (const fixture of fixtures) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   sourceForEntitlement,
   sourceHasManageablePurchase,
@@ -106,13 +106,31 @@ describe('active and manageable are deliberately different questions', () => {
   });
 });
 
-describe('Free source and complimentary usage placeholder', () => {
+const claimQuery = vi.hoisted(() => ({ eq: vi.fn(), select: vi.fn(), from: vi.fn() }));
+vi.mock('./supabase', () => ({ supabase: { from: claimQuery.from } }));
+
+describe('Free source and complimentary usage reader', () => {
   it('does not label Free or errors as a trial', () => {
     expect(sourceForEntitlement({ allowed: true, plan: 'free' })).toBe('none');
     expect(sourceForEntitlement({ allowed: false, reason: 'error', detail: 'offline' })).toBe('none');
   });
-  it('provides three unused claims through the typed reader', async () => {
+  it.each([0, 1, 2, 3, 4])('counts %s lifetime claims without fetching rows', async used => {
+    claimQuery.from.mockReturnValue({ select: claimQuery.select });
+    claimQuery.select.mockReturnValue({ eq: claimQuery.eq });
+    claimQuery.eq.mockResolvedValue({ count: used, error: null });
     const { readComplimentaryUsage } = await import('./subscriptionSource');
-    expect(await readComplimentaryUsage('user')).toEqual({ used: 0, total: 3, remaining: 3 });
+    expect(await readComplimentaryUsage('user')).toEqual({ used, total: 3, remaining: Math.max(0, 3 - used) });
+    expect(claimQuery.from).toHaveBeenLastCalledWith('introductory_deep_access_claims');
+    expect(claimQuery.select).toHaveBeenLastCalledWith('*', { count: 'exact', head: true });
+    expect(claimQuery.eq).toHaveBeenLastCalledWith('user_id', 'user');
   });
+  it.each([{ count: null, error: null }, { count: null, error: { message: 'offline' } }])(
+    'does not invent unused claims on read failure: %j', async result => {
+      claimQuery.from.mockReturnValue({ select: claimQuery.select });
+      claimQuery.select.mockReturnValue({ eq: claimQuery.eq });
+      claimQuery.eq.mockResolvedValue(result);
+      const { readComplimentaryUsage } = await import('./subscriptionSource');
+      await expect(readComplimentaryUsage('user')).rejects.toThrow();
+    },
+  );
 });

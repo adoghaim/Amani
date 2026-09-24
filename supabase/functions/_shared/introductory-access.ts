@@ -1,5 +1,5 @@
 /**
- * Introductory Deep Access — the 2 lifetime full-AI interpretations a Free user
+ * Introductory Deep Access — the 3 lifetime full-AI interpretations a Free user
  * gets before Plus is required.
  *
  * Modelled as an append-only claim ledger rather than a `credits_remaining`
@@ -14,7 +14,7 @@
  *   - there is no client-writable "remaining" field to tamper with — and this
  *     codebase has already been bitten there once, in PR #32, where the default
  *     column GRANT on `users` let a client write its own `subscription_status`;
- *   - the reason someone has 0, 1 or 2 left is auditable after the fact.
+ *   - the reason someone has 0, 1, 2 or 3 left is auditable after the fact.
  *
  * ## The persistence contract: premium output and the ledger commit together
  *
@@ -62,8 +62,8 @@
  * Here *and* in the database. `decideIntroductoryAccess` is the UX and
  * cost-control path; the real boundary is the trigger in
  * `20260903000000_introductory_deep_access_claims.sql`, which takes a per-user
- * advisory lock and refuses the third row. Two concurrent uploads of two
- * different draws would both read `count = 1` here and both believe they hold
+ * advisory lock and refuses the fourth row. Two concurrent uploads of two
+ * different draws would both read `count = 2` here and both believe they hold
  * the last credit — only the DB can settle that, so only the DB is trusted to,
  * and the request that loses the race is served the Free-shaped result rather
  * than the premium one it thought it had earned.
@@ -156,7 +156,7 @@ export interface DeepAccessInput {
  * output nobody may see. The binding decision is `commitDeepAccess`.
  *
  * Order matters. The existing-claim check runs before the budget check so that
- * a user who has spent both credits still gets deep access when they revisit —
+ * a user who has spent all credits still gets deep access when they revisit —
  * or re-upload — a draw they already claimed. It also means an over-identified
  * draw (two real draws colliding on one key, which the date-only evidence tier
  * can produce) resolves in the user's favour: the second draw is served free
@@ -261,7 +261,7 @@ export interface CommitRequest {
  * never caught and downgraded into a premium response.
  */
 export async function commitDeepAccess(
-  actions: IntroductoryAccessActions,
+  actions: Pick<IntroductoryAccessActions, "commitDeepAccess">,
   decision: DeepAccessDecision,
   completion: DeepAccessCompletion,
   request: CommitRequest,
@@ -294,4 +294,25 @@ export async function commitDeepAccess(
   // The ledger refused — this request lost the race for the last credit and
   // nothing was persisted as premium. Fail closed.
   return { committed: false, reason: "introductory_access_exhausted" };
+}
+
+/** Generation-handler boundary. Premium and flag-off requests never call the
+ * ledger. The caller uses its existing upsert when committed is false; a
+ * refused claim retains the generated payload but writes Free tier metadata. */
+export async function commitGeneratedInterpretation(
+  actions: Pick<IntroductoryAccessActions, "commitDeepAccess">,
+  input: {
+    freemiumActive: boolean;
+    tier: Tier;
+    decision: DeepAccessDecision | null;
+    completion: DeepAccessCompletion;
+    request: CommitRequest | null;
+  },
+): Promise<{ committed: boolean; tier: Tier }> {
+  if (!input.freemiumActive || input.tier === "plus") {
+    return { committed: false, tier: input.tier };
+  }
+  if (!input.decision || !input.request) throw new Error("Missing introductory access context");
+  const result = await commitDeepAccess(actions, input.decision, input.completion, input.request);
+  return { committed: result.committed, tier: result.committed ? "plus" : "free" };
 }

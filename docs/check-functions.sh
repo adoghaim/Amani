@@ -18,7 +18,6 @@ for file in supabase/functions/*/index.ts supabase/functions/_shared/*.ts; do
     supabase/functions/generate-interpretation/index.ts|\
     supabase/functions/create-portal-session/index.ts|\
     supabase/functions/lab-insights/index.ts|\
-    supabase/functions/_shared/subscription-guard.ts|\
     supabase/functions/stripe-checkout/index.ts|\
     supabase/functions/delete-user-data/index.ts|\
     supabase/functions/_shared/rate-limit-store.ts)
