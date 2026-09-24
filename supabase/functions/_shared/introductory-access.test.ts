@@ -111,7 +111,7 @@ describe('decideIntroductoryAccess', () => {
       tier: 'free', userId: USER, bloodDrawId: DRAW,
     });
     expect(d).toMatchObject({
-      granted: true, reason: 'credit_available', claimsUsed: 0, claimsRemaining: 2,
+      granted: true, reason: 'credit_available', claimsUsed: 0, claimsRemaining: 3,
       consumesCredit: true,
     });
   });
@@ -121,18 +121,18 @@ describe('decideIntroductoryAccess', () => {
     const d = await decideIntroductoryAccess(actions, {
       tier: 'free', userId: USER, bloodDrawId: DRAW,
     });
-    expect(d).toMatchObject({ granted: true, reason: 'credit_available', claimsRemaining: 1 });
+    expect(d).toMatchObject({ granted: true, reason: 'credit_available', claimsRemaining: 2 });
   });
 
-  it('denies a third distinct draw', async () => {
-    const { actions } = fakeActions([claim(OTHER_DRAW), claim('c'.repeat(64))]);
+  it('denies a fourth distinct draw', async () => {
+    const { actions } = fakeActions([claim(OTHER_DRAW), claim('c'.repeat(64)), claim('d'.repeat(64))]);
     const d = await decideIntroductoryAccess(actions, {
       tier: 'free', userId: USER, bloodDrawId: DRAW,
     });
     expect(d).toEqual({
       granted: false,
       reason: 'introductory_access_exhausted',
-      claimsUsed: 2,
+      claimsUsed: 3,
       claimsRemaining: 0,
       consumesCredit: false,
     });
@@ -246,14 +246,16 @@ describe('commitDeepAccess — nothing commits on failed work', () => {
   });
 
   it('commits nothing when access was already denied', async () => {
-    const { actions, rows, calls } = fakeActions([claim('x'.repeat(64)), claim('y'.repeat(64))]);
+    const { actions, rows, calls } = fakeActions([
+      claim('x'.repeat(64)), claim('y'.repeat(64)), claim('z'.repeat(64)),
+    ]);
     const decision = await decideIntroductoryAccess(actions, {
       tier: 'free', userId: USER, bloodDrawId: DRAW,
     });
     expect(decision.granted).toBe(false);
     const outcome = await commitDeepAccess(actions, decision, GENERATED, REQUEST);
     expect(outcome).toEqual({ committed: false, reason: 'introductory_access_exhausted' });
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(calls.commit).toBe(0);
   });
 

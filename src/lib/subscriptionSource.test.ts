@@ -105,3 +105,14 @@ describe('active and manageable are deliberately different questions', () => {
     expect(all).toHaveLength(6);
   });
 });
+
+describe('Free source and complimentary usage placeholder', () => {
+  it('does not label Free or errors as a trial', () => {
+    expect(sourceForEntitlement({ allowed: true, plan: 'free' })).toBe('none');
+    expect(sourceForEntitlement({ allowed: false, reason: 'error', detail: 'offline' })).toBe('none');
+  });
+  it('provides three unused claims through the typed reader', async () => {
+    const { readComplimentaryUsage } = await import('./subscriptionSource');
+    expect(await readComplimentaryUsage('user')).toEqual({ used: 0, total: 3, remaining: 3 });
+  });
+});

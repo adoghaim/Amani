@@ -81,3 +81,14 @@ export function sourceIsActive(source: SubscriptionSource): boolean {
 export function sourceHasManageablePurchase(source: SubscriptionSource): boolean {
   return source === 'stripe' || source === 'ios' || source === 'android'
 }
+
+/** PR 2 will replace this reader with the per-user claim ledger. */
+export interface ComplimentaryUsage {
+  used: number;
+  total: 3;
+  remaining: number;
+}
+export type ComplimentaryUsageReader = (userId: string) => Promise<ComplimentaryUsage>;
+export const readComplimentaryUsage: ComplimentaryUsageReader = async () => ({
+  used: 0, total: 3, remaining: 3,
+});

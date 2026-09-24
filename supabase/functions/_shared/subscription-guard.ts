@@ -1,8 +1,10 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import type { createClient } from "npm:@supabase/supabase-js@2";
 import { loadBetaTester, type BetaAllowlistActions } from "./beta-allowlist.ts";
 import {
   BETA_TESTER_COLUMNS,
   resolveEntitlement,
+  isOnboarded,
+  type EntitlementResult,
   toComplimentaryGrant,
   type IapRecord,
 } from "./entitlement.ts";
@@ -11,15 +13,7 @@ type SupabaseClient = ReturnType<typeof createClient>;
 
 // Re-exported so existing importers keep their type without knowing that the
 // decision moved into entitlement.ts.
-export type SubscriptionCheckResult =
-  | {
-      allowed: true;
-      reason: "active_subscription" | "active_iap" | "complimentary" | "trial";
-    }
-  | {
-      allowed: false;
-      reason: "trial_expired" | "onboarding_incomplete" | "no_subscription";
-    };
+export type SubscriptionCheckResult = EntitlementResult;
 
 /*
   There is no `ALLOW_SANDBOX_IAP` any more.
@@ -67,6 +61,7 @@ function betaAllowlistActions(supabase: SupabaseClient): BetaAllowlistActions {
 export async function checkUserSubscription(
   supabase: SupabaseClient,
   userId: string,
+  freemiumActive = Deno.env.get("FREEMIUM_ACTIVE") === "true",
 ): Promise<SubscriptionCheckResult> {
   try {
     const [subResult, iapResult, userResult] = await Promise.all([
@@ -84,10 +79,16 @@ export async function checkUserSubscription(
         .eq("user_id", userId),
       supabase
         .from("users")
-        .select("trial_start_date")
+        .select(freemiumActive ? "onboarding_completed, onboarding_skipped" : "trial_start_date")
         .eq("id", userId)
         .maybeSingle(),
     ]);
+
+    if (freemiumActive) {
+      for (const result of [subResult, iapResult, userResult]) {
+        if (result.error) return { allowed: false, reason: "error", detail: result.error.message };
+      }
+    }
 
     /*
       A failed IAP read must not silently downgrade a paying App Store customer
@@ -106,17 +107,26 @@ export async function checkUserSubscription(
       customer never touches `iap_beta_testers` — no query, no dependency, no
       way for the allowlist to change what they are entitled to.
     */
+    let betaReadFailed = false;
+    let betaReadError: unknown;
     const betaTester = await loadBetaTester(
       betaAllowlistActions(supabase),
       userId,
       iapRecords,
-      (error) =>
+      (error) => {
+        betaReadFailed = true;
+        betaReadError = error;
         console.error(
           "[subscription-guard] iap_beta_testers read failed; sandbox receipts " +
             "will not entitle until it recovers:",
           error,
-        ),
+        );
+      },
     );
+
+    if (freemiumActive && betaReadFailed) {
+      return { allowed: false, reason: "error", detail: String(betaReadError) };
+    }
 
     /*
       Complimentary grants: reviewers, press, support goodwill. Read
@@ -149,6 +159,9 @@ export async function checkUserSubscription(
       migration has run. Treating it as absent costs access only to the handful
       of complimentary accounts we control and can re-check by hand.
     */
+    if (freemiumActive && compError) {
+      return { allowed: false, reason: "error", detail: compError.message };
+    }
     if (compError) {
       console.error(
         "[subscription-guard] complimentary_entitlements read failed; " +
@@ -158,9 +171,11 @@ export async function checkUserSubscription(
     }
 
     return resolveEntitlement({
+      freemiumActive,
+      onboarded: isOnboarded(userResult.data),
       stripeStatus: subResult.data?.subscription_status ?? null,
       iapRecords,
-      trialStartDate: userResult.data?.trial_start_date ?? null,
+      trialStartDate: (userResult.data as { trial_start_date?: string | null } | null)?.trial_start_date ?? null,
       now: Date.now(),
       userId,
       betaTester,
@@ -168,6 +183,7 @@ export async function checkUserSubscription(
     });
   } catch (err) {
     console.error("[subscription-guard] DB read failed, failing closed:", err);
+    if (freemiumActive) return { allowed: false, reason: "error", detail: String(err) };
     return { allowed: false, reason: "no_subscription" };
   }
 }

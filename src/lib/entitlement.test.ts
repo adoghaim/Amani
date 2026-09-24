@@ -7,6 +7,7 @@ import {
   BETA_TESTER_COLUMNS as CLIENT_BETA_COLUMNS,
   TRIAL_DURATION_MS,
   type BetaTester,
+  isOnboarded as clientIsOnboarded,
 } from './entitlement';
 import {
   resolveEntitlement as server,
@@ -14,6 +15,7 @@ import {
   toComplimentaryGrant as serverToComplimentaryGrant,
   SOLD_IAP_PRODUCT_IDS as SERVER_SOLD_PRODUCTS,
   BETA_TESTER_COLUMNS as SERVER_BETA_COLUMNS,
+  isOnboarded as serverIsOnboarded,
 } from '../../supabase/functions/_shared/entitlement';
 import { IAP_PRODUCT_IDS } from './iap-config';
 
@@ -260,5 +262,49 @@ describe('client entitlement — the cases the gate depends on', () => {
         betaTester: null,
       })
     ).toEqual({ allowed: false, reason: 'no_subscription' });
+  });
+});
+
+// Activation fixtures pin both the legacy wire shape and the new plan state.
+describe('freemium activation parity', () => {
+  const base = { stripeStatus: null, iapRecords: [], trialStartDate: past, now: NOW, userId: USER, onboarded: true };
+  const sandbox = { status: 'active', expires_at: future, environment: 'sandbox', platform: 'ios', product_id: MONTHLY };
+  const fixtures = [
+    { name: 'stripe', input: { stripeStatus: 'active' }, legacy: { allowed: true, reason: 'active_subscription' }, active: { allowed: true, plan: 'premium', reason: 'active_subscription', source: 'active_subscription' } },
+    { name: 'iap', input: { iapRecords: [{ ...sandbox, environment: 'production' }] }, legacy: { allowed: true, reason: 'active_iap' }, active: { allowed: true, plan: 'premium', reason: 'active_iap', source: 'active_iap' } },
+    { name: 'sandbox with beta', input: { iapRecords: [sandbox], betaTester: BETA_TESTERS[1] }, legacy: { allowed: true, reason: 'active_iap' }, active: { allowed: true, plan: 'premium', reason: 'active_iap', source: 'active_iap' } },
+    { name: 'sandbox without beta', input: { iapRecords: [sandbox] }, legacy: { allowed: true, reason: 'trial' }, active: { allowed: true, plan: 'free' } },
+    { name: 'complimentary', input: { complimentary: { user_id: USER, reason: 'press', enabled: true, expires_at: null } }, legacy: { allowed: true, reason: 'complimentary' }, active: { allowed: true, plan: 'premium', reason: 'complimentary', source: 'complimentary' } },
+    { name: 'recent onboarding', input: {}, legacy: { allowed: true, reason: 'trial' }, active: { allowed: true, plan: 'free' } },
+    { name: 'expired clock', input: { trialStartDate: new Date(NOW - TRIAL_DURATION_MS).toISOString() }, legacy: { allowed: false, reason: 'trial_expired' }, active: { allowed: true, plan: 'free' } },
+    { name: 'missing clock', input: { trialStartDate: null }, legacy: { allowed: false, reason: 'onboarding_incomplete' }, active: { allowed: true, plan: 'free' } },
+    { name: 'invalid clock', input: { trialStartDate: 'invalid' }, legacy: { allowed: false, reason: 'onboarding_incomplete' }, active: { allowed: true, plan: 'free' } },
+    { name: 'not onboarded', input: { onboarded: false }, legacy: { allowed: true, reason: 'trial' }, active: { allowed: false, reason: 'onboarding_incomplete' } },
+    { name: 'paid but not onboarded', input: { onboarded: false, stripeStatus: 'active' }, legacy: { allowed: true, reason: 'active_subscription' }, active: { allowed: false, reason: 'onboarding_incomplete' } },
+    { name: 'read error', input: { readError: 'offline' }, legacy: { allowed: true, reason: 'trial' }, active: { allowed: false, reason: 'error', detail: 'offline' } },
+  ];
+  for (const fixture of fixtures) {
+    for (const freemiumActive of [false, true]) {
+      it(`${fixture.name}, flag ${freemiumActive}`, () => {
+        const input = { ...base, ...fixture.input, freemiumActive };
+        expect(client(input)).toEqual(server(input));
+        expect(client(input)).toEqual(freemiumActive ? fixture.active : fixture.legacy);
+        if (!freemiumActive) expect(client(input)).toEqual(client({ ...input, freemiumActive: undefined }));
+      });
+    }
+  }
+});
+
+describe('explicit onboarding fields', () => {
+  it.each([
+    [null, false],
+    [{ trial_start_date: past }, false],
+    [{ onboarding_completed: true }, true],
+    [{ onboarding_skipped: true }, true],
+    [{ onboarding_completed: false, onboarding_skipped: false }, false],
+    [{ onboarding_completed: 'true', onboarding_skipped: 1 }, false],
+  ])('reads %j strictly', (row, expected) => {
+    expect(clientIsOnboarded(row)).toBe(expected);
+    expect(serverIsOnboarded(row)).toBe(expected);
   });
 });

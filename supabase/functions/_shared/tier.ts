@@ -58,7 +58,7 @@ export const MEDICAL_FLOOR = Object.freeze({
 export type MedicalFloor = typeof MEDICAL_FLOOR;
 
 /** Lifetime Introductory Deep Access credits on Free. Frozen by the spec. */
-export const FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS = 2;
+export const FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS = 3;
 
 /** Full before/after comparisons on Free, once comparable data exists. Frozen. */
 export const FREE_FULL_COMPARISONS = 1;
@@ -141,7 +141,8 @@ export interface TierDecision {
     | "entitled"
     | "freemium_inactive"
     | "free_tier"
-    | "onboarding_incomplete";
+    | "onboarding_incomplete"
+    | "error";
 }
 
 export interface TierInput {
@@ -162,6 +163,15 @@ export interface TierInput {
  */
 export function resolveTier(input: TierInput): TierDecision {
   const { entitlement, freemiumActive } = input;
+
+  if (freemiumActive && !entitlement.allowed && entitlement.reason === "error") {
+    return {
+      tier: "plus",
+      allowances: PLUS_ALLOWANCES,
+      gate: { gate: "block", reason: "error" },
+      reason: "error",
+    };
+  }
 
   if (!entitlement.allowed && entitlement.reason === "onboarding_incomplete") {
     return {
@@ -191,7 +201,7 @@ export function resolveTier(input: TierInput): TierDecision {
       };
   }
 
-  if (entitlement.allowed) {
+  if (entitlement.allowed && entitlement.plan !== "free") {
     return {
       tier: "plus",
       allowances: PLUS_ALLOWANCES,
