@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   FLOOR_FINDING_KEYS,
   FLOOR_REQUIRED_KEYS,
@@ -6,6 +6,7 @@ import {
   findFloorViolations,
   shapeInterpretation,
   shouldRequestDeepInterpretation,
+  shouldGenerateDeepInterpretation,
   type InterpretationPayload,
 } from './response-shaping';
 
@@ -272,5 +273,49 @@ describe('tier is carried outside the payload', () => {
       expect(result.payload).not.toHaveProperty('depth');
       expect(result.tier).toBe(tier);
     }
+  });
+});
+
+// Post-limit generation changes cost/depth, never the access decision.
+
+const exhausted = { granted: false as const, reason: 'introductory_access_exhausted' as const,
+  claimsUsed: 3, claimsRemaining: 0 as const, consumesCredit: false as const };
+const postLimitInput = { freemiumActive: true, tier: 'free' as const,
+  deepAccessGranted: false, decision: exhausted };
+
+describe('post-limit generation policy', () => {
+  it.each([undefined, 'always'])('generates full AI after exhaustion with setting %s', postLimitGeneration => {
+    const deep = shouldGenerateDeepInterpretation({ ...postLimitInput, postLimitGeneration });
+    expect(deep).toBe(true);
+    const ai = { headline: 'Full model output', pattern_signals: ['full'] };
+    const fallback = vi.fn();
+    const result = shapeInterpretation({ tier: 'free', deepAccessGranted: deep, aiInterpretation: ai,
+      deterministicInterpretation: fallback });
+    expect(result).toEqual({ payload: ai, tier: 'free', depth: 'deep', source: 'ai' });
+    expect(result.payload).toBe(ai);
+    expect(fallback).not.toHaveBeenCalled();
+    expect(exhausted.consumesCredit).toBe(false);
+  });
+  it.each(['on_demand', 'invalid', ''])('retains deterministic generation for %s', postLimitGeneration => {
+    expect(shouldGenerateDeepInterpretation({ ...postLimitInput, postLimitGeneration })).toBe(false);
+  });
+  it.each([undefined, 'always', 'on_demand'])('does not affect Premium or an existing grant: %s', postLimitGeneration => {
+    for (const tier of ['plus', 'free'] as const) {
+      expect(shouldGenerateDeepInterpretation({ ...postLimitInput, tier,
+        deepAccessGranted: true, decision: null, postLimitGeneration })).toBe(true);
+    }
+  });
+  it('preserves the flag-off generation predicate for all settings and grants', () => {
+    for (const postLimitGeneration of [undefined, 'always', 'on_demand']) {
+      for (const deepAccessGranted of [true, false]) {
+        expect(shouldGenerateDeepInterpretation({ ...postLimitInput, freemiumActive: false,
+          deepAccessGranted, postLimitGeneration })).toBe(deepAccessGranted);
+      }
+    }
+  });
+  it('does not bypass missing access context or missing model prerequisites', () => {
+    expect(shouldGenerateDeepInterpretation({ ...postLimitInput, decision: null })).toBe(false);
+    expect(shouldRequestDeepInterpretation(true, false, true)).toBe(false);
+    expect(shouldRequestDeepInterpretation(true, true, false)).toBe(false);
   });
 });

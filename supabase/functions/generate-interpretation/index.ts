@@ -17,11 +17,14 @@ import {
   type IntroductoryAccessActions,
 } from "../_shared/introductory-access.ts";
 import { deriveBloodDrawIdentity, hashDrawKey } from "../_shared/blood-draw-identity.ts";
+import { addFindingMetadata } from "../_shared/finding-metadata.ts";
+import { generationSample, recordGenerationCosts, type GenerationSample, type GenerationCostContext } from "../_shared/generation-cost.ts";
 import { resolveTier } from "../_shared/tier.ts";
 import {
   findFloorViolations,
   shapeInterpretation,
   shouldRequestDeepInterpretation,
+  shouldGenerateDeepInterpretation,
 } from "../_shared/response-shaping.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
@@ -777,6 +780,7 @@ async function tryOpenAI(
   primaryContext: PrimaryContext | null,
   userContextBlock: string | null,
   isOptimizationOnly: boolean,
+  recordCost?: (sample: GenerationSample) => void,
 ): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
@@ -1128,7 +1132,7 @@ Required schema:
   "disclaimer": "string"
 }`;
 
-  const first = await callOpenAIOnce(apiKey, prompt);
+  const first = await callOpenAIOnce(apiKey, prompt, recordCost);
   if (!first) return null;
 
   const firstCheck = validateInterpretationOutput(first);
@@ -1145,7 +1149,7 @@ Required schema:
     firstCheck.violations.join(", ") +
     "). Regenerate without dosages, frequencies, prescriptive verbs, or banned supplements. Re-read the supplement rules above and comply strictly.";
 
-  const second = await callOpenAIOnce(apiKey, stricterPrompt);
+  const second = await callOpenAIOnce(apiKey, stricterPrompt, recordCost);
   if (!second) return null;
 
   const secondCheck = validateInterpretationOutput(second);
@@ -1180,7 +1184,11 @@ Required schema:
 async function callOpenAIOnce(
   apiKey: string,
   prompt: string,
+  recordCost?: (sample: GenerationSample) => void,
 ): Promise<AIInterpretationOutput | null> {
+  const started = recordCost ? performance.now() : 0;
+  let usage: unknown;
+  let model = "gpt-4o-mini";
   try {
     const res = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
@@ -1211,6 +1219,8 @@ async function callOpenAIOnce(
     }
 
     const data = await res.json();
+    usage = data.usage;
+    if (typeof data.model === "string") model = data.model;
     const content = data.choices?.[0]?.message?.content;
     if (!content) return null;
 
@@ -1227,6 +1237,8 @@ async function callOpenAIOnce(
   } catch (e: unknown) {
     console.warn("[generate-interpretation] OpenAI failed:", errorMessage(e));
     return null;
+  } finally {
+    recordCost?.(generationSample(model, usage, performance.now() - started));
   }
 }
 
@@ -1254,6 +1266,8 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
+  const costSamples: GenerationSample[] = [];
+  let costContext: GenerationCostContext | null = null;
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -1457,6 +1471,10 @@ Deno.serve(async (req: Request) => {
         if (data !== "committed" && data !== "already_claimed" && data !== "limit_reached") {
           throw new Error("Unexpected commit_deep_access outcome");
         }
+        if (costContext && data === "committed" && input.consumeCredit) {
+          costContext.claimConsumed = true;
+          costContext.interpretationTier = "plus";
+        }
         return data;
       },
     };
@@ -1466,15 +1484,19 @@ Deno.serve(async (req: Request) => {
       // the stored upload; never use client-editable report_date as identity.
       let contentHash: string | null = null;
       const { data: fileReport, error: fileError } = await supabase
-        .from("lab_reports").select("file_url").eq("id", reportId).maybeSingle();
+        .from("lab_reports").select("file_url, content_hash").eq("id", reportId).maybeSingle();
       if (fileError) throw new Error(`Report identity read failed: ${fileError.message}`);
-      if (fileReport?.file_url) {
+      contentHash = fileReport?.content_hash ?? null;
+      if (contentHash === null && fileReport?.file_url) {
         const { data: blob, error } = await supabase.storage.from("lab-files").download(fileReport.file_url);
         if (error) throw new Error(`Report file read failed: ${error.message}`);
         if (!blob) throw new Error("Report file missing");
         const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
         contentHash = Array.from(new Uint8Array(digest))
           .map(b => b.toString(16).padStart(2, "0")).join("");
+        const { error: hashError } = await supabase.from("lab_reports")
+          .update({ content_hash: contentHash }).eq("id", reportId).is("content_hash", null);
+        if (hashError) throw new Error(`Report hash save failed: ${hashError.message}`);
       }
       const identity = deriveBloodDrawIdentity(null, { reportId, contentHash });
       const bloodDrawId = await hashDrawKey(identity.key);
@@ -1483,6 +1505,20 @@ Deno.serve(async (req: Request) => {
         tier: "free", userId: user.id, bloodDrawId,
       });
       deepAccessGranted = accessDecision.granted;
+    }
+
+    // Access remains the ledger's decision; generation may continue after exhaustion.
+    const generateDeep = shouldGenerateDeepInterpretation({
+      freemiumActive: freemiumActive(), tier: tierDecision.tier,
+      deepAccessGranted, decision: accessDecision,
+      postLimitGeneration: Deno.env.get("FREEMIUM_POST_LIMIT_GENERATION"),
+    });
+    if (freemiumActive()) {
+      costContext = {
+        userId: user.id, reportId, interpretationTier: tierDecision.tier,
+        planAtRequest: subCheck.allowed ? subCheck.plan : "free",
+        claimConsumed: false, deep: generateDeep,
+      };
     }
 
     // The floor, as a thunk. Only evaluated on the branch that persists it, so
@@ -1503,9 +1539,10 @@ Deno.serve(async (req: Request) => {
 
     let aiInterpretation: AIInterpretationOutput | null = null;
 
-    if (shouldRequestDeepInterpretation(deepAccessGranted, !!openaiApiKey, analytes.length > 0) && report) {
+    if (shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && report) {
       console.log("[generate-interpretation] Trying OpenAI...");
-      const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly);
+      const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
+        costContext ? sample => costSamples.push(sample) : undefined);
       if (aiResult) {
         // Guarantee overall_interpretation is grounded in deterministic primary_context
         if (primaryContext) {
@@ -1516,8 +1553,8 @@ Deno.serve(async (req: Request) => {
       } else {
         console.log("[generate-interpretation] OpenAI failed, using fallback");
       }
-    } else if (!deepAccessGranted) {
-      // A Free user past their introductory credits costs zero OpenAI spend.
+    } else if (!generateDeep) {
+      // on_demand skips model spend after introductory access is exhausted.
       console.log("[generate-interpretation] Deep access not granted — deterministic interpretation");
     } else {
       console.log("[generate-interpretation] Using fallback (no key or no analytes)");
@@ -1525,10 +1562,17 @@ Deno.serve(async (req: Request) => {
 
     const shaped = shapeInterpretation({
       tier: tierDecision.tier,
-      deepAccessGranted,
+      deepAccessGranted: generateDeep,
       aiInterpretation,
       deterministicInterpretation,
     });
+
+    const interpretationJson = freemiumActive()
+      ? addFindingMetadata(shaped.payload, {
+          observedAt: report?.report_date,
+          hasPriorComparison: primaryContext?.previous_value != null,
+        })
+      : shaped.payload;
 
     /*
       The medical floor is checked on whatever is about to be persisted, at every
@@ -1536,7 +1580,7 @@ Deno.serve(async (req: Request) => {
       shaping is wrong, and withholding the report on top of that would punish
       the user for our bug by denying them their own lab data.
     */
-    const floorViolations = findFloorViolations(shaped.payload);
+    const floorViolations = findFloorViolations(interpretationJson);
     if (floorViolations.length > 0) {
       console.error(
         "[generate-interpretation] MEDICAL FLOOR VIOLATION — persisting anyway:",
@@ -1544,7 +1588,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const interpretationJson = shaped.payload;
     const source = shaped.source;
 
     let savedByLedger = false;
@@ -1560,8 +1603,10 @@ Deno.serve(async (req: Request) => {
       shaped.tier = committed.tier;
     }
 
+    if (costContext) costContext.interpretationTier = shaped.tier;
+
     // A race loser saves the already-generated payload with Free metadata.
-    // No always-generate or preview/shaping changes are introduced here.
+    // Post-limit always-generation uses this same upsert without consuming a claim.
     if (!savedByLedger) {
     const { error: upsertError } = await supabase
       .from("interpretations")
@@ -1617,5 +1662,12 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  } finally {
+    if (costContext) {
+      await recordGenerationCosts(costContext, costSamples, async row => {
+        const { error } = await supabase.from("interpretation_generation_costs").insert(row);
+        if (error) throw error;
+      }, error => console.warn("[generate-interpretation] Cost insert failed:", errorMessage(error)));
+    }
   }
 });
