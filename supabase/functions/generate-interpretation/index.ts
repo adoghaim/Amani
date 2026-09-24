@@ -1514,9 +1514,12 @@ Deno.serve(async (req: Request) => {
       postLimitGeneration: Deno.env.get("FREEMIUM_POST_LIMIT_GENERATION"),
     });
     if (freemiumActive()) {
+      if (subCheck.allowed && subCheck.plan === undefined) {
+        console.warn("[generate-interpretation] Cost telemetry plan missing; recording unknown");
+      }
       costContext = {
         userId: user.id, reportId, interpretationTier: tierDecision.tier,
-        planAtRequest: subCheck.allowed ? subCheck.plan : "free",
+        planAtRequest: subCheck.allowed ? (subCheck.plan ?? "unknown") : "free",
         claimConsumed: false, deep: generateDeep,
       };
     }
