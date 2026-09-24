@@ -129,7 +129,7 @@ describe('freemium active', () => {
       entitlement: { allowed: false, reason: 'trial_expired' },
       freemiumActive: true,
     });
-    expect(decision.allowances.deepInterpretation).toEqual({ kind: 'lifetime', limit: 2 });
+    expect(decision.allowances.deepInterpretation).toEqual({ kind: 'lifetime', limit: 3 });
     expect(decision.allowances.fullComparison).toEqual({ kind: 'lifetime', limit: 1 });
     expect(decision.allowances.aiQuestions).toEqual({ kind: 'monthly', limit: 5 });
     expect(decision.allowances.revealedTrendInsights).toEqual({ kind: 'lifetime', limit: 1 });
@@ -198,5 +198,19 @@ describe('normalizeTierForClient — fail open on shape, closed on entitlement',
     // Every response predating this change omits the field entirely.
     expect(normalizeTierForClient(undefined)).toBe('plus');
     expect(normalizeTierForClient(null)).toBe('plus');
+  });
+});
+
+describe('resolved plan and error decisions', () => {
+  it('allows a resolved Free plan with Free allowances', () => {
+    const input = { freemiumActive: true, entitlement: { allowed: true as const, plan: 'free' as const } };
+    expect(client(input)).toEqual(server(input));
+    expect(client(input)).toMatchObject({ tier: 'free', reason: 'free_tier', gate: { gate: 'allow' } });
+  });
+  it('surfaces infrastructure failure without resolving Free', () => {
+    const input = { freemiumActive: true, entitlement: { allowed: false as const, reason: 'error' as const, detail: 'offline' } };
+    expect(client(input)).toEqual(server(input));
+    expect(client(input)).toMatchObject({ reason: 'error', gate: { gate: 'block', reason: 'error' } });
+    expect(client(input).tier).not.toBe('free');
   });
 });

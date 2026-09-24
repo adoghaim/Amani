@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { clientFreemiumActive } from '../lib/tier'
 import { supabase } from '../lib/supabase'
 import { getProductByPriceId } from '../stripe-config'
 /*
@@ -12,6 +13,8 @@ import { getProductByPriceId } from '../stripe-config'
 import {
   BETA_TESTER_COLUMNS,
   resolveEntitlement,
+  isOnboarded,
+  type ResolvedPlan,
   toBetaTester,
   toComplimentaryGrant,
   type BetaTester,
@@ -21,6 +24,8 @@ import {
 import {
   sourceForEntitlement,
   sourceIsActive,
+  readComplimentaryUsage,
+  type ComplimentaryUsage,
   type SubscriptionSource,
 } from '../lib/subscriptionSource'
 
@@ -88,10 +93,21 @@ export function useSubscription() {
   const [source, setSource] = useState<SubscriptionSource>('none')
   const [entitled, setEntitled] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [plan, setPlan] = useState<ResolvedPlan>()
+  const [error, setError] = useState<Error | null>(null)
+  const [complimentary, setComplimentary] = useState<ComplimentaryUsage>({ used: 0, total: 3, remaining: 3 })
 
   const fetchSubscription = useCallback(async () => {
+    const freemiumActive = clientFreemiumActive()
+    if (freemiumActive) setLoading(true)
+    setError(null)
+    setPlan(undefined)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) {
+        setError(new Error(authError.message))
+        if (freemiumActive) throw authError
+      }
 
       if (!user) {
         setSubscription(null)
@@ -108,7 +124,7 @@ export function useSubscription() {
           .from('iap_subscriptions')
           .select('platform, product_id, status, expires_at, environment')
           .eq('user_id', user.id),
-        supabase.from('users').select('trial_start_date').eq('id', user.id).maybeSingle(),
+        supabase.from('users').select(freemiumActive ? 'onboarding_completed, onboarding_skipped' : 'trial_start_date').eq('id', user.id).maybeSingle(),
         /*
           The user's own sandbox-beta row, if any. Server-written and RLS-scoped
           to `auth.uid()`; reading it is what lets this hook reach the same
@@ -139,6 +155,13 @@ export function useSubscription() {
           .eq('user_id', user.id)
           .maybeSingle(),
       ])
+
+      const readError = [stripeResult, iapResult, userResult, betaResult, complimentaryResult]
+        .find(result => result.error)?.error
+      if (readError) {
+        setError(new Error(readError.message))
+        if (freemiumActive) throw readError
+      }
 
       if (stripeResult.error) {
         console.error('Error fetching subscription:', stripeResult.error)
@@ -178,6 +201,8 @@ export function useSubscription() {
       }))
 
       const entitlement = resolveEntitlement({
+        freemiumActive,
+        onboarded: isOnboarded(userResult.data),
         stripeStatus: stripe?.subscription_status ?? null,
         iapRecords: records,
         trialStartDate,
@@ -189,7 +214,12 @@ export function useSubscription() {
 
       setSubscription(stripe)
       setIapSubscriptions(iap)
-      setEntitled(entitlement.allowed)
+      setEntitled(freemiumActive ? entitlement.plan === 'premium' : entitlement.allowed)
+      if (!readError && !authError) {
+        setPlan(entitlement.plan ?? (entitlement.allowed ? 'premium' :
+          entitlement.reason === 'onboarding_incomplete' ? undefined : 'free'))
+      }
+      setComplimentary(await readComplimentaryUsage(user.id))
 
       /*
         Which storefront actually entitles decides where "manage" sends them,
@@ -220,6 +250,13 @@ export function useSubscription() {
       )
     } catch (error) {
       console.error('Error fetching subscription:', error)
+      setError(error instanceof Error ? error : new Error(String(error)))
+      setPlan(undefined)
+      if (freemiumActive) {
+        setEntitled(false)
+        setSource('none')
+        setActiveIap(null)
+      }
     } finally {
       setLoading(false)
     }
@@ -257,6 +294,9 @@ export function useSubscription() {
     activeIap,
     source,
     entitled,
+    plan,
+    complimentary,
+    error,
     loading,
     getActivePlan,
     isActive,

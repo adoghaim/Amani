@@ -74,6 +74,10 @@ export type BetaTester = {
 };
 
 export type EntitlementInput = {
+  /** Explicit onboarding eligibility; consulted only after activation. */
+  onboarded?: boolean;
+  freemiumActive?: boolean;
+  readError?: string | null;
   stripeStatus: string | null;
   iapRecords: readonly IapRecord[];
   trialStartDate: string | null;
@@ -97,7 +101,7 @@ export type EntitlementInput = {
   complimentary?: ComplimentaryGrant | null;
 };
 
-export type EntitlementResult =
+export type LegacyEntitlementResult =
   | {
       allowed: true;
       reason: "active_subscription" | "active_iap" | "complimentary" | "trial";
@@ -106,6 +110,24 @@ export type EntitlementResult =
       allowed: false;
       reason: "trial_expired" | "onboarding_incomplete" | "no_subscription";
     };
+
+export type ResolvedPlan = "premium" | "free";
+export type PremiumSource = "active_subscription" | "active_iap" | "complimentary";
+export type ResolvedEntitlementResult =
+  | { allowed: true; plan: "premium"; reason: PremiumSource; source: PremiumSource }
+  | { allowed: true; plan: "free"; reason?: never; source?: never }
+  | { allowed: false; reason: "onboarding_incomplete"; plan?: never; source?: never }
+  | { allowed: false; reason: "error"; detail: string; plan?: never; source?: never };
+export type EntitlementResult =
+  | (LegacyEntitlementResult & { plan?: never; source?: never })
+  | ResolvedEntitlementResult;
+
+/** The same fields are written by completed and skipped onboarding flows. */
+export function isOnboarded(row: unknown): boolean {
+  if (typeof row !== "object" || row === null || Array.isArray(row)) return false;
+  const fields = row as Record<string, unknown>;
+  return fields.onboarding_completed === true || fields.onboarding_skipped === true;
+}
 
 /**
  * Does an allowlist row's platform cover this receipt's platform?
@@ -290,7 +312,25 @@ function complimentaryEntitles(
  * the trial so a paying user is never reported as "trial" — that distinction
  * drives the client's upgrade prompts.
  */
+export function resolveEntitlement(input: EntitlementInput & { freemiumActive: true }): ResolvedEntitlementResult;
+export function resolveEntitlement(input: EntitlementInput & { freemiumActive?: false }): LegacyEntitlementResult;
+export function resolveEntitlement(input: EntitlementInput): EntitlementResult;
 export function resolveEntitlement(input: EntitlementInput): EntitlementResult {
+  if (!input.freemiumActive) return resolveLegacyEntitlement(input);
+  if (input.readError != null) {
+    return { allowed: false, reason: "error", detail: input.readError };
+  }
+  if (input.onboarded !== true) return { allowed: false, reason: "onboarding_incomplete" };
+
+  // Exclude the old clock entirely: only the premium-source checks can allow.
+  const premium = resolveLegacyEntitlement({ ...input, trialStartDate: null });
+  if (premium.allowed && premium.reason !== "trial") {
+    return { allowed: true, plan: "premium", reason: premium.reason, source: premium.reason };
+  }
+  return { allowed: true, plan: "free" };
+}
+
+function resolveLegacyEntitlement(input: EntitlementInput): LegacyEntitlementResult {
   const { stripeStatus, iapRecords, trialStartDate, now } = input;
 
   if (stripeStatus && ACTIVE_STRIPE_STATUSES.has(stripeStatus)) {
