@@ -1,5 +1,15 @@
 \set ON_ERROR_STOP 1
 BEGIN;
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.commit_deep_access(NULL, NULL, NULL, NULL, '{}'::jsonb, 'ai', 'plus', true);
+    RAISE EXCEPTION 'authenticated executed commit_deep_access';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+RESET ROLE;
 -- Deliberately fail the second write to prove the first write rolls back too.
 CREATE FUNCTION reject_test_interpretation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -74,7 +84,7 @@ BEGIN
   IF result IS DISTINCT FROM 'already_claimed' THEN RAISE EXCEPTION 'retry: %', result; END IF;
   result := commit_deep_access(u, r[1], repeat('e',64), 'content_hash', '{"headline":"changed evidence"}', 'ai', 'plus', true);
   IF result IS DISTINCT FROM 'already_claimed' THEN RAISE EXCEPTION 'report double charged: %', result; END IF;
-  result := commit_deep_access(u, r[4], lpad('1',64,'0'), 'unidentified', '{"headline":"same draw"}', 'ai', 'plus', false);
+  result := commit_deep_access(u, r[4], lpad('1',64,'0'), 'unidentified', '{"headline":"same draw"}', 'ai', 'plus', true);
   IF result IS DISTINCT FROM 'already_claimed' THEN RAISE EXCEPTION 're-upload: %', result; END IF;
   IF (SELECT count(*) FROM introductory_deep_access_claims WHERE user_id = u) <> 3
      OR (SELECT count(*) FROM interpretations WHERE lab_report_id = r[1]) <> 1 THEN

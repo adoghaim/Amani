@@ -756,6 +756,69 @@ export type Database = {
         }
         Relationships: []
       }
+      interpretation_generation_costs: {
+        Row: {
+          id: string
+          user_id: string
+          report_id: string | null
+          interpretation_tier: string
+          plan_at_request: string
+          claim_consumed: boolean
+          model: string
+          prompt_tokens: number | null
+          completion_tokens: number | null
+          total_tokens: number | null
+          deep: boolean
+          duration_ms: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          report_id?: string | null
+          interpretation_tier: string
+          plan_at_request: string
+          claim_consumed: boolean
+          model: string
+          prompt_tokens?: number | null
+          completion_tokens?: number | null
+          total_tokens?: number | null
+          deep: boolean
+          duration_ms: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          report_id?: string | null
+          interpretation_tier?: string
+          plan_at_request?: string
+          claim_consumed?: boolean
+          model?: string
+          prompt_tokens?: number | null
+          completion_tokens?: number | null
+          total_tokens?: number | null
+          deep?: boolean
+          duration_ms?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interpretation_generation_costs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interpretation_generation_costs_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "lab_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lab_reports: {
         Row: {
           average_cycle_length: number | null
@@ -763,6 +826,7 @@ export type Database = {
           estimated_cycle_day: number | null
           estimated_cycle_phase: string
           file_url: string | null
+          content_hash: string | null
           id: string
           import_method: string | null
           lab_name: string | null
@@ -780,6 +844,7 @@ export type Database = {
           estimated_cycle_day?: number | null
           estimated_cycle_phase?: string
           file_url?: string | null
+          content_hash?: string | null
           id?: string
           import_method?: string | null
           lab_name?: string | null
@@ -797,6 +862,7 @@ export type Database = {
           estimated_cycle_day?: number | null
           estimated_cycle_phase?: string
           file_url?: string | null
+          content_hash?: string | null
           id?: string
           import_method?: string | null
           lab_name?: string | null

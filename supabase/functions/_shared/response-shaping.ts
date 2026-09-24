@@ -1,54 +1,37 @@
 /**
- * Tier-shaped interpretations, and the medical floor that survives every tier.
+ * Select a whole generated or deterministic interpretation without trimming it.
+ * Access entitlement and generation depth are separate: with freemium active,
+ * exhausted Free requests generate deeply by default but retain Free row tier.
+ * The on_demand switch retains the historical deterministic-only path.
  *
- * ## What "response shaping" actually means here
- *
- * `generate-interpretation` does not return the interpretation. It returns
- * `{ success, source }` and writes the payload to `interpretations.json_output`;
- * every client reads it back from that row. So there is exactly one shape
- * surface — the stored row — and tiering it is *row* shaping, not response
- * shaping.
- *
- * That has a consequence worth stating plainly: a Free-shaped row is what every
- * later read of that report returns, forever, to every client version. There is
- * no "serve it thin now, richly later". Upgrading to Plus does not retroactively
- * enrich an existing row; it has to be regenerated.
- *
- * ## Free does not get a trimmed AI interpretation
- *
- * The tempting design — prompt the model for less, or delete fields from its
- * answer — is wrong twice over.
- *
- * First, it cannot work as written: `InterpretationSchema` requires every field
- * and `z.object` strips unknown ones, so a deliberately shallower AI response
- * fails `safeParse`, returns null, and lands on the deterministic fallback *by
- * accident* rather than by design.
- *
- * Second, `MEDICAL_FLOOR.deterministicInterpretation` already commits Free to
- * the rule-based interpretation. So Free skips the model entirely: no OpenAI
- * call, no token spend, and no premium content that has to be carefully removed
- * before persisting. Content that is never generated cannot leak.
- *
- * Hence the central invariant of this module: **shaping selects between two
- * whole payloads; it never edits either one.** `shapeInterpretation` returns one
- * of its two inputs by reference, and a test asserts exactly that. Field-level
- * stripping is the failure mode this design exists to make unrepresentable.
- *
- * ## Why the tier marker is a column and not a field
- *
- * `sanitizeViolations` in `nutrient-policy.ts` filters every top-level string
- * array in the payload, and `collectFreeformStrings` walks every string in it
- * through the medical-boundary validator. A `tier: "free"` field would be
- * scanned; upgrade copy placed in the payload could be silently filtered, or —
- * if it happened to name a nutrient — could fail the whole interpretation and
- * force the fallback. So tier lives in `interpretations.tier`, outside
- * `json_output`, where the nutrient policy cannot see it and cannot be confused
- * by it.
- *
+ * The handler adds stored finding metadata after selection. No preview shaping
+ * happens here; PR 3 consumes that metadata. The medical floor below applies to
+ * either payload. Tier stays in the row column, outside the narrative payload.
  * Pure — no Deno, no network, no clock.
  */
 
 import { MEDICAL_FLOOR, type Tier } from "./tier.ts";
+import type { DeepAccessDecision } from "./introductory-access.ts";
+
+/** Generation is independent of entitlement. Only an explicitly exhausted Free
+ * decision may opt into post-limit generation; ledger failures still propagate.
+ * FREEMIUM_POST_LIMIT_GENERATION defaults to always; unknown values fail cheap.
+ * Call after decideIntroductoryAccess and before requesting/shaping model output.
+ */
+export function shouldGenerateDeepInterpretation(input: {
+  freemiumActive: boolean;
+  tier: Tier;
+  deepAccessGranted: boolean;
+  decision: DeepAccessDecision | null;
+  postLimitGeneration?: string;
+}): boolean {
+  if (!input.freemiumActive) return input.deepAccessGranted;
+  return input.deepAccessGranted || (
+    input.tier === "free" &&
+    input.decision?.reason === "introductory_access_exhausted" &&
+    (input.postLimitGeneration === undefined || input.postLimitGeneration === "always")
+  );
+}
 
 /** Whether this row holds the model's work or the deterministic rules'. */
 export type InterpretationDepth = "deep" | "standard";
@@ -58,9 +41,9 @@ export type InterpretationPayload = Record<string, unknown>;
 export interface ShapeInput {
   tier: Tier;
   /**
-   * Whether this draw is entitled to the full AI interpretation. Plus is always
-   * true; Free is true only while Introductory Deep Access credits remain, as
-   * decided by `introductory-access.ts`.
+   * Legacy parameter name: whether to retain generated deep content. The handler
+   * passes shouldGenerateDeepInterpretation's result, not the access entitlement.
+   * The ledger independently controls claims and the persisted tier.
    */
   deepAccessGranted: boolean;
   /** The validated model output, or null when it was never requested or failed. */
@@ -118,9 +101,8 @@ export function shapeInterpretation(input: ShapeInput): ShapedInterpretation {
 /**
  * Whether the model should be called at all.
  *
- * The cost control: a Free user past their introductory credits costs zero
- * OpenAI spend. Kept next to the shaping rule so the two cannot disagree about
- * what "deep" means.
+ * Tests the generation-depth decision plus model prerequisites. Its legacy
+ * parameter name does not grant access or consume a claim.
  */
 export function shouldRequestDeepInterpretation(
   deepAccessGranted: boolean,

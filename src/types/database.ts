@@ -56,6 +56,53 @@ export interface Database {
           default_period_length?: number | null
         }
       }
+      interpretation_generation_costs: {
+        Row: {
+          id: string
+          user_id: string
+          report_id: string | null
+          interpretation_tier: string
+          plan_at_request: string
+          claim_consumed: boolean
+          model: string
+          prompt_tokens: number | null
+          completion_tokens: number | null
+          total_tokens: number | null
+          deep: boolean
+          duration_ms: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          report_id?: string | null
+          interpretation_tier: string
+          plan_at_request: string
+          claim_consumed: boolean
+          model: string
+          prompt_tokens?: number | null
+          completion_tokens?: number | null
+          total_tokens?: number | null
+          deep: boolean
+          duration_ms: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          report_id?: string | null
+          interpretation_tier?: string
+          plan_at_request?: string
+          claim_consumed?: boolean
+          model?: string
+          prompt_tokens?: number | null
+          completion_tokens?: number | null
+          total_tokens?: number | null
+          deep?: boolean
+          duration_ms?: number
+          created_at?: string
+        }
+      }
       lab_reports: {
         Row: {
           id: string
@@ -63,6 +110,7 @@ export interface Database {
           report_date: string
           upload_date: string
           file_url: string | null
+          content_hash: string | null
           lab_name: string | null
           last_period_start_date: string | null
           average_cycle_length: number | null
@@ -78,6 +126,7 @@ export interface Database {
           report_date: string
           upload_date?: string
           file_url?: string | null
+          content_hash?: string | null
           lab_name?: string | null
           last_period_start_date?: string | null
           average_cycle_length?: number | null
@@ -93,6 +142,7 @@ export interface Database {
           report_date?: string
           upload_date?: string
           file_url?: string | null
+          content_hash?: string | null
           lab_name?: string | null
           last_period_start_date?: string | null
           average_cycle_length?: number | null

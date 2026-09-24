@@ -9,6 +9,7 @@ import {
   type DeepAccessCompletion,
   type IntroductoryAccessActions,
 } from './introductory-access';
+import { shapeInterpretation, shouldGenerateDeepInterpretation } from './response-shaping';
 
 /**
  * The ledger exists to make the wrong outcomes impossible rather than unlikely:
@@ -384,5 +385,28 @@ describe('generation persistence wiring', () => {
     expect(results).toEqual([{ committed: true, tier: 'plus' }, { committed: false, tier: 'free' }]);
     expect(fake.rows).toHaveLength(3);
     expect(fake.stored).toHaveLength(1);
+  });
+});
+
+
+describe('post-limit generation and persistence', () => {
+  it.each(['always', 'on_demand'])('%s never consumes an exhausted claim', async postLimitGeneration => {
+    const decision = { granted: false as const, reason: 'introductory_access_exhausted' as const,
+      claimsUsed: 3, claimsRemaining: 0 as const, consumesCredit: false as const };
+    const deep = shouldGenerateDeepInterpretation({ freemiumActive: true, tier: 'free',
+      deepAccessGranted: decision.granted, decision, postLimitGeneration });
+    const ai = { headline: 'Full model output', pattern_signals: [{ explanation: 'Full detail' }] };
+    const fallback = { headline: 'Deterministic output' };
+    const shaped = shapeInterpretation({ tier: 'free', deepAccessGranted: deep,
+      aiInterpretation: deep ? ai : null, deterministicInterpretation: () => fallback });
+    const commit = vi.fn();
+    const outcome = await commitGeneratedInterpretation({ commitDeepAccess: commit }, {
+      freemiumActive: true, tier: 'free', decision,
+      completion: { parseConfident: true, interpretationGenerated: deep },
+      request: { ...REQUEST, interpretation: shaped.payload },
+    });
+    expect(outcome).toEqual({ committed: false, tier: 'free' });
+    expect(commit).not.toHaveBeenCalled();
+    expect(shaped.payload).toBe(postLimitGeneration === 'always' ? ai : fallback);
   });
 });
