@@ -138,8 +138,10 @@ export function IapPaywall({ onEntitled }: IapPaywallProps) {
         <div className="flex items-start gap-3 p-4 bg-theme-surface-2 border border-theme-border rounded-lg">
           <AlertCircle className="w-5 h-5 text-theme-muted-text mt-0.5 flex-shrink-0" />
           <p className="text-sm text-theme-muted-text">
-            In-app purchases aren&rsquo;t available on this device yet. You can subscribe at
-            amanibiometrics.com from any browser, and your account will unlock here.
+            Plans are temporarily unavailable. Please try again later or{' '}
+            <Link to="/contact" className="underline underline-offset-2 hover:text-theme-text">
+              contact support
+            </Link>.
           </p>
         </div>
       )}
