@@ -5,6 +5,7 @@ import {
   FREEMIUM_COPY,
   LOCKED_CROSS_REPORT_LABEL,
   complimentaryCounterCopy,
+  lockedLifestyleLabel,
   lockedPatternsLabel,
 } from './copy';
 
@@ -38,6 +39,13 @@ describe('locked card labels', () => {
     expect(lockedPatternsLabel(3)).toBe('3 additional patterns found');
     expect(lockedPatternsLabel(1)).toBe('1 additional pattern found');
     expect(LOCKED_CROSS_REPORT_LABEL).toBe('Cross-report relationship available');
+  });
+
+  it('keeps the owner-to-confirm (non-§6) labels in FREEMIUM_COPY, unchanged in wording', () => {
+    expect(FREEMIUM_COPY.lockedCards.patternsOne).toBe('1 additional pattern found');
+    expect(lockedLifestyleLabel(1)).toBe(FREEMIUM_COPY.lockedCards.lifestyleOne);
+    expect(lockedLifestyleLabel(1)).toBe('1 lifestyle insight available');
+    expect(lockedLifestyleLabel(2)).toBe('2 lifestyle insights available');
   });
 });
 

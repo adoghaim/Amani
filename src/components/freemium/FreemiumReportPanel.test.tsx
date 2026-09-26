@@ -30,8 +30,36 @@ describe('FreemiumReportPanel per access state', () => {
     expect(out).toContain('3 additional patterns found');
     expect(out).toContain('Cross-report relationship available');
     expect(out).toContain('Unlock Premium');
-    expect(out).toContain('Premium Analysis 1 of 3 included');
     expect(out).toContain('2 complimentary Premium analyses remaining');
+  });
+
+  it('basic (post-limit): only the exhausted line — never "Premium Analysis N of 3 included"', () => {
+    const exhausted = { ...basic, complimentary: { used: 3, total: 3, remaining: 0 } };
+    const out = render(exhausted, { complimentaryUsed: 3 });
+    expect(out).toContain("You've used your 3 complimentary Premium analyses. Future reports still include Basic insights and Premium Previews.");
+    expect(out).not.toMatch(/Premium Analysis \d of 3 included/);
+    expect(out).toContain('Premium Preview');
+    expect(out).toContain('3 additional patterns found');
+  });
+
+  it('full: the counter uses get-interpretation\'s read-time figure over the stale hook (the claim this report consumed)', () => {
+    const full = (used: number) => parseInterpretationAccess({
+      access: 'full', interpretation: { headline: 'H' }, plan: 'free',
+      complimentary: { used, total: 3, remaining: 3 - used }, stored_depth: 'deep',
+    });
+    const first = render(full(1), { complimentaryUsed: 0 });
+    expect(first).toContain('Premium Analysis 1 of 3 included');
+    expect(first).toContain('2 complimentary Premium analyses remaining');
+    expect(first).not.toContain('Every Amani account includes 3 complimentary Premium analyses.');
+
+    const third = render(full(3), { complimentaryUsed: 2 });
+    expect(third).toContain('Premium Analysis 3 of 3 included');
+    expect(third).toContain("You've used your 3 complimentary Premium analyses. Future reports still include Basic insights and Premium Previews.");
+  });
+
+  it('falls back to the hook figure when the response carries none', () => {
+    const full = parseInterpretationAccess({ access: 'full', interpretation: { headline: 'H' }, plan: 'free' });
+    expect(render(full, { complimentaryUsed: 2 })).toContain('Premium Analysis 2 of 3 included');
   });
 
   it('basic without preview or locked findings renders neither', () => {
@@ -84,7 +112,7 @@ describe('FreemiumReportPanel per access state', () => {
     expect(render(basic, { generating: true })).toContain('Generating your analysis');
   });
 
-  it('hides the counter when the ledger read failed', () => {
-    expect(render(basic, { complimentaryUsed: null })).not.toMatch(/complimentary|of 3 included/);
+  it('hides the counter when neither the response nor the ledger read has a figure', () => {
+    expect(render({ ...basic, complimentary: null }, { complimentaryUsed: null })).not.toMatch(/complimentary|of 3 included/);
   });
 });

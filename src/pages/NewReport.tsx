@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { checkSubscriptionLive, handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { uploadRequiresSubscription } from '../lib/freemium/gates';
+import { generateFailureKind } from '../lib/freemium/reportAccess';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
@@ -757,11 +758,17 @@ export function NewReport() {
       }).then(async ({ error: interpError }) => {
         if (interpError) {
           /*
-            Flag on, upload completion is never a paywall. A 402 is not a failed
-            report either: the report view asks get-interpretation and renders
-            whatever state is true.
+            Flag on, upload completion is never a paywall. But the server has
+            refused, so nothing is coming: settle the row now (compare-and-set,
+            as below) rather than leave it 'processing' for the report view's
+            90 s poll. The report view then reads get-interpretation and, when
+            generating is refused again, shows the Premium entry point in place.
           */
-          if (clientFreemiumActive() && interpError instanceof FunctionsHttpError && interpError.context?.status === 402) return;
+          if (clientFreemiumActive() && interpError instanceof FunctionsHttpError
+            && generateFailureKind(interpError.context?.status) === 'premium_required') {
+            void markReportFailed(createdReportId);
+            return;
+          }
           const redirect = await handle402(interpError);
           if (redirect) { navigate(redirect, { replace: true }); return; }
           const limitMessage = await rateLimitMessage(interpError);

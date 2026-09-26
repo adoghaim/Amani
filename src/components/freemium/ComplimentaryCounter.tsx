@@ -6,11 +6,15 @@ interface ComplimentaryCounterProps {
   used: number;
   /** `compact` is the one-line form for status badges. */
   variant?: 'card' | 'compact';
+  /** Omit "Premium Analysis N of 3 included" (a Basic report used no claim). */
+  hideUsage?: boolean;
 }
 
 /** The locked §6 counter copy. Only ever shown to a Free account. */
-export function ComplimentaryCounter({ used, variant = 'card' }: ComplimentaryCounterProps) {
-  const { usage, status } = complimentaryCounterCopy(used);
+export function ComplimentaryCounter({ used, variant = 'card', hideUsage = false }: ComplimentaryCounterProps) {
+  const copy = complimentaryCounterCopy(used);
+  const usage = hideUsage ? null : copy.usage;
+  const { status } = copy;
 
   if (variant === 'compact') {
     return <p className="text-xs text-theme-muted-text-2">{status}</p>;

@@ -46,7 +46,15 @@ import {
   fetchInterpretationAccess,
   type InterpretationAccessResult,
 } from '../lib/freemium/interpretationAccess';
-import { FreemiumReportPanel } from '../components/freemium/FreemiumReportPanel';
+import {
+  accessRequestKey,
+  applyAccessResult,
+  createAccessRequester,
+  freemiumCanRegenerate,
+  generateFailureKind,
+} from '../lib/freemium/reportAccess';
+import { AccessErrorNotice, FreemiumReportPanel } from '../components/freemium/FreemiumReportPanel';
+import { FREEMIUM_COPY } from '../lib/freemium/copy';
 import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
 
 /*
@@ -73,8 +81,8 @@ async function rateLimitMessage(err: unknown): Promise<string | null> {
   return 'Daily analysis limit reached. Please try again tomorrow.';
 }
 
-function isPaymentRequired(err: unknown): boolean {
-  return err instanceof FunctionsHttpError && err.context?.status === 402;
+function httpStatus(err: unknown): number | undefined {
+  return err instanceof FunctionsHttpError ? err.context?.status : undefined;
 }
 
 /* NewReport writes this key when the upload's interpretation request is
@@ -398,11 +406,20 @@ export function ReportView() {
   */
   const freemium = clientFreemiumActive();
   const [accessState, setAccessState] = useState<InterpretationAccessResult | null>(null);
+  // A failed refresh while a body is on screen: shown inline, the body stays.
+  const [accessInlineError, setAccessInlineError] = useState<InterpretationAccessResult | null>(null);
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessNonce, setAccessNonce] = useState(0);
   const [generating, setGenerating] = useState(false);
+  // The server refused to generate for this viewer (402): offer Premium, don't retry.
+  const [generatePremiumRequired, setGeneratePremiumRequired] = useState(false);
+  const [regenerateFailed, setRegenerateFailed] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const accessKeyRef = useRef<string | null>(null);
+  const accessStateRef = useRef<InterpretationAccessResult | null>(null);
+  const accessRequester = useRef(createAccessRequester(id => fetchInterpretationAccess(
+    (name, options) => supabase.functions.invoke(name, options),
+    id,
+  ))).current;
   const autoGenerateFired = useRef(false);
   const refreshAccess = () => setAccessNonce(n => n + 1);
   const [report, setReport] = useState<LabReport | null>(null);
@@ -584,31 +601,34 @@ export function ReportView() {
   }, [report?.status, report?.id, interpretation, reportId, freemium]);
 
   /*
-    Flag on: one get-interpretation call per (report, settled status, explicit
-    refresh). The key ref makes the call idempotent across StrictMode's
-    double-invoked effects and drops a response a newer request superseded.
+    Flag on: one get-interpretation call per (report settled, explicit
+    refresh) — see accessRequestKey. The requester makes the call idempotent
+    across StrictMode's double-invoked effects and drops a response a newer
+    request superseded.
   */
   const reportKeyId = report?.id;
   const reportStatus = report?.status;
   useEffect(() => {
-    if (!freemium || !reportKeyId || !reportStatus || reportStatus === 'processing') return;
-    const key = `${reportKeyId}:${reportStatus}:${accessNonce}`;
-    if (accessKeyRef.current === key) return;
-    accessKeyRef.current = key;
-    setAccessLoading(true);
-    void fetchInterpretationAccess(
-      (name, options) => supabase.functions.invoke(name, options),
-      reportId,
-    ).then(result => {
-      if (accessKeyRef.current !== key) return;
-      setAccessState(result);
-      setInterpretation(result.interpretation ? normalizeInterpretation(result.interpretation) : null);
-      if (result.interpretation) {
-        writeInterpRateLimit(reportId, null);
-        setRateLimitNotice(null);
+    const key = accessRequestKey({ freemium, reportId: reportKeyId, status: reportStatus, nonce: accessNonce });
+    const started = accessRequester.request(key, reportId, result => {
+      const { state, inlineError } = applyAccessResult(accessStateRef.current, result);
+      setAccessInlineError(inlineError);
+      if (!inlineError) {
+        accessStateRef.current = state;
+        setAccessState(state);
+        setInterpretation(state.interpretation ? normalizeInterpretation(state.interpretation) : null);
+        if (state.interpretation) {
+          writeInterpRateLimit(reportId, null);
+          setRateLimitNotice(null);
+        }
+        // This read may be the one that consumed a complimentary claim; the
+        // hook's ledger figure predates it, so Billing/SubscriptionStatus refetch.
+        if (state.access === 'full') void refetchSubscription();
       }
       setAccessLoading(false);
     });
+    if (started) setAccessLoading(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [freemium, reportKeyId, reportStatus, accessNonce, reportId]);
 
   /*
@@ -1060,12 +1080,37 @@ export function ReportView() {
 
   const handleRegenerate = async () => {
     if (!report || report.regeneration_count >= 3) return;
-    if (!entitled) return;
+    if (freemium ? !freemiumCanRegenerate(accessState, report.regeneration_count) : !entitled) return;
     setRegenerating(true);
     setError('');
+    setRegenerateFailed(false);
     const priorStatus = report.status;
     writeInterpRateLimit(reportId, null);
     setRateLimitNotice(null);
+    /*
+      Flag on, a failed regenerate leaves the stored body exactly as it was
+      (the server upserts only on success), so put back the status and the
+      retry spent optimistically, and say what happened: 402 → Premium in
+      place, 429 → the daily-limit notice, anything else → a retryable error.
+      No get-interpretation read — there is nothing new to read.
+    */
+    const failFreemium = async (err: unknown) => {
+      await supabase.from('lab_reports').update({
+        status: priorStatus,
+        regeneration_count: report.regeneration_count,
+      }).eq('id', reportId);
+      const kind = generateFailureKind(httpStatus(err));
+      const limitMessage = kind === 'rate_limited' ? await rateLimitMessage(err) : null;
+      if (kind === 'premium_required') {
+        setPaywallOpen(true);
+      } else if (limitMessage) {
+        writeInterpRateLimit(reportId, limitMessage);
+        setRateLimitNotice(limitMessage);
+      } else {
+        setRegenerateFailed(true);
+      }
+      await fetchReport();
+    };
     try {
       /*
         Deliberately NOT deleting the existing interpretation first.
@@ -1087,21 +1132,11 @@ export function ReportView() {
           primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
         },
       });
+      if (freemium && (interpError || !fnData?.success)) {
+        await failFreemium(interpError);
+        return;
+      }
       if (interpError) {
-        /*
-          Flag on, a 402 here means Premium is required. Undo the optimistic
-          status and retry count, and offer Premium in place instead of
-          redirecting to the pricing page.
-        */
-        if (freemium && isPaymentRequired(interpError)) {
-          await supabase.from('lab_reports').update({
-            status: priorStatus,
-            regeneration_count: report.regeneration_count,
-          }).eq('id', reportId);
-          setPaywallOpen(true);
-          await fetchReport();
-          return;
-        }
         const redirect = await handle402(interpError);
         if (redirect) { navigate(redirect, { replace: true }); return; }
         const limitMessage = await rateLimitMessage(interpError);
@@ -1122,10 +1157,13 @@ export function ReportView() {
       }
       await fetchReport();
       if (freemium) refreshAccess();
-    } catch {
+    } catch (err) {
+      if (freemium) {
+        await failFreemium(err);
+        return;
+      }
       await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       await fetchReport();
-      if (freemium) refreshAccess();
     } finally {
       setRegenerating(false);
     }
@@ -1137,11 +1175,13 @@ export function ReportView() {
     caps regenerating an existing analysis, not producing the first one. The
     server decides Full or Basic; afterwards the page asks get-interpretation
     once. Never opens a paywall: a report that is not ready yet is not an
-    upsell moment.
+    upsell moment. A 402 shows the Premium entry point in place of the
+    generate action instead of retrying into the same refusal.
   */
   const handleGenerate = async () => {
     if (generating) return;
     setGenerating(true);
+    setGeneratePremiumRequired(false);
     writeInterpRateLimit(reportId, null);
     setRateLimitNotice(null);
     let refresh = true;
@@ -1149,7 +1189,10 @@ export function ReportView() {
       const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
         body: { reportId, primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null },
       });
-      if (invokeErr) {
+      if (invokeErr && generateFailureKind(httpStatus(invokeErr)) === 'premium_required') {
+        refresh = false;
+        setGeneratePremiumRequired(true);
+      } else if (invokeErr) {
         const limitMessage = await rateLimitMessage(invokeErr);
         if (limitMessage) {
           // Nothing was generated; asking again would only spend the read quota.
@@ -1199,7 +1242,9 @@ export function ReportView() {
     );
   }
 
-  const canRegenerate = report.regeneration_count < 3 && entitled;
+  const canRegenerate = freemium
+    ? freemiumCanRegenerate(accessState, report.regeneration_count)
+    : report.regeneration_count < 3 && entitled;
   /*
     This report was written at the Free tier, so it holds the deterministic
     interpretation rather than the AI one. A Plus subscriber can turn it into
@@ -1228,7 +1273,9 @@ export function ReportView() {
     <FreemiumReportPanel
       state={accessState}
       generating={generating}
+      premiumRequired={generatePremiumRequired}
       plan={plan}
+      // Fallback only — the panel prefers the figure get-interpretation returned.
       // A failed ledger read leaves the hook's default of 0 used; never show that as fact.
       complimentaryUsed={subscriptionError ? null : complimentary.used}
       onRetry={refreshAccess}
@@ -1248,7 +1295,7 @@ export function ReportView() {
         <PremiumPaywall
           open={paywallOpen}
           onClose={() => setPaywallOpen(false)}
-          onEntitled={() => { void refetchSubscription(); refreshAccess(); }}
+          onEntitled={() => { void refetchSubscription(); setGeneratePremiumRequired(false); refreshAccess(); }}
         />
       )}
       <div className="max-w-3xl mx-auto">
@@ -1367,6 +1414,20 @@ export function ReportView() {
                 </button>
               )}
             </div>
+          )}
+
+          {/* ── Flag on: a failed refresh/regenerate never hides the body on screen ── */}
+          {freemium && accessInlineError && !isProcessing && (
+            <AccessErrorNotice state={accessInlineError} onRetry={refreshAccess} inline />
+          )}
+          {freemium && regenerateFailed && !isProcessing && (
+            <AccessErrorNotice
+              state={null}
+              inline
+              title={FREEMIUM_COPY.report.regenerateErrorTitle}
+              body={FREEMIUM_COPY.report.regenerateErrorBody}
+              onRetry={() => { void handleRegenerate(); }}
+            />
           )}
 
           {/* ── Error state ─────────────────────────────────────── */}

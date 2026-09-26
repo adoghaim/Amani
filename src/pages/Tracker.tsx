@@ -16,7 +16,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { FREEMIUM_COPY } from '../lib/freemium/copy';
-import { isPremiumRequiredResponse } from '../lib/freemium/premiumRequired';
+import { paymentRequiredAction } from '../lib/freemium/premiumRequired';
 import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
@@ -402,23 +402,23 @@ export function Tracker() {
       // lab-insights answers 402 when the trial or subscription has lapsed.
       // `handle402` reads the invoke-style error, and this call uses raw fetch,
       // so hand it the Response wrapped the way `functions.invoke` would.
-      if (res.status === 402) {
-        /*
-          Flag on, comparison is Premium-only: a Free account gets
-          `premium_required`, which opens the paywall in place rather than
-          redirecting to pricing.
-        */
-        if (clientFreemiumActive() && await isPremiumRequiredResponse(res)) {
-          setShowInsightsModal(false);
-          setPaywallOpen(true);
-          return;
-        }
-        const redirect = await handle402(new FunctionsHttpError(res));
-        if (redirect) {
-          setShowInsightsModal(false);
-          navigate(redirect, { replace: true });
-          return;
-        }
+      /*
+        Flag on, comparison is Premium-only: a Free account gets
+        `premium_required`, which opens the paywall in place rather than
+        redirecting to pricing.
+      */
+      const paymentAction = await paymentRequiredAction(
+        res, clientFreemiumActive(), r => handle402(new FunctionsHttpError(r)),
+      );
+      if (paymentAction.kind === 'paywall') {
+        setShowInsightsModal(false);
+        setPaywallOpen(true);
+        return;
+      }
+      if (paymentAction.kind === 'redirect') {
+        setShowInsightsModal(false);
+        navigate(paymentAction.to, { replace: true });
+        return;
       }
       if (!res.ok) throw new Error('Failed to generate insights');
       const data = await res.json();

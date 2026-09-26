@@ -46,16 +46,26 @@ export function complimentaryCounterCopy(used: number): ComplimentaryCounterCopy
   };
 }
 
-/** Locked-card titles on a Basic report. */
+/** Locked-card titles on a Basic report. The plural patterns and cross-report labels are §6. */
 export function lockedPatternsLabel(count: number): string {
-  return count === 1 ? '1 additional pattern found' : `${count} additional patterns found`;
+  return count === 1 ? FREEMIUM_COPY.lockedCards.patternsOne : `${count} additional patterns found`;
 }
 export const LOCKED_CROSS_REPORT_LABEL = 'Cross-report relationship available';
 export function lockedLifestyleLabel(count: number): string {
-  return count === 1 ? '1 lifestyle insight available' : `${count} lifestyle insights available`;
+  return count === 1
+    ? FREEMIUM_COPY.lockedCards.lifestyleOne
+    : FREEMIUM_COPY.lockedCards.lifestyleMany.replace('{n}', String(count));
 }
 
 export const FREEMIUM_COPY = Object.freeze({
+  lockedCards: {
+    // Not a §6 locked string; owner to confirm. (§6 locks "N additional patterns found".)
+    patternsOne: '1 additional pattern found',
+    // Not a §6 locked string; owner to confirm.
+    lifestyleOne: '1 lifestyle insight available',
+    // Not a §6 locked string; owner to confirm.
+    lifestyleMany: '{n} lifestyle insights available',
+  },
   report: {
     basicHeading: 'Basic insights',
     previewLabel: 'Premium Preview',
@@ -67,6 +77,10 @@ export const FREEMIUM_COPY = Object.freeze({
     errorBody: 'Your lab values are saved and shown below. Please try again in a moment.',
     errorRateLimited: "You've reached today's limit for loading analyses. Please try again tomorrow.",
     retry: 'Try again',
+    // Not a §6 locked string; owner to confirm.
+    regenerateErrorTitle: "We couldn't regenerate your analysis",
+    // Not a §6 locked string; owner to confirm.
+    regenerateErrorBody: 'Your current analysis is unchanged. Please try again in a moment.',
     generateTitle: 'Your analysis is not ready yet',
     generateBody: 'Generate it now. Your lab values are saved and shown below.',
     generateCta: 'Generate analysis',
@@ -90,7 +104,6 @@ export const FREEMIUM_COPY = Object.freeze({
   paywall: {
     title: 'Amani Premium',
     intro: 'Premium unlocks the full analysis on every report, including patterns across markers and across your reports.',
-    premiumRequiredTitle: 'Premium feature',
     premiumRequiredBody: 'Comparing reports is part of Amani Premium.',
   },
   pricing: {

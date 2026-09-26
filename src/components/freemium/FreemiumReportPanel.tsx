@@ -20,9 +20,15 @@ interface FreemiumReportPanelProps {
   state: InterpretationAccessResult | null;
   /** A generation request is in flight. */
   generating: boolean;
+  /** The last generate request was refused with 402 (Premium required). */
+  premiumRequired?: boolean;
   /** `useSubscription().plan`; the counter is only for Free accounts. */
   plan: 'premium' | 'free' | undefined;
-  /** `useSubscription().complimentary.used`, or null when it is not known. */
+  /**
+   * `useSubscription().complimentary.used`, or null when it is not known. A
+   * fallback only: the figure get-interpretation returned with `state` wins,
+   * because it was read after this report's claim and the hook's was not.
+   */
   complimentaryUsed: number | null;
   onRetry: () => void;
   onGenerate: () => void;
@@ -40,10 +46,12 @@ interface FreemiumReportPanelProps {
  *   generation_needed → the generate action
  */
 export function FreemiumReportPanel({
-  state, generating, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
+  state, generating, premiumRequired = false, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
 }: FreemiumReportPanelProps) {
-  const counter = plan === 'free' && complimentaryUsed !== null
-    ? <ComplimentaryCounter used={complimentaryUsed} />
+  const used = state?.complimentary?.used ?? complimentaryUsed;
+  // A Basic report consumed no claim, so it gets the remaining/exhausted line only.
+  const counter = plan === 'free' && used !== null
+    ? <ComplimentaryCounter used={used} hideUsage={state?.access === 'basic'} />
     : null;
 
   if (generating) {
@@ -57,28 +65,10 @@ export function FreemiumReportPanel({
 
   if (!state) return null;
 
-  if (state.access === 'error') {
-    const rateLimited = state.code === 'rate_limit_exceeded';
-    return (
-      <div role="alert" className="rounded-2xl border border-theme-flag-watch-border bg-theme-flag-watch-bg p-5 space-y-3">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-theme-flag-watch">{COPY.errorTitle}</p>
-            <p className="text-xs text-theme-flag-watch mt-1 leading-relaxed">
-              {rateLimited ? COPY.errorRateLimited : COPY.errorBody}
-            </p>
-          </div>
-        </div>
-        {!rateLimited && (
-          <Button variant="secondary" size="sm" onClick={onRetry}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-            {COPY.retry}
-          </Button>
-        )}
-      </div>
-    );
-  }
+  if (state.access === 'error') return <AccessErrorNotice state={state} onRetry={onRetry} />;
+
+  // generate-interpretation answered 402: the entry point to Premium, not another generate button.
+  if (premiumRequired && state.access === 'generation_needed') return upgradeBanner(onOpenPaywall);
 
   if (state.access === 'generation_needed') {
     const hasBody = state.interpretation !== null;
@@ -143,13 +133,57 @@ export function FreemiumReportPanel({
         </button>
       ))}
 
-      <div className="rounded-2xl border border-theme-border bg-theme-surface px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-theme-text">{COPY.upgradeTitle}</p>
-          <p className="text-xs text-theme-muted-text-2 mt-0.5">{COPY.upgradeBody}</p>
-        </div>
-        <Button size="sm" onClick={onOpenPaywall}>{COPY.upgradeCta}</Button>
-      </div>
+      {upgradeBanner(onOpenPaywall)}
     </section>
+  );
+}
+
+function upgradeBanner(onOpenPaywall: () => void) {
+  return (
+    <div className="rounded-2xl border border-theme-border bg-theme-surface px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-semibold text-theme-text">{COPY.upgradeTitle}</p>
+        <p className="text-xs text-theme-muted-text-2 mt-0.5">{COPY.upgradeBody}</p>
+      </div>
+      <Button size="sm" onClick={onOpenPaywall}>{COPY.upgradeCta}</Button>
+    </div>
+  );
+}
+
+/**
+ * A retryable error. As the whole panel it stands in for a body that could not
+ * be read; `inline` is the non-blocking form ReportView shows above a body the
+ * user is already reading (a failed refresh or regenerate), which stays put.
+ * Never a paywall, never "Free".
+ */
+export function AccessErrorNotice({ state, onRetry, inline = false, title, body }: {
+  state: InterpretationAccessResult | null;
+  onRetry: () => void;
+  inline?: boolean;
+  title?: string;
+  body?: string;
+}) {
+  const rateLimited = state?.code === 'rate_limit_exceeded';
+  return (
+    <div
+      role={inline ? 'status' : 'alert'}
+      className={`rounded-2xl border border-theme-flag-watch-border bg-theme-flag-watch-bg ${inline ? 'px-4 py-3' : 'p-5'} space-y-3`}
+    >
+      <div className="flex items-start gap-3">
+        <AlertCircle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-theme-flag-watch">{title ?? COPY.errorTitle}</p>
+          <p className="text-xs text-theme-flag-watch mt-1 leading-relaxed">
+            {rateLimited ? COPY.errorRateLimited : body ?? COPY.errorBody}
+          </p>
+        </div>
+      </div>
+      {!rateLimited && (
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+          {COPY.retry}
+        </Button>
+      )}
+    </div>
   );
 }

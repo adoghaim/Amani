@@ -4,6 +4,7 @@ import { StaticRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { resolveDashboardEntitlementView } from '../../lib/dashboardEntitlement';
 import { uploadRequiresSubscription } from '../../lib/freemium/gates';
+import { paymentRequiredAction } from '../../lib/freemium/premiumRequired';
 
 const subscription = vi.hoisted(() => ({
   current: { plan: undefined as 'premium' | 'free' | undefined, loading: false, error: null as Error | null, refetch: vi.fn() },
@@ -45,28 +46,38 @@ describe('upload gate', () => {
   });
 });
 
-describe('SubscriptionGate as a Premium gate (flag on)', () => {
-  beforeEach(() => vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true'));
+describe('Tracker comparison: 402 handling (paymentRequiredAction)', () => {
+  const json402 = (body: unknown) => new Response(JSON.stringify(body), { status: 402 });
 
-  it('Premium passes through', () => {
-    subscription.current.plan = 'premium';
-    expect(render(<SubscriptionGate><p>premium surface</p></SubscriptionGate>)).toContain('premium surface');
+  it('flag on: premium_required opens the paywall; the pricing redirect is never consulted', async () => {
+    const legacy = vi.fn(async () => '/pricing');
+    expect(await paymentRequiredAction(json402({ code: 'premium_required' }), true, legacy)).toEqual({ kind: 'paywall' });
+    expect(legacy).not.toHaveBeenCalled();
   });
 
-  it('Free sees an in-place upgrade, not a redirect', () => {
-    subscription.current.plan = 'free';
-    const html = render(<SubscriptionGate><p>premium surface</p></SubscriptionGate>);
-    expect(html).not.toContain('premium surface');
-    expect(html).toContain('Premium feature');
-    expect(html).toContain('Unlock Premium');
+  it('flag on: any other 402 keeps the legacy redirect', async () => {
+    const legacy = vi.fn(async () => '/app/billing');
+    expect(await paymentRequiredAction(json402({ code: 'subscription_required' }), true, legacy))
+      .toEqual({ kind: 'redirect', to: '/app/billing' });
   });
 
-  it('an entitlement read error is a retry, never a paywall', () => {
-    subscription.current.error = new Error('offline');
-    const html = render(<SubscriptionGate><p>premium surface</p></SubscriptionGate>);
-    expect(html).toContain('Try again');
-    expect(html).not.toContain('Unlock Premium');
-    expect(html).not.toContain('premium surface');
+  it('flag off: premium_required is a redirect, exactly as 1.0.5', async () => {
+    const legacy = vi.fn(async () => '/pricing');
+    expect(await paymentRequiredAction(json402({ code: 'premium_required' }), false, legacy))
+      .toEqual({ kind: 'redirect', to: '/pricing' });
+  });
+
+  it('non-402 responses are left to the caller', async () => {
+    const legacy = vi.fn(async () => '/pricing');
+    expect(await paymentRequiredAction(new Response('{}', { status: 200 }), true, legacy)).toEqual({ kind: 'none' });
+    expect(legacy).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubscriptionGate (no Premium variant)', () => {
+  it('flag on it is still the legacy live check — it is not mounted on any flag-on route', () => {
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    expect(render(<SubscriptionGate><p>surface</p></SubscriptionGate>)).not.toContain('surface');
   });
 });
 
