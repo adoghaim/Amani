@@ -123,9 +123,12 @@ export const FREEMIUM_COPY = Object.freeze({
     confirmedBody: 'Thank you for subscribing. Your Premium subscription is confirmed on your account.',
   },
   terms: {
-    heading: 'Subscriptions and renewal',
-    whatYouGet: 'Amani Free includes Basic insights on every lab report. Amani Premium adds the full AI-generated analysis on every report.',
-    freePlanLabel: 'Complimentary Premium analyses:',
-    freePlan: 'every account includes 3, once per account. No payment card is required to sign up.',
+    heading: 'Free access, subscriptions, and renewal',
+    freeAccountLabel: 'Free account:',
+    freeAccount: 'Amani provides a free account with certain included features and a limited number of complimentary Premium analyses.',
+    premiumLabel: 'Premium:',
+    premium: 'additional Premium features require a paid subscription.',
+    changesLabel: 'Changes:',
+    changes: 'available features and limits may change.',
   },
 });

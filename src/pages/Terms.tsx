@@ -162,12 +162,16 @@ export function Terms() {
                 {freemium ? (
                   <>
                     <li>
-                      <strong className="text-theme-text">What you get:</strong>{' '}
-                      {FREEMIUM_COPY.terms.whatYouGet}
+                      <strong className="text-theme-text">{FREEMIUM_COPY.terms.freeAccountLabel}</strong>{' '}
+                      {FREEMIUM_COPY.terms.freeAccount}
                     </li>
                     <li>
-                      <strong className="text-theme-text">{FREEMIUM_COPY.terms.freePlanLabel}</strong>{' '}
-                      {FREEMIUM_COPY.terms.freePlan}
+                      <strong className="text-theme-text">{FREEMIUM_COPY.terms.premiumLabel}</strong>{' '}
+                      {FREEMIUM_COPY.terms.premium}
+                    </li>
+                    <li>
+                      <strong className="text-theme-text">{FREEMIUM_COPY.terms.changesLabel}</strong>{' '}
+                      {FREEMIUM_COPY.terms.changes}
                     </li>
                   </>
                 ) : (
