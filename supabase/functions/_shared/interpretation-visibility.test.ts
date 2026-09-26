@@ -6,6 +6,7 @@ import { buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETE
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
+import { buildTrendEvidence } from './trend-evidence';
 
 const full = { headline: 'headline', cycle_context: {}, questions_for_doctor: ['doctor'], disclaimer: 'disclaimer',
   key_findings: [{ status: 'attention', title: 'visible abnormal' }],
@@ -143,11 +144,16 @@ describe('deterministic interpretation stays on the Free medical floor', () => {
     expect(isDeterministicSource(null)).toBe(false);
   });
 
+  // SQL interpretation_floor never emits flagged_trends: every row carrying
+  // trend_evidence is written by the TS writer with its TS projection. Without
+  // trend_evidence the TS and SQL key sets are identical.
+  const { trend_evidence: _evidence, ...withoutEvidence } = deterministicFixture;
   it.each(DETERMINISTIC_SOURCES)('%s: full deterministic narrative in Basic, SQL key parity', source => {
     const basic = buildBasicProjection(deterministicFixture, undefined, { source });
     expect(basic.overall_interpretation).toBe(deterministicFixture.overall_interpretation);
     expect(basic.pattern_signals).toEqual(deterministicFixture.pattern_signals);
-    expect(Object.keys(basic).sort()).toEqual(deterministicKeys);
+    expect(Object.keys(basic).sort()).toEqual([...deterministicKeys, 'flagged_trends'].sort());
+    expect(Object.keys(buildBasicProjection(withoutEvidence, undefined, { source })).sort()).toEqual(deterministicKeys);
     expect(findFloorViolations(basic)).toEqual([]);
     expect(basic).not.toHaveProperty('trend_evidence');
   });
@@ -155,7 +161,8 @@ describe('deterministic interpretation stays on the Free medical floor', () => {
   it.each(['ai', null, undefined, 'unknown'])('source %s keeps the narrative locked (unchanged behaviour)', source => {
     const basic = buildBasicProjection(deterministicFixture, undefined, { source });
     expect(basic).toEqual(buildBasicProjection(deterministicFixture));
-    expect(Object.keys(basic).sort()).toEqual(expectedKeys);
+    expect(Object.keys(basic).sort()).toEqual([...expectedKeys, 'flagged_trends'].sort());
+    expect(Object.keys(buildBasicProjection(withoutEvidence, undefined, { source })).sort()).toEqual(expectedKeys);
     expect(JSON.stringify(basic)).not.toMatch(/DETERMINISTIC_(OVERALL|PATTERN)/);
   });
 
@@ -169,7 +176,9 @@ describe('deterministic interpretation stays on the Free medical floor', () => {
     // TSH is locked; the ferritin trend touches a discuss marker and is floor, not a count.
     expect(basic.locked).toEqual({ patterns: 0, cross_report: 1, lifestyle: 0 });
     expect(JSON.stringify(basic)).not.toContain('TSH increased');
-    expect(JSON.stringify(basic)).not.toContain('Ferritin decreased');
+    // ...and is shown as a flagged trend line, the only trend Basic reveals.
+    expect(basic.flagged_trends).toEqual([expect.objectContaining({ biomarker_slug: 'ferritin',
+      previous_value: 20, current_value: 9, direction: 'decreased', status: 'discuss' })]);
     // The same stored AI-sourced body keeps its narrative locked.
     const ai = buildBasicProjection(stored, undefined, { source: 'ai' });
     expect(ai).not.toHaveProperty('overall_interpretation');

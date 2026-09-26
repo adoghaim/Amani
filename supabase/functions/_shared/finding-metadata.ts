@@ -1,4 +1,4 @@
-import { carriesFindingSafety } from "./tier.ts";
+import { carriesFindingSafety, isAbnormalStatus } from "./tier.ts";
 import { FLOOR_FINDING_KEYS, type InterpretationPayload } from "./response-shaping.ts";
 
 export interface FindingMetadata {
@@ -9,6 +9,69 @@ export interface FindingMetadata {
   magnitude_normalized: number | null;
   observed_at: string | null;
   visibility_hint: "basic" | "premium";
+}
+
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const hasComparison = (c: Record<string, unknown>) =>
+  finite(c.delta) || (finite(c.previous_value) && finite(c.current_value));
+
+/** Markers flagged abnormal now, with their FINDING_STATUS value when one is
+ * stated (null for a boolean-only flag). Deterministic payloads flag markers in
+ * top_findings, AI ones in key_findings. */
+export function abnormalMarkerStatuses(payload: InterpretationPayload): Map<string, string | null> {
+  const markers = new Map<string, string | null>();
+  for (const key of ["key_findings", "top_findings"] as const) {
+    const values = payload[key];
+    if (!Array.isArray(values)) continue;
+    for (const finding of values) {
+      if (!finding || typeof finding !== "object" || typeof finding.biomarker_slug !== "string"
+        || !carriesFindingSafety(finding)) continue;
+      const status = ["status", "current_status", "flag", "flagged"].map(k => finding[k]).find(isAbnormalStatus);
+      if (!markers.get(finding.biomarker_slug)) markers.set(finding.biomarker_slug, typeof status === "string" ? status : null);
+    }
+  }
+  return markers;
+}
+
+/** First usable trend_evidence entry per biomarker slug. */
+export function trendEvidenceBySlug(payload: InterpretationPayload): Map<string, Record<string, unknown>> {
+  const evidence = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(payload.trend_evidence)) {
+    for (const entry of payload.trend_evidence) {
+      if (entry && typeof entry === "object" && typeof entry.biomarker_slug === "string"
+        && hasComparison(entry) && !evidence.has(entry.biomarker_slug)) evidence.set(entry.biomarker_slug, entry);
+    }
+  }
+  return evidence;
+}
+
+/** A change on a marker that is abnormal now is safety-relevant, so Basic shows
+ * it as a line of values (no narrative body). Never a preview, never counted. */
+export interface FlaggedTrend {
+  biomarker_slug: string;
+  marker: string;
+  previous_value: unknown;
+  current_value: unknown;
+  unit: unknown;
+  previous_date: unknown;
+  direction: unknown;
+  status: string | null;
+  summary: unknown;
+}
+
+export function flaggedTrends(payload: InterpretationPayload): FlaggedTrend[] {
+  const abnormal = abnormalMarkerStatuses(payload);
+  return [...trendEvidenceBySlug(payload).entries()].filter(([slug]) => abnormal.has(slug)).map(([slug, e]) => ({
+    biomarker_slug: slug,
+    marker: typeof e.marker === "string" ? e.marker : slug,
+    previous_value: e.previous_value ?? null,
+    current_value: e.current_value ?? null,
+    unit: e.unit ?? null,
+    previous_date: e.previous_date ?? null,
+    direction: e.direction ?? null,
+    status: abnormal.get(slug) ?? null,
+    summary: e.summary ?? null,
+  }));
 }
 
 /** Stored-only additive catalog for PR 3: json_output.findings[] contains
@@ -32,27 +95,8 @@ export function addFindingMetadata(
     ? Date.parse(context.observedAt) : NaN;
   const observedAt = Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
   const findings: Array<FindingMetadata & { source_path: string; content: unknown }> = [];
-  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-  const hasComparison = (c: Record<string, unknown>) =>
-    finite(c.delta) || (finite(c.previous_value) && finite(c.current_value));
-  // Deterministic payloads flag markers in top_findings, AI ones in key_findings.
-  const abnormalMarkers = new Set<string>();
-  for (const key of ["key_findings", "top_findings"] as const) {
-    const values = payload[key];
-    if (!Array.isArray(values)) continue;
-    for (const finding of values) {
-      if (finding && typeof finding === "object" && typeof finding.biomarker_slug === "string") {
-        if (carriesFindingSafety(finding)) abnormalMarkers.add(finding.biomarker_slug);
-      }
-    }
-  }
-  const evidence = new Map<string, Record<string, unknown>>();
-  if (Array.isArray(payload.trend_evidence)) {
-    for (const entry of payload.trend_evidence) {
-      if (entry && typeof entry === "object" && typeof entry.biomarker_slug === "string"
-        && hasComparison(entry) && !evidence.has(entry.biomarker_slug)) evidence.set(entry.biomarker_slug, entry);
-    }
-  }
+  const abnormalMarkers = abnormalMarkerStatuses(payload);
+  const evidence = trendEvidenceBySlug(payload);
   const referenced = new Set<string>();
   const append = (path: string, content: unknown, kind: FindingMetadata["kind"]) => {
     const record = content && typeof content === "object" ? content as Record<string, unknown> : {};

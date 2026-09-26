@@ -11,8 +11,9 @@ END $$;
 CREATE TEMP TABLE deterministic_projection_keys AS SELECT
   $deterministic_keys$["abnormal_flags", "basic_interpretation", "critical_findings", "cycle_context", "disclaimer", "flags", "headline", "key_findings", "locked", "overall_interpretation", "pattern_signals", "preview", "questions_for_doctor", "safety_findings", "safety_notes", "summary_bullets", "top_findings", "warnings", "what_to_do_next"]$deterministic_keys$::jsonb AS expected_keys;
 
-SELECT pg_temp.assert((SELECT jsonb_agg(key ORDER BY key) FROM jsonb_object_keys(interpretation_floor(payload,'fallback')) key)
-  = (SELECT expected_keys FROM deterministic_projection_keys) FROM deterministic_prompt_fixture),
+SELECT pg_temp.assert((SELECT (SELECT jsonb_agg(k ORDER BY k) FROM jsonb_object_keys(interpretation_floor(f.payload,'fallback')) k)
+    = (SELECT expected_keys FROM deterministic_projection_keys)
+  FROM deterministic_prompt_fixture f),
   'SQL/TS deterministic projection key parity');
 SELECT pg_temp.assert((SELECT interpretation_floor(payload,'ai') = interpretation_floor(payload)
   AND interpretation_floor(payload,NULL) = interpretation_floor(payload)

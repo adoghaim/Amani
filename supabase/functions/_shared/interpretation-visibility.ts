@@ -1,6 +1,7 @@
 import { carriesFindingSafety, isAbnormalStatus } from "./tier.ts";
 import { FLOOR_REQUIRED_KEYS, FLOOR_FINDING_KEYS, findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
 import { contentFingerprint, pathWithin, selectPremiumPreview, type CatalogFinding } from "./preview-selector.ts";
+import { flaggedTrends } from "./finding-metadata.ts";
 
 const defaults: InterpretationPayload = {
   headline: "Your lab results", cycle_context: {}, questions_for_doctor: [],
@@ -104,6 +105,19 @@ export function buildBasicProjection(
     if (f.preview_eligible !== true) ineligiblePaths.add(f.source_path);
   }
   basic.safety_findings = [...new Map(safety.map(value => [contentFingerprint(value), value])).values()];
+  // A trend on a marker abnormal now is floor: values only, never a narrative
+  // body, a preview or a locked count. Emitted only when present, so a payload
+  // without trend_evidence (every legacy row) projects exactly as before and as
+  // SQL interpretation_floor does.
+  const flagged = flaggedTrends(full);
+  if (flagged.length) {
+    basic.flagged_trends = flagged;
+    collect(flagged);
+    const slugs = new Set(flagged.map(line => line.biomarker_slug));
+    if (Array.isArray(full.trend_evidence)) full.trend_evidence.forEach((entry, index) => {
+      if (entry && typeof entry === "object" && slugs.has(entry.biomarker_slug)) abnormalOrSafetyPaths.add(`/trend_evidence/${index}`);
+    });
+  }
   // Added after the safety scan so safety_findings match SQL interpretation_floor.
   for (const key of deterministicKeys) {
     basic[key] = full[key];

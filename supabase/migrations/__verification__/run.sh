@@ -262,6 +262,17 @@ psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations -q -f /tmp/deterministic-verify.sql
 
+# Case 8 (pre-cutover half): the read-source migration refuses to run before
+# 20260926000001 and leaves nothing behind.
+READ_SOURCE=20260926000004_read_interpretation_source.sql
+docker cp "$HERE/../$READ_SOURCE" "$CONTAINER:/tmp/$READ_SOURCE" >/dev/null
+if psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_SOURCE" >/dev/null 2>&1; then
+  echo "FAIL: $READ_SOURCE applied before the cutover"; exit 1
+fi
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN IF to_regprocedure('public.read_interpretation_for_server(uuid,uuid,boolean)') IS NOT NULL
+  THEN RAISE EXCEPTION 'FAIL: pre-cutover $READ_SOURCE left a function behind'; END IF; END \$\$;"
+echo "PASS: $READ_SOURCE refuses to run before the cutover."
+
 for migration in 20260926000001_interpretations_compatibility_view.sql 20260926000002_generation_cost_deep_comment.sql; do
   docker cp "$HERE/../$migration" "$CONTAINER:/tmp/$migration" >/dev/null
   psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$migration"
@@ -276,3 +287,10 @@ psql_f -v ON_ERROR_STOP=1 -q -c "UPDATE interpretations_private SET json_output_
   WHERE lab_report_id IN ('09100000-0000-4000-8000-000000000050','09100000-0000-4000-8000-000000000051');"
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
+
+# Case 8: read RPC returns interpretation_source after the cutover. Applied twice
+# (DROP + CREATE must be idempotent); the cutover's own RPC checks still hold.
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_SOURCE"
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_SOURCE"
+docker cp "$HERE/read-interpretation-source.verify.sql" "$CONTAINER:/tmp/read-source-verify.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/read-source-verify.sql
