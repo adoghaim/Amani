@@ -6,6 +6,12 @@ import { readInterpretation, type InterpretationReadActions } from "../_shared/i
 const headers = { "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS", "Content-Type": "application/json" };
+/** Read cap, not a generation cap: no model spend, one indexed RPC per call.
+ * Clients fetch once per report open and once after generation completes, never
+ * on a status poll (docs/interpretation-visibility-rollout.md). 600/day covers
+ * heavy legitimate browsing (~dozens of opens) with wide margin, while a 3 s poll
+ * exhausts it in 30 minutes, so a regressed client surfaces as 429s, not load. */
+const READ_LIMIT_PER_DAY = 600;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers });
@@ -34,7 +40,7 @@ Deno.serve(async (req: Request) => {
         return { data: typeof data === "number" ? data : null, error };
       },
     }, {
-      userId: user.id, endpoint: "get-interpretation", limitPerDay: 30,
+      userId: user.id, endpoint: "get-interpretation", limitPerDay: READ_LIMIT_PER_DAY,
     });
     const result = await readInterpretation({
       async ownsReport() {

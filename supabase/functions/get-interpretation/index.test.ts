@@ -38,13 +38,13 @@ describe('get-interpretation HTTP boundary', () => {
     expect(read).not.toHaveBeenCalled();
     expect(increment).not.toHaveBeenCalled();
   });
-  it.each([30, 31])('uses the sibling atomic daily limit at count %s', async count => {
+  it.each([31, 600, 601])('uses the atomic counter with a 600/day read cap at count %s', async count => {
     const { handler, read, increment } = harness({ count });
     const response = await handler(request());
-    expect(response.status).toBe(count === 30 ? 200 : 429);
+    expect(response.status).toBe(count <= 600 ? 200 : 429);
     expect(increment).toHaveBeenCalledWith('increment_rate_limit', expect.objectContaining({ p_user_id: 'verified-user', p_endpoint: 'get-interpretation', p_window_start: expect.any(String) }));
-    expect(read).toHaveBeenCalledTimes(count === 30 ? 1 : 0);
-    if (count === 31) expect(await response.json()).toEqual({ code: 'rate_limit_exceeded' });
+    expect(read).toHaveBeenCalledTimes(count <= 600 ? 1 : 0);
+    if (count === 601) expect(await response.json()).toEqual({ code: 'rate_limit_exceeded' });
   });
   it('maps an unavailable rate counter to retryable 503 with CORS', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});

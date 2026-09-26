@@ -1,13 +1,24 @@
 import { carriesFindingSafety, isAbnormalStatus } from "./tier.ts";
 import { FLOOR_REQUIRED_KEYS, FLOOR_FINDING_KEYS, findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
 import { contentFingerprint, pathWithin, selectPremiumPreview, type CatalogFinding } from "./preview-selector.ts";
+import { flaggedTrends } from "./finding-metadata.ts";
 
-export const PROJECTION_VERSION = 2;
 const defaults: InterpretationPayload = {
   headline: "Your lab results", cycle_context: {}, questions_for_doctor: [],
   disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
 };
 export const SAFETY_KEYS = ["safety_notes", "abnormal_flags", "flags", "warnings", "critical_findings", "what_to_do_next"] as const;
+
+/** interpretation_source values of the rule-based interpretation, which
+ * MEDICAL_FLOOR.deterministicInterpretation makes free. SQL copy in
+ * 20260926000003_deterministic_projection_floor.sql is parity-tested. */
+export const DETERMINISTIC_SOURCES = Object.freeze(["fallback", "deterministic"] as const);
+/** Narrative the deterministic payload carries beyond the shared floor keys. */
+export const DETERMINISTIC_NARRATIVE_KEYS = Object.freeze(["overall_interpretation", "pattern_signals"] as const);
+
+export function isDeterministicSource(source: unknown): boolean {
+  return typeof source === "string" && (DETERMINISTIC_SOURCES as readonly string[]).includes(source);
+}
 
 /** Flags are evidence of floor membership, never evidence of preview eligibility. */
 export const carriesSafety = carriesFindingSafety;
@@ -40,8 +51,16 @@ function atPointer(payload: InterpretationPayload, path: string): unknown {
 /** Allowlist compilation, never basic ?? full. Unclassified narrative is not a preview.
  * The existing catalog cannot prove that prose is a meaningful, safety-independent
  * correlation. Such entries are omitted until the server has classification evidence.
+ *
+ * A deterministic source (the rule-based fallback) is the medical floor itself:
+ * its overall_interpretation and pattern_signals are returned whole and leave
+ * the preview/count pool. AI narrative, and any unknown source, stays locked.
  */
-export function buildBasicProjection(full: InterpretationPayload, findings?: readonly CatalogFinding[]): InterpretationPayload {
+export function buildBasicProjection(
+  full: InterpretationPayload,
+  findings?: readonly CatalogFinding[],
+  provenance: { source?: string | null } = {},
+): InterpretationPayload {
   const basic: InterpretationPayload = {};
   for (const key of FLOOR_REQUIRED_KEYS) basic[key] = full[key] ?? defaults[key];
   for (const key of FLOOR_FINDING_KEYS) basic[key] = Array.isArray(full[key]) ? full[key] : [];
@@ -49,6 +68,8 @@ export function buildBasicProjection(full: InterpretationPayload, findings?: rea
     basic[key] = full[key] ?? [];
   }
   const floorPaths = new Set([...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS].map(key => `/${key}`));
+  const deterministicKeys = isDeterministicSource(provenance.source)
+    ? DETERMINISTIC_NARRATIVE_KEYS.filter(key => full[key] != null) : [];
   const fingerprints = new Set<string>();
   const collect = (value: unknown) => {
     fingerprints.add(contentFingerprint(value));
@@ -84,8 +105,27 @@ export function buildBasicProjection(full: InterpretationPayload, findings?: rea
     if (f.preview_eligible !== true) ineligiblePaths.add(f.source_path);
   }
   basic.safety_findings = [...new Map(safety.map(value => [contentFingerprint(value), value])).values()];
+  // A trend on a marker abnormal now is floor: values only, never a narrative
+  // body, a preview or a locked count. Emitted only when present, so a payload
+  // without trend_evidence (every legacy row) projects exactly as before and as
+  // SQL interpretation_floor does.
+  const flagged = flaggedTrends(full);
+  if (flagged.length) {
+    basic.flagged_trends = flagged;
+    collect(flagged);
+    const slugs = new Set(flagged.map(line => line.biomarker_slug));
+    if (Array.isArray(full.trend_evidence)) full.trend_evidence.forEach((entry, index) => {
+      if (entry && typeof entry === "object" && slugs.has(entry.biomarker_slug)) abnormalOrSafetyPaths.add(`/trend_evidence/${index}`);
+    });
+  }
+  // Added after the safety scan so safety_findings match SQL interpretation_floor.
+  for (const key of deterministicKeys) {
+    basic[key] = full[key];
+    floorPaths.add(`/${key}`);
+    collect(full[key]);
+  }
   const selection = selectPremiumPreview({ findings: valid,
-    floorKeys: [...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS], floorPaths,
+    floorKeys: [...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS, ...deterministicKeys], floorPaths,
     floorContentFingerprints: fingerprints, abnormalOrSafetyPaths, ineligiblePaths });
   // The headline is already part of the unconditionally visible floor. Reuse
   // its concise result summary, never truncate a locked Premium narrative.

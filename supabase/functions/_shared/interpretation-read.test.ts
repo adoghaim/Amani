@@ -73,3 +73,27 @@ it.each([false, true])('serves floor-violating stored Full without an infrastruc
     expect(log).toHaveBeenCalledWith(expect.stringContaining('MEDICAL FLOOR VIOLATION'), expect.any(Array));
   } finally { log.mockRestore(); }
 });
+
+describe('Full readers of non-deep rows (read RPC returns interpretation_source)', () => {
+  const deterministic = { headline: 'h', cycle_context: {}, questions_for_doctor: [], disclaimer: 'd',
+    key_findings: [], top_findings: [], overall_interpretation: 'DETERMINISTIC_OVERALL',
+    pattern_signals: [{ title: 'p', explanation: 'DETERMINISTIC_PATTERN' }] };
+  const premium = async () => ({ allowed: true as const, plan: 'premium' as const,
+    reason: 'active_subscription' as const, source: 'active_subscription' as const });
+  const row = (has_claim: boolean, interpretation_source?: string | null) => async () => ({
+    json_output: deterministic, stored_depth: 'standard', has_claim, tier: 'free',
+    ...(interpretation_source === undefined ? {} : { interpretation_source }) });
+  it.each(['fallback', 'deterministic'])('%s standard row: Premium and claimed readers receive the stored deterministic body', async source => {
+    for (const overrides of [{ resolveEntitlement: premium, readSelected: row(false, source) }, { readSelected: row(true, source) }]) {
+      const result = await readInterpretation(actions(overrides));
+      expect(result.body.access).toBe('generation_needed');
+      expect(result.body.interpretation).toEqual(deterministic);
+    }
+  });
+  it.each(['ai', null, undefined])('source %s standard row keeps the narrative-free Basic (unchanged)', async source => {
+    const result = await readInterpretation(actions({ resolveEntitlement: premium, readSelected: row(false, source) }));
+    expect(result.body.access).toBe('generation_needed');
+    expect(result.body.interpretation).toEqual(buildBasicProjection(deterministic));
+    expect(JSON.stringify(result.body.interpretation)).not.toMatch(/DETERMINISTIC_(OVERALL|PATTERN)/);
+  });
+});

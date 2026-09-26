@@ -25,6 +25,9 @@ export const InterpretationSchema = z.object({
       confidence: z.string(),
       explanation: z.string(),
       related_biomarkers: z.array(z.string()),
+      // Additive: requested only when the prompt carries PRIOR-REPORT CHANGES.
+      // finding-metadata ignores a slug with no stored trend_evidence entry.
+      trend_biomarker: z.string().optional(),
     }),
   ),
   what_you_can_do_now: z.array(z.string()),

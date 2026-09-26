@@ -1,7 +1,7 @@
 import type { EntitlementResult } from "./entitlement.ts";
 import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
 import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
-import { buildBasicProjection } from "./interpretation-visibility.ts";
+import { buildBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
 import type { LockedCounts } from "./preview-selector.ts";
 
 export interface InterpretationReadActions {
@@ -12,6 +12,8 @@ export interface InterpretationReadActions {
    * service RPC receives the TS decision; no request parameter can supply it. */
   readSelected(premium: boolean): Promise<{
     json_output: InterpretationPayload; stored_depth: string; has_claim: boolean; tier: string;
+    /** Absent from a pre-20260926000004 RPC; treated as non-deterministic. */
+    interpretation_source?: string | null;
   } | null>;
   countClaims(): Promise<number>;
 }
@@ -49,15 +51,19 @@ export async function readInterpretation(actions: InterpretationReadActions): Pr
         remaining: Math.max(0, FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS - used) } };
     if (!row) return { status: 200, body: { ...empty, ...common, access: "generation_needed" } };
     const full = premium || row.has_claim;
+    const provenance = { source: row.interpretation_source ?? null };
     if (full && row.stored_depth !== "deep") {
-      const basic = buildBasicProjection(row.json_output);
-      return { status: 200, body: { ...common, access: "generation_needed", interpretation: basic,
+      const basic = buildBasicProjection(row.json_output, undefined, provenance);
+      // A deterministic body IS the medical floor: serve it whole, still asking
+      // for the deep generation this reader is entitled to.
+      const interpretation = isDeterministicSource(provenance.source) ? row.json_output : basic;
+      return { status: 200, body: { ...common, access: "generation_needed", interpretation,
         preview: basic.preview, locked: basic.locked as LockedCounts } };
     }
     const violations = findFloorViolations(row.json_output);
     if (violations.length) console.error("[get-interpretation] MEDICAL FLOOR VIOLATION — serving stored payload", violations);
     // Basic arrives precompiled; rebuilding it would discard its chosen preview.
-    const projection = full ? buildBasicProjection(row.json_output) : row.json_output;
+    const projection = full ? buildBasicProjection(row.json_output, undefined, provenance) : row.json_output;
     return { status: 200, body: { ...common, access: full ? "full" : "basic",
       interpretation: row.json_output, preview: projection.preview ?? null,
       locked: (projection.locked ?? empty.locked) as LockedCounts } };
