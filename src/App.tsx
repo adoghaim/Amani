@@ -4,7 +4,7 @@ import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { OnboardingGate } from './components/OnboardingGate'
-import { SubscriptionGate } from './components/SubscriptionGate'
+import { UploadGate } from './components/freemium/UploadGate'
 import { isNative, onAppUrlOpen } from './lib/native'
 import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
@@ -89,7 +89,8 @@ function AppRoutes() {
 
         <Route path="/app" element={<ProtectedRoute><OnboardingGate><Dashboard /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/pricing" element={<ProtectedRoute><OnboardingGate><PricingPage /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/new" element={<ProtectedRoute><OnboardingGate><SubscriptionGate><NewReport /></SubscriptionGate></OnboardingGate></ProtectedRoute>} />
+        {/* Flag on, uploading is part of Free: auth + onboarding only. See lib/freemium/gates.ts. */}
+        <Route path="/app/new" element={<ProtectedRoute><OnboardingGate><UploadGate><NewReport /></UploadGate></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/reports" element={<ProtectedRoute><OnboardingGate><Reports /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/reports/:id" element={<ProtectedRoute><OnboardingGate><ReportView /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />

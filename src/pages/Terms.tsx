@@ -23,6 +23,8 @@ import { ArrowLeft } from 'lucide-react';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
 import { STRIPE_PRODUCTS } from '../stripe-config';
+import { clientFreemiumActive } from '../lib/tier';
+import { FREEMIUM_COPY } from '../lib/freemium/copy';
 
 const LAST_UPDATED = '23 August 2026';
 
@@ -30,6 +32,8 @@ const monthly = STRIPE_PRODUCTS.find((p) => p.interval === 'month');
 const yearly = STRIPE_PRODUCTS.find((p) => p.interval === 'year');
 
 export function Terms() {
+  // Flag on, there is no trial. Neutral plan lines only; legal banners are separate work.
+  const freemium = clientFreemiumActive();
   return (
     <div className="min-h-screen bg-theme-background">
       <nav className="bg-theme-surface border-b border-theme-border shadow-sm">
@@ -150,19 +154,38 @@ export function Terms() {
 
           <section>
             <h2 className="text-xl font-semibold text-theme-text mb-3">
-              Subscriptions, trial, and renewal
+              {freemium ? FREEMIUM_COPY.terms.heading : 'Subscriptions, trial, and renewal'}
             </h2>
 
             <div className="bg-theme-surface border border-theme-border rounded-xl p-5 mb-4">
               <ul className="space-y-2 text-sm">
-                <li>
-                  <strong className="text-theme-text">What you get:</strong> Amani — full access,
-                  including unlimited lab report uploads and AI-generated explanations.
-                </li>
-                <li>
-                  <strong className="text-theme-text">Free trial:</strong> 7 days, no payment
-                  card required to sign up.
-                </li>
+                {freemium ? (
+                  <>
+                    <li>
+                      <strong className="text-theme-text">{FREEMIUM_COPY.terms.freeAccountLabel}</strong>{' '}
+                      {FREEMIUM_COPY.terms.freeAccount}
+                    </li>
+                    <li>
+                      <strong className="text-theme-text">{FREEMIUM_COPY.terms.premiumLabel}</strong>{' '}
+                      {FREEMIUM_COPY.terms.premium}
+                    </li>
+                    <li>
+                      <strong className="text-theme-text">{FREEMIUM_COPY.terms.changesLabel}</strong>{' '}
+                      {FREEMIUM_COPY.terms.changes}
+                    </li>
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      <strong className="text-theme-text">What you get:</strong> Amani — full access,
+                      including unlimited lab report uploads and AI-generated explanations.
+                    </li>
+                    <li>
+                      <strong className="text-theme-text">Free trial:</strong> 7 days, no payment
+                      card required to sign up.
+                    </li>
+                  </>
+                )}
                 <li>
                   <strong className="text-theme-text">Price and period:</strong>{' '}
                   {monthly ? `$${monthly.price.toFixed(2)} per month` : 'monthly'} or{' '}
@@ -204,8 +227,13 @@ export function Terms() {
                 Cancel in your device&rsquo;s subscription settings, not in Amani.
               </strong>{' '}
               We cannot cancel an App Store or Google Play subscription for you, and deleting
-              your Amani account will not cancel it either. Any unused portion of a free trial
-              is forfeited when you buy a subscription.
+              your Amani account will not cancel it either.
+              {!freemium && (
+                <>
+                  {' '}Any unused portion of a free trial
+                  is forfeited when you buy a subscription.
+                </>
+              )}
             </p>
 
             <h3 className="font-semibold text-theme-text mt-5 mb-2">Refunds</h3>

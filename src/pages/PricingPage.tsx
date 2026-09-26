@@ -4,6 +4,35 @@ import { PricingCard } from '../components/pricing/PricingCard'
 import { IapPaywall } from '../components/pricing/IapPaywall'
 import { stripeProducts } from '../stripe-config'
 import { isNative } from '../lib/native'
+import { clientFreemiumActive } from '../lib/tier'
+import { FREEMIUM_COPY } from '../lib/freemium/copy'
+import { useAuth } from '../contexts/AuthContext'
+import { useSubscription } from '../hooks/useSubscription'
+import { ComplimentaryCounter } from '../components/freemium/ComplimentaryCounter'
+
+/**
+ * Flag on, the "seven days free" line becomes account-aware: signed out sees
+ * what every account includes; a Free account sees its own complimentary
+ * counter; a Premium account is told it already has Premium. Nothing is
+ * claimed about an account whose plan could not be read.
+ */
+function FreemiumPricingIntro() {
+  const { user } = useAuth()
+  const { plan, complimentary, loading, error } = useSubscription()
+
+  return (
+    <div className="space-y-3 max-w-prose">
+      <p className="text-theme-muted-text-2">{FREEMIUM_COPY.pricing.intro}</p>
+      {!user ? (
+        <p className="text-theme-muted-text-2">{FREEMIUM_COPY.pricing.signedOut}</p>
+      ) : loading || error ? null : plan === 'premium' ? (
+        <p className="text-theme-text font-medium">{FREEMIUM_COPY.pricing.premiumActive}</p>
+      ) : plan === 'free' ? (
+        <ComplimentaryCounter used={complimentary.used} />
+      ) : null}
+    </div>
+  )
+}
 
 export function PricingPage() {
   const navigate = useNavigate()
@@ -32,10 +61,14 @@ export function PricingPage() {
 
         <div className="mb-10">
           <h1 className="text-4xl mb-3">Choose your plan</h1>
-          <p className="text-theme-muted-text-2 max-w-prose">
-            Both plans include everything. Seven days free first, and you can cancel from
-            inside the app.
-          </p>
+          {clientFreemiumActive() ? (
+            <FreemiumPricingIntro />
+          ) : (
+            <p className="text-theme-muted-text-2 max-w-prose">
+              Both plans include everything. Seven days free first, and you can cancel from
+              inside the app.
+            </p>
+          )}
         </div>
 
         {native ? (

@@ -3,6 +3,8 @@ import { safeRedirectTarget } from '../lib/redirect'
 import { AuthShell } from '../components/auth/AuthShell'
 import { CycleMark } from '../components/CycleMark'
 import { Link, useNavigate } from 'react-router-dom'
+import { clientFreemiumActive } from '../lib/tier'
+import { FREEMIUM_COPY } from '../lib/freemium/copy'
 
 const INCLUDED = [
   'Seven days free, no card to start',
@@ -15,10 +17,12 @@ export function SignupPage() {
   const navigate = useNavigate()
   const params = new URLSearchParams(window.location.search)
   const redirect = safeRedirectTarget(params.get('redirect'))
+  const freemium = clientFreemiumActive()
+  const included = freemium ? FREEMIUM_COPY.auth.signupIncluded : INCLUDED
 
   return (
     <AuthShell
-      title="Start your trial"
+      title={freemium ? FREEMIUM_COPY.auth.signupTitle : 'Start your trial'}
       subtitle={
         <>
           Already have an account?{' '}
@@ -29,7 +33,7 @@ export function SignupPage() {
       }
       aside={
         <ul className="space-y-3.5">
-          {INCLUDED.map(item => (
+          {included.map(item => (
             <li key={item} className="flex items-baseline gap-3 text-theme-text-body border-b border-theme-border-inner pb-3.5">
               <CycleMark className="w-3.5 h-3.5 text-theme-primary shrink-0 translate-y-0.5" />
               {item}

@@ -10,6 +10,9 @@ import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { checkSubscriptionLive, handle402 } from '../utils/subscription';
+import { clientFreemiumActive } from '../lib/tier';
+import { uploadRequiresSubscription } from '../lib/freemium/gates';
+import { generateFailureKind } from '../lib/freemium/reportAccess';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
@@ -166,11 +169,13 @@ export function NewReport() {
   // Cycle metadata extracted from the PDF/OCR itself. When non-null, it wins
   // over the calculated fallback derived from reportDate + lastPeriodDate.
   const parsedCycleRef = useRef<ExtractedCycleContext | null>(null);
-  const [subChecked, setSubChecked] = useState(false);
+  // Flag on, uploading is part of Free and there is nothing to re-check here.
+  const [subChecked, setSubChecked] = useState(() => !uploadRequiresSubscription());
 
   // Defense-in-depth: re-check subscription before rendering the upload UI.
   // SubscriptionGate in App.tsx is the primary guard; this is the fallback.
   useEffect(() => {
+    if (!uploadRequiresSubscription()) return;
     let cancelled = false;
     checkSubscriptionLive().then(result => {
       if (cancelled) return;
@@ -752,6 +757,18 @@ export function NewReport() {
         },
       }).then(async ({ error: interpError }) => {
         if (interpError) {
+          /*
+            Flag on, upload completion is never a paywall. But the server has
+            refused, so nothing is coming: settle the row now (compare-and-set,
+            as below) rather than leave it 'processing' for the report view's
+            90 s poll. The report view then reads get-interpretation and, when
+            generating is refused again, shows the Premium entry point in place.
+          */
+          if (clientFreemiumActive() && interpError instanceof FunctionsHttpError
+            && generateFailureKind(interpError.context?.status) === 'premium_required') {
+            void markReportFailed(createdReportId);
+            return;
+          }
           const redirect = await handle402(interpError);
           if (redirect) { navigate(redirect, { replace: true }); return; }
           const limitMessage = await rateLimitMessage(interpError);

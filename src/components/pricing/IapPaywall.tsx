@@ -4,6 +4,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '../Button'
 import { IapPricingCard } from './IapPricingCard'
 import { useAuth } from '../../contexts/AuthContext'
+import { clientFreemiumActive } from '../../lib/tier'
 import {
   getIapOfferings,
   initIap,
@@ -201,11 +202,19 @@ export function IapPaywall({ onEntitled }: IapPaywallProps) {
           least 24 hours before the end of the current period. Your account is charged for renewal
           within 24 hours of the end of the current period.
         </p>
-        <p>
-          You can manage your subscription and turn off auto-renew in your device&rsquo;s account
-          settings after purchase. Any unused portion of a free trial is forfeited when a
-          subscription is purchased.
-        </p>
+        {/* Freemium has no free trial to forfeit, so the flag-on build drops that sentence. */}
+        {clientFreemiumActive() ? (
+          <p>
+            You can manage your subscription and turn off auto-renew in your device&rsquo;s account
+            settings after purchase.
+          </p>
+        ) : (
+          <p>
+            You can manage your subscription and turn off auto-renew in your device&rsquo;s account
+            settings after purchase. Any unused portion of a free trial is forfeited when a
+            subscription is purchased.
+          </p>
+        )}
         <p>
           <Link to="/terms" className="underline underline-offset-2 hover:text-theme-text">
             Terms of Use
