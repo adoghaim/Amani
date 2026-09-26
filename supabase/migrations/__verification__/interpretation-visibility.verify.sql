@@ -1,7 +1,10 @@
 \set ON_ERROR_STOP 1
 BEGIN;
 CREATE FUNCTION pg_temp.assert(ok boolean, label text) RETURNS void LANGUAGE plpgsql AS $$
-BEGIN IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %',label; END IF; END $$;
+BEGIN
+  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %',label; END IF;
+  RAISE NOTICE 'PASS: %',label;
+END $$;
 SELECT pg_temp.assert((SELECT relation='interpretations_private'::regclass FROM visibility_boundary_snapshot),'same table OID');
 SELECT pg_temp.assert(EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='interpretations_private'::regclass AND confrelid='lab_reports'::regclass AND contype='f' AND confdeltype='c'),'FK cascade survives');
 SELECT pg_temp.assert(EXISTS(SELECT 1 FROM pg_trigger t JOIN visibility_boundary_snapshot s ON t.oid=s.trigger_oid WHERE t.tgrelid='interpretations_private'::regclass),'trigger survives');
@@ -22,6 +25,8 @@ SELECT pg_temp.assert((SELECT stored_depth='unknown' AND json_output_basic->'pre
   AND NOT json_output_basic ? 'locked_secret' AND json_output_basic::text LIKE '%always_visible%'
   FROM interpretations_private WHERE lab_report_id='09100000-0000-4000-8000-000000000031'),'legacy floor-only backfill');
 SELECT pg_temp.assert((SELECT NOT enabled FROM interpretation_visibility_config),'installed OFF');
+CREATE TEMP TABLE visibility_mutation_snapshot AS
+SELECT id, to_jsonb(i) AS row_data FROM interpretations_private i;
 SELECT set_config('request.jwt.claim.sub','09000000-0000-4000-8000-000000000031',true);
 SET LOCAL ROLE authenticated;
 -- Exact SQL equivalents of both old PostgREST selections, not merely helper calls.
@@ -31,9 +36,18 @@ SELECT pg_temp.assert((SELECT json_output ? 'locked_secret' FROM interpretations
 SELECT pg_temp.assert((SELECT count(*)=1 FROM interpretations),'cross-user denial');
 DO $$ BEGIN
   BEGIN UPDATE interpretations_private SET tier='plus'; RAISE EXCEPTION 'private mutation allowed'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-  BEGIN UPDATE interpretations SET tier='plus'; RAISE EXCEPTION 'view mutation allowed'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    UPDATE interpretations SET tier='plus';
+    RAISE EXCEPTION 'view mutation allowed';
+  EXCEPTION WHEN insufficient_privilege OR SQLSTATE '0A000' OR SQLSTATE '55000' THEN NULL;
+  END;
 END $$;
 RESET ROLE;
+SELECT pg_temp.assert(NOT EXISTS(
+  SELECT 1 FROM visibility_mutation_snapshot s
+  FULL JOIN interpretations_private i ON i.id=s.id
+  WHERE s.row_data IS DISTINCT FROM to_jsonb(i)
+),'authenticated private/view mutations denied and no row changed');
 UPDATE interpretation_visibility_config SET enabled=true;
 -- Exhaust the reader on three different draws, none covering the tested report.
 INSERT INTO introductory_deep_access_claims(user_id,blood_draw_id,evidence_tier)

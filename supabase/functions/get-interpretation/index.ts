@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
-import { readInterpretation } from "../_shared/interpretation-read.ts";
+import { readInterpretation, type InterpretationReadActions } from "../_shared/interpretation-read.ts";
 
 const headers = { "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -33,7 +33,7 @@ Deno.serve(async (req: Request) => {
     async readSelected(premium) {
       const { data, error } = await service.rpc("read_interpretation_for_server", {
         p_user_id: user.id, p_report_id: body.reportId, p_premium: premium,
-      }).maybeSingle();
+      }).maybeSingle<NonNullable<Awaited<ReturnType<InterpretationReadActions["readSelected"]>>>>();
       if (error) throw error;
       return data;
     },

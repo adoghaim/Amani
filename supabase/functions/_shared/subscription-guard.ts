@@ -1,4 +1,4 @@
-import type { createClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { loadBetaTester, type BetaAllowlistActions } from "./beta-allowlist.ts";
 import {
   BETA_TESTER_COLUMNS,
@@ -10,8 +10,6 @@ import {
 } from "./entitlement.ts";
 
 type StripeSubscriptionRow = { subscription_status: string | null };
-
-type SupabaseClient = ReturnType<typeof createClient>;
 
 // Re-exported so existing importers keep their type without knowing that the
 // decision moved into entitlement.ts.
