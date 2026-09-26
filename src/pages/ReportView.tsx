@@ -41,6 +41,13 @@ import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
+import { clientFreemiumActive } from '../lib/tier';
+import {
+  fetchInterpretationAccess,
+  type InterpretationAccessResult,
+} from '../lib/freemium/interpretationAccess';
+import { FreemiumReportPanel } from '../components/freemium/FreemiumReportPanel';
+import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
 
 /*
   A 429 from `generate-interpretation` means "over your daily AI quota", not
@@ -64,6 +71,10 @@ async function rateLimitMessage(err: unknown): Promise<string | null> {
     // ignore parse failure
   }
   return 'Daily analysis limit reached. Please try again tomorrow.';
+}
+
+function isPaymentRequired(err: unknown): boolean {
+  return err instanceof FunctionsHttpError && err.context?.status === 402;
 }
 
 /* NewReport writes this key when the upload's interpretation request is
@@ -373,8 +384,27 @@ export function ReportView() {
     subscriber — Stripe, Apple and Google alike — silently lost the ability to
     regenerate a report.
   */
-  const { entitled } = useSubscription();
+  const {
+    entitled, plan, complimentary, error: subscriptionError, refetch: refetchSubscription,
+  } = useSubscription();
   const navigate = useNavigate();
+  /*
+    Build-time flag. Off: this page is the 1.0.5 page, reading the
+    interpretation straight from the `interpretations` view. On: the body comes
+    only from `get-interpretation`, which has already chosen Full or Basic for
+    this viewer — fetched once when the report opens and once when a
+    generation completes. The 3 s polls below stay on the report status and
+    never touch get-interpretation, whose rate limit is per day.
+  */
+  const freemium = clientFreemiumActive();
+  const [accessState, setAccessState] = useState<InterpretationAccessResult | null>(null);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessNonce, setAccessNonce] = useState(0);
+  const [generating, setGenerating] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const accessKeyRef = useRef<string | null>(null);
+  const autoGenerateFired = useRef(false);
+  const refreshAccess = () => setAccessNonce(n => n + 1);
   const [report, setReport] = useState<LabReport | null>(null);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
@@ -428,6 +458,8 @@ export function ReportView() {
       if (data && data.status !== 'processing') {
         clearInterval(interval);
         fetchReport();
+        // Flag on: the status change re-runs the get-interpretation effect.
+        if (freemium) return;
         const { data: interpData } = await supabase
           .from('interpretations')
           .select('id, json_output, tier')
@@ -462,9 +494,11 @@ export function ReportView() {
       }
     }, POLL_INTERVAL);
     return () => clearInterval(interval);
-  }, [report?.status, reportId]);
+  }, [report?.status, reportId, freemium]);
 
   useEffect(() => {
+    // Flag on: generation is driven by get-interpretation's generation_needed.
+    if (freemium) return;
     if (!report || (report.status !== 'ready' && report.status !== 'error') || interpretation !== null) return;
     if (interpPollingActive.current) return;
 
@@ -547,7 +581,49 @@ export function ReportView() {
       cancelled = true;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [report?.status, report?.id, interpretation, reportId]);
+  }, [report?.status, report?.id, interpretation, reportId, freemium]);
+
+  /*
+    Flag on: one get-interpretation call per (report, settled status, explicit
+    refresh). The key ref makes the call idempotent across StrictMode's
+    double-invoked effects and drops a response a newer request superseded.
+  */
+  const reportKeyId = report?.id;
+  const reportStatus = report?.status;
+  useEffect(() => {
+    if (!freemium || !reportKeyId || !reportStatus || reportStatus === 'processing') return;
+    const key = `${reportKeyId}:${reportStatus}:${accessNonce}`;
+    if (accessKeyRef.current === key) return;
+    accessKeyRef.current = key;
+    setAccessLoading(true);
+    void fetchInterpretationAccess(
+      (name, options) => supabase.functions.invoke(name, options),
+      reportId,
+    ).then(result => {
+      if (accessKeyRef.current !== key) return;
+      setAccessState(result);
+      setInterpretation(result.interpretation ? normalizeInterpretation(result.interpretation) : null);
+      if (result.interpretation) {
+        writeInterpRateLimit(reportId, null);
+        setRateLimitNotice(null);
+      }
+      setAccessLoading(false);
+    });
+  }, [freemium, reportKeyId, reportStatus, accessNonce, reportId]);
+
+  /*
+    Flag on, no stored interpretation at all: run the generate action once per
+    report open, as the legacy page does. A stored-but-shallow body
+    (generation_needed WITH an interpretation) is never regenerated
+    automatically — that stays a one-click offer, like the Free-tier upgrade.
+  */
+  useEffect(() => {
+    if (!freemium || accessState?.access !== 'generation_needed' || accessState.interpretation !== null) return;
+    if (autoGenerateFired.current) return;
+    autoGenerateFired.current = true;
+    void handleGenerate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freemium, accessState]);
 
   const fetchReport = async (isRetry = false) => {
     const { data: reportData, error: reportError } = await supabase
@@ -567,7 +643,10 @@ export function ReportView() {
     const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
       supabase.from('biomarkers').select('*').eq('lab_report_id', reportId),
       supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
-      supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
+      // Flag on, the body is read only through get-interpretation.
+      freemium
+        ? Promise.resolve({ data: null })
+        : supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
     ]);
 
     if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
@@ -1009,6 +1088,20 @@ export function ReportView() {
         },
       });
       if (interpError) {
+        /*
+          Flag on, a 402 here means Premium is required. Undo the optimistic
+          status and retry count, and offer Premium in place instead of
+          redirecting to the pricing page.
+        */
+        if (freemium && isPaymentRequired(interpError)) {
+          await supabase.from('lab_reports').update({
+            status: priorStatus,
+            regeneration_count: report.regeneration_count,
+          }).eq('id', reportId);
+          setPaywallOpen(true);
+          await fetchReport();
+          return;
+        }
         const redirect = await handle402(interpError);
         if (redirect) { navigate(redirect, { replace: true }); return; }
         const limitMessage = await rateLimitMessage(interpError);
@@ -1028,11 +1121,48 @@ export function ReportView() {
         await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       }
       await fetchReport();
+      if (freemium) refreshAccess();
     } catch {
       await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
       await fetchReport();
+      if (freemium) refreshAccess();
     } finally {
       setRegenerating(false);
+    }
+  };
+
+  /*
+    Flag on: the generate action for `generation_needed`. The same request the
+    legacy auto-generation makes, without touching `regeneration_count` — that
+    caps regenerating an existing analysis, not producing the first one. The
+    server decides Full or Basic; afterwards the page asks get-interpretation
+    once. Never opens a paywall: a report that is not ready yet is not an
+    upsell moment.
+  */
+  const handleGenerate = async () => {
+    if (generating) return;
+    setGenerating(true);
+    writeInterpRateLimit(reportId, null);
+    setRateLimitNotice(null);
+    let refresh = true;
+    try {
+      const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+        body: { reportId, primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null },
+      });
+      if (invokeErr) {
+        const limitMessage = await rateLimitMessage(invokeErr);
+        if (limitMessage) {
+          // Nothing was generated; asking again would only spend the read quota.
+          refresh = false;
+          writeInterpRateLimit(reportId, limitMessage);
+          setRateLimitNotice(limitMessage);
+        }
+      }
+    } catch {
+      // Fall through to a fresh read, which renders whatever is true now.
+    } finally {
+      setGenerating(false);
+      if (refresh) refreshAccess();
     }
   };
 
@@ -1094,6 +1224,19 @@ export function ReportView() {
   // values behind a spinner that will never resolve.
   const isProcessing = (report.status === 'processing' || regenerating) && !rateLimitNotice;
 
+  const freemiumPanel = freemium ? (
+    <FreemiumReportPanel
+      state={accessState}
+      generating={generating}
+      plan={plan}
+      // A failed ledger read leaves the hook's default of 0 used; never show that as fact.
+      complimentaryUsed={subscriptionError ? null : complimentary.used}
+      onRetry={refreshAccess}
+      onGenerate={() => { void handleGenerate(); }}
+      onOpenPaywall={() => setPaywallOpen(true)}
+    />
+  ) : null;
+
   const resolvedLabSource: LabSource = (() => {
     if (report.lab_source && report.lab_source !== 'unknown') return report.lab_source;
     return 'unknown';
@@ -1101,6 +1244,13 @@ export function ReportView() {
 
   return (
     <Layout>
+      {freemium && (
+        <PremiumPaywall
+          open={paywallOpen}
+          onClose={() => setPaywallOpen(false)}
+          onEntitled={() => { void refetchSubscription(); refreshAccess(); }}
+        />
+      )}
       <div className="max-w-3xl mx-auto">
 
         {/* ── A. Header ──────────────────────────────────────────── */}
@@ -1220,7 +1370,7 @@ export function ReportView() {
           )}
 
           {/* ── Error state ─────────────────────────────────────── */}
-          {hasError && !interpretation && interpGaveUp && !rateLimitNotice && (() => {
+          {!freemium && hasError && !interpretation && interpGaveUp && !rateLimitNotice && (() => {
             const hasData = biomarkers.length > 0 || reportAnalytes.length > 0;
             const reason = !hasData
               ? 'No lab values were extracted. The PDF may be image-based.'
@@ -1257,12 +1407,17 @@ export function ReportView() {
           })()}
 
           {/* ── AI loading indicator (ready/error but no interpretation yet) ─── */}
-          {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && !rateLimitNotice && insightSummary && (
+          {(report.status === 'ready' || report.status === 'error') && !interpretation && !isProcessing && !interpGaveUp && !rateLimitNotice && insightSummary && (!freemium || accessLoading) && (
             <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-6 py-4 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-theme-primary animate-spin flex-shrink-0" />
               <p className="text-sm text-theme-muted-text-2">AI summary is being generated. Your lab data is ready below.</p>
             </div>
           )}
+
+          {/* ── Flag on: error / generate states sit with the status notices ── */}
+          {freemiumPanel && !isProcessing && !accessLoading && !rateLimitNotice
+            && (generating || accessState?.access === 'error' || accessState?.access === 'generation_needed')
+            && freemiumPanel}
 
           {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
@@ -1602,6 +1757,11 @@ export function ReportView() {
               primaryDisplayName={insightSummary?.primaryFinding?.displayName ?? null}
             />
           )}
+
+          {/* ── Flag on: Basic insights, Premium Preview, locked cards ── */}
+          {freemiumPanel && !isProcessing && !accessLoading && !generating
+            && (accessState?.access === 'basic' || accessState?.access === 'full')
+            && freemiumPanel}
 
           {/* Legacy cards removed in this consolidation pass:
               - PrimaryInsightCard (subsumed by Your Health Story)

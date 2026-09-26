@@ -10,6 +10,8 @@ import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { checkSubscriptionLive, handle402 } from '../utils/subscription';
+import { clientFreemiumActive } from '../lib/tier';
+import { uploadRequiresSubscription } from '../lib/freemium/gates';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
@@ -166,11 +168,13 @@ export function NewReport() {
   // Cycle metadata extracted from the PDF/OCR itself. When non-null, it wins
   // over the calculated fallback derived from reportDate + lastPeriodDate.
   const parsedCycleRef = useRef<ExtractedCycleContext | null>(null);
-  const [subChecked, setSubChecked] = useState(false);
+  // Flag on, uploading is part of Free and there is nothing to re-check here.
+  const [subChecked, setSubChecked] = useState(() => !uploadRequiresSubscription());
 
   // Defense-in-depth: re-check subscription before rendering the upload UI.
   // SubscriptionGate in App.tsx is the primary guard; this is the fallback.
   useEffect(() => {
+    if (!uploadRequiresSubscription()) return;
     let cancelled = false;
     checkSubscriptionLive().then(result => {
       if (cancelled) return;
@@ -752,6 +756,12 @@ export function NewReport() {
         },
       }).then(async ({ error: interpError }) => {
         if (interpError) {
+          /*
+            Flag on, upload completion is never a paywall. A 402 is not a failed
+            report either: the report view asks get-interpretation and renders
+            whatever state is true.
+          */
+          if (clientFreemiumActive() && interpError instanceof FunctionsHttpError && interpError.context?.status === 402) return;
           const redirect = await handle402(interpError);
           if (redirect) { navigate(redirect, { replace: true }); return; }
           const limitMessage = await rateLimitMessage(interpError);

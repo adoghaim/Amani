@@ -34,6 +34,7 @@ import {
   toDateOnly,
 } from '../utils/cyclePredictor';
 import { getTrialDaysRemaining } from '../utils/subscription';
+import { clientFreemiumActive } from '../lib/tier';
 import { formatDate } from '../utils/formatters';
 
 type NoteModalState = { open: boolean; defaultDate: string };
@@ -308,6 +309,7 @@ export function Dashboard() {
       entitled,
       source,
       trialDaysRemaining,
+      freemiumActive: clientFreemiumActive(),
     });
 
   const getStatusIcon = (status: string) => {

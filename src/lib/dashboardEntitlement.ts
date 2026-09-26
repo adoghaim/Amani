@@ -61,6 +61,12 @@ export interface DashboardEntitlementInput {
    * entitling this user — see `showTrialCountdown` below for why.
    */
   trialDaysRemaining: number | null;
+  /**
+   * `clientFreemiumActive()`. On, uploading is part of Free and there is no
+   * trial to count down or to have ended; the plan itself is shown by
+   * SubscriptionStatus, and the paywall is entered from reports and Billing.
+   */
+  freemiumActive?: boolean;
 }
 
 export interface DashboardEntitlementView {
@@ -79,7 +85,17 @@ export function resolveDashboardEntitlementView({
   entitled,
   source,
   trialDaysRemaining,
+  freemiumActive = false,
 }: DashboardEntitlementInput): DashboardEntitlementView {
+  if (freemiumActive) {
+    return {
+      canCreateReport: true,
+      showTrialEndedNotice: false,
+      showUpsell: false,
+      showTrialCountdown: false,
+    };
+  }
+
   if (subscriptionLoading) {
     return {
       canCreateReport: true,

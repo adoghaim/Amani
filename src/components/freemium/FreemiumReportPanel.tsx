@@ -1,0 +1,155 @@
+import { AlertCircle, Loader2, Lock, RefreshCw, Sparkles } from 'lucide-react';
+import { Button } from '../Button';
+import { ComplimentaryCounter } from './ComplimentaryCounter';
+import {
+  basicInterpretationText,
+  previewText,
+  type InterpretationAccessResult,
+} from '../../lib/freemium/interpretationAccess';
+import {
+  FREEMIUM_COPY,
+  LOCKED_CROSS_REPORT_LABEL,
+  lockedLifestyleLabel,
+  lockedPatternsLabel,
+} from '../../lib/freemium/copy';
+
+const COPY = FREEMIUM_COPY.report;
+
+interface FreemiumReportPanelProps {
+  /** Latest `get-interpretation` answer; null until the first one lands. */
+  state: InterpretationAccessResult | null;
+  /** A generation request is in flight. */
+  generating: boolean;
+  /** `useSubscription().plan`; the counter is only for Free accounts. */
+  plan: 'premium' | 'free' | undefined;
+  /** `useSubscription().complimentary.used`, or null when it is not known. */
+  complimentaryUsed: number | null;
+  onRetry: () => void;
+  onGenerate: () => void;
+  onOpenPaywall: () => void;
+}
+
+/**
+ * The flag-on, access-specific part of a report. The floor — lab values, flags,
+ * history and the deterministic summary — is rendered by ReportView for every
+ * state and is never behind anything here.
+ *
+ *   full              → nothing extra (the counter, for a Free account's claim)
+ *   basic             → Basic interpretation, one Premium Preview, locked cards
+ *   error             → retryable error. Never a paywall, never "Free".
+ *   generation_needed → the generate action
+ */
+export function FreemiumReportPanel({
+  state, generating, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
+}: FreemiumReportPanelProps) {
+  const counter = plan === 'free' && complimentaryUsed !== null
+    ? <ComplimentaryCounter used={complimentaryUsed} />
+    : null;
+
+  if (generating) {
+    return (
+      <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-6 py-5 flex items-center gap-4">
+        <Loader2 className="w-5 h-5 text-theme-primary animate-spin" />
+        <p className="text-sm font-semibold text-theme-text">{COPY.generating}</p>
+      </div>
+    );
+  }
+
+  if (!state) return null;
+
+  if (state.access === 'error') {
+    const rateLimited = state.code === 'rate_limit_exceeded';
+    return (
+      <div role="alert" className="rounded-2xl border border-theme-flag-watch-border bg-theme-flag-watch-bg p-5 space-y-3">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-theme-flag-watch">{COPY.errorTitle}</p>
+            <p className="text-xs text-theme-flag-watch mt-1 leading-relaxed">
+              {rateLimited ? COPY.errorRateLimited : COPY.errorBody}
+            </p>
+          </div>
+        </div>
+        {!rateLimited && (
+          <Button variant="secondary" size="sm" onClick={onRetry}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            {COPY.retry}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  if (state.access === 'generation_needed') {
+    const hasBody = state.interpretation !== null;
+    return (
+      <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface p-5 space-y-3">
+        <p className="text-sm font-semibold text-theme-text">
+          {hasBody ? COPY.generateFullTitle : COPY.generateTitle}
+        </p>
+        {!hasBody && <p className="text-xs text-theme-muted-text-2">{COPY.generateBody}</p>}
+        <Button size="sm" onClick={onGenerate}>
+          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+          {hasBody ? COPY.generateFullCta : COPY.generateCta}
+        </Button>
+      </div>
+    );
+  }
+
+  if (state.access === 'full') return counter;
+
+  const basicText = basicInterpretationText(state.interpretation);
+  const preview = state.preview ? previewText(state.preview) : null;
+  const locked: { key: string; label: string }[] = [
+    ...(state.locked.patterns > 0 ? [{ key: 'patterns', label: lockedPatternsLabel(state.locked.patterns) }] : []),
+    ...(state.locked.cross_report > 0 ? [{ key: 'cross_report', label: LOCKED_CROSS_REPORT_LABEL }] : []),
+    ...(state.locked.lifestyle > 0 ? [{ key: 'lifestyle', label: lockedLifestyleLabel(state.locked.lifestyle) }] : []),
+  ];
+
+  return (
+    <section className="space-y-4" aria-label={COPY.basicHeading}>
+      {basicText && (
+        <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface p-5">
+          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-theme-muted-text-3 mb-2">{COPY.basicHeading}</p>
+          <p className="text-sm text-theme-text-body leading-relaxed">{basicText}</p>
+        </div>
+      )}
+
+      {counter}
+
+      {preview && (
+        <div className="rounded-2xl border border-theme-primary/30 bg-theme-surface p-5">
+          <p className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-theme-primary mb-2">
+            <Sparkles className="w-3 h-3" />
+            {COPY.previewLabel}
+          </p>
+          {preview.title && <p className="text-sm font-semibold text-theme-text mb-1">{preview.title}</p>}
+          <p className="text-sm text-theme-text-body leading-relaxed">{preview.body}</p>
+        </div>
+      )}
+
+      {locked.map(card => (
+        <button
+          key={card.key}
+          type="button"
+          onClick={onOpenPaywall}
+          className="w-full text-left rounded-2xl border border-theme-border bg-theme-surface-2 px-5 py-4 flex items-center justify-between gap-3 hover:border-theme-primary transition-colors"
+        >
+          <span className="flex items-center gap-3">
+            <Lock className="w-4 h-4 text-theme-muted-text shrink-0" />
+            <span className="text-sm font-medium text-theme-text">{card.label}</span>
+          </span>
+          <span className="text-xs text-theme-muted-text-2 shrink-0">{COPY.lockedHint}</span>
+        </button>
+      ))}
+
+      <div className="rounded-2xl border border-theme-border bg-theme-surface px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-theme-text">{COPY.upgradeTitle}</p>
+          <p className="text-xs text-theme-muted-text-2 mt-0.5">{COPY.upgradeBody}</p>
+        </div>
+        <Button size="sm" onClick={onOpenPaywall}>{COPY.upgradeCta}</Button>
+      </div>
+    </section>
+  );
+}

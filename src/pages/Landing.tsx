@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { CycleMark } from '../components/CycleMark';
+import { clientFreemiumActive } from '../lib/tier';
+import { FREEMIUM_COPY } from '../lib/freemium/copy';
 
 /*
   The old page opened with a centred headline over three equal icon columns —
@@ -64,6 +66,8 @@ function Step({ n, title, body }: { n: string; title: string; body: string }) {
 }
 
 export function Landing() {
+  const freemium = clientFreemiumActive();
+  const copy = FREEMIUM_COPY.landing;
   return (
     <div className="min-h-dvh bg-theme-background">
       <nav className="border-b border-theme-border-inner">
@@ -76,7 +80,7 @@ export function Landing() {
               <Button variant="ghost" size="sm">Log in</Button>
             </Link>
             <Link to="/signup">
-              <Button size="sm">Start free trial</Button>
+              <Button size="sm">{freemium ? copy.navCta : 'Start free trial'}</Button>
             </Link>
           </div>
         </div>
@@ -99,14 +103,14 @@ export function Landing() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 mb-5">
               <Link to="/signup" className="sm:w-auto">
-                <Button size="lg" className="w-full sm:w-auto">Start your free 7-day trial</Button>
+                <Button size="lg" className="w-full sm:w-auto">{freemium ? copy.heroCta : 'Start your free 7-day trial'}</Button>
               </Link>
               <Link to="/login" className="sm:w-auto">
                 <Button variant="outline" size="lg" className="w-full sm:w-auto">Log in</Button>
               </Link>
             </div>
             <p className="text-sm text-theme-muted-text-2">
-              No card to start. Then $9.99 a month, or $99.99 a year.
+              {freemium ? copy.heroNote : 'No card to start. Then $9.99 a month, or $99.99 a year.'}
             </p>
           </div>
 
@@ -183,8 +187,12 @@ export function Landing() {
         <div className="mb-10">
           <h2 className="text-3xl mb-3">Pricing</h2>
           <p className="text-theme-muted-text max-w-[42ch]">
-            One plan, billed monthly or yearly. Seven days free first, and you can cancel
-            from inside the app.
+            {freemium ? copy.pricingBody : (
+              <>
+                One plan, billed monthly or yearly. Seven days free first, and you can cancel
+                from inside the app.
+              </>
+            )}
           </p>
         </div>
 
@@ -199,7 +207,7 @@ export function Landing() {
             </p>
             <p className="text-sm text-theme-muted-text-3 line-through tabular-nums mb-7">$19.99</p>
             <Link to="/signup" className="mt-auto">
-              <Button variant="outline" className="w-full">Start free trial</Button>
+              <Button variant="outline" className="w-full">{freemium ? copy.cardCta : 'Start free trial'}</Button>
             </Link>
           </div>
 
@@ -214,7 +222,7 @@ export function Landing() {
             </p>
             <p className="text-sm text-theme-muted-text-3 line-through tabular-nums mb-7">$199.99</p>
             <Link to="/signup" className="mt-auto">
-              <Button className="w-full">Start free trial</Button>
+              <Button className="w-full">{freemium ? copy.cardCta : 'Start free trial'}</Button>
             </Link>
           </div>
         </div>

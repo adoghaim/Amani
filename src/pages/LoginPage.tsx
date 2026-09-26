@@ -2,6 +2,8 @@ import { LoginForm } from '../components/auth/LoginForm'
 import { safeRedirectTarget } from '../lib/redirect'
 import { AuthShell } from '../components/auth/AuthShell'
 import { Link, useNavigate } from 'react-router-dom'
+import { clientFreemiumActive } from '../lib/tier'
+import { FREEMIUM_COPY } from '../lib/freemium/copy'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -15,7 +17,7 @@ export function LoginPage() {
         <>
           No account yet?{' '}
           <Link to="/signup" className="text-theme-primary hover:text-theme-primary-dark transition-colors font-medium">
-            Start a free trial
+            {clientFreemiumActive() ? FREEMIUM_COPY.auth.loginCreateAccount : 'Start a free trial'}
           </Link>
         </>
       }

@@ -1,7 +1,10 @@
 import { Crown, Clock, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useSubscription } from '../hooks/useSubscription';
+import { useSubscription, type SubscriptionSource } from '../hooks/useSubscription';
+import { clientFreemiumActive } from '../lib/tier';
+import { FREEMIUM_COPY } from '../lib/freemium/copy';
+import { ComplimentaryCounter } from './freemium/ComplimentaryCounter';
 
 /*
   `users.subscription_status` is NOT the source of truth and never became one.
@@ -17,6 +20,66 @@ import { useSubscription } from '../hooks/useSubscription';
   makes.
 */
 export function SubscriptionStatus() {
+  return clientFreemiumActive() ? <FreemiumPlanStatus /> : <LegacySubscriptionStatus />;
+}
+
+/** Premium source line; complimentary is its own plan label, never "billed". */
+function premiumSourceLabel(source: SubscriptionSource): string | null {
+  if (source === 'ios') return FREEMIUM_COPY.plan.sourceIos;
+  if (source === 'android') return FREEMIUM_COPY.plan.sourceAndroid;
+  if (source === 'stripe') return FREEMIUM_COPY.plan.sourceStripe;
+  return null;
+}
+
+/**
+ * Flag on: "Plan: Free" with complimentary remaining, or "Plan: Premium" with
+ * where it comes from. No countdown and no expiry — Free does not lapse. An
+ * unresolved or failed read shows nothing rather than guessing Free.
+ */
+function FreemiumPlanStatus() {
+  const { userProfile, loading } = useAuth();
+  const { plan, source, complimentary, error, loading: subscriptionLoading } = useSubscription();
+
+  if (loading || subscriptionLoading) {
+    return (
+      <div className="bg-theme-surface rounded-xl border border-theme-border p-4 animate-pulse">
+        <div className="h-3 bg-theme-surface-2 rounded w-1/3" />
+      </div>
+    );
+  }
+  if (!userProfile || error || !plan) return null;
+
+  if (plan === 'premium') {
+    const complimentaryGrant = source === 'complimentary';
+    const detail = complimentaryGrant ? FREEMIUM_COPY.plan.complimentary : premiumSourceLabel(source);
+    return (
+      <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border rounded-xl px-4 py-3 flex items-center gap-3">
+        <Crown className="w-4 h-4 text-theme-flag-ok shrink-0" />
+        <p className="text-sm text-theme-flag-ok font-medium">
+          {FREEMIUM_COPY.plan.premium}
+          {detail && <span className="font-normal"> &middot; {detail}</span>}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-theme-surface-2 border border-theme-border rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+      <div>
+        <p className="text-sm text-theme-text font-medium">{FREEMIUM_COPY.plan.free}</p>
+        <ComplimentaryCounter used={complimentary.used} variant="compact" />
+      </div>
+      <Link
+        to="/app/billing"
+        className="text-xs font-semibold text-theme-primary hover:text-theme-primary-dark shrink-0 transition-colors"
+      >
+        {FREEMIUM_COPY.plan.seePremium}
+      </Link>
+    </div>
+  );
+}
+
+function LegacySubscriptionStatus() {
   const { userProfile, loading } = useAuth();
   const { entitled, source, loading: subscriptionLoading } = useSubscription();
 

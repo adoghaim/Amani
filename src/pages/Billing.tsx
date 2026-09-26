@@ -11,6 +11,10 @@ import { CreditCard, Calendar, CheckCircle, AlertCircle, RefreshCw } from 'lucid
 import { useState } from 'react';
 import { isNative, openExternalUrl } from '../lib/native';
 import { initIap, restoreIapPurchases, storeSubscriptionsUrl, syncIapEntitlement } from '../lib/iap';
+import { clientFreemiumActive } from '../lib/tier';
+import { FREEMIUM_COPY } from '../lib/freemium/copy';
+import { ComplimentaryCounter } from '../components/freemium/ComplimentaryCounter';
+import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
 
 export function Billing() {
   const { user, userProfile } = useAuth();
@@ -21,7 +25,16 @@ export function Billing() {
     loading: subLoading,
     isActive,
     refetch,
+    plan,
+    complimentary: complimentaryUsage,
+    error: subError,
   } = useSubscription();
+  /*
+    Flag on: no trial and no countdown. The plan is Free or Premium, Free shows
+    the complimentary counter, and subscribing opens the paywall in place.
+  */
+  const freemium = clientFreemiumActive();
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +101,7 @@ export function Billing() {
 
   const manageLabel = () => {
     if (complimentary) return 'Complimentary access';
-    if (!active) return 'Subscribe Now';
+    if (!active) return freemium ? FREEMIUM_COPY.plan.upgrade : 'Subscribe Now';
     if (source === 'ios') return 'Manage in the App Store';
     if (source === 'android') return 'Manage in Google Play';
     return 'Manage via Stripe';
@@ -100,6 +113,10 @@ export function Billing() {
     if (complimentary) return;
 
     if (!active) {
+      if (freemium) {
+        setPaywallOpen(true);
+        return;
+      }
       navigate('/app/pricing');
       return;
     }
@@ -255,6 +272,7 @@ export function Billing() {
                   </div>
                 ) : active ? (
                   <div className="space-y-2">
+                    {freemium && <p className="text-theme-text font-medium">{FREEMIUM_COPY.plan.premium}</p>}
                     <p className="text-theme-text flex items-center gap-2">
                       <CheckCircle className="w-5 h-5 text-theme-success" />
                       <span className="font-medium">Active subscription</span>
@@ -274,6 +292,23 @@ export function Billing() {
                       </p>
                     )}
                   </div>
+                ) : freemium ? (
+                  // Never show Free for a read we could not complete.
+                  subError || plan !== 'free' ? (
+                    <div className="space-y-3">
+                      <p className="text-theme-text">{FREEMIUM_COPY.plan.loadError}</p>
+                      <Button variant="secondary" size="sm" onClick={() => { void refetch(); }}>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        {FREEMIUM_COPY.report.retry}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-theme-text font-medium">{FREEMIUM_COPY.plan.free}</p>
+                      <p className="text-theme-muted-text">{FREEMIUM_COPY.plan.freeSummary}</p>
+                      <ComplimentaryCounter used={complimentaryUsage.used} />
+                    </div>
+                  )
                 ) : userProfile.subscription_status === 'trial' ? (
                   <div className="space-y-2">
                     <p className="text-theme-text">
@@ -333,7 +368,9 @@ export function Billing() {
                 ? `Your subscription is billed by ${source === 'ios' ? 'Apple' : 'Google'}. Change your plan, update payment, or cancel in your store account settings.`
                 : active
                   ? 'Update your payment method, view billing history, or cancel your subscription.'
-                  : 'Subscribe to unlock full access to all features.'}
+                  : freemium
+                    ? FREEMIUM_COPY.plan.manageFreeBody
+                    : 'Subscribe to unlock full access to all features.'}
             </p>
             {error && (
               <div className="flex items-start gap-3 p-4 mb-4 bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg">
@@ -348,7 +385,8 @@ export function Billing() {
                 button has — the portal, the App Store, Google Play — would
                 either error or show an unrelated account.
               */}
-              {!complimentary && (
+              {/* Flag on, an unresolved plan is a retry above, never an upgrade offer. */}
+              {!complimentary && !(freemium && !active && (subError || plan !== 'free')) && (
                 <Button onClick={handleManageSubscription} disabled={loading}>
                   <Calendar className="w-5 h-5 mr-2" />
                   {loading ? 'Loading...' : manageLabel()}
@@ -367,7 +405,7 @@ export function Billing() {
             )}
           </Card>
 
-          {!active && userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
+          {!freemium && !active && userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
             <Card className="bg-theme-surface-2 border-theme-border">
               <h3 className="text-theme-text mb-2">
                 Your trial is active
@@ -380,6 +418,13 @@ export function Billing() {
           )}
         </div>
       </div>
+      {freemium && (
+        <PremiumPaywall
+          open={paywallOpen}
+          onClose={() => setPaywallOpen(false)}
+          onEntitled={() => { void refetch(); }}
+        />
+      )}
     </Layout>
   );
 }

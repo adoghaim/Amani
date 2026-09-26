@@ -14,6 +14,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
+import { clientFreemiumActive } from '../lib/tier';
+import { FREEMIUM_COPY } from '../lib/freemium/copy';
+import { isPremiumRequiredResponse } from '../lib/freemium/premiumRequired';
+import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
 import { TodayCard } from '../components/TodayCard';
@@ -82,6 +86,7 @@ export function Tracker() {
   const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   const [showInsightsModal, setShowInsightsModal] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const [insightsData, setInsightsData] = useState<LabInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -398,6 +403,16 @@ export function Tracker() {
       // `handle402` reads the invoke-style error, and this call uses raw fetch,
       // so hand it the Response wrapped the way `functions.invoke` would.
       if (res.status === 402) {
+        /*
+          Flag on, comparison is Premium-only: a Free account gets
+          `premium_required`, which opens the paywall in place rather than
+          redirecting to pricing.
+        */
+        if (clientFreemiumActive() && await isPremiumRequiredResponse(res)) {
+          setShowInsightsModal(false);
+          setPaywallOpen(true);
+          return;
+        }
         const redirect = await handle402(new FunctionsHttpError(res));
         if (redirect) {
           setShowInsightsModal(false);
@@ -651,6 +666,14 @@ export function Tracker() {
         loading={insightsLoading}
         error={insightsError || undefined}
       />
+
+      {clientFreemiumActive() && (
+        <PremiumPaywall
+          open={paywallOpen}
+          onClose={() => setPaywallOpen(false)}
+          reason={FREEMIUM_COPY.paywall.premiumRequiredBody}
+        />
+      )}
     </Layout>
   );
 }

@@ -5,6 +5,8 @@ import { supabase } from '../../lib/supabase'
 import { publicUrl } from '../../lib/appUrl';
 import { openExternalUrl } from '../../lib/native'
 import { errorMessage } from '../../lib/errors'
+import { clientFreemiumActive } from '../../lib/tier'
+import { FREEMIUM_COPY } from '../../lib/freemium/copy'
 
 interface PricingCardProps {
   product: StripeProduct
@@ -104,7 +106,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
           variant={isPopular ? 'primary' : 'outline'}
           className="w-full"
         >
-          Start free trial
+          {clientFreemiumActive() ? FREEMIUM_COPY.pricing.subscribe : 'Start free trial'}
         </Button>
 
         {error && (

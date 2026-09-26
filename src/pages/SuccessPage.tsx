@@ -22,6 +22,10 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCircle, Loader2, Clock } from 'lucide-react'
 import { Button } from '../components/Button'
 import { checkSubscriptionLive } from '../utils/subscription'
+import { supabase } from '../lib/supabase'
+import { clientFreemiumActive } from '../lib/tier'
+import { FREEMIUM_COPY } from '../lib/freemium/copy'
+import { waitForStripePurchase, type StripeSubscriptionRow } from '../lib/freemium/purchaseConfirmation'
 
 /** How often to re-ask the server. */
 const POLL_INTERVAL_MS = 2000
@@ -38,8 +42,33 @@ export function SuccessPage() {
   const navigate = useNavigate()
   const [state, setState] = useState<State>('confirming')
   const cancelled = useRef(false)
+  const freemium = clientFreemiumActive()
 
   const poll = useCallback(async () => {
+    /*
+      Flag on, "may use the app" is true for every Free account, so it proves
+      nothing about this purchase. Wait for the Stripe subscription row itself.
+    */
+    if (clientFreemiumActive()) {
+      const outcome = await waitForStripePurchase({
+        read: async () => {
+          const { data, error } = await supabase
+            .from('stripe_user_subscriptions')
+            .select('subscription_id, subscription_status')
+            .maybeSingle()
+          if (error) throw error
+          return data as StripeSubscriptionRow | null
+        },
+        isCancelled: () => cancelled.current,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        now: () => Date.now(),
+        intervalMs: POLL_INTERVAL_MS,
+        timeoutMs: POLL_TIMEOUT_MS,
+      })
+      if (outcome) setState(outcome)
+      return
+    }
+
     const startedAt = Date.now()
 
     while (!cancelled.current) {
@@ -88,11 +117,20 @@ export function SuccessPage() {
               <div className="flex justify-center mb-6">
                 <Loader2 className="h-16 w-16 text-theme-primary animate-spin" />
               </div>
-              <h1 className="text-2xl text-theme-text mb-4">Confirming your subscription</h1>
-              <p className="text-theme-muted-text mb-8">
-                Your payment went through. We&rsquo;re just waiting for it to be confirmed —
-                this usually takes a few seconds.
-              </p>
+              {freemium ? (
+                <>
+                  <h1 className="text-2xl text-theme-text mb-4">{FREEMIUM_COPY.success.confirming}</h1>
+                  <p className="text-theme-muted-text mb-8">{FREEMIUM_COPY.success.confirmingBody}</p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-2xl text-theme-text mb-4">Confirming your subscription</h1>
+                  <p className="text-theme-muted-text mb-8">
+                    Your payment went through. We&rsquo;re just waiting for it to be confirmed —
+                    this usually takes a few seconds.
+                  </p>
+                </>
+              )}
             </>
           )}
 
@@ -101,10 +139,19 @@ export function SuccessPage() {
               <div className="flex justify-center mb-6">
                 <CheckCircle className="h-16 w-16 text-theme-flag-ok" />
               </div>
-              <h1 className="text-2xl text-theme-text mb-4">You&rsquo;re all set</h1>
-              <p className="text-theme-muted-text mb-8">
-                Thank you for subscribing. Every Amani feature is unlocked on your account.
-              </p>
+              {freemium ? (
+                <>
+                  <h1 className="text-2xl text-theme-text mb-4">{FREEMIUM_COPY.success.confirmed}</h1>
+                  <p className="text-theme-muted-text mb-8">{FREEMIUM_COPY.success.confirmedBody}</p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-2xl text-theme-text mb-4">You&rsquo;re all set</h1>
+                  <p className="text-theme-muted-text mb-8">
+                    Thank you for subscribing. Every Amani feature is unlocked on your account.
+                  </p>
+                </>
+              )}
               {/*
                 /app, not /. The old CTA said "Continue to Dashboard" and
                 navigated to the marketing landing page.
