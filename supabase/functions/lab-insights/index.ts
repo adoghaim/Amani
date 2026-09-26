@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
+import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { parseLabInsightsCompletion } from "../_shared/lab-insights-output.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
@@ -94,7 +95,13 @@ Deno.serve(async (req: Request) => {
     // This function bills us for an OpenAI call, so it gates on entitlement
     // exactly like generate-interpretation / extract-biomarkers /
     // parse-lab-report-ocr. Without this an expired trial kept generating.
-    const subCheck = await checkUserSubscription(supabaseAuth, userId);
+    const subCheck = await checkUserSubscription(supabaseAuth, userId, undefined, true);
+    if (!subCheck.allowed && subCheck.reason === "error") return entitlementUnavailable(corsHeaders);
+    if (subCheck.allowed && subCheck.plan === "free") {
+      return new Response(JSON.stringify({ code: "premium_required" }), {
+        status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     if (!subCheck.allowed) {
       console.log("[lab-insights] subscription check blocked:", subCheck.reason);
       return new Response(

@@ -664,13 +664,18 @@ export type Database = {
         }
         Relationships: []
       }
-      interpretations: {
+      interpretations_private: {
         Row: {
           disclaimer_version: string
           generated_at: string
           id: string
           interpretation_source: string | null
           json_output: Json
+          json_output_basic: Json
+          stored_depth: "deep" | "standard" | "unknown"
+          projection_version: number
+          blood_draw_id: string | null
+          tier: string | null
           lab_report_id: string
         }
         Insert: {
@@ -679,6 +684,11 @@ export type Database = {
           id?: string
           interpretation_source?: string | null
           json_output: Json
+          json_output_basic?: Json
+          stored_depth?: "deep" | "standard" | "unknown"
+          projection_version?: number
+          blood_draw_id?: string | null
+          tier?: string | null
           lab_report_id: string
         }
         Update: {
@@ -687,6 +697,11 @@ export type Database = {
           id?: string
           interpretation_source?: string | null
           json_output?: Json
+          json_output_basic?: Json
+          stored_depth?: "deep" | "standard" | "unknown"
+          projection_version?: number
+          blood_draw_id?: string | null
+          tier?: string | null
           lab_report_id?: string
         }
         Relationships: [
@@ -1550,6 +1565,18 @@ export type Database = {
       }
     }
     Views: {
+      interpretations: {
+        Row: {
+          id: string
+          lab_report_id: string
+          json_output: Json
+          generated_at: string
+          disclaimer_version: string
+          interpretation_source: string | null
+          tier: string | null
+        }
+        Relationships: []
+      }
       stripe_user_orders: {
         Row: {
           amount_subtotal: number | null
@@ -1585,7 +1612,19 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      save_interpretation: {
+        Args: { p_user_id: string; p_report_id: string; p_interpretation: Json; p_basic: Json; p_stored_depth: string; p_source: string; p_tier: string; p_blood_draw_id?: string | null }
+        Returns: undefined
+      }
+      commit_deep_access_v2: {
+        Args: { p_user_id: string; p_report_id: string; p_blood_draw_id: string; p_evidence_tier: string; p_interpretation: Json; p_source: string; p_tier: string; p_consume_credit: boolean; p_basic: Json }
+        Returns: string
+      }
+      delete_interpretations: { Args: { p_report_ids: string[] }; Returns: undefined }
+      read_interpretation_for_server: {
+        Args: { p_user_id: string; p_report_id: string; p_premium: boolean }
+        Returns: { json_output: Json; stored_depth: string; has_claim: boolean; tier: string | null }[]
+      }
     }
     Enums: {
       stripe_order_status: "pending" | "completed" | "canceled"

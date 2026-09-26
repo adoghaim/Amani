@@ -32,8 +32,6 @@ export type MedicalFloor = typeof MEDICAL_FLOOR;
 /** Lifetime Introductory Deep Access credits on Free. Frozen by the spec. */
 export const FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS = 3;
 
-/** Full before/after comparisons on Free, once comparable data exists. Frozen. */
-export const FREE_FULL_COMPARISONS = 1;
 
 /*
   Beta limits, frozen 2026-09-04. Named for the analysis being metered, never
@@ -74,8 +72,8 @@ export const FREE_ALLOWANCES: Allowances = Object.freeze({
     limit: FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS,
   }),
   fullComparison: Object.freeze({
-    kind: "lifetime",
-    limit: FREE_FULL_COMPARISONS,
+    kind: "capped",
+    limit: 0,
   }),
   aiQuestions: Object.freeze({
     kind: "monthly",

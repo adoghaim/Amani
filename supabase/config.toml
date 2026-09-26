@@ -39,3 +39,6 @@ verify_jwt = true
 # taken from this JWT, never from the request body.
 [functions.verify-iap-purchase]
 verify_jwt = true
+
+[functions.get-interpretation]
+verify_jwt = true

@@ -183,3 +183,9 @@ describe('subscription guard denial wire shapes', () => {
     }
   });
 });
+
+it.each(['stripe_user_subscriptions', 'iap_subscriptions', 'users', 'iap_beta_testers', 'complimentary_entitlements'])('strict handler guard surfaces %s errors even while dark', async table => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const db = database({ iap_subscriptions: { data: [sandbox] }, [table]: { error: { message: 'offline' } } });
+  expect(await checkUserSubscription(db.client, userId, false, true)).toMatchObject({ allowed: false, reason: 'error' });
+});

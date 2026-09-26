@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { ExtractBiomarkersRequestSchema } from "../_shared/schemas/requests.ts";
+import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
@@ -252,7 +253,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const subCheck = await checkUserSubscription(supabase, user.id);
+    const subCheck = await checkUserSubscription(supabase, user.id, undefined, true);
+    if (!subCheck.allowed && subCheck.reason === "error") return entitlementUnavailable(corsHeaders);
     if (!subCheck.allowed) {
       console.log("[extract-biomarkers] subscription check blocked:", subCheck.reason);
       return new Response(

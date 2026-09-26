@@ -3,6 +3,8 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 shopt -s nullglob
 
+# The discovery glob includes get-interpretation and the visibility/read/preview
+# modules; subscription-guard remains in the checked set. No freemium exclusion.
 files=()
 discovered=0
 excluded=0

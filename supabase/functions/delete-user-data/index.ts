@@ -152,7 +152,7 @@ Deno.serve(async (req: Request) => {
 
         if (ids.length > 0) {
           const perReport = await Promise.all([
-            supabase.from("interpretations").delete().in("lab_report_id", ids),
+            supabase.rpc("delete_interpretations", { p_report_ids: ids }),
             supabase.from("biomarkers").delete().in("lab_report_id", ids),
             supabase.from("report_items").delete().in("lab_report_id", ids),
             supabase.from("report_analytes").delete().in("lab_report_id", ids),

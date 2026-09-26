@@ -7,6 +7,8 @@ import {
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { buildBasicProjection } from "../_shared/interpretation-visibility.ts";
+import { entitlementUnavailable, generationVisibilityMode } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import {
   commitGeneratedInterpretation,
@@ -1321,10 +1323,29 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const subCheck = await checkUserSubscription(supabaseUser, user.id);
+    let active = freemiumActive();
+    let subCheck = await checkUserSubscription(supabaseUser, user.id, active, true);
+    if (!subCheck.allowed && subCheck.reason === "error") return entitlementUnavailable(corsHeaders);
+    try {
+      active = await generationVisibilityMode({ active, entitlement: subCheck,
+        readEnabled: async () => {
+          const { data, error } = await supabase.from("interpretation_visibility_config")
+            .select("enabled").eq("singleton", true).single();
+          if (error || !data) throw new Error("Visibility configuration unavailable");
+          return data.enabled === true;
+        },
+        warn: () => console.warn("[generate-interpretation] Free generation disabled: DB visibility switch is OFF"),
+      });
+    } catch {
+      return entitlementUnavailable(corsHeaders);
+    }
+    if (freemiumActive() && !active) {
+      subCheck = await checkUserSubscription(supabaseUser, user.id, false, true);
+      if (!subCheck.allowed && subCheck.reason === "error") return entitlementUnavailable(corsHeaders);
+    }
     const tierDecision = resolveTier({
       entitlement: subCheck,
-      freemiumActive: freemiumActive(),
+      freemiumActive: active,
     });
     if (tierDecision.gate.gate === "block") {
       debugLog("[generate-interpretation] subscription check blocked:", tierDecision.gate.reason);
@@ -1457,12 +1478,13 @@ Deno.serve(async (req: Request) => {
         return count;
       },
       async commitDeepAccess(input) {
-        const { data, error } = await supabase.rpc("commit_deep_access", {
+        const { data, error } = await supabase.rpc("commit_deep_access_v2", {
           p_user_id: input.userId,
           p_report_id: input.reportId,
           p_blood_draw_id: input.bloodDrawId,
           p_evidence_tier: input.evidenceTier,
           p_interpretation: input.interpretation,
+          p_basic: basicProjection,
           p_source: "ai",
           p_tier: "plus",
           p_consume_credit: input.consumeCredit,
@@ -1479,7 +1501,7 @@ Deno.serve(async (req: Request) => {
       },
     };
     let deepAccessGranted = tierDecision.tier === "plus";
-    if (freemiumActive() && tierDecision.tier === "free") {
+    if (active && tierDecision.tier === "free") {
       // Raw accession/collection evidence is not retained in production. Hash
       // the stored upload; never use client-editable report_date as identity.
       let contentHash: string | null = null;
@@ -1509,11 +1531,11 @@ Deno.serve(async (req: Request) => {
 
     // Access remains the ledger's decision; generation may continue after exhaustion.
     const generateDeep = shouldGenerateDeepInterpretation({
-      freemiumActive: freemiumActive(), tier: tierDecision.tier,
+      freemiumActive: active, tier: tierDecision.tier,
       deepAccessGranted, decision: accessDecision,
       postLimitGeneration: Deno.env.get("FREEMIUM_POST_LIMIT_GENERATION"),
     });
-    if (freemiumActive()) {
+    if (active) {
       if (subCheck.allowed && subCheck.plan === undefined) {
         console.warn("[generate-interpretation] Cost telemetry plan missing; recording unknown");
       }
@@ -1570,12 +1592,13 @@ Deno.serve(async (req: Request) => {
       deterministicInterpretation,
     });
 
-    const interpretationJson = freemiumActive()
+    const interpretationJson = active
       ? addFindingMetadata(shaped.payload, {
           observedAt: report?.report_date,
           hasPriorComparison: primaryContext?.previous_value != null,
         })
       : shaped.payload;
+    const basicProjection = buildBasicProjection(interpretationJson);
 
     /*
       The medical floor is checked on whatever is about to be persisted, at every
@@ -1594,7 +1617,7 @@ Deno.serve(async (req: Request) => {
     const source = shaped.source;
 
     let savedByLedger = false;
-    if (freemiumActive() && tierDecision.tier === "free") {
+    if (active && tierDecision.tier === "free") {
       const committed = await commitGeneratedInterpretation(introActions, {
         freemiumActive: true,
         tier: tierDecision.tier,
@@ -1611,31 +1634,34 @@ Deno.serve(async (req: Request) => {
     // A race loser saves the already-generated payload with Free metadata.
     // Post-limit always-generation uses this same upsert without consuming a claim.
     if (!savedByLedger) {
-    const { error: upsertError } = await supabase
-      .from("interpretations")
-      .upsert({
-        lab_report_id: reportId,
-        json_output: interpretationJson,
-        interpretation_source: source,
-        tier: shaped.tier,
-        generated_at: new Date().toISOString(),
-        disclaimer_version: "1.0",
-      }, { onConflict: "lab_report_id" });
-
-    if (upsertError) {
-      console.error("[generate-interpretation] Upsert error:", upsertError.message);
-      await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
-      return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const { error: upsertError } = await supabase.rpc("save_interpretation", {
+        p_user_id: user.id, p_report_id: reportId,
+        p_interpretation: interpretationJson,
+        p_basic: basicProjection,
+        p_stored_depth: shaped.depth, p_source: source, p_tier: shaped.tier,
+        p_blood_draw_id: claimRequest?.bloodDrawId ?? null,
       });
-    }
+
+      if (upsertError) {
+        console.error("[generate-interpretation] Upsert error:", upsertError.message);
+        await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
+        return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
     }
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
     console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
 
-    return new Response(JSON.stringify({ success: true, source }), {
+    return new Response(JSON.stringify(active ? {
+      success: true, source,
+      access: shaped.tier === "plus" ? "full" : "basic",
+      interpretation: shaped.tier === "plus" ? interpretationJson : basicProjection,
+      preview: basicProjection.preview,
+      locked: basicProjection.locked,
+    } : { success: true, source }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
