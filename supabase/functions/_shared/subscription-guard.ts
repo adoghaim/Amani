@@ -1,4 +1,4 @@
-import type { createClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { loadBetaTester, type BetaAllowlistActions } from "./beta-allowlist.ts";
 import {
   BETA_TESTER_COLUMNS,
@@ -10,8 +10,6 @@ import {
 } from "./entitlement.ts";
 
 type StripeSubscriptionRow = { subscription_status: string | null };
-
-type SupabaseClient = ReturnType<typeof createClient>;
 
 // Re-exported so existing importers keep their type without knowing that the
 // decision moved into entitlement.ts.
@@ -64,7 +62,9 @@ export async function checkUserSubscription(
   supabase: SupabaseClient,
   userId: string,
   freemiumActive = Deno.env.get("FREEMIUM_ACTIVE") === "true",
+  strictReadErrors = false,
 ): Promise<SubscriptionCheckResult> {
+  const failOnReadError = freemiumActive || strictReadErrors;
   try {
     const [subResult, iapResult, userResult] = await Promise.all([
       supabase
@@ -86,7 +86,7 @@ export async function checkUserSubscription(
         .maybeSingle(),
     ]);
 
-    if (freemiumActive) {
+    if (failOnReadError) {
       for (const result of [subResult, iapResult, userResult]) {
         if (result.error) return { allowed: false, reason: "error", detail: result.error.message };
       }
@@ -126,7 +126,7 @@ export async function checkUserSubscription(
       },
     );
 
-    if (freemiumActive && betaReadFailed) {
+    if (failOnReadError && betaReadFailed) {
       return { allowed: false, reason: "error", detail: String(betaReadError) };
     }
 
@@ -161,7 +161,7 @@ export async function checkUserSubscription(
       migration has run. Treating it as absent costs access only to the handful
       of complimentary accounts we control and can re-check by hand.
     */
-    if (freemiumActive && compError) {
+    if (failOnReadError && compError) {
       return { allowed: false, reason: "error", detail: compError.message };
     }
     if (compError) {
@@ -185,7 +185,7 @@ export async function checkUserSubscription(
     });
   } catch (err) {
     console.error("[subscription-guard] DB read failed, failing closed:", err);
-    if (freemiumActive) return { allowed: false, reason: "error", detail: String(err) };
+    if (failOnReadError) return { allowed: false, reason: "error", detail: String(err) };
     return { allowed: false, reason: "no_subscription" };
   }
 }

@@ -60,8 +60,6 @@ export type MedicalFloor = typeof MEDICAL_FLOOR;
 /** Lifetime Introductory Deep Access credits on Free. Frozen by the spec. */
 export const FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS = 3;
 
-/** Full before/after comparisons on Free, once comparable data exists. Frozen. */
-export const FREE_FULL_COMPARISONS = 1;
 
 /*
   Beta limits, frozen 2026-09-04.
@@ -113,8 +111,8 @@ export const FREE_ALLOWANCES: Allowances = Object.freeze({
     limit: FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS,
   }),
   fullComparison: Object.freeze({
-    kind: "lifetime",
-    limit: FREE_FULL_COMPARISONS,
+    kind: "capped",
+    limit: 0,
   }),
   aiQuestions: Object.freeze({
     kind: "monthly",
@@ -231,4 +229,26 @@ export function resolveTier(input: TierInput): TierDecision {
  */
 export function normalizeTierForClient(raw: unknown): Tier {
   return raw === "free" ? "free" : "plus";
+}
+
+/** Owner vocabulary, 2026-09-26. SQL's frozen migration copy is parity-tested. */
+export const FINDING_STATUS = Object.freeze({
+  NORMAL: ["reassuring", "normal", "in_range", "within_range", "optimal"],
+  BORDERLINE: ["monitor"],
+  ABNORMAL: ["attention", "discuss"],
+} as const);
+
+export function isAbnormalStatus(value: unknown): boolean {
+  return typeof value === "string" && (FINDING_STATUS.ABNORMAL as readonly string[]).includes(value.toLowerCase());
+}
+
+/** Only explicit boolean flags and the abnormal vocabulary confer safety status. */
+export function carriesFindingSafety(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(carriesFindingSafety);
+  if (!value || typeof value !== "object") return false;
+  return Object.entries(value).some(([key, child]) => {
+    if (/^(abnormal|is_abnormal|safety|safety_related|is_safety|critical|urgent)$/.test(key)) return child === true;
+    if (/^(flag|flagged|status|current_status)$/.test(key) && isAbnormalStatus(child)) return true;
+    return carriesFindingSafety(child);
+  });
 }

@@ -238,3 +238,21 @@ for verification in generation-costs.verify.sql content-hash.verify.sql; do
   docker cp "$HERE/$verification" "$CONTAINER:/tmp/$verification" >/dev/null
   psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$verification"
 done
+
+# Case 6: DARK prepare -> deployed stable writers -> compatibility view cutover.
+# Stop at the first discrepancy. Do not patch forward through this boundary.
+for verification in interpretation-visibility.prelude.sql; do
+  docker cp "$HERE/$verification" "$CONTAINER:/tmp/$verification" >/dev/null
+  psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$verification"
+done
+migration=20260926000000_prepare_interpretation_visibility.sql
+docker cp "$HERE/../$migration" "$CONTAINER:/tmp/$migration" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$migration"
+docker cp "$HERE/interpretation-writers-before-cutover.verify.sql" "$CONTAINER:/tmp/writers-before.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/writers-before.sql
+for migration in 20260926000001_interpretations_compatibility_view.sql 20260926000002_generation_cost_deep_comment.sql; do
+  docker cp "$HERE/../$migration" "$CONTAINER:/tmp/$migration" >/dev/null
+  psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$migration"
+done
+docker cp "$HERE/interpretation-visibility.verify.sql" "$CONTAINER:/tmp/visibility-verify.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql

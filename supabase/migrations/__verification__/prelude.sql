@@ -5,7 +5,8 @@ CREATE ROLE service_role;
 
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
-  LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+  LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 
 CREATE TABLE users (id uuid PRIMARY KEY DEFAULT gen_random_uuid());
 CREATE TABLE lab_reports (

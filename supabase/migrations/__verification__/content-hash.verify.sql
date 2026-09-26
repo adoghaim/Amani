@@ -29,5 +29,19 @@ BEGIN
   END IF;
 END $$;
 RESET ROLE;
+SET LOCAL ROLE authenticated;
+-- Normal client writes retain the server-owned hash without needing to clear it.
+UPDATE lab_reports SET user_id = user_id WHERE id = 'a0000000-0000-4000-8000-000000000029';
+INSERT INTO lab_reports(id,user_id) VALUES
+ ('a0000000-0000-4000-8000-000000000031','88888888-8888-4888-8888-888888888888');
+DO $$ BEGIN
+  IF (SELECT content_hash FROM lab_reports WHERE id='a0000000-0000-4000-8000-000000000029') IS DISTINCT FROM repeat('a',64) THEN
+    RAISE EXCEPTION 'ordinary client update changed server hash';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM lab_reports WHERE id='a0000000-0000-4000-8000-000000000031' AND content_hash IS NULL) THEN
+    RAISE EXCEPTION 'ordinary client insert failed';
+  END IF;
+END $$;
+RESET ROLE;
 ROLLBACK;
 \echo 'PASS: nullable content hash is writable only by the server.'

@@ -130,7 +130,7 @@ describe('freemium active', () => {
       freemiumActive: true,
     });
     expect(decision.allowances.deepInterpretation).toEqual({ kind: 'lifetime', limit: 3 });
-    expect(decision.allowances.fullComparison).toEqual({ kind: 'lifetime', limit: 1 });
+    expect(decision.allowances.fullComparison).toEqual({ kind: 'capped', limit: 0 });
     expect(decision.allowances.aiQuestions).toEqual({ kind: 'monthly', limit: 5 });
     expect(decision.allowances.revealedTrendInsights).toEqual({ kind: 'lifetime', limit: 1 });
   });

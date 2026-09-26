@@ -185,29 +185,6 @@ export interface Database {
           flagged?: string
         }
       }
-      interpretations: {
-        Row: {
-          id: string
-          lab_report_id: string
-          json_output: Json
-          generated_at: string
-          disclaimer_version: string
-        }
-        Insert: {
-          id?: string
-          lab_report_id: string
-          json_output: Json
-          generated_at?: string
-          disclaimer_version?: string
-        }
-        Update: {
-          id?: string
-          lab_report_id?: string
-          json_output?: Json
-          generated_at?: string
-          disclaimer_version?: string
-        }
-      }
       cycle_events: {
         Row: {
           id: string
@@ -399,6 +376,20 @@ export interface Database {
           metadata?: Json | null
           created_at?: string
         }
+      }
+    }
+    Views: {
+      interpretations: {
+        Row: {
+          id: string
+          lab_report_id: string
+          json_output: Json
+          generated_at: string
+          disclaimer_version: string
+          interpretation_source: string | null
+          tier: string | null
+        }
+        Relationships: []
       }
     }
   }

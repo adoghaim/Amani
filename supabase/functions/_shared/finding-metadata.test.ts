@@ -26,7 +26,7 @@ describe('stored finding metadata', () => {
       expect.objectContaining({ kind: 'lifestyle', content: 'Walk' }),
       expect.objectContaining({ kind: 'narrative', content: 'Discuss' }),
       expect.objectContaining({ kind: 'narrative' }),
-      expect.objectContaining({ kind: 'trend', observed_at: null }),
+      expect.objectContaining({ kind: 'narrative', observed_at: null }),
     ]);
   });
   it('keeps valid numeric evidence, rejects invalid values, and uses narrative without a comparison', () => {
@@ -45,4 +45,27 @@ describe('stored finding metadata', () => {
     expect(addFindingMetadata(payload).findings).toEqual([]);
     expect(findFloorViolations(addFindingMetadata(payload))).toEqual([]);
   });
+});
+
+it('requires distinct marker evidence and derives trend from delta or prior values', () => {
+  const result = addFindingMetadata({
+    key_findings: [{ biomarker_slug: 'a', status: 'monitor' }, { biomarker_slug: 'b', status: 'reassuring' },
+      { biomarker_slug: 'c', status: 'reassuring', abnormal: true }],
+    pattern_signals: [
+      { related_biomarkers: ['a', 'b'] }, { related_biomarkers: ['a', 'a'] },
+      { related_biomarkers: ['a'], delta: 0 },
+      { related_biomarkers: ['b'], prior_comparison: { previous_value: 1, current_value: 2 } },
+      { related_biomarkers: ['a', 'c'] },
+    ],
+    what_you_can_do_now: [{ related_biomarkers: ['a'] }, 'Generic lifestyle advice'],
+  });
+  expect((result.findings as Array<{ preview_eligible?: boolean }>).slice(3)).toEqual([
+    expect.objectContaining({ kind: 'cross_marker', preview_eligible: true }),
+    expect.not.objectContaining({ preview_eligible: true }),
+    expect.objectContaining({ kind: 'trend', preview_eligible: true }),
+    expect.objectContaining({ kind: 'trend', preview_eligible: true }),
+    expect.objectContaining({ kind: 'floor', visibility_hint: 'basic' }),
+    expect.objectContaining({ kind: 'lifestyle', preview_eligible: true }),
+    expect.not.objectContaining({ preview_eligible: true }),
+  ]);
 });
