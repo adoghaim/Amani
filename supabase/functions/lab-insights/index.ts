@@ -3,11 +3,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
-import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
+import { entitlementUnavailable, premiumRequired } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { parseLabInsightsCompletion } from "../_shared/lab-insights-output.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
+import { compareBiomarkerValues, isSignificantChange, topChanges, type BiomarkerChange } from "../_shared/trend-evidence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,15 +22,6 @@ interface BiomarkerData {
   unit: string;
 }
 
-type BiomarkerChange = {
-  name: string;
-  previous_value: number;
-  current_value: number;
-  unit: string;
-  delta: number;
-  percent_change: number;
-};
-
 type InterventionRow = {
   title: string;
   category: string;
@@ -38,24 +30,6 @@ type InterventionRow = {
 };
 
 const normalizeName = (s: string) => s.toLowerCase().trim();
-
-// Keep this conservative to avoid noise.
-// Many lab units vary widely, so we primarily rely on percent change.
-const isSignificantChange = (change: BiomarkerChange): boolean => {
-  const absPct = Math.abs(change.percent_change);
-  // Treat tiny baselines carefully: percent changes can explode.
-  // If previous value is very small, require a meaningful absolute delta too.
-  if (Math.abs(change.previous_value) < 0.01) {
-    return Math.abs(change.delta) >= 0.5;
-  }
-  return absPct >= 10;
-};
-
-const topChanges = (changes: BiomarkerChange[], n = 10): BiomarkerChange[] => {
-  return [...changes]
-    .sort((a, b) => Math.abs(b.percent_change) - Math.abs(a.percent_change))
-    .slice(0, n);
-};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -97,7 +71,7 @@ Deno.serve(async (req: Request) => {
     // parse-lab-report-ocr. Without this an expired trial kept generating.
     const subCheck = await checkUserSubscription(supabaseAuth, userId, undefined, true);
     if (!subCheck.allowed && subCheck.reason === "error") return entitlementUnavailable(corsHeaders);
-    if (subCheck.allowed && subCheck.plan === "free") {
+    if (premiumRequired(subCheck)) {
       return new Response(JSON.stringify({ code: "premium_required" }), {
         status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -177,27 +151,12 @@ Deno.serve(async (req: Request) => {
       .select("name, value, unit")
       .eq("lab_report_id", previousReportId);
 
-    const biomarkerChangesAll: BiomarkerChange[] = (currentBiomarkers || [])
-      .map((current: BiomarkerData) => {
-        const previous = (previousBiomarkers || []).find(
-          (p: BiomarkerData) => normalizeName(p.name) === normalizeName(current.name)
-        );
-
-        if (previous && previous.unit === current.unit) {
-          const delta = current.value - previous.value;
-          const percentChange = previous.value !== 0 ? (delta / previous.value) * 100 : 0;
-          return {
-            name: current.name,
-            previous_value: previous.value,
-            current_value: current.value,
-            unit: current.unit,
-            delta,
-            percent_change: percentChange,
-          } as BiomarkerChange;
-        }
-        return null;
-      })
-      .filter((x): x is BiomarkerChange => Boolean(x));
+    // Same pairing rule as generation's stored trend evidence (_shared/trend-evidence.ts).
+    const comparable = (b: BiomarkerData) => ({ key: normalizeName(b.name), name: b.name, value: b.value, unit: b.unit });
+    const biomarkerChangesAll: BiomarkerChange[] = compareBiomarkerValues(
+      (currentBiomarkers || []).map(comparable),
+      (previousBiomarkers || []).map(comparable),
+    );
 
     const significantChanges = biomarkerChangesAll.filter(isSignificantChange);
     const mostNotable = topChanges(significantChanges.length > 0 ? significantChanges : biomarkerChangesAll, 12);

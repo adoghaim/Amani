@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { FINDING_STATUS } from "./tier";
 import { selectPremiumPreview } from "./preview-selector";
 import { describe, expect, it } from 'vitest';
-import { buildBasicProjection, carriesSafety, PROJECTION_VERSION } from './interpretation-visibility';
+import { buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
@@ -36,7 +36,7 @@ describe('Basic projection boundary', () => {
     expect(buildBasicProjection(data, catalog).preview).toBeNull();
   });
   it('does not manufacture a preview from the legacy catalog', () => {
-    const basic = buildBasicProjection(addFindingMetadata({ ...full, overall_interpretation: 'abnormal explanation' }, { hasPriorComparison: true }));
+    const basic = buildBasicProjection(addFindingMetadata({ ...full, overall_interpretation: 'abnormal explanation' }));
     expect(basic.preview).toBeNull();
     expect(basic).not.toHaveProperty('overall_interpretation');
   });
@@ -67,8 +67,6 @@ describe('production vocabulary and composite projection', () => {
     const sql = readFileSync(new URL('../../migrations/20260926000000_prepare_interpretation_visibility.sql', import.meta.url), 'utf8');
     const list = FINDING_STATUS.ABNORMAL.map(status => `'${status}'`).join(',');
     expect(sql).toContain(`lower(v #>> '{}') IN (${list})`);
-    expect(PROJECTION_VERSION).toBe(2);
-    expect(sql).toContain('DEFAULT 2 CHECK (projection_version = 2)');
   });
   it.each([...FINDING_STATUS.NORMAL, ...FINDING_STATUS.BORDERLINE, 'unknown', 'high'])('%s does not force narrative into Basic', status => {
     expect(carriesSafety({ status })).toBe(false);
@@ -121,5 +119,61 @@ describe('production vocabulary and composite projection', () => {
       { abnormal: true }, { status: 'attention', biomarker_slug: 'a', follow_up: 'Discuss results' },
     ]);
     expect(JSON.stringify(basic)).not.toMatch(/LOCKED_PRIMARY|LOCKED_OVERALL/);
+  });
+});
+
+// The deterministic fixture and key contract are shared with the SQL rehearsal
+// (deterministic-projection.prelude.sql / .verify.sql, migration 20260926000003).
+const deterministicPreludeSql = readFileSync(new URL('../../migrations/__verification__/deterministic-projection.prelude.sql', import.meta.url), 'utf8');
+const deterministicVerifySql = readFileSync(new URL('../../migrations/__verification__/deterministic-projection.verify.sql', import.meta.url), 'utf8');
+const deterministicMigration = readFileSync(new URL('../../migrations/20260926000003_deterministic_projection_floor.sql', import.meta.url), 'utf8');
+const deterministicFixture = JSON.parse(deterministicPreludeSql.match(/\$deterministic_fixture\$([\s\S]*?)\$deterministic_fixture\$/)![1]);
+const deterministicKeys: string[] = JSON.parse(deterministicVerifySql.match(/\$deterministic_keys\$([\s\S]*?)\$deterministic_keys\$/)![1]);
+
+describe('deterministic interpretation stays on the Free medical floor', () => {
+  it('keeps the frozen SQL source and narrative lists derived from TypeScript', () => {
+    const sources = DETERMINISTIC_SOURCES.map(s => `'${s}'`).join(',');
+    const keys = DETERMINISTIC_NARRATIVE_KEYS.map(k => `'${k}'`).join(',');
+    expect(deterministicMigration).toContain(`p_source IN (${sources})`);
+    expect(deterministicMigration).toContain(`interpretation_source IN (${sources})`);
+    expect(deterministicMigration).toContain(`ARRAY[${keys}]`);
+    expect(deterministicKeys).toEqual([...expectedKeys, ...DETERMINISTIC_NARRATIVE_KEYS].sort());
+    expect(isDeterministicSource('fallback')).toBe(true);
+    expect(isDeterministicSource('ai')).toBe(false);
+    expect(isDeterministicSource(null)).toBe(false);
+  });
+
+  it.each(DETERMINISTIC_SOURCES)('%s: full deterministic narrative in Basic, SQL key parity', source => {
+    const basic = buildBasicProjection(deterministicFixture, undefined, { source });
+    expect(basic.overall_interpretation).toBe(deterministicFixture.overall_interpretation);
+    expect(basic.pattern_signals).toEqual(deterministicFixture.pattern_signals);
+    expect(Object.keys(basic).sort()).toEqual(deterministicKeys);
+    expect(findFloorViolations(basic)).toEqual([]);
+    expect(basic).not.toHaveProperty('trend_evidence');
+  });
+
+  it.each(['ai', null, undefined, 'unknown'])('source %s keeps the narrative locked (unchanged behaviour)', source => {
+    const basic = buildBasicProjection(deterministicFixture, undefined, { source });
+    expect(basic).toEqual(buildBasicProjection(deterministicFixture));
+    expect(Object.keys(basic).sort()).toEqual(expectedKeys);
+    expect(JSON.stringify(basic)).not.toMatch(/DETERMINISTIC_(OVERALL|PATTERN)/);
+  });
+
+  it('composite: catalog + fallback projection previews the canonical trend and counts the rest', () => {
+    const stored = addFindingMetadata(deterministicFixture, { observedAt: '2026-09-20' });
+    const basic = buildBasicProjection(stored, undefined, { source: 'fallback' });
+    expect(basic.overall_interpretation).toBe('DETERMINISTIC_OVERALL');
+    expect(basic.pattern_signals).toEqual(deterministicFixture.pattern_signals);
+    expect((basic.preview as CatalogFinding).source_path).toBe('/trend_evidence/0');
+    expect((basic.preview as CatalogFinding).content).toMatchObject({ summary: 'Vitamin D increased 18 → 31 ng/mL since 2026-03-01' });
+    // TSH is locked; the ferritin trend touches a discuss marker and is floor, not a count.
+    expect(basic.locked).toEqual({ patterns: 0, cross_report: 1, lifestyle: 0 });
+    expect(JSON.stringify(basic)).not.toContain('TSH increased');
+    expect(JSON.stringify(basic)).not.toContain('Ferritin decreased');
+    // The same stored AI-sourced body keeps its narrative locked.
+    const ai = buildBasicProjection(stored, undefined, { source: 'ai' });
+    expect(ai).not.toHaveProperty('overall_interpretation');
+    expect(ai).not.toHaveProperty('pattern_signals');
+    expect(JSON.stringify(ai)).not.toContain('DETERMINISTIC_PATTERN');
   });
 });

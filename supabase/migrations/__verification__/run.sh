@@ -250,9 +250,29 @@ docker cp "$HERE/../$migration" "$CONTAINER:/tmp/$migration" >/dev/null
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$migration"
 docker cp "$HERE/interpretation-writers-before-cutover.verify.sql" "$CONTAINER:/tmp/writers-before.sql" >/dev/null
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/writers-before.sql
+
+# Case 7a: deterministic projection floor applied BEFORE cutover (production
+# today: prepare applied, cutover pending). Applied twice: must be idempotent.
+DETERMINISTIC=20260926000003_deterministic_projection_floor.sql
+docker cp "$HERE/../$DETERMINISTIC" "$CONTAINER:/tmp/$DETERMINISTIC" >/dev/null
+docker cp "$HERE/deterministic-projection.prelude.sql" "$CONTAINER:/tmp/deterministic-prelude.sql" >/dev/null
+docker cp "$HERE/deterministic-projection.verify.sql" "$CONTAINER:/tmp/deterministic-verify.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/deterministic-prelude.sql
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
+psql_f -v ON_ERROR_STOP=1 -v rel=interpretations -q -f /tmp/deterministic-verify.sql
+
 for migration in 20260926000001_interpretations_compatibility_view.sql 20260926000002_generation_cost_deep_comment.sql; do
   docker cp "$HERE/../$migration" "$CONTAINER:/tmp/$migration" >/dev/null
   psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$migration"
 done
 docker cp "$HERE/interpretation-visibility.verify.sql" "$CONTAINER:/tmp/visibility-verify.sql" >/dev/null
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql
+
+# Case 7b: the same migration AFTER cutover (numeric push order). Regress two
+# deterministic rows to the prepare-era floor, re-apply, and re-verify on the
+# private table so the post-cutover backfill branch is exercised.
+psql_f -v ON_ERROR_STOP=1 -q -c "UPDATE interpretations_private SET json_output_basic=interpretation_floor(json_output)
+  WHERE lab_report_id IN ('09100000-0000-4000-8000-000000000050','09100000-0000-4000-8000-000000000051');"
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
+psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql

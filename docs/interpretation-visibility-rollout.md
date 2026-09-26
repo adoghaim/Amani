@@ -122,6 +122,17 @@ entitled reader, never converted into a persistent 503. The endpoint uses the
 same atomic rate counter as siblings: 30 requests per user per UTC day, HTTP 429
 `rate_limit_exceeded` thereafter. Authentication transport exceptions and counter
 failures return structured retryable 503 with CORS headers.
+
+**Read cap (TASK-033): 600 requests per user per UTC day**, counter key
+`get-interpretation` on the same `increment_rate_limit` RPC. This supersedes the
+30/day stated above for this endpoint only; generation, OCR and lab-insights keep
+30. Rationale: a read costs no model spend and one ownership-bound RPC, and the
+new client (3b) must not hit a generation-sized cap while browsing its history.
+**Client contract for 3b:** call `get-interpretation` once when a report is opened
+and once after generation completes. Never poll it (e.g. every 3 s) while a report
+is processing; keep polling the existing status source (`lab_reports.status`) and
+fetch the interpretation once that reports `ready`. A 3 s poll would exhaust the
+cap in 30 minutes and then return 429 `rate_limit_exceeded` for the rest of the day.
 Complimentary counts reflect the actual historical ledger for both plans. Reading
 this attribution does not consume a claim; Premium generation still bypasses the
 ledger entirely.
@@ -152,8 +163,40 @@ overall_interpretation remain locked; explicit safety flags and follow-ups plus
 required floor keys remain visible. Patterns touching abnormal markers become
 floor catalog entries, but only their flags, not narrative bodies, enter Basic.
 Projection version 2 distinguishes this repair from the earlier unreleased logic;
-prepare backfill, legacy trigger, and save RPC all write version 2. The short Basic interpretation reuses the visible floor headline, never
+prepare backfill, legacy trigger, and save RPC all write version 2. The column and
+its CHECK are the only record of the version; TASK-033 removed the unused
+TypeScript `PROJECTION_VERSION` constant and its test coupling to the CHECK text.
+The short Basic interpretation reuses the visible floor headline, never
 a truncated locked narrative. `readInterpretation(actions)` is the injected authoritative policy port.
+
+## Pre-activation server closure (TASK-033, DARK)
+
+- **Deterministic narrative is floor.** `buildBasicProjection(full, findings?,
+  { source })`: when `source` is `fallback` or `deterministic`
+  (`DETERMINISTIC_SOURCES`), Basic also carries `overall_interpretation` and
+  `pattern_signals` verbatim; those paths leave the preview/count pool. Any
+  other source (ai, null, unknown) is unchanged. Migration `20260926000003`
+  (additive, runs before or after cutover) adds `interpretation_floor(jsonb, text)`,
+  makes the legacy-writer trigger source-aware, and re-projects only deterministic
+  rows whose Basic lacks narrative present in the full body. Stored depth, version
+  and the switch are untouched. `trend_evidence` is never part of the SQL floor.
+- **Trend evidence.** Activated generation attaches `trend_evidence[]` (additive):
+  `{biomarker_slug, marker, previous_value, current_value, delta, percent_change,
+  unit, previous_date, direction, summary}` for significant same-unit changes
+  against the user's most recent earlier report (the same prior report the primary
+  context already reads; lab-insights' comparison rules, now in
+  `_shared/trend-evidence.ts`). At most 8, largest relative change first. The AI
+  prompt gains a PRIOR-REPORT CHANGES block only when evidence exists, and
+  `pattern_signals[]` may carry optional `trend_biomarker`. The catalog marks a
+  pattern `kind:'trend'` only when that slug names a stored evidence entry;
+  unreferenced entries are catalogued as `/trend_evidence/i` trends with
+  `magnitude_normalized = |percent_change|/100`. No extra model call.
+- **Abnormal markers** now include `top_findings` (deterministic payloads) as well
+  as `key_findings`, using the shared `FINDING_STATUS` vocabulary: `discuss`
+  is abnormal, `monitor` is not.
+- Flag off: no trend evidence, no prompt change, no catalog; the stored payload
+  is byte-identical. The Basic projection stored alongside a fallback row now
+  carries its narrative, which is only served once the switch is ON.
 
 ## Verification and stop conditions
 

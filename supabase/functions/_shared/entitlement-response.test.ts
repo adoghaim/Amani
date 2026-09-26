@@ -87,6 +87,8 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
     expect(calls[0].name).toBe('save_interpretation');
     expect(calls[0].args.p_interpretation).toEqual(generated);
     expect(calls[0].args.p_interpretation).not.toHaveProperty('findings');
+    expect(calls[0].args.p_interpretation).not.toHaveProperty('trend_evidence');
+    expect(calls[0].args.p_basic).toEqual(buildBasicProjection(generated));
     expect(queried).not.toContain('introductory_deep_access_claims');
     expect(queried).not.toContain('interpretation_generation_costs');
     expect(queried.includes('interpretation_visibility_config')).toBe(activeFlag);
@@ -119,7 +121,7 @@ it.each(['extract-biomarkers', 'parse-lab-report-ocr', 'lab-insights', 'generate
   const response = await evaluate('return (async () => {\n' + handlerSource.slice(start, end) + '\n})();', {
     supabase: {}, supabaseAuth: {}, supabaseUser: {}, user: { id: 'u' }, userId: 'u', corsHeaders: {},
     checkUserSubscription: async () => ({ allowed: false, reason: 'error', detail: 'offline' }),
-    entitlementUnavailable, freemiumActive: () => true,
+    entitlementUnavailable, premiumRequired, freemiumActive: () => true,
   }) as Response;
   expect(response.status).toBe(503);
   expect(await response.json()).toEqual({ code: 'entitlement_unavailable', retryable: true });
@@ -130,7 +132,7 @@ it('lab-insights actual guard rejects Free with premium_required', async () => {
   const start = handlerSource.indexOf('    const subCheck = await checkUserSubscription(');
   const end = handlerSource.indexOf('    if (!openaiApiKey)', start);
   const response = await evaluate('return (async () => {\n' + handlerSource.slice(start, end) + '\n})();', {
-    supabaseAuth: {}, userId: 'u', corsHeaders: {}, entitlementUnavailable,
+    supabaseAuth: {}, userId: 'u', corsHeaders: {}, entitlementUnavailable, premiumRequired,
     checkUserSubscription: async () => ({ allowed: true, plan: 'free' }),
   }) as Response;
   expect(response.status).toBe(402);

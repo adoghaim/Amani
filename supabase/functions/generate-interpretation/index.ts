@@ -20,6 +20,7 @@ import {
 } from "../_shared/introductory-access.ts";
 import { deriveBloodDrawIdentity, hashDrawKey } from "../_shared/blood-draw-identity.ts";
 import { addFindingMetadata } from "../_shared/finding-metadata.ts";
+import { buildTrendEvidence, formatTrendEvidencePrompt, type TrendEvidence } from "../_shared/trend-evidence.ts";
 import { generationSample, recordGenerationCosts, type GenerationSample, type GenerationCostContext } from "../_shared/generation-cost.ts";
 import { resolveTier } from "../_shared/tier.ts";
 import {
@@ -783,6 +784,7 @@ async function tryOpenAI(
   userContextBlock: string | null,
   isOptimizationOnly: boolean,
   recordCost?: (sample: GenerationSample) => void,
+  trendEvidence: readonly TrendEvidence[] = [],
 ): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
@@ -1067,7 +1069,7 @@ ${userContextBlock ? `\n${userContextBlock}\n` : ""}
 LAB PANEL: ${analytes.length} total analytes. Key values shown below:
 ${labLines}
 ${patternBlock}
-${missingBlock}
+${missingBlock}${formatTrendEvidencePrompt(trendEvidence)}
 
 STRUCTURED FACTS (use these to ground your entire response):
 - Out-of-range markers: ${top_out_of_range.length > 0 ? top_out_of_range.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none"}
@@ -1436,6 +1438,13 @@ Deno.serve(async (req: Request) => {
       priorReportDate,
       parsedBody.data.primary_canonical_slug ?? null,
     );
+    // Activated only: per-marker comparison against the same prior report the
+    // primary context uses. Inactive requests keep prompt and payload unchanged.
+    const trendEvidence: TrendEvidence[] = active ? buildTrendEvidence(
+      analytes.map(a => ({ slug: slug(a), name: a.raw_name, value: a.value_numeric, unit: a.unit })),
+      priorAnalytes.map(a => ({ slug: slug(a), name: a.raw_name, value: a.value_numeric, unit: a.unit })),
+      priorReportDate,
+    ) : [];
     debugLog(`[generate-interpretation] primaryContext:`, primaryContext
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");
@@ -1567,7 +1576,7 @@ Deno.serve(async (req: Request) => {
     if (shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && report) {
       console.log("[generate-interpretation] Trying OpenAI...");
       const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
-        costContext ? sample => costSamples.push(sample) : undefined);
+        costContext ? sample => costSamples.push(sample) : undefined, trendEvidence);
       if (aiResult) {
         // Guarantee overall_interpretation is grounded in deterministic primary_context
         if (primaryContext) {
@@ -1592,13 +1601,15 @@ Deno.serve(async (req: Request) => {
       deterministicInterpretation,
     });
 
+    // trend_evidence is additive and attached to either payload; the catalog
+    // derives kind:'trend' from it. A deterministic source keeps its narrative
+    // in Basic (MEDICAL_FLOOR.deterministicInterpretation).
     const interpretationJson = active
-      ? addFindingMetadata(shaped.payload, {
-          observedAt: report?.report_date,
-          hasPriorComparison: primaryContext?.previous_value != null,
-        })
+      ? addFindingMetadata(trendEvidence.length > 0
+          ? { ...shaped.payload, trend_evidence: trendEvidence } : shaped.payload,
+        { observedAt: report?.report_date })
       : shaped.payload;
-    const basicProjection = buildBasicProjection(interpretationJson);
+    const basicProjection = buildBasicProjection(interpretationJson, undefined, { source: shaped.source });
 
     /*
       The medical floor is checked on whatever is about to be persisted, at every
