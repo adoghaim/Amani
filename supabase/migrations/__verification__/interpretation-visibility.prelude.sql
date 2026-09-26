@@ -24,3 +24,10 @@ INSERT INTO interpretations(lab_report_id,json_output,tier,interpretation_source
 
 INSERT INTO interpretations(lab_report_id,json_output,tier,interpretation_source) VALUES
  ('09100000-0000-4000-8000-000000000032','{"headline":"other owner","key_findings":[],"cycle_context":{},"questions_for_doctor":[],"disclaimer":"d","locked_secret":"OTHER_OWNER"}','free','ai');
+
+-- Harness parity with Supabase: production grants service_role full table access
+-- through default privileges, which this throwaway database does not have.
+-- (Lead-authored harness line, TASK-031; verified against production grants on
+-- introductory_deep_access_claims and interpretation_generation_costs.)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
