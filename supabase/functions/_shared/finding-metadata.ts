@@ -1,3 +1,4 @@
+import { carriesFindingSafety } from "./tier.ts";
 import { FLOOR_FINDING_KEYS, type InterpretationPayload } from "./response-shaping.ts";
 
 export interface FindingMetadata {
@@ -26,27 +27,34 @@ export function addFindingMetadata(
     ? Date.parse(context.observedAt) : NaN;
   const observedAt = Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
   const findings: Array<FindingMetadata & { source_path: string; content: unknown }> = [];
-  const normalStatuses = new Set(["normal", "in_range", "within_range", "optimal"]);
-  const markerStatuses = new Map<string, string>();
+  const abnormalMarkers = new Set<string>();
   if (Array.isArray(payload.key_findings)) {
     for (const finding of payload.key_findings) {
       if (finding && typeof finding === "object" && typeof finding.biomarker_slug === "string") {
-        markerStatuses.set(finding.biomarker_slug, finding.status);
+        if (carriesFindingSafety(finding)) abnormalMarkers.add(finding.biomarker_slug);
       }
     }
   }
   const append = (path: string, content: unknown, kind: FindingMetadata["kind"]) => {
     const record = content && typeof content === "object" ? content as Record<string, unknown> : {};
-    const related = Array.isArray(record.related_biomarkers) ? record.related_biomarkers : [];
-    const touchesAbnormal = related.some(slug => typeof slug === "string"
-      && markerStatuses.has(slug) && !normalStatuses.has(markerStatuses.get(slug)!));
-    const safety = touchesAbnormal;
+    const related = [...new Set([
+      ...(Array.isArray(record.related_biomarkers) ? record.related_biomarkers : []),
+      ...(typeof record.biomarker_slug === "string" ? [record.biomarker_slug] : []),
+    ].filter((slug): slug is string => typeof slug === "string" && slug.trim().length > 0))];
+    const safety = carriesFindingSafety(content) || related.some(slug => abnormalMarkers.has(slug));
+    // A label or global prior-report context alone is not trend evidence.
+    const finite = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+    const comparison = record.prior_comparison && typeof record.prior_comparison === "object"
+      ? record.prior_comparison as Record<string, unknown> : record;
+    const trendEvidence = finite(comparison.delta)
+      || (finite(comparison.previous_value) && finite(comparison.current_value));
+    if (kind !== "floor" && kind !== "narrative" && trendEvidence) kind = "trend";
     const confidence = record.confidence;
     const magnitude = record.magnitude_normalized;
     findings.push({
       source_path: path, content, kind: safety ? "floor" : kind,
-      ...(kind === "cross_marker" && !safety && related.length >= 2
-        && related.every(slug => typeof slug === "string" && normalStatuses.has(markerStatuses.get(slug) ?? ""))
+      ...(!safety && ((kind === "cross_marker" && related.length >= 2)
+        || ((kind === "trend" || kind === "lifestyle") && related.length >= 1))
         ? { preview_eligible: true } : {}),
       confidence: typeof confidence === "number" && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
         ? confidence : null,
@@ -68,8 +76,7 @@ export function addFindingMetadata(
     if (Array.isArray(values)) values.forEach((value, index) => append(`/${key}/${index}`, value, kind));
   }
   for (const key of ["primary_concern", "overall_interpretation"] as const) {
-    if (payload[key] != null) append(`/${key}`, payload[key],
-      key === "overall_interpretation" && context.hasPriorComparison ? "trend" : "narrative");
+    if (payload[key] != null) append(`/${key}`, payload[key], "narrative");
   }
   return { ...payload, findings };
 }

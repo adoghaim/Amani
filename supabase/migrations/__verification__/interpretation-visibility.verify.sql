@@ -5,6 +5,35 @@ BEGIN
   IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %',label; END IF;
   RAISE NOTICE 'PASS: %',label;
 END $$;
+-- Same prompt fixture/key contract consumed by interpretation-visibility.test.ts.
+CREATE TEMP TABLE prompt_projection_fixture AS SELECT payload,
+  $projection_keys$["abnormal_flags", "basic_interpretation", "critical_findings", "cycle_context", "disclaimer", "flags", "headline", "key_findings", "locked", "preview", "questions_for_doctor", "safety_findings", "safety_notes", "summary_bullets", "top_findings", "warnings", "what_to_do_next"]$projection_keys$::jsonb AS expected_keys FROM visibility_prompt_fixture;
+DO $$ DECLARE f record; status text; payload jsonb; basic jsonb; BEGIN
+  SELECT * INTO f FROM prompt_projection_fixture;
+  FOREACH status IN ARRAY ARRAY['reassuring','monitor','attention'] LOOP
+    payload := jsonb_set(f.payload,'{key_findings,0,status}',to_jsonb(status));
+    basic := interpretation_floor(payload);
+    PERFORM pg_temp.assert((SELECT jsonb_agg(key ORDER BY key) FROM jsonb_object_keys(basic) key)=f.expected_keys,
+      'SQL/TS projection key parity: '||status);
+    PERFORM pg_temp.assert(NOT basic ?| ARRAY['overall_interpretation','primary_concern','pattern_signals']
+      AND basic->'safety_findings'='[]'::jsonb AND basic->'preview'='null'::jsonb,
+      'legacy provenance withholds narrative: '||status);
+    PERFORM pg_temp.assert(basic->'key_findings'=payload->'key_findings','all marker flags preserved: '||status);
+    PERFORM pg_temp.assert(interpretation_has_safety(payload->'key_findings')=(status='attention'),
+      'owner status vocabulary: '||status);
+  END LOOP;
+END $$;
+-- These rows existed before prepare, so this tests the actual migration backfill.
+SELECT pg_temp.assert((SELECT count(*)=3 FROM interpretations_private
+  WHERE lab_report_id IN ('09100000-0000-4000-8000-000000000040','09100000-0000-4000-8000-000000000041','09100000-0000-4000-8000-000000000042')
+    AND projection_version=2 AND json_output_basic=interpretation_floor(json_output)),
+  'prompt fixture backfilled to floor-only version 2');
+SELECT pg_temp.assert((SELECT bool_and(stored_depth = CASE WHEN tier='free' THEN 'unknown' ELSE 'deep' END)
+  FROM interpretations_private WHERE lab_report_id IN
+    ('09100000-0000-4000-8000-000000000040','09100000-0000-4000-8000-000000000041','09100000-0000-4000-8000-000000000042')),
+  'Plus and pre-tiering full narrative retain deep availability; Free remains unknown');
+SELECT pg_temp.assert((SELECT stored_depth='unknown' FROM interpretations_private
+  WHERE lab_report_id='09100000-0000-4000-8000-000000000043'), 'pre-tiering missing narrative remains unknown');
 SELECT pg_temp.assert((SELECT relation='interpretations_private'::regclass FROM visibility_boundary_snapshot),'same table OID');
 SELECT pg_temp.assert(EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='interpretations_private'::regclass AND confrelid='lab_reports'::regclass AND contype='f' AND confdeltype='c'),'FK cascade survives');
 SELECT pg_temp.assert(EXISTS(SELECT 1 FROM pg_trigger t JOIN visibility_boundary_snapshot s ON t.oid=s.trigger_oid WHERE t.tgrelid='interpretations_private'::regclass),'trigger survives');
@@ -14,20 +43,32 @@ SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM pg_policies WHERE tablename='inte
 SELECT pg_temp.assert(NOT has_table_privilege('authenticated','interpretations_private','SELECT,INSERT,UPDATE,DELETE'),'private grants revoked');
 SELECT pg_temp.assert(NOT has_table_privilege('anon','interpretations_private','SELECT,INSERT,UPDATE,DELETE'),'anon private grants revoked');
 SELECT pg_temp.assert(has_table_privilege('authenticated','interpretations','SELECT') AND NOT has_table_privilege('authenticated','interpretations','INSERT,UPDATE,DELETE'),'view select only');
-SELECT pg_temp.assert(NOT has_table_privilege('authenticated','interpretation_visibility_config','INSERT,UPDATE,DELETE'),'switch service-only');
+SELECT pg_temp.assert(NOT has_table_privilege('authenticated','interpretation_visibility_config','SELECT,INSERT,UPDATE,DELETE'),'switch service-only');
 SELECT pg_temp.assert((SELECT array_agg(column_name::text ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='interpretations')=ARRAY['id','lab_report_id','json_output','generated_at','disclaimer_version','interpretation_source','tier'],'explicit safe view columns');
 SELECT pg_temp.assert(NOT has_function_privilege('authenticated','read_interpretation_for_server(uuid,uuid,boolean)','EXECUTE'),'authoritative RPC service only');
 SELECT pg_temp.assert(NOT has_function_privilege('authenticated','save_interpretation(uuid,uuid,jsonb,jsonb,text,text,text,text)','EXECUTE'),'save RPC service only');
 SELECT pg_temp.assert(NOT has_function_privilege('authenticated','commit_deep_access_v2(uuid,uuid,text,text,jsonb,text,text,boolean,jsonb)','EXECUTE'),'v2 service only');
 SELECT pg_temp.assert(NOT has_function_privilege('authenticated','delete_interpretations(uuid[])','EXECUTE'),'delete RPC service only');
 SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM pg_publication_tables WHERE tablename IN ('interpretations','interpretations_private')),'no realtime publication');
-SELECT pg_temp.assert((SELECT stored_depth='unknown' AND json_output_basic->'preview'='null'::jsonb
+SELECT pg_temp.assert((SELECT stored_depth='unknown' AND projection_version=2 AND json_output_basic->'preview'='null'::jsonb
   AND NOT json_output_basic ? 'locked_secret' AND json_output_basic::text LIKE '%always_visible%'
   FROM interpretations_private WHERE lab_report_id='09100000-0000-4000-8000-000000000031'),'legacy floor-only backfill');
 SELECT pg_temp.assert((SELECT NOT enabled FROM interpretation_visibility_config),'installed OFF');
 CREATE TEMP TABLE visibility_mutation_snapshot AS
 SELECT id, to_jsonb(i) AS row_data FROM interpretations_private i;
 SELECT set_config('request.jwt.claim.sub','09000000-0000-4000-8000-000000000031',true);
+-- Unlike table access, functions in a view require the querying role's EXECUTE.
+-- Stop if this expectation changes: then remove the grant from the migration.
+REVOKE EXECUTE ON FUNCTION read_compatible_interpretations() FROM authenticated;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+  BEGIN
+    PERFORM * FROM interpretations;
+    RAISE EXCEPTION 'view works without EXECUTE: remove unnecessary grant';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+GRANT EXECUTE ON FUNCTION read_compatible_interpretations() TO authenticated;
 SET LOCAL ROLE authenticated;
 -- Exact SQL equivalents of both old PostgREST selections, not merely helper calls.
 SELECT * FROM interpretations;

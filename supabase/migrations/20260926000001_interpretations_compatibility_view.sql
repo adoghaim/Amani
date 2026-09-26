@@ -12,7 +12,7 @@ END $$;
 CREATE POLICY interpretations_service_only ON public.interpretations_private TO service_role USING (true) WITH CHECK (true);
 
 -- PL/pgSQL bodies are text: table renaming does NOT retarget them. Rewrite all
--- four stable writers within this transaction before the view takes the name.
+-- three stable writers (v2 calls v1/save transitively) within this transaction before the view takes the name.
 DO $$ DECLARE signature text; definition text; BEGIN
   FOREACH signature IN ARRAY ARRAY[
     'public.commit_deep_access(uuid,uuid,text,text,jsonb,text,text,boolean)',
@@ -43,7 +43,9 @@ BEGIN
         AND s.current_period_end > extract(epoch FROM now()))
     OR EXISTS (SELECT 1 FROM public.iap_subscriptions WHERE user_id=reader AND status='active'
       AND environment='production' AND expires_at > now());
-EXCEPTION WHEN OTHERS THEN RETURN false;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'interpretation_reader_is_full failed (SQLSTATE %); returning Basic', SQLSTATE;
+  RETURN false;
 END;
 $$;
 REVOKE ALL ON FUNCTION public.interpretation_reader_is_full(uuid,text) FROM PUBLIC, anon, authenticated;
@@ -64,6 +66,10 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
   WHERE r.user_id=auth.uid();
 $$;
 REVOKE ALL ON FUNCTION public.read_compatible_interpretations() FROM PUBLIC, anon, authenticated;
+-- PostgreSQL checks function EXECUTE as the querying role even through a
+-- definer view. The verification SQL revokes this grant and proves SELECT fails,
+-- then restores it and exercises both old SELECT shapes. Direct RPC is equally
+-- ownership-bound and returns only the view's selected projection.
 GRANT EXECUTE ON FUNCTION public.read_compatible_interpretations() TO authenticated;
 CREATE VIEW public.interpretations WITH (security_barrier=true) AS
   SELECT id,lab_report_id,json_output,generated_at,disclaimer_version,interpretation_source,tier

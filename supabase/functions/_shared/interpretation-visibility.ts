@@ -1,24 +1,31 @@
+import { carriesFindingSafety, isAbnormalStatus } from "./tier.ts";
 import { FLOOR_REQUIRED_KEYS, FLOOR_FINDING_KEYS, findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
 import { contentFingerprint, pathWithin, selectPremiumPreview, type CatalogFinding } from "./preview-selector.ts";
 
-export const PROJECTION_VERSION = 1;
+export const PROJECTION_VERSION = 2;
 const defaults: InterpretationPayload = {
   headline: "Your lab results", cycle_context: {}, questions_for_doctor: [],
   disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
 };
-export const SAFETY_KEYS = ["safety_notes", "abnormal_flags", "flags", "warnings", "critical_findings", "what_to_do_next", "primary_concern"] as const;
+export const SAFETY_KEYS = ["safety_notes", "abnormal_flags", "flags", "warnings", "critical_findings", "what_to_do_next"] as const;
 
 /** Flags are evidence of floor membership, never evidence of preview eligibility. */
-export function carriesSafety(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(carriesSafety);
-  if (!value || typeof value !== "object") return false;
-  return Object.entries(value).some(([key, child]) => {
-    if (/^(abnormal|is_abnormal|safety|safety_related|is_safety|critical|urgent)$/.test(key)) return child !== false && child != null;
-    if (/^(flag|flagged|status|current_status)$/.test(key) && typeof child === "string") {
-      return !["normal", "in_range", "optimal", "within_range"].includes(child.toLowerCase());
+export const carriesSafety = carriesFindingSafety;
+
+/** Retain flags/identifiers and explicit safety follow-ups, never their narrative container. */
+function safetyFlags(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) return value.flatMap(safetyFlags);
+  if (!value || typeof value !== "object") return [];
+  const record = value as Record<string, unknown>;
+  const flags = Object.fromEntries(Object.entries(record).filter(([key, child]) =>
+    (/^(abnormal|is_abnormal|safety|safety_related|is_safety|critical|urgent)$/.test(key) && child === true)
+    || (/^(flag|flagged|status|current_status)$/.test(key) && isAbnormalStatus(child))));
+  if (Object.keys(flags).length) {
+    for (const key of ["biomarker_slug", "marker", "related_biomarkers", "safety_notes", "follow_up", "what_to_do_next"]) {
+      if (record[key] != null) flags[key] = record[key];
     }
-    return carriesSafety(child);
-  });
+  }
+  return [...(Object.keys(flags).length ? [flags] : []), ...Object.values(record).flatMap(safetyFlags)];
 }
 
 function atPointer(payload: InterpretationPayload, path: string): unknown {
@@ -39,7 +46,6 @@ export function buildBasicProjection(full: InterpretationPayload, findings?: rea
   for (const key of FLOOR_REQUIRED_KEYS) basic[key] = full[key] ?? defaults[key];
   for (const key of FLOOR_FINDING_KEYS) basic[key] = Array.isArray(full[key]) ? full[key] : [];
   for (const key of SAFETY_KEYS) {
-    if (key === "primary_concern" && full[key] == null) continue;
     basic[key] = full[key] ?? [];
   }
   const floorPaths = new Set([...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS].map(key => `/${key}`));
@@ -49,11 +55,6 @@ export function buildBasicProjection(full: InterpretationPayload, findings?: rea
     if (value && typeof value === "object") Object.values(value).forEach(collect);
   };
   Object.values(basic).forEach(collect);
-  if (FLOOR_FINDING_KEYS.some(key => carriesSafety(full[key])) && full.overall_interpretation != null) {
-    basic.overall_interpretation = full.overall_interpretation;
-    floorPaths.add("/overall_interpretation");
-    collect(full.overall_interpretation);
-  }
   const catalog = findings ?? (Array.isArray(full.findings) ? full.findings as CatalogFinding[] : []);
   const abnormalOrSafetyPaths = new Set<string>();
   const ineligiblePaths = new Set<string>();
@@ -64,7 +65,7 @@ export function buildBasicProjection(full: InterpretationPayload, findings?: rea
     const values = Array.isArray(value) ? value : [value];
     values.forEach((entry, index) => {
       if (carriesSafety(entry)) {
-        safety.push(entry);
+        safety.push(...safetyFlags(entry));
         abnormalOrSafetyPaths.add(Array.isArray(value) ? `/${key}/${index}` : `/${key}`);
         collect(entry);
       }
@@ -76,7 +77,7 @@ export function buildBasicProjection(full: InterpretationPayload, findings?: rea
   for (const f of valid) {
     if (f.kind === "floor" || f.visibility_hint === "basic" || carriesSafety(f.content)) {
       abnormalOrSafetyPaths.add(f.source_path);
-      if (![...floorPaths].some(path => pathWithin(f.source_path, path))) safety.push(f.content);
+      if (![...floorPaths].some(path => pathWithin(f.source_path, path))) safety.push(...safetyFlags(f.content));
       collect(f.content);
     }
     // Only explicit server-authored classification can qualify opaque prose.

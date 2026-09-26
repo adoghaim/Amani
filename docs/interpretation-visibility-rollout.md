@@ -10,17 +10,23 @@ A legacy client selects `interpretations.json_output` directly. Storing a deep
 Free payload there makes its bodies downloadable regardless of UI state. The
 new facade selects one projection at read time. Neither row tier nor AI source
 is a Full entitlement. Unknown stored depth requests regeneration on the new
-endpoint; it is never inferred from source.
+endpoint; it is never inferred from source. Per the owner’s legacy rule, existing
+`tier='plus'` rows are backfilled as deep; pre-tiering (`tier IS NULL`) rows
+qualify as deep only with a nonempty string `overall_interpretation`. Remaining
+rows stay unknown. This classifies availability, never the reader’s access.
 
 SQL intentionally under-reveals relative to TypeScript. Full requires report
 ownership, a public users row, and one of: a committed report/draw claim; an
 enabled complimentary grant with null/future expiry; a non-deleted Stripe customer
 and subscription with active status and future current_period_end; or an active
 production IAP row with future expiry. Sandbox (even beta), grace, billing_retry,
-trialing, missing/expired provider facts and SQL errors do not prove Full. A
+Stripe trialing/past_due, missing/expired provider facts and SQL errors do not prove Full. A
 separate provable Full source still suffices. The switch is the only intentional
 bypass: explicit false reproduces today's full payload for the owning user.
-Missing configuration is treated as protected, never OFF.
+Missing configuration is treated as protected, never OFF. Old binaries therefore
+show Basic for Stripe trialing/past_due and IAP in_grace_period/billing_retry unless
+another provable Full source exists; the TS-authoritative endpoint can return Full
+for these states. Support must expect this intentional SQL under-reveal.
 
 The new endpoint validates the user JWT, verifies report ownership with that JWT,
 and runs the existing premium-first TS resolver. It then calls a service-only
@@ -46,7 +52,11 @@ is no endpoint query of private full storage and no raw-storage fallback.
    `delete_interpretations`. Rollback before cutover may restore old functions;
    the compatibility trigger keeps their Basic projection fresh.
 3. **Owner GO: cutover** — run the migration-boundary rehearsal in a disposable
-   database first, then apply `20260926000001` and `20260926000002`. The rename
+   database first. Before cutover GO, use a preview project with the migrations and
+   real user JWTs, with visibility switched ON, to run live PostgREST `select('*')` and
+   `select('id, json_output, tier')` for exhausted Free and each Premium source.
+   Assert the seven-column shape, Basic/Full selection, and cross-user denial;
+   raw SQL alone is insufficient. Then apply `20260926000001` and `20260926000002`. The rename
    retains table OID, FK cascade, indexes, unique constraint and triggers. All
    private policies are replaced with service-only access. Function bodies for
    v1/save/delete are retargeted transactionally; v2 calls these stable functions.
@@ -90,18 +100,28 @@ Service-only RPCs (arguments in order):
   table(json_output jsonb, stored_depth text, has_claim boolean, tier text)`.
 
 Authenticated `read_compatible_interpretations() -> table` has the view's exact
-columns and enforces auth.uid ownership internally. The private
+columns and enforces auth.uid ownership internally. Its EXECUTE grant is retained
+because PostgreSQL checks function calls in a view against the querying role.
+The SQL rehearsal revokes EXECUTE, expects view SELECT to fail with insufficient
+privilege, restores it, then exercises both old query shapes. Lead must execute
+that assertion before cutover; if SELECT works without it, remove the grant. The private
 `interpretation_reader_is_full(uuid report, text draw) -> boolean` has no
 client EXECUTE grant. Safety/floor and trigger helper functions are not public
 client APIs.
 
 New HTTP endpoint: `POST get-interpretation {reportId}` returns
-`{access: full|basic|error|generation_needed, interpretation, preview,
+`{access: full|basic|error|generation_needed, interpretation, stored_depth, preview,
 locked:{patterns,cross_report,lifestyle}, plan, complimentary}`. Errors also carry
 `code` and `retryable`. DB failures are HTTP 503 with
 `code: entitlement_unavailable, retryable:true`; absent/foreign report is 404;
 onboarding denial is 403. Missing interpretation or insufficient stored depth
 is a successful `generation_needed` response, with Basic data when available.
+`stored_depth` is deep/standard/unknown for a stored row, null when absent or on
+policy errors. Missing floor keys in stored Full are logged and served to the
+entitled reader, never converted into a persistent 503. The endpoint uses the
+same atomic rate counter as siblings: 30 requests per user per UTC day, HTTP 429
+`rate_limit_exceeded` thereafter. Authentication transport exceptions and counter
+failures return structured retryable 503 with CORS headers.
 Complimentary counts reflect the actual historical ledger for both plans. Reading
 this attribution does not consume a claim; Premium generation still bypasses the
 ledger entirely.
@@ -119,11 +139,20 @@ Pure contracts: `selectPremiumPreview` takes findings, floorKeys, floorPaths,
 floorContentFingerprints, abnormalOrSafetyPaths and ineligiblePaths as in the
 memo; returns preview and locked counts. `buildBasicProjection(full, findings?)`
 returns an allowlisted payload and validates the floor. `FindingMetadata` adds
-optional server-classified `preview_eligible`. Normal cross-marker findings need
-at least two known-normal linked markers; opaque trend/lifestyle prose is not
-assumed meaningful. Unknown legacy provenance yields no preview. Primary concern,
-clinical follow-ups, explicit safety flags and all narrative floor keys remain
-visible. The short Basic interpretation reuses the visible floor headline, never
+optional server-classified `preview_eligible`. Cross-marker previews need at least two distinct linked markers, none abnormal;
+trend/lifestyle previews need at least one linked marker, none abnormal. A trend
+requires numeric delta or previous/current comparison evidence. Global prior-report
+context alone does not reclassify a narrative. Owner vocabulary in `_shared/tier.ts`:
+NORMAL = reassuring/normal/in_range/within_range/optimal, BORDERLINE = monitor,
+ABNORMAL = attention/discuss. Explicit boolean abnormal/safety flags also count.
+The SQL migration copy is guarded by the TypeScript parity test. Ineligible
+previews still count as locked candidates; only the selected preview is subtracted.
+Unknown legacy provenance yields no preview. Whole primary_concern and
+overall_interpretation remain locked; explicit safety flags and follow-ups plus
+required floor keys remain visible. Patterns touching abnormal markers become
+floor catalog entries, but only their flags, not narrative bodies, enter Basic.
+Projection version 2 distinguishes this repair from the earlier unreleased logic;
+prepare backfill, legacy trigger, and save RPC all write version 2. The short Basic interpretation reuses the visible floor headline, never
 a truncated locked narrative. `readInterpretation(actions)` is the injected authoritative policy port.
 
 ## Verification and stop conditions
@@ -150,3 +179,33 @@ Docker, network, and production calls are prohibited in the implementer sandbox;
 no local Deno executable is available. The implementation report records which
 local commands ran and keeps
 unexecuted SQL, Deno, device, and review evidence pending for the Lead.
+
+## Production privilege checks (Lead, after every migration)
+
+Immediately after each prepare/cutover/comment migration, run this exact query.
+It checks effective privileges (including PUBLIC/inherited/default grants), not
+only ACL text. Do not proceed to the next owner GO if any unexpected grant appears.
+At prepare, `interpretations` is still the legacy table; at cutover it is the view.
+The config must deny every listed anon/authenticated privilege. After cutover the
+view must allow only authenticated SELECT; anon must have none.
+
+```sql
+SELECT c.relname, c.relkind, r.role_name, p.privilege,
+       has_table_privilege(r.role_name, c.oid, p.privilege) AS granted
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
+CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
+                   ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(privilege)
+WHERE n.nspname='public'
+  AND c.relname IN ('interpretation_visibility_config', 'interpretations', 'interpretations_private')
+ORDER BY c.relname, r.role_name, p.privilege;
+```
+
+The harness already installs permissive anon/authenticated/service_role default
+privileges in run.sh before prepare, making these REVOKE assertions load-bearing.
+The repair adds authenticated config SELECT denial, shared prompt-fixture SQL/TS
+key-set parity, actual legacy backfill/depth/version checks, and the view EXECUTE
+necessity check. These SQL stop conditions remain for the Lead's Docker run.
+`generate-interpretation/index.ts` remains in the existing Deno baseline exclusion:
+the repair sandbox skips Deno, so it cannot establish a passing ratchet with that
+file included. No exclusion is added or broadened.

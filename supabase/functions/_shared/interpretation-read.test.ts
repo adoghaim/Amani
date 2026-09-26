@@ -38,6 +38,7 @@ describe('authoritative interpretation reads', () => {
     const result = await readInterpretation(actions({ resolveEntitlement: async () => ({ allowed: true, plan: 'premium', reason: 'complimentary', source: 'complimentary' }),
       readSelected: async () => ({ json_output: full, stored_depth, has_claim: false, tier: 'plus' }) }));
     expect(result.body.access).toBe('generation_needed');
+    expect(result.body.stored_depth).toBe(stored_depth);
     expect(result.body.interpretation).not.toHaveProperty('private');
   });
   it('distinguishes missing generation, ownership denial and DB errors', async () => {
@@ -58,4 +59,17 @@ describe('authoritative interpretation reads', () => {
     }
     expect(read).not.toHaveBeenCalled();
   });
+});
+
+it.each([false, true])('serves floor-violating stored Full without an infrastructure denial (claim=%s)', async has_claim => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const payload = { headline: 'Existing full narrative', private: 'paid content' };
+    const result = await readInterpretation(actions({
+      resolveEntitlement: async () => ({ allowed: true, plan: has_claim ? 'free' : 'premium' }),
+      readSelected: async () => ({ json_output: payload, stored_depth: 'deep', has_claim, tier: 'plus' }),
+    }));
+    expect(result).toMatchObject({ status: 200, body: { access: 'full', interpretation: payload, stored_depth: 'deep' } });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('MEDICAL FLOOR VIOLATION'), expect.any(Array));
+  } finally { log.mockRestore(); }
 });

@@ -51,7 +51,7 @@ describe('deterministic preview selection', () => {
     ], { floorContentFingerprints: new Set([contentFingerprint('floor copy')]),
       abnormalOrSafetyPaths: new Set(['/safety']), ineligiblePaths: new Set(['/unproven']) });
     expect(result.preview?.source_path).toBe('/a');
-    expect(result.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+    expect(result.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 1 });
   });
   it('is immutable and stable across permutations and exact ties', () => {
     const entries = [finding('trend','/b'), finding('trend','/a')];
@@ -68,5 +68,22 @@ describe('deterministic preview selection', () => {
         "preview": null,
       }
     `);
+  });
+});
+
+it('counts preview-ineligible findings of every premium kind', () => {
+  const findings = [finding('trend', '/a'), finding('cross_marker', '/b'), finding('lifestyle', '/c')];
+  expect(select(findings, { ineligiblePaths: new Set(['/a', '/b', '/c']) })).toMatchInlineSnapshot(`
+    {
+      "locked": {
+        "cross_report": 1,
+        "lifestyle": 1,
+        "patterns": 1,
+      },
+      "preview": null,
+    }
+  `);
+  expect(select(findings, { ineligiblePaths: new Set(['/a', '/b']) })).toMatchObject({
+    preview: { source_path: '/c' }, locked: { cross_report: 1, patterns: 1, lifestyle: 0 },
   });
 });

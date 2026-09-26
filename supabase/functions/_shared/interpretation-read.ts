@@ -23,10 +23,11 @@ export async function readInterpretation(actions: InterpretationReadActions): Pr
     preview: unknown; locked: LockedCounts;
     plan: "premium" | "free" | null;
     complimentary: { used: number; total: number; remaining: number } | null;
+    stored_depth: string | null;
     code?: string; retryable?: boolean;
   };
 }> {
-  const empty = { interpretation: null, preview: null,
+  const empty = { stored_depth: null, interpretation: null, preview: null,
     locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, plan: null, complimentary: null };
   const failure = (status: number, code: string, retryable = false) => ({
     status, body: { ...empty, access: "error" as const, code, retryable },
@@ -43,7 +44,7 @@ export async function readInterpretation(actions: InterpretationReadActions): Pr
     const row = await actions.readSelected(premium);
     const used = await actions.countClaims();
     if (!Number.isInteger(used) || used < 0) throw new Error("Invalid claim count");
-    const common = { plan: entitlement.plan,
+    const common = { plan: entitlement.plan, stored_depth: row?.stored_depth ?? null,
       complimentary: { used, total: FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS,
         remaining: Math.max(0, FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS - used) } };
     if (!row) return { status: 200, body: { ...empty, ...common, access: "generation_needed" } };
@@ -53,7 +54,8 @@ export async function readInterpretation(actions: InterpretationReadActions): Pr
       return { status: 200, body: { ...common, access: "generation_needed", interpretation: basic,
         preview: basic.preview, locked: basic.locked as LockedCounts } };
     }
-    if (findFloorViolations(row.json_output).length) throw new Error("Invalid interpretation floor");
+    const violations = findFloorViolations(row.json_output);
+    if (violations.length) console.error("[get-interpretation] MEDICAL FLOOR VIOLATION — serving stored payload", violations);
     // Basic arrives precompiled; rebuilding it would discard its chosen preview.
     const projection = full ? buildBasicProjection(row.json_output) : row.json_output;
     return { status: 200, body: { ...common, access: full ? "full" : "basic",

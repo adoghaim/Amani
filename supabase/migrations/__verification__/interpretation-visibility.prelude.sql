@@ -20,7 +20,7 @@ INSERT INTO lab_reports(id,user_id) VALUES
  ('09100000-0000-4000-8000-000000000031','09000000-0000-4000-8000-000000000031'),
  ('09100000-0000-4000-8000-000000000032','09000000-0000-4000-8000-000000000032');
 INSERT INTO interpretations(lab_report_id,json_output,tier,interpretation_source) VALUES
- ('09100000-0000-4000-8000-000000000031','{"headline":"Legacy","key_findings":[{"status":"high","title":"floor"}],"cycle_context":{},"questions_for_doctor":[],"disclaimer":"d","locked_secret":"NEVER_BASIC","unknown_safety":{"abnormal":true,"value":"always_visible"}}','free','ai');
+ ('09100000-0000-4000-8000-000000000031','{"headline":"Legacy","key_findings":[{"status":"attention","title":"floor"}],"cycle_context":{},"questions_for_doctor":[],"disclaimer":"d","locked_secret":"NEVER_BASIC","unknown_safety":{"abnormal":true,"marker":"always_visible"}}','free','ai');
 
 INSERT INTO interpretations(lab_report_id,json_output,tier,interpretation_source) VALUES
  ('09100000-0000-4000-8000-000000000032','{"headline":"other owner","key_findings":[],"cycle_context":{},"questions_for_doctor":[],"disclaimer":"d","locked_secret":"OTHER_OWNER"}','free','ai');
@@ -31,3 +31,86 @@ INSERT INTO interpretations(lab_report_id,json_output,tier,interpretation_source
 -- introductory_deep_access_claims and interpretation_generation_costs.)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+
+-- Production-shaped legacy rows, shared verbatim with the TypeScript composite test.
+CREATE TABLE visibility_prompt_fixture AS SELECT $prompt_fixture${
+  "headline": "Panel summary",
+  "cycle_context": {},
+  "questions_for_doctor": [],
+  "disclaimer": "Educational",
+  "key_findings": [
+    {
+      "biomarker_slug": "a",
+      "status": "reassuring"
+    },
+    {
+      "biomarker_slug": "b",
+      "status": "reassuring"
+    },
+    {
+      "biomarker_slug": "c",
+      "status": "reassuring"
+    },
+    {
+      "biomarker_slug": "d",
+      "status": "reassuring"
+    }
+  ],
+  "overall_interpretation": "LOCKED_OVERALL",
+  "primary_concern": {
+    "title": "LOCKED_PRIMARY"
+  },
+  "pattern_signals": [
+    {
+      "related_biomarkers": [
+        "a",
+        "b"
+      ],
+      "explanation": "PATTERN_BODY_0",
+      "confidence": 0.8
+    },
+    {
+      "related_biomarkers": [
+        "b",
+        "c"
+      ],
+      "explanation": "PATTERN_BODY_1",
+      "confidence": 0.8
+    },
+    {
+      "related_biomarkers": [
+        "c",
+        "d"
+      ],
+      "explanation": "PATTERN_BODY_2",
+      "confidence": 0.8
+    },
+    {
+      "related_biomarkers": [
+        "b"
+      ],
+      "explanation": "PATTERN_BODY_3",
+      "confidence": 0.8,
+      "delta": 2
+    }
+  ],
+  "what_you_can_do_now": [
+    {
+      "related_biomarkers": [
+        "d"
+      ],
+      "explanation": "LIFESTYLE_BODY"
+    },
+    "Generic lifestyle advice"
+  ]
+}$prompt_fixture$::jsonb AS payload;
+INSERT INTO users(id) VALUES ('09000000-0000-4000-8000-000000000040');
+INSERT INTO lab_reports(id,user_id)
+SELECT ('09100000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  '09000000-0000-4000-8000-000000000040'::uuid FROM generate_series(40,43) n;
+INSERT INTO interpretations(lab_report_id,json_output,tier,interpretation_source)
+SELECT ('09100000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  CASE WHEN n=43 THEN '{}'::jsonb ELSE jsonb_set(payload,'{key_findings,0,status}',
+    to_jsonb(CASE n WHEN 40 THEN 'reassuring' WHEN 41 THEN 'monitor' ELSE 'attention' END)) END,
+  CASE n WHEN 40 THEN 'plus' WHEN 42 THEN 'free' ELSE NULL END,'ai'
+FROM visibility_prompt_fixture CROSS JOIN generate_series(40,43) n;

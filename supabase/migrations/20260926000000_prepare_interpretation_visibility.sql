@@ -3,7 +3,7 @@ BEGIN;
 ALTER TABLE public.interpretations
   ADD COLUMN json_output_basic jsonb,
   ADD COLUMN stored_depth text NOT NULL DEFAULT 'unknown' CHECK (stored_depth IN ('deep','standard','unknown')),
-  ADD COLUMN projection_version integer NOT NULL DEFAULT 1 CHECK (projection_version = 1),
+  ADD COLUMN projection_version integer NOT NULL DEFAULT 2 CHECK (projection_version = 2),
   ADD COLUMN blood_draw_id text;
 
 CREATE TABLE public.interpretation_visibility_config (
@@ -15,6 +15,8 @@ ALTER TABLE public.interpretation_visibility_config ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.interpretation_visibility_config FROM PUBLIC, anon, authenticated;
 GRANT ALL ON public.interpretation_visibility_config TO service_role;
 
+-- Status vocabulary derived from FINDING_STATUS in _shared/tier.ts; parity test guards drift.
+-- NORMAL: reassuring, normal, in_range, within_range, optimal. BORDERLINE: monitor.
 -- Structural safety classification for legacy backfill. Unknown narrative is
 -- never preview-eligible; explicit abnormal/safety flags are never withheld.
 CREATE FUNCTION public.interpretation_has_safety(p_value jsonb) RETURNS boolean
@@ -28,9 +30,9 @@ BEGIN
   ELSIF jsonb_typeof(p_value) = 'object' THEN
     FOR k,v IN SELECT key,value FROM jsonb_each(p_value) LOOP
       IF k IN ('abnormal','is_abnormal','safety','safety_related','is_safety','critical','urgent')
-        AND v NOT IN ('false'::jsonb,'null'::jsonb) THEN RETURN true; END IF;
+        AND v = 'true'::jsonb THEN RETURN true; END IF;
       IF k IN ('flag','flagged','status','current_status') AND jsonb_typeof(v)='string'
-        AND lower(v #>> '{}') NOT IN ('normal','in_range','optimal','within_range') THEN RETURN true; END IF;
+        AND lower(v #>> '{}') IN ('attention','discuss') THEN RETURN true; END IF;
       IF public.interpretation_has_safety(v) THEN RETURN true; END IF;
     END LOOP;
   END IF;
@@ -39,6 +41,39 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.interpretation_has_safety(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.interpretation_has_safety(jsonb) TO service_role;
+
+-- Only the flag and explicit safety follow-ups survive outside required floor keys.
+CREATE FUNCTION public.interpretation_safety_flags(p_value jsonb) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
+DECLARE result jsonb := '[]'::jsonb; flags jsonb := '{}'::jsonb; k text; v jsonb;
+BEGIN
+  IF jsonb_typeof(p_value) = 'array' THEN
+    FOR v IN SELECT value FROM jsonb_array_elements(p_value) LOOP
+      result := result || public.interpretation_safety_flags(v);
+    END LOOP;
+  ELSIF jsonb_typeof(p_value) = 'object' THEN
+    FOR k,v IN SELECT key,value FROM jsonb_each(p_value) LOOP
+      IF (k IN ('abnormal','is_abnormal','safety','safety_related','is_safety','critical','urgent') AND v='true'::jsonb)
+        OR (k IN ('flag','flagged','status','current_status') AND jsonb_typeof(v)='string'
+          AND public.interpretation_has_safety(jsonb_build_object(k,v))) THEN
+        flags := flags || jsonb_build_object(k,v);
+      END IF;
+      result := result || public.interpretation_safety_flags(v);
+    END LOOP;
+    IF flags <> '{}'::jsonb THEN
+      FOREACH k IN ARRAY ARRAY['biomarker_slug','marker','related_biomarkers','safety_notes','follow_up','what_to_do_next'] LOOP
+        IF p_value->k IS NOT NULL AND p_value->k <> 'null'::jsonb THEN
+          flags := flags || jsonb_build_object(k,p_value->k);
+        END IF;
+      END LOOP;
+      result := jsonb_build_array(flags) || result;
+    END IF;
+  END IF;
+  RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.interpretation_safety_flags(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.interpretation_safety_flags(jsonb) TO service_role;
 
 -- Unknown legacy provenance never licenses a preview or hidden narrative.
 -- Floor keys retain their original shapes. Raw analytes remain separately readable.
@@ -60,22 +95,14 @@ BEGIN
   FOREACH k IN ARRAY ARRAY['key_findings','top_findings','summary_bullets'] LOOP
     result := result || jsonb_build_object(k, CASE WHEN jsonb_typeof(p_full->k) = 'array' THEN p_full->k ELSE '[]'::jsonb END);
   END LOOP;
-  FOREACH k IN ARRAY ARRAY['safety_notes','abnormal_flags','flags','warnings','critical_findings','what_to_do_next','primary_concern'] LOOP
-    IF k='primary_concern' AND (p_full->k IS NULL OR p_full->k='null'::jsonb) THEN CONTINUE; END IF;
+  FOREACH k IN ARRAY ARRAY['safety_notes','abnormal_flags','flags','warnings','critical_findings','what_to_do_next'] LOOP
     result := result || jsonb_build_object(k, COALESCE(NULLIF(p_full->k,'null'::jsonb), '[]'::jsonb));
   END LOOP;
-  IF public.interpretation_has_safety(p_full->'key_findings')
-    OR public.interpretation_has_safety(p_full->'top_findings')
-    OR public.interpretation_has_safety(p_full->'summary_bullets') THEN
-    IF p_full->'overall_interpretation' IS NOT NULL THEN
-      result := result || jsonb_build_object('overall_interpretation',p_full->'overall_interpretation');
-    END IF;
-  END IF;
   IF jsonb_typeof(p_full)='object' THEN
     FOR k,v IN SELECT key,value FROM jsonb_each(p_full) LOOP
       IF k='findings' OR result ? k THEN CONTINUE; END IF;
       FOR entry IN SELECT value FROM jsonb_array_elements(CASE WHEN jsonb_typeof(v)='array' THEN v ELSE jsonb_build_array(v) END) LOOP
-        IF public.interpretation_has_safety(entry) THEN safety := safety || jsonb_build_array(entry); END IF;
+        IF public.interpretation_has_safety(entry) THEN safety := safety || public.interpretation_safety_flags(entry); END IF;
       END LOOP;
     END LOOP;
   END IF;
@@ -88,8 +115,14 @@ $$;
 REVOKE ALL ON FUNCTION public.interpretation_floor(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.interpretation_floor(jsonb) TO service_role;
 
-UPDATE public.interpretations SET json_output_basic = public.interpretation_floor(json_output);
--- No legacy writer recorded persisted depth. Source='ai' and tier='plus' are not proof.
+-- Owner decision: historical Plus rows were full; pre-tiering rows qualify only
+-- with a nonempty full narrative. Source='ai' alone never proves depth.
+UPDATE public.interpretations SET json_output_basic = public.interpretation_floor(json_output),
+  projection_version = 2,
+  stored_depth = CASE WHEN tier='plus' OR (tier IS NULL
+    AND jsonb_typeof(json_output->'overall_interpretation')='string'
+    AND length(trim(json_output->>'overall_interpretation')) > 0)
+    THEN 'deep' ELSE 'unknown' END;
 ALTER TABLE public.interpretations ALTER COLUMN json_output_basic SET NOT NULL;
 
 -- Keeps v1/old ordinary writers safe during the prepare/deploy interval. A change
@@ -102,7 +135,7 @@ BEGIN
       AND NEW.json_output_basic IS NOT DISTINCT FROM OLD.json_output_basic) THEN
     NEW.json_output_basic := public.interpretation_floor(NEW.json_output);
     NEW.stored_depth := 'unknown';
-    NEW.projection_version := 1;
+    NEW.projection_version := 2;
   END IF;
   RETURN NEW;
 END;
@@ -129,7 +162,7 @@ BEGIN
   INSERT INTO public.interpretations AS stored
     (lab_report_id,json_output,json_output_basic,stored_depth,projection_version,blood_draw_id,
       interpretation_source,tier,generated_at,disclaimer_version)
-  VALUES (p_report_id,p_interpretation,p_basic,p_stored_depth,1,p_blood_draw_id,p_source,p_tier,now(),'1.0')
+  VALUES (p_report_id,p_interpretation,p_basic,p_stored_depth,2,p_blood_draw_id,p_source,p_tier,now(),'1.0')
   ON CONFLICT (lab_report_id) DO UPDATE SET
     json_output=EXCLUDED.json_output, json_output_basic=EXCLUDED.json_output_basic,
     stored_depth=EXCLUDED.stored_depth, projection_version=EXCLUDED.projection_version,

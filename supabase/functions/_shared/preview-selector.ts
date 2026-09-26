@@ -26,7 +26,7 @@ export function selectPremiumPreview(input: {
   ineligiblePaths: ReadonlySet<string>;
 }): PreviewSelection {
   const priorities: Record<string, number> = { trend: 0, cross_marker: 1, lifestyle: 2 };
-  const excluded = [...input.floorPaths, ...input.abnormalOrSafetyPaths, ...input.ineligiblePaths,
+  const excluded = [...input.floorPaths, ...input.abnormalOrSafetyPaths,
     ...input.floorKeys.map(key => `/${key}`)];
   const number = (n: unknown) => typeof n === "number" && Number.isFinite(n) ? n : -Infinity;
   const confidence = (n: unknown) => typeof n === "number" && n >= 0 && n <= 1 ? number(n) : -Infinity;
@@ -53,9 +53,10 @@ export function selectPremiumPreview(input: {
     seen.add(fingerprint);
     return true;
   });
-  const preview = unique.shift() ?? null;
+  const preview = unique.find(f => ![...input.ineligiblePaths].some(path => pathWithin(f.source_path, path))) ?? null;
   const locked: LockedCounts = { patterns: 0, cross_report: 0, lifestyle: 0 };
   for (const f of unique) {
+    if (f === preview) continue;
     if (f.kind === "trend") locked.cross_report++;
     if (f.kind === "cross_marker") locked.patterns++;
     if (f.kind === "lifestyle") locked.lifestyle++;
