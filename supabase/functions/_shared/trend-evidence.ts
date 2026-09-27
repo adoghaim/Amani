@@ -103,12 +103,22 @@ export function buildTrendEvidence(
   previous: readonly TrendInputValue[],
   previousDate: string | null,
 ): TrendEvidence[] {
-  const comparable = (values: readonly TrendInputValue[]): ComparableValue[] => values.flatMap(v => {
-    const value = typeof v.value === "number" ? v.value
-      : typeof v.value === "string" && v.value.trim() !== "" ? Number(v.value) : NaN;
-    return typeof v.slug === "string" && v.slug && Number.isFinite(value)
-      ? [{ key: v.slug, name: v.name, value, unit: v.unit ?? "" }] : [];
-  });
+  // No per-entry timestamp exists here. Prefer a usable numeric entry with a
+  // non-empty unit; among equally complete entries the last input occurrence
+  // wins. Do not combine a value with a different entry's unit. Map insertion
+  // order keeps equal-magnitude ties deterministic, and dedupe precedes the cap.
+  const comparable = (values: readonly TrendInputValue[]): ComparableValue[] => {
+    const unique = new Map<string, ComparableValue>();
+    for (const v of values) {
+      const value = typeof v.value === "number" ? v.value
+        : typeof v.value === "string" && v.value.trim() !== "" ? Number(v.value) : NaN;
+      if (typeof v.slug !== "string" || !v.slug || !Number.isFinite(value)) continue;
+      const unit = v.unit ?? "";
+      if (!unit && unique.get(v.slug)?.unit) continue;
+      unique.set(v.slug, { key: v.slug, name: v.name, value, unit });
+    }
+    return [...unique.values()];
+  };
   const date = typeof previousDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(previousDate)
     ? previousDate.slice(0, 10) : null;
   const changes = compareBiomarkerValues(comparable(current), comparable(previous))

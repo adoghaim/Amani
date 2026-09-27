@@ -9,7 +9,12 @@ END $$;
 -- Key contract shared with interpretation-visibility.test.ts (TS buildBasicProjection
 -- with source 'fallback' must produce exactly these keys for the shared fixture).
 CREATE TEMP TABLE deterministic_projection_keys AS SELECT
-  $deterministic_keys$["abnormal_flags", "basic_interpretation", "critical_findings", "cycle_context", "disclaimer", "flags", "headline", "key_findings", "locked", "overall_interpretation", "pattern_signals", "preview", "questions_for_doctor", "safety_findings", "safety_notes", "summary_bullets", "top_findings", "warnings", "what_to_do_next"]$deterministic_keys$::jsonb AS expected_keys;
+  $deterministic_keys$["abnormal_flags", "basic_interpretation", "critical_findings", "cycle_context", "disclaimer", "flagged_trends", "flags", "headline", "key_findings", "locked", "overall_interpretation", "pattern_signals", "preview", "questions_for_doctor", "safety_findings", "safety_notes", "summary_bullets", "top_findings", "warnings", "what_to_do_next"]$deterministic_keys$::jsonb AS expected_keys;
+
+-- The literal is the current contract. Before the additive migration, assert
+-- the historical contract explicitly; afterwards require flagged_trends too.
+UPDATE deterministic_projection_keys SET expected_keys = expected_keys - 'flagged_trends'
+WHERE to_regprocedure('public.interpretation_flagged_trends(jsonb)') IS NULL;
 
 SELECT pg_temp.assert((SELECT (SELECT jsonb_agg(k ORDER BY k) FROM jsonb_object_keys(interpretation_floor(f.payload,'fallback')) k)
     = (SELECT expected_keys FROM deterministic_projection_keys)

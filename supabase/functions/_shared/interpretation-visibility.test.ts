@@ -138,22 +138,20 @@ describe('deterministic interpretation stays on the Free medical floor', () => {
     expect(deterministicMigration).toContain(`p_source IN (${sources})`);
     expect(deterministicMigration).toContain(`interpretation_source IN (${sources})`);
     expect(deterministicMigration).toContain(`ARRAY[${keys}]`);
-    expect(deterministicKeys).toEqual([...expectedKeys, ...DETERMINISTIC_NARRATIVE_KEYS].sort());
+    expect(deterministicKeys).toEqual([...expectedKeys, ...DETERMINISTIC_NARRATIVE_KEYS, 'flagged_trends'].sort());
     expect(isDeterministicSource('fallback')).toBe(true);
     expect(isDeterministicSource('ai')).toBe(false);
     expect(isDeterministicSource(null)).toBe(false);
   });
 
-  // SQL interpretation_floor never emits flagged_trends: every row carrying
-  // trend_evidence is written by the TS writer with its TS projection. Without
-  // trend_evidence the TS and SQL key sets are identical.
+  // The current SQL contract includes flagged_trends for this evidence-bearing fixture.
   const { trend_evidence: _evidence, ...withoutEvidence } = deterministicFixture;
   it.each(DETERMINISTIC_SOURCES)('%s: full deterministic narrative in Basic, SQL key parity', source => {
     const basic = buildBasicProjection(deterministicFixture, undefined, { source });
     expect(basic.overall_interpretation).toBe(deterministicFixture.overall_interpretation);
     expect(basic.pattern_signals).toEqual(deterministicFixture.pattern_signals);
-    expect(Object.keys(basic).sort()).toEqual([...deterministicKeys, 'flagged_trends'].sort());
-    expect(Object.keys(buildBasicProjection(withoutEvidence, undefined, { source })).sort()).toEqual(deterministicKeys);
+    expect(Object.keys(basic).sort()).toEqual(deterministicKeys);
+    expect(Object.keys(buildBasicProjection(withoutEvidence, undefined, { source })).sort()).toEqual(deterministicKeys.filter(key => key !== 'flagged_trends'));
     expect(findFloorViolations(basic)).toEqual([]);
     expect(basic).not.toHaveProperty('trend_evidence');
   });
@@ -184,5 +182,21 @@ describe('deterministic interpretation stays on the Free medical floor', () => {
     expect(ai).not.toHaveProperty('overall_interpretation');
     expect(ai).not.toHaveProperty('pattern_signals');
     expect(JSON.stringify(ai)).not.toContain('DETERMINISTIC_PATTERN');
+  });
+});
+
+const flaggedTrendSql = readFileSync(new URL('../../migrations/__verification__/flagged-trends.verify.sql', import.meta.url), 'utf8');
+const flaggedTrendCases = JSON.parse(flaggedTrendSql.match(/\$trend_cases\$([\s\S]*?)\$trend_cases\$/)![1]);
+describe('SQL/TS flagged_trends shared value fixtures', () => {
+  it.each(flaggedTrendCases)('matches the SQL expected values for $full', ({ full, expected }) => {
+    for (const source of ['ai', 'fallback', 'deterministic', null]) {
+      const basic = buildBasicProjection(full, undefined, { source });
+      expect(basic.flagged_trends ?? []).toEqual(expected);
+      if (!expected.length) expect(basic).not.toHaveProperty('flagged_trends');
+    }
+  });
+  it('freezes the shared abnormal vocabulary in SQL', () => {
+    const migration = readFileSync(new URL('../../migrations/20260927000000_flagged_trends_projection.sql', import.meta.url), 'utf8');
+    expect(migration).toContain(`IN (${FINDING_STATUS.ABNORMAL.map(s => `'${s}'`).join(',')})`);
   });
 });

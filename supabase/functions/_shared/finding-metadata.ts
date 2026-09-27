@@ -113,7 +113,14 @@ export function addFindingMetadata(
       ? record.prior_comparison as Record<string, unknown> : trendSlug ? evidence.get(trendSlug)! : record;
     const trendEvidence = hasComparison(comparison);
     if (kind !== "floor" && kind !== "narrative" && trendEvidence) kind = "trend";
-    if (kind === "trend" && trendSlug) referenced.add(trendSlug);
+    // First catalogued comparison for a slug wins, including multiple model
+    // patterns referring to the same stored evidence. Keep the original source
+    // path/content and do not count the same analyte twice.
+    const comparisonSlug = trendSlug ?? (typeof record.biomarker_slug === "string" ? record.biomarker_slug : null);
+    if (kind === "trend" && comparisonSlug) {
+      if (referenced.has(comparisonSlug)) return;
+      referenced.add(comparisonSlug);
+    }
     const confidence = record.confidence;
     const magnitude = finite(record.magnitude_normalized) ? record.magnitude_normalized
       : kind === "trend" && finite(comparison.percent_change) ? Math.abs(comparison.percent_change) / 100 : null;

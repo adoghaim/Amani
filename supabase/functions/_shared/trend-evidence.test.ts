@@ -91,3 +91,35 @@ describe('lab-insights comparison rules (moved verbatim)', () => {
     expect(topChanges([{ ...changes[0], percent_change: -50 }, changes[0]], 1)[0].percent_change).toBe(-50);
   });
 });
+
+describe('duplicate analyte slugs', () => {
+  const row = (value: unknown, unit: string | null = 'u'): TrendInputValue => ({ slug: 'a', name: 'A', value, unit });
+  it.each([
+    { current: [row(20), row(30)], previous: [row(10)], from: 10, to: 30 },
+    { current: [row(30)], previous: [row(5), row(10)], from: 10, to: 30 },
+    { current: [row(20), row(30)], previous: [row(5), row(10)], from: 10, to: 30 },
+    { current: [row(30), row(null), row(''), row(Infinity)], previous: [row(10)], from: 10, to: 30 },
+    { current: [row(99, null), row(30), row(80, null)], previous: [row(10), row(90, null)], from: 10, to: 30 },
+    { current: [row(20, null), row(30, null)], previous: [row(5, null), row(10, null)], from: 10, to: 30 },
+  ])('dedupes current=$current previous=$previous before cataloguing', ({ current, previous, from, to }) => {
+    const evidence = buildTrendEvidence(current, previous, null);
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]).toMatchObject({ previous_value: from, current_value: to });
+    const catalog = addFindingMetadata({ trend_evidence: evidence }).findings as CatalogFinding[];
+    expect(catalog.filter(f => f.kind === 'trend')).toHaveLength(1);
+  });
+  it('does not borrow an older unit to force a comparison', () => {
+    expect(buildTrendEvidence([row(20), row(30, 'other')], [row(10)], null)).toEqual([]);
+  });
+});
+
+it('catalogues only the first pattern referencing a trend slug', () => {
+  const evidence = buildTrendEvidence(currentReport, previousReport, null);
+  const catalog = addFindingMetadata({ trend_evidence: evidence, pattern_signals: [
+    { trend_biomarker: 'vitamin_d', explanation: 'First' },
+    { trend_biomarker: 'vitamin_d', explanation: 'Repeated' },
+  ] }).findings as CatalogFinding[];
+  expect(catalog.filter(f => f.kind === 'trend')).toHaveLength(evidence.length);
+  expect(catalog.some(f => f.source_path === '/pattern_signals/1')).toBe(false);
+  expect(catalog.some(f => f.source_path === '/trend_evidence/0')).toBe(false);
+});
