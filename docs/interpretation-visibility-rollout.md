@@ -180,6 +180,13 @@ a truncated locked narrative. `readInterpretation(actions)` is the injected auth
   makes the legacy-writer trigger source-aware, and re-projects only deterministic
   rows whose Basic lacks narrative present in the full body. Stored depth, version
   and the switch are untouched. `trend_evidence` is never part of the SQL floor.
+  **Replay hazard:** never manually re-apply `20260926000003` after
+  `20260927000001`. The former defines the two-argument floor as calling the
+  one-argument floor; the latter defines the one-argument floor as calling the
+  two-argument floor, so re-running `20260926000003` alone makes them mutually
+  recursive and every floor call fails with stack depth exceeded. The Supabase
+  migration ledger prevents this in normal operation; no repair script may
+  bypass it.
 - **Trend evidence.** Activated generation attaches `trend_evidence[]` (additive):
   `{biomarker_slug, marker, previous_value, current_value, delta, percent_change,
   unit, previous_date, direction, summary}` for significant same-unit changes

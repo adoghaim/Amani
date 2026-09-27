@@ -1,4 +1,6 @@
 import { AlertCircle, Loader2, Lock, RefreshCw, Sparkles } from 'lucide-react';
+import type { InsightSummary } from '../../lib/insights/buildInsightSummary';
+import { selectTrajectoryBullets } from '../YourTrajectoryCard';
 import { Button } from '../Button';
 import { ComplimentaryCounter } from './ComplimentaryCounter';
 import {
@@ -20,6 +22,8 @@ interface FreemiumReportPanelProps {
   state: InterpretationAccessResult | null;
   /** A generation request is in flight. */
   generating: boolean;
+  /** Existing deterministic floor, used only to avoid repeating visible changes. */
+  floorSummary?: InsightSummary | null;
   /** The last generate request was refused with 402 (Premium required). */
   premiumRequired?: boolean;
   /** `useSubscription().plan`; the counter is only for Free accounts. */
@@ -46,11 +50,12 @@ interface FreemiumReportPanelProps {
  *   generation_needed → the generate action
  */
 export function FreemiumReportPanel({
-  state, generating, premiumRequired = false, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
+  state, generating, floorSummary, premiumRequired = false, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
 }: FreemiumReportPanelProps) {
   const used = state?.complimentary?.used ?? complimentaryUsed;
   // A Basic report consumed no claim, so it gets the remaining/exhausted line only.
   const counter = plan === 'free' && used !== null
+    && !(state?.access === 'full' && state.complimentary === null)
     ? <ComplimentaryCounter used={used} hideUsage={state?.access === 'basic'} />
     : null;
 
@@ -89,6 +94,7 @@ export function FreemiumReportPanel({
   if (state.access === 'full') return counter;
 
   const basicText = basicInterpretationText(state.interpretation);
+  const trends = basicTrendLines(state.interpretation, floorSummary);
   const preview = state.preview ? previewText(state.preview) : null;
   const locked: { key: string; label: string }[] = [
     ...(state.locked.patterns > 0 ? [{ key: 'patterns', label: lockedPatternsLabel(state.locked.patterns) }] : []),
@@ -102,6 +108,17 @@ export function FreemiumReportPanel({
         <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface p-5">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-theme-muted-text-3 mb-2">{COPY.basicHeading}</p>
           <p className="text-sm text-theme-text-body leading-relaxed">{basicText}</p>
+        </div>
+      )}
+
+      {trends.length > 0 && (
+        <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface p-5">
+          <h2 className="text-sm font-semibold text-theme-text mb-2">{COPY.changesHeading}</h2>
+          <ul className="space-y-2">
+          {trends.map(line => (
+            <li key={line.slug} className="text-sm text-theme-text-body">{line.text}</li>
+          ))}
+          </ul>
         </div>
       )}
 
@@ -136,6 +153,31 @@ export function FreemiumReportPanel({
       {upgradeBanner(onOpenPaywall)}
     </section>
   );
+}
+
+/** Only a rendered trajectory bullet containing the same two values replaces
+ * this line. Headlines, priority cards and boundary-only text do not. */
+function basicTrendLines(payload: Record<string, unknown> | null, floor?: InsightSummary | null) {
+  const seen = new Set<string>();
+  const visible = floor ? selectTrajectoryBullets(floor.biggestChanges, floor.primaryFinding) : [];
+  const raw = payload?.flagged_trends;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap(entry => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const line = entry as Record<string, unknown>;
+    const slug = line.biomarker_slug;
+    if (typeof slug !== 'string' || seen.has(slug)) return [];
+    seen.add(slug);
+    if (visible.some(b => b.key === slug && b.values
+      && b.values.previous === line.previous_value && b.values.current === line.current_value
+      && b.values.unit === line.unit)) return [];
+    const value = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? String(v) : '—';
+    const marker = typeof line.marker === 'string' ? line.marker : slug;
+    const unit = typeof line.unit === 'string' ? ` ${line.unit}` : '';
+    const direction = typeof line.direction === 'string' ? ` · ${line.direction}` : '';
+    const date = typeof line.previous_date === 'string' ? ` · ${line.previous_date}` : '';
+    return [{ slug, text: `${marker}: ${value(line.previous_value)} → ${value(line.current_value)}${unit}${direction}${date}` }];
+  });
 }
 
 function upgradeBanner(onOpenPaywall: () => void) {

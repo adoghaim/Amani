@@ -1,4 +1,4 @@
-import { carriesFindingSafety, isAbnormalStatus } from "./tier.ts";
+import { carriesFindingSafety, FINDING_STATUS, isAbnormalStatus } from "./tier.ts";
 import { FLOOR_REQUIRED_KEYS, FLOOR_FINDING_KEYS, findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
 import { contentFingerprint, pathWithin, selectPremiumPreview, type CatalogFinding } from "./preview-selector.ts";
 import { flaggedTrends } from "./finding-metadata.ts";
@@ -18,6 +18,125 @@ export const DETERMINISTIC_NARRATIVE_KEYS = Object.freeze(["overall_interpretati
 
 export function isDeterministicSource(source: unknown): boolean {
   return typeof source === "string" && (DETERMINISTIC_SOURCES as readonly string[]).includes(source);
+}
+
+/** Basic keeps cycle facts, never model-authored prose (including old stored
+ * strings, explanation, and unknown nested fields). The deterministic writer's
+ * cycle sentence is itself floor and survives for a deterministic source (a DB
+ * column, never the payload). Confidence is only ever a stored value. Full
+ * bodies are untouched. Mirrored by interpretation_basic_cycle_context in SQL. */
+export function basicCycleContext(value: unknown, source?: string | null): Record<string, unknown> {
+  const context = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : {};
+  const day = context.estimated_cycle_day;
+  const phase = context.estimated_cycle_phase;
+  const confidence = context.confidence;
+  return {
+    estimated_cycle_day: typeof day === "number" && Number.isSafeInteger(day) && day > 0 ? day : null,
+    estimated_cycle_phase: typeof phase === "string" && ["menstrual", "follicular", "ovulatory", "luteal",
+      "pregnancy_t1", "pregnancy_t2", "pregnancy_t3", "unknown"].includes(phase) ? phase : "unknown",
+    confidence: typeof confidence === "string" && ["low", "medium", "high"].includes(confidence) ? confidence : null,
+    explanation: isDeterministicSource(source) && typeof context.explanation === "string" ? context.explanation : "",
+  };
+}
+
+const SLUG = /^[a-z0-9_]{1,80}$/;
+// Single spaces between tokens only; no whitespace-only, leading or trailing space.
+const UNIT = /^[a-zA-Z0-9µμ%/^.*()-]+( [a-zA-Z0-9µμ%/^.*()-]+)*$/;
+
+/** Typed facts of one finding-like object: identifiers, values, flags and
+ * status vocabulary. Never strings of prose, whatever the key is called
+ * (title, explanation, marker, safety_notes, follow_up, what_to_do_next), nor
+ * nested objects. */
+function basicFindingEntry(entry: unknown): Record<string, unknown> | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const finding: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(entry)) {
+    if (key === "biomarker_slug" && typeof child === "string" && SLUG.test(child)) finding[key] = child;
+    if (key === "related_biomarkers" && Array.isArray(child)) finding[key] = child.filter(v => typeof v === "string" && SLUG.test(v));
+    if (["value", "previous_value", "current_value", "reference_min", "reference_max"].includes(key)
+      && (child === null || (typeof child === "number" && Number.isFinite(child)))) finding[key] = child;
+    if (key === "unit" && typeof child === "string" && child.length <= 24 && UNIT.test(child)) finding[key] = child;
+    if (["abnormal", "is_abnormal", "safety", "safety_related", "is_safety", "critical", "urgent"].includes(key)
+      && typeof child === "boolean") finding[key] = child;
+    if (["status", "current_status", "flag", "flagged"].includes(key) && typeof child === "string"
+      && [...FINDING_STATUS.NORMAL, ...FINDING_STATUS.BORDERLINE, ...FINDING_STATUS.ABNORMAL, "unknown"].includes(child.toLowerCase())) finding[key] = child;
+  }
+  return Object.keys(finding).length ? finding : null;
+}
+
+/** Findings are not a prose floor merely because they carry an abnormal flag.
+ * Only typed facts survive. Text from
+ * trusted rule-based writers is itself the medical floor (source is a DB column,
+ * never a field taken from the model payload). Unknown source fails closed.
+ */
+export function basicFindingArray(value: unknown, source?: string | null): unknown[] {
+  if (!Array.isArray(value)) return [];
+  if (isDeterministicSource(source)) return value;
+  return value.flatMap(entry => basicFindingEntry(entry) ?? []);
+}
+
+/** SAFETY_KEYS for AI/unknown sources fail closed like the finding arrays: no
+ * current writer emits them, and older prompts asked the model for
+ * safety_notes strings, so bare strings are model prose and are dropped. Object
+ * entries are reduced to typed facts so an abnormal flag is never lost.
+ * what_to_do_next is prompt-authored narrative (removed outright).
+ * Deterministic sources are floor verbatim. */
+export function basicSafetyValue(key: string, value: unknown, source?: string | null): unknown {
+  if (value === undefined || value === null) return [];
+  if (isDeterministicSource(source)) return value;
+  if (key === "what_to_do_next") return [];
+  if (Array.isArray(value)) return value.flatMap(entry => basicFindingEntry(entry) ?? []);
+  return basicFindingEntry(value) ?? [];
+}
+
+/** The model's headline is the designed short Basic text, bounded: a string of
+ * at most 200 characters with at least one ASCII letter or digit, else the
+ * default. Code points, so SQL char_length agrees. */
+export function basicHeadline(value: unknown): string {
+  return typeof value === "string" && [...value].length <= 200 && /[A-Za-z0-9]/.test(value)
+    ? value : defaults.headline as string;
+}
+
+/** Headline bounded and disclaimer server-owned for AI/unknown sources; a
+ * deterministic source keeps its own. Mirrored in SQL. */
+function basicOwnedText(basic: InterpretationPayload, source?: string | null): void {
+  if (isDeterministicSource(source)) return;
+  basic.headline = basicHeadline(basic.headline);
+  basic.disclaimer = defaults.disclaimer;
+}
+
+/** questions_for_doctor is the free appointment-questions feature: strings only
+ * for AI/unknown sources, verbatim for deterministic ones. */
+export function basicQuestions(value: unknown, source?: string | null): unknown {
+  if (value === undefined || value === null) return [];
+  if (isDeterministicSource(source)) return value;
+  if (typeof value === "string") return value;
+  return Array.isArray(value) ? value.filter(v => typeof v === "string") : [];
+}
+
+/** Every key buildBasicProjection / SQL interpretation_floor emit for an
+ * AI/unknown/NULL source. The read sanitizer drops any other stored key for
+ * those sources. Pinned to the SQL ARRAY in interpretation_sanitize_basic. */
+export const BASIC_KEYS = Object.freeze([...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS,
+  "safety_findings", "flagged_trends", "basic_interpretation", "preview", "locked"] as const);
+
+/** Re-sanitize stored Basic without rebuilding its preview or locked counts.
+ * AI/unknown/NULL sources keep only BASIC_KEYS; deterministic keeps every key. */
+export function sanitizeBasicProjection(stored: InterpretationPayload, source?: string | null): InterpretationPayload {
+  const basic = isDeterministicSource(source) ? stored
+    : Object.fromEntries(Object.entries(stored).filter(([key]) => (BASIC_KEYS as readonly string[]).includes(key)));
+  const result: InterpretationPayload = { ...basic, cycle_context: basicCycleContext(basic.cycle_context, source),
+    questions_for_doctor: basicQuestions(basic.questions_for_doctor, source) };
+  basicOwnedText(result, source);
+  // basic_interpretation is always the headline; keep it bounded with it.
+  if (!isDeterministicSource(source) && Object.hasOwn(basic, "basic_interpretation")) {
+    result.basic_interpretation = result.headline;
+  }
+  for (const key of FLOOR_FINDING_KEYS) result[key] = basicFindingArray(basic[key], source);
+  for (const key of SAFETY_KEYS) result[key] = basicSafetyValue(key, basic[key], source);
+  if (Object.hasOwn(basic, "safety_findings")) result.safety_findings = basicFindingArray(basic.safety_findings, source);
+  return result;
 }
 
 /** Flags are evidence of floor membership, never evidence of preview eligibility. */
@@ -63,10 +182,11 @@ export function buildBasicProjection(
 ): InterpretationPayload {
   const basic: InterpretationPayload = {};
   for (const key of FLOOR_REQUIRED_KEYS) basic[key] = full[key] ?? defaults[key];
-  for (const key of FLOOR_FINDING_KEYS) basic[key] = Array.isArray(full[key]) ? full[key] : [];
-  for (const key of SAFETY_KEYS) {
-    basic[key] = full[key] ?? [];
-  }
+  basicOwnedText(basic, provenance.source);
+  basic.cycle_context = basicCycleContext(full.cycle_context, provenance.source);
+  basic.questions_for_doctor = basicQuestions(full.questions_for_doctor, provenance.source);
+  for (const key of FLOOR_FINDING_KEYS) basic[key] = basicFindingArray(full[key], provenance.source);
+  for (const key of SAFETY_KEYS) basic[key] = basicSafetyValue(key, full[key], provenance.source);
   const floorPaths = new Set([...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS].map(key => `/${key}`));
   const deterministicKeys = isDeterministicSource(provenance.source)
     ? DETERMINISTIC_NARRATIVE_KEYS.filter(key => full[key] != null) : [];
@@ -76,6 +196,8 @@ export function buildBasicProjection(
     if (value && typeof value === "object") Object.values(value).forEach(collect);
   };
   Object.values(basic).forEach(collect);
+  // Selection still excludes the original floor content, even when prose was stripped.
+  for (const key of [...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS]) if (full[key] != null) collect(full[key]);
   const catalog = findings ?? (Array.isArray(full.findings) ? full.findings as CatalogFinding[] : []);
   const abnormalOrSafetyPaths = new Set<string>();
   const ineligiblePaths = new Set<string>();
@@ -104,7 +226,9 @@ export function buildBasicProjection(
     // Only explicit server-authored classification can qualify opaque prose.
     if (f.preview_eligible !== true) ineligiblePaths.add(f.source_path);
   }
-  basic.safety_findings = [...new Map(safety.map(value => [contentFingerprint(value), value])).values()];
+  // Flags and identifiers only for AI/unknown sources (no marker/follow-up prose).
+  const safeSafety = basicFindingArray(safety, provenance.source);
+  basic.safety_findings = [...new Map(safeSafety.map(value => [contentFingerprint(value), value])).values()];
   // A trend on a marker abnormal now is floor: values only, never a narrative
   // body, a preview or a locked count. Emitted only when present, so a payload
   // without trend_evidence (every legacy row) projects exactly as before and as

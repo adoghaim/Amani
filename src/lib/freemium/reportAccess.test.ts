@@ -95,3 +95,33 @@ describe('ReportView access policy', () => {
   });
   it.each([[402, 'premium_required'], [429, 'rate_limited'], [500, 'failed'], [400, 'failed'], [undefined, 'failed']] as const)('classifies generate status %s as %s', (status, expected) => expect(generateFailureKind(status)).toBe(expected));
 });
+
+it('clears a rejected key, delivers nothing, and re-fetches on retry', async () => {
+  const fetch = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(body('full'));
+  const requester = createAccessRequester(fetch);
+  const onResult = vi.fn();
+  expect(requester.request('A:0', 'A', onResult)).toBe(true);
+  await Promise.resolve();
+  expect(onResult).not.toHaveBeenCalled();
+  expect(requester.request('A:0', 'A', onResult)).toBe(true);
+  await Promise.resolve();
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(onResult).toHaveBeenCalledTimes(1);
+  expect(onResult).toHaveBeenCalledWith(body('full'));
+});
+
+it('a stale rejection does not invalidate the newer active key', async () => {
+  let reject!: (reason: Error) => void;
+  const stale = new Promise<InterpretationAccessResult>((_, r) => { reject = r; });
+  const fetch = vi.fn().mockReturnValueOnce(stale).mockResolvedValue(body('basic'));
+  const requester = createAccessRequester(fetch);
+  const onResult = vi.fn();
+  requester.request('A:0', 'A', onResult);
+  requester.request('B:0', 'B', onResult);
+  reject(new Error('offline'));
+  await Promise.resolve();
+  expect(requester.request('B:0', 'B', onResult)).toBe(false);
+  expect(requester.request('A:0', 'A', onResult)).toBe(true);
+  await Promise.resolve();
+  expect(fetch).toHaveBeenCalledTimes(3);
+});

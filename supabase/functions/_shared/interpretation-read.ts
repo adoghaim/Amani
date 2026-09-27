@@ -1,7 +1,7 @@
 import type { EntitlementResult } from "./entitlement.ts";
 import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
 import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
-import { buildBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
+import { sanitizeBasicProjection, buildBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
 import type { LockedCounts } from "./preview-selector.ts";
 
 export interface InterpretationReadActions {
@@ -18,7 +18,7 @@ export interface InterpretationReadActions {
   countClaims(): Promise<number>;
 }
 
-export async function readInterpretation(actions: InterpretationReadActions): Promise<{
+export async function readInterpretation(actions: InterpretationReadActions, freemiumActive: boolean): Promise<{
   status: number; body: {
     access: "full" | "basic" | "error" | "generation_needed";
     interpretation: InterpretationPayload | null;
@@ -36,10 +36,23 @@ export async function readInterpretation(actions: InterpretationReadActions): Pr
   });
   try {
     if (!await actions.ownsReport()) return failure(404, "report_not_found");
+    if (!freemiumActive) {
+      // Legacy entitlement is informational on reads: expiry, onboarding, or a
+      // failed plan lookup must not turn an owned stored report into a paywall.
+      const entitlement = await actions.resolveEntitlement().catch(() => null);
+      const plan = !entitlement || entitlement.reason === "error" ? null
+        : entitlement.allowed && (entitlement.plan === "premium"
+          || ["active_subscription", "active_iap", "complimentary"].includes(entitlement.reason ?? ""))
+          ? "premium" as const : "free" as const;
+      const row = await actions.readSelected(true);
+      return { status: 200, body: { ...empty, plan,
+        access: row ? "full" : "generation_needed",
+        interpretation: row?.json_output ?? null, stored_depth: row?.stored_depth ?? null } };
+    }
     const entitlement = await actions.resolveEntitlement();
     if (!entitlement.allowed) return entitlement.reason === "error"
       ? failure(503, "entitlement_unavailable", true) : failure(403, "onboarding_incomplete");
-    // New endpoint always requests the current TS model (premium-first). A
+    // Flag-on reads require the current TS model (premium-first). A
     // legacy 'trial' result is not proof of Premium and cannot unlock storage.
     if (entitlement.plan !== "free" && entitlement.plan !== "premium") return failure(503, "entitlement_unavailable", true);
     const premium = entitlement.plan === "premium";
@@ -65,7 +78,7 @@ export async function readInterpretation(actions: InterpretationReadActions): Pr
     // Basic arrives precompiled; rebuilding it would discard its chosen preview.
     const projection = full ? buildBasicProjection(row.json_output, undefined, provenance) : row.json_output;
     return { status: 200, body: { ...common, access: full ? "full" : "basic",
-      interpretation: row.json_output, preview: projection.preview ?? null,
+      interpretation: full ? row.json_output : sanitizeBasicProjection(row.json_output, provenance.source), preview: projection.preview ?? null,
       locked: (projection.locked ?? empty.locked) as LockedCounts } };
   } catch {
     return failure(503, "entitlement_unavailable", true);

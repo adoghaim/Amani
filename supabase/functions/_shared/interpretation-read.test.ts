@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { readInterpretation, type InterpretationReadActions } from './interpretation-read';
+import { readInterpretation as readWithFlag, type InterpretationReadActions } from './interpretation-read';
 import { resolveEntitlement } from './entitlement';
 import { buildBasicProjection } from './interpretation-visibility';
+const readInterpretation = (actions: InterpretationReadActions) => readWithFlag(actions, true);
 const full = { headline: 'h', cycle_context: {}, questions_for_doctor: [], disclaimer: 'd', key_findings: [], private: 'full body' };
 function actions(overrides: Partial<InterpretationReadActions> = {}): InterpretationReadActions {
   return { ownsReport: async () => true, resolveEntitlement: async () => ({ allowed: true, plan: 'free' }),
@@ -96,4 +98,114 @@ describe('Full readers of non-deep rows (read RPC returns interpretation_source)
     expect(result.body.interpretation).toEqual(buildBasicProjection(deterministic));
     expect(JSON.stringify(result.body.interpretation)).not.toMatch(/DETERMINISTIC_(OVERALL|PATTERN)/);
   });
+});
+
+describe('explicit server dark gate', () => {
+  it.each([false, true])('OFF serves owned stored Full independent of claim=%s, depth, or legacy eligibility', async has_claim => {
+    const entitlements = [
+      { allowed: false as const, reason: 'trial_expired' as const },
+      { allowed: false as const, reason: 'no_subscription' as const },
+      { allowed: false as const, reason: 'onboarding_incomplete' as const },
+      { allowed: true as const, reason: 'trial' as const },
+      { allowed: true as const, reason: 'active_subscription' as const },
+      { allowed: true as const, reason: 'active_iap' as const },
+      { allowed: true as const, reason: 'complimentary' as const },
+      { allowed: false as const, reason: 'error' as const, detail: 'offline' },
+    ];
+    for (const entitlement of entitlements) for (const stored_depth of ['deep', 'standard', 'unknown']) {
+      const readSelected = vi.fn(async () => ({ json_output: full, stored_depth, has_claim, tier: 'free' }));
+      const countClaims = vi.fn();
+      const result = await readWithFlag(actions({ resolveEntitlement: async () => entitlement, readSelected, countClaims }), false);
+      expect(result).toEqual({ status: 200, body: {
+        access: 'full', interpretation: full, stored_depth, preview: null,
+        locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, complimentary: null,
+        plan: ['active_subscription', 'active_iap', 'complimentary'].includes(entitlement.reason)
+          ? 'premium' : entitlement.reason === 'error' ? null : 'free',
+      } });
+      expect(readSelected).toHaveBeenCalledTimes(1);
+      expect(readSelected).toHaveBeenCalledWith(true);
+      expect(countClaims).not.toHaveBeenCalled();
+    }
+  });
+  it.each([false, true])('missing rows request generation with gate=%s', async flag => {
+    const result = await readWithFlag(actions({ readSelected: async () => null }), flag);
+    expect(result).toMatchObject({ status: 200, body: { access: 'generation_needed', interpretation: null } });
+    if (!flag) expect(result.body.complimentary).toBeNull();
+  });
+  it('OFF plan resolution failure cannot block an owned Full read', async () => {
+    const result = await readWithFlag(actions({ resolveEntitlement: async () => { throw new Error('offline'); } }), false);
+    expect(result).toMatchObject({ status: 200, body: { access: 'full', interpretation: full, plan: null, complimentary: null } });
+  });
+  it.each([false, true])('OFF preserves ownership and database errors (owns=%s)', async owns => {
+    const read = vi.fn(async () => { throw new Error('offline'); });
+    const result = await readWithFlag(actions({ ownsReport: async () => owns, readSelected: read }), false);
+    expect(result.status).toBe(owns ? 503 : 404);
+    if (!owns) expect(read).not.toHaveBeenCalled();
+  });
+  it.each([false, true])('ON shallow Free row needs generation only with a claim=%s', async has_claim => {
+    const result = await readWithFlag(actions({ readSelected: async () => ({ json_output: buildBasicProjection(full),
+      stored_depth: 'standard', has_claim, tier: 'free' }) }), true);
+    expect(result.body.access).toBe(has_claim ? 'generation_needed' : 'basic');
+  });
+  it('sanitizes old stored Basic cycle prose without rebuilding preview/counts or touching Full', async () => {
+    const payload = { ...full, cycle_context: { estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+      confidence: 'high', explanation: 'PRIVATE CROSS-MARKER NARRATIVE', other: 'PRIVATE LIFESTYLE' },
+      preview: { content: 'chosen preview' }, locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
+    for (const flag of [false, true]) for (const has_claim of [false, true]) {
+      const result = await readWithFlag(actions({ readSelected: async () => ({ json_output: payload,
+        stored_depth: 'deep', has_claim, tier: 'free' }) }), flag);
+      if (flag && !has_claim) {
+        expect(JSON.stringify(result.body)).not.toContain('PRIVATE');
+        expect(result.body.preview).toEqual(payload.preview);
+        expect(result.body.locked).toEqual(payload.locked);
+        expect(result.body.interpretation?.cycle_context).toEqual({ estimated_cycle_day: 21,
+          estimated_cycle_phase: 'luteal', confidence: 'high', explanation: '' });
+      } else expect(result.body.interpretation).toBe(payload);
+    }
+  });
+});
+
+it('endpoint threads the exact environment gate through entitlement and read policy', () => {
+  const source = readFileSync(new URL('../get-interpretation/index.ts', import.meta.url), 'utf8');
+  expect(source).toContain('const freemiumActive = Deno.env.get("FREEMIUM_ACTIVE") === "true"');
+  expect(source).toContain('checkUserSubscription(userClient, user.id, freemiumActive, true)');
+  expect(source).toContain('}, freemiumActive)');
+  expect(source).not.toMatch(/checkUserSubscription\([^)]*,\s*true\s*,\s*true\s*\)/);
+  const policy = readFileSync(new URL('./interpretation-read.ts', import.meta.url), 'utf8');
+  expect(policy).not.toContain('Deno.env');
+});
+
+it.each(['ai', null, undefined, 'fallback', 'deterministic'])('sanitizes stored findings at Basic reads with source %s; Full remains identical', async interpretation_source => {
+  const finding = { biomarker_slug: 'ferritin', status: 'attention', abnormal: true, value: 9,
+    title: 'PRIVATE CROSS-MARKER NARRATIVE', explanation: 'PRIVATE CROSS-MARKER NARRATIVE' };
+  const payload = { ...full, key_findings: [finding], top_findings: [finding], summary_bullets: ['PRIVATE CROSS-MARKER NARRATIVE'],
+    cycle_context: 'PRIVATE CROSS-MARKER NARRATIVE', preview: { content: 'selected preview' },
+    what_to_do_next: ['PRIVATE CROSS-MARKER NARRATIVE'],
+    safety_findings: [{ abnormal: true, biomarker_slug: 'ferritin', follow_up: 'PRIVATE CROSS-MARKER NARRATIVE' }],
+    locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
+  const original = structuredClone(payload);
+  for (const flag of [false, true]) for (const has_claim of [false, true]) {
+    const result = await readWithFlag(actions({ readSelected: async () => ({ json_output: payload,
+      stored_depth: 'deep', has_claim, tier: 'free', interpretation_source }) }), flag);
+    if (flag && !has_claim) {
+      expect(result.body.preview).toEqual(payload.preview);
+      expect(result.body.locked).toEqual(payload.locked);
+      expect(result.body.interpretation?.cycle_context).toEqual({ estimated_cycle_day: null,
+        estimated_cycle_phase: 'unknown', confidence: null, explanation: '' });
+      if (interpretation_source === 'fallback' || interpretation_source === 'deterministic') {
+        expect(result.body.interpretation?.top_findings).toEqual(payload.top_findings);
+        expect(result.body.interpretation?.summary_bullets).toEqual(payload.summary_bullets);
+        expect(result.body.interpretation?.what_to_do_next).toEqual(payload.what_to_do_next);
+        expect(result.body.interpretation?.safety_findings).toEqual(payload.safety_findings);
+      } else {
+        expect(result.body.interpretation?.what_to_do_next).toEqual([]);
+        expect(result.body.interpretation?.safety_findings).toEqual([{ abnormal: true, biomarker_slug: 'ferritin' }]);
+        expect(JSON.stringify(result.body)).not.toContain('PRIVATE CROSS-MARKER NARRATIVE');
+        expect(result.body.interpretation?.key_findings).toEqual([{ biomarker_slug: 'ferritin', status: 'attention', abnormal: true, value: 9 }]);
+        expect(result.body.interpretation?.top_findings).toEqual(result.body.interpretation?.key_findings);
+        expect(result.body.interpretation?.summary_bullets).toEqual([]);
+      }
+    } else expect(result.body.interpretation).toBe(payload);
+  }
+  expect(payload).toEqual(original);
 });

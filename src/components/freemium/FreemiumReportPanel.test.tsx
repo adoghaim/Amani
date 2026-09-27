@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { YourTrajectoryCard } from '../YourTrajectoryCard';
+import type { BiggestChange, InsightSummary } from '../../lib/insights/buildInsightSummary';
 import { FreemiumReportPanel } from './FreemiumReportPanel';
 import { parseInterpretationAccess, type InterpretationAccessResult } from '../../lib/freemium/interpretationAccess';
 
@@ -57,9 +59,10 @@ describe('FreemiumReportPanel per access state', () => {
     expect(third).toContain("You've used your 3 complimentary Premium analyses. Future reports still include Basic insights and Premium Previews.");
   });
 
-  it('falls back to the hook figure when the response carries none', () => {
+  it('legacy Full without a ledger figure does not show a claim counter or paywall', () => {
     const full = parseInterpretationAccess({ access: 'full', interpretation: { headline: 'H' }, plan: 'free' });
-    expect(render(full, { complimentaryUsed: 2 })).toContain('Premium Analysis 2 of 3 included');
+    expect(render(full, { complimentaryUsed: 2 }).trim()).toBe('');
+    expect(render({ ...full, plan: null }, { complimentaryUsed: 2 }).trim()).toBe('');
   });
 
   it('basic without preview or locked findings renders neither', () => {
@@ -77,7 +80,8 @@ describe('FreemiumReportPanel per access state', () => {
   });
 
   it('full: no preview, no locked cards, no upgrade; counter only for a Free account', () => {
-    const full = parseInterpretationAccess({ access: 'full', interpretation: { headline: 'H' }, plan: 'free' });
+    const full = parseInterpretationAccess({ access: 'full', interpretation: { headline: 'H' }, plan: 'free',
+      complimentary: { used: 2, total: 3, remaining: 1 } });
     const freeOut = render(full, { complimentaryUsed: 2 });
     expect(freeOut).toContain('Premium Analysis 2 of 3 included');
     expect(freeOut).not.toMatch(/Premium Preview|Unlock Premium|additional pattern/);
@@ -114,5 +118,97 @@ describe('FreemiumReportPanel per access state', () => {
 
   it('hides the counter when neither the response nor the ledger read has a figure', () => {
     expect(render({ ...basic, complimentary: null }, { complimentaryUsed: null })).not.toMatch(/complimentary|of 3 included/);
+  });
+});
+
+const trend = (slug: string, marker = slug) => ({ biomarker_slug: slug, marker,
+  previous_value: 10, current_value: 20, unit: 'u', previous_date: '2026-03-01',
+  direction: 'increased', status: 'attention', summary: 'SERVER_INTERNAL_NARRATIVE' });
+const withTrends = (entries: unknown[]) => ({ ...basic,
+  interpretation: { ...basic.interpretation, flagged_trends: entries } });
+const change = (key: BiggestChange['key'], trajectoryStatus: BiggestChange['trajectoryStatus']): BiggestChange => ({
+  key, displayName: key, previousValue: 10, currentValue: 20, unit: 'u', percentDelta: 100,
+  trendDirection: 'up', significance: 'significant', boundaryCrossing: null, trajectoryStatus,
+  distanceToNormalImprovement: null, fact: '', priorReportDate: '2026-03-01', priorIsOlderThanImmediatePrior: false,
+});
+const floorWith = (biggestChanges: BiggestChange[]): InsightSummary => ({ biggestChanges,
+  primaryFinding: null, topFindings: [], deltaMap: new Map(), systemSummaries: [],
+  questionsForDoctor: [], watchSignals: [], confidence: { score: 1, label: 'high', reasons: [],
+    coverageCount: 1, totalCount: 1, normalizationRate: 1, parserQuality: 'high', sourceFormat: 'text' } });
+
+describe('Basic abnormal changes', () => {
+  it('renders every values line, direction and prior date, never summary or extra locked counts', () => {
+    const state = withTrends([trend('ferritin', 'Ferritin'), trend('tsh', 'TSH')]);
+    const out = render(state);
+    expect(out).toContain('Changes since your last report');
+    expect(out).toContain('Ferritin: 10 → 20 u · increased · 2026-03-01');
+    expect(out).toContain('TSH: 10 → 20 u · increased · 2026-03-01');
+    expect(out).not.toContain('SERVER_INTERNAL_NARRATIVE');
+    expect(out.match(/Premium Preview/g)).toHaveLength(1);
+    expect(out).toContain('3 additional patterns found');
+    expect(state.locked).toEqual(basic.locked);
+  });
+  it('absence or an empty key preserves existing markup', () => {
+    expect(render(withTrends([]))).toBe(render(basic));
+  });
+  it('Full ignores the Basic-only field', () => {
+    const out = render({ ...withTrends([trend('ferritin')]), access: 'full' });
+    expect(out).not.toMatch(/ferritin|SERVER_INTERNAL|increased/);
+  });
+  it('deduplicates by slug, never by display label, and tolerates malformed entries', () => {
+    const out = render(withTrends([trend('ferritin'), trend('ferritin', 'Duplicate'), trend('tsh', 'ferritin'),
+      null, false, 'bad', {}, { ...trend('hdl'), previous_value: null, current_value: 0, unit: null }]));
+    expect(out.match(/ferritin: 10 → 20/g)).toHaveLength(2);
+    expect(out).not.toContain('Duplicate');
+    expect(out).toContain('hdl: — → 0');
+  });
+  it('deduplicates only selected bullets that render both matching values, with mixed significance after filtering', () => {
+    const changes = [change('hdl_cholesterol', 'stable_normal'),
+      { ...change('ferritin', 'worsening_still_low'), significance: 'minor' as const },
+      { ...change('tsh', 'worsening_still_high'), significance: 'moderate' as const },
+      change('ldl_cholesterol', 'worsening_still_high'), change('vitamin_d_25_oh', 'worsening_still_low'),
+      change('fasting_glucose', 'worsening_still_high')];
+    const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={changes} primaryFinding={null} reportCount={2} />));
+    const out = render(withTrends(changes.map(c => trend(c.key))), { floorSummary: floorWith(changes) });
+    let kept = 0;
+    for (const c of changes) {
+      // Prove the competing surface contains the two values, not just the name.
+      if (trajectory.includes(`${c.key} has risen from 10 to 20 u`) || trajectory.includes(`${c.key} has dropped from 10 to 20 u`)) {
+        expect(out).not.toContain(`${c.key}:`);
+      } else {
+        kept += 1;
+        expect(out).toContain(`${c.key}: 10 → 20`);
+      }
+    }
+    // The filtered-out change and the fifth-ranked change keep their lines.
+    expect(kept).toBe(2);
+    expect(out).toContain('hdl_cholesterol: 10 → 20');
+  });
+  it.each(['stable_abnormal', 'newly_abnormal', 'normalized'] as const)('keeps %s lines when the real card does not display both values', status => {
+    const c = { ...change('ferritin', status), ...(status === 'normalized' ? {
+      boundaryCrossing: { direction: 'improved' as const, from: 'out_of_range' as const, to: 'optimal' as const },
+    } : {}) };
+    const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={[c]} primaryFinding={null} reportCount={2} />));
+    expect(trajectory).toContain('ferritin');
+    expect(trajectory).not.toContain('10 to 20');
+    expect(render(withTrends([trend('ferritin')]), { floorSummary: floorWith([c]) })).toContain('ferritin: 10 → 20');
+  });
+  it('keeps boundary-only improving text, mismatched values and mismatched units', () => {
+    for (const c of [
+      { ...change('ferritin', 'improving_still_low'), boundaryCrossing: { direction: 'improved' as const, from: 'out_of_range' as const, to: 'borderline' as const } },
+      { ...change('ferritin', 'improving_still_low'), previousValue: 11 },
+      { ...change('ferritin', 'improving_still_low'), currentValue: 21 },
+      { ...change('ferritin', 'improving_still_low'), unit: 'other' },
+    ]) {
+      const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={[c]} primaryFinding={null} reportCount={2} />));
+      expect(trajectory).not.toContain('from 10 to 20 u');
+      expect(render(withTrends([trend('ferritin')]), { floorSummary: floorWith([c]) })).toContain('ferritin: 10 → 20');
+    }
+  });
+  it.each(['improving_still_low', 'improving_still_high', 'worsening_still_low', 'worsening_still_high'] as const)('suppresses matching %s only with proof in the real card', status => {
+    const c = change('ferritin', status);
+    const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={[c]} primaryFinding={null} reportCount={2} />));
+    expect(trajectory).toContain('from 10 to 20 u');
+    expect(render(withTrends([trend('ferritin')]), { floorSummary: floorWith([c]) })).not.toContain('ferritin:');
   });
 });

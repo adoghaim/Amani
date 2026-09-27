@@ -7,6 +7,8 @@ interface TrajectoryBullet {
   kind: BulletKind;
   text: string;
   isPrimary: boolean;
+  /** Present only when this exact bullet renders both numeric values. */
+  values?: { previous: number; current: number; unit: string };
 }
 
 const BUCKET_LABEL: Record<string, string> = {
@@ -52,11 +54,11 @@ function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryB
     return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
   }
   if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low') {
-    return { kind: 'improved', isPrimary, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
+    return { kind: 'improved', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
     const verb = trendDirection === 'up' ? 'risen' : trendDirection === 'down' ? 'dropped' : 'shifted';
-    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
+    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
   }
   if (trajectoryStatus === 'newly_abnormal') {
     return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside optimal at ${currentValue} ${unit}.` };
@@ -86,17 +88,23 @@ interface Props {
   reportCount: number;
 }
 
-export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Props) {
+/**
+ * The card's selection, unchanged from before it was extracted, so the Basic
+ * panel dedupes against exactly the bullets on screen. Each bullet also carries
+ * its change's key. Known quirk, deliberately kept: after null bullets are
+ * dropped, `bullets[i]` is paired with `changes[i]` for the significance
+ * tie-break (separate task).
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- Pure selection is shared with the Basic panel to match the rendered values exactly.
+export function selectTrajectoryBullets(changes: BiggestChange[], primaryFinding: TopFinding | null) {
   const primaryKey = primaryFinding?.key ?? null;
 
-  const bullets: TrajectoryBullet[] = [];
+  const bullets: (TrajectoryBullet & { key: BiggestChange['key'] })[] = [];
   for (const change of changes) {
     const isPrimary = change.key === primaryKey;
     const bullet = bulletForChange(change, isPrimary);
-    if (bullet) bullets.push(bullet);
+    if (bullet) bullets.push({ ...bullet, key: change.key });
   }
-
-  if (bullets.length === 0) return null;
 
   // Sort: primary with historical context first, then worsened > stable_elevated > improved > first,
   // then significance: significant > moderate > minor
@@ -109,7 +117,13 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
     return SIGNIFICANCE_PRIORITY[a.change!.significance] - SIGNIFICANCE_PRIORITY[b.change!.significance];
   });
 
-  const top = indexedBullets.slice(0, 4).map(x => x.b);
+  return indexedBullets.slice(0, 4).map(x => x.b);
+}
+
+export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Props) {
+  const top = selectTrajectoryBullets(changes, primaryFinding);
+
+  if (top.length === 0) return null;
 
   const subtitle = reportCount === 0
     ? 'How your numbers landed in this first report'

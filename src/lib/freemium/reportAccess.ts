@@ -52,6 +52,11 @@ export function createAccessRequester(
       void fetchAccess(reportId).then(result => {
         inFlight.delete(key);
         if (latest === key) request.onResult(result);
+      }, () => {
+        // Injected fetchers may reject. Deliver nothing and allow the same key
+        // to retry; a stale failure must not clear a newer active request.
+        inFlight.delete(key);
+        if (latest === key) latest = null;
       });
       return true;
     },

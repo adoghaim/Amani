@@ -42,6 +42,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
+import { cycleContextCard } from '../lib/cycleContextCard';
 import {
   fetchInterpretationAccess,
   type InterpretationAccessResult,
@@ -1272,6 +1273,7 @@ export function ReportView() {
   const freemiumPanel = freemium ? (
     <FreemiumReportPanel
       state={accessState}
+      floorSummary={insightSummary}
       generating={generating}
       premiumRequired={generatePremiumRequired}
       plan={plan}
@@ -1932,23 +1934,17 @@ export function ReportView() {
 
           {/* ── Cycle context ─────────────────────────────────────── */}
           {!isProcessing && (() => {
-            const aiCycle = interpretation?.cycle_context;
-            const aiPhase = aiCycle?.estimated_cycle_phase;
-            const reportPhase = report.estimated_cycle_phase;
-            const resolvedPhase = (aiPhase && aiPhase !== 'unknown') ? aiPhase : (reportPhase && reportPhase !== 'unknown' ? reportPhase : null);
-            if (!resolvedPhase) return null;
-            // Hide thin cycle-context card: phase alone duplicates the header pill.
-            // Only render when there's additional context (cycle day, AI explanation, or confidence label).
-            const hasExtraContext = !!(aiCycle?.estimated_cycle_day || aiCycle?.explanation || aiCycle?.confidence);
-            if (!hasExtraContext) return null;
+            // Phase/day always come from the report; see cycleContextCard.
+            const card = cycleContextCard(report, interpretation?.cycle_context);
+            if (!card) return null;
             return (
               <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-5 py-5">
                 <div className="flex items-center gap-2.5 mb-3">
                   <CalendarDays className="w-4 h-4 text-theme-primary" />
                   <h3 className="text-sm text-theme-text">Cycle context</h3>
-                  {aiCycle?.confidence && (
-                    <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[aiCycle.confidence]}`}>
-                      {aiCycle.confidence} confidence
+                  {card.confidence && (
+                    <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border font-medium ${CONFIDENCE_STYLE[card.confidence]}`}>
+                      {card.confidence} confidence
                     </span>
                   )}
                 </div>
@@ -1956,18 +1952,18 @@ export function ReportView() {
                   <div>
                     <p className="text-xs text-theme-muted-text-3">Phase</p>
                     <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
-                      {resolvedPhase.replace(/_/g, ' ')}
+                      {card.phase.replace(/_/g, ' ')}
                     </p>
                   </div>
-                  {aiCycle?.estimated_cycle_day && (
+                  {card.day && (
                     <div>
                       <p className="text-xs text-theme-muted-text-3">Cycle day</p>
-                      <p className="text-sm font-semibold text-theme-text mt-0.5">{aiCycle.estimated_cycle_day}</p>
+                      <p className="text-sm font-semibold text-theme-text mt-0.5">{card.day}</p>
                     </div>
                   )}
                 </div>
-                {aiCycle?.explanation && (
-                  <p className="text-xs text-theme-muted-text-2 leading-relaxed">{aiCycle.explanation}</p>
+                {card.explanation && (
+                  <p className="text-xs text-theme-muted-text-2 leading-relaxed">{card.explanation}</p>
                 )}
               </div>
             );

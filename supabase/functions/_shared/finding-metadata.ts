@@ -115,7 +115,9 @@ export function addFindingMetadata(
     if (kind !== "floor" && kind !== "narrative" && trendEvidence) kind = "trend";
     // First catalogued comparison for a slug wins, including multiple model
     // patterns referring to the same stored evidence. Keep the original source
-    // path/content and do not count the same analyte twice.
+    // path/content and do not count the same analyte twice. This can reduce
+    // locked.patterns/cross_report by one when duplicate findings previously
+    // counted the same analyte twice; it does not remove a distinct finding.
     const comparisonSlug = trendSlug ?? (typeof record.biomarker_slug === "string" ? record.biomarker_slug : null);
     if (kind === "trend" && comparisonSlug) {
       if (referenced.has(comparisonSlug)) return;

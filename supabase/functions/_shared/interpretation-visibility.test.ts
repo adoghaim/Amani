@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { FINDING_STATUS } from "./tier";
 import { selectPremiumPreview } from "./preview-selector";
 import { describe, expect, it } from 'vitest';
-import { buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
+import { basicCycleContext, basicFindingArray, basicHeadline, basicSafetyValue, sanitizeBasicProjection, BASIC_KEYS, SAFETY_KEYS, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
@@ -22,9 +22,12 @@ describe('Basic projection boundary', () => {
     const result = buildBasicProjection({ ...full, findings: catalog });
     for (const key of [...FLOOR_FINDING_KEYS, ...FLOOR_REQUIRED_KEYS]) expect(result).toHaveProperty(key);
     expect(findFloorViolations(result)).toEqual([]);
-    expect(result.key_findings).toEqual(full.key_findings);
+    expect(result.key_findings).toEqual([{ status: 'attention' }]);
     expect(result.safety_findings).toEqual([{ abnormal: true }]);
-    expect(result.what_to_do_next).toEqual(full.what_to_do_next);
+    // Prompt-authored narrative: withheld for unknown/AI provenance, floor for deterministic.
+    expect(result.what_to_do_next).toEqual([]);
+    expect(buildBasicProjection({ ...full, findings: catalog }, undefined, { source: 'fallback' }).what_to_do_next)
+      .toEqual(full.what_to_do_next);
     expect(result.preview).toEqual(catalog[0]);
     expect(result.locked).toEqual({ patterns: 1, cross_report: 0, lifestyle: 0 });
     expect(JSON.stringify(result)).not.toMatch(/LOCKED_SECRET|UNKNOWN_SECRET/);
@@ -111,15 +114,16 @@ describe('production vocabulary and composite projection', () => {
       expect((selection.preview?.content as { related_biomarkers: string[] }).related_biomarkers).not.toContain('a');
     }
   });
-  it('keeps nested safety flags and explicit follow-ups, never the surrounding narrative', () => {
+  it('keeps nested safety flags, never safety_notes, follow-up prose or the surrounding narrative', () => {
     const basic = buildBasicProjection({ ...promptFixture,
-      primary_concern: { biomarker_slug: 'a', status: 'attention', explanation: 'LOCKED_PRIMARY', follow_up: 'Discuss results' },
+      primary_concern: { biomarker_slug: 'a', status: 'attention', explanation: 'LOCKED_PRIMARY', follow_up: 'LOCKED_FOLLOW_UP',
+        marker: 'LOCKED_MARKER', safety_notes: ['LOCKED_SAFETY_NOTE'] },
       overall_interpretation: { abnormal: true, narrative: 'LOCKED_OVERALL' },
     });
     expect(basic.safety_findings).toEqual([
-      { abnormal: true }, { status: 'attention', biomarker_slug: 'a', follow_up: 'Discuss results' },
+      { abnormal: true }, { status: 'attention', biomarker_slug: 'a' },
     ]);
-    expect(JSON.stringify(basic)).not.toMatch(/LOCKED_PRIMARY|LOCKED_OVERALL/);
+    expect(JSON.stringify(basic)).not.toMatch(/LOCKED_PRIMARY|LOCKED_OVERALL|LOCKED_FOLLOW_UP|LOCKED_MARKER|LOCKED_SAFETY_NOTE/);
   });
 });
 
@@ -198,5 +202,208 @@ describe('SQL/TS flagged_trends shared value fixtures', () => {
   it('freezes the shared abnormal vocabulary in SQL', () => {
     const migration = readFileSync(new URL('../../migrations/20260927000000_flagged_trends_projection.sql', import.meta.url), 'utf8');
     expect(migration).toContain(`IN (${FINDING_STATUS.ABNORMAL.map(s => `'${s}'`).join(',')})`);
+  });
+});
+
+const cycleMigration = readFileSync(new URL('../../migrations/20260927000001_basic_cycle_context.sql', import.meta.url), 'utf8');
+const cycleCases: { input: unknown; expected: Record<string, unknown>; deterministic_explanation?: string }[] = JSON.parse(
+  cycleMigration.match(/\$cycle_cases\$([\s\S]*?)\$cycle_cases\$/)![1]);
+describe('cycle context confidentiality (shared SQL fixture)', () => {
+  it.each(cycleCases)('keeps only typed facts from $input', ({ input, expected, deterministic_explanation }) => {
+    expect(basicCycleContext(input)).toEqual(expected);
+    for (const source of ['ai', 'unknown', 'fallback', 'deterministic', null, undefined]) {
+      const deterministic = isDeterministicSource(source);
+      // The rule-based cycle sentence is floor; model prose never is.
+      const want = deterministic ? { ...expected, explanation: deterministic_explanation ?? '' } : expected;
+      const payload = { ...full, cycle_context: input };
+      const original = structuredClone(payload);
+      const basic = buildBasicProjection(payload, [], { source });
+      expect(basicCycleContext(input, source)).toEqual(want);
+      expect(basic.cycle_context).toEqual(want);
+      expect(sanitizeBasicProjection(payload, source).cycle_context).toEqual(want);
+      expect(JSON.stringify(basic)).not.toContain('PRIVATE');
+      if (!deterministic) expect(JSON.stringify(basic)).not.toContain('CYCLE SENTENCE');
+      expect(payload).toEqual(original);
+    }
+  });
+  it('never fabricates a cycle fact or confidence for any source', () => {
+    for (const source of ['ai', 'fallback', null]) {
+      expect(basicCycleContext({ explanation: 'x' }, source)).toMatchObject({
+        estimated_cycle_day: null, estimated_cycle_phase: 'unknown', confidence: null });
+    }
+  });
+  it('sanitizes existing projections at both SQL read boundaries without a backfill', () => {
+    expect(cycleMigration.match(/ELSE public.interpretation_sanitize_basic\(i.json_output_basic,i.interpretation_source\)/g)).toHaveLength(2);
+    expect(cycleMigration).not.toMatch(/UPDATE\s+public\./);
+    expect(cycleMigration).toContain('THEN i.json_output ELSE');
+    expect(cycleMigration).toContain('WHEN p_premium OR claim.covered THEN i.json_output');
+  });
+  it('asks the model only for the explanation; phase/day/confidence are server-filled', () => {
+    const writer = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
+    expect(writer).toContain('"cycle_context": {"explanation": "string"}');
+    expect(writer).not.toContain('"cycle_context": {"estimated_cycle_day":');
+    expect(writer).toContain('aiResult.cycle_context = { ...deterministicCycleFacts(report as LabReportData), explanation: modelCycleExplanation(aiResult.cycle_context) }');
+    const schema = readFileSync(new URL('./schemas/interpretation.ts', import.meta.url), 'utf8');
+    expect(schema).toContain('cycle_context: z.unknown()');
+  });
+});
+
+const findingCases: { input: unknown; expected: unknown[] }[] = JSON.parse(
+  cycleMigration.match(/\$finding_cases\$([\s\S]*?)\$finding_cases\$/)![1]);
+describe('findings confidentiality (one shared SQL fixture)', () => {
+  it.each(findingCases)('keeps typed facts only from $input', ({ input, expected }) => {
+    for (const key of FLOOR_FINDING_KEYS) for (const source of ['ai', 'unknown', null]) {
+      const payload = { ...full, [key]: input };
+      const original = structuredClone(payload);
+      expect(basicFindingArray(input, source)).toEqual(expected);
+      const basic = buildBasicProjection(payload, [], { source });
+      expect(basic[key]).toEqual(expected);
+      expect(JSON.stringify(basic)).not.toContain('PRIVATE CROSS-MARKER NARRATIVE');
+      expect(sanitizeBasicProjection(payload, source)[key]).toEqual(expected);
+      expect(payload).toEqual(original);
+    }
+    for (const source of DETERMINISTIC_SOURCES) {
+      for (const key of FLOOR_FINDING_KEYS) {
+        expect(buildBasicProjection({ ...full, [key]: input }, [], { source })[key]).toEqual(Array.isArray(input) ? input : []);
+      }
+    }
+  });
+  it('keeps selected preview and counts for legacy Basic while narrowing arrays', () => {
+    const payload = { ...full, key_findings: findingCases[0].input,
+      preview: catalog[0], locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
+    const basic = sanitizeBasicProjection(payload, 'ai');
+    expect(basic.preview).toBe(payload.preview);
+    expect(basic.locked).toBe(payload.locked);
+    expect(basic.key_findings).toEqual(findingCases[0].expected);
+  });
+  it('keeps original floor fingerprints out of preview selection after prose removal', () => {
+    const payload = { ...full, key_findings: [{ explanation: 'duplicate prose' }], pattern_signals: ['duplicate prose'] };
+    const basic = buildBasicProjection(payload, [{ ...catalog[0], content: 'duplicate prose' }]);
+    expect(basic.preview).toBeNull();
+    expect(basic.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+  });
+  it('covers generation, stored Basic reads, both SQL reads and both floor overloads', () => {
+    const generator = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
+    expect(generator).toContain('buildBasicProjection(interpretationJson, undefined, { source: shaped.source })');
+    expect(generator).toContain('shaped.tier === "plus" ? interpretationJson : basicProjection');
+    const reader = readFileSync(new URL('./interpretation-read.ts', import.meta.url), 'utf8');
+    expect(reader).toContain('sanitizeBasicProjection(row.json_output, provenance.source)');
+    expect(cycleMigration.match(/ELSE public.interpretation_sanitize_basic\(i.json_output_basic,i.interpretation_source\)/g)).toHaveLength(2);
+    // One floor body: the one-argument floor is the NULL (fail-closed) source.
+    expect(cycleMigration).toContain('RETURN public.interpretation_floor(p_full, NULL::text);');
+    expect(cycleMigration).toContain('public.interpretation_basic_findings(p_full->k,p_source)');
+    expect(cycleMigration).toContain('public.interpretation_basic_safety_value(k,p_full->k,p_source)');
+    expect(cycleMigration).toContain("'safety_findings',public.interpretation_basic_findings(safety,p_source)");
+    const harness = readFileSync(new URL('../../migrations/__verification__/run.sh', import.meta.url), 'utf8');
+    expect(harness).toContain('BASIC=20260927000001_basic_cycle_context.sql');
+    expect(harness.match(/psql_f -v ON_ERROR_STOP=1 -q -f "\/tmp\/\$BASIC"/g)).toHaveLength(2);
+  });
+  it('keeps the frozen SQL finding-status vocabulary derived from FINDING_STATUS', () => {
+    const list = [...FINDING_STATUS.NORMAL, ...FINDING_STATUS.BORDERLINE, ...FINDING_STATUS.ABNORMAL, 'unknown'].map(s => `'${s}'`).join(',');
+    expect(cycleMigration).toContain(`lower(v #>> '{}') IN (${list})`);
+  });
+});
+
+type SafetyCase = { full: Record<string, unknown>; expected: Record<string, unknown>; deterministic: Record<string, unknown> };
+const safetyCase: SafetyCase = JSON.parse(cycleMigration.match(/\$safety_cases\$([\s\S]*?)\$safety_cases\$/)![1]);
+describe('remaining floor channels (one shared SQL sentinel fixture)', () => {
+  it.each(['ai', 'unknown', null, undefined, ...DETERMINISTIC_SOURCES])('source %s: model prose withheld, flags and safety text kept', source => {
+    const deterministic = isDeterministicSource(source);
+    const want = deterministic ? safetyCase.deterministic : safetyCase.expected;
+    const original = structuredClone(safetyCase.full);
+    const basic = buildBasicProjection(safetyCase.full, [], { source });
+    // The SQL input exactly: full (with the non-floor primary_concern) plus the
+    // old verbatim safety findings.
+    const stored = { ...safetyCase.full, safety_findings: safetyCase.deterministic.safety_findings };
+    const read = sanitizeBasicProjection(stored, source);
+    for (const [key, value] of Object.entries(want)) {
+      expect(basic[key]).toEqual(value);
+      if (key !== 'basic_interpretation') expect(read[key]).toEqual(value);
+    }
+    if (!deterministic) {
+      expect(JSON.stringify(basic)).not.toContain('SENTINEL');
+      expect(JSON.stringify(read)).not.toContain('SENTINEL');
+      // Only the Basic key allowlist; the four stored-decision keys appear only
+      // when the stored row carries them.
+      const optional = ['flagged_trends', 'basic_interpretation', 'preview', 'locked'];
+      expect(Object.keys(read).sort()).toEqual(BASIC_KEYS.filter(key => !optional.includes(key)).sort());
+      const withOptional = sanitizeBasicProjection({ ...stored, flagged_trends: [], basic_interpretation: 'stale',
+        preview: null, locked: { patterns: 0, cross_report: 0, lifestyle: 0 } }, source);
+      expect(Object.keys(withOptional).sort()).toEqual([...BASIC_KEYS].sort());
+      expect(JSON.stringify(withOptional)).not.toContain('SENTINEL');
+      // Abnormal finding, status, value, unit and flags survive as typed facts;
+      // bare safety-key prose does not.
+      expect(basic.abnormal_flags).toEqual([{ biomarker_slug: 'ferritin', status: 'discuss', abnormal: true, value: 9, unit: 'ng/mL' }]);
+      expect(basic.warnings).toEqual([]);
+      expect(basic.safety_notes).toEqual([{ biomarker_slug: 'hemoglobin', abnormal: true }]);
+      // The disclaimer is the server's, never the model's.
+      expect(basic.disclaimer).toBe(read.disclaimer);
+      expect(basic.disclaimer).toBe('This report is for educational purposes only and does not constitute medical advice.');
+    } else {
+      expect(basic.disclaimer).toBe(safetyCase.full.disclaimer);
+      expect(read.disclaimer).toBe(safetyCase.full.disclaimer);
+      // Deterministic stored Basic is verbatim, every key included.
+      expect(read.primary_concern).toEqual(safetyCase.full.primary_concern);
+    }
+    expect(safetyCase.full).toEqual(original);
+  });
+  it('BASIC_KEYS is every key the Basic projection emits, pinned to both SQL copies', () => {
+    const emitted = buildBasicProjection({ ...safetyCase.full, trend_evidence: [] }, [], { source: 'ai' });
+    for (const key of Object.keys(emitted)) expect(BASIC_KEYS).toContain(key);
+    const list = `ARRAY[${BASIC_KEYS.map(key => `'${key}'`).join(',')}]`;
+    expect(cycleMigration.split(list)).toHaveLength(3);
+  });
+  it.each(['ai', 'unknown', null, undefined])('source %s: SAFETY_KEYS keep typed facts only, never strings', source => {
+    const flag = { biomarker_slug: 'ferritin', abnormal: true, explanation: 'PROSE' };
+    for (const key of SAFETY_KEYS) {
+      const typed = key === 'what_to_do_next' ? [] : [{ biomarker_slug: 'ferritin', abnormal: true }];
+      expect(basicSafetyValue(key, 'PROSE', source)).toEqual([]);
+      expect(basicSafetyValue(key, ['PROSE', ['PROSE'], { text: 'PROSE' }, 7], source)).toEqual([]);
+      expect(basicSafetyValue(key, ['PROSE', flag], source)).toEqual(typed);
+      expect(basicSafetyValue(key, null, source)).toEqual([]);
+    }
+  });
+  it.each(DETERMINISTIC_SOURCES)('%s: SAFETY_KEYS verbatim', source => {
+    for (const key of SAFETY_KEYS) {
+      expect(basicSafetyValue(key, ['kept'], source)).toEqual(['kept']);
+      expect(basicSafetyValue(key, 'kept', source)).toBe('kept');
+    }
+  });
+  it('the SQL disclaimer default is the TS default', () => {
+    const disclaimer = buildBasicProjection({}, [], { source: 'ai' }).disclaimer;
+    expect(cycleMigration.match(new RegExp(`'${disclaimer}'::text`, 'g'))).toHaveLength(2);
+  });
+  it('keeps the original floor fingerprints of stripped channels out of preview selection', () => {
+    const payload = { ...full, what_to_do_next: ['duplicate prose'], cycle_context: { explanation: 'duplicate cycle' },
+      pattern_signals: ['duplicate prose', 'duplicate cycle'] };
+    const findings = payload.pattern_signals.map((content, i) => ({ ...catalog[0], content, source_path: `/pattern_signals/${i}` }));
+    const basic = buildBasicProjection(payload, findings);
+    expect(basic.preview).toBeNull();
+    expect(basic.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+  });
+});
+
+const headlineCases: { input: unknown; expected: string }[] = JSON.parse(
+  cycleMigration.match(/\$headline_cases\$([\s\S]*?)\$headline_cases\$/)![1]);
+describe('Basic headline bound (shared SQL fixture)', () => {
+  it.each(headlineCases)('bounds $input', ({ input, expected }) => {
+    expect(basicHeadline(input)).toBe(expected);
+    for (const source of ['ai', 'unknown', null, undefined]) {
+      const basic = buildBasicProjection({ headline: input }, [], { source });
+      const read = sanitizeBasicProjection({ headline: input, basic_interpretation: 'stale' }, source);
+      expect(basic.headline).toBe(expected);
+      expect(basic.basic_interpretation).toBe(expected);
+      expect(read.headline).toBe(expected);
+      expect(read.basic_interpretation).toBe(expected);
+    }
+    for (const source of DETERMINISTIC_SOURCES) {
+      expect(buildBasicProjection({ headline: input }, [], { source }).headline).toEqual(input ?? 'Your lab results');
+      const read = sanitizeBasicProjection({ headline: input, basic_interpretation: 'stale' }, source);
+      expect(read.headline).toEqual(input);
+      expect(read.basic_interpretation).toBe('stale');
+    }
+  });
+  it('does not add basic_interpretation to a stored Basic that lacks it', () => {
+    expect(sanitizeBasicProjection({ headline: 'Iron is low' }, 'ai')).not.toHaveProperty('basic_interpretation');
   });
 });

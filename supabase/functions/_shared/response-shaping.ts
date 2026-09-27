@@ -136,10 +136,11 @@ export const FLOOR_REQUIRED_KEYS = Object.freeze([
 ] as const);
 
 /**
- * At least one narrative findings surface must be present. The AI and
- * deterministic shapes disagree on which — `key_findings` vs `top_findings` /
- * `summary_bullets` — and the client renders whichever it gets, so requiring a
- * specific one would fail a valid payload.
+ * At least one findings array must be present. AI uses key_findings (normalized
+ * but not currently rendered); deterministic writers use top_findings and
+ * summary_bullets. Membership here requires the array, not verbatim model prose:
+ * buildBasicProjection sanitizes AI/unknown-source entries to typed facts and
+ * explicit safety follow-ups, while trusted deterministic text stays floor.
  */
 export const FLOOR_FINDING_KEYS = Object.freeze([
   "key_findings",

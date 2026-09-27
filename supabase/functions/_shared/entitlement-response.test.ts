@@ -44,13 +44,18 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
   let handler: (req: Request) => Promise<Response> = async () => new Response(null, { status: 500 });
   const queried: string[] = [];
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
-  const generated = { headline: 'h', cycle_context: {}, questions_for_doctor: [], disclaimer: 'd', key_findings: [], deep_body: 'full' };
+  // The model tries to author phase/day/confidence; only its explanation may survive.
+  const generated: Record<string, unknown> = { headline: 'h', cycle_context: { estimated_cycle_day: 3, estimated_cycle_phase: 'pregnancy_t2',
+    confidence: 'high', explanation: 'model prose' }, questions_for_doctor: [], disclaimer: 'd', key_findings: [], deep_body: 'full' };
+  const sink: { helpers?: Record<string, unknown> } = {};
+  evaluate(source.slice(source.indexOf('function deterministicCycleFacts('), source.indexOf('function generateFallbackInterpretation('))
+    + '\nsink.helpers = { deterministicCycleFacts, modelCycleExplanation };', { sink });
   const from = (table: string) => {
     queried.push(table);
     let selection = '';
     const reply = () => ({ data: table === 'lab_reports'
       ? selection === 'id, user_id' ? { id: 'r', user_id: 'u' }
-        : selection.includes('context') ? { id: 'r', report_date: '2026-09-26' } : null
+        : selection.includes('context') ? { id: 'r', report_date: '2026-09-26', estimated_cycle_day: 21, estimated_cycle_phase: 'luteal' } : null
       : table === 'report_analytes' ? [{ value_numeric: 1 }]
         : table === 'interpretation_visibility_config' ? { enabled: false } : null, error: null });
     const query: Record<string, unknown> = {};
@@ -78,7 +83,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation, shapeInterpretation,
       tryOpenAI: async () => generated, addFindingMetadata: noCall, buildBasicProjection,
       findFloorViolations, commitGeneratedInterpretation: noCall, recordGenerationCosts: noCall,
-      isRateLimitExceeded: () => false, errorMessage: String,
+      isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers,
     });
     const response = await handler(new Request('https://example.invalid', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: '{}' }));
     expect(response.status).toBe(200);
@@ -86,6 +91,8 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
     expect(calls).toHaveLength(1);
     expect(calls[0].name).toBe('save_interpretation');
     expect(calls[0].args.p_interpretation).toEqual(generated);
+    expect((calls[0].args.p_interpretation as Record<string, unknown>).cycle_context).toEqual({
+      estimated_cycle_day: 21, estimated_cycle_phase: 'luteal', confidence: 'medium', explanation: 'model prose' });
     expect(calls[0].args.p_interpretation).not.toHaveProperty('findings');
     expect(calls[0].args.p_interpretation).not.toHaveProperty('trend_evidence');
     expect(calls[0].args.p_basic).toEqual(buildBasicProjection(generated));
