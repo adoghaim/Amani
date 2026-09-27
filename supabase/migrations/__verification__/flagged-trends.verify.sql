@@ -47,7 +47,7 @@ DECLARE cases jsonb := $trend_cases$[
           "unit": "u",
           "previous_date": "2026-03-01",
           "direction": "increased",
-          "summary": "A increased 10 \u2192 20 u since 2026-03-01"
+          "summary": "A increased 10 → 20 u since 2026-03-01"
         },
         {
           "biomarker_slug": "a",
@@ -78,7 +78,7 @@ DECLARE cases jsonb := $trend_cases$[
         "previous_date": "2026-03-01",
         "direction": "increased",
         "status": "AtTeNtIoN",
-        "summary": "A increased 10 \u2192 20 u since 2026-03-01"
+        "summary": "A increased 10 → 20 u since 2026-03-01"
       },
       {
         "biomarker_slug": "b",
@@ -112,6 +112,601 @@ DECLARE cases jsonb := $trend_cases$[
     "full": {
       "trend_evidence": null,
       "key_findings": {}
+    },
+    "expected": []
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "abnormal": {
+            "status": "attention"
+          }
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "abnormal": [
+            {
+              "status": "discuss"
+            }
+          ]
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "is_abnormal": {
+            "status": "attention"
+          }
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "is_abnormal": [
+            {
+              "status": "discuss"
+            }
+          ]
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "safety": {
+            "status": "attention"
+          }
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "safety": [
+            {
+              "status": "discuss"
+            }
+          ]
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "safety_related": {
+            "status": "attention"
+          }
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "safety_related": [
+            {
+              "status": "discuss"
+            }
+          ]
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "is_safety": {
+            "status": "attention"
+          }
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "is_safety": [
+            {
+              "status": "discuss"
+            }
+          ]
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "critical": {
+            "status": "attention"
+          }
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "critical": [
+            {
+              "status": "discuss"
+            }
+          ]
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "urgent": {
+            "status": "attention"
+          }
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "urgent": [
+            {
+              "status": "discuss"
+            }
+          ]
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "férritine",
+          "status": "DiScUsS"
+        },
+        {
+          "biomarker_slug": "unicode_status",
+          "status": "DÍSCUSS"
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "férritine",
+          "delta": 1,
+          "marker": "Férritine",
+          "summary": "Évolution → 2"
+        },
+        {
+          "biomarker_slug": "unicode_status",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "férritine",
+        "marker": "Férritine",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": "DiScUsS",
+        "summary": "Évolution → 2"
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        null,
+        "discuss",
+        true,
+        42,
+        [],
+        [
+          {
+            "status": "discuss"
+          }
+        ],
+        {
+          "biomarker_slug": "",
+          "abnormal": true
+        }
+      ],
+      "trend_evidence": [
+        null,
+        "x",
+        false,
+        42,
+        [],
+        [
+          {
+            "biomarker_slug": "",
+            "delta": 1
+          }
+        ],
+        {
+          "biomarker_slug": "",
+          "delta": 1,
+          "marker": 42
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "",
+        "marker": "",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "status": null
+        },
+        {
+          "biomarker_slug": "x",
+          "abnormal": true
+        },
+        {
+          "biomarker_slug": "x",
+          "urgent": true
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1,
+          "marker": {
+            "name": "ignored"
+          }
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": null,
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "status": "monitor"
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
     },
     "expected": []
   }

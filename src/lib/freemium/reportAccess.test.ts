@@ -51,6 +51,25 @@ describe('ReportView access policy', () => {
     expect(onResult).toHaveBeenCalledTimes(1);
     expect(onResult).toHaveBeenCalledWith(body('basic'));
   });
+  it.each(['A first', 'B first'])('reuses pending A during A→B→A and delivers A exactly once (%s)', async order => {
+    const a = deferred(); const b = deferred();
+    const fetch = vi.fn().mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+    const requester = createAccessRequester(fetch);
+    const originalA = vi.fn(); const resultB = vi.fn(); const activeA = vi.fn();
+    expect(requester.request('A:0', 'A', originalA)).toBe(true);
+    expect(requester.request('B:0', 'B', resultB)).toBe(true);
+    expect(requester.request('A:0', 'A', activeA)).toBe(false);
+    expect(requester.request('A:0', 'A', activeA)).toBe(false);
+    expect(fetch.mock.calls).toEqual([['A'], ['B']]);
+    if (order === 'B first') { b.resolve(body('basic')); await b.promise; }
+    a.resolve(body('full')); await a.promise;
+    if (order === 'A first') { b.resolve(body('basic')); await b.promise; }
+    expect(originalA).not.toHaveBeenCalled();
+    expect(resultB).not.toHaveBeenCalled();
+    expect(activeA).toHaveBeenCalledTimes(1);
+    expect(activeA).toHaveBeenCalledWith(body('full'));
+    expect(requester.request('A:0', 'A', activeA)).toBe(false);
+  });
   it.each(['basic', 'full'] as const)('keeps a prior %s body on an error', access => {
     const current = body(access); const error = accessError('network_error');
     expect(applyAccessResult(current, error)).toEqual({ state: current, inlineError: error });

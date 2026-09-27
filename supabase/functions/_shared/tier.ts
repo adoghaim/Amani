@@ -247,7 +247,7 @@ export function carriesFindingSafety(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(carriesFindingSafety);
   if (!value || typeof value !== "object") return false;
   return Object.entries(value).some(([key, child]) => {
-    if (/^(abnormal|is_abnormal|safety|safety_related|is_safety|critical|urgent)$/.test(key)) return child === true;
+    if (/^(abnormal|is_abnormal|safety|safety_related|is_safety|critical|urgent)$/.test(key) && child === true) return true;
     if (/^(flag|flagged|status|current_status)$/.test(key) && isAbnormalStatus(child)) return true;
     return carriesFindingSafety(child);
   });

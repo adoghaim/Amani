@@ -270,7 +270,7 @@ docker cp "$HERE/flagged-trends.verify.sql" "$CONTAINER:/tmp/flagged-verify.sql"
 # Use a separate database cloned at the prepare stage: the migration commits.
 psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE flagged_before TEMPLATE amani;'
 docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -v rel=interpretations -q \
-  -f /tmp/flagged-prelude.sql -f /tmp/flagged.sql -f /tmp/flagged.sql -f /tmp/flagged-verify.sql
+  -f /tmp/flagged-prelude.sql -f /tmp/flagged.sql -f /tmp/flagged.sql -f /tmp/flagged-verify.sql -f /tmp/deterministic-verify.sql
 
 # Case 8 (pre-cutover half): the read-source migration refuses to run before
 # 20260926000001 and leaves nothing behind.
@@ -314,3 +314,6 @@ psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/flagged-prel
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$FLAGGED"
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$FLAGGED"
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/flagged-verify.sql
+
+# The deterministic contract must also hold after the additive trend migration.
+psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql

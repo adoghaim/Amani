@@ -26,9 +26,9 @@ export function accessRequestKey(input: {
 
 export interface AccessRequester {
   /**
-   * Starts a read for `key` unless it is null or already the latest key.
+   * Starts a read for `key` unless it is null, already the latest key, or still in flight.
    * Returns whether a request was made. A response is delivered only while
-   * its key is still the latest, so a superseded read is dropped.
+   * its key is active, using the latest callback for that key.
    */
   request(key: string | null, reportId: string, onResult: (result: InterpretationAccessResult) => void): boolean;
 }
@@ -37,12 +37,21 @@ export function createAccessRequester(
   fetchAccess: (reportId: string) => Promise<InterpretationAccessResult>,
 ): AccessRequester {
   let latest: string | null = null;
+  const inFlight = new Map<string, { onResult: (result: InterpretationAccessResult) => void }>();
   return {
     request(key, reportId, onResult) {
       if (key === null || key === latest) return false;
       latest = key;
+      const pending = inFlight.get(key);
+      if (pending) {
+        pending.onResult = onResult;
+        return false;
+      }
+      const request = { onResult };
+      inFlight.set(key, request);
       void fetchAccess(reportId).then(result => {
-        if (latest === key) onResult(result);
+        inFlight.delete(key);
+        if (latest === key) request.onResult(result);
       });
       return true;
     },

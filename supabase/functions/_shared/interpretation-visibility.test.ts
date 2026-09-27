@@ -138,21 +138,20 @@ describe('deterministic interpretation stays on the Free medical floor', () => {
     expect(deterministicMigration).toContain(`p_source IN (${sources})`);
     expect(deterministicMigration).toContain(`interpretation_source IN (${sources})`);
     expect(deterministicMigration).toContain(`ARRAY[${keys}]`);
-    expect(deterministicKeys).toEqual([...expectedKeys, ...DETERMINISTIC_NARRATIVE_KEYS].sort());
+    expect(deterministicKeys).toEqual([...expectedKeys, ...DETERMINISTIC_NARRATIVE_KEYS, 'flagged_trends'].sort());
     expect(isDeterministicSource('fallback')).toBe(true);
     expect(isDeterministicSource('ai')).toBe(false);
     expect(isDeterministicSource(null)).toBe(false);
   });
 
-  // Historical deterministic key fixture excludes flagged_trends. The additive
-  // flagged-trends migration has its own shared SQL/TS value fixtures below.
+  // The current SQL contract includes flagged_trends for this evidence-bearing fixture.
   const { trend_evidence: _evidence, ...withoutEvidence } = deterministicFixture;
   it.each(DETERMINISTIC_SOURCES)('%s: full deterministic narrative in Basic, SQL key parity', source => {
     const basic = buildBasicProjection(deterministicFixture, undefined, { source });
     expect(basic.overall_interpretation).toBe(deterministicFixture.overall_interpretation);
     expect(basic.pattern_signals).toEqual(deterministicFixture.pattern_signals);
-    expect(Object.keys(basic).sort()).toEqual([...deterministicKeys, 'flagged_trends'].sort());
-    expect(Object.keys(buildBasicProjection(withoutEvidence, undefined, { source })).sort()).toEqual(deterministicKeys);
+    expect(Object.keys(basic).sort()).toEqual(deterministicKeys);
+    expect(Object.keys(buildBasicProjection(withoutEvidence, undefined, { source })).sort()).toEqual(deterministicKeys.filter(key => key !== 'flagged_trends'));
     expect(findFloorViolations(basic)).toEqual([]);
     expect(basic).not.toHaveProperty('trend_evidence');
   });
