@@ -1,4 +1,5 @@
 import { AlertCircle, Loader2, Lock, RefreshCw, Sparkles } from 'lucide-react';
+import type { InsightSummary } from '../../lib/insights/buildInsightSummary';
 import { Button } from '../Button';
 import { ComplimentaryCounter } from './ComplimentaryCounter';
 import {
@@ -20,6 +21,8 @@ interface FreemiumReportPanelProps {
   state: InterpretationAccessResult | null;
   /** A generation request is in flight. */
   generating: boolean;
+  /** Existing deterministic floor, used only to avoid repeating visible changes. */
+  floorSummary?: InsightSummary | null;
   /** The last generate request was refused with 402 (Premium required). */
   premiumRequired?: boolean;
   /** `useSubscription().plan`; the counter is only for Free accounts. */
@@ -46,11 +49,12 @@ interface FreemiumReportPanelProps {
  *   generation_needed → the generate action
  */
 export function FreemiumReportPanel({
-  state, generating, premiumRequired = false, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
+  state, generating, floorSummary, premiumRequired = false, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
 }: FreemiumReportPanelProps) {
   const used = state?.complimentary?.used ?? complimentaryUsed;
   // A Basic report consumed no claim, so it gets the remaining/exhausted line only.
   const counter = plan === 'free' && used !== null
+    && !(state?.access === 'full' && state.complimentary === null)
     ? <ComplimentaryCounter used={used} hideUsage={state?.access === 'basic'} />
     : null;
 
@@ -89,6 +93,7 @@ export function FreemiumReportPanel({
   if (state.access === 'full') return counter;
 
   const basicText = basicInterpretationText(state.interpretation);
+  const trends = basicTrendLines(state.interpretation, floorSummary);
   const preview = state.preview ? previewText(state.preview) : null;
   const locked: { key: string; label: string }[] = [
     ...(state.locked.patterns > 0 ? [{ key: 'patterns', label: lockedPatternsLabel(state.locked.patterns) }] : []),
@@ -103,6 +108,14 @@ export function FreemiumReportPanel({
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-theme-muted-text-3 mb-2">{COPY.basicHeading}</p>
           <p className="text-sm text-theme-text-body leading-relaxed">{basicText}</p>
         </div>
+      )}
+
+      {trends.length > 0 && (
+        <ul className="rounded-2xl border border-theme-border-subtle bg-theme-surface p-5 space-y-2">
+          {trends.map(line => (
+            <li key={line.slug} className="text-sm text-theme-text-body">{line.text}</li>
+          ))}
+        </ul>
       )}
 
       {counter}
@@ -136,6 +149,59 @@ export function FreemiumReportPanel({
       {upgradeBanner(onOpenPaywall)}
     </section>
   );
+}
+
+/** Mirrors the visible (four-bullet) trajectory selection without treating every
+ * historical marker as visible. ReportView's key-findings are not key-walked;
+ * its primary finding and trajectory are the other change-bearing floor cards. */
+function basicTrendLines(payload: Record<string, unknown> | null, floor?: InsightSummary | null) {
+  const seen = new Set<string>();
+  if (floor) {
+    const primary = floor.primaryFinding?.key;
+    const bullets = floor.biggestChanges.flatMap(change => {
+      const status = change.trajectoryStatus;
+      const kind = change.isFirstRecorded ? 3
+        : (status === 'normalized' && change.boundaryCrossing) || change.boundaryCrossing?.direction === 'improved'
+          || status === 'improving_still_high' || status === 'improving_still_low' ? 2
+        : status === 'worsening_still_high' || status === 'worsening_still_low' || status === 'newly_abnormal' ? 0
+        : status === 'stable_abnormal' ? 1 : null;
+      return kind === null ? [] : [{ change, kind }];
+    });
+    // Match YourTrajectoryCard's current significance indexing as well as its
+    // primary/kind ordering. Keep the regression test against the actual card.
+    const significance = { significant: 0, moderate: 1, minor: 2 };
+    bullets.map((bullet, index) => ({ ...bullet, significance: significance[floor.biggestChanges[index]!.significance] }))
+      .sort((a, b) => Number(b.change.key === primary && b.kind !== 3) - Number(a.change.key === primary && a.kind !== 3)
+        || a.kind - b.kind || a.significance - b.significance)
+      .slice(0, 4).forEach(({ change }) => { if (!change.isFirstRecorded) seen.add(change.key); });
+    const delta = primary ? floor.deltaMap.get(primary) : null;
+    if (primary && delta && ['improving_still_high', 'improving_still_low', 'worsening_still_high',
+      'worsening_still_low', 'stable_abnormal'].includes(delta.trajectoryStatus ?? '')) seen.add(primary);
+    // The improving primary headline also names the first worsening marker.
+    const primaryImproving = delta?.trajectoryStatus?.startsWith('improving_still_')
+      || floor.biggestChanges.some(c => c.key === primary && c.significance !== 'minor'
+        && c.trajectoryStatus?.startsWith('improving_still_'));
+    if (primaryImproving) {
+      const worsening = floor.biggestChanges.find(c => c.trajectoryStatus?.startsWith('worsening_still_')
+        || c.boundaryCrossing?.direction === 'worsened');
+      if (worsening) seen.add(worsening.key);
+    }
+  }
+  const raw = payload?.flagged_trends;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap(entry => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const line = entry as Record<string, unknown>;
+    const slug = line.biomarker_slug;
+    if (typeof slug !== 'string' || seen.has(slug)) return [];
+    seen.add(slug);
+    const value = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? String(v) : '—';
+    const marker = typeof line.marker === 'string' ? line.marker : slug;
+    const unit = typeof line.unit === 'string' ? ` ${line.unit}` : '';
+    const direction = typeof line.direction === 'string' ? ` · ${line.direction}` : '';
+    const date = typeof line.previous_date === 'string' ? ` · ${line.previous_date}` : '';
+    return [{ slug, text: `${marker}: ${value(line.previous_value)} → ${value(line.current_value)}${unit}${direction}${date}` }];
+  });
 }
 
 function upgradeBanner(onOpenPaywall: () => void) {

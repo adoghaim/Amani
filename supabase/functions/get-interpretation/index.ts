@@ -42,6 +42,7 @@ Deno.serve(async (req: Request) => {
     }, {
       userId: user.id, endpoint: "get-interpretation", limitPerDay: READ_LIMIT_PER_DAY,
     });
+    const freemiumActive = Deno.env.get("FREEMIUM_ACTIVE") === "true";
     const result = await readInterpretation({
       async ownsReport() {
         const { data, error } = await userClient.from("lab_reports").select("id")
@@ -49,7 +50,7 @@ Deno.serve(async (req: Request) => {
         if (error) throw error;
         return data !== null;
       },
-      resolveEntitlement: () => checkUserSubscription(userClient, user.id, true, true),
+      resolveEntitlement: () => checkUserSubscription(userClient, user.id, freemiumActive, true),
       async readSelected(premium) {
         const { data, error } = await service.rpc("read_interpretation_for_server", {
           p_user_id: user.id, p_report_id: body.reportId, p_premium: premium,
@@ -63,7 +64,7 @@ Deno.serve(async (req: Request) => {
         if (error || count === null) throw error ?? new Error("Missing claim count");
         return count;
       },
-    });
+    }, freemiumActive);
     return new Response(JSON.stringify(result.body), { status: result.status, headers });
   } catch (error) {
     if (isRateLimitExceeded(error)) {

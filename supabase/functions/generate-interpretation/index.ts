@@ -1132,7 +1132,7 @@ Required schema:
   "what_to_do_next": ["string"],
   "overall_interpretation": "string",
   "questions_for_doctor": ["string"],
-  "cycle_context": "string",
+  "cycle_context": {"estimated_cycle_day": "positive integer or null", "estimated_cycle_phase": "menstrual|follicular|ovulatory|luteal|pregnancy_t1|pregnancy_t2|pregnancy_t3|unknown", "confidence": "low|medium|high", "explanation": "string"},
   "disclaimer": "string"
 }`;
 

@@ -709,6 +709,132 @@ DECLARE cases jsonb := $trend_cases$[
       ]
     },
     "expected": []
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "abnormal": 1
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": []
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "abnormal": "true"
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": []
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "flag": "attention"
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": "attention",
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "flag": "monitor"
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": []
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "flagged": "discuss"
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": [
+      {
+        "biomarker_slug": "x",
+        "marker": "x",
+        "previous_value": null,
+        "current_value": null,
+        "unit": null,
+        "previous_date": null,
+        "direction": null,
+        "status": "discuss",
+        "summary": null
+      }
+    ]
+  },
+  {
+    "full": {
+      "key_findings": [
+        {
+          "biomarker_slug": "x",
+          "flagged": "reassuring"
+        }
+      ],
+      "trend_evidence": [
+        {
+          "biomarker_slug": "x",
+          "delta": 1
+        }
+      ]
+    },
+    "expected": []
   }
 ]$trend_cases$::jsonb;
   item jsonb; source text; actual jsonb;
@@ -770,3 +896,12 @@ BEGIN
   END IF;
 END $$;
 ROLLBACK;
+
+-- Service-only projection helper must never become a client RPC.
+DO $$ BEGIN
+  IF has_function_privilege('anon', 'public.interpretation_flagged_trends(jsonb)', 'EXECUTE')
+    OR has_function_privilege('authenticated', 'public.interpretation_flagged_trends(jsonb)', 'EXECUTE')
+    OR NOT has_function_privilege('service_role', 'public.interpretation_flagged_trends(jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'flagged trend helper privilege boundary failed';
+  END IF;
+END $$;

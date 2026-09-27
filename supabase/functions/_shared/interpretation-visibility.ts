@@ -20,6 +20,24 @@ export function isDeterministicSource(source: unknown): boolean {
   return typeof source === "string" && (DETERMINISTIC_SOURCES as readonly string[]).includes(source);
 }
 
+/** Basic keeps cycle facts, never model-authored prose (including old stored
+ * strings, explanation, and unknown nested fields). Full bodies are untouched.
+ * Mirrored by interpretation_basic_cycle_context in the additive SQL migration. */
+export function basicCycleContext(value: unknown): Record<string, unknown> {
+  const context = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : {};
+  const day = context.estimated_cycle_day;
+  const phase = context.estimated_cycle_phase;
+  const confidence = context.confidence;
+  return {
+    estimated_cycle_day: typeof day === "number" && Number.isSafeInteger(day) && day > 0 ? day : null,
+    estimated_cycle_phase: typeof phase === "string" && ["menstrual", "follicular", "ovulatory", "luteal",
+      "pregnancy_t1", "pregnancy_t2", "pregnancy_t3", "unknown"].includes(phase) ? phase : "unknown",
+    confidence: typeof confidence === "string" && ["low", "medium", "high"].includes(confidence) ? confidence : "low",
+    explanation: "",
+  };
+}
+
 /** Flags are evidence of floor membership, never evidence of preview eligibility. */
 export const carriesSafety = carriesFindingSafety;
 
@@ -63,6 +81,7 @@ export function buildBasicProjection(
 ): InterpretationPayload {
   const basic: InterpretationPayload = {};
   for (const key of FLOOR_REQUIRED_KEYS) basic[key] = full[key] ?? defaults[key];
+  basic.cycle_context = basicCycleContext(full.cycle_context);
   for (const key of FLOOR_FINDING_KEYS) basic[key] = Array.isArray(full[key]) ? full[key] : [];
   for (const key of SAFETY_KEYS) {
     basic[key] = full[key] ?? [];

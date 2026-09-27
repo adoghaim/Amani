@@ -102,7 +102,8 @@ const surfaces: [string, () => ReactNode][] = [
   ['Billing complimentary', () => { signedIn(); subscription('premium', { source: 'complimentary' }); return <Billing />; }],
   ['Billing read error', () => { signedIn(); subscription(undefined, { error: new Error('x') }); return <Billing />; }],
   ['Report basic', () => panel({ access: 'basic', interpretation: { headline: 'H' }, locked: { patterns: 2, cross_report: 1, lifestyle: 1 } })],
-  ['Report full', () => panel({ access: 'full', interpretation: { headline: 'H' } })],
+  ['Report full', () => panel({ access: 'full', interpretation: { headline: 'H' },
+    complimentary: { used: 1, total: 3, remaining: 2 } })],
   ['Report error', () => panel({ access: 'error', code: 'entitlement_unavailable' })],
   ['Report generation_needed', () => panel({ access: 'generation_needed', interpretation: null })],
 ];

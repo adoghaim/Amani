@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { FINDING_STATUS } from "./tier";
 import { selectPremiumPreview } from "./preview-selector";
 import { describe, expect, it } from 'vitest';
-import { buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
+import { basicCycleContext, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
@@ -198,5 +198,35 @@ describe('SQL/TS flagged_trends shared value fixtures', () => {
   it('freezes the shared abnormal vocabulary in SQL', () => {
     const migration = readFileSync(new URL('../../migrations/20260927000000_flagged_trends_projection.sql', import.meta.url), 'utf8');
     expect(migration).toContain(`IN (${FINDING_STATUS.ABNORMAL.map(s => `'${s}'`).join(',')})`);
+  });
+});
+
+const cycleMigration = readFileSync(new URL('../../migrations/20260927000001_basic_cycle_context.sql', import.meta.url), 'utf8');
+const cycleCases: { input: unknown; expected: Record<string, unknown> }[] = JSON.parse(
+  cycleMigration.match(/\$cycle_cases\$([\s\S]*?)\$cycle_cases\$/)![1]);
+describe('cycle context confidentiality (shared SQL fixture)', () => {
+  it.each(cycleCases)('keeps only typed facts from $input', ({ input, expected }) => {
+    expect(basicCycleContext(input)).toEqual(expected);
+    for (const source of ['ai', 'fallback', 'deterministic', null]) {
+      const payload = { ...full, cycle_context: input };
+      const original = structuredClone(payload);
+      const basic = buildBasicProjection(payload, [], { source });
+      expect(basic.cycle_context).toEqual(expected);
+      expect(JSON.stringify(basic)).not.toContain('PRIVATE');
+      expect(payload).toEqual(original);
+    }
+  });
+  it('sanitizes existing projections at both SQL read boundaries without a backfill', () => {
+    expect(cycleMigration.match(/ELSE jsonb_set\(i.json_output_basic/g)).toHaveLength(2);
+    expect(cycleMigration).toContain("public.interpretation_basic_cycle_context(i.json_output_basic->'cycle_context')");
+    expect(cycleMigration).not.toMatch(/UPDATE\s+public\./);
+    expect(cycleMigration).toContain('THEN i.json_output ELSE');
+    expect(cycleMigration).toContain('WHEN p_premium OR claim.covered THEN i.json_output');
+  });
+  it('documents the AI contract as an object while keeping Full validation compatible', () => {
+    const writer = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
+    expect(writer).toContain('"cycle_context": {"estimated_cycle_day":');
+    const schema = readFileSync(new URL('./schemas/interpretation.ts', import.meta.url), 'utf8');
+    expect(schema).toContain('cycle_context: z.unknown()');
   });
 });

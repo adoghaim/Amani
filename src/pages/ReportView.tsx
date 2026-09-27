@@ -1272,6 +1272,7 @@ export function ReportView() {
   const freemiumPanel = freemium ? (
     <FreemiumReportPanel
       state={accessState}
+      floorSummary={insightSummary}
       generating={generating}
       premiumRequired={generatePremiumRequired}
       plan={plan}

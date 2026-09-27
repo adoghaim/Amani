@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
 import { describe, expect, it, vi } from 'vitest';
+import type { InterpretationReadActions } from '../_shared/interpretation-read';
 import { enforceRateLimit, isRateLimitExceeded } from '../_shared/rate-limit';
 
 // Run the actual Deno callback with injected transports, as the generation
@@ -11,22 +12,26 @@ const request = () => new Request('https://example.invalid/get-interpretation', 
   method: 'POST', headers: { Authorization: 'Bearer test' },
   body: JSON.stringify({ reportId: '09100000-0000-4000-8000-000000000031' }),
 });
-function harness(options: { authThrows?: boolean; count?: number | null } = {}) {
+function harness(options: { authThrows?: boolean; count?: number | null; flag?: string; invokeEntitlement?: boolean } = {}) {
   let handler!: (req: Request) => Promise<Response>;
-  const read = vi.fn(async () => ({ status: 200, body: { access: 'basic' } }));
+  const checkUserSubscription = vi.fn(async () => ({ allowed: true, reason: 'trial' }));
+  const read = vi.fn(async (actions: InterpretationReadActions, freemiumActive: boolean) => {
+    if (options.invokeEntitlement) await actions.resolveEntitlement();
+    return { status: 200, body: { access: freemiumActive ? 'basic' : 'full' } };
+  });
   const increment = vi.fn(async () => ({ data: options.count === undefined ? 1 : options.count, error: null }));
   const getUser = vi.fn(async () => {
     if (options.authThrows) throw new Error('transport unavailable');
     return { data: { user: { id: 'verified-user' } }, error: null };
   });
   const values = {
-    Deno: { env: { get: () => 'test' }, serve: (fn: typeof handler) => { handler = fn; } },
+    Deno: { env: { get: (name: string) => name === 'FREEMIUM_ACTIVE' ? options.flag : 'test' }, serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => ({ auth: { getUser }, rpc: increment }),
     enforceRateLimit, isRateLimitExceeded,
-    readInterpretation: read,
+    readInterpretation: read, checkUserSubscription,
   };
   new Function(...Object.keys(values), code)(...Object.values(values));
-  return { handler, read, increment };
+  return { handler, read, increment, checkUserSubscription };
 }
 describe('get-interpretation HTTP boundary', () => {
   it('returns a retryable CORS response when auth transport throws', async () => {
@@ -57,4 +62,12 @@ describe('get-interpretation HTTP boundary', () => {
       expect(read).not.toHaveBeenCalled();
     } finally { log.mockRestore(); }
   });
+});
+
+it.each([undefined, 'false', 'TRUE', 'true'])('threads env %s into the third guard argument and read policy', async flag => {
+  const { handler, read, checkUserSubscription } = harness({ flag, invokeEntitlement: true });
+  const response = await handler(request());
+  expect(response.status).toBe(200);
+  expect(read).toHaveBeenCalledWith(expect.any(Object), flag === 'true');
+  expect(checkUserSubscription).toHaveBeenCalledWith(expect.any(Object), 'verified-user', flag === 'true', true);
 });
