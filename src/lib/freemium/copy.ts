@@ -67,6 +67,8 @@ export const FREEMIUM_COPY = Object.freeze({
     lifestyleMany: '{n} lifestyle insights available',
   },
   report: {
+    // Owner-approved TASK-035 R3, 2026-09-27.
+    changesHeading: 'Changes since your last report',
     basicHeading: 'Basic insights',
     previewLabel: 'Premium Preview',
     lockedHint: 'Included with Premium',

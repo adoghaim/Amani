@@ -174,3 +174,32 @@ it('endpoint threads the exact environment gate through entitlement and read pol
   const policy = readFileSync(new URL('./interpretation-read.ts', import.meta.url), 'utf8');
   expect(policy).not.toContain('Deno.env');
 });
+
+it.each(['ai', null, undefined, 'fallback', 'deterministic'])('sanitizes stored findings at Basic reads with source %s; Full remains identical', async interpretation_source => {
+  const finding = { biomarker_slug: 'ferritin', status: 'attention', abnormal: true, value: 9,
+    title: 'PRIVATE CROSS-MARKER NARRATIVE', explanation: 'PRIVATE CROSS-MARKER NARRATIVE' };
+  const payload = { ...full, key_findings: [finding], top_findings: [finding], summary_bullets: ['PRIVATE CROSS-MARKER NARRATIVE'],
+    cycle_context: 'PRIVATE CROSS-MARKER NARRATIVE', preview: { content: 'selected preview' },
+    locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
+  const original = structuredClone(payload);
+  for (const flag of [false, true]) for (const has_claim of [false, true]) {
+    const result = await readWithFlag(actions({ readSelected: async () => ({ json_output: payload,
+      stored_depth: 'deep', has_claim, tier: 'free', interpretation_source }) }), flag);
+    if (flag && !has_claim) {
+      expect(result.body.preview).toEqual(payload.preview);
+      expect(result.body.locked).toEqual(payload.locked);
+      expect(result.body.interpretation?.cycle_context).toEqual({ estimated_cycle_day: null,
+        estimated_cycle_phase: 'unknown', confidence: null, explanation: '' });
+      if (interpretation_source === 'fallback' || interpretation_source === 'deterministic') {
+        expect(result.body.interpretation?.top_findings).toEqual(payload.top_findings);
+        expect(result.body.interpretation?.summary_bullets).toEqual(payload.summary_bullets);
+      } else {
+        expect(JSON.stringify(result.body)).not.toContain('PRIVATE CROSS-MARKER NARRATIVE');
+        expect(result.body.interpretation?.key_findings).toEqual([{ biomarker_slug: 'ferritin', status: 'attention', abnormal: true, value: 9 }]);
+        expect(result.body.interpretation?.top_findings).toEqual(result.body.interpretation?.key_findings);
+        expect(result.body.interpretation?.summary_bullets).toEqual([]);
+      }
+    } else expect(result.body.interpretation).toBe(payload);
+  }
+  expect(payload).toEqual(original);
+});

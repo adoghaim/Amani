@@ -1,7 +1,7 @@
 import type { EntitlementResult } from "./entitlement.ts";
 import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
 import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
-import { basicCycleContext, buildBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
+import { sanitizeBasicProjection, buildBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
 import type { LockedCounts } from "./preview-selector.ts";
 
 export interface InterpretationReadActions {
@@ -78,7 +78,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     // Basic arrives precompiled; rebuilding it would discard its chosen preview.
     const projection = full ? buildBasicProjection(row.json_output, undefined, provenance) : row.json_output;
     return { status: 200, body: { ...common, access: full ? "full" : "basic",
-      interpretation: full ? row.json_output : { ...row.json_output, cycle_context: basicCycleContext(row.json_output.cycle_context) }, preview: projection.preview ?? null,
+      interpretation: full ? row.json_output : sanitizeBasicProjection(row.json_output, provenance.source), preview: projection.preview ?? null,
       locked: (projection.locked ?? empty.locked) as LockedCounts } };
   } catch {
     return failure(503, "entitlement_unavailable", true);

@@ -1,12 +1,21 @@
--- Basic cycle facts only, with TS parity in interpretation-visibility.ts.
+-- Basic cycle facts and findings confidentiality, with TS parity in interpretation-visibility.ts.
 -- No backfill: Full and all stored rows remain unchanged. Sanitizing at both
 -- read boundaries also protects existing Basic projections until an owner
 -- separately authorizes a backfill. Both floor overloads inherit this rule.
 -- Requires the existing visibility cutover; does not change its switch.
 BEGIN;
+DO $$ BEGIN
+  IF to_regclass('public.interpretations_private') IS NULL
+    OR to_regclass('public.interpretation_visibility_config') IS NULL
+    OR to_regprocedure('public.interpretation_flagged_trends(jsonb)') IS NULL
+    OR to_regprocedure('public.interpretation_floor(jsonb,text)') IS NULL
+    OR to_regprocedure('public.read_interpretation_for_server(uuid,uuid,boolean)') IS NULL THEN
+    RAISE EXCEPTION 'Apply visibility cutover, source-aware reads and 20260927000000 before 20260927000001';
+  END IF;
+END $$;
 CREATE OR REPLACE FUNCTION public.interpretation_basic_cycle_context(p_context jsonb) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
-DECLARE day jsonb := 'null'::jsonb; phase text := 'unknown'; confidence text := 'low'; n numeric;
+DECLARE day jsonb := 'null'::jsonb; phase text := 'unknown'; confidence text := NULL; n numeric;
 BEGIN
   IF jsonb_typeof(p_context)='object' THEN
     IF jsonb_typeof(p_context->'estimated_cycle_day')='number' THEN
@@ -26,6 +35,58 @@ $$;
 REVOKE ALL ON FUNCTION public.interpretation_basic_cycle_context(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.interpretation_basic_cycle_context(jsonb) TO service_role;
 
+-- Structured findings only for AI/unknown provenance; trusted deterministic
+-- text remains the medical floor. Source is supplied by the stored row.
+CREATE OR REPLACE FUNCTION public.interpretation_basic_findings(p_findings jsonb, p_source text) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
+DECLARE result jsonb := '[]'::jsonb; entry jsonb; finding jsonb; k text; v jsonb;
+BEGIN
+  IF jsonb_typeof(p_findings) IS DISTINCT FROM 'array' THEN RETURN result; END IF;
+  IF p_source IN ('fallback','deterministic') THEN RETURN p_findings; END IF;
+  FOR entry IN SELECT value FROM jsonb_array_elements(p_findings) LOOP
+    IF jsonb_typeof(entry) <> 'object' THEN CONTINUE; END IF;
+    finding := '{}'::jsonb;
+    FOR k,v IN SELECT key,value FROM jsonb_each(entry) LOOP
+      IF (k='biomarker_slug' AND jsonb_typeof(v)='string' AND (v #>> '{}') ~ '^[a-z0-9_]{1,80}$')
+        OR (k IN ('value','previous_value','current_value','reference_min','reference_max') AND jsonb_typeof(v) IN ('number','null'))
+        OR (k='unit' AND jsonb_typeof(v)='string' AND (v #>> '{}') ~ '^[a-zA-Z0-9µμ%/^. *()-]{1,24}$')
+        OR (k IN ('abnormal','is_abnormal','safety','safety_related','is_safety','critical','urgent') AND jsonb_typeof(v)='boolean')
+        OR (k IN ('status','current_status','flag','flagged') AND jsonb_typeof(v)='string'
+          AND lower(v #>> '{}') IN ('reassuring','normal','in_range','within_range','optimal','monitor','attention','discuss','unknown')) THEN
+        finding := finding || jsonb_build_object(k,v);
+      END IF;
+      -- Explicit clinical follow-ups, never the surrounding explanation/title.
+      IF k IN ('safety_notes','follow_up','what_to_do_next') THEN
+        IF jsonb_typeof(v)='string' THEN finding := finding || jsonb_build_object(k,v);
+        ELSIF jsonb_typeof(v)='array' THEN
+          finding := finding || jsonb_build_object(k,(SELECT coalesce(jsonb_agg(value),'[]'::jsonb)
+            FROM jsonb_array_elements(v) WHERE jsonb_typeof(value)='string'));
+        END IF;
+      END IF;
+    END LOOP;
+    IF finding <> '{}'::jsonb THEN result := result || jsonb_build_array(finding); END IF;
+  END LOOP;
+  RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.interpretation_basic_findings(jsonb,text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.interpretation_basic_findings(jsonb,text) TO service_role;
+
+-- Preserve the stored preview/count decision; do not recompile legacy Basic.
+CREATE OR REPLACE FUNCTION public.interpretation_sanitize_basic(p_basic jsonb, p_source text) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
+DECLARE result jsonb := CASE WHEN jsonb_typeof(p_basic)='object' THEN p_basic ELSE '{}'::jsonb END; k text;
+BEGIN
+  result := jsonb_set(result,'{cycle_context}',public.interpretation_basic_cycle_context(result->'cycle_context'));
+  FOREACH k IN ARRAY ARRAY['key_findings','top_findings','summary_bullets'] LOOP
+    result := result || jsonb_build_object(k,public.interpretation_basic_findings(result->k,p_source));
+  END LOOP;
+  RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.interpretation_sanitize_basic(jsonb,text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.interpretation_sanitize_basic(jsonb,text) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.interpretation_floor(p_full jsonb) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
 DECLARE
@@ -43,7 +104,7 @@ BEGIN
   END LOOP;
   result := jsonb_set(result, '{cycle_context}', public.interpretation_basic_cycle_context(p_full->'cycle_context'));
   FOREACH k IN ARRAY ARRAY['key_findings','top_findings','summary_bullets'] LOOP
-    result := result || jsonb_build_object(k, CASE WHEN jsonb_typeof(p_full->k) = 'array' THEN p_full->k ELSE '[]'::jsonb END);
+    result := result || jsonb_build_object(k, public.interpretation_basic_findings(p_full->k,NULL));
   END LOOP;
   FOREACH k IN ARRAY ARRAY['safety_notes','abnormal_flags','flags','warnings','critical_findings','what_to_do_next'] LOOP
     result := result || jsonb_build_object(k, COALESCE(NULLIF(p_full->k,'null'::jsonb), '[]'::jsonb));
@@ -68,6 +129,28 @@ $$;
 REVOKE ALL ON FUNCTION public.interpretation_floor(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.interpretation_floor(jsonb) TO service_role;
 
+-- The source-aware overload restores trusted deterministic findings, as well
+-- as its existing narrative keys. Cycle facts are sanitized for every source.
+CREATE OR REPLACE FUNCTION public.interpretation_floor(p_full jsonb, p_source text) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
+DECLARE result jsonb := public.interpretation_floor(p_full); k text;
+BEGIN
+  IF p_source IN ('fallback','deterministic') AND jsonb_typeof(p_full)='object' THEN
+    FOREACH k IN ARRAY ARRAY['key_findings','top_findings','summary_bullets'] LOOP
+      result := result || jsonb_build_object(k,public.interpretation_basic_findings(p_full->k,p_source));
+    END LOOP;
+    FOREACH k IN ARRAY ARRAY['overall_interpretation','pattern_signals'] LOOP
+      IF p_full->k IS NOT NULL AND p_full->k <> 'null'::jsonb THEN
+        result := result || jsonb_build_object(k,p_full->k);
+      END IF;
+    END LOOP;
+  END IF;
+  RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.interpretation_floor(jsonb,text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.interpretation_floor(jsonb,text) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.read_compatible_interpretations()
 RETURNS TABLE(id uuid,lab_report_id uuid,json_output jsonb,generated_at timestamptz,
   disclaimer_version text,interpretation_source text,tier text)
@@ -75,8 +158,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
   SELECT i.id,i.lab_report_id,
     CASE WHEN (SELECT enabled FROM public.interpretation_visibility_config WHERE singleton) IS FALSE
       OR public.interpretation_reader_is_full(i.lab_report_id,i.blood_draw_id)
-      THEN i.json_output ELSE jsonb_set(i.json_output_basic, '{cycle_context}',
-        public.interpretation_basic_cycle_context(i.json_output_basic->'cycle_context')) END,
+      THEN i.json_output ELSE public.interpretation_sanitize_basic(i.json_output_basic,i.interpretation_source) END,
     i.generated_at,i.disclaimer_version,i.interpretation_source,i.tier
   FROM public.interpretations_private i
   JOIN public.lab_reports r ON r.id=i.lab_report_id
@@ -92,8 +174,7 @@ GRANT EXECUTE ON FUNCTION public.read_compatible_interpretations() TO authentica
 CREATE OR REPLACE FUNCTION public.read_interpretation_for_server(p_user_id uuid,p_report_id uuid,p_premium boolean)
 RETURNS TABLE(json_output jsonb,stored_depth text,has_claim boolean,tier text,interpretation_source text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-  SELECT CASE WHEN p_premium OR claim.covered THEN i.json_output ELSE jsonb_set(i.json_output_basic, '{cycle_context}',
-        public.interpretation_basic_cycle_context(i.json_output_basic->'cycle_context')) END,
+  SELECT CASE WHEN p_premium OR claim.covered THEN i.json_output ELSE public.interpretation_sanitize_basic(i.json_output_basic,i.interpretation_source) END,
     i.stored_depth,claim.covered,i.tier,i.interpretation_source
   FROM public.interpretations_private i JOIN public.lab_reports r ON r.id=i.lab_report_id
   CROSS JOIN LATERAL (SELECT EXISTS(SELECT 1 FROM public.introductory_deep_access_claims c
@@ -106,16 +187,16 @@ GRANT EXECUTE ON FUNCTION public.read_interpretation_for_server(uuid,uuid,boolea
 -- Shared synthetic fixture with Vitest; exercises both SQL floor overloads.
 DO $$
 DECLARE cases jsonb := $cycle_cases$[
-  {"input": null, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": "PRIVATE cross-marker and lifestyle narrative", "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": [], "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": {}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": 42, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": true, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": {"estimated_cycle_day": "21", "estimated_cycle_phase": {"text": "PRIVATE"}, "confidence": ["high"], "explanation": "PRIVATE"}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": {"estimated_cycle_day": -1}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": {"estimated_cycle_day": 1.5}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
-  {"input": {"estimated_cycle_day": 9007199254740992}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
+  {"input": null, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": "PRIVATE cross-marker and lifestyle narrative", "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": [], "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": {}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": 42, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": true, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": {"estimated_cycle_day": "21", "estimated_cycle_phase": {"text": "PRIVATE"}, "confidence": ["high"], "explanation": "PRIVATE"}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": {"estimated_cycle_day": -1}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": {"estimated_cycle_day": 1.5}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
+  {"input": {"estimated_cycle_day": 9007199254740992}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}},
   {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "menstrual", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "menstrual", "confidence": "high", "explanation": ""}},
   {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "follicular", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "follicular", "confidence": "high", "explanation": ""}},
   {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "ovulatory", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "ovulatory", "confidence": "high", "explanation": ""}},
@@ -123,7 +204,10 @@ DECLARE cases jsonb := $cycle_cases$[
   {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "pregnancy_t1", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "pregnancy_t1", "confidence": "high", "explanation": ""}},
   {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "pregnancy_t2", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "pregnancy_t2", "confidence": "high", "explanation": ""}},
   {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "pregnancy_t3", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "pregnancy_t3", "confidence": "high", "explanation": ""}},
-  {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "unknown", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "unknown", "confidence": "high", "explanation": ""}}
+  {"input": {"estimated_cycle_day": 21, "estimated_cycle_phase": "unknown", "confidence": "high", "explanation": "PRIVATE CROSS-REPORT", "extra": {"text": "PRIVATE LIFESTYLE"}}, "expected": {"estimated_cycle_day": 21, "estimated_cycle_phase": "unknown", "confidence": "high", "explanation": ""}},
+  {"input": {"confidence": "low"}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "low", "explanation": ""}},
+  {"input": {"confidence": "medium"}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": "medium", "explanation": ""}},
+  {"input": {"confidence": "invalid"}, "expected": {"estimated_cycle_day": null, "estimated_cycle_phase": "unknown", "confidence": null, "explanation": ""}}
 ]$cycle_cases$::jsonb;
   item jsonb; payload jsonb; source text;
 BEGIN
@@ -143,6 +227,139 @@ BEGIN
     OR has_function_privilege('authenticated', 'public.interpretation_basic_cycle_context(jsonb)', 'EXECUTE')
     OR NOT has_function_privilege('service_role', 'public.interpretation_basic_cycle_context(jsonb)', 'EXECUTE') THEN
     RAISE EXCEPTION 'Basic cycle context privilege boundary failed';
+  END IF;
+END $$;
+
+-- One shared findings fixture drives SQL and TS tests for all three arrays.
+DO $$
+DECLARE cases jsonb := $finding_cases$[
+  {
+    "input": [
+      {
+        "biomarker_slug": "ferritin",
+        "status": "attention",
+        "abnormal": true,
+        "value": 9,
+        "previous_value": 20,
+        "current_value": 9,
+        "reference_min": 15,
+        "reference_max": 150,
+        "unit": "ng/mL",
+        "title": "PRIVATE CROSS-MARKER NARRATIVE",
+        "explanation": "PRIVATE CROSS-MARKER NARRATIVE",
+        "summary": "PRIVATE CROSS-MARKER NARRATIVE",
+        "text": "PRIVATE CROSS-MARKER NARRATIVE",
+        "narrative": "PRIVATE CROSS-MARKER NARRATIVE",
+        "deep_analysis": "PRIVATE CROSS-MARKER NARRATIVE",
+        "why_it_matters": "PRIVATE CROSS-MARKER NARRATIVE",
+        "recommendation": "PRIVATE CROSS-MARKER NARRATIVE",
+        "marker": "PRIVATE CROSS-MARKER NARRATIVE",
+        "nested": {
+          "explanation": "PRIVATE CROSS-MARKER NARRATIVE"
+        }
+      },
+      "PRIVATE CROSS-MARKER NARRATIVE",
+      {
+        "explanation": "PRIVATE CROSS-MARKER NARRATIVE"
+      }
+    ],
+    "expected": [
+      {
+        "biomarker_slug": "ferritin",
+        "status": "attention",
+        "abnormal": true,
+        "value": 9,
+        "previous_value": 20,
+        "current_value": 9,
+        "reference_min": 15,
+        "reference_max": 150,
+        "unit": "ng/mL"
+      }
+    ]
+  },
+  {
+    "input": [
+      {
+        "biomarker_slug": "tsh",
+        "status": "monitor",
+        "safety_notes": [
+          "Contact your clinician",
+          {
+            "explanation": "PRIVATE CROSS-MARKER NARRATIVE"
+          }
+        ],
+        "follow_up": "Discuss the abnormal result",
+        "what_to_do_next": [
+          "Retest with clinician"
+        ]
+      }
+    ],
+    "expected": [
+      {
+        "biomarker_slug": "tsh",
+        "status": "monitor",
+        "safety_notes": [
+          "Contact your clinician"
+        ],
+        "follow_up": "Discuss the abnormal result",
+        "what_to_do_next": [
+          "Retest with clinician"
+        ]
+      }
+    ]
+  },
+  {
+    "input": [
+      {
+        "biomarker_slug": "PRIVATE CROSS-MARKER NARRATIVE",
+        "status": "PRIVATE CROSS-MARKER NARRATIVE",
+        "abnormal": "PRIVATE CROSS-MARKER NARRATIVE",
+        "value": "PRIVATE CROSS-MARKER NARRATIVE",
+        "reference_min": "PRIVATE CROSS-MARKER NARRATIVE",
+        "unit": "PRIVATE CROSS-MARKER NARRATIVE",
+        "explanation": "PRIVATE CROSS-MARKER NARRATIVE"
+      }
+    ],
+    "expected": []
+  },
+  {
+    "input": null,
+    "expected": []
+  },
+  {
+    "input": [
+      "PRIVATE CROSS-MARKER NARRATIVE"
+    ],
+    "expected": []
+  }
+]$finding_cases$::jsonb;
+  item jsonb; k text; source text; payload jsonb; basic jsonb;
+BEGIN
+  FOR item IN SELECT value FROM jsonb_array_elements(cases) LOOP
+    FOREACH k IN ARRAY ARRAY['key_findings','top_findings','summary_bullets'] LOOP
+      payload := jsonb_build_object(k,item->'input');
+      FOREACH source IN ARRAY ARRAY['ai','unknown',NULL] LOOP
+        IF public.interpretation_basic_findings(item->'input',source) IS DISTINCT FROM item->'expected'
+          OR public.interpretation_floor(payload,source)->k IS DISTINCT FROM item->'expected'
+          OR public.interpretation_sanitize_basic(payload,source)->k IS DISTINCT FROM item->'expected' THEN
+          RAISE EXCEPTION 'Basic findings parity failed: %', k;
+        END IF;
+      END LOOP;
+      FOREACH source IN ARRAY ARRAY['fallback','deterministic'] LOOP
+        basic := public.interpretation_floor(payload,source);
+        IF basic->k IS DISTINCT FROM CASE WHEN jsonb_typeof(item->'input')='array' THEN item->'input' ELSE '[]'::jsonb END THEN
+          RAISE EXCEPTION 'Deterministic findings floor changed: %', k;
+        END IF;
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  IF has_function_privilege('anon','public.interpretation_basic_findings(jsonb,text)','EXECUTE')
+    OR has_function_privilege('authenticated','public.interpretation_basic_findings(jsonb,text)','EXECUTE')
+    OR NOT has_function_privilege('service_role','public.interpretation_basic_findings(jsonb,text)','EXECUTE')
+    OR has_function_privilege('anon','public.interpretation_sanitize_basic(jsonb,text)','EXECUTE')
+    OR has_function_privilege('authenticated','public.interpretation_sanitize_basic(jsonb,text)','EXECUTE')
+    OR NOT has_function_privilege('service_role','public.interpretation_sanitize_basic(jsonb,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'Basic findings privilege boundary failed';
   END IF;
 END $$;
 

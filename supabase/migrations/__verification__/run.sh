@@ -272,6 +272,16 @@ psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE flagged_before TEMPLATE amani;'
 docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -v rel=interpretations -q \
   -f /tmp/flagged-prelude.sql -f /tmp/flagged.sql -f /tmp/flagged.sql -f /tmp/flagged-verify.sql -f /tmp/deterministic-verify.sql
 
+# 000001 must fail atomically before the cutover, even with flagged trends.
+BASIC=20260927000001_basic_cycle_context.sql
+docker cp "$HERE/../$BASIC" "$CONTAINER:/tmp/$BASIC" >/dev/null
+if docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -q -f "/tmp/$BASIC" >/dev/null 2>&1; then
+  echo "FAIL: $BASIC applied before the cutover"; exit 1
+fi
+docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+  IF to_regprocedure('public.interpretation_basic_cycle_context(jsonb)') IS NOT NULL
+    THEN RAISE EXCEPTION 'out-of-order Basic migration left a function behind'; END IF; END \$\$;"
+
 # Case 8 (pre-cutover half): the read-source migration refuses to run before
 # 20260926000001 and leaves nothing behind.
 READ_SOURCE=20260926000004_read_interpretation_source.sql
@@ -317,3 +327,13 @@ psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/flagged-veri
 
 # The deterministic contract must also hold after the additive trend migration.
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
+
+# Case 10: post-cutover Basic confidentiality, no backfill, idempotent.
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE TABLE basic_before_000001 AS SELECT id,to_jsonb(i) row_data FROM interpretations_private i;'
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$BASIC"
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$BASIC"
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+  IF EXISTS (SELECT 1 FROM basic_before_000001 b FULL JOIN interpretations_private i USING(id)
+    WHERE b.row_data IS DISTINCT FROM to_jsonb(i)) THEN RAISE EXCEPTION '000001 changed stored rows'; END IF; END \$\$;"
+psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql

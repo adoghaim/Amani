@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { FINDING_STATUS } from "./tier";
 import { selectPremiumPreview } from "./preview-selector";
 import { describe, expect, it } from 'vitest';
-import { basicCycleContext, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
+import { basicCycleContext, basicFindingArray, sanitizeBasicProjection, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
@@ -22,7 +22,7 @@ describe('Basic projection boundary', () => {
     const result = buildBasicProjection({ ...full, findings: catalog });
     for (const key of [...FLOOR_FINDING_KEYS, ...FLOOR_REQUIRED_KEYS]) expect(result).toHaveProperty(key);
     expect(findFloorViolations(result)).toEqual([]);
-    expect(result.key_findings).toEqual(full.key_findings);
+    expect(result.key_findings).toEqual([{ status: 'attention' }]);
     expect(result.safety_findings).toEqual([{ abnormal: true }]);
     expect(result.what_to_do_next).toEqual(full.what_to_do_next);
     expect(result.preview).toEqual(catalog[0]);
@@ -217,8 +217,7 @@ describe('cycle context confidentiality (shared SQL fixture)', () => {
     }
   });
   it('sanitizes existing projections at both SQL read boundaries without a backfill', () => {
-    expect(cycleMigration.match(/ELSE jsonb_set\(i.json_output_basic/g)).toHaveLength(2);
-    expect(cycleMigration).toContain("public.interpretation_basic_cycle_context(i.json_output_basic->'cycle_context')");
+    expect(cycleMigration.match(/ELSE public.interpretation_sanitize_basic\(i.json_output_basic,i.interpretation_source\)/g)).toHaveLength(2);
     expect(cycleMigration).not.toMatch(/UPDATE\s+public\./);
     expect(cycleMigration).toContain('THEN i.json_output ELSE');
     expect(cycleMigration).toContain('WHEN p_premium OR claim.covered THEN i.json_output');
@@ -229,4 +228,64 @@ describe('cycle context confidentiality (shared SQL fixture)', () => {
     const schema = readFileSync(new URL('./schemas/interpretation.ts', import.meta.url), 'utf8');
     expect(schema).toContain('cycle_context: z.unknown()');
   });
+});
+
+const findingCases: { input: unknown; expected: unknown[] }[] = JSON.parse(
+  cycleMigration.match(/\$finding_cases\$([\s\S]*?)\$finding_cases\$/)![1]);
+describe('findings confidentiality (one shared SQL fixture)', () => {
+  it.each(findingCases)('keeps typed facts and explicit safety follow-ups from $input', ({ input, expected }) => {
+    for (const key of FLOOR_FINDING_KEYS) for (const source of ['ai', 'unknown', null]) {
+      const payload = { ...full, [key]: input };
+      const original = structuredClone(payload);
+      expect(basicFindingArray(input, source)).toEqual(expected);
+      const basic = buildBasicProjection(payload, [], { source });
+      expect(basic[key]).toEqual(expected);
+      expect(JSON.stringify(basic)).not.toContain('PRIVATE CROSS-MARKER NARRATIVE');
+      expect(sanitizeBasicProjection(payload, source)[key]).toEqual(expected);
+      expect(payload).toEqual(original);
+    }
+    for (const source of DETERMINISTIC_SOURCES) {
+      for (const key of FLOOR_FINDING_KEYS) {
+        expect(buildBasicProjection({ ...full, [key]: input }, [], { source })[key]).toEqual(Array.isArray(input) ? input : []);
+      }
+    }
+  });
+  it('keeps selected preview and counts for legacy Basic while narrowing arrays', () => {
+    const payload = { ...full, key_findings: findingCases[0].input,
+      preview: catalog[0], locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
+    const basic = sanitizeBasicProjection(payload, 'ai');
+    expect(basic.preview).toBe(payload.preview);
+    expect(basic.locked).toBe(payload.locked);
+    expect(basic.key_findings).toEqual(findingCases[0].expected);
+  });
+  it('keeps original floor fingerprints out of preview selection after prose removal', () => {
+    const payload = { ...full, key_findings: [{ explanation: 'duplicate prose' }], pattern_signals: ['duplicate prose'] };
+    const basic = buildBasicProjection(payload, [{ ...catalog[0], content: 'duplicate prose' }]);
+    expect(basic.preview).toBeNull();
+    expect(basic.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+  });
+  it('covers generation, stored Basic reads, both SQL reads and both floor overloads', () => {
+    const generator = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
+    expect(generator).toContain('buildBasicProjection(interpretationJson, undefined, { source: shaped.source })');
+    expect(generator).toContain('shaped.tier === "plus" ? interpretationJson : basicProjection');
+    const reader = readFileSync(new URL('./interpretation-read.ts', import.meta.url), 'utf8');
+    expect(reader).toContain('sanitizeBasicProjection(row.json_output, provenance.source)');
+    expect(cycleMigration.match(/ELSE public.interpretation_sanitize_basic\(i.json_output_basic,i.interpretation_source\)/g)).toHaveLength(2);
+    expect(cycleMigration).toContain('public.interpretation_basic_findings(p_full->k,NULL)');
+    expect(cycleMigration).toContain('public.interpretation_basic_findings(p_full->k,p_source)');
+    const harness = readFileSync(new URL('../../migrations/__verification__/run.sh', import.meta.url), 'utf8');
+    expect(harness).toContain('BASIC=20260927000001_basic_cycle_context.sql');
+    expect(harness.match(/psql_f -v ON_ERROR_STOP=1 -q -f "\/tmp\/\$BASIC"/g)).toHaveLength(2);
+  });
+});
+
+it.each(['Old model cycle narrative', null, {}, { confidence: 'invalid' }])('suppresses the extra Cycle context card for absent facts: %j', input => {
+  const aiCycle = basicCycleContext(input);
+  expect(aiCycle).toEqual({ estimated_cycle_day: null, estimated_cycle_phase: 'unknown', confidence: null, explanation: '' });
+  const reportSource = readFileSync(new URL('../../../src/pages/ReportView.tsx', import.meta.url), 'utf8');
+  const predicate = reportSource.match(/const hasExtraContext = (.*);/)![1];
+  // Evaluate ReportView's real guard (with a known report phase, which passes the
+  // earlier phase guard), so a future predicate change is exercised here too.
+  expect(new Function('aiCycle', `return ${predicate}`)(aiCycle)).toBe(false);
+  expect(reportSource).toContain('if (!hasExtraContext) return null;');
 });

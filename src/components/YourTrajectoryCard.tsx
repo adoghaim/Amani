@@ -7,6 +7,8 @@ interface TrajectoryBullet {
   kind: BulletKind;
   text: string;
   isPrimary: boolean;
+  /** Present only when this exact bullet renders both numeric values. */
+  values?: { previous: number; current: number; unit: string };
 }
 
 const BUCKET_LABEL: Record<string, string> = {
@@ -52,11 +54,11 @@ function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryB
     return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
   }
   if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low') {
-    return { kind: 'improved', isPrimary, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
+    return { kind: 'improved', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
     const verb = trendDirection === 'up' ? 'risen' : trendDirection === 'down' ? 'dropped' : 'shifted';
-    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
+    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
   }
   if (trajectoryStatus === 'newly_abnormal') {
     return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside optimal at ${currentValue} ${unit}.` };
@@ -86,30 +88,24 @@ interface Props {
   reportCount: number;
 }
 
-export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Props) {
-  const primaryKey = primaryFinding?.key ?? null;
-
-  const bullets: TrajectoryBullet[] = [];
-  for (const change of changes) {
-    const isPrimary = change.key === primaryKey;
-    const bullet = bulletForChange(change, isPrimary);
-    if (bullet) bullets.push(bullet);
-  }
-
-  if (bullets.length === 0) return null;
-
-  // Sort: primary with historical context first, then worsened > stable_elevated > improved > first,
-  // then significance: significant > moderate > minor
-  const indexedBullets = bullets.map((b, i) => ({ b, change: changes[i] }));
-  indexedBullets.sort((a, b) => {
-    if (a.b.isPrimary && a.b.kind !== 'first' && !(b.b.isPrimary && b.b.kind !== 'first')) return -1;
-    if (b.b.isPrimary && b.b.kind !== 'first' && !(a.b.isPrimary && a.b.kind !== 'first')) return 1;
-    const kindDiff = KIND_PRIORITY[a.b.kind] - KIND_PRIORITY[b.b.kind];
-    if (kindDiff !== 0) return kindDiff;
-    return SIGNIFICANCE_PRIORITY[a.change!.significance] - SIGNIFICANCE_PRIORITY[b.change!.significance];
+/** Keep each bullet attached to its source through filtering and sorting. */
+// eslint-disable-next-line react-refresh/only-export-components -- Pure selection is shared with the Basic panel to match the rendered values exactly.
+export function selectTrajectoryBullets(changes: BiggestChange[], primaryFinding: TopFinding | null) {
+  const bullets = changes.flatMap(change => {
+    const bullet = bulletForChange(change, change.key === primaryFinding?.key);
+    return bullet ? [{ ...bullet, key: change.key, significance: change.significance }] : [];
   });
+  bullets.sort((a, b) => {
+    const primary = Number(b.isPrimary && b.kind !== 'first') - Number(a.isPrimary && a.kind !== 'first');
+    return primary || KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind]
+      || SIGNIFICANCE_PRIORITY[a.significance] - SIGNIFICANCE_PRIORITY[b.significance];
+  });
+  return bullets.slice(0, 4);
+}
 
-  const top = indexedBullets.slice(0, 4).map(x => x.b);
+export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Props) {
+  const top = selectTrajectoryBullets(changes, primaryFinding);
+  if (!top.length) return null;
 
   const subtitle = reportCount === 0
     ? 'How your numbers landed in this first report'

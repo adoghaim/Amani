@@ -1,4 +1,4 @@
-import { carriesFindingSafety, isAbnormalStatus } from "./tier.ts";
+import { carriesFindingSafety, FINDING_STATUS, isAbnormalStatus } from "./tier.ts";
 import { FLOOR_REQUIRED_KEYS, FLOOR_FINDING_KEYS, findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
 import { contentFingerprint, pathWithin, selectPremiumPreview, type CatalogFinding } from "./preview-selector.ts";
 import { flaggedTrends } from "./finding-metadata.ts";
@@ -33,9 +33,47 @@ export function basicCycleContext(value: unknown): Record<string, unknown> {
     estimated_cycle_day: typeof day === "number" && Number.isSafeInteger(day) && day > 0 ? day : null,
     estimated_cycle_phase: typeof phase === "string" && ["menstrual", "follicular", "ovulatory", "luteal",
       "pregnancy_t1", "pregnancy_t2", "pregnancy_t3", "unknown"].includes(phase) ? phase : "unknown",
-    confidence: typeof confidence === "string" && ["low", "medium", "high"].includes(confidence) ? confidence : "low",
+    confidence: typeof confidence === "string" && ["low", "medium", "high"].includes(confidence) ? confidence : null,
     explanation: "",
   };
+}
+
+/** Findings are not a prose floor merely because they carry an abnormal flag.
+ * Only typed facts and explicitly named clinical follow-ups survive. Text from
+ * trusted rule-based writers is itself the medical floor (source is a DB column,
+ * never a field taken from the model payload). Unknown source fails closed.
+ */
+export function basicFindingArray(value: unknown, source?: string | null): unknown[] {
+  if (!Array.isArray(value)) return [];
+  if (isDeterministicSource(source)) return value;
+  return value.flatMap(entry => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const finding: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(entry)) {
+      if (key === "biomarker_slug" && typeof child === "string" && /^[a-z0-9_]{1,80}$/.test(child)) finding[key] = child;
+      if (["value", "previous_value", "current_value", "reference_min", "reference_max"].includes(key)
+        && (child === null || (typeof child === "number" && Number.isFinite(child)))) finding[key] = child;
+      if (key === "unit" && typeof child === "string" && /^[a-zA-Z0-9µμ%/^. *()-]{1,24}$/.test(child)) finding[key] = child;
+      if (["abnormal", "is_abnormal", "safety", "safety_related", "is_safety", "critical", "urgent"].includes(key)
+        && typeof child === "boolean") finding[key] = child;
+      if (["status", "current_status", "flag", "flagged"].includes(key) && typeof child === "string"
+        && [...FINDING_STATUS.NORMAL, ...FINDING_STATUS.BORDERLINE, ...FINDING_STATUS.ABNORMAL, "unknown"].includes(child.toLowerCase())) finding[key] = child;
+      // Explicit safety-floor fields only, not title/explanation/summary or any
+      // unclassified nested object. An abnormal parent does not authorize prose.
+      if (["safety_notes", "follow_up", "what_to_do_next"].includes(key)) {
+        if (typeof child === "string") finding[key] = child;
+        else if (Array.isArray(child)) finding[key] = child.filter(v => typeof v === "string");
+      }
+    }
+    return Object.keys(finding).length ? [finding] : [];
+  });
+}
+
+/** Re-sanitize stored Basic without rebuilding its preview or locked counts. */
+export function sanitizeBasicProjection(basic: InterpretationPayload, source?: string | null): InterpretationPayload {
+  const result: InterpretationPayload = { ...basic, cycle_context: basicCycleContext(basic.cycle_context) };
+  for (const key of FLOOR_FINDING_KEYS) result[key] = basicFindingArray(basic[key], source);
+  return result;
 }
 
 /** Flags are evidence of floor membership, never evidence of preview eligibility. */
@@ -82,7 +120,7 @@ export function buildBasicProjection(
   const basic: InterpretationPayload = {};
   for (const key of FLOOR_REQUIRED_KEYS) basic[key] = full[key] ?? defaults[key];
   basic.cycle_context = basicCycleContext(full.cycle_context);
-  for (const key of FLOOR_FINDING_KEYS) basic[key] = Array.isArray(full[key]) ? full[key] : [];
+  for (const key of FLOOR_FINDING_KEYS) basic[key] = basicFindingArray(full[key], provenance.source);
   for (const key of SAFETY_KEYS) {
     basic[key] = full[key] ?? [];
   }
@@ -95,6 +133,8 @@ export function buildBasicProjection(
     if (value && typeof value === "object") Object.values(value).forEach(collect);
   };
   Object.values(basic).forEach(collect);
+  // Selection still excludes the original floor content, even when prose was stripped.
+  for (const key of FLOOR_FINDING_KEYS) if (Array.isArray(full[key])) collect(full[key]);
   const catalog = findings ?? (Array.isArray(full.findings) ? full.findings as CatalogFinding[] : []);
   const abnormalOrSafetyPaths = new Set<string>();
   const ineligiblePaths = new Set<string>();

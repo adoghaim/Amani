@@ -6,6 +6,15 @@ BEGIN
   IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %',label; END IF;
   RAISE NOTICE 'PASS: %',label;
 END $$;
+-- Before 000001 the stored floor matches directly. Afterwards only the
+-- read-time sanitized projection must match; 000001 intentionally does no backfill.
+CREATE FUNCTION pg_temp.visible_basic(payload jsonb, source text) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE result jsonb;
+BEGIN
+  IF to_regprocedure('public.interpretation_sanitize_basic(jsonb,text)') IS NULL THEN RETURN payload; END IF;
+  EXECUTE 'SELECT public.interpretation_sanitize_basic($1,$2)' INTO result USING payload,source;
+  RETURN result;
+END $$;
 -- Key contract shared with interpretation-visibility.test.ts (TS buildBasicProjection
 -- with source 'fallback' must produce exactly these keys for the shared fixture).
 CREATE TEMP TABLE deterministic_projection_keys AS SELECT
@@ -33,14 +42,14 @@ SELECT pg_temp.assert((SELECT count(*)=2 FROM :rel i, deterministic_prompt_fixtu
   WHERE i.lab_report_id IN ('09100000-0000-4000-8000-000000000050','09100000-0000-4000-8000-000000000051')
     AND i.json_output_basic->'overall_interpretation'=f.payload->'overall_interpretation'
     AND i.json_output_basic->'pattern_signals'=f.payload->'pattern_signals'
-    AND i.json_output_basic=interpretation_floor(i.json_output,i.interpretation_source)
+    AND pg_temp.visible_basic(i.json_output_basic,i.interpretation_source)=interpretation_floor(i.json_output,i.interpretation_source)
     AND i.projection_version=2 AND i.stored_depth='unknown'),
   'deterministic rows backfilled with full deterministic narrative');
 SELECT pg_temp.assert((SELECT count(*)=2 FROM :rel
   WHERE lab_report_id IN ('09100000-0000-4000-8000-000000000052','09100000-0000-4000-8000-000000000053')
     AND NOT json_output_basic ?| ARRAY['overall_interpretation','pattern_signals']
     AND json_output_basic::text NOT LIKE '%DETERMINISTIC_%'
-    AND json_output_basic=interpretation_floor(json_output)),
+    AND pg_temp.visible_basic(json_output_basic,interpretation_source)=interpretation_floor(json_output)),
   'ai and unknown-source rows keep narrative locked');
 SELECT pg_temp.assert((SELECT json_output_basic->>'preview'='TS_SELECTED_PREVIEW' FROM :rel
   WHERE lab_report_id='09100000-0000-4000-8000-000000000054'),

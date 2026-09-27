@@ -140,6 +140,7 @@ describe('Basic abnormal changes', () => {
   it('renders every values line, direction and prior date, never summary or extra locked counts', () => {
     const state = withTrends([trend('ferritin', 'Ferritin'), trend('tsh', 'TSH')]);
     const out = render(state);
+    expect(out).toContain('Changes since your last report');
     expect(out).toContain('Ferritin: 10 → 20 u · increased · 2026-03-01');
     expect(out).toContain('TSH: 10 → 20 u · increased · 2026-03-01');
     expect(out).not.toContain('SERVER_INTERNAL_NARRATIVE');
@@ -161,18 +162,50 @@ describe('Basic abnormal changes', () => {
     expect(out).not.toContain('Duplicate');
     expect(out).toContain('hdl: — → 0');
   });
-  it('deduplicates exactly the visible trajectory slugs, preserving the fifth and non-rendered change', () => {
-    const changes = [change('hdl_cholesterol', 'stable_normal'), change('ferritin', 'worsening_still_low'),
-      change('tsh', 'stable_abnormal'), change('ldl_cholesterol', 'improving_still_high'),
-      change('vitamin_d_25_oh', 'worsening_still_low'), change('fasting_glucose', 'improving_still_high')];
-    const floor = floorWith(changes);
+  it('deduplicates only selected bullets that render both matching values, with mixed significance after filtering', () => {
+    const changes = [change('hdl_cholesterol', 'stable_normal'),
+      { ...change('ferritin', 'worsening_still_low'), significance: 'minor' as const },
+      { ...change('tsh', 'worsening_still_high'), significance: 'moderate' as const },
+      change('ldl_cholesterol', 'worsening_still_high'), change('vitamin_d_25_oh', 'worsening_still_low'),
+      change('fasting_glucose', 'worsening_still_high')];
     const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={changes} primaryFinding={null} reportCount={2} />));
-    const out = render(withTrends(changes.map(c => trend(c.key))), { floorSummary: floor });
+    const out = render(withTrends(changes.map(c => trend(c.key))), { floorSummary: floorWith(changes) });
     for (const c of changes) {
-      if (trajectory.includes(`${c.key} `)) expect(out).not.toContain(`${c.key}:`);
-      else expect(out).toContain(`${c.key}:`);
+      if (['hdl_cholesterol', 'ferritin'].includes(c.key)) {
+        expect(trajectory).not.toContain(`${c.key} `);
+        expect(out).toContain(`${c.key}: 10 → 20`);
+      } else {
+        // Prove the competing surface contains the two values, not just the name.
+        expect(trajectory).toContain(`${c.key} has risen from 10 to 20 u`);
+        expect(out).not.toContain(`${c.key}:`);
+      }
     }
-    expect(out).toContain('hdl_cholesterol:');
-    expect(out).toContain('fasting_glucose:');
+  });
+  it.each(['stable_abnormal', 'newly_abnormal', 'normalized'] as const)('keeps %s lines when the real card does not display both values', status => {
+    const c = { ...change('ferritin', status), ...(status === 'normalized' ? {
+      boundaryCrossing: { direction: 'improved' as const, from: 'out_of_range' as const, to: 'optimal' as const },
+    } : {}) };
+    const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={[c]} primaryFinding={null} reportCount={2} />));
+    expect(trajectory).toContain('ferritin');
+    expect(trajectory).not.toContain('10 to 20');
+    expect(render(withTrends([trend('ferritin')]), { floorSummary: floorWith([c]) })).toContain('ferritin: 10 → 20');
+  });
+  it('keeps boundary-only improving text, mismatched values and mismatched units', () => {
+    for (const c of [
+      { ...change('ferritin', 'improving_still_low'), boundaryCrossing: { direction: 'improved' as const, from: 'out_of_range' as const, to: 'borderline' as const } },
+      { ...change('ferritin', 'improving_still_low'), previousValue: 11 },
+      { ...change('ferritin', 'improving_still_low'), currentValue: 21 },
+      { ...change('ferritin', 'improving_still_low'), unit: 'other' },
+    ]) {
+      const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={[c]} primaryFinding={null} reportCount={2} />));
+      expect(trajectory).not.toContain('from 10 to 20 u');
+      expect(render(withTrends([trend('ferritin')]), { floorSummary: floorWith([c]) })).toContain('ferritin: 10 → 20');
+    }
+  });
+  it.each(['improving_still_low', 'improving_still_high', 'worsening_still_low', 'worsening_still_high'] as const)('suppresses matching %s only with proof in the real card', status => {
+    const c = change('ferritin', status);
+    const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={[c]} primaryFinding={null} reportCount={2} />));
+    expect(trajectory).toContain('from 10 to 20 u');
+    expect(render(withTrends([trend('ferritin')]), { floorSummary: floorWith([c]) })).not.toContain('ferritin:');
   });
 });

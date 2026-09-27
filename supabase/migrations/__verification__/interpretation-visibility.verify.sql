@@ -5,6 +5,15 @@ BEGIN
   IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %',label; END IF;
   RAISE NOTICE 'PASS: %',label;
 END $$;
+-- Before 000001 the stored floor matches directly. Afterwards only the
+-- read-time sanitized projection must match; 000001 intentionally does no backfill.
+CREATE FUNCTION pg_temp.visible_basic(payload jsonb, source text) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE result jsonb;
+BEGIN
+  IF to_regprocedure('public.interpretation_sanitize_basic(jsonb,text)') IS NULL THEN RETURN payload; END IF;
+  EXECUTE 'SELECT public.interpretation_sanitize_basic($1,$2)' INTO result USING payload,source;
+  RETURN result;
+END $$;
 -- Same prompt fixture/key contract consumed by interpretation-visibility.test.ts.
 CREATE TEMP TABLE prompt_projection_fixture AS SELECT payload,
   $projection_keys$["abnormal_flags", "basic_interpretation", "critical_findings", "cycle_context", "disclaimer", "flags", "headline", "key_findings", "locked", "preview", "questions_for_doctor", "safety_findings", "safety_notes", "summary_bullets", "top_findings", "warnings", "what_to_do_next"]$projection_keys$::jsonb AS expected_keys FROM visibility_prompt_fixture;
@@ -26,7 +35,7 @@ END $$;
 -- These rows existed before prepare, so this tests the actual migration backfill.
 SELECT pg_temp.assert((SELECT count(*)=3 FROM interpretations_private
   WHERE lab_report_id IN ('09100000-0000-4000-8000-000000000040','09100000-0000-4000-8000-000000000041','09100000-0000-4000-8000-000000000042')
-    AND projection_version=2 AND json_output_basic=interpretation_floor(json_output)),
+    AND projection_version=2 AND pg_temp.visible_basic(json_output_basic,interpretation_source)=interpretation_floor(json_output)),
   'prompt fixture backfilled to floor-only version 2');
 SELECT pg_temp.assert((SELECT bool_and(stored_depth = CASE WHEN tier='free' THEN 'unknown' ELSE 'deep' END)
   FROM interpretations_private WHERE lab_report_id IN
@@ -192,6 +201,64 @@ SELECT save_interpretation('09000000-0000-4000-8000-000000000032','09100000-0000
 RESET ROLE;
 DELETE FROM lab_reports WHERE id='09100000-0000-4000-8000-000000000032';
 SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM interpretations_private WHERE lab_report_id='09100000-0000-4000-8000-000000000032'),'report deletion cascades');
+-- After 000001, prove the actual read boundaries, not only helper output.
+SELECT to_regprocedure('public.interpretation_sanitize_basic(jsonb,text)') IS NOT NULL AS basic_sanitizer_installed \gset
+\if :basic_sanitizer_installed
+INSERT INTO users(id) VALUES ('09000000-0000-4000-8000-000000000061');
+INSERT INTO lab_reports(id,user_id) VALUES ('09100000-0000-4000-8000-000000000061','09000000-0000-4000-8000-000000000061');
+CREATE TEMP TABLE basic_read_fixture AS SELECT interpretation_floor('{}') || '{
+  "cycle_context":"PRIVATE CROSS-MARKER NARRATIVE",
+  "key_findings":[{"biomarker_slug":"ferritin","abnormal":true,"status":"attention","value":9,"explanation":"PRIVATE CROSS-MARKER NARRATIVE"}],
+  "top_findings":[{"biomarker_slug":"ferritin","abnormal":true,"status":"attention","value":9,"explanation":"PRIVATE CROSS-MARKER NARRATIVE"}],
+  "summary_bullets":["PRIVATE CROSS-MARKER NARRATIVE"],
+  "preview":{"content":"chosen preview"},"locked":{"patterns":2,"cross_report":1,"lifestyle":3}
+}'::jsonb AS payload;
+GRANT SELECT ON basic_read_fixture TO service_role;
+INSERT INTO interpretations_private(lab_report_id,json_output,json_output_basic,stored_depth,projection_version,tier,interpretation_source)
+SELECT '09100000-0000-4000-8000-000000000061',payload,payload,'deep',2,'free','ai' FROM basic_read_fixture;
+SELECT set_config('request.jwt.claim.sub','09000000-0000-4000-8000-000000000061',true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert((SELECT json_output::text NOT LIKE '%PRIVATE CROSS-MARKER NARRATIVE%'
+  AND json_output->'cycle_context'='{"estimated_cycle_day":null,"estimated_cycle_phase":"unknown","confidence":null,"explanation":""}'::jsonb
+  AND json_output->'key_findings'='[{"biomarker_slug":"ferritin","abnormal":true,"status":"attention","value":9}]'::jsonb
+  AND json_output->'top_findings'=json_output->'key_findings'
+  AND json_output->'summary_bullets'='[]'::jsonb
+  AND json_output->'preview'='{"content":"chosen preview"}'::jsonb
+  AND json_output->'locked'='{"patterns":2,"cross_report":1,"lifestyle":3}'::jsonb
+  FROM interpretations WHERE lab_report_id='09100000-0000-4000-8000-000000000061'),
+  'compat Basic strips legacy cycle and findings prose, keeps flags/values/preview/counts');
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.assert((SELECT json_output=public.interpretation_sanitize_basic((SELECT payload FROM basic_read_fixture),'ai')
+  FROM read_interpretation_for_server('09000000-0000-4000-8000-000000000061','09100000-0000-4000-8000-000000000061',false)),
+  'server RPC Basic sanitizes stored content');
+SELECT pg_temp.assert((SELECT json_output=(SELECT payload FROM basic_read_fixture)
+  FROM read_interpretation_for_server('09000000-0000-4000-8000-000000000061','09100000-0000-4000-8000-000000000061',true)),
+  'server RPC Full preserves exact stored content');
+RESET ROLE;
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM introductory_deep_access_claims WHERE user_id='09000000-0000-4000-8000-000000000061'),
+  'reads consumed no claim');
+UPDATE interpretation_visibility_config SET enabled=false;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert((SELECT json_output::text LIKE '%PRIVATE CROSS-MARKER NARRATIVE%'
+  FROM interpretations WHERE lab_report_id='09100000-0000-4000-8000-000000000061'), 'switch OFF compat preserves Full');
+RESET ROLE;
+UPDATE interpretation_visibility_config SET enabled=true;
+INSERT INTO introductory_deep_access_claims(user_id,report_id,blood_draw_id,evidence_tier)
+VALUES('09000000-0000-4000-8000-000000000061','09100000-0000-4000-8000-000000000061',repeat('6',64),'content_hash');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert((SELECT json_output::text LIKE '%PRIVATE CROSS-MARKER NARRATIVE%'
+  FROM interpretations WHERE lab_report_id='09100000-0000-4000-8000-000000000061'), 'claimed compat preserves Full');
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.assert((SELECT has_claim AND json_output=(SELECT payload FROM basic_read_fixture)
+  FROM read_interpretation_for_server('09000000-0000-4000-8000-000000000061','09100000-0000-4000-8000-000000000061',false)),
+  'claimed server RPC preserves Full');
+RESET ROLE;
+SELECT pg_temp.assert((SELECT json_output=f.payload AND json_output_basic=f.payload
+  FROM interpretations_private i CROSS JOIN basic_read_fixture f
+  WHERE i.lab_report_id='09100000-0000-4000-8000-000000000061'), 'all reads leave both stored bodies unchanged');
+\endif
 UPDATE interpretation_visibility_config SET enabled=false;
 SELECT pg_temp.assert((SELECT NOT enabled FROM interpretation_visibility_config),'rollback switch OFF');
 ROLLBACK;
