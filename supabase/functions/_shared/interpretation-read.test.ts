@@ -180,6 +180,8 @@ it.each(['ai', null, undefined, 'fallback', 'deterministic'])('sanitizes stored 
     title: 'PRIVATE CROSS-MARKER NARRATIVE', explanation: 'PRIVATE CROSS-MARKER NARRATIVE' };
   const payload = { ...full, key_findings: [finding], top_findings: [finding], summary_bullets: ['PRIVATE CROSS-MARKER NARRATIVE'],
     cycle_context: 'PRIVATE CROSS-MARKER NARRATIVE', preview: { content: 'selected preview' },
+    what_to_do_next: ['PRIVATE CROSS-MARKER NARRATIVE'],
+    safety_findings: [{ abnormal: true, biomarker_slug: 'ferritin', follow_up: 'PRIVATE CROSS-MARKER NARRATIVE' }],
     locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
   const original = structuredClone(payload);
   for (const flag of [false, true]) for (const has_claim of [false, true]) {
@@ -193,7 +195,11 @@ it.each(['ai', null, undefined, 'fallback', 'deterministic'])('sanitizes stored 
       if (interpretation_source === 'fallback' || interpretation_source === 'deterministic') {
         expect(result.body.interpretation?.top_findings).toEqual(payload.top_findings);
         expect(result.body.interpretation?.summary_bullets).toEqual(payload.summary_bullets);
+        expect(result.body.interpretation?.what_to_do_next).toEqual(payload.what_to_do_next);
+        expect(result.body.interpretation?.safety_findings).toEqual(payload.safety_findings);
       } else {
+        expect(result.body.interpretation?.what_to_do_next).toEqual([]);
+        expect(result.body.interpretation?.safety_findings).toEqual([{ abnormal: true, biomarker_slug: 'ferritin' }]);
         expect(JSON.stringify(result.body)).not.toContain('PRIVATE CROSS-MARKER NARRATIVE');
         expect(result.body.interpretation?.key_findings).toEqual([{ biomarker_slug: 'ferritin', status: 'attention', abnormal: true, value: 9 }]);
         expect(result.body.interpretation?.top_findings).toEqual(result.body.interpretation?.key_findings);

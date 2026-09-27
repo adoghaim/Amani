@@ -279,7 +279,8 @@ if docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_ST
   echo "FAIL: $BASIC applied before the cutover"; exit 1
 fi
 docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
-  IF to_regprocedure('public.interpretation_basic_cycle_context(jsonb)') IS NOT NULL
+  IF to_regprocedure('public.interpretation_basic_cycle_context(jsonb,text)') IS NOT NULL
+    OR to_regprocedure('public.interpretation_basic_safety_value(text,jsonb,text)') IS NOT NULL
     THEN RAISE EXCEPTION 'out-of-order Basic migration left a function behind'; END IF; END \$\$;"
 
 # Case 8 (pre-cutover half): the read-source migration refuses to run before

@@ -88,24 +88,42 @@ interface Props {
   reportCount: number;
 }
 
-/** Keep each bullet attached to its source through filtering and sorting. */
+/**
+ * The card's selection, unchanged from before it was extracted, so the Basic
+ * panel dedupes against exactly the bullets on screen. Each bullet also carries
+ * its change's key. Known quirk, deliberately kept: after null bullets are
+ * dropped, `bullets[i]` is paired with `changes[i]` for the significance
+ * tie-break (separate task).
+ */
 // eslint-disable-next-line react-refresh/only-export-components -- Pure selection is shared with the Basic panel to match the rendered values exactly.
 export function selectTrajectoryBullets(changes: BiggestChange[], primaryFinding: TopFinding | null) {
-  const bullets = changes.flatMap(change => {
-    const bullet = bulletForChange(change, change.key === primaryFinding?.key);
-    return bullet ? [{ ...bullet, key: change.key, significance: change.significance }] : [];
+  const primaryKey = primaryFinding?.key ?? null;
+
+  const bullets: (TrajectoryBullet & { key: BiggestChange['key'] })[] = [];
+  for (const change of changes) {
+    const isPrimary = change.key === primaryKey;
+    const bullet = bulletForChange(change, isPrimary);
+    if (bullet) bullets.push({ ...bullet, key: change.key });
+  }
+
+  // Sort: primary with historical context first, then worsened > stable_elevated > improved > first,
+  // then significance: significant > moderate > minor
+  const indexedBullets = bullets.map((b, i) => ({ b, change: changes[i] }));
+  indexedBullets.sort((a, b) => {
+    if (a.b.isPrimary && a.b.kind !== 'first' && !(b.b.isPrimary && b.b.kind !== 'first')) return -1;
+    if (b.b.isPrimary && b.b.kind !== 'first' && !(a.b.isPrimary && a.b.kind !== 'first')) return 1;
+    const kindDiff = KIND_PRIORITY[a.b.kind] - KIND_PRIORITY[b.b.kind];
+    if (kindDiff !== 0) return kindDiff;
+    return SIGNIFICANCE_PRIORITY[a.change!.significance] - SIGNIFICANCE_PRIORITY[b.change!.significance];
   });
-  bullets.sort((a, b) => {
-    const primary = Number(b.isPrimary && b.kind !== 'first') - Number(a.isPrimary && a.kind !== 'first');
-    return primary || KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind]
-      || SIGNIFICANCE_PRIORITY[a.significance] - SIGNIFICANCE_PRIORITY[b.significance];
-  });
-  return bullets.slice(0, 4);
+
+  return indexedBullets.slice(0, 4).map(x => x.b);
 }
 
 export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Props) {
   const top = selectTrajectoryBullets(changes, primaryFinding);
-  if (!top.length) return null;
+
+  if (top.length === 0) return null;
 
   const subtitle = reportCount === 0
     ? 'How your numbers landed in this first report'

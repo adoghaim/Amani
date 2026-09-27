@@ -170,16 +170,19 @@ describe('Basic abnormal changes', () => {
       change('fasting_glucose', 'worsening_still_high')];
     const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={changes} primaryFinding={null} reportCount={2} />));
     const out = render(withTrends(changes.map(c => trend(c.key))), { floorSummary: floorWith(changes) });
+    let kept = 0;
     for (const c of changes) {
-      if (['hdl_cholesterol', 'ferritin'].includes(c.key)) {
-        expect(trajectory).not.toContain(`${c.key} `);
-        expect(out).toContain(`${c.key}: 10 → 20`);
-      } else {
-        // Prove the competing surface contains the two values, not just the name.
-        expect(trajectory).toContain(`${c.key} has risen from 10 to 20 u`);
+      // Prove the competing surface contains the two values, not just the name.
+      if (trajectory.includes(`${c.key} has risen from 10 to 20 u`) || trajectory.includes(`${c.key} has dropped from 10 to 20 u`)) {
         expect(out).not.toContain(`${c.key}:`);
+      } else {
+        kept += 1;
+        expect(out).toContain(`${c.key}: 10 → 20`);
       }
     }
+    // The filtered-out change and the fifth-ranked change keep their lines.
+    expect(kept).toBe(2);
+    expect(out).toContain('hdl_cholesterol: 10 → 20');
   });
   it.each(['stable_abnormal', 'newly_abnormal', 'normalized'] as const)('keeps %s lines when the real card does not display both values', status => {
     const c = { ...change('ferritin', status), ...(status === 'normalized' ? {

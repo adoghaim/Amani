@@ -653,6 +653,23 @@ function computeReportFacts(analytes: AnalyteData[], report: LabReportData): Rep
 
 // ─── Fallback Interpretation ──────────────────────────────────────────────────
 
+/** Cycle phase/day are app-calculated report facts, never model output. */
+function deterministicCycleFacts(report: LabReportData) {
+  const day = report.estimated_cycle_day ?? null;
+  return {
+    estimated_cycle_day: day,
+    estimated_cycle_phase: report.estimated_cycle_phase ?? "unknown",
+    confidence: day ? "medium" as const : "low" as const,
+  };
+}
+
+/** The model owns only the prose around the deterministic cycle facts. */
+function modelCycleExplanation(value: unknown): string {
+  if (typeof value === "string") return value;
+  const explanation = value && typeof value === "object" ? (value as Record<string, unknown>).explanation : undefined;
+  return typeof explanation === "string" ? explanation : "";
+}
+
 function generateFallbackInterpretation(
   report: LabReportData,
   analytes: AnalyteData[],
@@ -762,12 +779,7 @@ function generateFallbackInterpretation(
     top_findings,
     pattern_signals: matched_patterns,
     overall_interpretation: overallInterpretation,
-    cycle_context: {
-      estimated_cycle_day: day,
-      estimated_cycle_phase: phase,
-      confidence: day ? "medium" as const : "low" as const,
-      explanation: cycleExplanation,
-    },
+    cycle_context: { ...deterministicCycleFacts(report), explanation: cycleExplanation },
     questions_for_doctor: questions.slice(0, 3),
     disclaimer:
       "This report is for educational purposes only and does not constitute medical advice. All results should be reviewed with your healthcare provider in the context of your full health history, symptoms, and clinical presentation.",
@@ -1132,7 +1144,7 @@ Required schema:
   "what_to_do_next": ["string"],
   "overall_interpretation": "string",
   "questions_for_doctor": ["string"],
-  "cycle_context": {"estimated_cycle_day": "positive integer or null", "estimated_cycle_phase": "menstrual|follicular|ovulatory|luteal|pregnancy_t1|pregnancy_t2|pregnancy_t3|unknown", "confidence": "low|medium|high", "explanation": "string"},
+  "cycle_context": {"explanation": "string"},
   "disclaimer": "string"
 }`;
 
@@ -1578,6 +1590,9 @@ Deno.serve(async (req: Request) => {
       const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
         costContext ? sample => costSamples.push(sample) : undefined, trendEvidence);
       if (aiResult) {
+        // Phase/day/confidence come from the report, never the model; any
+        // model-supplied values are discarded before storage.
+        aiResult.cycle_context = { ...deterministicCycleFacts(report as LabReportData), explanation: modelCycleExplanation(aiResult.cycle_context) };
         // Guarantee overall_interpretation is grounded in deterministic primary_context
         if (primaryContext) {
           aiResult.overall_interpretation = aiResult.overall_interpretation ?? formatPrimarySummary(primaryContext);

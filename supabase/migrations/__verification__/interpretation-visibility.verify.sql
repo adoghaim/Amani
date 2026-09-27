@@ -211,6 +211,8 @@ CREATE TEMP TABLE basic_read_fixture AS SELECT interpretation_floor('{}') || '{
   "key_findings":[{"biomarker_slug":"ferritin","abnormal":true,"status":"attention","value":9,"explanation":"PRIVATE CROSS-MARKER NARRATIVE"}],
   "top_findings":[{"biomarker_slug":"ferritin","abnormal":true,"status":"attention","value":9,"explanation":"PRIVATE CROSS-MARKER NARRATIVE"}],
   "summary_bullets":["PRIVATE CROSS-MARKER NARRATIVE"],
+  "what_to_do_next":["PRIVATE CROSS-MARKER NARRATIVE"],
+  "safety_findings":[{"abnormal":true,"biomarker_slug":"ferritin","follow_up":"PRIVATE CROSS-MARKER NARRATIVE"}],
   "preview":{"content":"chosen preview"},"locked":{"patterns":2,"cross_report":1,"lifestyle":3}
 }'::jsonb AS payload;
 GRANT SELECT ON basic_read_fixture TO service_role;
@@ -223,10 +225,12 @@ SELECT pg_temp.assert((SELECT json_output::text NOT LIKE '%PRIVATE CROSS-MARKER 
   AND json_output->'key_findings'='[{"biomarker_slug":"ferritin","abnormal":true,"status":"attention","value":9}]'::jsonb
   AND json_output->'top_findings'=json_output->'key_findings'
   AND json_output->'summary_bullets'='[]'::jsonb
+  AND json_output->'what_to_do_next'='[]'::jsonb
+  AND json_output->'safety_findings'='[{"abnormal":true,"biomarker_slug":"ferritin"}]'::jsonb
   AND json_output->'preview'='{"content":"chosen preview"}'::jsonb
   AND json_output->'locked'='{"patterns":2,"cross_report":1,"lifestyle":3}'::jsonb
   FROM interpretations WHERE lab_report_id='09100000-0000-4000-8000-000000000061'),
-  'compat Basic strips legacy cycle and findings prose, keeps flags/values/preview/counts');
+  'compat Basic strips legacy cycle, findings and follow-up prose, keeps flags/values/preview/counts');
 RESET ROLE;
 SET LOCAL ROLE service_role;
 SELECT pg_temp.assert((SELECT json_output=public.interpretation_sanitize_basic((SELECT payload FROM basic_read_fixture),'ai')
