@@ -262,6 +262,16 @@ psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$DETERMINISTIC"
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations -q -f /tmp/deterministic-verify.sql
 
+# Flagged-trend parity before cutover in an isolated database, leaving the
+# historical deterministic/cutover expectations below unchanged.
+docker cp "$HERE/../20260927000000_flagged_trends_projection.sql" "$CONTAINER:/tmp/flagged.sql" >/dev/null
+docker cp "$HERE/flagged-trends.prelude.sql" "$CONTAINER:/tmp/flagged-prelude.sql" >/dev/null
+docker cp "$HERE/flagged-trends.verify.sql" "$CONTAINER:/tmp/flagged-verify.sql" >/dev/null
+# Use a separate database cloned at the prepare stage: the migration commits.
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE flagged_before TEMPLATE amani;'
+docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -v rel=interpretations -q \
+  -f /tmp/flagged-prelude.sql -f /tmp/flagged.sql -f /tmp/flagged.sql -f /tmp/flagged-verify.sql
+
 # Case 8 (pre-cutover half): the read-source migration refuses to run before
 # 20260926000001 and leaves nothing behind.
 READ_SOURCE=20260926000004_read_interpretation_source.sql
@@ -294,3 +304,13 @@ psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_SOURCE"
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_SOURCE"
 docker cp "$HERE/read-interpretation-source.verify.sql" "$CONTAINER:/tmp/read-source-verify.sql" >/dev/null
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/read-source-verify.sql
+
+# Case 9: flagged-trend parity/backfill after cutover, repeated for idempotence.
+FLAGGED=20260927000000_flagged_trends_projection.sql
+docker cp "$HERE/../$FLAGGED" "$CONTAINER:/tmp/$FLAGGED" >/dev/null
+docker cp "$HERE/flagged-trends.prelude.sql" "$CONTAINER:/tmp/flagged-prelude.sql" >/dev/null
+docker cp "$HERE/flagged-trends.verify.sql" "$CONTAINER:/tmp/flagged-verify.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/flagged-prelude.sql
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$FLAGGED"
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$FLAGGED"
+psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/flagged-verify.sql
