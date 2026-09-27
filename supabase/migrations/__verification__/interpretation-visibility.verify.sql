@@ -37,7 +37,7 @@ SELECT pg_temp.assert((SELECT count(*)=3 FROM interpretations_private
   WHERE lab_report_id IN ('09100000-0000-4000-8000-000000000040','09100000-0000-4000-8000-000000000041','09100000-0000-4000-8000-000000000042')
     AND projection_version=2 AND pg_temp.visible_basic(json_output_basic,interpretation_source)=interpretation_floor(json_output)),
   'prompt fixture backfilled to floor-only version 2');
-SELECT pg_temp.assert((SELECT bool_and(stored_depth = CASE WHEN tier='free' THEN 'unknown' ELSE 'deep' END)
+SELECT pg_temp.assert((SELECT bool_and(stored_depth = (CASE WHEN tier='free' THEN 'unknown' ELSE 'deep' END))
   FROM interpretations_private WHERE lab_report_id IN
     ('09100000-0000-4000-8000-000000000040','09100000-0000-4000-8000-000000000041','09100000-0000-4000-8000-000000000042')),
   'Plus and pre-tiering full narrative retain deep availability; Free remains unknown');

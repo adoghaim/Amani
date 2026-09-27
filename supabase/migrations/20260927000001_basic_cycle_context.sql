@@ -347,7 +347,7 @@ BEGIN
       END LOOP;
       FOREACH source IN ARRAY ARRAY['fallback','deterministic'] LOOP
         basic := public.interpretation_floor(payload,source);
-        IF basic->k IS DISTINCT FROM CASE WHEN jsonb_typeof(item->'input')='array' THEN item->'input' ELSE '[]'::jsonb END THEN
+        IF basic->k IS DISTINCT FROM (CASE WHEN jsonb_typeof(item->'input')='array' THEN item->'input' ELSE '[]'::jsonb END) THEN
           RAISE EXCEPTION 'Deterministic findings floor changed: %', k;
         END IF;
       END LOOP;
