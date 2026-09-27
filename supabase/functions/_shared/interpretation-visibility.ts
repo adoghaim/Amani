@@ -44,10 +44,10 @@ const SLUG = /^[a-z0-9_]{1,80}$/;
 // Single spaces between tokens only; no whitespace-only, leading or trailing space.
 const UNIT = /^[a-zA-Z0-9µμ%/^.*()-]+( [a-zA-Z0-9µμ%/^.*()-]+)*$/;
 
-/** Typed facts of one finding-like object: identifiers, values, flags, status
- * vocabulary, and nested safety_notes strings (no current writer emits them;
- * only legacy/unknown rows can). Never title, explanation, marker,
- * follow_up/what_to_do_next prose, or nested objects. */
+/** Typed facts of one finding-like object: identifiers, values, flags and
+ * status vocabulary. Never strings of prose, whatever the key is called
+ * (title, explanation, marker, safety_notes, follow_up, what_to_do_next), nor
+ * nested objects. */
 function basicFindingEntry(entry: unknown): Record<string, unknown> | null {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
   const finding: Record<string, unknown> = {};
@@ -61,18 +61,12 @@ function basicFindingEntry(entry: unknown): Record<string, unknown> | null {
       && typeof child === "boolean") finding[key] = child;
     if (["status", "current_status", "flag", "flagged"].includes(key) && typeof child === "string"
       && [...FINDING_STATUS.NORMAL, ...FINDING_STATUS.BORDERLINE, ...FINDING_STATUS.ABNORMAL, "unknown"].includes(child.toLowerCase())) finding[key] = child;
-    // Strings only. follow_up and what_to_do_next are model-authored
-    // narrative and stay Premium.
-    if (key === "safety_notes") {
-      if (typeof child === "string") finding[key] = child;
-      else if (Array.isArray(child)) finding[key] = child.filter(v => typeof v === "string");
-    }
   }
   return Object.keys(finding).length ? finding : null;
 }
 
 /** Findings are not a prose floor merely because they carry an abnormal flag.
- * Only typed facts (and nested safety_notes strings) survive. Text from
+ * Only typed facts survive. Text from
  * trusted rule-based writers is itself the medical floor (source is a DB column,
  * never a field taken from the model payload). Unknown source fails closed.
  */
@@ -121,8 +115,17 @@ export function basicQuestions(value: unknown, source?: string | null): unknown 
   return Array.isArray(value) ? value.filter(v => typeof v === "string") : [];
 }
 
-/** Re-sanitize stored Basic without rebuilding its preview or locked counts. */
-export function sanitizeBasicProjection(basic: InterpretationPayload, source?: string | null): InterpretationPayload {
+/** Every key buildBasicProjection / SQL interpretation_floor emit for an
+ * AI/unknown/NULL source. The read sanitizer drops any other stored key for
+ * those sources. Pinned to the SQL ARRAY in interpretation_sanitize_basic. */
+export const BASIC_KEYS = Object.freeze([...FLOOR_REQUIRED_KEYS, ...FLOOR_FINDING_KEYS, ...SAFETY_KEYS,
+  "safety_findings", "flagged_trends", "basic_interpretation", "preview", "locked"] as const);
+
+/** Re-sanitize stored Basic without rebuilding its preview or locked counts.
+ * AI/unknown/NULL sources keep only BASIC_KEYS; deterministic keeps every key. */
+export function sanitizeBasicProjection(stored: InterpretationPayload, source?: string | null): InterpretationPayload {
+  const basic = isDeterministicSource(source) ? stored
+    : Object.fromEntries(Object.entries(stored).filter(([key]) => (BASIC_KEYS as readonly string[]).includes(key)));
   const result: InterpretationPayload = { ...basic, cycle_context: basicCycleContext(basic.cycle_context, source),
     questions_for_doctor: basicQuestions(basic.questions_for_doctor, source) };
   basicOwnedText(result, source);

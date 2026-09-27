@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { FINDING_STATUS } from "./tier";
 import { selectPremiumPreview } from "./preview-selector";
 import { describe, expect, it } from 'vitest';
-import { basicCycleContext, basicFindingArray, basicHeadline, basicSafetyValue, sanitizeBasicProjection, SAFETY_KEYS, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
+import { basicCycleContext, basicFindingArray, basicHeadline, basicSafetyValue, sanitizeBasicProjection, BASIC_KEYS, SAFETY_KEYS, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
@@ -114,16 +114,16 @@ describe('production vocabulary and composite projection', () => {
       expect((selection.preview?.content as { related_biomarkers: string[] }).related_biomarkers).not.toContain('a');
     }
   });
-  it('keeps nested safety flags and safety notes, never follow-up prose or the surrounding narrative', () => {
+  it('keeps nested safety flags, never safety_notes, follow-up prose or the surrounding narrative', () => {
     const basic = buildBasicProjection({ ...promptFixture,
       primary_concern: { biomarker_slug: 'a', status: 'attention', explanation: 'LOCKED_PRIMARY', follow_up: 'LOCKED_FOLLOW_UP',
-        marker: 'LOCKED_MARKER', safety_notes: ['Seek care promptly'] },
+        marker: 'LOCKED_MARKER', safety_notes: ['LOCKED_SAFETY_NOTE'] },
       overall_interpretation: { abnormal: true, narrative: 'LOCKED_OVERALL' },
     });
     expect(basic.safety_findings).toEqual([
-      { abnormal: true }, { status: 'attention', biomarker_slug: 'a', safety_notes: ['Seek care promptly'] },
+      { abnormal: true }, { status: 'attention', biomarker_slug: 'a' },
     ]);
-    expect(JSON.stringify(basic)).not.toMatch(/LOCKED_PRIMARY|LOCKED_OVERALL|LOCKED_FOLLOW_UP|LOCKED_MARKER/);
+    expect(JSON.stringify(basic)).not.toMatch(/LOCKED_PRIMARY|LOCKED_OVERALL|LOCKED_FOLLOW_UP|LOCKED_MARKER|LOCKED_SAFETY_NOTE/);
   });
 });
 
@@ -251,7 +251,7 @@ describe('cycle context confidentiality (shared SQL fixture)', () => {
 const findingCases: { input: unknown; expected: unknown[] }[] = JSON.parse(
   cycleMigration.match(/\$finding_cases\$([\s\S]*?)\$finding_cases\$/)![1]);
 describe('findings confidentiality (one shared SQL fixture)', () => {
-  it.each(findingCases)('keeps typed facts and explicit safety follow-ups from $input', ({ input, expected }) => {
+  it.each(findingCases)('keeps typed facts only from $input', ({ input, expected }) => {
     for (const key of FLOOR_FINDING_KEYS) for (const source of ['ai', 'unknown', null]) {
       const payload = { ...full, [key]: input };
       const original = structuredClone(payload);
@@ -312,9 +312,9 @@ describe('remaining floor channels (one shared SQL sentinel fixture)', () => {
     const want = deterministic ? safetyCase.deterministic : safetyCase.expected;
     const original = structuredClone(safetyCase.full);
     const basic = buildBasicProjection(safetyCase.full, [], { source });
-    // A stored Basic holds floor keys only (never primary_concern).
-    const { primary_concern: _concern, ...floorKeys } = safetyCase.full;
-    const stored = { ...floorKeys, safety_findings: safetyCase.deterministic.safety_findings };
+    // The SQL input exactly: full (with the non-floor primary_concern) plus the
+    // old verbatim safety findings.
+    const stored = { ...safetyCase.full, safety_findings: safetyCase.deterministic.safety_findings };
     const read = sanitizeBasicProjection(stored, source);
     for (const [key, value] of Object.entries(want)) {
       expect(basic[key]).toEqual(value);
@@ -323,6 +323,14 @@ describe('remaining floor channels (one shared SQL sentinel fixture)', () => {
     if (!deterministic) {
       expect(JSON.stringify(basic)).not.toContain('SENTINEL');
       expect(JSON.stringify(read)).not.toContain('SENTINEL');
+      // Only the Basic key allowlist; the four stored-decision keys appear only
+      // when the stored row carries them.
+      const optional = ['flagged_trends', 'basic_interpretation', 'preview', 'locked'];
+      expect(Object.keys(read).sort()).toEqual(BASIC_KEYS.filter(key => !optional.includes(key)).sort());
+      const withOptional = sanitizeBasicProjection({ ...stored, flagged_trends: [], basic_interpretation: 'stale',
+        preview: null, locked: { patterns: 0, cross_report: 0, lifestyle: 0 } }, source);
+      expect(Object.keys(withOptional).sort()).toEqual([...BASIC_KEYS].sort());
+      expect(JSON.stringify(withOptional)).not.toContain('SENTINEL');
       // Abnormal finding, status, value, unit and flags survive as typed facts;
       // bare safety-key prose does not.
       expect(basic.abnormal_flags).toEqual([{ biomarker_slug: 'ferritin', status: 'discuss', abnormal: true, value: 9, unit: 'ng/mL' }]);
@@ -334,8 +342,16 @@ describe('remaining floor channels (one shared SQL sentinel fixture)', () => {
     } else {
       expect(basic.disclaimer).toBe(safetyCase.full.disclaimer);
       expect(read.disclaimer).toBe(safetyCase.full.disclaimer);
+      // Deterministic stored Basic is verbatim, every key included.
+      expect(read.primary_concern).toEqual(safetyCase.full.primary_concern);
     }
     expect(safetyCase.full).toEqual(original);
+  });
+  it('BASIC_KEYS is every key the Basic projection emits, pinned to both SQL copies', () => {
+    const emitted = buildBasicProjection({ ...safetyCase.full, trend_evidence: [] }, [], { source: 'ai' });
+    for (const key of Object.keys(emitted)) expect(BASIC_KEYS).toContain(key);
+    const list = `ARRAY[${BASIC_KEYS.map(key => `'${key}'`).join(',')}]`;
+    expect(cycleMigration.split(list)).toHaveLength(3);
   });
   it.each(['ai', 'unknown', null, undefined])('source %s: SAFETY_KEYS keep typed facts only, never strings', source => {
     const flag = { biomarker_slug: 'ferritin', abnormal: true, explanation: 'PROSE' };

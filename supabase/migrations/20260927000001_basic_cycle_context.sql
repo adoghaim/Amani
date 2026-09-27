@@ -58,9 +58,9 @@ REVOKE ALL ON FUNCTION public.interpretation_basic_cycle_context(jsonb,text) FRO
 GRANT EXECUTE ON FUNCTION public.interpretation_basic_cycle_context(jsonb,text) TO service_role;
 
 -- Typed facts of one finding-like object (NULL when none): identifiers, values,
--- flags, status vocabulary and nested safety_notes strings (no current writer
--- emits them; only legacy/unknown rows can).
--- Never title/explanation/marker/follow_up/what_to_do_next or nested objects.
+-- flags and status vocabulary. Never prose strings, whatever the key is called
+-- (title/explanation/marker/safety_notes/follow_up/what_to_do_next), nor
+-- nested objects.
 CREATE OR REPLACE FUNCTION public.interpretation_basic_finding_entry(p_entry jsonb) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
 DECLARE finding jsonb := '{}'::jsonb; k text; v jsonb;
@@ -72,12 +72,8 @@ BEGIN
       OR (k='unit' AND jsonb_typeof(v)='string' AND length(v #>> '{}') <= 24 AND (v #>> '{}') ~ '^[a-zA-Z0-9µμ%/^.*()-]+( [a-zA-Z0-9µμ%/^.*()-]+)*$')
       OR (k IN ('abnormal','is_abnormal','safety','safety_related','is_safety','critical','urgent') AND jsonb_typeof(v)='boolean')
       OR (k IN ('status','current_status','flag','flagged') AND jsonb_typeof(v)='string'
-        AND lower(v #>> '{}') IN ('reassuring','normal','in_range','within_range','optimal','monitor','attention','discuss','unknown'))
-      OR (k='safety_notes' AND jsonb_typeof(v)='string') THEN
+        AND lower(v #>> '{}') IN ('reassuring','normal','in_range','within_range','optimal','monitor','attention','discuss','unknown')) THEN
       finding := finding || jsonb_build_object(k,v);
-    ELSIF k='safety_notes' AND jsonb_typeof(v)='array' THEN
-      finding := finding || jsonb_build_object(k,(SELECT coalesce(jsonb_agg(e.value ORDER BY e.ord),'[]'::jsonb)
-        FROM jsonb_array_elements(v) WITH ORDINALITY AS e(value,ord) WHERE jsonb_typeof(e.value)='string'));
     ELSIF k='related_biomarkers' AND jsonb_typeof(v)='array' THEN
       finding := finding || jsonb_build_object(k,(SELECT coalesce(jsonb_agg(e.value ORDER BY e.ord),'[]'::jsonb)
         FROM jsonb_array_elements(v) WITH ORDINALITY AS e(value,ord)
@@ -161,10 +157,17 @@ REVOKE ALL ON FUNCTION public.interpretation_basic_questions(jsonb,text) FROM PU
 GRANT EXECUTE ON FUNCTION public.interpretation_basic_questions(jsonb,text) TO service_role;
 
 -- Preserve the stored preview/count decision; do not recompile legacy Basic.
+-- AI/unknown/NULL sources keep only the Basic key allowlist (TS BASIC_KEYS, the
+-- keys interpretation_floor emits); any other stored key is dropped.
+-- Deterministic sources keep every key.
 CREATE OR REPLACE FUNCTION public.interpretation_sanitize_basic(p_basic jsonb, p_source text) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
 DECLARE result jsonb := CASE WHEN jsonb_typeof(p_basic)='object' THEN p_basic ELSE '{}'::jsonb END; k text;
 BEGIN
+  IF (p_source IN ('fallback','deterministic')) IS NOT TRUE THEN
+    result := (SELECT coalesce(jsonb_object_agg(e.key,e.value),'{}'::jsonb) FROM jsonb_each(result) AS e(key,value)
+      WHERE e.key = ANY(ARRAY['headline','cycle_context','questions_for_doctor','disclaimer','key_findings','top_findings','summary_bullets','safety_notes','abnormal_flags','flags','warnings','critical_findings','what_to_do_next','safety_findings','flagged_trends','basic_interpretation','preview','locked']));
+  END IF;
   result := jsonb_set(result,'{cycle_context}',public.interpretation_basic_cycle_context(result->'cycle_context',p_source));
   result := jsonb_set(result,'{questions_for_doctor}',public.interpretation_basic_questions(result->'questions_for_doctor',p_source));
   -- Headline bounded, disclaimer server-owned; basic_interpretation is the headline.
@@ -407,9 +410,6 @@ DECLARE cases jsonb := $finding_cases$[
       {
         "biomarker_slug": "tsh",
         "status": "monitor",
-        "safety_notes": [
-          "Contact your clinician"
-        ],
         "related_biomarkers": ["free_t4"]
       }
     ]
@@ -513,7 +513,7 @@ DECLARE c jsonb := $safety_cases$
     "critical_findings": {"biomarker_slug": "potassium", "critical": true},
     "flags": [],
     "key_findings": [{"biomarker_slug": "ferritin", "status": "discuss"}],
-    "safety_findings": [{"status": "attention", "biomarker_slug": "ferritin", "safety_notes": ["Seek care promptly if you feel faint."], "related_biomarkers": ["ferritin"]}]
+    "safety_findings": [{"status": "attention", "biomarker_slug": "ferritin", "related_biomarkers": ["ferritin"]}]
   },
   "deterministic": {
     "headline": "Short Basic headline",
@@ -549,6 +549,12 @@ BEGIN
     IF source IS DISTINCT FROM 'fallback' AND source IS DISTINCT FROM 'deterministic'
       AND (basic::text LIKE '%SENTINEL%' OR public.interpretation_sanitize_basic(stored,source)::text LIKE '%SENTINEL%') THEN
       RAISE EXCEPTION 'Model-authored narrative reached Basic (%)', source;
+    END IF;
+    -- The read emits only the Basic key allowlist (TS BASIC_KEYS) for these sources.
+    IF source IS DISTINCT FROM 'fallback' AND source IS DISTINCT FROM 'deterministic'
+      AND EXISTS (SELECT 1 FROM jsonb_object_keys(public.interpretation_sanitize_basic(stored,source)) AS o(key)
+        WHERE o.key <> ALL(ARRAY['headline','cycle_context','questions_for_doctor','disclaimer','key_findings','top_findings','summary_bullets','safety_notes','abnormal_flags','flags','warnings','critical_findings','what_to_do_next','safety_findings','flagged_trends','basic_interpretation','preview','locked'])) THEN
+      RAISE EXCEPTION 'Basic read emitted a key outside the allowlist (%)', source;
     END IF;
   END LOOP;
   IF interpretation_floor(c->'full') IS DISTINCT FROM interpretation_floor(c->'full',NULL) THEN
