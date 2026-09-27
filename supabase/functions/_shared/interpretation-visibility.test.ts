@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { FINDING_STATUS } from "./tier";
 import { selectPremiumPreview } from "./preview-selector";
 import { describe, expect, it } from 'vitest';
-import { basicCycleContext, basicFindingArray, basicSafetyValue, sanitizeBasicProjection, SAFETY_KEYS, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
+import { basicCycleContext, basicFindingArray, basicHeadline, basicSafetyValue, sanitizeBasicProjection, SAFETY_KEYS, buildBasicProjection, carriesSafety, DETERMINISTIC_NARRATIVE_KEYS, DETERMINISTIC_SOURCES, isDeterministicSource } from './interpretation-visibility';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
@@ -323,20 +323,39 @@ describe('remaining floor channels (one shared SQL sentinel fixture)', () => {
     if (!deterministic) {
       expect(JSON.stringify(basic)).not.toContain('SENTINEL');
       expect(JSON.stringify(read)).not.toContain('SENTINEL');
-      // Abnormal finding, status, value, unit and flags survive; so does
-      // separately allowlisted safety text.
+      // Abnormal finding, status, value, unit and flags survive as typed facts;
+      // bare safety-key prose does not.
       expect(basic.abnormal_flags).toEqual([{ biomarker_slug: 'ferritin', status: 'discuss', abnormal: true, value: 9, unit: 'ng/mL' }]);
-      expect(basic.warnings).toBe('Critical potassium: contact your clinician today.');
-      expect(basic.safety_notes).toEqual(['Seek care promptly if you feel faint.']);
+      expect(basic.warnings).toEqual([]);
+      expect(basic.safety_notes).toEqual([{ biomarker_slug: 'hemoglobin', abnormal: true }]);
+      // The disclaimer is the server's, never the model's.
+      expect(basic.disclaimer).toBe(read.disclaimer);
+      expect(basic.disclaimer).toBe('This report is for educational purposes only and does not constitute medical advice.');
+    } else {
+      expect(basic.disclaimer).toBe(safetyCase.full.disclaimer);
+      expect(read.disclaimer).toBe(safetyCase.full.disclaimer);
     }
     expect(safetyCase.full).toEqual(original);
   });
-  it('what_to_do_next is the only SAFETY_KEY withheld outright', () => {
+  it.each(['ai', 'unknown', null, undefined])('source %s: SAFETY_KEYS keep typed facts only, never strings', source => {
+    const flag = { biomarker_slug: 'ferritin', abnormal: true, explanation: 'PROSE' };
     for (const key of SAFETY_KEYS) {
-      expect(basicSafetyValue(key, ['kept'], 'ai')).toEqual(key === 'what_to_do_next' ? [] : ['kept']);
-      expect(basicSafetyValue(key, ['kept'], 'fallback')).toEqual(['kept']);
-      expect(basicSafetyValue(key, null, 'ai')).toEqual([]);
+      const typed = key === 'what_to_do_next' ? [] : [{ biomarker_slug: 'ferritin', abnormal: true }];
+      expect(basicSafetyValue(key, 'PROSE', source)).toEqual([]);
+      expect(basicSafetyValue(key, ['PROSE', ['PROSE'], { text: 'PROSE' }, 7], source)).toEqual([]);
+      expect(basicSafetyValue(key, ['PROSE', flag], source)).toEqual(typed);
+      expect(basicSafetyValue(key, null, source)).toEqual([]);
     }
+  });
+  it.each(DETERMINISTIC_SOURCES)('%s: SAFETY_KEYS verbatim', source => {
+    for (const key of SAFETY_KEYS) {
+      expect(basicSafetyValue(key, ['kept'], source)).toEqual(['kept']);
+      expect(basicSafetyValue(key, 'kept', source)).toBe('kept');
+    }
+  });
+  it('the SQL disclaimer default is the TS default', () => {
+    const disclaimer = buildBasicProjection({}, [], { source: 'ai' }).disclaimer;
+    expect(cycleMigration.match(new RegExp(`'${disclaimer}'::text`, 'g'))).toHaveLength(2);
   });
   it('keeps the original floor fingerprints of stripped channels out of preview selection', () => {
     const payload = { ...full, what_to_do_next: ['duplicate prose'], cycle_context: { explanation: 'duplicate cycle' },
@@ -345,5 +364,30 @@ describe('remaining floor channels (one shared SQL sentinel fixture)', () => {
     const basic = buildBasicProjection(payload, findings);
     expect(basic.preview).toBeNull();
     expect(basic.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+  });
+});
+
+const headlineCases: { input: unknown; expected: string }[] = JSON.parse(
+  cycleMigration.match(/\$headline_cases\$([\s\S]*?)\$headline_cases\$/)![1]);
+describe('Basic headline bound (shared SQL fixture)', () => {
+  it.each(headlineCases)('bounds $input', ({ input, expected }) => {
+    expect(basicHeadline(input)).toBe(expected);
+    for (const source of ['ai', 'unknown', null, undefined]) {
+      const basic = buildBasicProjection({ headline: input }, [], { source });
+      const read = sanitizeBasicProjection({ headline: input, basic_interpretation: 'stale' }, source);
+      expect(basic.headline).toBe(expected);
+      expect(basic.basic_interpretation).toBe(expected);
+      expect(read.headline).toBe(expected);
+      expect(read.basic_interpretation).toBe(expected);
+    }
+    for (const source of DETERMINISTIC_SOURCES) {
+      expect(buildBasicProjection({ headline: input }, [], { source }).headline).toEqual(input ?? 'Your lab results');
+      const read = sanitizeBasicProjection({ headline: input, basic_interpretation: 'stale' }, source);
+      expect(read.headline).toEqual(input);
+      expect(read.basic_interpretation).toBe('stale');
+    }
+  });
+  it('does not add basic_interpretation to a stored Basic that lacks it', () => {
+    expect(sanitizeBasicProjection({ headline: 'Iron is low' }, 'ai')).not.toHaveProperty('basic_interpretation');
   });
 });

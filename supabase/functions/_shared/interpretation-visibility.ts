@@ -45,8 +45,9 @@ const SLUG = /^[a-z0-9_]{1,80}$/;
 const UNIT = /^[a-zA-Z0-9µμ%/^.*()-]+( [a-zA-Z0-9µμ%/^.*()-]+)*$/;
 
 /** Typed facts of one finding-like object: identifiers, values, flags, status
- * vocabulary, and application-classified safety_notes strings. Never title,
- * explanation, marker, follow_up/what_to_do_next prose, or nested objects. */
+ * vocabulary, and nested safety_notes strings (no current writer emits them;
+ * only legacy/unknown rows can). Never title, explanation, marker,
+ * follow_up/what_to_do_next prose, or nested objects. */
 function basicFindingEntry(entry: unknown): Record<string, unknown> | null {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
   const finding: Record<string, unknown> = {};
@@ -60,8 +61,8 @@ function basicFindingEntry(entry: unknown): Record<string, unknown> | null {
       && typeof child === "boolean") finding[key] = child;
     if (["status", "current_status", "flag", "flagged"].includes(key) && typeof child === "string"
       && [...FINDING_STATUS.NORMAL, ...FINDING_STATUS.BORDERLINE, ...FINDING_STATUS.ABNORMAL, "unknown"].includes(child.toLowerCase())) finding[key] = child;
-    // Application-classified safety text, strings only. follow_up and
-    // what_to_do_next are model-authored narrative and stay Premium.
+    // Strings only. follow_up and what_to_do_next are model-authored
+    // narrative and stay Premium.
     if (key === "safety_notes") {
       if (typeof child === "string") finding[key] = child;
       else if (Array.isArray(child)) finding[key] = child.filter(v => typeof v === "string");
@@ -71,7 +72,7 @@ function basicFindingEntry(entry: unknown): Record<string, unknown> | null {
 }
 
 /** Findings are not a prose floor merely because they carry an abnormal flag.
- * Only typed facts and application-classified safety notes survive. Text from
+ * Only typed facts (and nested safety_notes strings) survive. Text from
  * trusted rule-based writers is itself the medical floor (source is a DB column,
  * never a field taken from the model payload). Unknown source fails closed.
  */
@@ -81,19 +82,34 @@ export function basicFindingArray(value: unknown, source?: string | null): unkno
   return value.flatMap(entry => basicFindingEntry(entry) ?? []);
 }
 
-/** SAFETY_KEYS for AI/unknown sources: what_to_do_next is prompt-authored
- * narrative (removed); the other keys are application-classified safety
- * information kept as strings, with any object entry reduced to typed facts so
- * an abnormal flag is never lost. Deterministic sources are floor verbatim. */
+/** SAFETY_KEYS for AI/unknown sources fail closed like the finding arrays: no
+ * current writer emits them, and older prompts asked the model for
+ * safety_notes strings, so bare strings are model prose and are dropped. Object
+ * entries are reduced to typed facts so an abnormal flag is never lost.
+ * what_to_do_next is prompt-authored narrative (removed outright).
+ * Deterministic sources are floor verbatim. */
 export function basicSafetyValue(key: string, value: unknown, source?: string | null): unknown {
   if (value === undefined || value === null) return [];
   if (isDeterministicSource(source)) return value;
   if (key === "what_to_do_next") return [];
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    return value.flatMap(entry => typeof entry === "string" ? [entry] : basicFindingEntry(entry) ?? []);
-  }
+  if (Array.isArray(value)) return value.flatMap(entry => basicFindingEntry(entry) ?? []);
   return basicFindingEntry(value) ?? [];
+}
+
+/** The model's headline is the designed short Basic text, bounded: a string of
+ * at most 200 characters with at least one ASCII letter or digit, else the
+ * default. Code points, so SQL char_length agrees. */
+export function basicHeadline(value: unknown): string {
+  return typeof value === "string" && [...value].length <= 200 && /[A-Za-z0-9]/.test(value)
+    ? value : defaults.headline as string;
+}
+
+/** Headline bounded and disclaimer server-owned for AI/unknown sources; a
+ * deterministic source keeps its own. Mirrored in SQL. */
+function basicOwnedText(basic: InterpretationPayload, source?: string | null): void {
+  if (isDeterministicSource(source)) return;
+  basic.headline = basicHeadline(basic.headline);
+  basic.disclaimer = defaults.disclaimer;
 }
 
 /** questions_for_doctor is the free appointment-questions feature: strings only
@@ -109,6 +125,11 @@ export function basicQuestions(value: unknown, source?: string | null): unknown 
 export function sanitizeBasicProjection(basic: InterpretationPayload, source?: string | null): InterpretationPayload {
   const result: InterpretationPayload = { ...basic, cycle_context: basicCycleContext(basic.cycle_context, source),
     questions_for_doctor: basicQuestions(basic.questions_for_doctor, source) };
+  basicOwnedText(result, source);
+  // basic_interpretation is always the headline; keep it bounded with it.
+  if (!isDeterministicSource(source) && Object.hasOwn(basic, "basic_interpretation")) {
+    result.basic_interpretation = result.headline;
+  }
   for (const key of FLOOR_FINDING_KEYS) result[key] = basicFindingArray(basic[key], source);
   for (const key of SAFETY_KEYS) result[key] = basicSafetyValue(key, basic[key], source);
   if (Object.hasOwn(basic, "safety_findings")) result.safety_findings = basicFindingArray(basic.safety_findings, source);
@@ -158,6 +179,7 @@ export function buildBasicProjection(
 ): InterpretationPayload {
   const basic: InterpretationPayload = {};
   for (const key of FLOOR_REQUIRED_KEYS) basic[key] = full[key] ?? defaults[key];
+  basicOwnedText(basic, provenance.source);
   basic.cycle_context = basicCycleContext(full.cycle_context, provenance.source);
   basic.questions_for_doctor = basicQuestions(full.questions_for_doctor, provenance.source);
   for (const key of FLOOR_FINDING_KEYS) basic[key] = basicFindingArray(full[key], provenance.source);

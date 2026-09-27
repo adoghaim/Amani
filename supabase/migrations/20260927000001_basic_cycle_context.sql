@@ -1,13 +1,24 @@
 -- Basic floor confidentiality, with TS parity in interpretation-visibility.ts.
 -- Deterministic/app-calculated facts are Basic; model-authored interpretation
--- is Premium unless it is the designed short Basic text (headline), the free
--- appointment questions (strings), the disclaimer, or application-classified
--- safety information (strings / typed facts). Trusted rule-based text
--- (interpretation_source fallback|deterministic, a DB column) stays floor.
+-- is Premium unless it is the designed short Basic text (headline, bounded to
+-- 200 characters) or the free appointment questions (strings). For AI/unknown/
+-- NULL sources the disclaimer is the server default, never the model's, and the
+-- safety keys (safety_notes, abnormal_flags, flags, warnings, critical_findings)
+-- keep typed facts only: no current writer emits them and older prompts asked
+-- the model for safety_notes strings, so bare strings are dropped. Trusted
+-- rule-based text (interpretation_source fallback|deterministic, a DB column)
+-- stays floor verbatim.
 -- No backfill: Full and all stored rows remain unchanged. Sanitizing at both
 -- read boundaries also protects existing Basic projections until an owner
 -- separately authorizes a backfill. Both floor overloads share one body.
 -- Requires the existing visibility cutover; does not change its switch.
+--
+-- REPLAY HAZARD: never manually re-apply 20260926000003 after this migration.
+-- 000003 defines the two-argument floor as calling the one-argument floor; this
+-- migration defines the one-argument floor as calling the two-argument floor.
+-- Re-running 000003 alone would make them mutually recursive (every floor call
+-- raises stack depth exceeded). The Supabase migration ledger prevents this in
+-- normal operation; do not bypass it with a repair script.
 BEGIN;
 DO $$ BEGIN
   IF to_regclass('public.interpretations_private') IS NULL
@@ -47,7 +58,8 @@ REVOKE ALL ON FUNCTION public.interpretation_basic_cycle_context(jsonb,text) FRO
 GRANT EXECUTE ON FUNCTION public.interpretation_basic_cycle_context(jsonb,text) TO service_role;
 
 -- Typed facts of one finding-like object (NULL when none): identifiers, values,
--- flags, status vocabulary and application-classified safety_notes strings.
+-- flags, status vocabulary and nested safety_notes strings (no current writer
+-- emits them; only legacy/unknown rows can).
 -- Never title/explanation/marker/follow_up/what_to_do_next or nested objects.
 CREATE OR REPLACE FUNCTION public.interpretation_basic_finding_entry(p_entry jsonb) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
@@ -96,9 +108,9 @@ $$;
 REVOKE ALL ON FUNCTION public.interpretation_basic_findings(jsonb,text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.interpretation_basic_findings(jsonb,text) TO service_role;
 
--- SAFETY_KEYS. what_to_do_next is prompt-authored narrative (removed for
--- AI/unknown); the rest are application-classified safety information kept as
--- strings, object entries reduced to typed facts so a flag is never lost.
+-- SAFETY_KEYS fail closed for AI/unknown/NULL sources, like the finding arrays:
+-- bare strings are dropped, object entries reduced to typed facts so a flag is
+-- never lost. what_to_do_next is prompt-authored narrative (removed outright).
 CREATE OR REPLACE FUNCTION public.interpretation_basic_safety_value(p_key text, p_value jsonb, p_source text) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
 DECLARE result jsonb := '[]'::jsonb; entry jsonb; finding jsonb;
@@ -106,10 +118,9 @@ BEGIN
   IF p_value IS NULL OR p_value='null'::jsonb THEN RETURN '[]'::jsonb; END IF;
   IF p_source IN ('fallback','deterministic') THEN RETURN p_value; END IF;
   IF p_key='what_to_do_next' THEN RETURN '[]'::jsonb; END IF;
-  IF jsonb_typeof(p_value)='string' THEN RETURN p_value; END IF;
   IF jsonb_typeof(p_value)='array' THEN
     FOR entry IN SELECT value FROM jsonb_array_elements(p_value) LOOP
-      finding := CASE WHEN jsonb_typeof(entry)='string' THEN entry ELSE public.interpretation_basic_finding_entry(entry) END;
+      finding := public.interpretation_basic_finding_entry(entry);
       IF finding IS NOT NULL THEN result := result || jsonb_build_array(finding); END IF;
     END LOOP;
     RETURN result;
@@ -119,6 +130,21 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.interpretation_basic_safety_value(text,jsonb,text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.interpretation_basic_safety_value(text,jsonb,text) TO service_role;
+
+-- The designed short Basic text, bounded: a string of at most 200 characters
+-- with at least one ASCII letter or digit, else the default.
+CREATE OR REPLACE FUNCTION public.interpretation_basic_headline(p_value jsonb) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, public AS $$
+BEGIN
+  IF jsonb_typeof(p_value)='string' AND char_length(p_value #>> '{}') <= 200
+    AND (p_value #>> '{}') ~ '[A-Za-z0-9]' THEN
+    RETURN p_value;
+  END IF;
+  RETURN '"Your lab results"'::jsonb;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.interpretation_basic_headline(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.interpretation_basic_headline(jsonb) TO service_role;
 
 -- The free appointment-questions feature: strings only for AI/unknown sources.
 CREATE OR REPLACE FUNCTION public.interpretation_basic_questions(p_value jsonb, p_source text) RETURNS jsonb
@@ -141,6 +167,14 @@ DECLARE result jsonb := CASE WHEN jsonb_typeof(p_basic)='object' THEN p_basic EL
 BEGIN
   result := jsonb_set(result,'{cycle_context}',public.interpretation_basic_cycle_context(result->'cycle_context',p_source));
   result := jsonb_set(result,'{questions_for_doctor}',public.interpretation_basic_questions(result->'questions_for_doctor',p_source));
+  -- Headline bounded, disclaimer server-owned; basic_interpretation is the headline.
+  IF (p_source IN ('fallback','deterministic')) IS NOT TRUE THEN
+    result := result || jsonb_build_object('headline',public.interpretation_basic_headline(result->'headline'),
+      'disclaimer','This report is for educational purposes only and does not constitute medical advice.'::text);
+    IF result ? 'basic_interpretation' THEN
+      result := result || jsonb_build_object('basic_interpretation',result->'headline');
+    END IF;
+  END IF;
   FOREACH k IN ARRAY ARRAY['key_findings','top_findings','summary_bullets'] LOOP
     result := result || jsonb_build_object(k,public.interpretation_basic_findings(result->k,p_source));
   END LOOP;
@@ -173,6 +207,11 @@ BEGIN
         WHEN 'cycle_context' THEN '{}'::jsonb WHEN 'questions_for_doctor' THEN '[]'::jsonb
         ELSE '"This report is for educational purposes only and does not constitute medical advice."'::jsonb END));
   END LOOP;
+  -- Headline bounded, disclaimer server-owned (the default above) for AI/unknown/NULL.
+  IF (p_source IN ('fallback','deterministic')) IS NOT TRUE THEN
+    result := result || jsonb_build_object('headline',public.interpretation_basic_headline(result->'headline'),
+      'disclaimer','This report is for educational purposes only and does not constitute medical advice.'::text);
+  END IF;
   result := jsonb_set(result, '{cycle_context}', public.interpretation_basic_cycle_context(p_full->'cycle_context',p_source));
   result := jsonb_set(result, '{questions_for_doctor}', public.interpretation_basic_questions(p_full->'questions_for_doctor',p_source));
   FOREACH k IN ARRAY ARRAY['key_findings','top_findings','summary_bullets'] LOOP
@@ -451,26 +490,26 @@ DECLARE c jsonb := $safety_cases$
 {
   "full": {
     "headline": "Short Basic headline",
-    "disclaimer": "Educational",
+    "disclaimer": "SENTINEL NARRATIVE model-written disclaimer",
     "questions_for_doctor": ["What does my ferritin mean?", {"text": "SENTINEL NARRATIVE"}],
     "what_to_do_next": ["Discuss whether retesting ferritin makes sense. SENTINEL NARRATIVE"],
-    "safety_notes": ["Seek care promptly if you feel faint.", {"explanation": "SENTINEL NARRATIVE"}],
-    "abnormal_flags": [{"biomarker_slug": "ferritin", "status": "discuss", "abnormal": true, "value": 9, "unit": "ng/mL", "explanation": "SENTINEL NARRATIVE"}],
-    "warnings": "Critical potassium: contact your clinician today.",
+    "safety_notes": ["SENTINEL NARRATIVE Seek care promptly if you feel faint.", {"explanation": "SENTINEL NARRATIVE"}, {"biomarker_slug": "hemoglobin", "abnormal": true, "explanation": "SENTINEL NARRATIVE"}],
+    "abnormal_flags": [{"biomarker_slug": "ferritin", "status": "discuss", "abnormal": true, "value": 9, "unit": "ng/mL", "explanation": "SENTINEL NARRATIVE"}, "SENTINEL NARRATIVE bare flag prose"],
+    "warnings": "SENTINEL NARRATIVE Critical potassium: contact your clinician today.",
     "critical_findings": {"biomarker_slug": "potassium", "critical": true, "marker": "SENTINEL NARRATIVE"},
-    "flags": 42,
+    "flags": ["SENTINEL NARRATIVE flag prose", 42, {"nested": {"text": "SENTINEL NARRATIVE"}}],
     "key_findings": [{"biomarker_slug": "ferritin", "status": "discuss", "title": "SENTINEL NARRATIVE", "explanation": "SENTINEL NARRATIVE"}],
     "primary_concern": {"biomarker_slug": "ferritin", "status": "attention", "marker": "SENTINEL NARRATIVE", "follow_up": "SENTINEL NARRATIVE", "what_to_do_next": ["SENTINEL NARRATIVE"], "safety_notes": ["Seek care promptly if you feel faint."], "related_biomarkers": ["ferritin", "SENTINEL NARRATIVE"], "explanation": "SENTINEL NARRATIVE"}
   },
   "expected": {
     "headline": "Short Basic headline",
     "basic_interpretation": "Short Basic headline",
-    "disclaimer": "Educational",
+    "disclaimer": "This report is for educational purposes only and does not constitute medical advice.",
     "questions_for_doctor": ["What does my ferritin mean?"],
     "what_to_do_next": [],
-    "safety_notes": ["Seek care promptly if you feel faint."],
+    "safety_notes": [{"biomarker_slug": "hemoglobin", "abnormal": true}],
     "abnormal_flags": [{"biomarker_slug": "ferritin", "status": "discuss", "abnormal": true, "value": 9, "unit": "ng/mL"}],
-    "warnings": "Critical potassium: contact your clinician today.",
+    "warnings": [],
     "critical_findings": {"biomarker_slug": "potassium", "critical": true},
     "flags": [],
     "key_findings": [{"biomarker_slug": "ferritin", "status": "discuss"}],
@@ -479,14 +518,14 @@ DECLARE c jsonb := $safety_cases$
   "deterministic": {
     "headline": "Short Basic headline",
     "basic_interpretation": "Short Basic headline",
-    "disclaimer": "Educational",
+    "disclaimer": "SENTINEL NARRATIVE model-written disclaimer",
     "questions_for_doctor": ["What does my ferritin mean?", {"text": "SENTINEL NARRATIVE"}],
     "what_to_do_next": ["Discuss whether retesting ferritin makes sense. SENTINEL NARRATIVE"],
-    "safety_notes": ["Seek care promptly if you feel faint.", {"explanation": "SENTINEL NARRATIVE"}],
-    "abnormal_flags": [{"biomarker_slug": "ferritin", "status": "discuss", "abnormal": true, "value": 9, "unit": "ng/mL", "explanation": "SENTINEL NARRATIVE"}],
-    "warnings": "Critical potassium: contact your clinician today.",
+    "safety_notes": ["SENTINEL NARRATIVE Seek care promptly if you feel faint.", {"explanation": "SENTINEL NARRATIVE"}, {"biomarker_slug": "hemoglobin", "abnormal": true, "explanation": "SENTINEL NARRATIVE"}],
+    "abnormal_flags": [{"biomarker_slug": "ferritin", "status": "discuss", "abnormal": true, "value": 9, "unit": "ng/mL", "explanation": "SENTINEL NARRATIVE"}, "SENTINEL NARRATIVE bare flag prose"],
+    "warnings": "SENTINEL NARRATIVE Critical potassium: contact your clinician today.",
     "critical_findings": {"biomarker_slug": "potassium", "critical": true, "marker": "SENTINEL NARRATIVE"},
-    "flags": 42,
+    "flags": ["SENTINEL NARRATIVE flag prose", 42, {"nested": {"text": "SENTINEL NARRATIVE"}}],
     "key_findings": [{"biomarker_slug": "ferritin", "status": "discuss", "title": "SENTINEL NARRATIVE", "explanation": "SENTINEL NARRATIVE"}],
     "safety_findings": [{"status": "attention", "biomarker_slug": "ferritin", "marker": "SENTINEL NARRATIVE", "follow_up": "SENTINEL NARRATIVE", "what_to_do_next": ["SENTINEL NARRATIVE"], "safety_notes": ["Seek care promptly if you feel faint."], "related_biomarkers": ["ferritin", "SENTINEL NARRATIVE"]}]
   }
@@ -507,7 +546,8 @@ BEGIN
         RAISE EXCEPTION 'Basic read sanitization parity failed: % (%)', k, source;
       END IF;
     END LOOP;
-    IF source IS DISTINCT FROM 'fallback' AND source IS DISTINCT FROM 'deterministic' AND basic::text LIKE '%SENTINEL%' THEN
+    IF source IS DISTINCT FROM 'fallback' AND source IS DISTINCT FROM 'deterministic'
+      AND (basic::text LIKE '%SENTINEL%' OR public.interpretation_sanitize_basic(stored,source)::text LIKE '%SENTINEL%') THEN
       RAISE EXCEPTION 'Model-authored narrative reached Basic (%)', source;
     END IF;
   END LOOP;
@@ -516,12 +556,54 @@ BEGIN
   END IF;
 END $$;
 
+-- Shared SQL/TS headline bound. `expected` is the AI/unknown/NULL-source Basic
+-- headline (and basic_interpretation); deterministic sources keep their own.
+DO $$
+DECLARE cases jsonb := $headline_cases$[
+  {"input": "Iron is low", "expected": "Iron is low"},
+  {"input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  {"input": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "expected": "Your lab results"},
+  {"input": "💙aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expected": "💙aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  {"input": "", "expected": "Your lab results"},
+  {"input": "   ", "expected": "Your lab results"},
+  {"input": "💙", "expected": "Your lab results"},
+  {"input": 42, "expected": "Your lab results"},
+  {"input": ["PRIVATE"], "expected": "Your lab results"},
+  {"input": {"text": "PRIVATE"}, "expected": "Your lab results"},
+  {"input": null, "expected": "Your lab results"}
+]$headline_cases$::jsonb;
+  item jsonb; source text; payload jsonb; stored jsonb; basic jsonb; read jsonb;
+BEGIN
+  FOR item IN SELECT value FROM jsonb_array_elements(cases) LOOP
+    payload := jsonb_build_object('headline',item->'input');
+    stored := payload || jsonb_build_object('basic_interpretation','stale');
+    FOREACH source IN ARRAY ARRAY['ai','unknown',NULL] LOOP
+      basic := public.interpretation_floor(payload,source);
+      read := public.interpretation_sanitize_basic(stored,source);
+      IF public.interpretation_basic_headline(item->'input') IS DISTINCT FROM item->'expected'
+        OR basic->'headline' IS DISTINCT FROM item->'expected' OR basic->'basic_interpretation' IS DISTINCT FROM item->'expected'
+        OR read->'headline' IS DISTINCT FROM item->'expected' OR read->'basic_interpretation' IS DISTINCT FROM item->'expected' THEN
+        RAISE EXCEPTION 'Basic headline bound parity failed (%)', source;
+      END IF;
+    END LOOP;
+    FOREACH source IN ARRAY ARRAY['fallback','deterministic'] LOOP
+      IF public.interpretation_floor(payload,source)->'headline'
+          IS DISTINCT FROM COALESCE(NULLIF(item->'input','null'::jsonb),'"Your lab results"'::jsonb)
+        OR public.interpretation_sanitize_basic(stored,source)->'headline' IS DISTINCT FROM stored->'headline'
+        OR public.interpretation_sanitize_basic(stored,source)->'basic_interpretation' IS DISTINCT FROM '"stale"'::jsonb THEN
+        RAISE EXCEPTION 'Deterministic headline changed (%)', source;
+      END IF;
+    END LOOP;
+  END LOOP;
+END $$;
+
 DO $$
 DECLARE f text;
 BEGIN
   FOREACH f IN ARRAY ARRAY['public.interpretation_basic_cycle_context(jsonb,text)','public.interpretation_basic_finding_entry(jsonb)',
     'public.interpretation_basic_findings(jsonb,text)','public.interpretation_basic_safety_value(text,jsonb,text)',
-    'public.interpretation_basic_questions(jsonb,text)','public.interpretation_sanitize_basic(jsonb,text)'] LOOP
+    'public.interpretation_basic_questions(jsonb,text)','public.interpretation_basic_headline(jsonb)',
+    'public.interpretation_sanitize_basic(jsonb,text)'] LOOP
     IF has_function_privilege('anon',f,'EXECUTE') OR has_function_privilege('authenticated',f,'EXECUTE')
       OR NOT has_function_privilege('service_role',f,'EXECUTE') THEN
       RAISE EXCEPTION 'Basic sanitizer privilege boundary failed: %', f;
