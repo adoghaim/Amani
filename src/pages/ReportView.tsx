@@ -1356,7 +1356,9 @@ export function ReportView() {
                 ) : (
                   <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
                 )}
-                {canUpgradeInterpretation
+                {freemium && accessState?.access === 'generation_needed' && !interpretation
+                  ? FREEMIUM_COPY.report.generateCta
+                  : canUpgradeInterpretation
                   ? 'Generate full Amani analysis'
                   : `Regenerate (${3 - report.regeneration_count} left)`}
               </Button>

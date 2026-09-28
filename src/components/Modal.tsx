@@ -27,7 +27,8 @@
   when the sheet hits its own scroll limit.
 */
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { X } from 'lucide-react';
 
@@ -44,12 +45,47 @@ interface ModalProps {
 
 export function Modal({ open, onClose, title, children, footer, animate = false }: ModalProps) {
   useBodyScrollLock(open);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Escape closes. Cheap, and the only keyboard affordance a sheet needs.
+  // The portal leaves the app inert without disabling the dialog itself.
+  // Keep this separate from onClose so inline callbacks do not reset focus.
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement;
+    const app = document.getElementById('root');
+    const wasInert = app?.hasAttribute('inert');
+    app?.setAttribute('inert', '');
+    panelRef.current?.focus();
+    return () => {
+      if (!wasInert) app?.removeAttribute('inert');
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, [open]);
+
+  // Contain keyboard navigation even on WebViews without inert support.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (e.key !== 'Tab') return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
+        'a[href], button, input, select, textarea, [tabindex], [contenteditable="true"]',
+      )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled')
+        && !element.closest('[inert], [hidden]') && element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) {
+        e.preventDefault();
+        panel.focus();
+      } else if (!panel.contains(document.activeElement) || document.activeElement === panel) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -57,7 +93,7 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
 
   if (!open) return null;
 
-  return (
+  const overlay = (
     /*
       dvh, not vh: on Android the browser chrome and the on-screen keyboard both
       change the visible height, and vh keeps reporting the largest value. The
@@ -65,7 +101,7 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
       underneath it.
     */
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 safe-top safe-bottom"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 safe-top safe-bottom"
       style={{ height: '100dvh' }}
       onClick={(e) => {
         // Backdrop click closes; clicks inside the panel must not.
@@ -73,6 +109,8 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
       }}
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         className={`bg-theme-surface rounded-2xl shadow-xl w-full max-w-md flex flex-col ${
           animate ? 'animate-slide-up' : ''
         }`}
@@ -115,4 +153,6 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
       </div>
     </div>
   );
+
+  return typeof document === 'undefined' ? overlay : createPortal(overlay, document.body);
 }

@@ -205,7 +205,6 @@ export function Landing() {
               <span className="text-4xl text-theme-text tabular-nums font-medium">$9.99</span>
               <span className="text-theme-muted-text-2 text-sm ml-1">/month</span>
             </p>
-            <p className="text-sm text-theme-muted-text-3 line-through tabular-nums mb-7">$19.99</p>
             <Link to="/signup" className="mt-auto">
               <Button variant="outline" className="w-full">{freemium ? copy.cardCta : 'Start free trial'}</Button>
             </Link>
@@ -213,14 +212,13 @@ export function Landing() {
 
           <div className="rounded-2xl border-2 border-theme-primary bg-theme-surface p-7 flex flex-col relative">
             <span className="absolute -top-3 left-7 bg-theme-accent text-white font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded">
-              Save $20
+              Best value
             </span>
             <p className="font-mono text-xs uppercase tracking-[0.14em] text-theme-primary mb-4">Yearly</p>
             <p className="mb-1">
               <span className="text-4xl text-theme-text tabular-nums font-medium">$99.99</span>
               <span className="text-theme-muted-text-2 text-sm ml-1">/year</span>
             </p>
-            <p className="text-sm text-theme-muted-text-3 line-through tabular-nums mb-7">$199.99</p>
             <Link to="/signup" className="mt-auto">
               <Button className="w-full">{freemium ? copy.cardCta : 'Start free trial'}</Button>
             </Link>
