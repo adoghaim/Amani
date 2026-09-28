@@ -1344,7 +1344,7 @@ export function ReportView() {
             </div>
           </div>
           <div className="flex gap-2 flex-shrink-0">
-            {canRegenerate && (
+            {canRegenerate && !(freemium && accessState?.access === 'generation_needed' && !interpretation) && (
               <Button
                 variant={canUpgradeInterpretation ? 'primary' : 'secondary'}
                 size="sm"
@@ -1356,9 +1356,7 @@ export function ReportView() {
                 ) : (
                   <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
                 )}
-                {freemium && accessState?.access === 'generation_needed' && !interpretation
-                  ? FREEMIUM_COPY.report.generateCta
-                  : canUpgradeInterpretation
+                {canUpgradeInterpretation
                   ? 'Generate full Amani analysis'
                   : `Regenerate (${3 - report.regeneration_count} left)`}
               </Button>
