@@ -17,7 +17,7 @@ export const STRIPE_PRODUCTS: StripeProduct[] = [
     name: 'Amani Yearly',
     description: 'Full access to Amani with yearly billing',
     price: 99.99,
-    beforePrice: 199.99,
+    beforePrice: 99.99,
     currency: 'usd',
     interval: 'year',
     mode: 'subscription'
@@ -28,7 +28,7 @@ export const STRIPE_PRODUCTS: StripeProduct[] = [
     name: 'Amani Monthly',
     description: 'Full access to Amani with monthly billing',
     price: 9.99,
-    beforePrice: 19.99,
+    beforePrice: 9.99,
     currency: 'usd',
     interval: 'month',
     mode: 'subscription'

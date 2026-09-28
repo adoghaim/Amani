@@ -28,11 +28,9 @@ function formatStoreCurrency(amount: number, currencyCode: string): string | nul
  * The comparison price, derived from the Stripe twin's *ratio* rather than its
  * amount.
  *
- * `stripe-config.ts` holds $19.99→$9.99 and $199.99→$99.99, both a straight
- * half-off. The discount is the part that travels; the dollar figures do not —
- * rendering "$199.99" struck through next to a store price of "¥15,000" is both
- * wrong and the kind of price mismatch App Review flags. So take the ratio from
- * the twin and apply it to the store's own localized price.
+ * A comparison renders only when the Stripe twin has beforePrice above price;
+ * none is configured today. If configured, apply that ratio to the store's
+ * localized price rather than displaying a hardcoded USD amount.
  */
 function comparison(product: IapStoreProduct): { before: string; savingsPct: number } | null {
   const twin = getStripeTwin(product.productId)

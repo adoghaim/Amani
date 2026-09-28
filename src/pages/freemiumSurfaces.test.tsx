@@ -195,3 +195,15 @@ describe('flag off: the 1.0.5 copy is untouched', () => {
     expect(text(<SubscriptionStatus />)).not.toContain('Plan:');
   });
 });
+
+
+describe('Landing pricing anchors', () => {
+  it.each(['true', ''])('shows only real prices with freemium=%s', flag => {
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', flag);
+    const html = renderToStaticMarkup(<StaticRouter location="/"><Landing /></StaticRouter>);
+    expect(html).toContain('$9.99');
+    expect(html).toContain('$99.99');
+    expect(html).toContain('Best value');
+    expect(html).not.toMatch(/line-through|Save \$20|\$19\.99|\$199\.99/);
+  });
+});

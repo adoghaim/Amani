@@ -1344,7 +1344,7 @@ export function ReportView() {
             </div>
           </div>
           <div className="flex gap-2 flex-shrink-0">
-            {canRegenerate && (
+            {canRegenerate && !(freemium && accessState?.access === 'generation_needed' && !interpretation) && (
               <Button
                 variant={canUpgradeInterpretation ? 'primary' : 'secondary'}
                 size="sm"

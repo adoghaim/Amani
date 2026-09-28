@@ -70,8 +70,8 @@ export function getIapProduct(productId: string): IapProduct | undefined {
 /**
  * Bridges a store product to its Stripe twin by billing interval, not by id —
  * Apple, Google and Stripe each use their own id namespace, and interval is the
- * only thing all three agree on. Used so the native paywall can show the same
- * "was $199.99" strike-through copy the web paywall does.
+ * only thing all three agree on. Supplies comparison metadata when beforePrice
+ * exceeds price; no comparison is configured today.
  *
  * Prices themselves always come from the store at runtime: StoreKit returns
  * localized currency, and hardcoding USD would show the wrong number to

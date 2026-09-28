@@ -443,9 +443,7 @@ export function Dashboard() {
               <Link to="/app/pricing" className="block mb-5 group">
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-theme-surface border border-theme-border rounded-xl px-5 py-4 transition-colors group-hover:border-theme-primary">
                   <p className="text-sm text-theme-text">
-                    <span className="font-mono text-theme-muted-text-3 line-through mr-1.5 tabular-nums">$19.99</span>
                     <span className="font-mono tabular-nums">$9.99</span> a month, or{' '}
-                    <span className="font-mono text-theme-muted-text-3 line-through mr-1.5 tabular-nums">$199.99</span>
                     <span className="font-mono tabular-nums">$99.99</span> a year
                   </p>
                   <span className="text-sm font-medium text-theme-primary shrink-0">See pricing &rarr;</span>
