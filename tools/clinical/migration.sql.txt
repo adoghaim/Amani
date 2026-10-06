@@ -15,19 +15,30 @@ DECLARE
   after_rows jsonb := '{}'::jsonb;
   archived_rows jsonb := '{}'::jsonb;
   saved record;
-  legacy_count integer;
+  bad record;
+  run_mode text;
+  legacy text[] := ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'];
+  present text[];
+  absent_legacy text[];
+  legacy_oids oid[];
+  conflict_drift boolean;
 BEGIN
   IF to_regclass('clinical_archive.task041_state') IS NOT NULL THEN
     SELECT * INTO STRICT saved FROM clinical_archive.task041_state;
     IF saved.seed_hash <> '__HASH__' OR saved.status <> 'applied' THEN
       RAISE EXCEPTION 'TASK-041 incompatible catalog or rolled-back state; explicit new migration required';
     END IF;
+    IF saved.absent_legacy IS DISTINCT FROM ARRAY(SELECT x FROM unnest(legacy) x WHERE NOT (saved.archived_rows ? x) ORDER BY x)
+      OR (saved.mode, cardinality(saved.absent_legacy)) NOT IN (('production',0),('chain',1),('absent',3))
+      OR (saved.mode='chain' AND saved.absent_legacy <> ARRAY['biomarker_phase_ranges']) THEN
+      RAISE EXCEPTION 'TASK-041 recorded mode % does not match its archived tables', saved.mode;
+    END IF;
     FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog','clinical_catalog_entries','clinical_ranges'] LOOP
       EXECUTE format('LOCK TABLE public.%I IN ACCESS EXCLUSIVE MODE', rel);
       EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM public.%I t', rel) INTO actual;
       IF actual IS DISTINCT FROM saved.after_rows->rel THEN RAISE EXCEPTION 'TASK-041 intervening writes in %', rel; END IF;
     END LOOP;
-    FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
+    FOREACH rel IN ARRAY legacy LOOP
       IF to_regclass('public.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'TASK-041 duplicate legacy table %', rel; END IF;
       IF NOT (saved.archived_rows ? rel) THEN
         IF to_regclass('clinical_archive.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'TASK-041 unexpected archive %',rel; END IF;
@@ -39,100 +50,126 @@ BEGIN
     END LOOP;
     RETURN;
   END IF;
-  IF to_regnamespace('clinical_archive') IS NOT NULL OR to_regclass('public.clinical_ranges') IS NOT NULL
-     OR to_regclass('public.clinical_catalog_entries') IS NOT NULL THEN
-    RAISE EXCEPTION 'TASK-041 unexpected existing destination';
+  -- Classify before reading or writing anything (Lead amendment 4):
+  --   production: all three legacy tables; the only mode permitted against production.
+  --   chain: definitions + reference ranges, phase ranges absent (a fresh checked-in chain).
+  --   absent: no legacy table (turn-3 case, retained).
+  -- Every other shape is unclassifiable and refuses.
+  IF to_regnamespace('clinical_archive') IS NOT NULL THEN
+    RAISE EXCEPTION 'TASK-041 unclassifiable state: schema clinical_archive exists without applied state';
   END IF;
-  SELECT count(*) INTO legacy_count FROM unnest(ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges']) name
-    WHERE to_regclass('public.' || name) IS NOT NULL;
-  IF legacy_count NOT IN (0,3) THEN RAISE EXCEPTION 'TASK-041 partial legacy state'; END IF;
-  FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog','biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
-    IF legacy_count=0 AND rel IN ('biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges') THEN CONTINUE; END IF;
+  IF to_regclass('public.clinical_ranges') IS NOT NULL OR to_regclass('public.clinical_catalog_entries') IS NOT NULL THEN
+    RAISE EXCEPTION 'TASK-041 unclassifiable state: destination clinical tables already exist';
+  END IF;
+  SELECT c.relname, c.relkind INTO bad FROM unnest(legacy) name JOIN pg_class c ON c.oid=to_regclass('public.' || name)
+    WHERE c.relkind <> 'r' ORDER BY c.relname LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'TASK-041 unclassifiable legacy state: public.% has relkind %, not an ordinary table', bad.relname, bad.relkind;
+  END IF;
+  present := ARRAY(SELECT name FROM unnest(legacy) name WHERE to_regclass('public.' || name) IS NOT NULL ORDER BY name);
+  absent_legacy := ARRAY(SELECT name FROM unnest(legacy) name WHERE to_regclass('public.' || name) IS NULL ORDER BY name);
+  run_mode := CASE
+    WHEN cardinality(present)=3 THEN 'production'
+    WHEN present=ARRAY['biomarker_definitions','biomarker_reference_ranges'] THEN 'chain'
+    WHEN cardinality(present)=0 THEN 'absent'
+  END;
+  IF run_mode IS NULL THEN
+    RAISE EXCEPTION 'TASK-041 unclassifiable legacy state: present % is neither production (all three), chain (definitions and reference ranges without phase ranges) nor absent (none)', present;
+  END IF;
+  FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog'] || present LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.' || rel) AND relkind='r') THEN
-      RAISE EXCEPTION 'TASK-041 missing ordinary table %', rel;
+      RAISE EXCEPTION 'TASK-041 mode %: missing ordinary table %', run_mode, rel;
     END IF;
     EXECUTE format('LOCK TABLE public.%I IN ACCESS EXCLUSIVE MODE', rel);
     EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM public.%I t', rel) INTO actual;
-    IF rel IN ('biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges') THEN
+    IF rel = ANY(legacy) THEN
       archived_rows := archived_rows || jsonb_build_object(rel, actual);
     ELSE
       old_rows := old_rows || jsonb_build_object(rel, actual);
     END IF;
   END LOOP;
-  IF legacy_count=3 THEN
+  legacy_oids := ARRAY(SELECT to_regclass('public.' || name)::oid FROM unnest(present) name);
   -- Never silently archive an unexpected external dependent table or view.
   IF EXISTS (
     SELECT 1 FROM pg_constraint WHERE contype='f'
-    AND confrelid IN ('public.biomarker_definitions'::regclass,'public.biomarker_reference_ranges'::regclass,'public.biomarker_phase_ranges'::regclass)
-    AND conrelid NOT IN ('public.biomarker_definitions'::regclass,'public.biomarker_reference_ranges'::regclass,'public.biomarker_phase_ranges'::regclass)
+    AND confrelid = ANY(legacy_oids) AND conrelid <> ALL(legacy_oids)
     AND NOT (conname='lab_results_biomarker_name_fkey' AND conrelid=coalesce(to_regclass('public.lab_results'),0::oid)
-      AND confrelid='public.biomarker_definitions'::regclass)
+      AND confrelid=to_regclass('public.biomarker_definitions'))
   ) OR EXISTS (
     SELECT 1 FROM pg_depend d JOIN pg_rewrite w ON d.classid='pg_rewrite'::regclass AND d.objid=w.oid
-    WHERE d.refobjid IN ('public.biomarker_definitions'::regclass,'public.biomarker_reference_ranges'::regclass,'public.biomarker_phase_ranges'::regclass)
-  ) THEN RAISE EXCEPTION 'TASK-041 unexpected legacy dependency'; END IF;
-  IF jsonb_array_length(archived_rows->'biomarker_definitions') <> 44
-    OR jsonb_array_length(archived_rows->'biomarker_reference_ranges') <> 23
-    OR jsonb_array_length(archived_rows->'biomarker_phase_ranges') <> 22 THEN
-    RAISE EXCEPTION 'TASK-041 unexpected legacy row counts';
+    WHERE d.refobjid = ANY(legacy_oids)
+  ) THEN RAISE EXCEPTION 'TASK-041 mode %: unexpected legacy dependency', run_mode; END IF;
+  IF run_mode='production' THEN
+    IF jsonb_array_length(archived_rows->'biomarker_definitions') <> 44
+      OR jsonb_array_length(archived_rows->'biomarker_reference_ranges') <> 23
+      OR jsonb_array_length(archived_rows->'biomarker_phase_ranges') <> 22 THEN
+      RAISE EXCEPTION 'TASK-041 mode production: unexpected legacy row counts';
+    END IF;
+    -- Lead-supplied 2026-10-06 inventories are preconditions, not winners.
+    -- Refuse changed known conflicts rather than silently archiving new evidence.
+    IF NOT EXISTS (SELECT 1 FROM public.biomarker_definitions WHERE name='magnesium' AND unit='mg/dL'
+        AND optimal_min=5.2 AND optimal_max=6.5 AND clinical_min=4.2 AND clinical_max=6.8)
+      OR NOT EXISTS (SELECT 1 FROM public.biomarker_definitions WHERE name='egfr' AND unit='mL/min'
+        AND optimal_min=90 AND optimal_max=120 AND clinical_min=60 AND clinical_max=120) THEN
+      RAISE EXCEPTION 'TASK-041 mode production: definitions inventory mismatch';
+    END IF;
+    -- Dynamic SQL: the other modes never plan a reference to an absent phase table.
+    EXECUTE 'SELECT EXISTS (
+      SELECT 1 FROM (VALUES
+        (''estradiol'',''follicular'',30,250,30,200,20,400,12,300),
+        (''estradiol'',''luteal'',50,300,60,200,30,500,12,250),
+        (''estradiol'',''menstrual'',20,80,20,80,10,200,12,100),
+        (''estradiol'',''ovulatory'',150,750,150,350,100,1000,100,500),
+        (''fsh'',''follicular'',2,10,3,10,2,20,2,20),
+        (''fsh'',''luteal'',1,8,1,8,1,10,1,12),
+        (''fsh'',''menstrual'',3,10,3,10,3,20,2,20),
+        (''fsh'',''ovulatory'',2,15,6,20,2,30,5,30),
+        (''lh'',''follicular'',2,15,1,12,1,25,1,15),
+        (''lh'',''luteal'',2,12,1,10,1,20,1,15),
+        (''lh'',''menstrual'',2,15,1,10,1,25,1,15),
+        (''lh'',''ovulatory'',20,80,15,70,15,100,10,100),
+        (''progesterone'',''follicular'',0.1,0.9,0.1,1.0,0.1,1.5,0.1,1.5),
+        (''progesterone'',''luteal'',5.0,25.0,5.0,20.0,3.0,30.0,2.0,25.0),
+        (''progesterone'',''menstrual'',0.1,0.9,0.1,0.9,0.1,1.5,0.1,1.0)
+      ) v(slug,phase,ro_min,ro_max,po_min,po_max,rc_min,rc_max,pc_min,pc_max)
+      LEFT JOIN public.biomarker_reference_ranges r ON r.biomarker_name=v.slug AND r.phase=v.phase
+      LEFT JOIN public.biomarker_phase_ranges p ON p.biomarker_name=v.slug AND p.phase=v.phase
+      WHERE ROW(r.optimal_min,r.optimal_max,r.clinical_min,r.clinical_max) IS DISTINCT FROM ROW(v.ro_min,v.ro_max,v.rc_min,v.rc_max)
+         OR ROW(p.optimal_min,p.optimal_max,p.clinical_min,p.clinical_max) IS DISTINCT FROM ROW(v.po_min,v.po_max,v.pc_min,v.pc_max)
+    )' INTO STRICT conflict_drift;
+    IF conflict_drift THEN RAISE EXCEPTION 'TASK-041 mode production: phase conflict inventory mismatch'; END IF;
   END IF;
-  -- Lead-supplied 2026-10-06 inventories are preconditions, not winners.
-  -- Refuse changed known conflicts rather than silently archiving new evidence.
-  IF NOT EXISTS (SELECT 1 FROM public.biomarker_definitions WHERE name='magnesium' AND unit='mg/dL'
-      AND optimal_min=5.2 AND optimal_max=6.5 AND clinical_min=4.2 AND clinical_max=6.8)
-    OR NOT EXISTS (SELECT 1 FROM public.biomarker_definitions WHERE name='egfr' AND unit='mL/min'
-      AND optimal_min=90 AND optimal_max=120 AND clinical_min=60 AND clinical_max=120) THEN
-    RAISE EXCEPTION 'TASK-041 definitions inventory mismatch';
+  -- Production and absent modes treat the supplied snapshots as the exact metadata
+  -- precondition, not permission to overwrite drift. Chain mode is a clean
+  -- developer database and nothing in it is evidence: it asserts nothing about
+  -- identity, catalog or synonym contents and lets the upserts below seed by slug.
+  IF run_mode IN ('production','absent') THEN
+    SELECT jsonb_agg(x ORDER BY x::text) INTO expected FROM jsonb_array_elements(seed->'registry') x;
+    SELECT jsonb_agg(to_jsonb(t)-'id'-'created_at' ORDER BY (to_jsonb(t)-'id'-'created_at')::text) INTO actual FROM public.canonical_analytes t;
+    IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'TASK-041 mode %: canonical snapshot mismatch', run_mode; END IF;
+    SELECT jsonb_agg(x ORDER BY x::text) INTO expected FROM jsonb_array_elements(seed->'metadata') x;
+    SELECT jsonb_agg(to_jsonb(t)-'id'-'created_at' ORDER BY (to_jsonb(t)-'id'-'created_at')::text) INTO actual FROM public.biomarker_catalog t;
+    IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'TASK-041 mode %: catalog snapshot mismatch', run_mode; END IF;
+    IF EXISTS (
+      SELECT 1 FROM public.analyte_synonyms s JOIN public.canonical_analytes a ON a.id=s.canonical_analyte_id
+      WHERE NOT (seed->'synonyms' @> jsonb_build_array(jsonb_build_object('analyte_slug',a.slug,'synonym_text',s.synonym_text,'source_type',s.source_type)))
+    ) THEN RAISE EXCEPTION 'TASK-041 mode %: unrecognized synonym or conflicting owner', run_mode; END IF;
   END IF;
-  IF EXISTS (
-    SELECT 1 FROM (VALUES
-      ('estradiol','follicular',30,250,30,200,20,400,12,300),
-      ('estradiol','luteal',50,300,60,200,30,500,12,250),
-      ('estradiol','menstrual',20,80,20,80,10,200,12,100),
-      ('estradiol','ovulatory',150,750,150,350,100,1000,100,500),
-      ('fsh','follicular',2,10,3,10,2,20,2,20),
-      ('fsh','luteal',1,8,1,8,1,10,1,12),
-      ('fsh','menstrual',3,10,3,10,3,20,2,20),
-      ('fsh','ovulatory',2,15,6,20,2,30,5,30),
-      ('lh','follicular',2,15,1,12,1,25,1,15),
-      ('lh','luteal',2,12,1,10,1,20,1,15),
-      ('lh','menstrual',2,15,1,10,1,25,1,15),
-      ('lh','ovulatory',20,80,15,70,15,100,10,100),
-      ('progesterone','follicular',0.1,0.9,0.1,1.0,0.1,1.5,0.1,1.5),
-      ('progesterone','luteal',5.0,25.0,5.0,20.0,3.0,30.0,2.0,25.0),
-      ('progesterone','menstrual',0.1,0.9,0.1,0.9,0.1,1.5,0.1,1.0)
-    ) v(slug,phase,ro_min,ro_max,po_min,po_max,rc_min,rc_max,pc_min,pc_max)
-    LEFT JOIN public.biomarker_reference_ranges r ON r.biomarker_name=v.slug AND r.phase=v.phase
-    LEFT JOIN public.biomarker_phase_ranges p ON p.biomarker_name=v.slug AND p.phase=v.phase
-    WHERE ROW(r.optimal_min,r.optimal_max,r.clinical_min,r.clinical_max) IS DISTINCT FROM ROW(v.ro_min,v.ro_max,v.rc_min,v.rc_max)
-       OR ROW(p.optimal_min,p.optimal_max,p.clinical_min,p.clinical_max) IS DISTINCT FROM ROW(v.po_min,v.po_max,v.pc_min,v.pc_max)
-  ) THEN RAISE EXCEPTION 'TASK-041 phase conflict inventory mismatch'; END IF;
-  END IF; -- wholly absent legacy state skips only archival preconditions
-  -- The supplied snapshots are the exact metadata precondition, not permission
-  -- to overwrite production drift. UUIDs/timestamps are preserved, never seeded.
-  SELECT jsonb_agg(x ORDER BY x::text) INTO expected FROM jsonb_array_elements(seed->'registry') x;
-  SELECT jsonb_agg(to_jsonb(t)-'id'-'created_at' ORDER BY (to_jsonb(t)-'id'-'created_at')::text) INTO actual FROM public.canonical_analytes t;
-  IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'TASK-041 canonical snapshot mismatch'; END IF;
-  SELECT jsonb_agg(x ORDER BY x::text) INTO expected FROM jsonb_array_elements(seed->'metadata') x;
-  SELECT jsonb_agg(to_jsonb(t)-'id'-'created_at' ORDER BY (to_jsonb(t)-'id'-'created_at')::text) INTO actual FROM public.biomarker_catalog t;
-  IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'TASK-041 catalog snapshot mismatch'; END IF;
-  IF EXISTS (
-    SELECT 1 FROM public.analyte_synonyms s JOIN public.canonical_analytes a ON a.id=s.canonical_analyte_id
-    WHERE NOT (seed->'synonyms' @> jsonb_build_array(jsonb_build_object('analyte_slug',a.slug,'synonym_text',s.synonym_text,'source_type',s.source_type)))
-  ) THEN RAISE EXCEPTION 'TASK-041 unrecognized synonym or conflicting owner'; END IF;
 
   CREATE SCHEMA clinical_archive;
   REVOKE ALL ON SCHEMA clinical_archive FROM PUBLIC, anon, authenticated, service_role;
   CREATE TABLE clinical_archive.task041_state (
     singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton), seed_hash text NOT NULL,
     status text NOT NULL CHECK(status IN ('applied','rolled_back')),
+    mode text NOT NULL CHECK(mode IN ('production','chain','absent')), absent_legacy text[] NOT NULL,
     before_rows jsonb NOT NULL, after_rows jsonb NOT NULL, archived_rows jsonb NOT NULL
   );
   REVOKE ALL ON clinical_archive.task041_state FROM PUBLIC, anon, authenticated, service_role;
   ALTER TABLE clinical_archive.task041_state ENABLE ROW LEVEL SECURITY;
 
-  -- Seed by slug. Exact-state guards above make these identity/catalog upserts
-  -- no-ops on the supplied production snapshot, preserving IDs and timestamps.
+  -- Seed by slug. In production and absent modes the exact-state guards above make
+  -- these identity/catalog upserts precondition-only no-ops, preserving IDs and
+  -- timestamps. Only chain mode can insert missing rows; rollback deletes them.
   INSERT INTO public.canonical_analytes (slug,display_name,category,subcategory,unit,is_core,is_ratio,affects_scoring,affects_recommendations)
     SELECT x.slug,x.display_name,x.category,x.subcategory,x.unit,x.is_core,x.is_ratio,x.affects_scoring,x.affects_recommendations
     FROM jsonb_populate_recordset(NULL::public.canonical_analytes,seed->'registry') x
@@ -148,6 +185,7 @@ BEGIN
 
   -- Separate catalog identity preserves two range-only analytes without creating
   -- extraction identities. Unreconciled units have NULL registry_slug/factor.
+  -- Everything from here on is mode-independent: every mode builds identical tables.
   CREATE TABLE public.clinical_catalog_entries (
     slug text PRIMARY KEY, UNIQUE(slug,range_unit), legacy_key text UNIQUE NOT NULL, range_unit text NOT NULL,
     registry_slug text REFERENCES public.canonical_analytes(slug), registry_unit text,
@@ -187,14 +225,14 @@ BEGIN
   CREATE POLICY clinical_entries_read ON public.clinical_catalog_entries FOR SELECT TO authenticated,service_role USING(true);
   CREATE POLICY clinical_ranges_read ON public.clinical_ranges FOR SELECT TO authenticated,service_role USING(true);
 
-  FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
-    IF legacy_count=3 THEN EXECUTE format('ALTER TABLE public.%I SET SCHEMA clinical_archive',rel); END IF;
+  FOREACH rel IN ARRAY present LOOP
+    EXECUTE format('ALTER TABLE public.%I SET SCHEMA clinical_archive',rel);
   END LOOP;
   FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog','clinical_catalog_entries','clinical_ranges'] LOOP
     EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM public.%I t',rel) INTO actual;
     after_rows := after_rows || jsonb_build_object(rel,actual);
   END LOOP;
-  INSERT INTO clinical_archive.task041_state(seed_hash,status,before_rows,after_rows,archived_rows)
-    VALUES('__HASH__','applied',old_rows,after_rows,archived_rows);
+  INSERT INTO clinical_archive.task041_state(seed_hash,status,mode,absent_legacy,before_rows,after_rows,archived_rows)
+    VALUES('__HASH__','applied',run_mode,absent_legacy,old_rows,after_rows,archived_rows);
 END $clinical$;
 COMMIT;

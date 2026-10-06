@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 DO $verify$
-DECLARE seed jsonb; actual jsonb; expected jsonb; rel text; role_name text; priv text;
+DECLARE seed jsonb; actual jsonb; expected jsonb; rel text; role_name text; priv text; st record;
 BEGIN
   SELECT payload INTO STRICT seed FROM public.fixture_clinical_seed;
   -- Full JSON row equality checks SQL endpoints, units, provenance and mappings.
@@ -32,11 +32,19 @@ BEGIN
 
     THEN RAISE EXCEPTION 'magnesium archive/shipping separation lost'; END IF;
   IF EXISTS(SELECT 1 FROM public.clinical_ranges WHERE evidence_grade<>'unsourced' OR review_status<>'UNKNOWN') THEN RAISE EXCEPTION 'invented provenance'; END IF;
-  IF (SELECT archived_rows <> '{}'::jsonb FROM clinical_archive.task041_state) THEN
+  SELECT * INTO STRICT st FROM clinical_archive.task041_state;
+  IF st.mode NOT IN ('production','chain','absent') THEN RAISE EXCEPTION 'unknown recorded mode %',st.mode; END IF;
+  -- Each legacy table is archived exactly when the recorded mode says it existed.
+  FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
+    IF to_regclass('public.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'legacy table % left in public',rel; END IF;
+    IF (rel = ANY(st.absent_legacy)) = (to_regclass('clinical_archive.' || rel) IS NOT NULL) OR (rel = ANY(st.absent_legacy)) = (st.archived_rows ? rel)
+      THEN RAISE EXCEPTION 'mode % archive of % inconsistent',st.mode,rel; END IF;
+  END LOOP;
+  IF st.absent_legacy <> CASE st.mode WHEN 'production' THEN '{}'::text[] WHEN 'chain' THEN ARRAY['biomarker_phase_ranges']
+    ELSE ARRAY['biomarker_definitions','biomarker_phase_ranges','biomarker_reference_ranges'] END
+    THEN RAISE EXCEPTION 'mode % recorded wrong absent tables %',st.mode,st.absent_legacy; END IF;
+  IF st.mode IN ('production','chain') THEN
     IF NOT EXISTS(SELECT 1 FROM clinical_archive.biomarker_definitions WHERE name='magnesium' AND optimal_min=5.2 AND optimal_max=6.5) THEN RAISE EXCEPTION 'magnesium archive lost'; END IF;
-    FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
-      IF to_regclass('public.' || rel) IS NOT NULL OR to_regclass('clinical_archive.' || rel) IS NULL THEN RAISE EXCEPTION 'legacy retirement failed'; END IF;
-    END LOOP;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lab_results_biomarker_name_fkey'
       AND conrelid='public.lab_results'::regclass AND confrelid='clinical_archive.biomarker_definitions'::regclass
       AND contype='f' AND convalidated) THEN RAISE EXCEPTION 'lab_results FK did not follow archive'; END IF;
@@ -46,10 +54,6 @@ BEGIN
       UPDATE public.lab_results SET biomarker_name='task041_missing' WHERE biomarker_name='tsh';
       RAISE EXCEPTION 'lab_results FK accepted invalid reference';
     EXCEPTION WHEN foreign_key_violation THEN NULL; END;
-  ELSE
-    FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
-      IF to_regclass('public.' || rel) IS NOT NULL OR to_regclass('clinical_archive.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'absent legacy table created'; END IF;
-    END LOOP;
   END IF;
   FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
     IF has_schema_privilege(role_name,'clinical_archive','USAGE') THEN RAISE EXCEPTION 'archive accessible to %',role_name; END IF;

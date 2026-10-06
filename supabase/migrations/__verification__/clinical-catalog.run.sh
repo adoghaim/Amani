@@ -1,12 +1,29 @@
 #!/usr/bin/env bash
 # Sourced by run.sh; shares only the existing throwaway container, no remote DB.
 # This case also runs independently via CLINICAL_ONLY=1 run.sh.
+CLINICAL_TMP="$(mktemp -d)"
+# Forward must refuse with the named classification and leave no archive behind.
+clinical_refused() {
+  local db="$1" label="$2" reason="$3" out
+  if out=$(docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f /tmp/clinical-forward.sql 2>&1); then
+    echo "FAIL: $db accepted $label"; return 1
+  fi
+  if ! grep -q "$reason" <<<"$out"; then echo "FAIL: $db refused $label for the wrong reason: $out"; return 1; fi
+  docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+    IF to_regnamespace('clinical_archive') IS NOT NULL OR to_regclass('public.clinical_ranges') IS NOT NULL
+      THEN RAISE EXCEPTION 'refused forward left state behind'; END IF; END \$\$;"
+}
+clinical_expect_mode() {
+  local db="$1" mode="$2" actual
+  actual=$(docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -tA -c 'SELECT mode FROM clinical_archive.task041_state;')
+  if [ "$actual" != "$mode" ]; then echo "FAIL: $db recorded mode '$actual', expected '$mode'"; return 1; fi
+}
 clinical_case() {
   local db="$1"
   local missing_synonyms="$2"
   docker exec "$CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE $db;"
   clinical_psql() { docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 "$@"; }
-  for file in clinical-catalog.prelude.sql clinical-catalog.seed.sql clinical-catalog.verify.sql clinical-catalog.rollback.sql clinical-catalog.snapshot.sql; do
+  for file in clinical-catalog.prelude.sql clinical-catalog.seed.sql clinical-catalog.verify.sql clinical-catalog.rollback.sql clinical-catalog.snapshot.sql clinical-catalog.fingerprint.sql; do
     docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
   done
   docker cp "$HERE/../20261006000000_clinical_catalog.sql" "$CONTAINER:/tmp/clinical-forward.sql" >/dev/null
@@ -32,12 +49,17 @@ clinical_case() {
     echo 'FAIL: accepted known FK name on wrong table'; return 1
   fi
   clinical_psql -q -c 'DROP TABLE public.fixture_wrong_owner;'
-  # A chain with definitions/reference but no out-of-band phase table is partial.
-  clinical_psql -q -c 'ALTER TABLE public.biomarker_phase_ranges RENAME TO fixture_phase_saved;'
-  if clinical_psql -q -f /tmp/clinical-forward.sql >/dev/null 2>&1; then
-    echo 'FAIL: accepted partial legacy state'; return 1
-  fi
-  clinical_psql -q -c 'ALTER TABLE public.fixture_phase_saved RENAME TO biomarker_phase_ranges;'
+  # Unclassifiable shapes (amendment 4): neither production nor chain nor absent.
+  # Definitions + phase without reference ranges.
+  clinical_psql -q -c 'ALTER TABLE public.biomarker_reference_ranges RENAME TO fixture_reference_saved;'
+  clinical_refused "$db" 'definitions and phase without reference ranges' 'unclassifiable legacy state' || return 1
+  clinical_psql -q -c 'ALTER TABLE public.fixture_reference_saved RENAME TO biomarker_reference_ranges;'
+  # All three names present, but the phase "table" is a view.
+  clinical_psql -q -c 'ALTER TABLE public.biomarker_phase_ranges RENAME TO fixture_phase_saved;
+    CREATE VIEW public.biomarker_phase_ranges AS SELECT * FROM public.fixture_phase_saved;'
+  clinical_refused "$db" 'phase ranges present as a view' 'not an ordinary table' || return 1
+  clinical_psql -q -c 'DROP VIEW public.biomarker_phase_ranges;
+    ALTER TABLE public.fixture_phase_saved RENAME TO biomarker_phase_ranges;'
   local before after
   before=$(clinical_psql -tA -f /tmp/clinical-catalog.snapshot.sql)
   # Unknown metadata must abort atomically before any archive is created.
@@ -55,6 +77,9 @@ clinical_case() {
   clinical_psql -q -c 'DROP VIEW public.fixture_legacy_dependent;'
   clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
   clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
+  clinical_expect_mode "$db" production || return 1
+  # Reference for the chain case's direct comparison (amendment 4, harness item 2).
+  clinical_psql -tA -f /tmp/clinical-catalog.fingerprint.sql > "$CLINICAL_TMP/$db.fingerprint"
   clinical_psql -q -c 'ALTER TABLE public.lab_results ADD CONSTRAINT fixture_unexpected_fkey FOREIGN KEY(biomarker_name) REFERENCES clinical_archive.biomarker_definitions(name);'
   if clinical_psql -q -f /tmp/clinical-catalog.rollback.sql >/dev/null 2>&1; then
     echo 'FAIL: rollback accepted unexpected archive FK'; return 1
@@ -108,10 +133,18 @@ clinical_absent_case() {
   sed '/^CREATE TABLE biomarker_definitions (/,$d' "$HERE/clinical-catalog.prelude.sql" | clinical_psql -q
   clinical_psql -q -c 'CREATE TABLE public.fixture_extraction_link(id uuid REFERENCES public.canonical_analytes(id));'
   clinical_psql -q -f /tmp/clinical-catalog.seed.sql
+  # Phase ranges alone (without the other two) is unclassifiable and must refuse.
+  clinical_psql -q -c 'CREATE TABLE public.biomarker_phase_ranges(biomarker_name text, phase text);'
+  clinical_refused clinical_absent 'phase ranges without definitions or reference ranges' 'unclassifiable legacy state' || return 1
+  clinical_psql -q -c 'DROP TABLE public.biomarker_phase_ranges;'
   local before after archival absent
   before=$(clinical_psql -tAc "SELECT jsonb_build_object('registry',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM public.canonical_analytes t),'synonyms',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM public.analyte_synonyms t),'metadata',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM public.biomarker_catalog t));")
   clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
   clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
+  clinical_expect_mode clinical_absent absent || return 1
+  if [ "$(clinical_psql -tA -f /tmp/clinical-catalog.fingerprint.sql)" != "$(cat "$CLINICAL_TMP/clinical_snapshot.fingerprint")" ]; then
+    echo 'FAIL: absent mode built different tables, grants or RLS than production mode'; return 1
+  fi
   absent=$(clinical_psql -tAc "SELECT jsonb_build_object('entries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY slug) FROM public.clinical_catalog_entries t),'ranges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM public.clinical_ranges t));")
   archival=$(docker exec "$CONTAINER" psql -U postgres -d clinical_snapshot -tAc "SELECT jsonb_build_object('entries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY slug) FROM clinical_archive.clinical_catalog_entries t),'ranges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM clinical_archive.clinical_ranges t));")
   if [ "$absent" != "$archival" ]; then echo 'FAIL: absent and archival projections differ'; return 1; fi
@@ -131,3 +164,69 @@ clinical_absent_case() {
   echo 'PASS: wholly absent legacy state forward, replay, identical projections and rollback'
 }
 clinical_absent_case
+
+# Amendment 4 mode `chain`: what a fresh checked-in migration chain produces.
+# 20260310054519 creates definitions (44) and reference ranges (23); no migration
+# creates the phase table. Build exactly that: the prelude minus the out-of-band
+# phase table and minus the fixture-only RLS policies, plus the chain's own index.
+clinical_chain_case() {
+  local db=clinical_chain
+  docker exec "$CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE $db;"
+  clinical_psql() { docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 "$@"; }
+  sed '/^CREATE TABLE public.biomarker_phase_ranges/,/^CREATE POLICY fixture_phase_read/d' "$HERE/clinical-catalog.prelude.sql" | clinical_psql -q
+  clinical_psql -q -c 'CREATE INDEX IF NOT EXISTS idx_brr_name ON public.biomarker_reference_ranges(biomarker_name);'
+  clinical_psql -q -f /tmp/clinical-catalog.seed.sql
+  clinical_psql -q -c "DO \$\$ BEGIN
+    IF to_regclass('public.biomarker_phase_ranges') IS NOT NULL
+      OR (SELECT count(*) FROM public.biomarker_definitions)<>44
+      OR (SELECT count(*) FROM public.biomarker_reference_ranges)<>23
+      THEN RAISE EXCEPTION 'chain fixture does not match the checked-in chain shape'; END IF; END \$\$;"
+  # A dev database is not evidence: drift that production mode refuses must be
+  # accepted here, and rows chain mode seeds must be removed again on rollback.
+  clinical_psql -q -c "UPDATE public.canonical_analytes SET unit='dev-drift' WHERE slug='tsh';
+    DELETE FROM public.biomarker_catalog WHERE slug=(SELECT min(slug) FROM public.biomarker_catalog);
+    DELETE FROM public.biomarker_reference_ranges WHERE biomarker_name='lh' AND phase='general';"
+  local before after
+  before=$(clinical_psql -tA -f /tmp/clinical-catalog.snapshot.sql)
+  clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
+  clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
+  clinical_expect_mode "$db" chain || return 1
+  clinical_psql -q -c "DO \$\$ BEGIN
+    IF (SELECT absent_legacy FROM clinical_archive.task041_state)<>ARRAY['biomarker_phase_ranges']
+      OR (SELECT archived_rows ? 'biomarker_phase_ranges' FROM clinical_archive.task041_state)
+      OR to_regclass('clinical_archive.biomarker_phase_ranges') IS NOT NULL
+      THEN RAISE EXCEPTION 'chain mode did not record the absent phase table'; END IF;
+    IF (SELECT count(*) FROM public.biomarker_catalog)<>(SELECT jsonb_array_length(payload->'metadata') FROM public.fixture_clinical_seed)
+      THEN RAISE EXCEPTION 'chain mode did not seed the catalog by slug'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.canonical_analytes WHERE slug='tsh' AND unit='dev-drift')
+      THEN RAISE EXCEPTION 'chain mode overwrote existing identity rows'; END IF; END \$\$;"
+  # Direct comparison, not two separate assertions: the new tables' content,
+  # columns, constraints, indexes, comments, grants, privileges and RLS policies.
+  local chain_print
+  chain_print=$(clinical_psql -tA -f /tmp/clinical-catalog.fingerprint.sql)
+  for reference in clinical_snapshot clinical_backfill; do
+    if [ "$chain_print" != "$(cat "$CLINICAL_TMP/$reference.fingerprint")" ]; then
+      echo "FAIL: chain mode built different tables, grants or RLS than production mode ($reference)"; return 1
+    fi
+  done
+  clinical_psql -q -f /tmp/clinical-catalog.rollback.sql
+  after=$(clinical_psql -tA -f /tmp/clinical-catalog.snapshot.sql)
+  if [ "$before" != "$after" ]; then
+    echo "FAIL: $db rollback changed data, IDs, columns, ACLs, policies, indexes or FKs"; return 1
+  fi
+  clinical_psql -q -c "DO \$\$ BEGIN
+    IF (SELECT status FROM clinical_archive.task041_state)<>'rolled_back'
+      OR to_regclass('public.biomarker_phase_ranges') IS NOT NULL
+      OR to_regclass('clinical_archive.biomarker_phase_ranges') IS NOT NULL
+      OR to_regclass('public.biomarker_definitions') IS NULL
+      OR to_regclass('public.biomarker_reference_ranges') IS NULL
+      OR to_regclass('public.clinical_ranges') IS NOT NULL
+      THEN RAISE EXCEPTION 'chain rollback did not reverse exactly the forward'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lab_results_biomarker_name_fkey'
+      AND conrelid='public.lab_results'::regclass AND confrelid='public.biomarker_definitions'::regclass AND convalidated)
+      THEN RAISE EXCEPTION 'lab_results FK not restored'; END IF;
+    END \$\$;"
+  echo 'PASS: chain mode (fresh checked-in chain) forward, replay, production-identical tables/grants/RLS and exact rollback'
+}
+clinical_chain_case
+rm -rf "$CLINICAL_TMP"

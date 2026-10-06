@@ -1,17 +1,20 @@
 -- Compare reference data, physical identities, table ACLs, RLS, policies,
 -- columns, indexes and FK definitions before forward and after rollback.
+-- Tables absent in a mode (the phase table in a fresh chain) contribute nothing.
+\set QUIET on
+CREATE FUNCTION pg_temp.task041_rows(rel text) RETURNS SETOF jsonb LANGUAGE plpgsql AS $rows$
+BEGIN
+  IF to_regclass('public.' || rel) IS NOT NULL THEN
+    RETURN QUERY EXECUTE format('SELECT to_jsonb(t) FROM public.%I t', rel);
+  END IF;
+END $rows$;
 WITH rels AS (
   SELECT c.* FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname='public' AND c.relname IN
     ('canonical_analytes','analyte_synonyms','biomarker_catalog','biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges','lab_results')
 ), data AS (
-  SELECT 'canonical_analytes' name,to_jsonb(t) row FROM public.canonical_analytes t UNION ALL
-  SELECT 'analyte_synonyms',to_jsonb(t) FROM public.analyte_synonyms t UNION ALL
-  SELECT 'biomarker_catalog',to_jsonb(t) FROM public.biomarker_catalog t UNION ALL
-  SELECT 'biomarker_definitions',to_jsonb(t) FROM public.biomarker_definitions t UNION ALL
-  SELECT 'biomarker_reference_ranges',to_jsonb(t) FROM public.biomarker_reference_ranges t UNION ALL
-  SELECT 'biomarker_phase_ranges',to_jsonb(t) FROM public.biomarker_phase_ranges t UNION ALL
-  SELECT 'lab_results',to_jsonb(t) FROM public.lab_results t
+  SELECT r.name, x AS row FROM unnest(ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog','biomarker_definitions',
+    'biomarker_reference_ranges','biomarker_phase_ranges','lab_results']) r(name), pg_temp.task041_rows(r.name) x
 )
 SELECT jsonb_build_object(
  'data',(SELECT jsonb_agg(jsonb_build_object('table',name,'row',row) ORDER BY name,row::text) FROM data),
