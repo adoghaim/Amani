@@ -40,6 +40,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Offline release automation tests
+        run: bash tools/release/check.sh
+
       - name: Lint
         run: npm run lint
 
