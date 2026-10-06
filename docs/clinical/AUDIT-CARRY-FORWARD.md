@@ -16,7 +16,7 @@ Open question: what original assay/specimen record explains the retired row, and
 
 ### CF-03 — P1 minimum — All 15 reproductive-hormone conflicts remain open
 
-Both historical candidates are visible below, transcribed from `CONFLICTS.md`. Reference = `biomarker_reference_ranges`; phase = `biomarker_phase_ranges`. Shipping equals the reference-table candidate. That is precedence, never clinical correctness. Each row is an explicit open item for both kinds, even where one pair of endpoints agrees. Progesterone ovulatory has no conflict in the supplied 15-item inventory; its ranges still require review in the 198-row queue.
+Both historical candidates are visible below, transcribed from `CONFLICTS.md`. Reference = `biomarker_reference_ranges`; phase = `biomarker_phase_ranges`. Shipping equals the reference-table candidate. That is precedence, never clinical correctness. Each row is an explicit open item for both kinds (30 range rows now DISPUTED), even where one pair of endpoints agrees. Progesterone ovulatory has no conflict in the supplied 15-item inventory; its ranges still require review in the 198-row queue.
 
 | Audit item | Phase | Reference optimal | Phase optimal | Reference clinical | Phase clinical | Specific question / required artifact |
 |---|---|---|---|---|---|---|
@@ -36,9 +36,9 @@ Both historical candidates are visible below, transcribed from `CONFLICTS.md`. R
 | CF-03-progesterone-luteal | luteal | 5.0-25.0 | 5.0-20.0 | 3.0-30.0 | 2.0-25.0 | Which progesterone assay and collection-day definition support either luteal candidate for each kind? Obtain the originating method sheets and phase-specific population interval tables for both legacy tables, plus an attributable context-target rationale and human adjudication. |
 | CF-03-progesterone-menstrual | menstrual | 0.1-0.9 | 0.1-0.9 | 0.1-1.5 | 0.1-1.0 | Which progesterone assay and collection-day definition support either menstrual candidate for each kind? Obtain the originating method sheets and phase-specific population interval tables for both legacy tables, plus an attributable context-target rationale and human adjudication. |
 
-### CF-04 — P0 — RF and ANA extraction/product gap
+### CF-04 — P2 — RF and ANA extraction/product gap
 
-`rheumatoid_factor` (0–14 IU/mL in both kinds) and `ana_screen` (null endpoints, empty unit, both kinds) have no registry identity and no extraction synonyms in the supplied catalog. They are unreachable through canonical lab ingestion. The P0 queue placement is a conservative diagnostic-labeling risk if made reachable; it does not claim current user exposure.
+`rheumatoid_factor` (0–14 IU/mL in both kinds) and `ana_screen` (null endpoints, empty unit, both kinds) have no registry identity and no extraction synonyms in the supplied catalog. They are unreachable through canonical lab ingestion. P2 is a product/identity review priority, not a clinical P0: no current ingestion exposure is established. Both kinds now carry NEEDS_CONTEXT; enabling ingestion needs a separate decision.
 
 Open questions: should either identity enter ingestion, which exact assay would it name, and how should ANA qualitative/titer/pattern information replace a numeric assumption? Required artifacts: product decision, extraction-registry proposal, and laboratory reporting/method sheets. Neither identity nor any interval was invented here.
 
@@ -91,3 +91,34 @@ Open questions: does the Lead confirm the corrected 44 female / 32 all / seven a
 Shipping eGFR **90–200 context / 60–200 reference mL/min/1.73m2** versus retired definitions **90–120 / 60–120 mL/min**. Both are visible historical observations. No indexed/unindexed unit equivalence or conversion is asserted; no candidate was seeded.
 
 Open question: which equation, body-surface-area convention, age scope and reporting ceiling explain each record? Required artifacts: both originating lab/equation specifications and a human adjudication of the unit and ceiling discrepancies.
+
+### CF-09 — P0 — Five unphased reproductive-hormone self-contradictions
+
+These are shipping fallback bands, not new candidates. All five are now DISPUTED.
+The conflict is mechanically established inside the dictionary; it does not establish
+which endpoint is clinically correct. No value changed.
+
+| Explicit audit item | Unphased band | Span of same-kind phase bands | Internal contradiction / question |
+|---|---|---|---|
+| lh/general/unphased/amani_context | 2–15 mIU/mL | 2–80 | The entire LH ovulatory surge band 20–80 sits wholly outside its own fallback. Should an absent phase suppress scoring? |
+| estradiol/general/unphased/amani_context | 30–350 pg/mL | 20–750 | Both ends exclude values included in phase bands. Should an absent phase suppress scoring? |
+| estradiol/general/unphased/lab_reference | 10–400 pg/mL | 10–1000 | Upper endpoint excludes values included in phase bands. Should an absent phase suppress classification? |
+| fsh/general/unphased/amani_context | 3–10 mIU/mL | 1–15 | Both ends exclude values included in phase bands. Should an absent phase suppress scoring? |
+| fsh/general/unphased/lab_reference | 2–25 mIU/mL | 1–30 | Both ends exclude values included in phase bands. Should an absent phase suppress classification? |
+
+Local code observation: `getRangesForPhase` in `src/lib/biomarkers/catalog.generated.ts`
+returns the phase-specific band only for a truthy, present phase, otherwise the fallback.
+`src/lib/scoring/scoreBiomarker.ts` and `src/lib/scoring/compareReports.ts` consume it.
+The phase span above is the minimum/maximum envelope of catalog bands, not a proposed
+replacement interval. An LH value of 40 is inside the catalog ovulatory band but above
+the fallback; this internal comparison does not independently establish clinical normality.
+
+Lead-provided exposure fact, quoted verbatim from TASK-042 amendment 1 A (2026-10-06),
+not queried or independently verified by this offline implementer:
+
+> **Current exposure is zero, and I checked rather than assumed.** All 18 production `lab_reports` carry a non-null `estimated_cycle_phase`, so no stored report reaches the fallback today, and the stored hormone values are modest (estradiol 45–178, FSH 4.8–6.1, LH 5.8–6.4) rather than surge values. So this is **latent, like the 1000x unit hazard — not a 1.0.6 incident.** It becomes live the first time a report arrives without a phase, which the nullable column permits.
+
+Required artifacts for each item: originating assay/phase-specific population interval
+sheets, an owner decision on missing-phase scoring versus suppression, and a de-identified
+missing-phase regression fixture. No clinical source has been retrieved. The product
+question is prepared in `docs/clinical/BACKLOG-1.0.7-HANDOFF.md` for the Lead's backlog.

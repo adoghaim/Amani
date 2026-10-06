@@ -42,7 +42,8 @@
           "ranges",
           "sex_applicability_provenance",
           "catalog_metadata",
-          "unit_mapping"
+          "unit_mapping",
+          "specimen_basis"
         ],
         "properties": {
           "slug": {
@@ -97,7 +98,7 @@
               "whole_blood",
               "UNKNOWN"
             ],
-            "description": "Offline specimen hypothesis only; inspect each range audit.specimen_basis. serum_or_plasma leaves the matrix unresolved and never asserts assay interchangeability."
+            "description": "Offline hypothesis only; specimen_basis beside this value states its derivation and uncertainty. serum_or_plasma does not assert interchangeability."
           },
           "aliases": {
             "type": "array",
@@ -592,6 +593,12 @@
                 "minLength": 1
               }
             }
+          },
+          "specimen_basis": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(INFERRED|UNKNOWN)",
+            "description": "Basis colocated with specimen: an offline hypothesis or unresolved matrix, never reviewed assay evidence."
           }
         }
       }

@@ -67,12 +67,38 @@ test('origin cannot impersonate clinical evidence or a human reviewer', () => {
 });
 
 test('shipping provenance never promotes validity or seeds dormant magnesium', () => {
+  const disputed = new Set([
+    ...['estradiol', 'fsh', 'lh'].flatMap(slug =>
+      ['follicular', 'luteal', 'menstrual', 'ovulatory'].flatMap(phase =>
+        ['amani_context', 'lab_reference'].map(kind => `${slug}/${kind}/${phase}`))),
+    ...['follicular', 'luteal', 'menstrual'].flatMap(phase =>
+      ['amani_context', 'lab_reference'].map(kind => `progesterone/${kind}/${phase}`)),
+    'lh/amani_context/-',
+    'estradiol/amani_context/-', 'estradiol/lab_reference/-',
+    'fsh/amani_context/-', 'fsh/lab_reference/-',
+  ]);
+  const needsContext = new Set(
+    ['vitamin_d_25_oh', 'egfr', 'rheumatoid_factor', 'ana_screen'].flatMap(slug =>
+      ['amani_context', 'lab_reference'].map(kind => `${slug}/${kind}/-`)));
+  const ranges = readCatalog().analytes.flatMap(a => a.ranges.map(r => ({
+    id: `${a.slug}/${r.kind}/${r.phase ?? '-'}`, status: r.review_status,
+  })));
+  assert.equal(ranges.length, 198);
+  assert.equal(new Set(ranges.map(r => r.id)).size, 198);
+  assert.equal(disputed.size, 35);
+  assert.equal(needsContext.size, 8);
+  assert.deepEqual(ranges.filter(r => r.status === 'DISPUTED').map(r => r.id).sort(), [...disputed].sort());
+  assert.deepEqual(ranges.filter(r => r.status === 'NEEDS_CONTEXT').map(r => r.id).sort(), [...needsContext].sort());
+  assert.deepEqual(ranges.filter(r => r.status === 'UNKNOWN').map(r => r.id).sort(),
+    ranges.filter(r => !disputed.has(r.id) && !needsContext.has(r.id)).map(r => r.id).sort());
+  assert.equal(ranges.filter(r => r.status === 'UNKNOWN').length, 155);
+  assert.equal(ranges.filter(r => r.status === 'SAFE').length, 0);
   const c = readCatalog();
   for (const a of c.analytes) for (const r of a.ranges) {
     assert.equal(r.value_origin, 'shipping_dictionary_2fd9433');
     assert.equal(r.value_origin_table, null);
     assert.equal(r.evidence_grade, 'unsourced');
-    assert.equal(r.review_status, 'UNKNOWN');
+    assert.notEqual(r.value_origin, 'reviewed_evidence');
     assert.equal(r.candidate_id, undefined);
     for (const key of ['source', 'source_url', 'source_date', 'reviewer', 'reviewed_at']) assert.equal(r[key], null);
   }

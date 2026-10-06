@@ -1,5 +1,10 @@
 # Clinical range conflicts — TASK-041
 
+Historical V2-01 dispositions below are preserved as shipping history. TASK-042
+amendment 1 now marks both kinds of all 15 analyte/phase pairs DISPUTED (30
+shipping ranges), without candidate rows or value changes. Current dispositions
+are in AUDIT-QUEUE.md; UNKNOWN below records the original transcription state.
+
 Inventory supplied by the Lead from production on 2026-10-06 in
 `CONFLICTS-OBSERVED.txt`; production was not queried in this offline task.
 `reference` means `biomarker_reference_ranges`; `phase` means

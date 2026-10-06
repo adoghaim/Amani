@@ -1,3 +1,127 @@
+# TASK-042 — turn 2 implementation observations
+
+Approach: The accepted offline instrument preserved provenance but could neither represent shipping disputes nor distinguish its P1 priorities; its evidence guards were masked by seed policy, its inventory counted candidates as shipping, and its generator wrote the client before checking frozen SQL. I separated structural evidence checks from the unconditional implementer prohibition, allowed shipping disputes, preflighted every artifact before writes, and applied the Lead's internally justified dispositions and triage distinctions without changing any clinical value. This is an implementation report, not independent review or clinical approval.
+
+## Starting state and boundaries
+
+Started clean at `51c20ca0362cc7bc6ae8647d4f43d0b99c0c89c3`, branch
+`v2/02-clinical-audit`, in the TASK-042 worktree. Original task integration base:
+`4305728`. All changes remain uncommitted. No source was retrieved or invented;
+no clinical value changed, including vitamin D. No source, URL, source date,
+reviewer, review date, evidence grade or value origin was promoted. No catalog
+range uses SAFE or reviewed_evidence. Dormant magnesium is not a candidate.
+No unmatched legacy identity was equated. No production access, network request,
+merge, push, commit, vault write or control-directory write was performed.
+D-001 release isolation and the separate production GO remain binding.
+
+## Observed implementation and local test evidence
+
+- Shipping inventory remains **83 analytes / 198 ranges**; candidate fixtures are
+  tolerated without inflating shipping inventory or the shipping audit queue.
+- **35 DISPUTED** = both kinds for the 15 historical analyte/phase pairs (30
+  ranges), plus five unphased fallback bands. Treating both kinds of each historical
+  pair as disputed does not claim both kinds have different endpoints; this is
+  explicit in each reason. **Eight NEEDS_CONTEXT** = both kinds for vitamin D,
+  eGFR, rheumatoid factor and ANA. **155 UNKNOWN** remain.
+- **55 P0 / 105 P1 / 38 P2 / zero P3**. All five fallback contradictions are
+  explicit P0 entries. CF-09 quotes the Lead exposure fact verbatim and attributes
+  it. The LH ovulatory band lies wholly outside its fallback. The local accessor
+  and its scoring/comparison callers were read; production was not queried.
+- P1 reasons distinguish legacy conflicts, existing but unverified phase bands,
+  missing phase context, other missing stratification, cycle metadata and scoring
+  metadata. Deterministic ordering within each tier is documented in the queue.
+  RF and ANA move to P2 product/identity review. Written reasons retain TSH,
+  ferritin and vitamin_b12 at P1 and triglycerides/LDL at P2 provisionally; clinical
+  evidence may escalate them. These are triage judgments, not clinical findings.
+- Required analyte-level `specimen_basis` colocates uncertainty with `specimen`,
+  and the validator requires consistency with range-level basis. ANA is UNKNOWN
+  because its empty unit/null endpoints do not support the previous derivation.
+  Magnesium now explicitly disclaims A8 as evidence of the shipping specimen.
+- Structural evidence rules execute before implementer policy. Synthetic in-memory
+  test tokens exercise missing/blank source, date, reviewer and review-date checks,
+  including the structurally complete path. No token is a clinical citation. The
+  catalog validator unconditionally rejects even complete evidence/review fixtures
+  and reviewed_evidence; there is no option to bypass seed policy.
+- Generation checks all frozen artifacts before any mutable write; an injected-I/O
+  regression simulates the next vitamin D value change and observes zero writes on
+  refusal. This addresses frozen-artifact preflight atomicity, not crash-safe
+  multi-file transactions. Future value changes still require a new authorized
+  migration, rather than editing the frozen one.
+- SQL generation is explicitly the historical V2-01 projection: it omits the new
+  specimen basis and audit fields, keeps specimen null, and renders shipping
+  review_status UNKNOWN. Current audit dispositions are repository-only and require
+  a separately authorized migration to persist. Candidate statuses are retained.
+  Values and other historical fields still trigger drift. Both frozen SQL and
+  client artifact match their checked-in bytes.
+
+## Commands and results
+
+| Command | Observed result |
+|---|---|
+| `node --test tools/clinical/audit-amendment.test.mjs` | 8 passed, 0 failed |
+| `npm run clinical:test` | 34 passed, 3 failed; unchanged assertions described below |
+| `npm run clinical:test:ci` | 33 passed, 3 failed; same assertions |
+| `npm test` | 1,212 passed across 52 files |
+| `npm run clinical:generate` | Passed; frozen artifacts unchanged |
+| `npm run clinical:check` | Passed; client, SQL and queue match |
+| `node tools/clinical/sql-parse-guard.mjs` | Passed |
+| `npm run typecheck` | Passed, including clinical checkJs and untouched importers |
+| `npm run lint` | Passed; zero errors, nine existing React Hook warnings |
+| `npm run build` | Passed; local Browserslist-data warning, no update attempted |
+| `git diff --check` | Passed |
+| `git diff --exit-code -- src supabase` | Passed; no changes |
+
+Initial new-test run: seven passed, one failed because the synthetic candidate ID
+used a hyphen prohibited by the existing schema. Changing only the new fixture to
+an underscore produced the eight-pass result above. Existing tests were not edited.
+Docker, hosted CI, device/runtime QA and production verification were not run;
+the Docker harness remains the Lead's responsibility.
+
+## Unresolved contract conflicts — PARTIAL
+
+The no-existing-test-edit rule conflicts with the amendment's required behavior:
+
+1. `tools/clinical/audit.test.mjs`, “shipping provenance never promotes validity or
+   seeds dormant magnesium”, asserts every status is UNKNOWN.
+2. `tools/clinical/catalog.test.mjs`, “all inherited ranges are honestly unsourced
+   and UNKNOWN”, asserts the same.
+3. `tools/clinical/catalog.test.mjs`, “invalid and ambiguous ranges fail closed”,
+   expects a shipping DISPUTED assignment to throw.
+
+These are the only three clinical test failures. They remain active, unchanged,
+and included in both scripts. Requested narrow resolution: authorize replacing
+the two blanket UNKNOWN assertions with the amendment's exact per-range disposition
+expectations and replacing the shipping-DISPUTED rejection case with a truly invalid
+status. The new test already checks the complete expected status inventory and
+standalone shipping-DISPUTED acceptance. No green suite is claimed.
+
+The amendment also requests `specs/BACKLOG-1.0.7.md`, outside allowed_paths and
+absent in this worktree. The complete product question is prepared in
+`docs/clinical/BACKLOG-1.0.7-HANDOFF.md`; the Lead can transfer it or authorize that
+path. No outside-scope file was written. Permission for both exceptions was asked
+while independent implementation continued; no approval has been received.
+
+## Evidence versus inference; Second Brain handoff only
+
+Local observed facts above derive from the catalog, code and commands. The zero
+production exposure and the dormant magnesium clinical hazard are attributed Lead
+statements, not independently verified clinical findings. Specimen hypotheses,
+modifier applicability, tier judgments and retained P1/P2 choices remain inferred.
+All assay/interval/clinical-guidance requests remain unanswered pending retrieved
+artifacts and human adjudication. No stratified values were invented.
+
+The local Second Brain snapshot is dated 2026-09-22 and describes an older release;
+it was read without syncing under the offline/no-vault-write boundary. It cannot
+establish current release or production facts. Proposed handoff is this report's
+local evidence and the unresolved exceptions; no project truth, decision or Pending
+item was changed. Next steps: Lead ruling on the two scope conflicts, independent
+review, Lead Docker harness, then human clinical evidence collection. Production
+remains separately gated.
+
+---
+
+# Accepted turn-1 report (historical; turn-2 changes are above)
+
 # TASK-042 — offline clinical audit and provenance implementation
 
 Approach: V2-01 deliberately transcribed shipping numbers without establishing clinical correctness, but lacked structural value-origin metadata and an ordered evidence-request instrument. I kept all original range fields and runtime values intact, added required origin/modifier/audit metadata, and rendered a deterministic 198-row queue from that seed. Specimen, population and modifier inferences are explicitly distinguished from internal observations. The accepted V2-01 SQL projection remains frozen; new audit metadata stays in the repository pending a separately authorized persistence design. This report records implementation and test observations, not an independent review or clinical approval.

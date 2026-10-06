@@ -23,12 +23,16 @@ export function sqlPayload(catalog) {
       legacy_to_registry_factor: a.unit_mapping?.legacy_to_registry_factor ?? null,
       // This is the V2-01 payload, not persistence for the TASK-042 audit.
       // Its specimen was null for every entry. Offline specimen hypotheses
-      // and the four new range fields stay in the seed/queue until a separately
-      // authorized migration exists. All other fields still participate in drift.
-      metadata: { ...Object.fromEntries(Object.entries(a).filter(([key]) => key !== 'ranges')), specimen: null } })),
+      // and audit provenance stay in the seed/queue until a separately authorized
+      // migration exists. Shipping review_status also retains its V2-01 value
+      // below; clinical values and other historical fields still detect drift.
+      metadata: { ...Object.fromEntries(Object.entries(a).filter(([key]) => !['ranges', 'specimen_basis'].includes(key))), specimen: null } })),
     ranges: catalog.analytes.flatMap(a => a.ranges.map(r => ({ slug: a.slug, unit: a.canonical_unit,
       candidate_id: r.candidate_id ?? 'shipping', ...Object.fromEntries(Object.entries(r)
-        .filter(([key]) => !['value_origin', 'value_origin_table', 'modifiers', 'audit'].includes(key))) }))),
+        .filter(([key]) => !['value_origin', 'value_origin_table', 'modifiers', 'audit'].includes(key))),
+      // Frozen V2-01 shipping history, not the current audit disposition.
+      // Persisting TASK-042 statuses requires a separately authorized migration.
+      review_status: r.candidate_id ? r.review_status : 'UNKNOWN' }))),
   };
 }
 export function renderSql(catalog) {
