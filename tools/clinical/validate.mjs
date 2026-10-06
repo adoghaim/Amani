@@ -61,6 +61,7 @@ export function validateCatalog(catalog) {
     if (analyte.score_weight !== weight) throw new Error(`${analyte.slug}: legacy weight mismatch`);
     if (!analyte.specimen_basis.trim()) throw new Error(`${analyte.slug}: blank specimen basis`);
     if (analyte.specimen === 'UNKNOWN' && !analyte.specimen_basis.startsWith('UNKNOWN')) throw new Error(`${analyte.slug}: unresolved specimen needs UNKNOWN basis`);
+    if (analyte.specimen !== 'UNKNOWN' && analyte.specimen_basis.startsWith('UNKNOWN')) throw new Error(`${analyte.slug}: UNKNOWN basis requires UNKNOWN specimen`);
     const bands = new Set();
     const clientKey = analyte.legacy_key ?? analyte.slug;
     if (clientKeys.has(clientKey)) throw new Error(`Duplicate client key ${clientKey}`);
@@ -109,7 +110,7 @@ export function validateCatalog(catalog) {
       bands.add(key);
       if (range.min !== null && range.max !== null && range.min > range.max) throw new Error(`${analyte.slug}: reversed range`);
     }
-    // Candidate rows are persisted with provenance but never projected into the
+    // Candidate rows stay in the seed, excluded from frozen SQL and the
     // legacy API. Shipping bands must remain explicit and complete.
     if (analyte.ranges.some(r => r.candidate_id
       ? r.review_status !== 'DISPUTED' || r.candidate_id === 'shipping'

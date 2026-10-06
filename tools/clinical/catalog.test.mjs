@@ -36,7 +36,7 @@ test('invalid and ambiguous ranges fail closed', () => {
   }
 });
 
-test('all inherited ranges are honestly unsourced and UNKNOWN', () => {
+test('inherited ranges remain unsourced with exactly the authorized audit dispositions', () => {
   const disputed = new Set([
     ...['estradiol', 'fsh', 'lh'].flatMap(slug =>
       ['follicular', 'luteal', 'menstrual', 'ovulatory'].flatMap(phase =>

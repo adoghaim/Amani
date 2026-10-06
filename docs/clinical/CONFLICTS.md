@@ -60,7 +60,7 @@ both are product gaps queued for V2-02 (amendment 1 A3).
 ## Candidate representation
 
 A future alternative is a range with `candidate_id` and `review_status: DISPUTED`.
-Candidates retain both endpoints and provenance in the seed and SQL table;
+Candidates retain both endpoints and provenance in the seed; the frozen V2-01 SQL excludes them pending a new authorized migration.
 they never enter `projectEntries` or the legacy `optimal` alias. Candidate IDs
 are unique within slug/population/phase/kind, and the reserved ID `shipping`
 cannot label a disputed alternative. Shipping pairs remain explicit and complete.

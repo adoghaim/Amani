@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCatalog, assertAuditInventory } from './generate.mjs';
+import { fallbackFindings } from './fallback-audit.mjs';
 import { validateCatalog } from './validate.mjs';
 
 export const auditArtifact = 'docs/clinical/AUDIT-QUEUE.md';
@@ -16,6 +17,7 @@ export function renderAuditQueue(catalog = readCatalog()) {
   // Stable lexicographic ordering on explicit internal triage axes, then ID.
   const orderKey = ({ a, r, id }) => [r.audit.tier,
     a.slug === 'vitamin_d_25_oh' ? '0' : '1',
+    fallbackFindings(a, r)?.widerThanPhases.length ? '0' : '1',
     r.review_status === 'DISPUTED' ? '0' : r.review_status === 'NEEDS_CONTEXT' ? '1' : '2',
     r.phase === null && Object.values(r.modifiers).includes('requires_context') ? '0' : '1',
     a.is_cycle_dependent ? '0' : '1',
@@ -30,7 +32,7 @@ export function renderAuditQueue(catalog = readCatalog()) {
     counts, '',
     'This is an offline triage instrument, not clinical approval. No external clinical source was retrieved. No clinical value changed. Every source, source URL, source date, reviewer and review date remains null; every evidence grade is unsourced. Internally justified dispositions are 35 DISPUTED, eight NEEDS_CONTEXT and 155 UNKNOWN; none is clinical approval. Requested artifacts below have NOT been obtained.', '',
     '`shipping_dictionary_2fd9433` identifies transcription history with zero clinical weight. It does not establish correctness. No range uses legacy_db_table or the reserved reviewed_evidence origin. Legacy alternatives below are historical observations, never additional seeded ranges.', '',
-    'P0 = potential care/action hazard (including owner-designated vitamin D); P1 = reproductive, cycle, pregnancy or life-stage context; P2 = scoring/recommendation interpretation; P3 = informational. Tiers other than owner-designated hazards are conservative implementer judgments for human review, not proven clinical abnormalities. Zero P3 rows is intentional: no range has been established as merely informational. P2 does not establish safety. Within each tier, order is deterministic: vitamin D first, then DISPUTED / NEEDS_CONTEXT / UNKNOWN, missing stratification for flagged modifiers before existing/unflagged bands, catalog cycle dependence, scoring metadata enabled / disabled / unknown, context before reference, then full range ID. Missing stratification means an unphased row with at least one requires_context flag; existing stratification is still unverified. Scoring metadata is a catalog observation, not proof that a runtime call is gated.', '',
+    'P0 = potential care/action hazard (including owner-designated vitamin D); P1 = reproductive, cycle, pregnancy or life-stage context; P2 = scoring/recommendation interpretation; P3 = informational. Tiers other than owner-designated hazards are conservative implementer judgments for human review, not proven clinical abnormalities. Zero P3 rows is intentional: no range has been established as merely informational. P2 does not establish safety. Within each tier, order is deterministic: vitamin D first, then fallback false-reassurance hazards before false-alarm-only hazards, then DISPUTED / NEEDS_CONTEXT / UNKNOWN, missing stratification for flagged modifiers before existing/unflagged bands, catalog cycle dependence, scoring metadata enabled / disabled / unknown, context before reference, then full range ID. Missing stratification means an unphased row with at least one requires_context flag; existing stratification is still unverified. Scoring metadata is a catalog observation, not proof that a runtime call is gated.', '',
     'For question 1, each range links to its exact catalog identity and aliases below. Questions 2–8 appear in the remaining columns. A blank unit or [] conversions is an explicit gap, not authority to infer a unit/conversion. The separate unit_mapping is a registry join, not an added measurement conversion.', '',
     'Specimen labels are hypotheses, with basis per row: serum_or_plasma leaves the actual matrix unresolved and does not declare interchangeability. UNKNOWN includes calculated results whose component matrices are undocumented. Population general remains the shipping projection key; it is not evidence of universal applicability. All 76 metadata entries remain unreviewed: 44 currently say female and 32 say all; female was the column default, not evidence (see CF-07).', '',
     'Modifier order: sex / age / cycle / pregnancy / life_stage. requires_context flags a review need, not a stratified value; UNKNOWN never means irrelevant. Cycle flags derive from phase structure; other flags are offline analyte-class inferences. False legacy cycle metadata is not proof of independence. Questions name unresolved modifiers only where those exist.', '',

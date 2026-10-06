@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { readCatalog, assertAuditInventory, generateArtifacts, renderCatalog, artifact } from './generate.mjs';
 import { validateCatalog, validateRangeEvidence } from './validate.mjs';
-import { renderSql } from './sql.mjs';
+import { fallbackFindings, fallbackSummary } from './fallback-audit.mjs';
+import { renderSql, sqlPayload, FROZEN_V2_01_REVIEW_STATUS } from './sql.mjs';
 import { renderAuditQueue } from './audit-queue.mjs';
 
 const fallbackIds = new Set(['lh/amani_context', 'estradiol/amani_context', 'estradiol/lab_reference', 'fsh/amani_context', 'fsh/lab_reference']);
@@ -136,4 +137,118 @@ test('turn 2 preserves clinical values and source fields relative to accepted tu
       assert.deepEqual(b.ranges[j][field], a.ranges[j][field], `${a.slug}/${j}/${field}`);
     }
   }
+});
+
+test('frozen SQL differs from shipping range fields only in the 43 intentional audit statuses', () => {
+  const c = readCatalog();
+  const payload = sqlPayload(c);
+  const expectedIds = new Set([
+    ...['estradiol', 'fsh', 'lh'].flatMap(slug => ['menstrual', 'follicular', 'ovulatory', 'luteal']
+      .flatMap(phase => ['amani_context', 'lab_reference'].map(kind => `${slug}/${phase}/${kind}`))),
+    ...['menstrual', 'follicular', 'luteal'].flatMap(phase => ['amani_context', 'lab_reference'].map(kind => `progesterone/${phase}/${kind}`)),
+    ...[...fallbackIds].map(id => id.replace('/', '/null/')),
+    ...[...contextSlugs].flatMap(slug => ['amani_context', 'lab_reference'].map(kind => `${slug}/null/${kind}`)),
+  ]);
+  assert.equal(expectedIds.size, 43);
+  const actualIds = [];
+  let i = 0;
+  for (const a of c.analytes) for (const r of a.ranges.filter(r => !r.candidate_id)) {
+    // Normalize only the documented V2-01 omissions and SQL identity fields.
+    // Deep equality below covers EVERY retained range field, not just endpoints.
+    const original = { ...r };
+    for (const field of ['value_origin', 'value_origin_table', 'modifiers', 'audit']) delete original[field];
+    const sql = { ...payload.ranges[i++] };
+    assert.equal(sql.slug, a.slug);
+    assert.equal(sql.unit, a.canonical_unit);
+    assert.equal(sql.candidate_id, 'shipping');
+    for (const field of ['slug', 'unit', 'candidate_id']) delete sql[field];
+    assert.equal(sql.review_status, FROZEN_V2_01_REVIEW_STATUS);
+    if (sql.review_status !== original.review_status) actualIds.push(`${a.slug}/${r.phase}/${r.kind}`);
+    assert.deepEqual({ ...sql, review_status: original.review_status }, original);
+  }
+  assert.equal(i, 198);
+  assert.equal(payload.ranges.length, i);
+  assert.deepEqual(actualIds.sort(), [...expectedIds].sort());
+});
+
+test('synthetic candidate survives validation while generate and check preserve every frozen artifact', () => {
+  const c = readCatalog();
+  const a = c.analytes[0];
+  a.ranges.push({ ...structuredClone(a.ranges[0]), min: -123, max: 456,
+    candidate_id: 'synthetic_alternative', review_status: 'DISPUTED' });
+  validateCatalog(c);
+  assertAuditInventory(c);
+  const writes = [];
+  const io = { read: path => readFileSync(path, 'utf8'), write: path => { writes.push(path); } };
+  generateArtifacts(c, io);
+  generateArtifacts(c, { ...io, check: true });
+  assert.deepEqual(writes, []);
+  for (const [path, output] of Object.entries(renderSql(c))) assert.equal(output, readFileSync(path, 'utf8'));
+  assert.equal(renderAuditQueue(c), readFileSync('docs/clinical/AUDIT-QUEUE.md', 'utf8'));
+  assert.equal(sqlPayload(c).ranges.length, 198);
+});
+
+test('UNKNOWN specimen basis and UNKNOWN specimen must imply each other', () => {
+  for (const [specimen, basis] of [['UNKNOWN', 'INFERRED synthetic basis'], ['serum_or_plasma', 'UNKNOWN synthetic basis']]) {
+    const c = readCatalog();
+    const a = c.analytes[0];
+    a.specimen = specimen;
+    a.specimen_basis = basis;
+    for (const r of a.ranges) r.audit.specimen_basis = basis;
+    assert.throws(() => validateCatalog(c), /UNKNOWN/);
+  }
+});
+
+test('fallback audit detects both directions, union gaps, and phase masking even with equal envelopes', () => {
+  const check = (min, max, bands) => {
+    const fallback = { min, max, phase: null, population: 'general', kind: 'lab_reference' };
+    return fallbackFindings({ ranges: [fallback, ...bands.map(([low, high], i) =>
+      ({ ...fallback, min: low, max: high, phase: String(i) }))] }, fallback);
+  };
+  assert.equal(check(2, 8, [[1, 10]]).narrowerThanUnion, true);
+  assert.equal(check(2, 8, [[1, 10]]).widerThanUnion, false);
+  assert.equal(check(0, 11, [[1, 10]]).widerThanUnion, true);
+  assert.equal(check(0, 11, [[1, 10]]).narrowerThanUnion, false);
+  assert.equal(check(0, 8, [[1, 10]]).widerThanUnion, true);
+  assert.equal(check(0, 8, [[1, 10]]).narrowerThanUnion, true);
+  assert.equal(check(1, 10, [[1, 3], [5, 10]]).widerThanUnion, true);
+  const equalUnion = check(1, 10, [[1, 5], [3, 10]]);
+  assert.equal(equalUnion.widerThanUnion, false);
+  assert.equal(equalUnion.narrowerThanUnion, false);
+  assert.equal(equalUnion.widerThanPhases.length, 2);
+  const c = readCatalog();
+  const found = c.analytes.flatMap(a => a.ranges.map(r => ({ a, r, f: fallbackFindings(a, r) }))).filter(row => row.f);
+  assert.equal(found.length, 8);
+  assert.equal(found.filter(({ f }) => f.narrowerThanUnion).length, 5);
+  assert.equal(found.filter(({ f }) => f.widerThanUnion).length, 1); // progesterone context has gaps
+  for (const { r, f } of found) {
+    assert.equal(r.audit.tier, 'P0');
+    assert.ok(f.widerThanPhases.length);
+    assert.ok(r.audit.reason.includes(fallbackSummary(f)));
+  }
+  const p = c.analytes.find(a => a.slug === 'progesterone');
+  for (const kind of ['amani_context', 'lab_reference']) {
+    const fallback = p.ranges.find(r => r.phase === null && r.kind === kind);
+    const luteal = p.ranges.find(r => r.phase === 'luteal' && r.kind === kind);
+    assert.ok(2 >= fallback.min && 2 <= fallback.max && 2 < luteal.min);
+  }
+  const output = renderAuditQueue(c);
+  const firstFallback = output.indexOf('`lh/general/unphased/lab_reference`');
+  assert.ok(firstFallback < output.indexOf('`magnesium/general/unphased/amani_context`'));
+});
+
+test('each historical conflict kind discloses endpoint agreement or difference per row', () => {
+  const c = readCatalog();
+  let agreeing = 0;
+  for (const line of readFileSync('docs/clinical/CONFLICTS.md', 'utf8').split('\n').filter(l => /^\| (estradiol|fsh|lh|progesterone) \|/.test(l))) {
+    const cells = line.split('|').slice(1, 7).map(s => s.trim());
+    const a = c.analytes.find(a => a.slug === cells[0]);
+    for (const { kind, i } of [{ kind: 'amani_context', i: 2 }, { kind: 'lab_reference', i: 4 }]) {
+      const r = a.ranges.find(r => r.phase === cells[1] && r.kind === kind);
+      const equal = JSON.stringify(cells[i].split('-').map(Number)) === JSON.stringify(cells[i + 1].split('-').map(Number));
+      assert.match(r.audit.reason, equal ? /two legacy copies agree.*family-level/ : /legacy endpoints differ/);
+      if (equal) agreeing++;
+    }
+  }
+  assert.equal(agreeing, 6);
 });

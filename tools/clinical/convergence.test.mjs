@@ -27,12 +27,13 @@ test('whitespace evidence and malformed review dates fail closed', () => {
     assert.throws(() => validateCatalog(c));
   }
 });
-test('DISPUTED candidates are retained in SQL and excluded from the shipping API', () => {
+test('DISPUTED candidates remain in the seed and are excluded from frozen SQL and the shipping API', () => {
   const c = structuredClone(readCatalog());
   c.analytes[0].ranges.push({ ...c.analytes[0].ranges[0], min: 1, max: 2, review_status: 'DISPUTED', candidate_id: 'historical_alternative' });
   assert.equal(validateCatalog(c), c);
   assert.equal(renderCatalog(c), renderCatalog());
-  assert.equal(sqlPayload(c).ranges.filter(r => r.review_status === 'DISPUTED').length, 1);
+  assert.deepEqual(sqlPayload(c), sqlPayload(readCatalog()));
+  assert.equal(c.analytes[0].ranges.at(-1).candidate_id, 'historical_alternative');
 });
 test('unit joins require approved explicit factors and refuse missing evidence', () => {
   const c = readCatalog();
