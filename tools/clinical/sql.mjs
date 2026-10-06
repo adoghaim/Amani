@@ -21,9 +21,14 @@ export function sqlPayload(catalog) {
       registry_slug: a.unit_mapping?.status === 'verified' ? a.slug : null,
       registry_unit: a.unit_mapping?.registry_unit ?? null,
       legacy_to_registry_factor: a.unit_mapping?.legacy_to_registry_factor ?? null,
-      metadata: Object.fromEntries(Object.entries(a).filter(([key]) => key !== 'ranges')) })),
+      // This is the V2-01 payload, not persistence for the TASK-042 audit.
+      // Its specimen was null for every entry. Offline specimen hypotheses
+      // and the four new range fields stay in the seed/queue until a separately
+      // authorized migration exists. All other fields still participate in drift.
+      metadata: { ...Object.fromEntries(Object.entries(a).filter(([key]) => key !== 'ranges')), specimen: null } })),
     ranges: catalog.analytes.flatMap(a => a.ranges.map(r => ({ slug: a.slug, unit: a.canonical_unit,
-      candidate_id: r.candidate_id ?? 'shipping', ...r }))),
+      candidate_id: r.candidate_id ?? 'shipping', ...Object.fromEntries(Object.entries(r)
+        .filter(([key]) => !['value_origin', 'value_origin_table', 'modifiers', 'audit'].includes(key))) }))),
   };
 }
 export function renderSql(catalog) {

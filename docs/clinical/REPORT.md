@@ -1,3 +1,72 @@
+# TASK-042 — offline clinical audit and provenance implementation
+
+Approach: V2-01 deliberately transcribed shipping numbers without establishing clinical correctness, but lacked structural value-origin metadata and an ordered evidence-request instrument. I kept all original range fields and runtime values intact, added required origin/modifier/audit metadata, and rendered a deterministic 198-row queue from that seed. Specimen, population and modifier inferences are explicitly distinguished from internal observations. The accepted V2-01 SQL projection remains frozen; new audit metadata stays in the repository pending a separately authorized persistence design. This report records implementation and test observations, not an independent review or clinical approval.
+
+## Scope and binding inputs
+
+Base `43057282f2c511878e47989c84b804fe17d33ae6`; branch `v2/02-clinical-audit`. Work is uncommitted. No merge, push, deployment or production query/write occurred. No external clinical source was retrieved, no citation was invented, no evidence grade was raised, no reviewer was assigned, and **no clinical value changed, including vitamin D**.
+
+`CONTRACT.md` and the specified TASK-041 relative directory were absent from this worktree. I located and read the Lead-owned TASK-042 contract and TASK-041 synthesis, amendment 2 A7/A8 and definitions inventory under the control repository's task folders, without writing there. The contract matches the supplied addendum. Checked-in `CONFLICTS.md` supplied the 15 conflict rows. Second Brain context was read from the local vault without a pull because this task is offline and vault writes are prohibited; its September release snapshot was not treated as current operational evidence.
+
+## Internally verified observations
+
+- **83 analytes / 198 ranges**, asserted on seed load and audit generation. Each range has `value_origin: shipping_dictionary_2fd9433`, `value_origin_table: null`, all five modifier flags and a required audit record. `reviewed_evidence` is unused and rejected by the validator.
+- Every original range field, including endpoints, population, phase, kind, notes and review state, equals base `4305728`. All original analyte metadata except previously null specimen equals the base. The historical value-identity test separately confirms the full public dictionary behavior against `2fd9433`.
+- All 198 ranges remain `unsourced` / `UNKNOWN`, with source, URL, source date, reviewer and review date null. `legacy_db_table` requires a nonblank table name but is unused in this seed. Neither provenance origin grants clinical weight.
+- Generated `AUDIT-QUEUE.md` has 198 unique range IDs, sorted **54 P0 / 110 P1 / 34 P2 / 0 P3**, with vitamin D first. Every row contains the eight answers or explicit gaps, reason, question and requested artifact. Identity links resolve to the 83 names/slugs/alias lists. No range was established as informational-only, so none was placed in P3.
+- Seven named carry-forward groups are explicit, with an eighth for eGFR. All 15 reproductive-hormone conflict rows retain both candidates in documentation. Dormant magnesium is historical drift evidence only: it was not added as a range or candidate. All 13 unmatched legacy names remain unmapped. RF and ANA still lack extraction identities.
+- **Inventory discrepancy in the brief:** 76 is the unreviewed metadata-entry count. Both top-level and nested fields contain **44 female / 32 all**, plus seven analytes with no metadata row/null applicability. All 76 provenance strings warn that female was a column default. CF-07 records the discrepancy without changing any applicability value.
+- The five differential mappings retain cells/uL → K/uL × 0.001, with reverse arithmetic tested on representative values and every endpoint. TSH and RBC retain explicit factor-1 spelling mappings. This verifies arithmetic only, not live ingestion normalization. `unit_conversions` remains empty, distinct from registry `unit_mapping`.
+- `git diff 4305728 -- src supabase` is empty. All 13 dictionary-importing modules are unchanged and pass the application typecheck. No existing test was edited. Package changes are confined to scripts.
+
+## Inferences and limitations, not clinical findings
+
+- `specimen` is an offline hypothesis with per-range `specimen_basis`: common chemistry/endocrine entries say `serum_or_plasma` without asserting assay interchangeability; blood counts, HbA1c and ESR infer whole blood; Serum Iron follows its explicit name; magnesium follows the supplied Lead serum interpretation. Generic folate and calculated-result specimens remain `UNKNOWN` pending assay/component records. No collection tube or handling requirement was invented.
+- `population: general` remains the legacy projection key. Cycle structure suggests a menstruating population; `female_adult` is only a review hypothesis because age/pregnancy scope is not established. This uncertainty is explicit in `audit.population_context`, rather than silently changing eligibility or breaking the frozen projection.
+- `requires_context` flags are conservative prompts for sex/age/cycle/pregnancy/life-stage review, not stratified ranges. Cycle flags derive from recorded structure; other flags are analyte-class inferences. `UNKNOWN` never means no sensitivity. False legacy cycle metadata is not evidence of independence.
+- Kinds are mechanically verified against the original optimal/clinical pairing. Every legacy `lab_reference` is explicitly doubtful as a genuine laboratory interval without the originating assay document. No patient-lab interval or optimal-target claim was established.
+- Tiers are implementer triage judgments, not claims that a specific measured value is clinically normal/abnormal. Vitamin D and the dormant magnesium hazard follow owner/Lead instructions. The severe-hypermagnesemia statement is attributed to the supplied contract/A8, not to a clinical source retrieved here. All other possible hazards await human assessment.
+- No external clinical evidence, human adjudication, production behavior or Docker execution was established in this task. The Lead must run the Docker harness; independent review remains separate.
+
+## Machinery and frozen-artifact boundary
+
+The schema requires `value_origin`, `value_origin_table`, `modifiers` and `audit` on every range, with enumerated origins/tiers/flags and no extra fields. The validator rejects reserved `reviewed_evidence`, non-unsourced evidence, human-review assignments and SAFE in implementer seeds; it also requires nonblank questions/artifact requests and cycle context where existing structure requires it. A future evidence-backed workflow must explicitly replace that offline restriction under the owner's authority; plausible strings cannot bypass it today.
+
+`sqlPayload` explicitly remains a **V2-01 projection**: it omits only the four new range fields and projects specimen back to the null value present in that version. All other original fields still drive SQL drift detection. The frozen migration, rollback and verification seed are byte-identical. Audit metadata is therefore **not persisted to the database or exposed through the legacy runtime artifact**. A future deployment needs a separately authorized migration; this task does not pretend one exists. Generator writes skip unchanged artifacts and refuse any attempted rewrite of frozen SQL artifacts. The new queue is generated/checkable through the existing clinical scripts, and the eight added tests run in both local and CI clinical suites.
+
+## Commands observed
+
+| Exact command | Result |
+|---|---|
+| `npm run clinical:generate` | Passed; 83 entries and 198-row audit queue; no frozen artifact changed |
+| `npm run clinical:test` | Final run: 29 passed, 0 failed, 0 skipped |
+| `npm run clinical:test:ci` | 28 passed, 0 failed, 0 skipped |
+| `npm test` | 1,212 passed across 52 files |
+| `npm run clinical:check` | Passed; client, frozen SQL and audit queue match |
+| `node tools/clinical/sql-parse-guard.mjs` | Passed, exit 0 |
+| `npm run typecheck` | Passed, application and clinical checkJs |
+| `npm run lint` | Passed; 0 errors, nine existing application warnings |
+| `npm run clinical:lint` | Passed after the new-test correction |
+| `npm run clinical:typecheck` | Passed after the new-test correction |
+| `npm run build` | Passed; outdated local Browserslist-data warning; no network update attempted |
+| `git diff --check` | Passed |
+| `git diff 4305728 -- src supabase` | Empty |
+
+The first clinical test run was 28 pass / one fail: my new test repeated the brief's incorrect “76 female” count. Inspecting the seed established 44 female / 32 all, and I corrected only the new assertion and documentation. Every existing test passed in that initial run. The final results above include the correction.
+
+## Open questions and handoff
+
+1. Lead: confirm the CF-07 count correction (76 unreviewed metadata entries, 44 female / 32 all), rather than the brief's literal 76 female values.
+2. Clinical reviewer: obtain the named artifacts per queue, beginning with vitamin D under R1 and the P0 hazards. No interval is clinically approved. All 15 conflict adjudications and 13 identity questions remain open.
+3. Lead: run the unchanged Docker harness and arrange independent review. This report does not certify the work.
+4. Before any later persistence or deployment, authorize a new migration for audit metadata and a genuine evidence/human-review workflow; the V2-01 migration stays frozen. Production remains untouched until separate GO.
+
+Second Brain handoff, report only: the local worktree demonstrates the 83/198 inventory, unchanged clinical values/runtime/SQL, new offline audit instrument and passing commands above. Specimen/modifier/population assessments remain hypotheses; clinical validity and deployment remain pending. No vault fact, decision or [Pending] item was changed, and no memory update was written. The local vault's older release snapshot is not evidence about this isolated V2 branch.
+
+---
+
+# Historical TASK-041 report (preserved below)
+
 # TASK-041 implementation evidence — turns 5 and 6
 
 ## Turn 6 (Lead directive: one parse defect, three rulings)

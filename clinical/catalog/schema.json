@@ -90,10 +90,14 @@
             }
           },
           "specimen": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string",
+            "enum": [
+              "serum",
+              "serum_or_plasma",
+              "whole_blood",
+              "UNKNOWN"
+            ],
+            "description": "Offline specimen hypothesis only; inspect each range audit.specimen_basis. serum_or_plasma leaves the matrix unresolved and never asserts assay interchangeability."
           },
           "aliases": {
             "type": "array",
@@ -254,7 +258,11 @@
                 "reviewer",
                 "reviewed_at",
                 "version",
-                "notes"
+                "notes",
+                "value_origin",
+                "value_origin_table",
+                "modifiers",
+                "audit"
               ],
               "properties": {
                 "kind": {
@@ -365,6 +373,125 @@
                 "candidate_id": {
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "value_origin": {
+                  "type": "string",
+                  "enum": [
+                    "shipping_dictionary_2fd9433",
+                    "legacy_db_table",
+                    "reviewed_evidence"
+                  ],
+                  "description": "Shipping history is not clinical correctness: value_origin describes transcription origin and has zero clinical weight. evidence_grade/review_status answer clinical validity independently. reviewed_evidence is reserved and rejected by the implementer validator."
+                },
+                "value_origin_table": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Required nonblank retired table name only for legacy_db_table; otherwise null."
+                },
+                "modifiers": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sex",
+                    "age",
+                    "cycle",
+                    "pregnancy",
+                    "life_stage"
+                  ],
+                  "properties": {
+                    "sex": {
+                      "type": "string",
+                      "enum": [
+                        "requires_context",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "age": {
+                      "type": "string",
+                      "enum": [
+                        "requires_context",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "cycle": {
+                      "type": "string",
+                      "enum": [
+                        "requires_context",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "pregnancy": {
+                      "type": "string",
+                      "enum": [
+                        "requires_context",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "life_stage": {
+                      "type": "string",
+                      "enum": [
+                        "requires_context",
+                        "UNKNOWN"
+                      ]
+                    }
+                  },
+                  "description": "Triage flags only, not stratified ranges or evidence of irrelevance. UNKNOWN requires a reviewer question; requires_context does not establish clinical values."
+                },
+                "audit": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "tier",
+                    "reason",
+                    "specimen_basis",
+                    "population_context",
+                    "kind_verification",
+                    "modifiers_basis",
+                    "open_question",
+                    "required_artifact"
+                  ],
+                  "properties": {
+                    "tier": {
+                      "type": "string",
+                      "enum": [
+                        "P0",
+                        "P1",
+                        "P2",
+                        "P3"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "specimen_basis": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "population_context": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "kind_verification": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "modifiers_basis": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "open_question": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "required_artifact": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "description": "Offline audit instrument. Tiers and matrix/population/modifier hypotheses are not clinical approval; artifacts are requests, not claimed sources."
                 }
               }
             }

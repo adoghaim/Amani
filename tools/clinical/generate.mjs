@@ -9,7 +9,14 @@ export { projectEntries } from './project.mjs';
 const root = new URL('../../', import.meta.url);
 export const artifact = 'src/lib/biomarkers/catalog.generated.ts';
 export function readCatalog() {
-  return validateCatalog(JSON.parse(readFileSync(new URL('clinical/catalog/catalog.json', root), 'utf8')));
+  const catalog = validateCatalog(JSON.parse(readFileSync(new URL('clinical/catalog/catalog.json', root), 'utf8')));
+  assertAuditInventory(catalog);
+  return catalog;
+}
+// Production seed inventory, separate from validation of synthetic candidate fixtures.
+export function assertAuditInventory(catalog) {
+  const ranges = catalog.analytes.reduce((count, a) => count + a.ranges.length, 0);
+  if (catalog.analytes.length !== 83 || ranges !== 198) throw new Error(`TASK-042 requires 83 analytes / 198 ranges; found ${catalog.analytes.length}/${ranges}`);
 }
 export function renderCatalog(catalog = readCatalog()) {
   const template = readFileSync(new URL('tools/clinical/dictionary.template.ts.txt', root), 'utf8');
@@ -27,7 +34,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const path = new URL(name, root);
     if (process.argv.includes('--check')) {
       if (expected !== readFileSync(path, 'utf8')) throw new Error(`${name} drifted; run npm run clinical:generate`);
-    } else writeFileSync(path, expected);
+    } else if (expected !== readFileSync(path, 'utf8')) {
+      // The accepted V2-01 migration and verification artifacts are frozen.
+      // Refuse drift instead of silently rewriting their historical payload.
+      if (name.startsWith('supabase/')) throw new Error(`${name} is frozen; a new migration requires separate authorization`);
+      writeFileSync(path, expected);
+    }
   }
   console.log(`Clinical catalog ${process.argv.includes('--check') ? 'matches' : 'generated'} (${readCatalog().analytes.length} entries)`);
 }

@@ -77,6 +77,18 @@ export function validateCatalog(catalog) {
       synonyms.add(key);
     }
     for (const range of analyte.ranges) {
+      // TASK-042 is an offline implementer seed, never an evidence approval path.
+      // A future evidence-backed workflow must change this policy explicitly.
+      if (range.value_origin === 'reviewed_evidence') throw new Error(`${analyte.slug}: reviewed_evidence is reserved; implementer seeds cannot assign it`);
+      if (range.evidence_grade !== 'unsourced' || range.review_status === 'SAFE'
+        || range.reviewer !== null || range.reviewed_at !== null) throw new Error(`${analyte.slug}: implementer seed cannot assign evidence or human review`);
+      if (range.value_origin === 'legacy_db_table'
+        ? !range.value_origin_table?.trim()
+        : range.value_origin_table !== null) throw new Error(`${analyte.slug}: value_origin_table must name a table only for legacy_db_table`);
+      for (const [field, value] of Object.entries(range.audit)) {
+        if (!value.trim()) throw new Error(`${analyte.slug}: audit.${field} must not be blank`);
+      }
+      if ((analyte.is_cycle_dependent || range.phase !== null) && range.modifiers.cycle !== 'requires_context') throw new Error(`${analyte.slug}: existing cycle structure requires context`);
       const key = `${range.population}/${range.phase}/${range.kind}${range.candidate_id ? `/${range.candidate_id}` : ""}`;
       if (bands.has(key)) throw new Error(`${analyte.slug}: duplicate range ${key}`);
       bands.add(key);
