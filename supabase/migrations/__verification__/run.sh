@@ -79,6 +79,15 @@ fi
 
 psql_f() { docker exec -i "$CONTAINER" psql -U postgres -d amani "$@"; }
 
+# TASK-041 isolated clinical catalog rehearsal. Roles are cluster-wide; the
+# existing cases also create them conditionally. No production connection.
+if [ "${CLINICAL_ONLY:-0}" = 1 ]; then
+  psql_f -v ON_ERROR_STOP=1 -q -c "CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;"
+  source "$HERE/clinical-catalog.run.sh"
+  exit 0
+fi
+
+
 echo "==> schema stubs + migration"
 docker cp "$HERE/prelude.sql" "$CONTAINER:/tmp/prelude.sql" >/dev/null
 docker cp "$MIGRATION" "$CONTAINER:/tmp/migration.sql" >/dev/null
@@ -338,3 +347,6 @@ psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
     WHERE b.row_data IS DISTINCT FROM to_jsonb(i)) THEN RAISE EXCEPTION '000001 changed stored rows'; END IF; END \$\$;"
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql
+
+# TASK-041: isolated reference catalog, no user-data fixture.
+source "$HERE/clinical-catalog.run.sh"

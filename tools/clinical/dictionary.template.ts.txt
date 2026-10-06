@@ -1,0 +1,109 @@
+import type { BiomarkerName, BiomarkerCategory, CyclePhase } from '../../types';
+
+export type ImportanceLevel = 'critical' | 'important' | 'supporting';
+
+export interface OptimalRange {
+  min: number | null;
+  max: number | null;
+}
+
+export interface ClinicalRange {
+  min: number | null;
+  max: number | null;
+}
+
+export interface PhaseRange {
+  optimal: OptimalRange;
+  clinical: ClinicalRange;
+}
+
+export interface BiomarkerEntry {
+  key: BiomarkerName;
+  displayName: string;
+  aliases: string[];
+  defaultUnit: string;
+  category: BiomarkerCategory;
+  importance: ImportanceLevel;
+  scoreWeight: number;
+  optimal: OptimalRange;
+  clinical: ClinicalRange;
+  phaseRanges?: Partial<Record<CyclePhase | 'general', PhaseRange>>;
+  higherIsBetter?: boolean;
+}
+
+type EntryInput = Omit<BiomarkerEntry, 'scoreWeight'> & { scoreWeight?: number };
+
+function w(importance: ImportanceLevel): number {
+  if (importance === 'critical') return 3;
+  if (importance === 'important') return 2;
+  return 1;
+}
+
+const RAW_ENTRIES: EntryInput[] = __ENTRIES__;
+
+const ENTRIES: BiomarkerEntry[] = RAW_ENTRIES.map(e => ({
+  ...e,
+  scoreWeight: w(e.importance),
+}));
+
+const BY_KEY = new Map<BiomarkerName, BiomarkerEntry>();
+const ALIAS_MAP = new Map<string, BiomarkerName>();
+
+for (const entry of ENTRIES) {
+  BY_KEY.set(entry.key, entry);
+  ALIAS_MAP.set(entry.key, entry.key);
+  for (const alias of entry.aliases) {
+    ALIAS_MAP.set(alias.toLowerCase(), entry.key);
+  }
+}
+
+export function getEntry(key: BiomarkerName): BiomarkerEntry | undefined {
+  return BY_KEY.get(key);
+}
+
+export function resolveAlias(rawName: string): BiomarkerName | null {
+  const normalized = rawName.toLowerCase().trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  const direct = ALIAS_MAP.get(normalized);
+  if (direct) return direct;
+  const underscore = ALIAS_MAP.get(normalized.replace(/ /g, '_'));
+  if (underscore) return underscore;
+  return null;
+}
+
+export function getDisplayName(key: BiomarkerName): string {
+  return BY_KEY.get(key)?.displayName ?? key.replace(/_/g, ' ');
+}
+
+export function getCategory(key: BiomarkerName): BiomarkerCategory | null {
+  return BY_KEY.get(key)?.category ?? null;
+}
+
+export function getImportance(key: BiomarkerName): ImportanceLevel {
+  return BY_KEY.get(key)?.importance ?? 'supporting';
+}
+
+export function getScoreWeight(key: BiomarkerName): number {
+  return BY_KEY.get(key)?.scoreWeight ?? 1;
+}
+
+export function getAllEntries(): BiomarkerEntry[] {
+  return ENTRIES;
+}
+
+export function getEntriesByCategory(category: BiomarkerCategory): BiomarkerEntry[] {
+  return ENTRIES.filter(e => e.category === category);
+}
+
+export function getRangesForPhase(
+  key: BiomarkerName,
+  phase?: CyclePhase | null,
+): { optimal: OptimalRange; clinical: ClinicalRange } | null {
+  const entry = BY_KEY.get(key);
+  if (!entry) return null;
+  if (phase && entry.phaseRanges?.[phase]) {
+    return entry.phaseRanges[phase]!;
+  }
+  return { optimal: entry.optimal, clinical: entry.clinical };
+}
+
+export { ENTRIES as BIOMARKER_ENTRIES };

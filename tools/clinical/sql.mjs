@@ -1,0 +1,47 @@
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { validateCatalog } from './validate.mjs';
+import { projectEntries } from './project.mjs';
+
+export const migrationArtifact = 'supabase/migrations/20261006000000_clinical_catalog.sql';
+export const rollbackArtifact = 'supabase/migrations/__verification__/clinical-catalog.rollback.sql';
+export function stableJson(value) {
+  return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : item);
+}
+export function sqlPayload(catalog) {
+  validateCatalog(catalog);
+  return {
+    registry: catalog.analytes.flatMap(a => a.registry_identity ? [a.registry_identity] : []),
+    synonyms: catalog.analytes.flatMap(a => a.extraction_synonyms.map(s => ({ analyte_slug: a.slug, ...s }))),
+    metadata: catalog.analytes.flatMap(a => a.catalog_metadata ? [{ ...a.catalog_metadata,
+      sex_applicability: a.catalog_metadata.sex_applicability === 'all' ? 'both' : a.catalog_metadata.sex_applicability }] : []),
+    entries: catalog.analytes.map(a => ({ slug: a.slug, legacy_key: a.legacy_key ?? a.slug,
+      range_unit: a.canonical_unit,
+      registry_slug: a.unit_mapping?.status === 'verified' ? a.slug : null,
+      registry_unit: a.unit_mapping?.registry_unit ?? null,
+      legacy_to_registry_factor: a.unit_mapping?.legacy_to_registry_factor ?? null,
+      metadata: Object.fromEntries(Object.entries(a).filter(([key]) => key !== 'ranges')) })),
+    ranges: catalog.analytes.flatMap(a => a.ranges.map(r => ({ slug: a.slug, unit: a.canonical_unit,
+      candidate_id: r.candidate_id ?? 'shipping', ...r }))),
+  };
+}
+export function renderSql(catalog) {
+  const payload = stableJson(sqlPayload(catalog));
+  const clientRanges = projectEntries(catalog).flatMap(e => [
+    ...['optimal', 'clinical'].map(kind => ({ key: e.key, unit: e.defaultUnit, phase: null,
+      kind: kind === 'optimal' ? 'amani_context' : 'lab_reference', ...e[kind] })),
+    ...Object.entries(e.phaseRanges ?? {}).flatMap(([phase, bands]) => ['optimal', 'clinical'].map(kind => ({
+      key: e.key, unit: e.defaultUnit, phase, kind: kind === 'optimal' ? 'amani_context' : 'lab_reference', ...bands[kind] }))),
+  ]);
+  const hash = createHash('sha256').update(payload).digest('hex');
+  const literal = value => "'" + value.replaceAll("'", "''") + "'::jsonb";
+  const replacements = { __PAYLOAD__: literal(payload), __CLIENT_RANGES__: literal(stableJson(clientRanges)), __HASH__: hash };
+  const delimiter = `$clinical_${hash}$`;
+  if (payload.includes(delimiter)) throw new Error('SQL body delimiter appears in seed');
+  const render = name => readFileSync(new URL(name, import.meta.url), 'utf8')
+    .replaceAll('$clinical$', () => delimiter)
+    .replace(/__PAYLOAD__|__CLIENT_RANGES__|__HASH__/g, marker => replacements[marker]);
+  return { [migrationArtifact]: render('migration.sql.txt'), [rollbackArtifact]: render('rollback.sql.txt'),
+    'supabase/migrations/__verification__/clinical-catalog.seed.sql': render('verification.sql.txt') };
+}

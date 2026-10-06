@@ -1,0 +1,14 @@
+-- Generated reference fixture and expectations from the same validated seed.
+CREATE TABLE public.fixture_clinical_seed(payload jsonb NOT NULL, client_ranges jsonb NOT NULL);
+REVOKE ALL ON public.fixture_clinical_seed FROM PUBLIC,anon,authenticated,service_role;
+INSERT INTO public.fixture_clinical_seed VALUES(__PAYLOAD__,__CLIENT_RANGES__);
+INSERT INTO public.canonical_analytes(slug,display_name,category,subcategory,unit,is_core,is_ratio,affects_scoring,affects_recommendations)
+SELECT x.slug,x.display_name,x.category,x.subcategory,x.unit,x.is_core,x.is_ratio,x.affects_scoring,x.affects_recommendations
+FROM public.fixture_clinical_seed f, jsonb_populate_recordset(NULL::public.canonical_analytes,f.payload->'registry') x;
+INSERT INTO public.biomarker_catalog(slug,name,category,subcategory,unit,sex_applicability,is_cycle_dependent,is_fasting_sensitive)
+SELECT x.slug,x.name,x.category,x.subcategory,x.unit,x.sex_applicability,x.is_cycle_dependent,x.is_fasting_sensitive
+FROM public.fixture_clinical_seed f, jsonb_populate_recordset(NULL::public.biomarker_catalog,f.payload->'metadata') x;
+INSERT INTO public.analyte_synonyms(canonical_analyte_id,synonym_text,source_type)
+SELECT a.id,s->>'synonym_text',s->>'source_type' FROM public.fixture_clinical_seed f,
+jsonb_array_elements(f.payload->'synonyms') s JOIN public.canonical_analytes a ON a.slug=s->>'analyte_slug';
+INSERT INTO public.fixture_extraction_link SELECT id FROM public.canonical_analytes;

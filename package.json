@@ -4,18 +4,24 @@
   "version": "1.0.6",
   "type": "module",
   "scripts": {
+    "clinical:generate": "node tools/clinical/generate.mjs",
+    "clinical:check": "node tools/clinical/generate.mjs --check",
+    "clinical:test": "node --test --test-concurrency=1 tools/clinical/catalog.test.mjs tools/clinical/convergence.test.mjs tools/clinical/sql-parse-guard.test.mjs tools/clinical/value-identity.test.mjs",
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . && npm run clinical:lint",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && npm run clinical:typecheck",
     "check:functions": "bash docs/check-functions.sh npx --yes deno@2",
     "test": "vitest run",
     "test:watch": "vitest",
     "cap:sync": "BUILD_TARGET=native vite build && npx cap sync",
     "preview:shots": "node tools/preview/shoot.mjs",
     "prepare": "husky",
-    "validate:contrast": "node tools/contrast/validate.mjs"
+    "validate:contrast": "node tools/contrast/validate.mjs",
+    "clinical:test:ci": "node --test --test-concurrency=1 tools/clinical/catalog.test.mjs tools/clinical/convergence.test.mjs tools/clinical/sql-parse-guard.test.mjs",
+    "clinical:lint": "eslint --config tools/clinical/eslint.config.mjs tools/clinical",
+    "clinical:typecheck": "tsc -p tools/clinical/tsconfig.json"
   },
   "dependencies": {
     "@capacitor/android": "8.5.1",
