@@ -29,12 +29,28 @@ BEGIN
     (SELECT (r->>'min')::numeric*0.001 FROM jsonb_array_elements(seed->'ranges') r WHERE r->>'slug'='neutrophils_abs' AND r->>'kind'='amani_context' AND r->>'phase' IS NULL)
     THEN RAISE EXCEPTION 'conversion mismatch'; END IF;
   IF NOT EXISTS(SELECT 1 FROM public.clinical_ranges WHERE slug='magnesium' AND kind='amani_context' AND min=1.8 AND max=2.4)
-    OR NOT EXISTS(SELECT 1 FROM clinical_archive.biomarker_definitions WHERE name='magnesium' AND optimal_min=5.2 AND optimal_max=6.5)
+
     THEN RAISE EXCEPTION 'magnesium archive/shipping separation lost'; END IF;
   IF EXISTS(SELECT 1 FROM public.clinical_ranges WHERE evidence_grade<>'unsourced' OR review_status<>'UNKNOWN') THEN RAISE EXCEPTION 'invented provenance'; END IF;
-  FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
-    IF to_regclass('public.' || rel) IS NOT NULL OR to_regclass('clinical_archive.' || rel) IS NULL THEN RAISE EXCEPTION 'legacy retirement failed'; END IF;
-  END LOOP;
+  IF (SELECT archived_rows <> '{}'::jsonb FROM clinical_archive.task041_state) THEN
+    IF NOT EXISTS(SELECT 1 FROM clinical_archive.biomarker_definitions WHERE name='magnesium' AND optimal_min=5.2 AND optimal_max=6.5) THEN RAISE EXCEPTION 'magnesium archive lost'; END IF;
+    FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
+      IF to_regclass('public.' || rel) IS NOT NULL OR to_regclass('clinical_archive.' || rel) IS NULL THEN RAISE EXCEPTION 'legacy retirement failed'; END IF;
+    END LOOP;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lab_results_biomarker_name_fkey'
+      AND conrelid='public.lab_results'::regclass AND confrelid='clinical_archive.biomarker_definitions'::regclass
+      AND contype='f' AND convalidated) THEN RAISE EXCEPTION 'lab_results FK did not follow archive'; END IF;
+    IF EXISTS (SELECT 1 FROM public.lab_results r LEFT JOIN clinical_archive.biomarker_definitions d ON d.name=r.biomarker_name WHERE d.name IS NULL)
+      THEN RAISE EXCEPTION 'lab_results FK has orphan rows'; END IF;
+    BEGIN
+      UPDATE public.lab_results SET biomarker_name='task041_missing' WHERE biomarker_name='tsh';
+      RAISE EXCEPTION 'lab_results FK accepted invalid reference';
+    EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+  ELSE
+    FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
+      IF to_regclass('public.' || rel) IS NOT NULL OR to_regclass('clinical_archive.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'absent legacy table created'; END IF;
+    END LOOP;
+  END IF;
   FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
     IF has_schema_privilege(role_name,'clinical_archive','USAGE') THEN RAISE EXCEPTION 'archive accessible to %',role_name; END IF;
     FOREACH rel IN ARRAY ARRAY['clinical_catalog_entries','clinical_ranges'] LOOP

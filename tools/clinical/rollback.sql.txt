@@ -17,10 +17,24 @@ BEGIN
   END LOOP;
   FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
     IF to_regclass('public.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'TASK-041 rollback name collision: %',rel; END IF;
+    IF NOT (saved.archived_rows ? rel) THEN
+      IF to_regclass('clinical_archive.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'TASK-041 unexpected archive %',rel; END IF;
+      CONTINUE;
+    END IF;
     EXECUTE format('LOCK TABLE clinical_archive.%I IN ACCESS EXCLUSIVE MODE',rel);
     EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM clinical_archive.%I t',rel) INTO actual;
     IF actual IS DISTINCT FROM saved.archived_rows->rel THEN RAISE EXCEPTION 'TASK-041 archive changed: %',rel; END IF;
   END LOOP;
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE contype='f'
+      AND confrelid IN (to_regclass('clinical_archive.biomarker_definitions'),to_regclass('clinical_archive.biomarker_reference_ranges'),to_regclass('clinical_archive.biomarker_phase_ranges'))
+      AND conrelid NOT IN (to_regclass('clinical_archive.biomarker_definitions'),to_regclass('clinical_archive.biomarker_reference_ranges'),to_regclass('clinical_archive.biomarker_phase_ranges'))
+      AND NOT (conname='lab_results_biomarker_name_fkey' AND conrelid=coalesce(to_regclass('public.lab_results'),0::oid)
+        AND confrelid=to_regclass('clinical_archive.biomarker_definitions'))
+  ) OR EXISTS (
+    SELECT 1 FROM pg_depend d JOIN pg_rewrite w ON d.classid='pg_rewrite'::regclass AND d.objid=w.oid
+    WHERE d.refobjid IN (to_regclass('clinical_archive.biomarker_definitions'),to_regclass('clinical_archive.biomarker_reference_ranges'),to_regclass('clinical_archive.biomarker_phase_ranges'))
+  ) THEN RAISE EXCEPTION 'TASK-041 rollback unexpected legacy dependency'; END IF;
   IF EXISTS (
     SELECT 1 FROM pg_constraint WHERE contype='f'
     AND confrelid IN ('public.clinical_catalog_entries'::regclass,'public.clinical_ranges'::regclass)
@@ -41,10 +55,11 @@ BEGIN
     EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM public.%I t',rel) INTO actual;
     IF actual IS DISTINCT FROM saved.before_rows->rel THEN RAISE EXCEPTION 'TASK-041 rollback snapshot mismatch: %',rel; END IF;
   END LOOP;
+  ALTER TABLE public.clinical_catalog_entries DROP CONSTRAINT clinical_catalog_entries_registry_slug_fkey;
   ALTER TABLE public.clinical_ranges SET SCHEMA clinical_archive;
   ALTER TABLE public.clinical_catalog_entries SET SCHEMA clinical_archive;
   FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
-    EXECUTE format('ALTER TABLE clinical_archive.%I SET SCHEMA public',rel);
+    IF saved.archived_rows ? rel THEN EXECUTE format('ALTER TABLE clinical_archive.%I SET SCHEMA public',rel); END IF;
   END LOOP;
   UPDATE clinical_archive.task041_state SET status='rolled_back';
 END $rollback$;

@@ -15,6 +15,7 @@ DECLARE
   after_rows jsonb := '{}'::jsonb;
   archived_rows jsonb := '{}'::jsonb;
   saved record;
+  legacy_count integer;
 BEGIN
   IF to_regclass('clinical_archive.task041_state') IS NOT NULL THEN
     SELECT * INTO STRICT saved FROM clinical_archive.task041_state;
@@ -28,6 +29,10 @@ BEGIN
     END LOOP;
     FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
       IF to_regclass('public.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'TASK-041 duplicate legacy table %', rel; END IF;
+      IF NOT (saved.archived_rows ? rel) THEN
+        IF to_regclass('clinical_archive.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'TASK-041 unexpected archive %',rel; END IF;
+        CONTINUE;
+      END IF;
       EXECUTE format('LOCK TABLE clinical_archive.%I IN ACCESS EXCLUSIVE MODE', rel);
       EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM clinical_archive.%I t', rel) INTO actual;
       IF actual IS DISTINCT FROM saved.archived_rows->rel THEN RAISE EXCEPTION 'TASK-041 changed archive %', rel; END IF;
@@ -38,7 +43,11 @@ BEGIN
      OR to_regclass('public.clinical_catalog_entries') IS NOT NULL THEN
     RAISE EXCEPTION 'TASK-041 unexpected existing destination';
   END IF;
+  SELECT count(*) INTO legacy_count FROM unnest(ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges']) name
+    WHERE to_regclass('public.' || name) IS NOT NULL;
+  IF legacy_count NOT IN (0,3) THEN RAISE EXCEPTION 'TASK-041 partial legacy state'; END IF;
   FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog','biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
+    IF legacy_count=0 AND rel IN ('biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges') THEN CONTINUE; END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.' || rel) AND relkind='r') THEN
       RAISE EXCEPTION 'TASK-041 missing ordinary table %', rel;
     END IF;
@@ -50,11 +59,14 @@ BEGIN
       old_rows := old_rows || jsonb_build_object(rel, actual);
     END IF;
   END LOOP;
+  IF legacy_count=3 THEN
   -- Never silently archive an unexpected external dependent table or view.
   IF EXISTS (
     SELECT 1 FROM pg_constraint WHERE contype='f'
     AND confrelid IN ('public.biomarker_definitions'::regclass,'public.biomarker_reference_ranges'::regclass,'public.biomarker_phase_ranges'::regclass)
     AND conrelid NOT IN ('public.biomarker_definitions'::regclass,'public.biomarker_reference_ranges'::regclass,'public.biomarker_phase_ranges'::regclass)
+    AND NOT (conname='lab_results_biomarker_name_fkey' AND conrelid=coalesce(to_regclass('public.lab_results'),0::oid)
+      AND confrelid='public.biomarker_definitions'::regclass)
   ) OR EXISTS (
     SELECT 1 FROM pg_depend d JOIN pg_rewrite w ON d.classid='pg_rewrite'::regclass AND d.objid=w.oid
     WHERE d.refobjid IN ('public.biomarker_definitions'::regclass,'public.biomarker_reference_ranges'::regclass,'public.biomarker_phase_ranges'::regclass)
@@ -95,6 +107,7 @@ BEGIN
     WHERE ROW(r.optimal_min,r.optimal_max,r.clinical_min,r.clinical_max) IS DISTINCT FROM ROW(v.ro_min,v.ro_max,v.rc_min,v.rc_max)
        OR ROW(p.optimal_min,p.optimal_max,p.clinical_min,p.clinical_max) IS DISTINCT FROM ROW(v.po_min,v.po_max,v.pc_min,v.pc_max)
   ) THEN RAISE EXCEPTION 'TASK-041 phase conflict inventory mismatch'; END IF;
+  END IF; -- wholly absent legacy state skips only archival preconditions
   -- The supplied snapshots are the exact metadata precondition, not permission
   -- to overwrite production drift. UUIDs/timestamps are preserved, never seeded.
   SELECT jsonb_agg(x ORDER BY x::text) INTO expected FROM jsonb_array_elements(seed->'registry') x;
@@ -175,7 +188,7 @@ BEGIN
   CREATE POLICY clinical_ranges_read ON public.clinical_ranges FOR SELECT TO authenticated,service_role USING(true);
 
   FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
-    EXECUTE format('ALTER TABLE public.%I SET SCHEMA clinical_archive',rel);
+    IF legacy_count=3 THEN EXECUTE format('ALTER TABLE public.%I SET SCHEMA clinical_archive',rel); END IF;
   END LOOP;
   FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog','clinical_catalog_entries','clinical_ranges'] LOOP
     EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM public.%I t',rel) INTO actual;

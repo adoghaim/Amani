@@ -1,198 +1,149 @@
-# TASK-041 implementation evidence — turn 2
+# TASK-041 implementation evidence — turn 3
 
-Approach: the accepted client projection already preserves shipping behavior;
-independent DB identities, unit scales and stale range copies are the remaining
-root cause. Keep the 83-entry/198-band client byte-identical, fold the supplied
-identity/synonym/catalog snapshots into the validated seed, explicitly reconcile
-legacy units, and generate atomic forward/rollback SQL with guarded archival.
-Retain conflicting evidence without choosing clinical winners. Add local
-rehearsal cases and CI enforcement without touching the 13 importers.
+Approach: the migration rejected a known external FK because its guard allowed
+only dependencies internal to the three legacy tables; the fixture omitted that
+FK, and its snapshot missed constraints owned outside the tracked tables.
+Preserve the named lab_results FK through schema moves, expand the fixture and
+rollback snapshot, detach the new catalog from the live registry on rollback,
+and support the explicitly authorized wholly absent legacy state. Move the
+historical value-identity test unchanged into a separate file so CI runs all
+history-independent tests without title filtering. No clinical values change.
 
-## Starting point and authority
+## Scope and evidence source
 
-Turn 2 started clean on `v2/01-clinical-catalog` at
-`b6d25c19d6e101e9b07482e4049439d02a83e10a` (accepted turn 1). The original
-value baseline remains `2fd9433bbcbed73a1e137505d2542ee58a16d9e0`.
-The Lead's contract, both amendments, inventories, snapshots and sprint plan
-were read from the control task directory, which was never written.
-Amendments authorize local authoring/rehearsal only. No commit, push, merge,
-production query, migration application, deployment or vault write occurred.
+Turn 3 began clean at `912e435fba0fc87650aaa6905d4613f29199e124` on
+`v2/01-clinical-catalog`. Original branch/value baseline:
+`2fd9433bbcbed73a1e137505d2542ee58a16d9e0`. The contract, conflict inventory and
+sprint plan were located and read in the control task directory (the brief's
+relative copies do not exist in this worktree). Nothing there was written.
+Amendment 3 supplies the production observations: exactly two legacy-targeting
+FKs, zero lab_results rows, PostgreSQL 17.6 and out-of-band phase-table creation.
+This implementer did not query production or independently verify those facts.
 
-## Implemented
+## Changes
 
-- Preserve all 83 shipping entries and 198 inherited bands. All retain
-  `unsourced`, `UNKNOWN`, null source/reviewer dates and version 1. Vitamin D
-  remains 50–80; magnesium remains 1.8–2.4 mg/dL. Clinical judgment is unchanged.
-- Fold all 81 registry identities, 224 synonyms and 76 catalog metadata rows
-  from the supplied snapshots into the seed. A separate offline Python
-  comparison compared multisets of full JSON tuples against each supplied file:
-  all three matched exactly after translating seed `all` back to DB `both`.
-  `SYNONYM-RECONCILIATION.md` lists each of the eleven production-only tuples;
-  all eleven are TPO variants. Legacy client aliases remain untouched.
-- Five explicit `_absolute` → `_abs` mappings carry `cells/uL`, `K/uL`, and
-  `legacy_to_registry_factor: 0.001`. Client keys and endpoints stay in cells/uL.
-  TSH and RBC spellings carry factor 1. Unapproved key/unit combinations fail
-  validation. Three ratios (`chol_hdl_ratio`, `albumin_globulin_ratio`,
-  `bun_creatinine_ratio`) have blank shipping units against registry `ratio`:
-  their unit join is explicitly refused, with null factor/registry FK; no
-  dimensionless equivalence is guessed. Existing extraction identities survive.
-- `rheumatoid_factor` and `ana_screen` remain range-only. The new
-  `clinical_catalog_entries` table permits these two without inventing rows in
-  `canonical_analytes`. `clinical_ranges` references the catalog slug and unit.
-  This is the A3-required refinement of the proposal's original canonical FK.
-- `CONFLICTS.md` retains all 15 phase disagreements and now records both
-  definitions disagreements (including both eGFR ceilings), all 13 unmatched
-  definition names, and the two extraction gaps. No unmatched definition is
-  mapped or seeded forward. The dormant magnesium band remains archive-only.
-- Seed sex applicability uses only `female`, `male`, `all` or unknown; the live
-  metadata projection maps `all` to existing `both`. The snapshots contain 44
-  female and 32 both rows; seven shipping analytes have no metadata row.
-  Provenance text records that female was a column default, not reviewed
-  applicability evidence. No sex metadata is represented as clinical review.
-- Candidates are explicit range rows with `candidate_id` and `DISPUTED`; SQL
-  retains them, client projection excludes them, and shipping pairs remain
-  explicit/complete. Existing tests rejecting a disputed shipping band remain
-  valid and unedited. Population is now enumerated. Candidates do not imply
-  an optimal presentation; current shipping provenance is unchanged.
-- Literal replacement uses a function. SQL rendering also substitutes all
-  placeholders in one pass, escapes SQL quotes, enables standard-conforming
-  strings and uses a payload-hash-derived DO delimiter. Tests cover dollar
-  metacharacters, quotes, template markers and the old DO delimiter.
-- Validation uses `Object.hasOwn` for schema properties, rejects whitespace-only
-  evidence/reviewer names, and validates `reviewed_at` with the date pattern.
-  Dedicated ESLint and TypeScript checkJs configs cover all clinical MJS tools,
-  including tests, through the existing lint/typecheck scripts. No dependency
-  or lockfile changed; package changes are confined to scripts.
-- Both CI trigger lists include `feature/amani-intelligence-v2`. CI runs the
-  five history-independent original clinical cases plus all nine new cases.
-  Positive name selection excludes the original git-history case without
-  editing that test file. `clinical:test` still runs all 15 locally. A negative
-  name filter was rejected during implementation because Node 24 matched its
-  file parent and ran the excluded test; the final positive filter was observed
-  to run only 5 + 9 cases. CI uses Node 20; hosted CI has not been observed.
+- Forward permits exactly `lab_results_biomarker_name_fkey` on
+  `public.lab_results` targeting the legacy definitions table. No FK is dropped,
+  recreated or weakened to allow that move. Other external FK/view dependencies
+  still refuse. Rollback applies the symmetric check on the archive.
+- The prelude copies lab_results DDL/RLS from
+  `20260310054519_full_44_biomarker_panel_schema_v3.sql` and tracing columns from
+  `20260402000000`; minimal synthetic auth/report parents support it. Three
+  synthetic rows exercise magnesium, estradiol and TSH references. These are
+  test fixtures, not patient data or changed clinical catalog values.
+- Forward verification checks the FK is validated, targets archived definitions,
+  contains no orphan rows, and rejects an invalid reference. Rollback verifies
+  its public target and rejection behavior. Snapshot equality covers FK OIDs,
+  definitions, targets, validation, all lab_results rows/columns/ACLs/RLS/policies,
+  and inbound constraints whose owner is outside the tracked tables.
+- Rollback drops only the new catalog's `registry_slug` FK before archiving it.
+  Its internal range/catalog constraints remain. The snapshot now sees an
+  archived relation constraining a live tracked table and would catch this leak.
+- Zero legacy tables with no archive creates the same new catalog/ranges and
+  records applied state with empty archived_rows. Replay and rollback use that
+  recorded state. Partial legacy state still refuses. The archival path keeps
+  the 44/23/22 counts, 15-row phase inventory, and two definitions preconditions.
+- The harness includes separate 224-synonym, 213-synonym and wholly absent legacy
+  cases, cross-case full JSON projection equality, replay/rollback, unexpected
+  FK name/owner probes, archive dependency probes and partial-state refusal.
+- `clinical:test:ci` runs both history-independent files unfiltered and serially;
+  `clinical:test` also runs the new value-identity file. The extracted helper and
+  test block is byte-identical to the original. No assertion was weakened, and
+  no existing Vitest file was edited. No new dependency or lockfile change.
+- Identity/catalog upserts are **precondition-only, never seeding**; the existing
+  exact snapshots must already match. Only missing known synonyms are inserted.
+  TABLE-DISPOSITION makes that limitation explicit for V2-02.
+- Queue `src/types/supabase.generated.ts` for regeneration after a separately
+  authorized apply. It remains untouched now. No archive retirement anywhere
+  real without separate owner GO.
 
-## Migration behavior authored (not executed here)
+## B2 conflict still requires a Lead ruling
 
-Generated targets: the unchanged client, dated forward migration, rollback SQL,
-and harness seed/expectation fixture. Both generation and drift checking cover
-all four. SQL carries a deterministic SHA-256 of its projected seed.
+The explicit all-absent path does **not** repair a real fresh-chain reset.
+The checked-in 20260310054519 migration creates biomarker_definitions and
+biomarker_reference_ranges, and no historical migration creates
+biomarker_phase_ranges. A fresh chain therefore reaches the two-present,
+one-absent state that B2 explicitly requires refusing. Supporting that actual
+state would require relaxing or amending the ruling; this implementer has not
+done so. A clarification was requested during implementation.
 
-Forward SQL uses one transaction, an advisory lock, and reference-table locks.
-It requires the supplied identity/catalog metadata exactly, rejects unknown or
-misowned synonyms, validates the 15 observed conflicts and two definition
-conflicts, checks legacy counts, and rejects external legacy FK/view consumers.
-Identity/catalog upserts therefore preserve existing UUIDs/timestamps. Missing
-known synonyms may be inserted; none are removed in the forward direction.
-It creates 83 catalog entries and 198 unit-bearing ranges with provenance and
-kind, then moves all three legacy range tables into `clinical_archive`.
-Original table data, OIDs, FK relationships, policies and ACLs are preserved;
-application schema access to the archive is revoked. New public tables enable
-RLS and grant read-only access to authenticated/service roles, explicitly
-revoking inherited default DML grants and anonymous access.
+The new harness case is labelled wholly absent legacy state, not a full
+Supabase reset. The latter remains unexercised and expected to refuse based on
+the checked-in DDL. The task remains PARTIAL pending this ruling and executable
+database/Edge Function checks. Do not claim fresh-chain acceptance from the
+all-absent fixture.
 
-A private state row snapshots before/after reference rows. Reapplication with
-the same hash and rows is a no-op; changed rows or a different hash fail.
-Rollback refuses intervening reference/range writes, changed archives, name
-collisions and new synonym/catalog consumers. It removes only inserted
-synonyms, compares restored live rows to the saved before snapshot, moves the
-old tables back and archives the new tables. No table is dropped. Forward after
-rollback is refused and requires an explicit new migration. Future catalog
-versions require a new dated migration; already applied seed history must not
-be rewritten as an operational update.
+## Value identity and determinism
 
-The harness runs separate 224- and 213-synonym databases, forward twice,
-SQL-to-seed full row equality, SQL-to-client endpoints/units equality, all
-synonym lookups, extraction UUID references, the hook SELECT under authenticated,
-RLS/grants and write denial, invalid provenance constraints, rejection of
-unexpected units/dependencies/intervening writes, and rollback. It compares
-all six tables' rows, UUIDs/OIDs, ACLs, columns, indexes, FK definitions and
-policies before/after. `CLINICAL_ONLY=1 bash
-supabase/migrations/__verification__/run.sh` selects only these cases.
+The historical test executes `git show 2fd9433:src/lib/biomarkers/dictionary.ts`,
+transpiles original and generated modules independently, evaluates each in a VM,
+and deep-compares ordered entries, exported API, getters, category/weight data,
+alias variants and all phase/fallback behavior. All 83 actual entries match
+(the original brief's 79 count was already reconciled in the accepted work).
+All 198 inherited bands retain unsourced/UNKNOWN provenance. Vitamin D remains
+50–80 and magnesium remains 1.8–2.4 mg/dL; no citation was invented.
 
-Fixture limitations: canonical/catalog DDL and definitions/reference data come
-from checked-in historical migrations. The phase table has no checked-in CREATE
-migration; its DDL is a representative fixture, fifteen rows use the supplied
-conflict inventory and seven remaining rows are non-conflicting sentinels.
-This is not a full production schema/data dump. The known counts/conflicts and
-snapshot guards are checked; arbitrary stored SQL function bodies or every
-possible production dependency are not inventoried. Those require a permitted
-live-schema preflight before any separately authorized production application.
-
-## Value identity and determinism evidence
-
-The unedited original local test uses `git show 2fd9433:.../dictionary.ts`,
-transpiles the original and generated modules independently with TypeScript,
-evaluates each in its own VM, and deep-compares complete ordered entries,
-exports, getters, categories, weights, alias variants and phase/fallback behavior.
-All 83 entries match. It intentionally remains local because CI checkout does
-not promise that historical object. No existing test or importer was edited.
-
-The generated client also matches accepted turn 1 byte-for-byte, SHA-256
+The client is byte-identical to accepted turn 1 `b6d25c1`, SHA-256
 `8186b5682703ca273455e31465b1085a239180a10e37c9b58161165fcda18c8e`.
-New tests compare all 198 SQL payload bands and units against the client
-projection via explicit legacy keys. This is a JavaScript projection proof;
-actual PostgreSQL-to-client equality is authored in the harness, not claimed run.
+`git diff --numstat b6d25c1 -- src` prints nothing. The seed and CONFLICTS.md
+remain unchanged; all 15 disagreements and both candidate values are retained.
 
-Repeated generation compared all four target Buffers before/after and found
-identical bytes. Tests reverse recursive input object-key order and compare SQL
-and client artifacts; JSON serialization sorts object keys by codepoint and
-preserves semantically meaningful array order. No timestamps or absolute paths
-are generated. Real hand-edit probes make the CLI reject both client and SQL
-drift without overwriting either, restoring original bytes in `finally`.
+A Python byte comparison captured all four generated targets, ran
+`npm run clinical:generate`, and compared every byte afterward: identical.
+Clinical tests also reverse object-key order, compare SQL/client payloads, and
+probe real hand edits to generated TS and SQL: drift check rejects the edit,
+does not overwrite it, and the test restores the original bytes. No timestamps
+or absolute paths are generated. SQL projection equality in PostgreSQL is
+asserted in the harness but was **not executed in this sandbox**.
 
-Snapshot input SHA-256 (Lead-supplied files, not queried here):
+## Commands observed this turn
 
-| Snapshot | SHA-256 |
+| Command | Observed result |
 |---|---|
-| canonical analytes | `267f373cd1ecd0ebcfc278ad46d47df33b7d46f385e4777d40005b274b66b9ce` |
-| analyte synonyms | `e4202503285597196f1ed1f0de8f3d25f904f86673b67a847f237aa6fd5bb787` |
-| biomarker catalog | `12452172c1e6e1d5d13177810bc28f092324a37948d2d221d9b8bed5849a8fee` |
-
-## Commands and observed results
-
-| Command | Result |
-|---|---|
-| `npm run clinical:test` | 15 passed, 0 failed; includes historical identity and both drift probes |
-| `npm run clinical:test:ci` | 5 original history-independent + 9 new tests passed; historical identity excluded |
-| `npm exec vitest run src/lib/biomarkers/provenance.test.ts` | 1 passed |
-| `npm test` | 1,212 passed across 52 files; no existing test changed |
-| `npm run clinical:generate` | Passed; all 4 targets byte-identical on regeneration |
+| `npm run clinical:generate` | Passed; four target byte comparison passed |
 | `npm run clinical:check` | Passed |
-| `npm run lint` | Passed; 0 errors, 9 existing warnings; includes clinical ESLint |
-| `npm run typecheck` | Passed; includes clinical checkJs |
-| `npm run build` | Passed; outdated Browserslist dataset warning |
-| `npm_config_offline=true npm run check:functions` | BLOCKED: Deno package is not cached (ENOTCACHED); no network attempted |
-| `bash supabase/migrations/__verification__/run.sh` | BLOCKED before PostgreSQL starts: Docker socket permission denied |
-| `bash -n supabase/migrations/__verification__/run.sh supabase/migrations/__verification__/clinical-catalog.run.sh` | Passed shell syntax only |
-| `git diff --check` | Passed |
+| `npm run clinical:test` | 15 passed, 0 failed, including historical identity |
+| `npm run clinical:test:ci` | 14 passed, 0 failed/skipped, no title filter |
+| `npm test` | 1,212 passed across 52 files |
+| `npm run lint` | 0 errors, 9 existing warnings; clinical lint passed |
+| `npm run typecheck` | Passed, including clinical checkJs |
+| `npm run build` | Passed |
+| `npm_config_offline=true npm run check:functions` | Blocked: Deno not cached (ENOTCACHED), no network attempted |
+| `bash supabase/migrations/__verification__/run.sh` | Blocked before PostgreSQL starts: Docker socket permission denied |
+| `bash -n supabase/migrations/__verification__/run.sh supabase/migrations/__verification__/clinical-catalog.run.sh` | Passed, syntax only |
+| `git diff --check` | Passed after removing whitespace copied from historical fixture DDL |
 
-The Supabase CLI migration help command itself was denied while trying to write
-its telemetry outside the workspace. The dated deterministic migration was
-therefore authored locally under the explicitly allowed path; no CLI migration
-or remote connection ran successfully.
+Local Node is v24.15.0. Hosted CI uses Node 20; that runtime has not been
+executed here. Removing title filtering removes the prior test-selection
+assumption but is not a claim of a hosted CI run.
 
-## Unexercised paths and next handoff
+## Unexercised paths and handoff
 
-Docker forward/replay/rollback, PostgreSQL constraints/privileges/projections,
-Supabase REST extraction, actual React hook execution, browser/mobile behavior,
-hosted CI and production state were not exercised. The Edge Function typecheck
-did not run to completion. Shell syntax, generated-byte tests and payload
-comparison do not substitute for database execution. The Lead must run the
-Docker harness and Deno check in the permitted environment, then obtain the
-required independent Fable/Opus review. These implementation results are not
-self-review or certification. All changes remain uncommitted for the Lead.
+Docker forward/replay/rollback, actual FK enforcement and RLS assertions,
+PostgreSQL cross-path projection equality, full Supabase chain replay, Deno
+checking, hosted CI, REST extraction, browser/mobile flows and production
+application remain unexercised here. The fixture's phase-table DDL remains
+representative: fifteen rows use the supplied conflicts and seven are sentinel
+rows; it is not a full production schema/data dump. The known lab_results
+dependency is now explicitly represented and allow-listed under B1. No claim
+that the migration applies to production follows from these local JS tests.
 
-`lab_reference` still means the inherited dictionary `clinical` band, never a
-patient's laboratory interval. `canDescribeAsOptimal` remains unwired to the
-forbidden existing surfaces; V2-02/V2-03 must enforce it in presentation. No
-clinical source was invented, and no clinical audit was performed here.
+All edits remain uncommitted inside allowed paths. No src edits since b6d25c1,
+no forbidden-path edit, no production write, network operation, merge, push,
+deployment or control-directory write. Required independent Fable and Opus
+review remains the Lead's gate; this report is implementation evidence only.
 
 ## Second Brain handoff (report only)
 
-The local Load/Update procedures and Amani context were read offline; the vault
-was not pulled or written under this task's restrictions. Its September state
-is older than this work and does not override the live repository. Verified
-handoff facts are the starting SHA, unchanged client hash, snapshot tuple
-comparison and command results above. Pending production, release, clinician,
-Docker and Deno facts remain unresolved. The owner amendments resolve this
-task's design questions; no project-memory decision was changed by this agent.
+Read the local Load/Update procedures, AI_CONTEXT, project index, Amani Current
+State/Decisions and skill index offline. No pull or vault write was performed
+under the task's restrictions. The vault's September snapshot is not current
+turn-3 evidence and no Pending fact was resolved from it.
+
+Verified this session: starting SHA/branch, named FK in checked-in schema,
+partial fresh-chain state implied by checked-in DDL, unchanged client bytes,
+unchanged relocated assertions, and command results above. Decisions applied:
+Lead B1–B5 only. Still unverified: actual database execution, production/CI state
+and Edge Function checks. Needed next: reconcile B2, run the Docker harness and
+Deno check in a permitted environment, then independent reviews. These facts
+are supplied for an authorized vault-side update; no project truth was edited.

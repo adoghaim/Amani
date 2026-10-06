@@ -198,3 +198,112 @@ CREATE POLICY fixture_reference_read ON public.biomarker_reference_ranges FOR SE
 CREATE POLICY fixture_phase_read ON public.biomarker_phase_ranges FOR SELECT TO authenticated USING(true);
 -- Representative dependency on extraction UUIDs: must survive both directions.
 CREATE TABLE public.fixture_extraction_link(id uuid REFERENCES public.canonical_analytes(id));
+
+-- Minimal auth/report parents for the exact checked-in lab_results DDL and RLS.
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+CREATE TABLE public.lab_reports(id uuid PRIMARY KEY, user_id uuid NOT NULL);
+CREATE TABLE lab_results (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lab_report_id         uuid NOT NULL REFERENCES lab_reports(id) ON DELETE CASCADE,
+  biomarker_name        text NOT NULL REFERENCES biomarker_definitions(name),
+  value                 numeric NOT NULL,
+  unit                  text NOT NULL,
+  lab_ref_min           numeric,
+  lab_ref_max           numeric,
+  amani_status          text NOT NULL DEFAULT 'unknown' CHECK (amani_status IN ('optimal','normal','borderline_low','borderline_high','out_of_range_low','out_of_range_high','unknown')),
+  lab_status            text NOT NULL DEFAULT 'unknown' CHECK (lab_status IN ('in_range','borderline_low','borderline_high','out_of_range_low','out_of_range_high','unknown')),
+  cycle_phase           text CHECK (cycle_phase IN ('menstrual','follicular','ovulatory','luteal','pregnancy_t1','pregnancy_t2','pregnancy_t3','unknown')),
+  extraction_confidence text CHECK (extraction_confidence IN ('high','medium','low')),
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(lab_report_id, biomarker_name)
+);
+
+ALTER TABLE lab_results ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "lr_select" ON lab_results FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM lab_reports WHERE lab_reports.id=lab_results.lab_report_id AND lab_reports.user_id=auth.uid()));
+CREATE POLICY "lr_insert" ON lab_results FOR INSERT TO authenticated WITH CHECK (EXISTS (SELECT 1 FROM lab_reports WHERE lab_reports.id=lab_results.lab_report_id AND lab_reports.user_id=auth.uid()));
+CREATE POLICY "lr_update" ON lab_results FOR UPDATE TO authenticated USING (EXISTS (SELECT 1 FROM lab_reports WHERE lab_reports.id=lab_results.lab_report_id AND lab_reports.user_id=auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM lab_reports WHERE lab_reports.id=lab_results.lab_report_id AND lab_reports.user_id=auth.uid()));
+CREATE POLICY "lr_delete" ON lab_results FOR DELETE TO authenticated USING (EXISTS (SELECT 1 FROM lab_reports WHERE lab_reports.id=lab_results.lab_report_id AND lab_reports.user_id=auth.uid()));
+
+/*
+  # Intelligent Data Pipeline - Schema Hardening
+
+  1. Changes
+    - Add tracing and metadata columns to `lab_results` to maintain the lineage
+      from raw OCR/text extraction to normalized canonical form.
+    - Fields added:
+      - `source_format`: origin type (text, ocr, manual)
+      - `parser_version`: version tag for traceability (v1_text, v2_ocr, etc.)
+      - `raw_biomarker_name`: exact string found on the report
+      - `canonical_biomarker_name`: the validated mapped name
+      - `unit_original`: exact string found for unit
+      - `unit_normalized`: the mapped unit that Amani uses
+      - `normalization_status`: mapped, partial, unmapped
+      - `review_status`: tracks whether the user has confirmed low-confidence hits
+      - `reviewed_by_user`: explicit boolean flag
+      - `source_snippet`: text chunk containing the value for UI review
+*/
+
+DO $$
+BEGIN
+  -- We use DO block to safely add columns
+
+  -- source_format
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'source_format') THEN
+    ALTER TABLE lab_results ADD COLUMN source_format text CHECK (source_format IN ('text', 'ocr', 'manual', 'unknown'));
+  END IF;
+
+  -- parser_version
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'parser_version') THEN
+    ALTER TABLE lab_results ADD COLUMN parser_version text;
+  END IF;
+
+  -- raw_biomarker_name
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'raw_biomarker_name') THEN
+    ALTER TABLE lab_results ADD COLUMN raw_biomarker_name text;
+  END IF;
+
+  -- canonical_biomarker_name (we keep this in addition to the FK biomarker_name for strict schema tracing as requested)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'canonical_biomarker_name') THEN
+    ALTER TABLE lab_results ADD COLUMN canonical_biomarker_name text;
+  END IF;
+
+  -- unit_original
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'unit_original') THEN
+    ALTER TABLE lab_results ADD COLUMN unit_original text;
+  END IF;
+
+  -- unit_normalized
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'unit_normalized') THEN
+    ALTER TABLE lab_results ADD COLUMN unit_normalized text;
+  END IF;
+
+  -- normalization_status
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'normalization_status') THEN
+    ALTER TABLE lab_results ADD COLUMN normalization_status text DEFAULT 'unmapped' CHECK (normalization_status IN ('mapped', 'partial', 'unmapped'));
+  END IF;
+
+  -- review_status
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'review_status') THEN
+    ALTER TABLE lab_results ADD COLUMN review_status text DEFAULT 'pending' CHECK (review_status IN ('pending', 'reviewed', 'edited_by_user'));
+  END IF;
+
+  -- reviewed_by_user
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'reviewed_by_user') THEN
+    ALTER TABLE lab_results ADD COLUMN reviewed_by_user boolean DEFAULT false;
+  END IF;
+
+  -- source_snippet
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'lab_results' AND column_name = 'source_snippet') THEN
+    ALTER TABLE lab_results ADD COLUMN source_snippet text;
+  END IF;
+
+END $$;
+
+CREATE INDEX idx_lr_report ON public.lab_results(lab_report_id);
+CREATE INDEX idx_lr_name ON public.lab_results(biomarker_name);
+INSERT INTO public.lab_reports VALUES ('11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222');
+INSERT INTO public.lab_results(lab_report_id,biomarker_name,value,unit,source_format,raw_biomarker_name,normalization_status)
+VALUES ('11111111-1111-4111-8111-111111111111','magnesium',2.1,'mg/dL','manual','Magnesium','mapped'),
+('11111111-1111-4111-8111-111111111111','estradiol',100,'pg/mL','ocr','E2','partial'),
+('11111111-1111-4111-8111-111111111111','tsh',1.5,'mIU/L','text','TSH','mapped');
