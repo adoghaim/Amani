@@ -20,7 +20,9 @@ BEGIN
   IF EXISTS(SELECT 1 FROM jsonb_array_elements(seed->'synonyms') s WHERE NOT EXISTS (
     SELECT 1 FROM public.analyte_synonyms n JOIN public.canonical_analytes a ON a.id=n.canonical_analyte_id
     WHERE a.slug=s->>'analyte_slug' AND n.synonym_text=s->>'synonym_text' AND n.source_type=s->>'source_type'))
-    OR (SELECT count(*) FROM public.analyte_synonyms)<>224 THEN RAISE EXCEPTION 'extraction synonym mismatch'; END IF;
+    -- Chain mode allows extra dev synonyms (Lead turn-6 ruling); others are exact.
+    OR ((SELECT count(*) FROM public.analyte_synonyms)<>224 AND (SELECT mode FROM clinical_archive.task041_state)<>'chain')
+    THEN RAISE EXCEPTION 'extraction synonym mismatch'; END IF;
   IF (SELECT count(*) FROM public.fixture_extraction_link l JOIN public.canonical_analytes a ON a.id=l.id)<>81 THEN RAISE EXCEPTION 'extraction UUIDs lost'; END IF;
   IF EXISTS(SELECT 1 FROM public.canonical_analytes WHERE slug IN ('rheumatoid_factor','ana_screen')) THEN RAISE EXCEPTION 'invented extraction identity'; END IF;
   IF (SELECT count(*) FROM public.clinical_catalog_entries WHERE legacy_key<>slug AND range_unit='cells/uL' AND registry_unit='K/uL' AND legacy_to_registry_factor=0.001)<>5 THEN RAISE EXCEPTION 'differential scale mismatch'; END IF;
@@ -40,8 +42,9 @@ BEGIN
     IF (rel = ANY(st.absent_legacy)) = (to_regclass('clinical_archive.' || rel) IS NOT NULL) OR (rel = ANY(st.absent_legacy)) = (st.archived_rows ? rel)
       THEN RAISE EXCEPTION 'mode % archive of % inconsistent',st.mode,rel; END IF;
   END LOOP;
-  IF st.absent_legacy <> CASE st.mode WHEN 'production' THEN '{}'::text[] WHEN 'chain' THEN ARRAY['biomarker_phase_ranges']
-    ELSE ARRAY['biomarker_definitions','biomarker_phase_ranges','biomarker_reference_ranges'] END
+  -- Parenthesized: plpgsql ends an IF condition at the first depth-0 THEN.
+  IF st.absent_legacy <> (CASE st.mode WHEN 'production' THEN '{}'::text[] WHEN 'chain' THEN ARRAY['biomarker_phase_ranges']
+    ELSE ARRAY['biomarker_definitions','biomarker_phase_ranges','biomarker_reference_ranges'] END)
     THEN RAISE EXCEPTION 'mode % recorded wrong absent tables %',st.mode,st.absent_legacy; END IF;
   IF st.mode IN ('production','chain') THEN
     IF NOT EXISTS(SELECT 1 FROM clinical_archive.biomarker_definitions WHERE name='magnesium' AND optimal_min=5.2 AND optimal_max=6.5) THEN RAISE EXCEPTION 'magnesium archive lost'; END IF;
@@ -74,7 +77,8 @@ FROM public.biomarker_catalog ORDER BY category,name;
 DO $app$
 BEGIN
   IF (SELECT count(*) FROM public.clinical_ranges)<>198 THEN RAISE EXCEPTION 'authenticated range read failed'; END IF;
-  IF (SELECT count(*) FROM public.analyte_synonyms s JOIN public.canonical_analytes a ON a.id=s.canonical_analyte_id)<>224 THEN RAISE EXCEPTION 'authenticated extraction read failed'; END IF;
+  -- At least the 224 seeded rows (exactness is asserted above as postgres; chain may hold extras).
+  IF (SELECT count(*) FROM public.analyte_synonyms s JOIN public.canonical_analytes a ON a.id=s.canonical_analyte_id)<224 THEN RAISE EXCEPTION 'authenticated extraction read failed'; END IF;
   BEGIN
     UPDATE public.clinical_ranges SET min=999 WHERE slug='magnesium';
     RAISE EXCEPTION 'unexpected write succeeded';

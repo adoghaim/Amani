@@ -2,6 +2,13 @@
 # Sourced by run.sh; shares only the existing throwaway container, no remote DB.
 # This case also runs independently via CLINICAL_ONLY=1 run.sh.
 CLINICAL_TMP="$(mktemp -d)"
+# Parse gate before any case (Lead turn 6): compile every DO body in every
+# clinical SQL file with plpgsql's validator inside a rolled-back transaction,
+# so a syntax error fails here, named by file, instead of mid-case.
+docker exec "$CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE clinical_parse;"
+(cd "$HERE/../../.." && node tools/clinical/sql-parse-guard.mjs && node tools/clinical/sql-parse-guard.mjs --compile-sql) \
+  | docker exec -i "$CONTAINER" psql -U postgres -d clinical_parse -v ON_ERROR_STOP=1 -q
+echo 'PASS: every clinical SQL DO body compiles (plpgsql validator) and no IF condition holds a bare CASE'
 # Forward must refuse with the named classification and leave no archive behind.
 clinical_refused() {
   local db="$1" label="$2" reason="$3" out
@@ -186,11 +193,40 @@ clinical_chain_case() {
   clinical_psql -q -c "UPDATE public.canonical_analytes SET unit='dev-drift' WHERE slug='tsh';
     DELETE FROM public.biomarker_catalog WHERE slug=(SELECT min(slug) FROM public.biomarker_catalog);
     DELETE FROM public.biomarker_reference_ranges WHERE biomarker_name='lh' AND phase='general';"
-  local before after
+  # Lead turn-6 ruling: chain mode still refuses a seeded synonym whose owner
+  # disagrees with the seed (it would silently keep a wrong extraction mapping).
+  clinical_psql -q -c "UPDATE public.analyte_synonyms SET canonical_analyte_id=(SELECT id FROM public.canonical_analytes WHERE slug='rdw')
+    WHERE synonym_text='HS-CRP' AND source_type='quest';"
+  clinical_refused "$db" 'a seeded synonym owned by the wrong analyte' 'conflicting synonym owner' || return 1
+  clinical_psql -q -c "UPDATE public.analyte_synonyms SET canonical_analyte_id=(SELECT id FROM public.canonical_analytes WHERE slug='hs_crp')
+    WHERE synonym_text='HS-CRP' AND source_type='quest';"
+  # Extra synonyms are allowed and survive; missing ones are seeded. Removing the
+  # rdw identity (and, by cascade, its 4 synonyms) makes the forward insert one
+  # new canonical_analytes row, the only path on which rollback deletes identity.
+  clinical_psql -q -c "INSERT INTO public.analyte_synonyms(canonical_analyte_id,synonym_text,source_type)
+      SELECT id,'FIXTURE DEV-ONLY SYNONYM','generic' FROM public.canonical_analytes WHERE slug='tsh';
+    DELETE FROM public.fixture_extraction_link WHERE id=(SELECT id FROM public.canonical_analytes WHERE slug='rdw');
+    DELETE FROM public.canonical_analytes WHERE slug='rdw';"
+  local before after before_ids seeded_id applied_ids
   before=$(clinical_psql -tA -f /tmp/clinical-catalog.snapshot.sql)
+  before_ids=$(clinical_psql -tAc 'SELECT string_agg(id::text, $$,$$ ORDER BY id) FROM public.canonical_analytes;')
+  clinical_psql -q -f /tmp/clinical-forward.sql
+  seeded_id=$(clinical_psql -tAc "SELECT id FROM public.canonical_analytes WHERE slug='rdw';")
+  applied_ids=$(clinical_psql -tAc "SELECT string_agg(id::text, \$\$,\$\$ ORDER BY id) FROM public.canonical_analytes WHERE id<>'$seeded_id';")
+  if [ -z "$seeded_id" ] || [ "$applied_ids" != "$before_ids" ]; then
+    echo 'FAIL: chain forward did not add exactly one identity row (rdw)'; return 1
+  fi
+  # Restore the extraction link to the new identity so verify sees all 81; it is
+  # also the first outside FK that must stop rollback deleting that identity.
+  clinical_psql -q -c "INSERT INTO public.fixture_extraction_link VALUES('$seeded_id');"
   clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
   clinical_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
   clinical_expect_mode "$db" chain || return 1
+  clinical_psql -q -c "DO \$\$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.analyte_synonyms s JOIN public.canonical_analytes a ON a.id=s.canonical_analyte_id
+      WHERE a.slug='tsh' AND s.synonym_text='FIXTURE DEV-ONLY SYNONYM') THEN RAISE EXCEPTION 'chain mode dropped an extra synonym'; END IF;
+    IF (SELECT count(*) FROM public.analyte_synonyms s JOIN public.canonical_analytes a ON a.id=s.canonical_analyte_id WHERE a.slug='rdw')<>4
+      THEN RAISE EXCEPTION 'chain mode did not seed the missing rdw synonyms'; END IF; END \$\$;"
   clinical_psql -q -c "DO \$\$ BEGIN
     IF (SELECT absent_legacy FROM clinical_archive.task041_state)<>ARRAY['biomarker_phase_ranges']
       OR (SELECT archived_rows ? 'biomarker_phase_ranges' FROM clinical_archive.task041_state)
@@ -209,7 +245,35 @@ clinical_chain_case() {
       echo "FAIL: chain mode built different tables, grants or RLS than production mode ($reference)"; return 1
     fi
   done
+  # Dedicated canonical_analytes rollback fixture (Lead turn 6). An outside FK to
+  # the seeded identity must refuse rollback, whether it would block the delete
+  # (the extraction link) or silently cascade from it (an ON DELETE CASCADE
+  # consumer). A refused rollback must leave the applied state untouched.
+  clinical_rollback_refused() {
+    local label="$1" out
+    if out=$(clinical_psql -q -f /tmp/clinical-catalog.rollback.sql 2>&1); then
+      echo "FAIL: rollback deleted a seeded identity referenced by $label"; return 1
+    fi
+    if ! grep -q 'references a canonical_analytes row seeded by the forward' <<<"$out"; then
+      echo "FAIL: rollback refused $label for the wrong reason: $out"; return 1
+    fi
+    clinical_psql -q -c "DO \$\$ BEGIN
+      IF (SELECT status FROM clinical_archive.task041_state)<>'applied'
+        OR NOT EXISTS (SELECT 1 FROM public.canonical_analytes WHERE id='$seeded_id')
+        OR to_regclass('public.clinical_ranges') IS NULL
+        THEN RAISE EXCEPTION 'refused rollback changed state'; END IF; END \$\$;"
+  }
+  clinical_rollback_refused 'the extraction link' || return 1
+  clinical_psql -q -c "DELETE FROM public.fixture_extraction_link WHERE id='$seeded_id';
+    CREATE TABLE public.fixture_identity_consumer(analyte_id uuid REFERENCES public.canonical_analytes(id) ON DELETE CASCADE);
+    INSERT INTO public.fixture_identity_consumer VALUES('$seeded_id');"
+  clinical_rollback_refused 'an ON DELETE CASCADE consumer' || return 1
+  clinical_psql -q -c 'DROP TABLE public.fixture_identity_consumer;'
   clinical_psql -q -f /tmp/clinical-catalog.rollback.sql
+  if [ "$(clinical_psql -tAc "SELECT count(*) FROM public.canonical_analytes WHERE id='$seeded_id' OR slug='rdw';")" != 0 ] ||
+    [ "$(clinical_psql -tAc 'SELECT string_agg(id::text, $$,$$ ORDER BY id) FROM public.canonical_analytes;')" != "$before_ids" ]; then
+    echo 'FAIL: chain rollback did not delete exactly the seeded rdw identity'; return 1
+  fi
   after=$(clinical_psql -tA -f /tmp/clinical-catalog.snapshot.sql)
   if [ "$before" != "$after" ]; then
     echo "FAIL: $db rollback changed data, IDs, columns, ACLs, policies, indexes or FKs"; return 1

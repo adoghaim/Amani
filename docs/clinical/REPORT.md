@@ -1,4 +1,90 @@
-# TASK-041 implementation evidence — turn 5 (amendment 4)
+# TASK-041 implementation evidence — turns 5 and 6
+
+## Turn 6 (Lead directive: one parse defect, three rulings)
+
+**The Docker harness is the Lead's to run. No SQL was executed by me this turn
+or any other; everything below about SQL behaviour is by reading only.**
+
+Turn 6 began clean at `271d4f8`.
+
+1. **Parse defect fixed as directed.** `clinical-catalog.verify.sql`: the CASE in
+   the `absent_legacy` IF condition is now parenthesized, `<> (CASE … END) THEN`.
+   No other SQL change was made for parsing.
+2. **Guard against the whole class, two layers.**
+   - Static, runs in `npm run clinical:test` and CI's `clinical:test:ci`:
+     `tools/clinical/sql-parse-guard.mjs` masks comments and string literals,
+     then flags any `IF`/`ELSIF` whose condition holds a `CASE` at parenthesis
+     depth 0 (plpgsql's condition ends at the first depth-0 `THEN`). It scans the
+     generated migration, every `__verification__/clinical-catalog.*.sql` and the
+     `tools/clinical/*.sql.txt` templates. Tests: positive control on the exact
+     defect shape and on `ELSIF`; negative controls for the parenthesized fix,
+     CASE in assignments, in subqueries, in strings, comments and DDL `IF NOT
+     EXISTS`; and a regression test that reads the real turn-5 file via
+     `git show 271d4f8:…` and requires a finding at line 43 exactly (skips only if
+     that commit is absent, e.g. a shallow CI clone). Observed passing.
+   - Compile, runs first in `clinical-catalog.run.sh` before any case: the static
+     guard, then `sql-parse-guard.mjs --compile-sql` emits every `DO` body of every
+     clinical SQL file as `CREATE FUNCTION pg_temp.… LANGUAGE plpgsql` with
+     `check_function_bodies = on` inside `BEGIN … ROLLBACK`, piped to psql in a
+     throwaway `clinical_parse` database. plpgsql's validator parses the body and
+     its embedded SQL without executing or resolving tables, and `\echo` names the
+     file and block before each. **Not executed by me.** It covers DO bodies only;
+     top-level statements are still parsed by the cases themselves. Bash `-c`
+     inline DO blocks in `run.sh` are not covered by either layer.
+3. **`absent` stays a valid mode**, unchanged; its harness case is unchanged.
+4. **Chain mode refuses a conflicting synonym owner.** Forward template (and so the
+   regenerated migration; payload and seed hash unchanged): in chain mode, any
+   existing `analyte_synonyms` row whose `(synonym_text, source_type)` is in the
+   seed but whose owning slug differs raises `conflicting synonym owner` naming
+   the tuple, the current owner and the seeded owner. Extra and missing synonyms
+   are allowed. Production and absent modes keep the strict check unchanged.
+   `verify.sql` now requires exactly 224 synonyms except in chain mode (where
+   every seeded tuple with the right owner is still required, extras allowed);
+   the authenticated read check became `< 224`, the exact count being asserted as
+   postgres just before it.
+5. **Dedicated `canonical_analytes` rollback fixture** (chain case):
+   - Refusal: `HS-CRP`/`quest` moved to `rdw` → forward must refuse with
+     `conflicting synonym owner` and leave no archive or new table; restored.
+   - Extras: a dev-only synonym on `tsh` is added before forward; asserted kept
+     after forward, and the before/after snapshot proves rollback keeps it.
+   - Identity path: the `rdw` analyte (with its extraction link; its 4 synonyms
+     go by cascade) is deleted before the before-snapshot. The forward must add
+     exactly one identity row (`rdw`, new UUID; all other IDs equal before). Its
+     extraction link is re-added so verify sees 81, then replay + verify twice.
+   - Rollback refuses (error must name `references a canonical_analytes row
+     seeded by the forward`, state must stay `applied` with the row and
+     `clinical_ranges` present) first with the extraction link referencing it
+     (a blocking FK), then with an `ON DELETE CASCADE` consumer table (the
+     silent-cascade case).
+   - With both removed, rollback must delete exactly that row: neither the
+     seeded UUID nor slug `rdw` remains, the ID set equals the pre-forward set,
+     and the full snapshot (data incl. synonyms, OIDs, ACLs, RLS, policies,
+     indexes, FKs) equals the pre-forward one.
+6. Docs: `TABLE-DISPOSITION.md` chain row and `analyte_synonyms` row updated to
+   the ruling. The turn-5 judgment call and the "canonical_analytes rollback
+   unexercised by any fixture" note below are superseded by items 4 and 5.
+
+### Turn-6 commands observed
+
+| Command | Observed result |
+|---|---|
+| `npm run clinical:generate` | Passed (83 entries); regenerated migration only |
+| `npm run clinical:check` | Passed |
+| `npm run clinical:test` | 21 passed, 0 failed, 0 skipped |
+| `npm run clinical:test:ci` | 20 passed, 0 failed, 0 skipped |
+| `bash -n …/clinical-catalog.run.sh` | Passed, syntax only |
+| `git diff --check` | Passed |
+| `npm test` | 1,212 passed across 52 files; no test file modified |
+| `npm run lint` | Exit 0; 0 errors, 9 existing warnings; clinical lint passed |
+| `npm run typecheck` | Passed, including clinical checkJs |
+| `npm run build` | Passed |
+| `npm run check:functions` | Exit 0 |
+| `git diff --stat b6d25c1 -- src` | Empty |
+| Docker harness | **SKIPPED — the Lead runs it.** Nothing in this turn's SQL or harness edits has executed |
+
+---
+
+## Turn 5 record (amendment 4)
 
 Approach: amendment 4 replaces the absent/partial distinction with an explicit
 classification. The forward now classifies the database before reading or

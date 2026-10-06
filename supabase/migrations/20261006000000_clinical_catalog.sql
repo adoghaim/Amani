@@ -141,8 +141,21 @@ BEGIN
   END IF;
   -- Production and absent modes treat the supplied snapshots as the exact metadata
   -- precondition, not permission to overwrite drift. Chain mode is a clean
-  -- developer database and nothing in it is evidence: it asserts nothing about
-  -- identity, catalog or synonym contents and lets the upserts below seed by slug.
+  -- developer database and nothing in it is evidence: it asserts no row counts or
+  -- conflict inventories and lets the upserts below seed by slug. It still refuses
+  -- a seeded synonym owned by a different analyte (Lead turn-6 ruling): ON CONFLICT
+  -- DO NOTHING would otherwise keep that wrong extraction mapping silently. Extra
+  -- and missing synonyms are allowed.
+  IF run_mode = 'chain' THEN
+    SELECT s.synonym_text, s.source_type, a.slug AS owner, x->>'analyte_slug' AS seeded INTO bad
+      FROM public.analyte_synonyms s JOIN public.canonical_analytes a ON a.id=s.canonical_analyte_id
+      JOIN jsonb_array_elements(seed->'synonyms') x ON x->>'synonym_text'=s.synonym_text AND x->>'source_type'=s.source_type
+      WHERE a.slug <> x->>'analyte_slug' ORDER BY s.synonym_text, s.source_type LIMIT 1;
+    IF FOUND THEN
+      RAISE EXCEPTION 'TASK-041 mode chain: conflicting synonym owner: % (%) is owned by %, seed says %',
+        bad.synonym_text, bad.source_type, bad.owner, bad.seeded;
+    END IF;
+  END IF;
   IF run_mode IN ('production','absent') THEN
     SELECT jsonb_agg(x ORDER BY x::text) INTO expected FROM jsonb_array_elements(seed->'registry') x;
     SELECT jsonb_agg(to_jsonb(t)-'id'-'created_at' ORDER BY (to_jsonb(t)-'id'-'created_at')::text) INTO actual FROM public.canonical_analytes t;
