@@ -1,0 +1,51 @@
+-- Generated rollback for TASK-041, seed c3edbe6871ab49dbbfa04db1fa277a0d712425bccb9b1d44f9b5738e440dde00. Local rehearsal only.
+-- Refuses intervening writes. No table is dropped; new catalog is archived.
+BEGIN;
+SET LOCAL standard_conforming_strings = on;
+SET LOCAL search_path = pg_catalog, public;
+SELECT pg_advisory_xact_lock(20261006,41);
+DO $rollback$
+DECLARE saved record; rel text; actual jsonb;
+BEGIN
+  IF to_regclass('clinical_archive.task041_state') IS NULL THEN RAISE EXCEPTION 'TASK-041 not applied'; END IF;
+  SELECT * INTO STRICT saved FROM clinical_archive.task041_state;
+  IF saved.seed_hash<>'c3edbe6871ab49dbbfa04db1fa277a0d712425bccb9b1d44f9b5738e440dde00' OR saved.status<>'applied' THEN RAISE EXCEPTION 'TASK-041 rollback state mismatch'; END IF;
+  FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog','clinical_catalog_entries','clinical_ranges'] LOOP
+    EXECUTE format('LOCK TABLE public.%I IN ACCESS EXCLUSIVE MODE',rel);
+    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM public.%I t',rel) INTO actual;
+    IF actual IS DISTINCT FROM saved.after_rows->rel THEN RAISE EXCEPTION 'TASK-041 rollback refuses intervening writes: %',rel; END IF;
+  END LOOP;
+  FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
+    IF to_regclass('public.' || rel) IS NOT NULL THEN RAISE EXCEPTION 'TASK-041 rollback name collision: %',rel; END IF;
+    EXECUTE format('LOCK TABLE clinical_archive.%I IN ACCESS EXCLUSIVE MODE',rel);
+    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM clinical_archive.%I t',rel) INTO actual;
+    IF actual IS DISTINCT FROM saved.archived_rows->rel THEN RAISE EXCEPTION 'TASK-041 archive changed: %',rel; END IF;
+  END LOOP;
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE contype='f'
+    AND confrelid IN ('public.clinical_catalog_entries'::regclass,'public.clinical_ranges'::regclass)
+    AND conrelid NOT IN ('public.clinical_catalog_entries'::regclass,'public.clinical_ranges'::regclass)
+  ) OR EXISTS (
+    SELECT 1 FROM pg_depend d JOIN pg_rewrite w ON d.classid='pg_rewrite'::regclass AND d.objid=w.oid
+    WHERE d.refobjid IN ('public.clinical_catalog_entries'::regclass,'public.clinical_ranges'::regclass)
+  ) THEN RAISE EXCEPTION 'TASK-041 rollback refuses new catalog dependencies'; END IF;
+  -- Only added synonyms can differ from the before snapshot. Refuse any FK
+  -- consumer before deletion (including ON DELETE CASCADE relationships).
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE contype='f' AND confrelid='public.analyte_synonyms'::regclass) THEN
+    RAISE EXCEPTION 'TASK-041 rollback refuses new synonym dependencies';
+  END IF;
+  DELETE FROM public.analyte_synonyms s WHERE NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(saved.before_rows->'analyte_synonyms') old WHERE old->>'id'=s.id::text
+  );
+  FOREACH rel IN ARRAY ARRAY['canonical_analytes','analyte_synonyms','biomarker_catalog'] LOOP
+    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), ''[]''::jsonb) FROM public.%I t',rel) INTO actual;
+    IF actual IS DISTINCT FROM saved.before_rows->rel THEN RAISE EXCEPTION 'TASK-041 rollback snapshot mismatch: %',rel; END IF;
+  END LOOP;
+  ALTER TABLE public.clinical_ranges SET SCHEMA clinical_archive;
+  ALTER TABLE public.clinical_catalog_entries SET SCHEMA clinical_archive;
+  FOREACH rel IN ARRAY ARRAY['biomarker_definitions','biomarker_reference_ranges','biomarker_phase_ranges'] LOOP
+    EXECUTE format('ALTER TABLE clinical_archive.%I SET SCHEMA public',rel);
+  END LOOP;
+  UPDATE clinical_archive.task041_state SET status='rolled_back';
+END $rollback$;
+COMMIT;

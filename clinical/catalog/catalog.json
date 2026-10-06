@@ -26,15 +26,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "estradiol",
-        "display_name": "Estradiol (E2)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "sex_hormones",
-        "unit": "pg/mL",
+        "display_name": "Estradiol (E2)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "estradiol",
+        "subcategory": "sex_hormones",
+        "unit": "pg/mL"
       },
       "extraction_synonyms": [
         {
@@ -42,12 +42,12 @@
           "source_type": "quest"
         },
         {
-          "synonym_text": "ESTRADIOL, SERUM",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "ESTRADIOL (E2)",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "ESTRADIOL, SERUM",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -211,7 +211,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": true,
+        "is_fasting_sensitive": false,
+        "name": "Estradiol",
+        "sex_applicability": "female",
+        "slug": "estradiol",
+        "subcategory": "reproductive",
+        "unit": "pg/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "pg/mL",
+        "registry_unit": "pg/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "progesterone",
@@ -236,15 +254,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "progesterone",
-        "display_name": "Progesterone",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "sex_hormones",
-        "unit": "ng/mL",
+        "display_name": "Progesterone",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "progesterone",
+        "subcategory": "sex_hormones",
+        "unit": "ng/mL"
       },
       "extraction_synonyms": [
         {
@@ -417,7 +435,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": true,
+        "is_fasting_sensitive": false,
+        "name": "Progesterone",
+        "sex_applicability": "female",
+        "slug": "progesterone",
+        "subcategory": "reproductive",
+        "unit": "ng/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/mL",
+        "registry_unit": "ng/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "fsh",
@@ -443,28 +479,28 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "fsh",
-        "display_name": "Follicle Stimulating Hormone (FSH)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "gonadotropins",
-        "unit": "mIU/mL",
+        "display_name": "Follicle Stimulating Hormone (FSH)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "fsh",
+        "subcategory": "gonadotropins",
+        "unit": "mIU/mL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "FSH",
-          "source_type": "quest"
+          "synonym_text": "FOLLICLE STIMULATING HORMONE",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "FOLLICLE-STIMULATING HORMONE (FSH)",
           "source_type": "quest"
         },
         {
-          "synonym_text": "FOLLICLE STIMULATING HORMONE",
-          "source_type": "labcorp"
+          "synonym_text": "FSH",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -628,7 +664,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": true,
+        "is_fasting_sensitive": false,
+        "name": "FSH",
+        "sex_applicability": "female",
+        "slug": "fsh",
+        "subcategory": "reproductive",
+        "unit": "mIU/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mIU/mL",
+        "registry_unit": "mIU/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "lh",
@@ -653,15 +707,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "lh",
-        "display_name": "Luteinizing Hormone (LH)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "gonadotropins",
-        "unit": "mIU/mL",
+        "display_name": "Luteinizing Hormone (LH)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "lh",
+        "subcategory": "gonadotropins",
+        "unit": "mIU/mL"
       },
       "extraction_synonyms": [
         {
@@ -669,12 +723,12 @@
           "source_type": "quest"
         },
         {
-          "synonym_text": "LUTEINIZING HORMONE (LH)",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "LUTEINIZING HORMONE",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "LUTEINIZING HORMONE (LH)",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -838,7 +892,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": true,
+        "is_fasting_sensitive": false,
+        "name": "LH",
+        "sex_applicability": "female",
+        "slug": "lh",
+        "subcategory": "reproductive",
+        "unit": "mIU/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mIU/mL",
+        "registry_unit": "mIU/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "total_testosterone",
@@ -864,27 +936,27 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "total_testosterone",
-        "display_name": "Total Testosterone",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "androgens",
-        "unit": "ng/dL",
+        "display_name": "Total Testosterone",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "total_testosterone",
+        "subcategory": "androgens",
+        "unit": "ng/dL"
       },
       "extraction_synonyms": [
-        {
-          "synonym_text": "TESTOSTERONE, TOTAL",
-          "source_type": "quest"
-        },
         {
           "synonym_text": "TESTOSTERONE TOTAL",
           "source_type": "labcorp"
         },
         {
           "synonym_text": "TESTOSTERONE, SERUM",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "TESTOSTERONE, TOTAL",
           "source_type": "quest"
         }
       ],
@@ -921,7 +993,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Total Testosterone",
+        "sex_applicability": "female",
+        "slug": "total_testosterone",
+        "subcategory": "androgen",
+        "unit": "ng/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/dL",
+        "registry_unit": "ng/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "free_testosterone",
@@ -946,24 +1036,24 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "free_testosterone",
-        "display_name": "Free Testosterone",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "androgens",
-        "unit": "pg/mL",
+        "display_name": "Free Testosterone",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "free_testosterone",
+        "subcategory": "androgens",
+        "unit": "pg/mL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "TESTOSTERONE, FREE",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "TESTOSTERONE FREE",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "TESTOSTERONE, FREE",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -999,7 +1089,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Free Testosterone",
+        "sex_applicability": "female",
+        "slug": "free_testosterone",
+        "subcategory": "androgen",
+        "unit": "pg/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "pg/mL",
+        "registry_unit": "pg/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "shbg",
@@ -1025,21 +1133,17 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "shbg",
-        "display_name": "SHBG",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "binding_proteins",
-        "unit": "nmol/L",
+        "display_name": "SHBG",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "shbg",
+        "subcategory": "binding_proteins",
+        "unit": "nmol/L"
       },
       "extraction_synonyms": [
-        {
-          "synonym_text": "SHBG",
-          "source_type": "quest"
-        },
         {
           "synonym_text": "SEX HORMONE BINDING GLOBULIN",
           "source_type": "quest"
@@ -1047,6 +1151,10 @@
         {
           "synonym_text": "SEX HORMONE-BINDING GLOBULIN",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "SHBG",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -1082,7 +1190,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Sex Hormone Binding Globulin",
+        "sex_applicability": "female",
+        "slug": "shbg",
+        "subcategory": "androgen",
+        "unit": "nmol/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "nmol/L",
+        "registry_unit": "nmol/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "dheas",
@@ -1109,28 +1235,28 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "dheas",
-        "display_name": "DHEA-S",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "androgens",
-        "unit": "ug/dL",
+        "display_name": "DHEA-S",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "dheas",
+        "subcategory": "androgens",
+        "unit": "ug/dL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "DHEA-S",
-          "source_type": "quest"
+          "synonym_text": "DEHYDROEPIANDROSTERONE SULFATE",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "DHEA SULFATE",
           "source_type": "quest"
         },
         {
-          "synonym_text": "DEHYDROEPIANDROSTERONE SULFATE",
-          "source_type": "labcorp"
+          "synonym_text": "DHEA-S",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -1166,7 +1292,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "DHEA-S",
+        "sex_applicability": "female",
+        "slug": "dheas",
+        "subcategory": "adrenal",
+        "unit": "mcg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ug/dL",
+        "registry_unit": "ug/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "prolactin",
@@ -1191,15 +1335,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "prolactin",
-        "display_name": "Prolactin",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "pituitary",
-        "unit": "ng/mL",
+        "display_name": "Prolactin",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "prolactin",
+        "subcategory": "pituitary",
+        "unit": "ng/mL"
       },
       "extraction_synonyms": [
         {
@@ -1244,7 +1388,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Prolactin",
+        "sex_applicability": "female",
+        "slug": "prolactin",
+        "subcategory": "pituitary",
+        "unit": "ng/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/mL",
+        "registry_unit": "ng/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "amh",
@@ -1271,15 +1433,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "amh",
-        "display_name": "Anti-Mullerian Hormone (AMH)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "ovarian_reserve",
-        "unit": "ng/mL",
+        "display_name": "Anti-Mullerian Hormone (AMH)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "amh",
+        "subcategory": "ovarian_reserve",
+        "unit": "ng/mL"
       },
       "extraction_synonyms": [
         {
@@ -1328,7 +1490,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "hormones",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Anti-Mullerian Hormone",
+        "sex_applicability": "female",
+        "slug": "amh",
+        "subcategory": "fertility",
+        "unit": "ng/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/mL",
+        "registry_unit": "ng/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "tsh",
@@ -1355,23 +1535,23 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "tsh",
-        "display_name": "TSH",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "uIU/mL",
+        "display_name": "TSH",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "tsh",
+        "subcategory": "thyroid",
+        "unit": "uIU/mL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "TSH",
+          "synonym_text": "THYROID STIMULATING HORMONE",
           "source_type": "quest"
         },
         {
-          "synonym_text": "THYROID STIMULATING HORMONE",
+          "synonym_text": "TSH",
           "source_type": "quest"
         },
         {
@@ -1412,7 +1592,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "TSH",
+        "sex_applicability": "female",
+        "slug": "tsh",
+        "subcategory": "thyroid",
+        "unit": "mIU/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mIU/L",
+        "registry_unit": "uIU/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "CONTRACT-AMENDMENT-2 A7: explicit scale/spelling reconciliation."
+      }
     },
     {
       "slug": "free_t3",
@@ -1438,15 +1636,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "free_t3",
-        "display_name": "Free T3",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "pg/mL",
+        "display_name": "Free T3",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "free_t3",
+        "subcategory": "thyroid",
+        "unit": "pg/mL"
       },
       "extraction_synonyms": [
         {
@@ -1495,7 +1693,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Free T3",
+        "sex_applicability": "female",
+        "slug": "free_t3",
+        "subcategory": "thyroid",
+        "unit": "pg/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "pg/mL",
+        "registry_unit": "pg/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "free_t4",
@@ -1522,15 +1738,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "free_t4",
-        "display_name": "Free T4",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "ng/dL",
+        "display_name": "Free T4",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "free_t4",
+        "subcategory": "thyroid",
+        "unit": "ng/dL"
       },
       "extraction_synonyms": [
         {
@@ -1579,7 +1795,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Free T4",
+        "sex_applicability": "female",
+        "slug": "free_t4",
+        "subcategory": "thyroid",
+        "unit": "ng/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/dL",
+        "registry_unit": "ng/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "total_t4",
@@ -1605,23 +1839,19 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "total_t4",
-        "display_name": "Total T4",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "ug/dL",
+        "display_name": "Total T4",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "total_t4",
+        "subcategory": "thyroid",
+        "unit": "ug/dL"
       },
       "extraction_synonyms": [
         {
           "synonym_text": "T4 (THYROXINE)",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "THYROXINE (T4)",
           "source_type": "quest"
         },
         {
@@ -1630,6 +1860,10 @@
         },
         {
           "synonym_text": "T4, TOTAL",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "THYROXINE (T4)",
           "source_type": "quest"
         }
       ],
@@ -1666,7 +1900,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Total T4",
+        "sex_applicability": "female",
+        "slug": "total_t4",
+        "subcategory": "thyroid",
+        "unit": "mcg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ug/dL",
+        "registry_unit": "ug/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "reverse_t3",
@@ -1692,15 +1944,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "reverse_t3",
-        "display_name": "Reverse T3",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "ng/dL",
+        "display_name": "Reverse T3",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "reverse_t3",
+        "subcategory": "thyroid",
+        "unit": "ng/dL"
       },
       "extraction_synonyms": [
         {
@@ -1745,7 +1997,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Reverse T3",
+        "sex_applicability": "female",
+        "slug": "reverse_t3",
+        "subcategory": "thyroid",
+        "unit": "ng/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/dL",
+        "registry_unit": "ng/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "tpo_antibodies",
@@ -1773,17 +2043,77 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "tpo_antibodies",
-        "display_name": "Thyroid Peroxidase Antibodies (TPO)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "thyroid",
-        "subcategory": "autoimmune",
-        "unit": "IU/mL",
+        "display_name": "Thyroid Peroxidase Antibodies (TPO)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "tpo_antibodies",
+        "subcategory": "autoimmune",
+        "unit": "IU/mL"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "ANTI THYROID PEROXIDASE ANTIBODY",
+          "source_type": "generic"
+        },
+        {
+          "synonym_text": "ANTI-THYROID PEROXIDASE",
+          "source_type": "generic"
+        },
+        {
+          "synonym_text": "ANTI-TPO",
+          "source_type": "generic"
+        },
+        {
+          "synonym_text": "ANTIMICROSOMAL AB",
+          "source_type": "generic"
+        },
+        {
+          "synonym_text": "MICROSOMAL ANTIBODY",
+          "source_type": "generic"
+        },
+        {
+          "synonym_text": "PEROXIDASE ANTIBODIES, THYROID",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "THYROID PEROXIDASE (TPO) AB",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "THYROID PEROXIDASE (TPO) ANTIBODIES",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "THYROID PEROXIDASE AB",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "THYROID PEROXIDASE ANTIBODIES",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "THYROID PEROXIDASE ANTIBODIES (TPO)",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "THYROID PEROXIDASE ANTIBODY",
+          "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "THYROPEROXIDASE ANTIBODY",
+          "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "TPO",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "TPO (THYROID PEROXIDASE ANTIBODY)",
+          "source_type": "quest"
+        },
         {
           "synonym_text": "TPO AB",
           "source_type": "quest"
@@ -1793,24 +2123,8 @@
           "source_type": "quest"
         },
         {
-          "synonym_text": "THYROID PEROXIDASE ANTIBODIES",
+          "synonym_text": "TPO THYROID PEROXIDASE ANTIBODIES",
           "source_type": "quest"
-        },
-        {
-          "synonym_text": "THYROID PEROXIDASE (TPO) AB",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "THYROID PEROXIDASE ANTIBODY",
-          "source_type": "labcorp"
-        },
-        {
-          "synonym_text": "TPO (THYROID PEROXIDASE ANTIBODY)",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "ANTI-TPO",
-          "source_type": "generic"
         }
       ],
       "ranges": [
@@ -1846,7 +2160,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "TPO Antibodies",
+        "sex_applicability": "female",
+        "slug": "tpo_antibodies",
+        "subcategory": "autoimmune",
+        "unit": "IU/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "IU/mL",
+        "registry_unit": "IU/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "tg_antibodies",
@@ -1873,17 +2205,21 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "tg_antibodies",
-        "display_name": "Thyroglobulin Antibodies (TgAb)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "thyroid",
-        "subcategory": "autoimmune",
-        "unit": "IU/mL",
+        "display_name": "Thyroglobulin Antibodies (TgAb)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "tg_antibodies",
+        "subcategory": "autoimmune",
+        "unit": "IU/mL"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "ANTI-TG",
+          "source_type": "generic"
+        },
         {
           "synonym_text": "TGAB",
           "source_type": "quest"
@@ -1895,10 +2231,6 @@
         {
           "synonym_text": "THYROGLOBULIN ANTIBODY",
           "source_type": "labcorp"
-        },
-        {
-          "synonym_text": "ANTI-TG",
-          "source_type": "generic"
         }
       ],
       "ranges": [
@@ -1934,7 +2266,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Thyroglobulin Antibodies",
+        "sex_applicability": "female",
+        "slug": "tg_antibodies",
+        "subcategory": "autoimmune",
+        "unit": "IU/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "IU/mL",
+        "registry_unit": "IU/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "free_thyroxine_index",
@@ -1952,23 +2302,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "free_thyroxine_index",
-        "display_name": "Free Thyroxine Index (FTI/T7)",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "",
+        "display_name": "Free Thyroxine Index (FTI/T7)",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "free_thyroxine_index",
+        "subcategory": "thyroid",
+        "unit": ""
       },
       "extraction_synonyms": [
         {
@@ -2017,7 +2367,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Free T4 Index (T7)",
+        "sex_applicability": "all",
+        "slug": "free_thyroxine_index",
+        "subcategory": "thyroid",
+        "unit": ""
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "",
+        "registry_unit": "",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "t3_uptake",
@@ -2034,35 +2402,35 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "t3_uptake",
-        "display_name": "T3 Uptake",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "%",
+        "display_name": "T3 Uptake",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "t3_uptake",
+        "subcategory": "thyroid",
+        "unit": "%"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "T-UPTAKE",
+          "source_type": "quest"
+        },
         {
           "synonym_text": "T3 UPTAKE",
           "source_type": "quest"
         },
         {
           "synonym_text": "T3 UPTAKE, SERUM",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "T-UPTAKE",
           "source_type": "quest"
         }
       ],
@@ -2099,7 +2467,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "T3 Uptake",
+        "sex_applicability": "all",
+        "slug": "t3_uptake",
+        "subcategory": "thyroid",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "total_t3",
@@ -2117,23 +2503,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "total_t3",
-        "display_name": "Total T3",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "thyroid",
-        "subcategory": "thyroid",
-        "unit": "ng/dL",
+        "display_name": "Total T3",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "total_t3",
+        "subcategory": "thyroid",
+        "unit": "ng/dL"
       },
       "extraction_synonyms": [
         {
@@ -2141,12 +2527,12 @@
           "source_type": "quest"
         },
         {
-          "synonym_text": "TRIIODOTHYRONINE, TOTAL",
-          "source_type": "labcorp"
-        },
-        {
           "synonym_text": "T3, TOTAL",
           "source_type": "quest"
+        },
+        {
+          "synonym_text": "TRIIODOTHYRONINE, TOTAL",
+          "source_type": "labcorp"
         }
       ],
       "ranges": [
@@ -2182,7 +2568,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "thyroid",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Total T3",
+        "sex_applicability": "all",
+        "slug": "total_t3",
+        "subcategory": "thyroid",
+        "unit": "ng/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/dL",
+        "registry_unit": "ng/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "fasting_glucose",
@@ -2210,27 +2614,27 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "fasting_glucose",
-        "display_name": "Fasting Glucose",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "metabolic",
-        "subcategory": "glucose",
-        "unit": "mg/dL",
+        "display_name": "Fasting Glucose",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "fasting_glucose",
+        "subcategory": "glucose",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "FASTING GLUCOSE",
+          "source_type": "quest"
+        },
         {
           "synonym_text": "GLUCOSE",
           "source_type": "quest"
         },
         {
           "synonym_text": "GLUCOSE, SERUM",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "FASTING GLUCOSE",
           "source_type": "quest"
         }
       ],
@@ -2267,7 +2671,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "Fasting Glucose",
+        "sex_applicability": "female",
+        "slug": "fasting_glucose",
+        "subcategory": "glucose",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "hemoglobin_a1c",
@@ -2295,25 +2717,17 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "hemoglobin_a1c",
-        "display_name": "Hemoglobin A1c",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "metabolic",
-        "subcategory": "glucose",
-        "unit": "%",
+        "display_name": "Hemoglobin A1c",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "hemoglobin_a1c",
+        "subcategory": "glucose",
+        "unit": "%"
       },
       "extraction_synonyms": [
-        {
-          "synonym_text": "HEMOGLOBIN A1C",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "HBA1C",
-          "source_type": "quest"
-        },
         {
           "synonym_text": "A1C",
           "source_type": "quest"
@@ -2321,6 +2735,14 @@
         {
           "synonym_text": "GLYCOHEMOGLOBIN",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "HBA1C",
+          "source_type": "quest"
+        },
+        {
+          "synonym_text": "HEMOGLOBIN A1C",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -2356,7 +2778,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Hemoglobin A1c",
+        "sex_applicability": "female",
+        "slug": "hemoglobin_a1c",
+        "subcategory": "glucose",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "fasting_insulin",
@@ -2382,23 +2822,23 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "fasting_insulin",
-        "display_name": "Fasting Insulin",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "hormones",
-        "subcategory": "pancreatic",
-        "unit": "uIU/mL",
+        "display_name": "Fasting Insulin",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "fasting_insulin",
+        "subcategory": "pancreatic",
+        "unit": "uIU/mL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "INSULIN",
+          "synonym_text": "FASTING INSULIN",
           "source_type": "quest"
         },
         {
-          "synonym_text": "FASTING INSULIN",
+          "synonym_text": "INSULIN",
           "source_type": "quest"
         },
         {
@@ -2439,7 +2879,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "Fasting Insulin",
+        "sex_applicability": "female",
+        "slug": "fasting_insulin",
+        "subcategory": "glucose",
+        "unit": "uIU/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "uIU/mL",
+        "registry_unit": "uIU/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "c_peptide",
@@ -2464,24 +2922,24 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "c_peptide",
-        "display_name": "C-Peptide",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "metabolic",
-        "subcategory": "pancreatic",
-        "unit": "ng/mL",
+        "display_name": "C-Peptide",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "c_peptide",
+        "subcategory": "pancreatic",
+        "unit": "ng/mL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "C-PEPTIDE",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "C PEPTIDE",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "C-PEPTIDE",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -2517,7 +2975,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "C-Peptide",
+        "sex_applicability": "female",
+        "slug": "c_peptide",
+        "subcategory": "glucose",
+        "unit": "ng/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/mL",
+        "registry_unit": "ng/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "sodium",
@@ -2534,23 +3010,23 @@
       ],
       "importance": "important",
       "score_weight": 2,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "sodium",
-        "display_name": "Sodium",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "metabolic",
-        "subcategory": "electrolytes",
-        "unit": "mEq/L",
+        "display_name": "Sodium",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "sodium",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
       },
       "extraction_synonyms": [
         {
@@ -2595,7 +3071,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Sodium",
+        "sex_applicability": "all",
+        "slug": "sodium",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mEq/L",
+        "registry_unit": "mEq/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "potassium",
@@ -2612,23 +3106,23 @@
       ],
       "importance": "important",
       "score_weight": 2,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "potassium",
-        "display_name": "Potassium",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "metabolic",
-        "subcategory": "electrolytes",
-        "unit": "mEq/L",
+        "display_name": "Potassium",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "potassium",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
       },
       "extraction_synonyms": [
         {
@@ -2673,7 +3167,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Potassium",
+        "sex_applicability": "all",
+        "slug": "potassium",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mEq/L",
+        "registry_unit": "mEq/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "chloride",
@@ -2690,23 +3202,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "chloride",
-        "display_name": "Chloride",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "metabolic",
-        "subcategory": "electrolytes",
-        "unit": "mEq/L",
+        "display_name": "Chloride",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "chloride",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
       },
       "extraction_synonyms": [
         {
@@ -2751,7 +3263,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Chloride",
+        "sex_applicability": "all",
+        "slug": "chloride",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mEq/L",
+        "registry_unit": "mEq/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "co2",
@@ -2769,36 +3299,36 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "co2",
-        "display_name": "CO2",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "metabolic",
-        "subcategory": "electrolytes",
-        "unit": "mEq/L",
+        "display_name": "CO2",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "co2",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "CO2",
-          "source_type": "quest"
+          "synonym_text": "BICARBONATE",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "CARBON DIOXIDE",
           "source_type": "quest"
         },
         {
-          "synonym_text": "BICARBONATE",
-          "source_type": "labcorp"
+          "synonym_text": "CO2",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -2834,7 +3364,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "CO2 (Bicarbonate)",
+        "sex_applicability": "all",
+        "slug": "co2",
+        "subcategory": "electrolytes",
+        "unit": "mEq/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mEq/L",
+        "registry_unit": "mEq/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "calcium",
@@ -2851,23 +3399,23 @@
       ],
       "importance": "important",
       "score_weight": 2,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "calcium",
-        "display_name": "Calcium",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "metabolic",
-        "subcategory": "electrolytes",
-        "unit": "mg/dL",
+        "display_name": "Calcium",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "calcium",
+        "subcategory": "electrolytes",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
@@ -2912,7 +3460,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "metabolic",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Calcium",
+        "sex_applicability": "all",
+        "slug": "calcium",
+        "subcategory": "electrolytes",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "total_cholesterol",
@@ -2938,27 +3504,27 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "total_cholesterol",
-        "display_name": "Total Cholesterol",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "lipids",
-        "subcategory": "lipids",
-        "unit": "mg/dL",
+        "display_name": "Total Cholesterol",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "total_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "CHOLESTEROL",
+          "source_type": "quest"
+        },
         {
           "synonym_text": "CHOLESTEROL, TOTAL",
           "source_type": "quest"
         },
         {
           "synonym_text": "TOTAL CHOLESTEROL",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "CHOLESTEROL",
           "source_type": "quest"
         }
       ],
@@ -2995,7 +3561,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "Total Cholesterol",
+        "sex_applicability": "female",
+        "slug": "total_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "hdl_cholesterol",
@@ -3022,23 +3606,23 @@
       "affects_recommendations": true,
       "higher_is_better": true,
       "registry_identity": {
-        "slug": "hdl_cholesterol",
-        "display_name": "HDL Cholesterol",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "lipids",
-        "subcategory": "lipids",
-        "unit": "mg/dL",
+        "display_name": "HDL Cholesterol",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "hdl_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "HDL CHOLESTEROL",
+          "synonym_text": "HDL CHOL DIRECT",
           "source_type": "quest"
         },
         {
-          "synonym_text": "HDL CHOL DIRECT",
+          "synonym_text": "HDL CHOLESTEROL",
           "source_type": "quest"
         },
         {
@@ -3083,7 +3667,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "HDL Cholesterol",
+        "sex_applicability": "female",
+        "slug": "hdl_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "ldl_cholesterol",
@@ -3111,19 +3713,19 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "ldl_cholesterol",
-        "display_name": "LDL Cholesterol",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "lipids",
-        "subcategory": "lipids",
-        "unit": "mg/dL",
+        "display_name": "LDL Cholesterol",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "ldl_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "LDL-CHOLESTEROL",
+          "synonym_text": "LDL CHOL CALC",
           "source_type": "quest"
         },
         {
@@ -3131,12 +3733,12 @@
           "source_type": "quest"
         },
         {
-          "synonym_text": "LDL CHOL CALC",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "LDL-C",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "LDL-CHOLESTEROL",
+          "source_type": "quest"
         },
         {
           "synonym_text": "LOW DENSITY LIPOPROTEIN CHOLESTEROL",
@@ -3176,7 +3778,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "LDL Cholesterol",
+        "sex_applicability": "female",
+        "slug": "ldl_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "triglycerides",
@@ -3202,24 +3822,24 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "triglycerides",
-        "display_name": "Triglycerides",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "lipids",
-        "subcategory": "lipids",
-        "unit": "mg/dL",
+        "display_name": "Triglycerides",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "triglycerides",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "TRIGLYCERIDES",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "TRIGLYCERIDE",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "TRIGLYCERIDES",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -3255,7 +3875,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "Triglycerides",
+        "sex_applicability": "female",
+        "slug": "triglycerides",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "non_hdl_cholesterol",
@@ -3280,15 +3918,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "non_hdl_cholesterol",
-        "display_name": "Non-HDL Cholesterol",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "lipids",
-        "subcategory": "lipids",
-        "unit": "mg/dL",
+        "display_name": "Non-HDL Cholesterol",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "non_hdl_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
@@ -3337,7 +3975,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "Non-HDL Cholesterol",
+        "sex_applicability": "female",
+        "slug": "non_hdl_cholesterol",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "apob",
@@ -3363,15 +4019,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "apob",
-        "display_name": "ApoB",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "lipids",
-        "subcategory": "apolipoproteins",
-        "unit": "mg/dL",
+        "display_name": "ApoB",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "apob",
+        "subcategory": "apolipoproteins",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
@@ -3416,7 +4072,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Apolipoprotein B",
+        "sex_applicability": "female",
+        "slug": "apob",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "lpa",
@@ -3443,21 +4117,17 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "lpa",
-        "display_name": "Lp(a)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "lipids",
-        "subcategory": "apolipoproteins",
-        "unit": "nmol/L",
+        "display_name": "Lp(a)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "lpa",
+        "subcategory": "apolipoproteins",
+        "unit": "nmol/L"
       },
       "extraction_synonyms": [
-        {
-          "synonym_text": "LPA",
-          "source_type": "quest"
-        },
         {
           "synonym_text": "LIPOPROTEIN (A)",
           "source_type": "quest"
@@ -3465,6 +4135,10 @@
         {
           "synonym_text": "LIPOPROTEIN(A)",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "LPA",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -3500,7 +4174,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Lipoprotein(a)",
+        "sex_applicability": "female",
+        "slug": "lpa",
+        "subcategory": "lipids",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "nmol/L",
+        "registry_unit": "nmol/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "chol_hdl_ratio",
@@ -3518,40 +4210,40 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": true,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "chol_hdl_ratio",
-        "display_name": "Chol/HDL Ratio",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "lipids",
-        "subcategory": "lipids",
-        "unit": "ratio",
+        "display_name": "Chol/HDL Ratio",
         "is_core": false,
         "is_ratio": true,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "chol_hdl_ratio",
+        "subcategory": "lipids",
+        "unit": "ratio"
       },
       "extraction_synonyms": [
-        {
-          "synonym_text": "CHOL/HDLC RATIO",
-          "source_type": "quest"
-        },
         {
           "synonym_text": "CHOL/HDLC",
           "source_type": "quest"
         },
         {
-          "synonym_text": "CHOLESTEROL/HDL RATIO",
-          "source_type": "labcorp"
+          "synonym_text": "CHOL/HDLC RATIO",
+          "source_type": "quest"
         },
         {
           "synonym_text": "CHOLESTEROL:HDL RATIO",
           "source_type": "generic"
+        },
+        {
+          "synonym_text": "CHOLESTEROL/HDL RATIO",
+          "source_type": "labcorp"
         }
       ],
       "ranges": [
@@ -3587,7 +4279,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "cardiovascular",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "CHOL/HDLC Ratio",
+        "sex_applicability": "all",
+        "slug": "chol_hdl_ratio",
+        "subcategory": "lipids",
+        "unit": "ratio"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "",
+        "registry_unit": "ratio",
+        "legacy_to_registry_factor": null,
+        "status": "refused",
+        "basis": "Shipping unit is empty; registry says ratio. No evidenced conversion; join refused."
+      }
     },
     {
       "slug": "ast",
@@ -3613,32 +4323,32 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "ast",
-        "display_name": "AST",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "liver",
-        "subcategory": "enzymes",
-        "unit": "U/L",
+        "display_name": "AST",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "ast",
+        "subcategory": "enzymes",
+        "unit": "U/L"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "AST (SGOT)",
-          "source_type": "quest"
+          "synonym_text": "ASPARTATE AMINOTRANSFERASE",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "AST",
           "source_type": "quest"
         },
         {
-          "synonym_text": "SGOT",
+          "synonym_text": "AST (SGOT)",
           "source_type": "quest"
         },
         {
-          "synonym_text": "ASPARTATE AMINOTRANSFERASE",
-          "source_type": "labcorp"
+          "synonym_text": "SGOT",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -3674,7 +4384,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "AST",
+        "sex_applicability": "female",
+        "slug": "ast",
+        "subcategory": "enzymes",
+        "unit": "U/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "U/L",
+        "registry_unit": "U/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "alt",
@@ -3700,32 +4428,32 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "alt",
-        "display_name": "ALT",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "liver",
-        "subcategory": "enzymes",
-        "unit": "U/L",
+        "display_name": "ALT",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "alt",
+        "subcategory": "enzymes",
+        "unit": "U/L"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "ALT (SGPT)",
-          "source_type": "quest"
+          "synonym_text": "ALANINE AMINOTRANSFERASE",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "ALT",
           "source_type": "quest"
         },
         {
-          "synonym_text": "SGPT",
+          "synonym_text": "ALT (SGPT)",
           "source_type": "quest"
         },
         {
-          "synonym_text": "ALANINE AMINOTRANSFERASE",
-          "source_type": "labcorp"
+          "synonym_text": "SGPT",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -3761,7 +4489,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "ALT",
+        "sex_applicability": "female",
+        "slug": "alt",
+        "subcategory": "enzymes",
+        "unit": "U/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "U/L",
+        "registry_unit": "U/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "ggt",
@@ -3788,21 +4534,17 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "ggt",
-        "display_name": "GGT",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "liver",
-        "subcategory": "enzymes",
-        "unit": "U/L",
+        "display_name": "GGT",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "ggt",
+        "subcategory": "enzymes",
+        "unit": "U/L"
       },
       "extraction_synonyms": [
-        {
-          "synonym_text": "GGT",
-          "source_type": "quest"
-        },
         {
           "synonym_text": "GAMMA GT",
           "source_type": "quest"
@@ -3810,6 +4552,10 @@
         {
           "synonym_text": "GAMMA-GLUTAMYL TRANSFERASE",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "GGT",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -3845,7 +4591,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "GGT",
+        "sex_applicability": "female",
+        "slug": "ggt",
+        "subcategory": "enzymes",
+        "unit": "U/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "U/L",
+        "registry_unit": "U/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "alkaline_phosphatase",
@@ -3871,23 +4635,23 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "alkaline_phosphatase",
-        "display_name": "Alkaline Phosphatase",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "liver",
-        "subcategory": "enzymes",
-        "unit": "U/L",
+        "display_name": "Alkaline Phosphatase",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "alkaline_phosphatase",
+        "subcategory": "enzymes",
+        "unit": "U/L"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "ALKALINE PHOSPHATASE",
+          "synonym_text": "ALK PHOS",
           "source_type": "quest"
         },
         {
-          "synonym_text": "ALK PHOS",
+          "synonym_text": "ALKALINE PHOSPHATASE",
           "source_type": "quest"
         }
       ],
@@ -3924,7 +4688,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Alkaline Phosphatase",
+        "sex_applicability": "female",
+        "slug": "alkaline_phosphatase",
+        "subcategory": "enzymes",
+        "unit": "U/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "U/L",
+        "registry_unit": "U/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "bilirubin_total",
@@ -3950,15 +4732,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "bilirubin_total",
-        "display_name": "Total Bilirubin",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "liver",
-        "subcategory": "bilirubin",
-        "unit": "mg/dL",
+        "display_name": "Total Bilirubin",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "bilirubin_total",
+        "subcategory": "bilirubin",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
@@ -4003,7 +4785,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Bilirubin, Total",
+        "sex_applicability": "female",
+        "slug": "bilirubin_total",
+        "subcategory": "liver_function",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "albumin",
@@ -4019,23 +4819,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "albumin",
-        "display_name": "Albumin",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "liver",
-        "subcategory": "proteins",
-        "unit": "g/dL",
+        "display_name": "Albumin",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "albumin",
+        "subcategory": "proteins",
+        "unit": "g/dL"
       },
       "extraction_synonyms": [
         {
@@ -4080,7 +4880,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Albumin",
+        "sex_applicability": "all",
+        "slug": "albumin",
+        "subcategory": "liver",
+        "unit": "g/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "g/dL",
+        "registry_unit": "g/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "globulin",
@@ -4096,23 +4914,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "globulin",
-        "display_name": "Globulin",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "liver",
-        "subcategory": "proteins",
-        "unit": "g/dL",
+        "display_name": "Globulin",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "globulin",
+        "subcategory": "proteins",
+        "unit": "g/dL"
       },
       "extraction_synonyms": [
         {
@@ -4157,7 +4975,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Globulin",
+        "sex_applicability": "all",
+        "slug": "globulin",
+        "subcategory": "liver",
+        "unit": "g/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "g/dL",
+        "registry_unit": "g/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "total_protein",
@@ -4174,23 +5010,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "total_protein",
-        "display_name": "Total Protein",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "liver",
-        "subcategory": "proteins",
-        "unit": "g/dL",
+        "display_name": "Total Protein",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "total_protein",
+        "subcategory": "proteins",
+        "unit": "g/dL"
       },
       "extraction_synonyms": [
         {
@@ -4235,7 +5071,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Total Protein",
+        "sex_applicability": "all",
+        "slug": "total_protein",
+        "subcategory": "liver",
+        "unit": "g/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "g/dL",
+        "registry_unit": "g/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "albumin_globulin_ratio",
@@ -4253,36 +5107,36 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": true,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "albumin_globulin_ratio",
-        "display_name": "Albumin/Globulin Ratio",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "liver",
-        "subcategory": "protein_balance",
-        "unit": "ratio",
+        "display_name": "Albumin/Globulin Ratio",
         "is_core": false,
         "is_ratio": true,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "albumin_globulin_ratio",
+        "subcategory": "protein_balance",
+        "unit": "ratio"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "ALBUMIN/GLOBULIN RATIO",
-          "source_type": "quest"
+          "synonym_text": "A:G RATIO",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "A/G RATIO",
           "source_type": "quest"
         },
         {
-          "synonym_text": "A:G RATIO",
-          "source_type": "labcorp"
+          "synonym_text": "ALBUMIN/GLOBULIN RATIO",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -4318,7 +5172,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "liver",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Albumin/Globulin Ratio",
+        "sex_applicability": "all",
+        "slug": "albumin_globulin_ratio",
+        "subcategory": "liver",
+        "unit": "ratio"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "",
+        "registry_unit": "ratio",
+        "legacy_to_registry_factor": null,
+        "status": "refused",
+        "basis": "Shipping unit is empty; registry says ratio. No evidenced conversion; join refused."
+      }
     },
     {
       "slug": "creatinine",
@@ -4343,15 +5215,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "creatinine",
-        "display_name": "Creatinine",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "kidney",
-        "subcategory": "renal",
-        "unit": "mg/dL",
+        "display_name": "Creatinine",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "creatinine",
+        "subcategory": "renal",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
@@ -4396,7 +5268,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "kidney",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Creatinine",
+        "sex_applicability": "female",
+        "slug": "creatinine",
+        "subcategory": "renal",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "bun",
@@ -4422,17 +5312,21 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "bun",
-        "display_name": "BUN",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "kidney",
-        "subcategory": "renal",
-        "unit": "mg/dL",
+        "display_name": "BUN",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "bun",
+        "subcategory": "renal",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "BLOOD UREA NITROGEN",
+          "source_type": "labcorp"
+        },
         {
           "synonym_text": "BUN",
           "source_type": "quest"
@@ -4440,10 +5334,6 @@
         {
           "synonym_text": "UREA NITROGEN (BUN)",
           "source_type": "quest"
-        },
-        {
-          "synonym_text": "BLOOD UREA NITROGEN",
-          "source_type": "labcorp"
         }
       ],
       "ranges": [
@@ -4479,7 +5369,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "kidney",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "BUN",
+        "sex_applicability": "female",
+        "slug": "bun",
+        "subcategory": "renal",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "egfr",
@@ -4506,15 +5414,15 @@
       "affects_recommendations": true,
       "higher_is_better": true,
       "registry_identity": {
-        "slug": "egfr",
-        "display_name": "eGFR",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "kidney",
-        "subcategory": "renal",
-        "unit": "mL/min/1.73m2",
+        "display_name": "eGFR",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "egfr",
+        "subcategory": "renal",
+        "unit": "mL/min/1.73m2"
       },
       "extraction_synonyms": [
         {
@@ -4563,7 +5471,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "kidney",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "eGFR",
+        "sex_applicability": "female",
+        "slug": "egfr",
+        "subcategory": "renal",
+        "unit": "mL/min/1.73m2"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mL/min/1.73m2",
+        "registry_unit": "mL/min/1.73m2",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "bun_creatinine_ratio",
@@ -4580,29 +5506,25 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": true,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "bun_creatinine_ratio",
-        "display_name": "BUN/Creatinine Ratio",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "kidney",
-        "subcategory": "renal",
-        "unit": "ratio",
+        "display_name": "BUN/Creatinine Ratio",
         "is_core": false,
         "is_ratio": true,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "bun_creatinine_ratio",
+        "subcategory": "renal",
+        "unit": "ratio"
       },
       "extraction_synonyms": [
-        {
-          "synonym_text": "BUN/CREATININE RATIO",
-          "source_type": "quest"
-        },
         {
           "synonym_text": "BUN:CREATININE RATIO",
           "source_type": "labcorp"
@@ -4610,6 +5532,10 @@
         {
           "synonym_text": "BUN/CREATININE",
           "source_type": "generic"
+        },
+        {
+          "synonym_text": "BUN/CREATININE RATIO",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -4645,7 +5571,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "kidney",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "BUN/Creatinine Ratio",
+        "sex_applicability": "all",
+        "slug": "bun_creatinine_ratio",
+        "subcategory": "kidney",
+        "unit": "ratio"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "",
+        "registry_unit": "ratio",
+        "legacy_to_registry_factor": null,
+        "status": "refused",
+        "basis": "Shipping unit is empty; registry says ratio. No evidenced conversion; join refused."
+      }
     },
     {
       "slug": "hs_crp",
@@ -4673,32 +5617,32 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "hs_crp",
-        "display_name": "hs-CRP",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "inflammation",
-        "subcategory": "inflammatory",
-        "unit": "mg/L",
+        "display_name": "hs-CRP",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "hs_crp",
+        "subcategory": "inflammatory",
+        "unit": "mg/L"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "HS-CRP",
-          "source_type": "quest"
+          "synonym_text": "C REACTIVE PROTEIN",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "C-REACTIVE PROTEIN, CARDIAC",
           "source_type": "quest"
         },
         {
-          "synonym_text": "C REACTIVE PROTEIN",
+          "synonym_text": "HIGH SENSITIVITY CRP",
           "source_type": "labcorp"
         },
         {
-          "synonym_text": "HIGH SENSITIVITY CRP",
-          "source_type": "labcorp"
+          "synonym_text": "HS-CRP",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -4734,7 +5678,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "inflammation",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "hs-CRP",
+        "sex_applicability": "female",
+        "slug": "hs_crp",
+        "subcategory": "inflammation",
+        "unit": "mg/L"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/L",
+        "registry_unit": "mg/L",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "esr",
@@ -4761,23 +5723,23 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "esr",
-        "display_name": "ESR",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "inflammation",
-        "subcategory": "inflammatory",
-        "unit": "mm/hr",
+        "display_name": "ESR",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "esr",
+        "subcategory": "inflammatory",
+        "unit": "mm/hr"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "ESR",
+          "synonym_text": "ERYTHROCYTE SEDIMENTATION RATE",
           "source_type": "quest"
         },
         {
-          "synonym_text": "ERYTHROCYTE SEDIMENTATION RATE",
+          "synonym_text": "ESR",
           "source_type": "quest"
         }
       ],
@@ -4814,7 +5776,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "inflammation",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "ESR",
+        "sex_applicability": "female",
+        "slug": "esr",
+        "subcategory": "inflammation",
+        "unit": "mm/h"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mm/hr",
+        "registry_unit": "mm/hr",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "ferritin",
@@ -4838,15 +5818,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "ferritin",
-        "display_name": "Ferritin",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "nutrients",
-        "subcategory": "iron",
-        "unit": "ng/mL",
+        "display_name": "Ferritin",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "ferritin",
+        "subcategory": "iron",
+        "unit": "ng/mL"
       },
       "extraction_synonyms": [
         {
@@ -4891,7 +5871,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Ferritin",
+        "sex_applicability": "female",
+        "slug": "ferritin",
+        "subcategory": "iron",
+        "unit": "ng/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/mL",
+        "registry_unit": "ng/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "iron_saturation",
@@ -4918,15 +5916,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "iron_saturation",
-        "display_name": "Iron Saturation",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "nutrients",
-        "subcategory": "iron",
-        "unit": "%",
+        "display_name": "Iron Saturation",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "iron_saturation",
+        "subcategory": "iron",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
@@ -4975,7 +5973,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Iron Saturation",
+        "sex_applicability": "female",
+        "slug": "iron_saturation",
+        "subcategory": "iron",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "vitamin_d_25_oh",
@@ -5003,28 +6019,28 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "vitamin_d_25_oh",
-        "display_name": "Vitamin D (25-OH)",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "nutrients",
-        "subcategory": "vitamins",
-        "unit": "ng/mL",
+        "display_name": "Vitamin D (25-OH)",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "vitamin_d_25_oh",
+        "subcategory": "vitamins",
+        "unit": "ng/mL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "VITAMIN D, 25-HYDROXY",
-          "source_type": "quest"
+          "synonym_text": "25-OH VITAMIN D",
+          "source_type": "labcorp"
         },
         {
           "synonym_text": "VITAMIN D (25-OH)",
           "source_type": "quest"
         },
         {
-          "synonym_text": "25-OH VITAMIN D",
-          "source_type": "labcorp"
+          "synonym_text": "VITAMIN D, 25-HYDROXY",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -5060,7 +6076,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Vitamin D (25-OH)",
+        "sex_applicability": "female",
+        "slug": "vitamin_d_25_oh",
+        "subcategory": "vitamins",
+        "unit": "ng/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/mL",
+        "registry_unit": "ng/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "vitamin_b12",
@@ -5086,17 +6120,21 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "vitamin_b12",
-        "display_name": "Vitamin B12",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "nutrients",
-        "subcategory": "vitamins",
-        "unit": "pg/mL",
+        "display_name": "Vitamin B12",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "vitamin_b12",
+        "subcategory": "vitamins",
+        "unit": "pg/mL"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "COBALAMIN",
+          "source_type": "labcorp"
+        },
         {
           "synonym_text": "VITAMIN B12",
           "source_type": "quest"
@@ -5104,10 +6142,6 @@
         {
           "synonym_text": "VITAMIN B12, SERUM",
           "source_type": "quest"
-        },
-        {
-          "synonym_text": "COBALAMIN",
-          "source_type": "labcorp"
         }
       ],
       "ranges": [
@@ -5143,7 +6177,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Vitamin B12",
+        "sex_applicability": "female",
+        "slug": "vitamin_b12",
+        "subcategory": "vitamins",
+        "unit": "pg/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "pg/mL",
+        "registry_unit": "pg/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "folate",
@@ -5169,15 +6221,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "folate",
-        "display_name": "Folate",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "nutrients",
-        "subcategory": "vitamins",
-        "unit": "ng/mL",
+        "display_name": "Folate",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "folate",
+        "subcategory": "vitamins",
+        "unit": "ng/mL"
       },
       "extraction_synonyms": [
         {
@@ -5226,7 +6278,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Folate",
+        "sex_applicability": "female",
+        "slug": "folate",
+        "subcategory": "vitamins",
+        "unit": "ng/mL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ng/mL",
+        "registry_unit": "ng/mL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "magnesium",
@@ -5251,15 +6321,15 @@
       "affects_scoring": true,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "magnesium",
-        "display_name": "Magnesium",
+        "affects_recommendations": true,
+        "affects_scoring": true,
         "category": "nutrients",
-        "subcategory": "minerals",
-        "unit": "mg/dL",
+        "display_name": "Magnesium",
         "is_core": true,
         "is_ratio": false,
-        "affects_scoring": true,
-        "affects_recommendations": true
+        "slug": "magnesium",
+        "subcategory": "minerals",
+        "unit": "mg/dL"
       },
       "extraction_synonyms": [
         {
@@ -5304,7 +6374,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Magnesium",
+        "sex_applicability": "female",
+        "slug": "magnesium",
+        "subcategory": "minerals",
+        "unit": "mg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "mg/dL",
+        "registry_unit": "mg/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "serum_iron",
@@ -5322,23 +6410,23 @@
       ],
       "importance": "important",
       "score_weight": 2,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": true,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "serum_iron",
-        "display_name": "Serum Iron",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "nutrients",
-        "subcategory": "iron",
-        "unit": "ug/dL",
+        "display_name": "Serum Iron",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "serum_iron",
+        "subcategory": "iron",
+        "unit": "ug/dL"
       },
       "extraction_synonyms": [
         {
@@ -5346,12 +6434,12 @@
           "source_type": "quest"
         },
         {
-          "synonym_text": "SERUM IRON",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "IRON, SERUM",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "SERUM IRON",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -5387,7 +6475,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": true,
+        "name": "Serum Iron",
+        "sex_applicability": "all",
+        "slug": "serum_iron",
+        "subcategory": "iron",
+        "unit": "mcg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ug/dL",
+        "registry_unit": "ug/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "tibc",
@@ -5405,23 +6511,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "tibc",
-        "display_name": "TIBC",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "nutrients",
-        "subcategory": "iron",
-        "unit": "ug/dL",
+        "display_name": "TIBC",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "tibc",
+        "subcategory": "iron",
+        "unit": "ug/dL"
       },
       "extraction_synonyms": [
         {
@@ -5466,7 +6572,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "TIBC",
+        "sex_applicability": "all",
+        "slug": "tibc",
+        "subcategory": "iron",
+        "unit": "mcg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ug/dL",
+        "registry_unit": "ug/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "uibc",
@@ -5483,23 +6607,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "uibc",
-        "display_name": "UIBC",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "nutrients",
-        "subcategory": "iron",
-        "unit": "ug/dL",
+        "display_name": "UIBC",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "uibc",
+        "subcategory": "iron",
+        "unit": "ug/dL"
       },
       "extraction_synonyms": [
         {
@@ -5544,7 +6668,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "nutrients",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "UIBC",
+        "sex_applicability": "all",
+        "slug": "uibc",
+        "subcategory": "iron",
+        "unit": "mcg/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "ug/dL",
+        "registry_unit": "ug/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "wbc",
@@ -5563,23 +6705,23 @@
       ],
       "importance": "important",
       "score_weight": 2,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "wbc",
-        "display_name": "WBC",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "K/uL",
+        "display_name": "WBC",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "wbc",
+        "subcategory": "cbc",
+        "unit": "K/uL"
       },
       "extraction_synonyms": [
         {
@@ -5587,12 +6729,12 @@
           "source_type": "quest"
         },
         {
-          "synonym_text": "WHITE BLOOD CELLS",
-          "source_type": "quest"
-        },
-        {
           "synonym_text": "WHITE BLOOD CELL COUNT",
           "source_type": "labcorp"
+        },
+        {
+          "synonym_text": "WHITE BLOOD CELLS",
+          "source_type": "quest"
         }
       ],
       "ranges": [
@@ -5628,7 +6770,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "WBC",
+        "sex_applicability": "all",
+        "slug": "wbc",
+        "subcategory": "cbc",
+        "unit": "x10E3/uL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "K/uL",
+        "registry_unit": "K/uL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "rbc",
@@ -5647,23 +6807,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "rbc",
-        "display_name": "Red Blood Cell Count",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "Million/uL",
+        "display_name": "Red Blood Cell Count",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "rbc",
+        "subcategory": "cbc",
+        "unit": "Million/uL"
       },
       "extraction_synonyms": [
         {
@@ -5712,7 +6872,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "RBC",
+        "sex_applicability": "all",
+        "slug": "rbc",
+        "subcategory": "cbc",
+        "unit": "x10E6/uL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "M/uL",
+        "registry_unit": "Million/uL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "CONTRACT-AMENDMENT-2 A7: explicit scale/spelling reconciliation."
+      }
     },
     {
       "slug": "hemoglobin",
@@ -5730,35 +6908,35 @@
       ],
       "importance": "important",
       "score_weight": 2,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "hemoglobin",
-        "display_name": "Hemoglobin",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "g/dL",
+        "display_name": "Hemoglobin",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "hemoglobin",
+        "subcategory": "cbc",
+        "unit": "g/dL"
       },
       "extraction_synonyms": [
+        {
+          "synonym_text": "HB",
+          "source_type": "quest"
+        },
         {
           "synonym_text": "HEMOGLOBIN",
           "source_type": "quest"
         },
         {
           "synonym_text": "HGB",
-          "source_type": "quest"
-        },
-        {
-          "synonym_text": "HB",
           "source_type": "quest"
         }
       ],
@@ -5795,7 +6973,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Hemoglobin",
+        "sex_applicability": "all",
+        "slug": "hemoglobin",
+        "subcategory": "cbc",
+        "unit": "g/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "g/dL",
+        "registry_unit": "g/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "hematocrit",
@@ -5812,31 +7008,31 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "hematocrit",
-        "display_name": "Hematocrit",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "%",
+        "display_name": "Hematocrit",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "hematocrit",
+        "subcategory": "cbc",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "HEMATOCRIT",
+          "synonym_text": "HCT",
           "source_type": "quest"
         },
         {
-          "synonym_text": "HCT",
+          "synonym_text": "HEMATOCRIT",
           "source_type": "quest"
         }
       ],
@@ -5873,7 +7069,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Hematocrit",
+        "sex_applicability": "all",
+        "slug": "hematocrit",
+        "subcategory": "cbc",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "mcv",
@@ -5890,23 +7104,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "mcv",
-        "display_name": "MCV",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "fL",
+        "display_name": "MCV",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "mcv",
+        "subcategory": "cbc",
+        "unit": "fL"
       },
       "extraction_synonyms": [
         {
@@ -5947,7 +7161,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "MCV",
+        "sex_applicability": "all",
+        "slug": "mcv",
+        "subcategory": "cbc",
+        "unit": "fL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "fL",
+        "registry_unit": "fL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "mch",
@@ -5964,23 +7196,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "mch",
-        "display_name": "MCH",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "pg",
+        "display_name": "MCH",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "mch",
+        "subcategory": "cbc",
+        "unit": "pg"
       },
       "extraction_synonyms": [
         {
@@ -6021,7 +7253,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "MCH",
+        "sex_applicability": "all",
+        "slug": "mch",
+        "subcategory": "cbc",
+        "unit": "pg"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "pg",
+        "registry_unit": "pg",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "mchc",
@@ -6038,23 +7288,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "mchc",
-        "display_name": "MCHC",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "g/dL",
+        "display_name": "MCHC",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "mchc",
+        "subcategory": "cbc",
+        "unit": "g/dL"
       },
       "extraction_synonyms": [
         {
@@ -6095,7 +7345,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "MCHC",
+        "sex_applicability": "all",
+        "slug": "mchc",
+        "subcategory": "cbc",
+        "unit": "g/dL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "g/dL",
+        "registry_unit": "g/dL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "rdw",
@@ -6113,23 +7381,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "rdw",
-        "display_name": "RDW",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "%",
+        "display_name": "RDW",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "rdw",
+        "subcategory": "cbc",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
@@ -6182,7 +7450,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "RDW",
+        "sex_applicability": "all",
+        "slug": "rdw",
+        "subcategory": "cbc",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "platelets",
@@ -6200,23 +7486,23 @@
       ],
       "importance": "important",
       "score_weight": 2,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "platelets",
-        "display_name": "Platelets",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "K/uL",
+        "display_name": "Platelets",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "platelets",
+        "subcategory": "cbc",
+        "unit": "K/uL"
       },
       "extraction_synonyms": [
         {
@@ -6265,7 +7551,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Platelets",
+        "sex_applicability": "all",
+        "slug": "platelets",
+        "subcategory": "cbc",
+        "unit": "x10E3/uL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "K/uL",
+        "registry_unit": "K/uL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "mpv",
@@ -6282,31 +7586,31 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "mpv",
-        "display_name": "MPV",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc",
-        "unit": "fL",
+        "display_name": "MPV",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "mpv",
+        "subcategory": "cbc",
+        "unit": "fL"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "MPV",
+          "synonym_text": "MEAN PLATELET VOLUME",
           "source_type": "quest"
         },
         {
-          "synonym_text": "MEAN PLATELET VOLUME",
+          "synonym_text": "MPV",
           "source_type": "quest"
         }
       ],
@@ -6343,7 +7647,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "MPV",
+        "sex_applicability": "all",
+        "slug": "mpv",
+        "subcategory": "cbc",
+        "unit": "fL"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "fL",
+        "registry_unit": "fL",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "neutrophils",
@@ -6363,31 +7685,31 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "neutrophils",
-        "display_name": "Neutrophils",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc_differential",
-        "unit": "%",
+        "display_name": "Neutrophils",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "neutrophils",
+        "subcategory": "cbc_differential",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "NEUTROPHILS",
+          "synonym_text": "NEUT %",
           "source_type": "quest"
         },
         {
-          "synonym_text": "NEUT %",
+          "synonym_text": "NEUTROPHILS",
           "source_type": "quest"
         }
       ],
@@ -6424,7 +7746,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Neutrophils",
+        "sex_applicability": "all",
+        "slug": "neutrophils",
+        "subcategory": "differential",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "lymphocytes",
@@ -6444,23 +7784,23 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "lymphocytes",
-        "display_name": "Lymphocytes",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc_differential",
-        "unit": "%",
+        "display_name": "Lymphocytes",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "lymphocytes",
+        "subcategory": "cbc_differential",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
@@ -6505,7 +7845,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Lymphocytes",
+        "sex_applicability": "all",
+        "slug": "lymphocytes",
+        "subcategory": "differential",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "monocytes",
@@ -6525,31 +7883,31 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "monocytes",
-        "display_name": "Monocytes",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc_differential",
-        "unit": "%",
+        "display_name": "Monocytes",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "monocytes",
+        "subcategory": "cbc_differential",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "MONOCYTES",
+          "synonym_text": "MONO %",
           "source_type": "quest"
         },
         {
-          "synonym_text": "MONO %",
+          "synonym_text": "MONOCYTES",
           "source_type": "quest"
         }
       ],
@@ -6586,7 +7944,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Monocytes",
+        "sex_applicability": "all",
+        "slug": "monocytes",
+        "subcategory": "differential",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "eosinophils",
@@ -6606,31 +7982,31 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "eosinophils",
-        "display_name": "Eosinophils",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc_differential",
-        "unit": "%",
+        "display_name": "Eosinophils",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "eosinophils",
+        "subcategory": "cbc_differential",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "EOSINOPHILS",
+          "synonym_text": "EOS %",
           "source_type": "quest"
         },
         {
-          "synonym_text": "EOS %",
+          "synonym_text": "EOSINOPHILS",
           "source_type": "quest"
         }
       ],
@@ -6667,7 +8043,25 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Eosinophils",
+        "sex_applicability": "all",
+        "slug": "eosinophils",
+        "subcategory": "differential",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
       "slug": "basophils",
@@ -6687,31 +8081,31 @@
       ],
       "importance": "supporting",
       "score_weight": 1,
-      "sex_applicability": null,
-      "is_cycle_dependent": null,
-      "is_fasting_sensitive": null,
+      "sex_applicability": "all",
+      "is_cycle_dependent": false,
+      "is_fasting_sensitive": false,
       "is_core": false,
       "is_ratio": false,
       "affects_scoring": false,
       "affects_recommendations": true,
       "registry_identity": {
-        "slug": "basophils",
-        "display_name": "Basophils",
+        "affects_recommendations": true,
+        "affects_scoring": false,
         "category": "blood",
-        "subcategory": "cbc_differential",
-        "unit": "%",
+        "display_name": "Basophils",
         "is_core": false,
         "is_ratio": false,
-        "affects_scoring": false,
-        "affects_recommendations": true
+        "slug": "basophils",
+        "subcategory": "cbc_differential",
+        "unit": "%"
       },
       "extraction_synonyms": [
         {
-          "synonym_text": "BASOPHILS",
+          "synonym_text": "BASO %",
           "source_type": "quest"
         },
         {
-          "synonym_text": "BASO %",
+          "synonym_text": "BASOPHILS",
           "source_type": "quest"
         }
       ],
@@ -6748,10 +8142,28 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": {
+        "category": "blood",
+        "is_cycle_dependent": false,
+        "is_fasting_sensitive": false,
+        "name": "Basophils",
+        "sex_applicability": "all",
+        "slug": "basophils",
+        "subcategory": "differential",
+        "unit": "%"
+      },
+      "sex_applicability_provenance": "Unreviewed biomarker_catalog metadata; female was the column default, not reviewed applicability evidence.",
+      "unit_mapping": {
+        "legacy_unit": "%",
+        "registry_unit": "%",
+        "legacy_to_registry_factor": 1,
+        "status": "verified",
+        "basis": "Identical unit strings."
+      }
     },
     {
-      "slug": "neutrophils_absolute",
+      "slug": "neutrophils_abs",
       "display_name": "Neutrophils (Absolute)",
       "short_name": null,
       "category": "blood",
@@ -6778,8 +8190,23 @@
       "is_ratio": null,
       "affects_scoring": null,
       "affects_recommendations": null,
-      "registry_identity": null,
-      "extraction_synonyms": [],
+      "registry_identity": {
+        "affects_recommendations": true,
+        "affects_scoring": false,
+        "category": "blood",
+        "display_name": "Neutrophils (Absolute)",
+        "is_core": false,
+        "is_ratio": false,
+        "slug": "neutrophils_abs",
+        "subcategory": "cbc_differential",
+        "unit": "K/uL"
+      },
+      "extraction_synonyms": [
+        {
+          "synonym_text": "NEUTROPHILS (ABSOLUTE)",
+          "source_type": "quest"
+        }
+      ],
       "ranges": [
         {
           "kind": "amani_context",
@@ -6813,10 +8240,20 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "legacy_key": "neutrophils_absolute",
+      "catalog_metadata": null,
+      "sex_applicability_provenance": "Unknown; no biomarker_catalog row.",
+      "unit_mapping": {
+        "legacy_unit": "cells/uL",
+        "registry_unit": "K/uL",
+        "legacy_to_registry_factor": 0.001,
+        "status": "verified",
+        "basis": "CONTRACT-AMENDMENT-2 A7: explicit scale/spelling reconciliation."
+      }
     },
     {
-      "slug": "lymphocytes_absolute",
+      "slug": "lymphocytes_abs",
       "display_name": "Lymphocytes (Absolute)",
       "short_name": null,
       "category": "blood",
@@ -6843,8 +8280,23 @@
       "is_ratio": null,
       "affects_scoring": null,
       "affects_recommendations": null,
-      "registry_identity": null,
-      "extraction_synonyms": [],
+      "registry_identity": {
+        "affects_recommendations": true,
+        "affects_scoring": false,
+        "category": "blood",
+        "display_name": "Lymphocytes (Absolute)",
+        "is_core": false,
+        "is_ratio": false,
+        "slug": "lymphocytes_abs",
+        "subcategory": "cbc_differential",
+        "unit": "K/uL"
+      },
+      "extraction_synonyms": [
+        {
+          "synonym_text": "LYMPHOCYTES (ABSOLUTE)",
+          "source_type": "quest"
+        }
+      ],
       "ranges": [
         {
           "kind": "amani_context",
@@ -6878,10 +8330,20 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "legacy_key": "lymphocytes_absolute",
+      "catalog_metadata": null,
+      "sex_applicability_provenance": "Unknown; no biomarker_catalog row.",
+      "unit_mapping": {
+        "legacy_unit": "cells/uL",
+        "registry_unit": "K/uL",
+        "legacy_to_registry_factor": 0.001,
+        "status": "verified",
+        "basis": "CONTRACT-AMENDMENT-2 A7: explicit scale/spelling reconciliation."
+      }
     },
     {
-      "slug": "monocytes_absolute",
+      "slug": "monocytes_abs",
       "display_name": "Monocytes (Absolute)",
       "short_name": null,
       "category": "blood",
@@ -6908,8 +8370,23 @@
       "is_ratio": null,
       "affects_scoring": null,
       "affects_recommendations": null,
-      "registry_identity": null,
-      "extraction_synonyms": [],
+      "registry_identity": {
+        "affects_recommendations": true,
+        "affects_scoring": false,
+        "category": "blood",
+        "display_name": "Monocytes (Absolute)",
+        "is_core": false,
+        "is_ratio": false,
+        "slug": "monocytes_abs",
+        "subcategory": "cbc_differential",
+        "unit": "K/uL"
+      },
+      "extraction_synonyms": [
+        {
+          "synonym_text": "MONOCYTES (ABSOLUTE)",
+          "source_type": "quest"
+        }
+      ],
       "ranges": [
         {
           "kind": "amani_context",
@@ -6943,10 +8420,20 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "legacy_key": "monocytes_absolute",
+      "catalog_metadata": null,
+      "sex_applicability_provenance": "Unknown; no biomarker_catalog row.",
+      "unit_mapping": {
+        "legacy_unit": "cells/uL",
+        "registry_unit": "K/uL",
+        "legacy_to_registry_factor": 0.001,
+        "status": "verified",
+        "basis": "CONTRACT-AMENDMENT-2 A7: explicit scale/spelling reconciliation."
+      }
     },
     {
-      "slug": "eosinophils_absolute",
+      "slug": "eosinophils_abs",
       "display_name": "Eosinophils (Absolute)",
       "short_name": null,
       "category": "blood",
@@ -6973,8 +8460,23 @@
       "is_ratio": null,
       "affects_scoring": null,
       "affects_recommendations": null,
-      "registry_identity": null,
-      "extraction_synonyms": [],
+      "registry_identity": {
+        "affects_recommendations": true,
+        "affects_scoring": false,
+        "category": "blood",
+        "display_name": "Eosinophils (Absolute)",
+        "is_core": false,
+        "is_ratio": false,
+        "slug": "eosinophils_abs",
+        "subcategory": "cbc_differential",
+        "unit": "K/uL"
+      },
+      "extraction_synonyms": [
+        {
+          "synonym_text": "EOSINOPHILS (ABSOLUTE)",
+          "source_type": "quest"
+        }
+      ],
       "ranges": [
         {
           "kind": "amani_context",
@@ -7008,10 +8510,20 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "legacy_key": "eosinophils_absolute",
+      "catalog_metadata": null,
+      "sex_applicability_provenance": "Unknown; no biomarker_catalog row.",
+      "unit_mapping": {
+        "legacy_unit": "cells/uL",
+        "registry_unit": "K/uL",
+        "legacy_to_registry_factor": 0.001,
+        "status": "verified",
+        "basis": "CONTRACT-AMENDMENT-2 A7: explicit scale/spelling reconciliation."
+      }
     },
     {
-      "slug": "basophils_absolute",
+      "slug": "basophils_abs",
       "display_name": "Basophils (Absolute)",
       "short_name": null,
       "category": "blood",
@@ -7038,8 +8550,23 @@
       "is_ratio": null,
       "affects_scoring": null,
       "affects_recommendations": null,
-      "registry_identity": null,
-      "extraction_synonyms": [],
+      "registry_identity": {
+        "affects_recommendations": true,
+        "affects_scoring": false,
+        "category": "blood",
+        "display_name": "Basophils (Absolute)",
+        "is_core": false,
+        "is_ratio": false,
+        "slug": "basophils_abs",
+        "subcategory": "cbc_differential",
+        "unit": "K/uL"
+      },
+      "extraction_synonyms": [
+        {
+          "synonym_text": "BASOPHILS (ABSOLUTE)",
+          "source_type": "quest"
+        }
+      ],
       "ranges": [
         {
           "kind": "amani_context",
@@ -7073,7 +8600,17 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "legacy_key": "basophils_absolute",
+      "catalog_metadata": null,
+      "sex_applicability_provenance": "Unknown; no biomarker_catalog row.",
+      "unit_mapping": {
+        "legacy_unit": "cells/uL",
+        "registry_unit": "K/uL",
+        "legacy_to_registry_factor": 0.001,
+        "status": "verified",
+        "basis": "CONTRACT-AMENDMENT-2 A7: explicit scale/spelling reconciliation."
+      }
     },
     {
       "slug": "rheumatoid_factor",
@@ -7133,7 +8670,10 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": null,
+      "sex_applicability_provenance": "Unknown; no biomarker_catalog row.",
+      "unit_mapping": null
     },
     {
       "slug": "ana_screen",
@@ -7197,94 +8737,11 @@
           "version": 1,
           "notes": "Exact transcription of dictionary.ts at 2fd9433bbcbed73a1e137505d2542ee58a16d9e0; clinical source and population not established. Legacy clinical band is not a patient lab reference."
         }
-      ]
+      ],
+      "catalog_metadata": null,
+      "sex_applicability_provenance": "Unknown; no biomarker_catalog row.",
+      "unit_mapping": null
     }
   ],
-  "identity_only": [
-    {
-      "slug": "neutrophils_abs",
-      "display_name": "Neutrophils (Absolute)",
-      "category": "blood",
-      "subcategory": "cbc_differential",
-      "unit": "K/uL",
-      "is_core": false,
-      "is_ratio": false,
-      "affects_scoring": false,
-      "affects_recommendations": true,
-      "extraction_synonyms": [
-        {
-          "synonym_text": "NEUTROPHILS (ABSOLUTE)",
-          "source_type": "quest"
-        }
-      ]
-    },
-    {
-      "slug": "lymphocytes_abs",
-      "display_name": "Lymphocytes (Absolute)",
-      "category": "blood",
-      "subcategory": "cbc_differential",
-      "unit": "K/uL",
-      "is_core": false,
-      "is_ratio": false,
-      "affects_scoring": false,
-      "affects_recommendations": true,
-      "extraction_synonyms": [
-        {
-          "synonym_text": "LYMPHOCYTES (ABSOLUTE)",
-          "source_type": "quest"
-        }
-      ]
-    },
-    {
-      "slug": "monocytes_abs",
-      "display_name": "Monocytes (Absolute)",
-      "category": "blood",
-      "subcategory": "cbc_differential",
-      "unit": "K/uL",
-      "is_core": false,
-      "is_ratio": false,
-      "affects_scoring": false,
-      "affects_recommendations": true,
-      "extraction_synonyms": [
-        {
-          "synonym_text": "MONOCYTES (ABSOLUTE)",
-          "source_type": "quest"
-        }
-      ]
-    },
-    {
-      "slug": "eosinophils_abs",
-      "display_name": "Eosinophils (Absolute)",
-      "category": "blood",
-      "subcategory": "cbc_differential",
-      "unit": "K/uL",
-      "is_core": false,
-      "is_ratio": false,
-      "affects_scoring": false,
-      "affects_recommendations": true,
-      "extraction_synonyms": [
-        {
-          "synonym_text": "EOSINOPHILS (ABSOLUTE)",
-          "source_type": "quest"
-        }
-      ]
-    },
-    {
-      "slug": "basophils_abs",
-      "display_name": "Basophils (Absolute)",
-      "category": "blood",
-      "subcategory": "cbc_differential",
-      "unit": "K/uL",
-      "is_core": false,
-      "is_ratio": false,
-      "affects_scoring": false,
-      "affects_recommendations": true,
-      "extraction_synonyms": [
-        {
-          "synonym_text": "BASOPHILS (ABSOLUTE)",
-          "source_type": "quest"
-        }
-      ]
-    }
-  ]
+  "identity_only": []
 }

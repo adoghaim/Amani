@@ -39,7 +39,10 @@
           "affects_recommendations",
           "registry_identity",
           "extraction_synonyms",
-          "ranges"
+          "ranges",
+          "sex_applicability_provenance",
+          "catalog_metadata",
+          "unit_mapping"
         ],
         "properties": {
           "slug": {
@@ -118,7 +121,6 @@
               null,
               "female",
               "male",
-              "both",
               "all"
             ]
           },
@@ -264,7 +266,17 @@
                 },
                 "population": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "enum": [
+                    "general",
+                    "female_adult",
+                    "male_adult",
+                    "pregnancy_t1",
+                    "pregnancy_t2",
+                    "pregnancy_t3",
+                    "postpartum",
+                    "postmenopausal"
+                  ]
                 },
                 "phase": {
                   "type": [
@@ -340,7 +352,8 @@
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                 },
                 "version": {
                   "type": "integer",
@@ -348,12 +361,110 @@
                 },
                 "notes": {
                   "type": "string"
+                },
+                "candidate_id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
                 }
               }
             }
           },
           "higher_is_better": {
             "type": "boolean"
+          },
+          "legacy_key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "sex_applicability_provenance": {
+            "type": "string",
+            "minLength": 1
+          },
+          "catalog_metadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "category",
+              "is_cycle_dependent",
+              "is_fasting_sensitive",
+              "name",
+              "sex_applicability",
+              "slug",
+              "subcategory",
+              "unit"
+            ],
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "is_cycle_dependent": {
+                "type": "boolean"
+              },
+              "is_fasting_sensitive": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sex_applicability": {
+                "type": "string",
+                "enum": [
+                  "female",
+                  "male",
+                  "all"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "subcategory": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            }
+          },
+          "unit_mapping": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "legacy_unit",
+              "registry_unit",
+              "legacy_to_registry_factor",
+              "status",
+              "basis"
+            ],
+            "properties": {
+              "legacy_unit": {
+                "type": "string"
+              },
+              "registry_unit": {
+                "type": "string"
+              },
+              "legacy_to_registry_factor": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "verified",
+                  "refused"
+                ]
+              },
+              "basis": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           }
         }
       }

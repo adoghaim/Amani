@@ -1,3 +1,40 @@
+# Table disposition — turn 2 authoring approved
+
+Amendments 1 A1–A6 and 2 A7–A11 resolve the questions in the original proposal
+below. Authorization covers local authoring/rehearsal only, not production.
+
+Implementation refinements required by those rulings:
+
+- `clinical_catalog_entries` supplies 83 slug-keyed catalog identities and the
+  explicit legacy key/unit mapping. `clinical_ranges` references this table,
+  including a composite FK tying endpoints to their shipping units. The optional
+  `registry_slug` references `canonical_analytes.slug` only for evidenced unit
+  mappings. This keeps `rheumatoid_factor` and `ana_screen` range-only without
+  inventing extraction identities. Three blank-unit ratios also refuse the
+  registry-unit join; their existing registry rows remain available to extraction.
+- All 81 supplied canonical identities, 224 synonym tuples and 76 metadata rows
+  are preserved. Existing UUIDs/timestamps are not generated from snapshots.
+  Exact identity/catalog preconditions make those upserts no-ops; only missing
+  known synonyms can be inserted. Unknown/conflicting live tuples abort.
+- The seed uses `all`; projection to the existing catalog translates it to `both`.
+  Defaults and sex applicability are explicitly unreviewed metadata.
+- The archive schema blocks application schema access while retaining original
+  table ACLs and OIDs. Thus rollback restores legacy table access exactly without
+  reconstructing grants. FK dependencies within the retired set remain intact;
+  external foreign keys and dependent views cause refusal before retirement.
+- An archive state row captures complete before/after reference rows. Replay
+  and rollback refuse intervening row writes; rollback also refuses new synonym
+  FK consumers or new catalog FK/view consumers. Only inserted synonyms are
+  removed. New tables are archived on rollback; no table is dropped. A replay
+  after rollback is deliberately refused and needs an explicit new migration.
+- Disputed alternatives use an explicit candidate discriminator in addition to
+  slug/population/phase/kind. They persist but never enter the legacy client.
+
+The historical proposal follows for context; its pending questions are answered
+by the Lead amendments above, not by an implementer decision.
+
+---
+
 # Proposed table disposition — Lead approval required
 
 Contract §4 explicitly says “implementer proposes, Lead approves before

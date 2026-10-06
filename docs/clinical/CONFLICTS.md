@@ -30,3 +30,33 @@ were silently resolved through clinical judgment. All remain V2-02 audit work.
 | progesterone | follicular | 0.1-0.9 | 0.1-1.0 | 0.1-1.5 | 0.1-1.5 | Shipping dictionary: 0.1-0.9 / 0.1-1.5; UNKNOWN |
 | progesterone | luteal | 5.0-25.0 | 5.0-20.0 | 3.0-30.0 | 2.0-25.0 | Shipping dictionary: 5.0-25.0 / 3.0-30.0; UNKNOWN |
 | progesterone | menstrual | 0.1-0.9 | 0.1-0.9 | 0.1-1.5 | 0.1-1.0 | Shipping dictionary: 0.1-0.9 / 0.1-1.5; UNKNOWN |
+
+## General definitions inventory (amendment 2 A8)
+
+Source: Lead-supplied `DEFINITIONS-CONFLICTS-OBSERVED.txt` and amendment 2,
+read offline. Of 44 definitions, the Lead reports 29 matching, two differing,
+and 13 unmatched names. The two differences below are never projected from the
+legacy definitions table; the entire table is archived intact.
+
+| Name | Shipping optimal / clinical | Definitions optimal / clinical | Unit evidence | Disposition |
+|---|---|---|---|---|
+| magnesium | 1.8–2.4 / 1.7–2.5 | 5.2–6.5 / 4.2–6.8 | Both say mg/dL; no conversion inferred | Shipping stands, UNKNOWN; dormant definition archived only; V2-02 audit queue |
+| egfr | 90–200 / 60–200 | 90–120 / 60–120 | Shipping mL/min/1.73m2; definitions mL/min | Shipping stands, UNKNOWN; no unit equivalence inferred; V2-02 audit queue |
+
+The following 13 unmatched names remain archived without a guessed mapping:
+`b12`, `dhea_s`, `glucose_fasting`, `hba1c`, `hdl`, `hscrp`, `insulin`, `ldl`,
+`non_hdl`, `testosterone_free`, `testosterone_total`, `tgab`, `vitamin_d`.
+In particular, no assay identity is inferred for `vitamin_d`.
+
+`rheumatoid_factor` and `ana_screen` keep their shipping ranges but have no
+canonical extraction identity in the supplied snapshot. No identity is created;
+both are product gaps queued for V2-02 (amendment 1 A3).
+
+## Candidate representation
+
+A future alternative is a range with `candidate_id` and `review_status: DISPUTED`.
+Candidates retain both endpoints and provenance in the seed and SQL table;
+they never enter `projectEntries` or the legacy `optimal` alias. Candidate IDs
+are unique within slug/population/phase/kind, and the reserved ID `shipping`
+cannot label a disputed alternative. Shipping pairs remain explicit and complete.
+No current inherited range has been changed to a disputed candidate.
