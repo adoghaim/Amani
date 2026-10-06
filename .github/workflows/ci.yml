@@ -40,6 +40,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Clinical catalog drift
+        run: npm run clinical:check
+
       - name: Lint
         run: npm run lint
 

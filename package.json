@@ -4,6 +4,9 @@
   "version": "1.0.6",
   "type": "module",
   "scripts": {
+    "clinical:generate": "node tools/clinical/generate.mjs",
+    "clinical:check": "node tools/clinical/generate.mjs --check",
+    "clinical:test": "node --test tools/clinical/catalog.test.mjs",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",

@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Amani clinical catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analytes",
+    "identity_only"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1",
+      "type": "string"
+    },
+    "analytes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "display_name",
+          "short_name",
+          "category",
+          "subcategory",
+          "canonical_unit",
+          "unit_conversions",
+          "specimen",
+          "aliases",
+          "importance",
+          "score_weight",
+          "sex_applicability",
+          "is_cycle_dependent",
+          "is_fasting_sensitive",
+          "is_core",
+          "is_ratio",
+          "affects_scoring",
+          "affects_recommendations",
+          "registry_identity",
+          "extraction_synonyms",
+          "ranges"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "short_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "subcategory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "canonical_unit": {
+            "type": "string"
+          },
+          "unit_conversions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "factor"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "factor": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "specimen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "important",
+              "supporting"
+            ]
+          },
+          "score_weight": {
+            "type": "number"
+          },
+          "sex_applicability": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "female",
+              "male",
+              "both",
+              "all"
+            ]
+          },
+          "is_cycle_dependent": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_fasting_sensitive": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_core": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_ratio": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "affects_scoring": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "affects_recommendations": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "registry_identity": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "slug",
+              "display_name",
+              "category",
+              "subcategory",
+              "unit",
+              "is_core",
+              "is_ratio",
+              "affects_scoring",
+              "affects_recommendations"
+            ],
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "subcategory": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "unit": {
+                "type": "string"
+              },
+              "is_core": {
+                "type": "boolean"
+              },
+              "is_ratio": {
+                "type": "boolean"
+              },
+              "affects_scoring": {
+                "type": "boolean"
+              },
+              "affects_recommendations": {
+                "type": "boolean"
+              }
+            }
+          },
+          "extraction_synonyms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "synonym_text",
+                "source_type"
+              ],
+              "properties": {
+                "synonym_text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_type": {
+                  "enum": [
+                    "quest",
+                    "labcorp",
+                    "generic"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "ranges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "population",
+                "phase",
+                "min",
+                "max",
+                "source",
+                "source_url",
+                "source_date",
+                "evidence_grade",
+                "review_status",
+                "reviewer",
+                "reviewed_at",
+                "version",
+                "notes"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "lab_reference",
+                    "amani_context"
+                  ]
+                },
+                "population": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "phase": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    null,
+                    "menstrual",
+                    "follicular",
+                    "ovulatory",
+                    "luteal",
+                    "general"
+                  ]
+                },
+                "min": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "max": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "evidence_grade": {
+                  "type": "string",
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "expert_opinion",
+                    "unsourced"
+                  ]
+                },
+                "review_status": {
+                  "type": "string",
+                  "enum": [
+                    "SAFE",
+                    "NEEDS_CONTEXT",
+                    "DISPUTED",
+                    "UNKNOWN"
+                  ]
+                },
+                "reviewer": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reviewed_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "higher_is_better": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "identity_only": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "display_name",
+          "category",
+          "subcategory",
+          "unit",
+          "is_core",
+          "is_ratio",
+          "affects_scoring",
+          "affects_recommendations",
+          "extraction_synonyms"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "subcategory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "is_core": {
+            "type": "boolean"
+          },
+          "is_ratio": {
+            "type": "boolean"
+          },
+          "affects_scoring": {
+            "type": "boolean"
+          },
+          "affects_recommendations": {
+            "type": "boolean"
+          },
+          "extraction_synonyms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "synonym_text",
+                "source_type"
+              ],
+              "properties": {
+                "synonym_text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_type": {
+                  "enum": [
+                    "quest",
+                    "labcorp",
+                    "generic"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
