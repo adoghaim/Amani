@@ -21,7 +21,8 @@ import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
-import { primaryFindingSentence } from '../lib/scoring/insightCopy';
+import { authorizedLanguage, primaryFindingSentence } from '../lib/scoring/insightCopy';
+import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
 import { contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import { classifyLabValue } from '../utils/classifyLabValue';
@@ -942,19 +943,18 @@ export function ReportView() {
   // server's interpretation already carries one but it's not surfaced to the
   // client; this matches the same shape so YourHealthStory can render the
   // honest "first tracked" / "improved" / "worsened" sentence.
+  const primaryBandLanguage = useMemo(() => {
+    const key = insightSummary?.primaryFinding?.key;
+    return (key ? insightSummary?.deltaMap.get(key)?.bandLanguage : undefined) ?? authorizedLanguage(null);
+  }, [insightSummary]);
+
   const frontendPrimaryContext = useMemo<PrimaryContext | null>(() => {
     if (!insightSummary?.primaryFinding) return null;
     const pf = insightSummary.primaryFinding;
     const change = insightSummary.biggestChanges.find(c => c.key === pf.key);
 
-    let trajectory: PrimaryContext['trajectory'] = 'no_prior_data';
-    if (change && !change.isFirstRecorded && change.previousValue !== null) {
-      if (change.boundaryCrossing?.direction === 'improved') trajectory = 'improving';
-      else if (change.boundaryCrossing?.direction === 'worsened') trajectory = 'worsening';
-      else if (change.trajectoryStatus === 'improving_still_high' || change.trajectoryStatus === 'improving_still_low') trajectory = 'improving';
-      else if (change.trajectoryStatus === 'worsening_still_high' || change.trajectoryStatus === 'worsening_still_low') trajectory = 'worsening';
-      else trajectory = 'unchanged';
-    }
+    // V2-03 amendment 5: exhaustive, so no movement can read "unchanged".
+    const trajectory = primaryTrajectory(change, primaryBandLanguage);
 
     const currentStatus: PrimaryContext['current_status'] =
       pf.status === 'out_of_range' ? (pf.direction === 'high' ? 'elevated' : pf.direction === 'low' ? 'low' : 'out_of_range')
@@ -973,7 +973,7 @@ export function ReportView() {
       prior_report_date: change?.priorReportDate ?? null,
       supporting_biomarker: null,
     };
-  }, [insightSummary]);
+  }, [insightSummary, primaryBandLanguage]);
 
   const primaryCategory = useMemo<BiomarkerCategory | null>(() => {
     if (!insightSummary?.primaryFinding) return null;
@@ -1008,12 +1008,12 @@ export function ReportView() {
 
   const healthStory = useMemo(() => {
     if (!insightSummary) return { sentences: [] };
-    return buildHealthStory({
+    return withBandReview(buildHealthStory({
       primaryContext: frontendPrimaryContext,
       focusAreas,
       primaryCategory,
-    });
-  }, [insightSummary, frontendPrimaryContext, focusAreas, primaryCategory]);
+    }), frontendPrimaryContext?.trajectory, primaryBandLanguage);
+  }, [insightSummary, frontendPrimaryContext, focusAreas, primaryCategory, primaryBandLanguage]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};

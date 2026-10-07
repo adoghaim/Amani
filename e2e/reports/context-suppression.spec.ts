@@ -1,8 +1,8 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
-  lutealPhaseReport, missingPhaseReport, patternFollicularReport, patternMissingPhaseReport,
-  trajectoryCurrentReport, trajectoryPriorReport, vitaminDReport,
+  lutealPhaseReport, missingPhaseReport, movedCurrentReport, movedPriorReport,
+  patternFollicularReport, patternMissingPhaseReport, trajectoryCurrentReport, trajectoryPriorReport, vitaminDReport,
 } from './synthetic-reports';
 
 // V2-03 release invariants in a real browser, against the real ReportView,
@@ -217,5 +217,25 @@ test.describe('trajectory across two reports', () => {
     // Any casing, any position, anywhere on the page.
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
     await expect(page.getByText(/improv|right direction/i)).toHaveCount(0);
+  });
+});
+
+// Amendment 5. TSH 9 -> 6 is out of band at both reports, so there is an
+// abnormal primary finding and "Your health story" renders its theme sentence.
+// The fixture in test 9 ends inside the band and cannot reach this surface.
+test.describe('health story for an out-of-band marker that moved', () => {
+  test.use({ authenticated: true, syntheticReports: [[movedCurrentReport, movedPriorReport], { scope: 'test' }] });
+
+  test('11. a movement toward the band reads neither "unchanged" nor "improved"', async ({ page }) => {
+    await openReport(page, movedCurrentReport.report.id);
+    const story = page.locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) })
+      .locator('p')
+      .filter({ hasText: /^This report is mainly about/ });
+    await expect(story).toHaveCount(1);
+    await expect(story).toContainText('which has changed since your prior report.');
+    await expect(story).toContainText("Amani's comparison band for this result has not yet completed clinical review.");
+    await expect(story).not.toContainText(/unchanged/i);
+    await expect(story).not.toContainText(/improv|right direction/i);
   });
 });

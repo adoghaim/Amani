@@ -83,3 +83,10 @@ export const trajectoryCurrentReport = report(6, 'unknown', [['tsh', 2, '2.0', '
 // Amendment 4 (R2). Vitamin D 40 ng/mL trips the unchanged vitamin D rule,
 // whose frozen title is "Vitamin D Below Optimal", against a NEEDS_CONTEXT band.
 export const vitaminDReport = report(7, 'unknown', [['vitamin_d_25_oh', 40, '40', 'ng/mL', 30, 100]]);
+
+// Amendment 5. An out-of-band primary marker that moved toward the band: TSH
+// 9 then 6, both above the lab interval, so the primary finding is abnormal
+// and the health story's theme sentence renders. R1 makes this
+// 'changed_still_high', which used to fall through to "is unchanged".
+export const movedPriorReport = report(8, 'unknown', [['tsh', 9, '9.0', 'uIU/mL', 0.45, 4.5]], '2025-12-01');
+export const movedCurrentReport = report(9, 'unknown', [['tsh', 6, '6.0', 'uIU/mL', 0.45, 4.5]]);

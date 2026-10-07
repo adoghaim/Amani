@@ -520,3 +520,74 @@ provenance test's "SAFE alone ⇒ optimal" assertion is inverted by ruling R2 an
   "has worsened" headline) is unchanged. R1 rules on favourable direction. Whether
   unfavourable direction against an unreviewed band also needs neutral wording is an owner
   question.
+
+## 12. Amendment 5 (turn 7): R1 had routed movements into "unchanged"
+
+**Defect.** `ReportView`'s health-story trajectory ended in `else trajectory = 'unchanged'`.
+The R1 statuses (`changed_into_band`, `changed_still_high`, `changed_still_low`) and a
+`'changed'` crossing all fell into it. TSH 9 → 6 against an unreviewed band read "is unchanged
+from your prior report". That statement is false.
+
+**Fix.**
+- `src/lib/scoring/healthStoryTrajectory.ts` (new): `primaryTrajectory(change, language)`
+  replaces the inline chain. Every crossing direction and every `TrajectoryStatus` is handled
+  explicitly. The status switch ends in a `never` check, so a new status fails typecheck.
+  - `'improving'` requires `language.favourableDirection`. Otherwise the movement maps to
+    `'changed'`.
+  - `newly_abnormal` maps to `'worsening'`. Before, it fell through to `'unchanged'` too.
+  - `stable_*` and `null` (withheld) give `'unchanged'` only when the value did not move.
+    Otherwise they give `'changed'`.
+  - An unknown crossing direction maps to `'changed'`.
+- `withBandReview()` places the band's `reviewStatement()` right after the theme sentence
+  when the trajectory is `'changed'`, matching the trajectory card.
+- `src/lib/insights/buildHealthStory.ts`: under the Lead's narrow exception, the only changes
+  are the `'changed'` union member and its verb, "has changed since your prior report". No
+  existing sentence, rule or threshold changed.
+- The primary band's language comes from `insightSummary.deltaMap.get(key).bandLanguage`.
+  When it is absent, it falls back to `authorizedLanguage(null)`.
+
+**Rendered (synthetic TSH 9 → 6, UNKNOWN band):** "This report is mainly about thyroid
+function, which has changed since your prior report. Amani's comparison band for this result
+has not yet completed clinical review."
+
+**Proof.**
+- Unit: `src/lib/scoring/healthStoryTrajectory.test.ts` runs an exhaustive sweep.
+  - Coverage: every `TrajectoryStatus` (11 plus `null`, enforced complete by a
+    `Record<NonNullable<TrajectoryStatus>, true>` table) × every crossing direction (none,
+    improved, worsened, changed, unknown) × 6 band languages × 3 value pairs.
+  - A moved value never reads "unchanged".
+  - An unauthorized band never reads "improving" or matches `claimsFavourableDirection`.
+  - Every `'changed'` sentence carries the band's review statement.
+  - It also runs the Lead's TSH 9 → 6 case through the real `buildInsightSummary`.
+- Browser: spec 11 in `e2e/reports/context-suppression.spec.ts` uses new fixtures
+  `movedPriorReport` / `movedCurrentReport`. TSH is 9 → 6, out of band both times, so the
+  theme sentence renders. The spec asserts that the story paragraph contains "has changed
+  since your prior report." and the review statement. It also asserts the paragraph contains
+  neither `/unchanged/i` nor `/improv|right direction/i`.
+
+**Negative control (unit, run).** I temporarily restored the old inline mapping at the top of
+`primaryTrajectory` and ran `npx vitest run src/lib/scoring/healthStoryTrajectory.test.ts`.
+4 of 5 tests failed:
+- Sweep: "improving_still_high … UNKNOWN 9->6: expected 'improving' not to be 'improving'".
+- Neutral statuses: "changed_into_band: expected 'unchanged' to be 'changed'".
+- Moved-value test: expected 'unchanged' to be 'changed'.
+- TSH 9 → 6 pipeline: expected 'unchanged' to be 'changed'.
+
+After restoring the fix, all 5 pass.
+
+**Not run here.** Playwright needed an approval this non-interactive session could not get.
+Spec 11 and its browser negative control are therefore **unproven**.
+
+For the Lead:
+- Positive run: `npm run test:e2e -- e2e/reports/context-suppression.spec.ts --grep "11\."` on
+  all three browsers.
+- Negative control: temporarily change `primaryTrajectory`'s `changed_*` case to return
+  `'unchanged'`. Spec 11 must then fail on `not.toContainText(/unchanged/i)`.
+
+**Verified in turn 7, in this worktree.**
+- `npm test`: 63 files, 1404 tests.
+- `npm run typecheck`: passes, including e2e.
+- `npm run lint`: 0 errors, the same 9 pre-existing warnings.
+- `npm run build`: success.
+
+No existing test changed.
