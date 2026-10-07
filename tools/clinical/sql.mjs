@@ -9,6 +9,10 @@ export function stableJson(value) {
   return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
     ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : item);
 }
+// V2-01 migration 20261006000000 is frozen by the Lead. Its 198 shipping
+// rows must retain UNKNOWN even where the repository audit disagrees (43 rows).
+// V2-03 needs a NEW migration before any consumer may read audit status from DB.
+export const FROZEN_V2_01_REVIEW_STATUS = 'UNKNOWN';
 export function sqlPayload(catalog) {
   validateCatalog(catalog);
   return {
@@ -21,9 +25,18 @@ export function sqlPayload(catalog) {
       registry_slug: a.unit_mapping?.status === 'verified' ? a.slug : null,
       registry_unit: a.unit_mapping?.registry_unit ?? null,
       legacy_to_registry_factor: a.unit_mapping?.legacy_to_registry_factor ?? null,
-      metadata: Object.fromEntries(Object.entries(a).filter(([key]) => key !== 'ranges')) })),
-    ranges: catalog.analytes.flatMap(a => a.ranges.map(r => ({ slug: a.slug, unit: a.canonical_unit,
-      candidate_id: r.candidate_id ?? 'shipping', ...r }))),
+      // This is the V2-01 payload, not persistence for the TASK-042 audit.
+      // Its specimen was null for every entry. Offline specimen hypotheses
+      // and audit provenance stay in the seed/queue until a separately authorized
+      // migration exists. Shipping review_status also retains its V2-01 value
+      // below; clinical values and other historical fields still detect drift.
+      metadata: { ...Object.fromEntries(Object.entries(a).filter(([key]) => !['ranges', 'specimen_basis'].includes(key))), specimen: null } })),
+    ranges: catalog.analytes.flatMap(a => a.ranges.filter(r => !r.candidate_id).map(r => ({ slug: a.slug, unit: a.canonical_unit,
+      candidate_id: r.candidate_id ?? 'shipping', ...Object.fromEntries(Object.entries(r)
+        .filter(([key]) => !['value_origin', 'value_origin_table', 'modifiers', 'audit'].includes(key))),
+      // Frozen V2-01 shipping history, not the current audit disposition.
+      // Persisting TASK-042 statuses requires a separately authorized migration.
+      review_status: FROZEN_V2_01_REVIEW_STATUS }))),
   };
 }
 export function renderSql(catalog) {

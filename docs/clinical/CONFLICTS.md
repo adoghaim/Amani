@@ -1,5 +1,10 @@
 # Clinical range conflicts — TASK-041
 
+Historical V2-01 dispositions below are preserved as shipping history. TASK-042
+amendment 1 now marks both kinds of all 15 analyte/phase pairs DISPUTED (30
+shipping ranges), without candidate rows or value changes. Current dispositions
+are in AUDIT-QUEUE.md; UNKNOWN below records the original transcription state.
+
 Inventory supplied by the Lead from production on 2026-10-06 in
 `CONFLICTS-OBSERVED.txt`; production was not queried in this offline task.
 `reference` means `biomarker_reference_ranges`; `phase` means
@@ -55,7 +60,7 @@ both are product gaps queued for V2-02 (amendment 1 A3).
 ## Candidate representation
 
 A future alternative is a range with `candidate_id` and `review_status: DISPUTED`.
-Candidates retain both endpoints and provenance in the seed and SQL table;
+Candidates retain both endpoints and provenance in the seed; the frozen V2-01 SQL excludes them pending a new authorized migration.
 they never enter `projectEntries` or the legacy `optimal` alias. Candidate IDs
 are unique within slug/population/phase/kind, and the reserved ID `shipping`
 cannot label a disputed alternative. Shipping pairs remain explicit and complete.

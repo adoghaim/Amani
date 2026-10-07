@@ -4,9 +4,9 @@
   "version": "1.0.6",
   "type": "module",
   "scripts": {
-    "clinical:generate": "node tools/clinical/generate.mjs",
-    "clinical:check": "node tools/clinical/generate.mjs --check",
-    "clinical:test": "node --test --test-concurrency=1 tools/clinical/catalog.test.mjs tools/clinical/convergence.test.mjs tools/clinical/sql-parse-guard.test.mjs tools/clinical/value-identity.test.mjs",
+    "clinical:generate": "node tools/clinical/generate.mjs && node tools/clinical/audit-queue.mjs",
+    "clinical:check": "node tools/clinical/generate.mjs --check && node tools/clinical/audit-queue.mjs --check",
+    "clinical:test": "node --test --test-concurrency=1 tools/clinical/catalog.test.mjs tools/clinical/convergence.test.mjs tools/clinical/sql-parse-guard.test.mjs tools/clinical/value-identity.test.mjs tools/clinical/audit.test.mjs tools/clinical/audit-amendment.test.mjs",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . && npm run clinical:lint",
@@ -19,9 +19,10 @@
     "preview:shots": "node tools/preview/shoot.mjs",
     "prepare": "husky",
     "validate:contrast": "node tools/contrast/validate.mjs",
-    "clinical:test:ci": "node --test --test-concurrency=1 tools/clinical/catalog.test.mjs tools/clinical/convergence.test.mjs tools/clinical/sql-parse-guard.test.mjs",
+    "clinical:test:ci": "node --test --test-concurrency=1 tools/clinical/catalog.test.mjs tools/clinical/convergence.test.mjs tools/clinical/sql-parse-guard.test.mjs tools/clinical/audit.test.mjs tools/clinical/audit-amendment.test.mjs",
     "clinical:lint": "eslint --config tools/clinical/eslint.config.mjs tools/clinical",
-    "clinical:typecheck": "tsc -p tools/clinical/tsconfig.json"
+    "clinical:typecheck": "tsc -p tools/clinical/tsconfig.json",
+    "clinical:audit": "node tools/clinical/audit-queue.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.1",

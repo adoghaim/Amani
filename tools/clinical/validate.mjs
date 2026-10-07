@@ -37,6 +37,17 @@ export function validateSchema(value, rule, path = '$') {
   if (Array.isArray(value) && rule.items) value.forEach((item, i) => validateSchema(item, rule.items, `${path}[${i}]`));
 }
 
+// Structural evidence rules for a future authorized workflow. This validates
+// completeness, not authenticity or approval. Seed validation always applies the
+// stricter implementer prohibition below; no option can disable that policy.
+export function validateRangeEvidence(range, slug = 'range') {
+  validateSchema(range, schema.properties.analytes.items.properties.ranges.items);
+  if (range.evidence_grade === 'unsourced' && (range.source !== null || range.source_url !== null || range.source_date !== null)) throw new Error(`${slug}: unsourced range carries a citation`);
+  if (range.evidence_grade !== 'unsourced' && (!range.source?.trim() || !range.source_date)) throw new Error(`${slug}: sourced range requires source and date`);
+  if (range.review_status === 'SAFE' && (range.evidence_grade === 'unsourced' || !range.reviewer?.trim() || !range.reviewed_at)) throw new Error(`${slug}: SAFE requires evidence and review`);
+  return range;
+}
+
 export function validateCatalog(catalog) {
   validateSchema(catalog, schema);
   const slugs = new Set();
@@ -48,6 +59,9 @@ export function validateCatalog(catalog) {
     slugs.add(analyte.slug);
     const weight = { critical: 3, important: 2, supporting: 1 }[analyte.importance];
     if (analyte.score_weight !== weight) throw new Error(`${analyte.slug}: legacy weight mismatch`);
+    if (!analyte.specimen_basis.trim()) throw new Error(`${analyte.slug}: blank specimen basis`);
+    if (analyte.specimen === 'UNKNOWN' && !analyte.specimen_basis.startsWith('UNKNOWN')) throw new Error(`${analyte.slug}: unresolved specimen needs UNKNOWN basis`);
+    if (analyte.specimen !== 'UNKNOWN' && analyte.specimen_basis.startsWith('UNKNOWN')) throw new Error(`${analyte.slug}: UNKNOWN basis requires UNKNOWN specimen`);
     const bands = new Set();
     const clientKey = analyte.legacy_key ?? analyte.slug;
     if (clientKeys.has(clientKey)) throw new Error(`Duplicate client key ${clientKey}`);
@@ -77,19 +91,30 @@ export function validateCatalog(catalog) {
       synonyms.add(key);
     }
     for (const range of analyte.ranges) {
+      validateRangeEvidence(range, analyte.slug);
+      if (range.audit.specimen_basis !== analyte.specimen_basis) throw new Error(`${analyte.slug}: specimen basis differs between analyte and range`);
+      // TASK-042 is an offline implementer seed, never an evidence approval path.
+      // A future evidence-backed workflow must change this policy explicitly.
+      if (range.value_origin === 'reviewed_evidence') throw new Error(`${analyte.slug}: reviewed_evidence is reserved; implementer seeds cannot assign it`);
+      if (range.evidence_grade !== 'unsourced' || range.review_status === 'SAFE'
+        || range.reviewer !== null || range.reviewed_at !== null) throw new Error(`${analyte.slug}: implementer seed cannot assign evidence or human review`);
+      if (range.value_origin === 'legacy_db_table'
+        ? !range.value_origin_table?.trim()
+        : range.value_origin_table !== null) throw new Error(`${analyte.slug}: value_origin_table must name a table only for legacy_db_table`);
+      for (const [field, value] of Object.entries(range.audit)) {
+        if (!value.trim()) throw new Error(`${analyte.slug}: audit.${field} must not be blank`);
+      }
+      if ((analyte.is_cycle_dependent || range.phase !== null) && range.modifiers.cycle !== 'requires_context') throw new Error(`${analyte.slug}: existing cycle structure requires context`);
       const key = `${range.population}/${range.phase}/${range.kind}${range.candidate_id ? `/${range.candidate_id}` : ""}`;
       if (bands.has(key)) throw new Error(`${analyte.slug}: duplicate range ${key}`);
       bands.add(key);
       if (range.min !== null && range.max !== null && range.min > range.max) throw new Error(`${analyte.slug}: reversed range`);
-      if (range.evidence_grade === 'unsourced' && (range.source !== null || range.source_url !== null || range.source_date !== null)) throw new Error(`${analyte.slug}: unsourced range carries a citation`);
-      if (range.evidence_grade !== 'unsourced' && (!range.source?.trim() || !range.source_date)) throw new Error(`${analyte.slug}: sourced range requires source and date`);
-      if (range.review_status === 'SAFE' && (range.evidence_grade === 'unsourced' || !range.reviewer?.trim() || !range.reviewed_at)) throw new Error(`${analyte.slug}: SAFE requires evidence and review`);
     }
-    // Candidate rows are persisted with provenance but never projected into the
+    // Candidate rows stay in the seed, excluded from frozen SQL and the
     // legacy API. Shipping bands must remain explicit and complete.
     if (analyte.ranges.some(r => r.candidate_id
       ? r.review_status !== 'DISPUTED' || r.candidate_id === 'shipping'
-      : r.population !== 'general' || r.review_status === 'DISPUTED')) throw new Error(`${analyte.slug}: range needs a new projection policy`);
+      : r.population !== 'general')) throw new Error(`${analyte.slug}: range needs a new projection policy`);
     for (const phase of new Set([null, ...analyte.ranges.filter(r => !r.candidate_id).map(r => r.phase)])) {
       for (const kind of ['amani_context', 'lab_reference']) {
         if (!bands.has(`general/${phase}/${kind}`)) throw new Error(`${analyte.slug}: missing ${phase}/${kind}`);
