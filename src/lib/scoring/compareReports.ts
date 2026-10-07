@@ -1,6 +1,8 @@
 import type { BiomarkerName, CyclePhase, AmaniStatus } from '../../types';
 import { getDisplayName, getRangesForPhase } from '../biomarkers/dictionary';
 import { computeAmaniStatus } from './scoreBiomarker';
+import { assessAmaniContext, contextFromReport } from './amaniContext';
+import { authorizedLanguage, type AuthorizedLanguage, type ReviewStatus } from './insightCopy';
 
 export type TrendDirection = 'up' | 'down' | 'stable';
 export type SignificanceTier = 'minor' | 'moderate' | 'significant';
@@ -14,12 +16,48 @@ export type TrajectoryStatus =
   | 'newly_abnormal'
   | 'stable_abnormal'
   | 'stable_normal'
+  // Amendment 4 (R1): the same movements when the destination band does not
+  // authorize a favourable direction. Neutral: no "improved", no success mark.
+  | 'changed_into_band'
+  | 'changed_still_high'
+  | 'changed_still_low'
   | null;
 
+/*
+  V2-03 amendment 2: the bucket for 'optimal' and 'normal' statuses is
+  'within_band', never 'optimal'. Every shipping Amani band is UNKNOWN,
+  DISPUTED or NEEDS_CONTEXT, so a crossing must not be printable as
+  "optimal range". Renaming the bucket makes that mistake impossible rather
+  than guarded; BOUNDARY_BUCKET_LABEL mirrors amaniPillLabel's neutral wording.
+*/
+export type BoundaryBucket = 'within_band' | 'borderline' | 'out_of_range';
+
+export const BOUNDARY_BUCKET_LABEL: Record<BoundaryBucket, string> = {
+  within_band: 'within the Amani band',
+  borderline: 'borderline',
+  out_of_range: 'outside the Amani band',
+};
+
+/** Label for a bucket; null for anything that is not a known bucket, so no caller can echo a raw value. */
+export function boundaryBucketLabel(bucket: string): string | null {
+  return Object.prototype.hasOwnProperty.call(BOUNDARY_BUCKET_LABEL, bucket)
+    ? BOUNDARY_BUCKET_LABEL[bucket as BoundaryBucket]
+    : null;
+}
+
+/*
+  V2-03 amendment 4 (R1). "Improved" says the movement was clinically
+  favourable, and a green check says the same thing. Only a destination band
+  whose language authorizes a favourable direction (SAFE plus directional
+  evidence, which no catalog band has) can produce 'improved'; every other
+  movement toward the band is 'changed'.
+*/
 export interface BoundaryCrossing {
-  from: 'optimal' | 'borderline' | 'out_of_range';
-  to: 'optimal' | 'borderline' | 'out_of_range';
-  direction: 'improved' | 'worsened';
+  from: BoundaryBucket;
+  to: BoundaryBucket;
+  direction: 'improved' | 'worsened' | 'changed';
+  /** Review status of the destination band; null when it could not be established. */
+  toReviewStatus: ReviewStatus | null;
 }
 
 export interface BiomarkerDelta {
@@ -34,6 +72,8 @@ export interface BiomarkerDelta {
   significance: SignificanceTier;
   boundaryCrossing: BoundaryCrossing | null;
   trajectoryStatus: TrajectoryStatus;
+  /** What may be said about the band this delta was judged against (R1, R2). */
+  bandLanguage: AuthorizedLanguage;
   previousStatus: AmaniStatus;
   currentStatus: AmaniStatus;
   distanceToNormalImprovement: number | null;
@@ -58,8 +98,8 @@ const MIN_ABSOLUTE_DELTA: Record<string, number> = {
 
 const NEAR_ZERO_THRESHOLD = 0.5;
 
-function statusBucket(status: AmaniStatus): 'optimal' | 'borderline' | 'out_of_range' {
-  if (status === 'optimal' || status === 'normal') return 'optimal';
+function statusBucket(status: AmaniStatus): BoundaryBucket {
+  if (status === 'optimal' || status === 'normal') return 'within_band';
   if (status === 'borderline_low' || status === 'borderline_high') return 'borderline';
   return 'out_of_range';
 }
@@ -73,7 +113,7 @@ function isLowStatus(status: AmaniStatus): boolean {
 }
 
 function isAbnormal(status: AmaniStatus): boolean {
-  return statusBucket(status) !== 'optimal';
+  return statusBucket(status) !== 'within_band';
 }
 
 function computeSignificance(
@@ -90,18 +130,20 @@ function computeSignificance(
   return 'minor';
 }
 
-function detectBoundaryCrossing(
+export function detectBoundaryCrossing(
   prevStatus: AmaniStatus,
   currStatus: AmaniStatus,
+  language: AuthorizedLanguage,
 ): BoundaryCrossing | null {
   const prevBucket = statusBucket(prevStatus);
   const currBucket = statusBucket(currStatus);
   if (prevBucket === currBucket) return null;
 
-  const severity: Record<string, number> = { optimal: 0, borderline: 1, out_of_range: 2 };
-  const direction = (severity[currBucket] ?? 0) < (severity[prevBucket] ?? 0) ? 'improved' : 'worsened';
+  const severity: Record<BoundaryBucket, number> = { within_band: 0, borderline: 1, out_of_range: 2 };
+  const towardBand = (severity[currBucket] ?? 0) < (severity[prevBucket] ?? 0);
+  const direction = !towardBand ? 'worsened' : language.favourableDirection ? 'improved' : 'changed';
 
-  return { from: prevBucket, to: currBucket, direction };
+  return { from: prevBucket, to: currBucket, direction, toReviewStatus: language.reviewStatus };
 }
 
 function computeDistanceToNormalImprovement(
@@ -134,7 +176,7 @@ function computeDistanceToNormalImprovement(
   return ((prevDist - currDist) / prevDist) * 100;
 }
 
-function computeTrajectoryStatus(
+export function computeTrajectoryStatus(
   prevStatus: AmaniStatus,
   currStatus: AmaniStatus,
   prevValue: number,
@@ -143,17 +185,21 @@ function computeTrajectoryStatus(
   distanceImprovement: number | null,
   significance: SignificanceTier,
   key: BiomarkerName,
-  cyclePhase?: CyclePhase | null,
+  cyclePhase: CyclePhase | null | undefined,
+  language: AuthorizedLanguage,
 ): TrajectoryStatus {
   const prevAbnormal = isAbnormal(prevStatus);
   const currAbnormal = isAbnormal(currStatus);
+  const favourable = language.favourableDirection;
 
-  if (boundaryCrossing?.direction === 'improved' && !currAbnormal) return 'normalized';
+  if (boundaryCrossing && boundaryCrossing.direction !== 'worsened' && !currAbnormal) {
+    return favourable ? 'normalized' : 'changed_into_band';
+  }
   if (boundaryCrossing?.direction === 'worsened' && !prevAbnormal) return 'newly_abnormal';
 
   if (!prevAbnormal && !currAbnormal) return 'stable_normal';
 
-  if (prevAbnormal && !currAbnormal) return 'normalized';
+  if (prevAbnormal && !currAbnormal) return favourable ? 'normalized' : 'changed_into_band';
   if (!prevAbnormal && currAbnormal) return 'newly_abnormal';
 
   if (significance === 'minor') return 'stable_abnormal';
@@ -176,6 +222,7 @@ function computeTrajectoryStatus(
     (distanceImprovement !== null && distanceImprovement < 0);
 
   if (movedTowardNormal) {
+    if (!favourable) return prevHigh ? 'changed_still_high' : 'changed_still_low';
     return prevHigh ? 'improving_still_high' : 'improving_still_low';
   }
   if (movedAwayFromNormal) {
@@ -208,13 +255,21 @@ export function compareReports(
     const prevStatus = computeAmaniStatus(curr.key, prev.value, cyclePhase);
     const currStatus = computeAmaniStatus(curr.key, curr.value, cyclePhase);
     const significance = computeSignificance(percentDelta, absoluteDelta, curr.key);
-    const boundaryCrossing = detectBoundaryCrossing(prevStatus, currStatus);
-    const distanceToNormalImprovement = computeDistanceToNormalImprovement(
+    // Withheld context (V2-03): keep the longitudinal values, but make no
+    // judgement about crossing, improving or worsening against a band Amani
+    // is not applying. ('unknown' would otherwise bucket as out_of_range.)
+    const assessment = assessAmaniContext(curr.key, curr.value, contextFromReport(cyclePhase));
+    const withheld = assessment.kind === 'withheld';
+    // R1: the destination band's review state, threaded into every judgement
+    // below. Unavailable or withheld means nothing is established.
+    const bandLanguage = authorizedLanguage(assessment.kind === 'scored' ? assessment.band : null);
+    const boundaryCrossing = withheld ? null : detectBoundaryCrossing(prevStatus, currStatus, bandLanguage);
+    const distanceToNormalImprovement = withheld ? null : computeDistanceToNormalImprovement(
       curr.key, prev.value, curr.value, cyclePhase,
     );
-    const trajectoryStatus = computeTrajectoryStatus(
+    const trajectoryStatus = withheld ? null : computeTrajectoryStatus(
       prevStatus, currStatus, prev.value, curr.value,
-      boundaryCrossing, distanceToNormalImprovement, significance, curr.key, cyclePhase,
+      boundaryCrossing, distanceToNormalImprovement, significance, curr.key, cyclePhase, bandLanguage,
     );
 
     deltas.push({
@@ -229,6 +284,7 @@ export function compareReports(
       significance,
       boundaryCrossing,
       trajectoryStatus,
+      bandLanguage,
       previousStatus: prevStatus,
       currentStatus: currStatus,
       distanceToNormalImprovement: distanceToNormalImprovement !== null
@@ -249,6 +305,8 @@ export function getBiggestChanges(deltas: BiomarkerDelta[], limit = 5): Biomarke
       if (
         d.trajectoryStatus === 'improving_still_high' ||
         d.trajectoryStatus === 'improving_still_low' ||
+        d.trajectoryStatus === 'changed_still_high' ||
+        d.trajectoryStatus === 'changed_still_low' ||
         d.trajectoryStatus === 'worsening_still_high' ||
         d.trajectoryStatus === 'worsening_still_low'
       ) return true;
@@ -259,7 +317,9 @@ export function getBiggestChanges(deltas: BiomarkerDelta[], limit = 5): Biomarke
       const crossB = b.boundaryCrossing ? 10 : 0;
 
       const trajScore = (d: BiomarkerDelta): number => {
-        if (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low') return 6;
+        // Ranking only, not a claim: a neutral movement keeps its old rank.
+        if (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low'
+          || d.trajectoryStatus === 'changed_still_high' || d.trajectoryStatus === 'changed_still_low') return 6;
         if (d.trajectoryStatus === 'worsening_still_high' || d.trajectoryStatus === 'worsening_still_low') return 5;
         return 0;
       };
@@ -276,4 +336,9 @@ export function getBiggestChanges(deltas: BiomarkerDelta[], limit = 5): Biomarke
       return scoreB - scoreA;
     })
     .slice(0, limit);
+}
+
+/** Band language per analyte, for surfaces that receive changes without it. */
+export function bandLanguageByKey(deltas: Iterable<BiomarkerDelta>): Map<BiomarkerName, AuthorizedLanguage> {
+  return new Map([...deltas].map(d => [d.key, d.bandLanguage] as const));
 }

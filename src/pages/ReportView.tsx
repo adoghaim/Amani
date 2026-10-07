@@ -13,12 +13,17 @@ import { NextBestSteps } from '../components/NextBestSteps';
 import { buildCards } from '../lib/cards/buildCards';
 import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
 import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
-import { scoreBiomarker } from '../lib/scoring/scoreBiomarker';
+import { computeAmaniStatus, scoreBiomarker, statusToConcern } from '../lib/scoring/scoreBiomarker';
 import { SystemSummaryCards } from '../components/SystemSummaryCards';
 import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
+import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
+import { bandLanguageByKey } from '../lib/scoring/compareReports';
+import { authorizedLanguage, primaryFindingSentence } from '../lib/scoring/insightCopy';
+import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
+import { contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { buildInsightSummary, formatPriorReportDate } from '../lib/insights/buildInsightSummary';
@@ -763,8 +768,19 @@ export function ReportView() {
   };
 
   const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
+  // V2-03: no pattern card may be built from an input Amani withholds for
+  // this report's context (e.g. a PCOS pattern from an unphased LH:FSH ratio).
+  // Amendment 4 (R2): a card that survives says only what its bands authorize.
   const insightFlags = useMemo(
-    () => evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+    () => authorizeInsightMatches(
+      gateInsightMatches(
+        evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+        biomarkers,
+        contextFromReport(report?.estimated_cycle_phase),
+      ),
+      biomarkers,
+      contextFromReport(report?.estimated_cycle_phase),
+    ),
     [biomarkers, report]
   );
 
@@ -927,19 +943,18 @@ export function ReportView() {
   // server's interpretation already carries one but it's not surfaced to the
   // client; this matches the same shape so YourHealthStory can render the
   // honest "first tracked" / "improved" / "worsened" sentence.
+  const primaryBandLanguage = useMemo(() => {
+    const key = insightSummary?.primaryFinding?.key;
+    return (key ? insightSummary?.deltaMap.get(key)?.bandLanguage : undefined) ?? authorizedLanguage(null);
+  }, [insightSummary]);
+
   const frontendPrimaryContext = useMemo<PrimaryContext | null>(() => {
     if (!insightSummary?.primaryFinding) return null;
     const pf = insightSummary.primaryFinding;
     const change = insightSummary.biggestChanges.find(c => c.key === pf.key);
 
-    let trajectory: PrimaryContext['trajectory'] = 'no_prior_data';
-    if (change && !change.isFirstRecorded && change.previousValue !== null) {
-      if (change.boundaryCrossing?.direction === 'improved') trajectory = 'improving';
-      else if (change.boundaryCrossing?.direction === 'worsened') trajectory = 'worsening';
-      else if (change.trajectoryStatus === 'improving_still_high' || change.trajectoryStatus === 'improving_still_low') trajectory = 'improving';
-      else if (change.trajectoryStatus === 'worsening_still_high' || change.trajectoryStatus === 'worsening_still_low') trajectory = 'worsening';
-      else trajectory = 'unchanged';
-    }
+    // V2-03 amendment 5: exhaustive, so no movement can read "unchanged".
+    const trajectory = primaryTrajectory(change, primaryBandLanguage);
 
     const currentStatus: PrimaryContext['current_status'] =
       pf.status === 'out_of_range' ? (pf.direction === 'high' ? 'elevated' : pf.direction === 'low' ? 'low' : 'out_of_range')
@@ -958,7 +973,7 @@ export function ReportView() {
       prior_report_date: change?.priorReportDate ?? null,
       supporting_biomarker: null,
     };
-  }, [insightSummary]);
+  }, [insightSummary, primaryBandLanguage]);
 
   const primaryCategory = useMemo<BiomarkerCategory | null>(() => {
     if (!insightSummary?.primaryFinding) return null;
@@ -993,12 +1008,12 @@ export function ReportView() {
 
   const healthStory = useMemo(() => {
     if (!insightSummary) return { sentences: [] };
-    return buildHealthStory({
+    return withBandReview(buildHealthStory({
       primaryContext: frontendPrimaryContext,
       focusAreas,
       primaryCategory,
-    });
-  }, [insightSummary, frontendPrimaryContext, focusAreas, primaryCategory]);
+    }), frontendPrimaryContext?.trajectory, primaryBandLanguage);
+  }, [insightSummary, frontendPrimaryContext, focusAreas, primaryCategory, primaryBandLanguage]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
@@ -1569,23 +1584,23 @@ export function ReportView() {
                       if (outOfRange.length === 0 && borderline.length === 0) {
                         if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `All values are within optimal range, and ${name} has improved since your last draw.`;
+                          return `All values are within Amani's context bands, and ${name} has improved since your last draw.`;
                         }
-                        return 'All measured values are within the Amani optimal range.';
+                        return 'All scored values are within Amani\'s context bands, which are still under review.';
                       }
 
                       if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
-                        return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
+                        return `${topName} is outside the Amani band and ${secondName} is borderline. These are the two areas worth focusing on.`;
                       }
                       if (outOfRange.length >= 2 && secondName) {
-                        return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
+                        return `${topName} and ${secondName} are both outside the Amani band. These are your top priorities.`;
                       }
                       if (outOfRange.length === 1 && borderline.length === 0) {
                         if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
+                          return `${topName} is outside the Amani band, though ${name} has improved since your last report.`;
                         }
-                        return `${topName} is outside optimal range and is the primary finding on this panel.`;
+                        return `${topName} is outside the Amani band and is the primary finding on this panel.`;
                       }
                       if (borderline.length >= 2 && secondName) {
                         return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;
@@ -1760,7 +1775,7 @@ export function ReportView() {
                             {insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.fact}
+                            {primaryFindingSentence(insightSummary.primaryFinding)}
                           </p>
                         </div>
                       </div>
@@ -1799,6 +1814,7 @@ export function ReportView() {
               changes={insightSummary.biggestChanges}
               primaryFinding={insightSummary.primaryFinding}
               reportCount={historicalReportCount}
+              bandLanguage={bandLanguageByKey(insightSummary.deltaMap.values())}
             />
           )}
 
@@ -1971,7 +1987,7 @@ export function ReportView() {
 
           {/* ── Questions for Your Doctor (deterministic) ──────── */}
           {insightSummary && !isProcessing && insightSummary.questionsForDoctor.length > 0 && (
-            <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} />
+            <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} bandLanguage={bandLanguageByKey(insightSummary.deltaMap.values())} />
           )}
 
           {/* ── Health Systems (drill-down to underlying biomarkers) ── */}
@@ -2007,7 +2023,9 @@ export function ReportView() {
 
               <div className="mt-5 space-y-2">
                 {filteredCategories.map(({ category, items }) => {
-                  const flaggedCount = items.filter(b => b.flagged === 'out_of_range' || b.flagged === 'borderline').length;
+                  // Counted live, not from the persisted upload-time flag: a flag stored
+                  // before V2-03 may have come from a fallback band Amani now withholds.
+                  const flaggedCount = items.filter(b => statusToConcern(computeAmaniStatus(b.name as BiomarkerName, b.value, cyclePhase)) > 0).length;
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {
@@ -2021,6 +2039,7 @@ export function ReportView() {
                     <div key={category} className="rounded-xl border border-theme-neutral-200 overflow-hidden">
                       <button
                         onClick={toggleCollapsed}
+                        aria-expanded={!isCollapsed}
                         className="flex items-center justify-between w-full px-4 py-3 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
@@ -2029,7 +2048,7 @@ export function ReportView() {
                           </span>
                           {flaggedCount > 0 && (
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-flag-watch-bg text-theme-flag-watch">
-                              {flaggedCount} outside optimal
+                              {flaggedCount} outside Amani band
                             </span>
                           )}
                         </div>

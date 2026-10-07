@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: process.env.E2E_ARTIFACT_PROBE === '1'
     ? '**/artifact-probe.spec.ts'
-    : ['**/smoke.spec.ts', '**/network-guard.spec.ts'],
+    : ['**/smoke.spec.ts', '**/network-guard.spec.ts', '**/reports/context-suppression.spec.ts'],
   // The redirect race is an explicit diagnostic opt-in, excluded from the CI gate.
   ...(process.env.E2E_QUARANTINE === '1'
     ? { grep: /@quarantine/ }

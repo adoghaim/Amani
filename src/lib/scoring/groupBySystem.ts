@@ -3,7 +3,9 @@ import { CATEGORY_DISPLAY } from '../../types';
 import { getCategory } from '../biomarkers/dictionary';
 import type { ScoredBiomarker } from './scoreBiomarker';
 
-export type SystemLabel = 'optimal' | 'mild_attention' | 'attention';
+// not_scored: every marker in the system is unscored (for example, withheld for
+// missing cycle context). Averaging zero markers must not read as reassurance.
+export type SystemLabel = 'optimal' | 'mild_attention' | 'attention' | 'not_scored';
 
 export interface SystemGroup {
   category: BiomarkerCategory;
@@ -12,6 +14,8 @@ export interface SystemGroup {
   systemLabel: SystemLabel;
   biomarkers: ScoredBiomarker[];
   totalCount: number;
+  /** Markers Amani actually scored; the rest are withheld or have no band. */
+  scoredCount: number;
   flaggedCount: number;
   weightedConcernAvg: number;
 }
@@ -63,9 +67,10 @@ export function groupBySystem(
       category: cat,
       label: display.label,
       shortLabel: display.shortLabel,
-      systemLabel: computeSystemLabel(weightedConcernAvg),
+      systemLabel: scorable.length === 0 ? 'not_scored' : computeSystemLabel(weightedConcernAvg),
       biomarkers,
       totalCount: biomarkers.length,
+      scoredCount: scorable.length,
       flaggedCount,
       weightedConcernAvg: Math.round(weightedConcernAvg * 100) / 100,
     });
@@ -82,7 +87,7 @@ export const SYSTEM_LABEL_CONFIG: Record<SystemLabel, {
   dot: string;
 }> = {
   optimal: {
-    label: 'Optimal',
+    label: 'Within Amani bands',
     bg: 'bg-theme-flag-ok-bg',
     text: 'text-theme-flag-ok',
     border: 'border-theme-flag-ok-border',
@@ -101,5 +106,12 @@ export const SYSTEM_LABEL_CONFIG: Record<SystemLabel, {
     text: 'text-theme-flag-low',
     border: 'border-theme-flag-low-border',
     dot: 'bg-theme-flag-low',
+  },
+  not_scored: {
+    label: 'Not scored',
+    bg: 'bg-theme-neutral-100',
+    text: 'text-theme-neutral-600',
+    border: 'border-theme-neutral-200',
+    dot: 'bg-theme-neutral-400',
   },
 };

@@ -1,4 +1,5 @@
 import type { ComputedDerivedMetric } from '../utils/derivedMetrics';
+import { withoutOptimalClaims } from '../lib/scoring/insightCopy';
 
 const METRIC_META: Record<string, { label: string; description: string; optimalLow: number; optimalHigh: number; unit: string }> = {
   HOMA_IR: {
@@ -29,10 +30,10 @@ const METRIC_META: Record<string, { label: string; description: string; optimalL
 };
 
 function getStatusColor(value: number, low: number, high: number) {
-  if (value >= low && value <= high) return { dot: 'bg-theme-flag-ok', text: 'text-theme-flag-ok', badge: 'bg-theme-flag-ok-bg border-theme-flag-ok-border', label: 'Optimal' };
+  if (value >= low && value <= high) return { dot: 'bg-theme-flag-ok', text: 'text-theme-flag-ok', badge: 'bg-theme-flag-ok-bg border-theme-flag-ok-border', label: 'Within Amani band' };
   const pctOutside = Math.abs(value > high ? (value - high) / high : (low - value) / (low || 1));
   if (pctOutside < 0.3) return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Borderline' };
-  return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Outside optimal' };
+  return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Outside Amani band' };
 }
 
 interface Props {
@@ -65,7 +66,7 @@ export function DerivedMetricsPanel({ metrics }: Props) {
                     <h3 className="text-sm text-theme-text">{meta.label}</h3>
                   </div>
                   <p className="text-xs text-theme-muted-text-2 mb-3">{meta.description}</p>
-                  <p className="text-sm text-theme-text">{metric.interpretation}</p>
+                  <p className="text-sm text-theme-text">{withoutOptimalClaims(metric.interpretation)}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-2xl font-bold text-theme-text">
@@ -73,7 +74,7 @@ export function DerivedMetricsPanel({ metrics }: Props) {
                   </div>
                   <div className={`text-xs font-medium mt-1 ${status.text}`}>{status.label}</div>
                   <div className="text-xs text-theme-muted-text-3 mt-0.5">
-                    Optimal: {meta.optimalLow}–{meta.optimalHigh}{meta.unit}
+                    Amani band: {meta.optimalLow}–{meta.optimalHigh}{meta.unit}
                   </div>
                 </div>
               </div>

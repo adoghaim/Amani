@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Minus, List } from 'lucide-react';
 import type { TopFinding } from '../lib/insights/buildInsightSummary';
+import { primaryFindingSentence } from '../lib/scoring/insightCopy';
 
 type FindingStyle = {
   bg: string; border: string; text: string; badge: string;
@@ -19,7 +20,7 @@ const SECONDARY_STYLE: Record<string, FindingStyle> = {
   },
   optimal: {
     bg: 'bg-theme-surface', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-theme-flag-ok-bg text-theme-flag-ok border border-theme-flag-ok-border', label: 'Optimal',
+    text: 'text-theme-text-body', badge: 'bg-theme-flag-ok-bg text-theme-flag-ok border border-theme-flag-ok-border', label: 'Within Amani band',
     leftBar: 'bg-theme-flag-ok-bg', iconBg: 'bg-theme-flag-ok-bg', iconColor: 'text-theme-flag-ok',
   },
 };
@@ -94,7 +95,7 @@ export function TopFindingsCard({ findings, aiExplanations, isPrimary = true }: 
                     </div>
                   </div>
                   <p className={`text-xs leading-relaxed ${style.text}`}>
-                    {aiExplanation ?? finding.fact}
+                    {aiExplanation ?? primaryFindingSentence(finding)}
                   </p>
                 </div>
               </div>

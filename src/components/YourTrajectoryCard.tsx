@@ -1,7 +1,12 @@
-import { CheckCircle2, AlertCircle, TrendingUp, Sparkles, LineChart } from 'lucide-react';
+import { CheckCircle2, AlertCircle, TrendingUp, Sparkles, LineChart, ArrowRightLeft } from 'lucide-react';
 import type { BiggestChange, TopFinding } from '../lib/insights/buildInsightSummary';
+import type { BiomarkerName } from '../types';
+import { boundaryBucketLabel } from '../lib/scoring/compareReports';
+import { authorizedLanguage, reviewStatement, type AuthorizedLanguage } from '../lib/scoring/insightCopy';
 
-type BulletKind = 'improved' | 'worsened' | 'stable_elevated' | 'first';
+// 'changed' is a movement toward a band that does not authorize a favourable
+// direction (V2-03 amendment 4, R1): neutral words, neutral icon.
+type BulletKind = 'improved' | 'changed' | 'worsened' | 'stable_elevated' | 'first';
 
 interface TrajectoryBullet {
   kind: BulletKind;
@@ -10,12 +15,6 @@ interface TrajectoryBullet {
   /** Present only when this exact bullet renders both numeric values. */
   values?: { previous: number; current: number; unit: string };
 }
-
-const BUCKET_LABEL: Record<string, string> = {
-  optimal: 'optimal range',
-  borderline: 'borderline',
-  out_of_range: 'out of range',
-};
 
 function isPlural(name: string): boolean {
   return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/i.test(name);
@@ -36,35 +35,53 @@ function formatPriorDate(date: string): string {
   return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
 }
 
-function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryBullet | null {
+function bulletForChange(change: BiggestChange, isPrimary: boolean, language: AuthorizedLanguage): TrajectoryBullet | null {
   const { displayName, trajectoryStatus, boundaryCrossing, trendDirection, previousValue, currentValue, unit, isFirstRecorded, priorReportDate, priorIsOlderThanImmediatePrior } = change;
   const c = conjugate(displayName);
-  const formatBoundary = (b: string) => BUCKET_LABEL[b] ?? b.replace(/_/g, ' ');
   const sinceClause = priorIsOlderThanImmediatePrior && priorReportDate
     ? ` since ${formatPriorDate(priorReportDate)}`
     : '';
+  // R1: favourable wording and the green check need a destination band that
+  // authorizes them. Otherwise the movement is described, never judged.
+  const favourable = language.favourableDirection;
+  const pending = reviewStatement(language);
+  // Neutral bucket wording only (V2-03 amendment 2). A bucket that is not a
+  // known one is never echoed; the sentence names only the Amani band.
+  const crossingText = (bc: NonNullable<typeof boundaryCrossing>) => {
+    if (!favourable) return `${displayName} changed from its previous range classification${sinceClause}. ${pending}`;
+    const from = boundaryBucketLabel(bc.from);
+    const to = boundaryBucketLabel(bc.to);
+    if (from && to) return `${displayName} improved from ${from} to ${to}${sinceClause}.`;
+    return `${displayName} ${c.has} moved toward the Amani band${sinceClause}.`;
+  };
+  const towardKind: BulletKind = favourable ? 'improved' : 'changed';
 
   if (isFirstRecorded) {
     return { kind: 'first', isPrimary, text: `${displayName} ${c.is} measured for the first time at ${currentValue} ${unit}.` };
   }
-  if (trajectoryStatus === 'normalized' && boundaryCrossing) {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
+  if ((trajectoryStatus === 'normalized' || trajectoryStatus === 'changed_into_band') && boundaryCrossing) {
+    return { kind: towardKind, isPrimary, text: crossingText(boundaryCrossing) };
   }
-  if (boundaryCrossing && boundaryCrossing.direction === 'improved') {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
+  if (boundaryCrossing && (boundaryCrossing.direction === 'improved' || boundaryCrossing.direction === 'changed')) {
+    return { kind: towardKind, isPrimary, text: crossingText(boundaryCrossing) };
   }
-  if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low') {
-    return { kind: 'improved', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
+  if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low'
+    || trajectoryStatus === 'changed_still_high' || trajectoryStatus === 'changed_still_low') {
+    const values = { previous: previousValue, current: currentValue, unit };
+    if (!favourable) {
+      return { kind: 'changed', isPrimary, values, text: `${displayName} changed from ${previousValue} to ${currentValue} ${unit}${sinceClause}. ${pending}` };
+    }
+    return { kind: 'improved', isPrimary, values, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside the Amani band.` };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
     const verb = trendDirection === 'up' ? 'risen' : trendDirection === 'down' ? 'dropped' : 'shifted';
-    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
+    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside the Amani band.` };
   }
   if (trajectoryStatus === 'newly_abnormal') {
-    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside optimal at ${currentValue} ${unit}.` };
+    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside the Amani band at ${currentValue} ${unit}.` };
   }
   if (trajectoryStatus === 'stable_abnormal') {
-    return { kind: 'stable_elevated', isPrimary, text: `${displayName} ${c.remains} outside optimal and ${c.is} being tracked over time.` };
+    return { kind: 'stable_elevated', isPrimary, text: `${displayName} ${c.remains} outside the Amani band and ${c.is} being tracked over time.` };
   }
   return null;
 }
@@ -73,6 +90,7 @@ const KIND_PRIORITY: Record<BulletKind, number> = {
   worsened: 0,
   stable_elevated: 1,
   improved: 2,
+  changed: 2,
   first: 3,
 };
 
@@ -86,6 +104,8 @@ interface Props {
   changes: BiggestChange[];
   primaryFinding: TopFinding | null;
   reportCount: number;
+  /** Destination-band language per analyte (R1). Absent means not established: neutral. */
+  bandLanguage?: ReadonlyMap<BiomarkerName, AuthorizedLanguage>;
 }
 
 /**
@@ -96,17 +116,21 @@ interface Props {
  * tie-break (separate task).
  */
 // eslint-disable-next-line react-refresh/only-export-components -- Pure selection is shared with the Basic panel to match the rendered values exactly.
-export function selectTrajectoryBullets(changes: BiggestChange[], primaryFinding: TopFinding | null) {
+export function selectTrajectoryBullets(
+  changes: BiggestChange[],
+  primaryFinding: TopFinding | null,
+  bandLanguage?: ReadonlyMap<BiomarkerName, AuthorizedLanguage>,
+) {
   const primaryKey = primaryFinding?.key ?? null;
 
   const bullets: (TrajectoryBullet & { key: BiggestChange['key'] })[] = [];
   for (const change of changes) {
     const isPrimary = change.key === primaryKey;
-    const bullet = bulletForChange(change, isPrimary);
+    const bullet = bulletForChange(change, isPrimary, bandLanguage?.get(change.key) ?? authorizedLanguage(null));
     if (bullet) bullets.push({ ...bullet, key: change.key });
   }
 
-  // Sort: primary with historical context first, then worsened > stable_elevated > improved > first,
+  // Sort: primary with historical context first, then worsened > stable_elevated > improved = changed > first,
   // then significance: significant > moderate > minor
   const indexedBullets = bullets.map((b, i) => ({ b, change: changes[i] }));
   indexedBullets.sort((a, b) => {
@@ -120,8 +144,8 @@ export function selectTrajectoryBullets(changes: BiggestChange[], primaryFinding
   return indexedBullets.slice(0, 4).map(x => x.b);
 }
 
-export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Props) {
-  const top = selectTrajectoryBullets(changes, primaryFinding);
+export function YourTrajectoryCard({ changes, primaryFinding, reportCount, bandLanguage }: Props) {
+  const top = selectTrajectoryBullets(changes, primaryFinding, bandLanguage);
 
   if (top.length === 0) return null;
 
@@ -145,7 +169,7 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
       <ul className="px-5 py-4 space-y-2.5">
         {top.map((b, i) => (
           <li key={i} className="flex items-start gap-3">
-            <span className="flex-shrink-0 mt-0.5">
+            <span className="flex-shrink-0 mt-0.5" data-bullet-kind={b.kind}>
               <BulletIcon kind={b.kind} />
             </span>
             <p className={`text-sm leading-relaxed ${b.isPrimary ? 'font-semibold text-theme-text' : 'text-theme-text-body'}`}>
@@ -159,7 +183,9 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
 }
 
 function BulletIcon({ kind }: { kind: BulletKind }) {
+  // The green check is a clinical signal: only an authorized 'improved' gets it.
   if (kind === 'improved') return <CheckCircle2 className="w-4 h-4 text-theme-flag-ok" />;
+  if (kind === 'changed') return <ArrowRightLeft className="w-4 h-4 text-theme-muted-text-3" />;
   if (kind === 'worsened') return <TrendingUp className="w-4 h-4 text-theme-flag-watch" />;
   if (kind === 'stable_elevated') return <AlertCircle className="w-4 h-4 text-theme-flag-watch" />;
   return <Sparkles className="w-4 h-4 text-theme-cat-sleep" />;

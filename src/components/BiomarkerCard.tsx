@@ -1,19 +1,31 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Info, BookOpen } from 'lucide-react';
-import { computeAmaniStatus, computeLabStatus } from '../lib/scoring/scoreBiomarker';
-import { amaniStatusToVariant, STATUS_PILL_CONFIG } from '../lib/scoring/statusPill';
-import { getEntry, getDisplayName } from '../lib/biomarkers/dictionary';
-import type { BiomarkerName, CyclePhase, AmaniStatus, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import { computeLabStatus } from '../lib/scoring/scoreBiomarker';
+import { amaniPillLabel, assessmentToVariant, STATUS_PILL_CONFIG } from '../lib/scoring/statusPill';
+import {
+  assessAmaniContext,
+  contextFromReport,
+  reviewStatusLabel,
+  withheldCopy,
+  formatInterval,
+  type AmaniAssessment,
+  type AmaniBand,
+} from '../lib/scoring/amaniContext';
+import { getDisplayName } from '../lib/biomarkers/dictionary';
+import type { BiomarkerName, CyclePhase, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
+import { withoutOptimalClaims } from '../lib/scoring/insightCopy';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
   value: number;
   rawValueText?: string | null;
   unit: string;
+  /** The patient's own laboratory interval, from biomarkers.reference_min/max. */
   labRefMin?: number | null;
   labRefMax?: number | null;
-  cyclePhase?: CyclePhase | null;
+  /** As recorded on the report. Never inferred here. */
+  cyclePhase?: CyclePhase | string | null;
   plainEnglishMeaning?: string;
   timingNotes?: string;
   commonNonAlarmReasons?: string[];
@@ -50,24 +62,30 @@ function formatRangeLabel(n: number): string {
   return n < 10 ? n.toFixed(1) : n.toFixed(0);
 }
 
+/*
+  The bar draws two different things and must never let one stand in for the
+  other: the patient's laboratory interval (from her report) and Amani's
+  context band (from the catalog). If the report carried no interval, no lab
+  band is drawn — the catalog's lab_reference row is not her lab's range.
+*/
 function RangeBar({
   value,
-  optMin,
-  optMax,
-  clinMin,
-  clinMax,
+  band,
+  labMin,
+  labMax,
 }: {
   value: number;
-  optMin: number | null;
-  optMax: number | null;
-  clinMin: number | null;
-  clinMax: number | null;
+  band: AmaniBand;
+  labMin: number | null;
+  labMax: number | null;
 }) {
+  const optMin = band.min;
+  const optMax = band.max;
   if (optMin === null || optMax === null) return null;
 
-  const baseHigh = clinMax ?? optMax * 1.5;
+  const baseHigh = Math.max(labMax ?? optMax * 1.5, optMax);
   const high = Math.max(baseHigh, value * 1.1);
-  const baseLow = clinMin ?? optMin * 0.5;
+  const baseLow = Math.min(labMin ?? optMin * 0.5, optMin);
   const low = value < baseLow ? Math.min(baseLow, value * 0.9) : baseLow;
   const span = high - low;
   if (span <= 0) return null;
@@ -76,24 +94,26 @@ function RangeBar({
 
   const optLeft = toPercent(optMin);
   const optWidth = toPercent(optMax) - optLeft;
-  const clinLeft = clinMin !== null ? toPercent(clinMin) : 0;
-  const clinWidth = clinMax !== null ? toPercent(clinMax) - clinLeft : 100 - clinLeft;
+  const hasLab = labMin !== null || labMax !== null;
+  const labLeft = labMin !== null ? toPercent(labMin) : 0;
+  const labWidth = labMax !== null ? toPercent(labMax) - labLeft : 100 - labLeft;
   const valuePos = toPercent(value);
 
-  const rangeMax = clinMax ?? optMax;
-  const isExtremeHigh = rangeMax !== null && rangeMax > 0 && value > rangeMax * 3;
-  const isExtremeLow = (clinMin !== null ? clinMin : optMin) !== null
-    && (clinMin ?? optMin)! > 0
-    && value < (clinMin ?? optMin)! / 3;
+  const rangeMax = labMax ?? optMax;
+  const rangeMin = labMin ?? optMin;
+  const isExtremeHigh = rangeMax > 0 && value > rangeMax * 3;
+  const isExtremeLow = rangeMin > 0 && value < rangeMin / 3;
   const isExtreme = isExtremeHigh || isExtremeLow;
 
   return (
-    <div className="mt-3">
+    <div className="mt-3" aria-hidden="true">
       <div className="relative h-3 rounded-full bg-theme-neutral-100 overflow-visible">
-        <div
-          className="absolute h-full rounded-full bg-theme-info-bg"
-          style={{ left: `${clinLeft}%`, width: `${clinWidth}%` }}
-        />
+        {hasLab && (
+          <div
+            className="absolute h-full rounded-full bg-theme-info-bg"
+            style={{ left: `${labLeft}%`, width: `${labWidth}%` }}
+          />
+        )}
         <div
           className="absolute h-full rounded-full bg-theme-flag-ok-bg"
           style={{ left: `${optLeft}%`, width: `${optWidth}%` }}
@@ -107,20 +127,20 @@ function RangeBar({
         Range labels are captions, not data. They were coloured green and blue,
         which put two more hues into a row that already carries a status pill, a
         trend arrow and the bar's own banding — and the green read as "in range"
-        when it was only naming the optimal band. A small legend dot carries the
+        when it was only naming the Amani band. A small legend dot carries the
         mapping; the text stays in muted ink.
       */}
       <div className="flex justify-between font-mono text-[10px] text-theme-muted-text-3 mt-1 tabular-nums">
-        <span>{formatRangeLabel(clinMin ?? optMin)}</span>
+        <span>{formatRangeLabel(low)}</span>
         <div className="flex gap-3 text-center items-center">
           <span className="inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-theme-flag-ok" aria-hidden="true" />
-            Opt {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}
+            <span className="w-1.5 h-1.5 rounded-full bg-theme-flag-ok" />
+            Amani {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}
           </span>
-          {clinMin !== null && clinMax !== null && (
+          {labMin !== null && labMax !== null && (
             <span className="inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-theme-info" aria-hidden="true" />
-              Lab {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}
+              <span className="w-1.5 h-1.5 rounded-full bg-theme-info" />
+              Lab {formatRangeLabel(labMin)}–{formatRangeLabel(labMax)}
             </span>
           )}
           {isExtreme && (
@@ -136,47 +156,46 @@ function RangeBar({
 }
 
 function DualStatusSection({
-  amaniStatus,
+  assessment,
   labRefMin,
   labRefMax,
   value,
 }: {
-  amaniStatus: AmaniStatus;
-  labRefMin?: number | null;
-  labRefMax?: number | null;
+  assessment: AmaniAssessment;
+  labRefMin: number | null;
+  labRefMax: number | null;
   value: number;
 }) {
-  const labStatus = computeLabStatus(value, labRefMin ?? null, labRefMax ?? null);
-  const amaniVariant = amaniStatusToVariant(amaniStatus);
-  const amaniPill = STATUS_PILL_CONFIG[amaniVariant];
-
-  const isNormalNotOptimal = amaniStatus === 'normal';
-  const hasBoth = labRefMin !== null && labRefMax !== null;
+  // Lab status is judged only against the patient's own interval.
+  const labStatus = computeLabStatus(value, labRefMin, labRefMax);
+  const amaniPill = STATUS_PILL_CONFIG[assessmentToVariant(assessment)];
+  const status = assessment.kind === 'scored' ? assessment.status : null;
+  const hasLabRange = labRefMin !== null || labRefMax !== null;
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${amaniPill.bg} ${amaniPill.text} ${amaniPill.border}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${amaniPill.dot}`} />
-          {amaniPill.label}
+          {amaniPillLabel(assessment)}
         </div>
-        {hasBoth && labStatus !== 'in_range' && (
+        {hasLabRange && labStatus !== 'in_range' && (
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-600">
-            Lab ref: {labStatus.replace(/_/g, ' ')}
+            Your lab's range: {labStatus.replace(/_/g, ' ')}
           </div>
         )}
-        {hasBoth && labStatus === 'in_range' && amaniStatus !== 'optimal' && (
+        {hasLabRange && labStatus === 'in_range' && (
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-500">
-            Within lab ref range
+            Within your lab's range
           </div>
         )}
       </div>
-      {isNormalNotOptimal && (
+      {status === 'normal' && (
         <div className="flex items-start gap-1.5 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2">
           <Info className="w-3.5 h-3.5 text-theme-info mt-0.5 shrink-0" />
           <p className="text-xs text-theme-info">
-            This result is within the standard lab reference range but below the Amani optimal threshold.
-            Being "normal" and being "optimal" are different — Amani uses tighter ranges for peak health.
+            This result is outside Amani's context band but inside the wider band Amani uses before
+            flagging a result as out of range. Amani's bands are its own context, not your laboratory's range.
           </p>
         </div>
       )}
@@ -204,23 +223,16 @@ export function BiomarkerCard({
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const amaniStatus = computeAmaniStatus(name, value, cyclePhase);
-  const amaniVariant = amaniStatusToVariant(amaniStatus);
-  const pill = STATUS_PILL_CONFIG[amaniVariant];
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase));
+  const pill = STATUS_PILL_CONFIG[assessmentToVariant(assessment)];
+  const pillLabel = amaniPillLabel(assessment);
+  const band = assessment.kind === 'scored' ? assessment.band : null;
+  const bandText = band ? formatInterval(band.min, band.max) : null;
+  const withheld = assessment.kind === 'withheld' ? withheldCopy(assessment) : null;
 
-  const entry = getEntry(name);
-  let optMin = entry?.optimal.min ?? null;
-  let optMax = entry?.optimal.max ?? null;
-  let clinMin = entry?.clinical.min ?? null;
-  let clinMax = entry?.clinical.max ?? null;
-
-  if (cyclePhase && entry?.phaseRanges?.[cyclePhase]) {
-    const pr = entry.phaseRanges[cyclePhase]!;
-    optMin = pr.optimal.min ?? optMin;
-    optMax = pr.optimal.max ?? optMax;
-    clinMin = pr.clinical.min ?? clinMin;
-    clinMax = pr.clinical.max ?? clinMax;
-  }
+  const labMin = labRefMin ?? null;
+  const labMax = labRefMax ?? null;
+  const labText = formatInterval(labMin, labMax);
 
   const displayName = getDisplayName(name);
   const formattedValue = rawValueText ?? (value % 1 === 0 ? value.toString() : value.toFixed(2));
@@ -234,17 +246,21 @@ export function BiomarkerCard({
   })();
 
   return (
-    <div className={`bg-theme-surface rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
+    <article
+      aria-label={`${displayName} result`}
+      className={`bg-theme-surface rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}
+    >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-theme-neutral-50/50 transition-colors"
+        aria-expanded={expanded}
+        className="w-full px-4 pt-4 pb-2 flex items-start gap-3 text-left hover:bg-theme-neutral-50/50 transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-sm font-semibold text-theme-text">{displayName}</span>
             <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${pill.bg} ${pill.text} ${pill.border}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${pill.dot}`} />
-              {pill.label}
+              {pillLabel}
             </div>
             {trendDir && (
               /*
@@ -276,59 +292,94 @@ export function BiomarkerCard({
           <div className="flex items-baseline gap-1.5 text-theme-muted-text-2">
             <span className="font-mono text-xl text-theme-text tabular-nums">{formattedValue}</span>
             <span className="font-mono text-xs">{unit}</span>
-            {labRefMin !== null && labRefMax !== null && (
-              <span className="font-mono text-xs text-theme-muted-text-3 tabular-nums">
-                · ref {labRefMin}–{labRefMax}
-              </span>
-            )}
           </div>
-          {(() => {
-            const effectiveStaleness: BaselineStaleness = baselineStaleness ?? 'fresh';
-            const showBaselinePill = baselineStatus
-              && baselineStatus !== 'near_baseline'
-              && (effectiveStaleness === 'limited' || baselineStatus !== 'insufficient_data');
-            const baselineLabel = showBaselinePill && baselineStatus
-              ? baselineCopy(baselineStatus, effectiveStaleness)
-              : null;
-            const showTrendPill = trendDirection
-              && trendDirection !== 'stable'
-              && trendDirection !== 'fluctuating'
-              && trendDirection !== 'insufficient_data'
-              && trendStrength !== 'weak';
-            if (!baselineLabel && !showTrendPill) return null;
-            return (
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {baselineLabel && (
-                  <span className="text-[10px] text-theme-flag-ok font-medium">{baselineLabel}</span>
-                )}
-                {showTrendPill && (
-                  <span className="text-[10px] text-theme-info font-medium">
-                    Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-          {(optMin !== null && optMax !== null) && (
-            <RangeBar value={value} optMin={optMin} optMax={optMax} clinMin={labRefMin ?? clinMin} clinMax={labRefMax ?? clinMax} />
-          )}
         </div>
         <div className="shrink-0 pt-0.5 text-theme-muted-text-3">
           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </button>
 
+      {/*
+        Two separate concepts, always labelled, never substituted (V2-03):
+        her laboratory's interval is shown whenever the report supplied one,
+        and Amani's band only when Amani actually applies one — with its
+        review state beside it, because no band has been clinically approved.
+      */}
+      <div className="px-4 pb-4">
+        <dl className="space-y-0.5 text-xs">
+          <div className="flex flex-wrap gap-x-1.5">
+            <dt className="text-theme-muted-text-3">Your lab's range:</dt>
+            <dd className="font-mono tabular-nums text-theme-text-body">
+              {labText ? `${labText} ${unit}` : 'Not provided on your report'}
+            </dd>
+          </div>
+          {band && bandText && (
+            <div className="flex flex-wrap gap-x-1.5">
+              <dt className="text-theme-muted-text-3">
+                Amani context band{band.phase ? ` (${band.phase} phase)` : ''}:
+              </dt>
+              <dd className="text-theme-text-body">
+                <span className="font-mono tabular-nums">{bandText} {unit}</span>
+                {' · '}
+                <span>{reviewStatusLabel(band)}</span>
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        {withheld && (
+          <div role="note" className="mt-2 flex items-start gap-1.5 bg-theme-surface-2 border border-theme-border rounded-lg px-3 py-2">
+            <Info className="w-3.5 h-3.5 text-theme-muted-text-2 mt-0.5 shrink-0" />
+            <div className="text-xs text-theme-text-body">
+              <p className="font-semibold">{withheld.title}</p>
+              <p className="mt-0.5">{withheld.body}</p>
+            </div>
+          </div>
+        )}
+
+        {(() => {
+          const effectiveStaleness: BaselineStaleness = baselineStaleness ?? 'fresh';
+          const showBaselinePill = baselineStatus
+            && baselineStatus !== 'near_baseline'
+            && (effectiveStaleness === 'limited' || baselineStatus !== 'insufficient_data');
+          const baselineLabel = showBaselinePill && baselineStatus
+            ? baselineCopy(baselineStatus, effectiveStaleness)
+            : null;
+          const showTrendPill = trendDirection
+            && trendDirection !== 'stable'
+            && trendDirection !== 'fluctuating'
+            && trendDirection !== 'insufficient_data'
+            && trendStrength !== 'weak';
+          if (!baselineLabel && !showTrendPill) return null;
+          return (
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {baselineLabel && (
+                <span className="text-[10px] text-theme-flag-ok font-medium">{baselineLabel}</span>
+              )}
+              {showTrendPill && (
+                <span className="text-[10px] text-theme-info font-medium">
+                  Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+        {band && (
+          <RangeBar value={value} band={band} labMin={labMin} labMax={labMax} />
+        )}
+      </div>
+
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-theme-neutral-100 pt-3">
           <DualStatusSection
-            amaniStatus={amaniStatus}
-            labRefMin={labRefMin}
-            labRefMax={labRefMax}
+            assessment={assessment}
+            labRefMin={labMin}
+            labRefMax={labMax}
             value={value}
           />
 
           {(() => {
-            const explanation = getBiomarkerExplanation(name);
+            const explanation = withoutOptimalClaims(getBiomarkerExplanation(name) ?? '');
             if (!explanation) return null;
             return (
               <div className="flex items-start gap-2 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2.5">
@@ -349,9 +400,10 @@ export function BiomarkerCard({
             <p className="text-xs text-theme-muted-text-2 italic border-l-2 border-theme-border pl-2">{timingNotes}</p>
           )}
 
-          {cyclePhase && entry?.phaseRanges?.[cyclePhase] && (
+          {band?.phase && (
             <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg px-3 py-2 text-xs text-theme-flag-low">
-              Showing cycle-adjusted ranges for the <span className="font-semibold capitalize">{cyclePhase}</span> phase.
+              Showing Amani's context band for the <span className="font-semibold capitalize">{band.phase}</span> phase
+              recorded on this report ({reviewStatusLabel(band).toLowerCase()}).
             </div>
           )}
 
@@ -384,6 +436,6 @@ export function BiomarkerCard({
           )}
         </div>
       )}
-    </div>
+    </article>
   );
 }

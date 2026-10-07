@@ -1,5 +1,6 @@
 import { test as base, expect } from '@playwright/test';
 import { assertNetworkAllowed, guardWebSocket, origin } from './network-guard';
+import type { SyntheticReport } from './reports/synthetic-reports';
 
 const apiOrigin = 'https://amani-e2e.invalid';
 const userId = '00000000-0000-4000-8000-000000000043';
@@ -13,8 +14,11 @@ const user = {
   created_at: '2026-01-01T00:00:00.000Z',
 };
 
-export const test = base.extend<{ authenticated: boolean; networkGuard: void }>({
+export const test = base.extend<{ authenticated: boolean; syntheticReports: SyntheticReport[]; networkGuard: void }>({
   authenticated: [false, { option: true }],
+  // Opt-in synthetic report rows (V2-03). Empty by default, so every existing
+  // test keeps the exact allowlist it had.
+  syntheticReports: [[], { option: true }],
   storageState: async ({ authenticated }, provide) => {
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
     // Unsigned, deliberately invalid outside this fixture. No real credential.
@@ -39,7 +43,7 @@ export const test = base.extend<{ authenticated: boolean; networkGuard: void }>(
       }] : [],
     });
   },
-  networkGuard: [async ({ context, authenticated }, provide) => {
+  networkGuard: [async ({ context, authenticated, syntheticReports }, provide) => {
     const unexpected: string[] = [];
     await context.route('**/*', async route => {
       const request = route.request();
@@ -75,9 +79,59 @@ export const test = base.extend<{ authenticated: boolean; networkGuard: void }>(
           '/rest/v1/iap_beta_testers',
           '/rest/v1/complimentary_entitlements',
         ];
+        // Prior-report history for opted-in synthetic reports (V2-03 amendment
+        // 2): the exact projection, filters and orderings ReportView requests.
+        // With no synthetic reports this answers [] exactly as before.
+        if (url.pathname === '/rest/v1/lab_reports' && url.searchParams.get('select') === 'id,report_date'
+          && url.searchParams.get('user_id') === `eq.${userId}`) {
+          const before = /^lt\.(\d{4}-\d{2}-\d{2})$/.exec(url.searchParams.get('report_date') ?? '')?.[1];
+          const order = url.searchParams.get('order');
+          const limit = url.searchParams.get('limit');
+          if (before && (order === 'report_date.desc' || order === 'report_date.asc') && (limit === null || limit === '1')) {
+            const rows = syntheticReports
+              .map(r => ({ id: r.report.id, report_date: r.report.report_date }))
+              .filter(r => r.report_date < before)
+              .sort((a, b) => (order === 'report_date.asc' ? 1 : -1) * a.report_date.localeCompare(b.report_date));
+            await route.fulfill({ json: limit === '1' ? rows.slice(0, 1) : rows });
+            return;
+          }
+        }
         if (emptyUserTables.includes(url.pathname) && url.searchParams.get('user_id') === `eq.${userId}`) {
           await route.fulfill({ json: [] });
           return;
+        }
+        // Exact per-report reads for opted-in synthetic reports only: one table,
+        // one filter, one fixture id each. Anything else still falls through.
+        const reportFor = (filter: string | null) =>
+          syntheticReports.find(r => filter === `eq.${r.report.id}`);
+        if (url.pathname === '/rest/v1/lab_reports' && url.searchParams.get('select') === '*') {
+          const match = reportFor(url.searchParams.get('id'));
+          if (match) { await route.fulfill({ json: [match.report] }); return; }
+        }
+        const byReport: Record<string, (r: SyntheticReport) => unknown[]> = {
+          '/rest/v1/biomarkers': r => r.biomarkers,
+          '/rest/v1/report_analytes': () => [],
+          '/rest/v1/interpretations': r => [r.interpretation],
+        };
+        // ReportView also polls interpretations with this narrower projection
+        // while the first read is in flight.
+        const select = url.searchParams.get('select');
+        const allowedSelect = select === '*'
+          || (url.pathname === '/rest/v1/interpretations' && select === 'id,json_output,tier');
+        if (Object.hasOwn(byReport, url.pathname) && allowedSelect) {
+          const match = reportFor(url.searchParams.get('lab_report_id'));
+          if (match) { await route.fulfill({ json: byReport[url.pathname](match) }); return; }
+        }
+        // ReportView's historical read: one projection, an in-list of fixture ids only.
+        const historyColumns = ['name', 'value', 'unit', 'reference_min', 'reference_max', 'lab_report_id'] as const;
+        if (url.pathname === '/rest/v1/biomarkers' && select === historyColumns.join(',')) {
+          const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];
+          const matches = ids.map(id => syntheticReports.find(r => r.report.id === id));
+          if (ids.length > 0 && matches.every(m => m !== undefined)) {
+            await route.fulfill({ json: matches.flatMap(m => m!.biomarkers.map(b =>
+              Object.fromEntries(historyColumns.map(c => [c, b[c]])))) });
+            return;
+          }
         }
         // This existing view is read without a user filter by useSubscription.
         // An empty response grants no subscription; no real backend is involved.

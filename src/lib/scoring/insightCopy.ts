@@ -1,0 +1,178 @@
+import type { TopFinding } from '../insights/buildInsightSummary';
+import {
+  canClaimFavourableDirection, canDescribeAsOptimal, isReviewedRange,
+  type ClaimEvidence, type RangeProvenance,
+} from '../biomarkers/provenance';
+
+/*
+  V2-03 amendment 3. Narrative copy built in src/lib/insights (outside TASK-044's
+  paths, and not ours to rewrite) still says "optimal range" about bands whose
+  review status is UNKNOWN, DISPUTED or NEEDS_CONTEXT. That copy reaches the page
+  only through in-scope call sites, so the call sites qualify it here instead of
+  rendering it verbatim.
+
+  V2-03 amendment 4 (R1, R2). authorizedLanguage() is the single owner of what
+  may be said about an Amani band, by review status:
+    SAFE           reviewed wording; "optimal" ONLY with optimal-target evidence,
+                   "improved" or a success indicator ONLY with directional evidence
+    NEEDS_CONTEXT  "More context needed"
+    DISPUTED       "Interpretation unavailable pending clinical review"
+    UNKNOWN        neutral comparison only: no optimal, healthy, improved, good, bad
+  A band whose review cannot be established gets UNKNOWN's language. No band in
+  the catalog carries claim evidence today, so nothing here can authorize
+  "optimal" or a favourable direction for real data.
+*/
+
+export type ReviewStatus = RangeProvenance['review_status'];
+
+/** The parts of an applied Amani band that decide its language. */
+export interface BandAuthority {
+  provenance: RangeProvenance;
+  claims: ClaimEvidence;
+}
+
+export type Placement = 'within' | 'outside' | null;
+
+export interface AuthorizedLanguage {
+  /** Null when the band's review state could not be established. */
+  reviewStatus: ReviewStatus | null;
+  /** SAFE with complete provenance: reviewed, evaluative wording is allowed. */
+  reviewedWording: boolean;
+  /** The word "optimal". Distinct from review: needs optimal-target evidence. */
+  optimal: boolean;
+  /** "Improved", favourable direction wording, green success iconography. */
+  favourableDirection: boolean;
+}
+
+const OPTIMAL = /optimal/i;
+const FAVOURABLE = /\bimprov|\bright direction\b|\bpositive direction\b|\bconstructive direction\b|\bbetter range\b/i;
+const EVALUATIVE = /\b(healthy|good|bad)\b/i;
+
+export function claimsOptimal(text: string): boolean {
+  return OPTIMAL.test(text);
+}
+
+export function claimsFavourableDirection(text: string): boolean {
+  return FAVOURABLE.test(text);
+}
+
+export function authorizedLanguage(band: BandAuthority | null | undefined): AuthorizedLanguage {
+  if (!band) return { reviewStatus: null, reviewedWording: false, optimal: false, favourableDirection: false };
+  return {
+    reviewStatus: band.provenance.review_status,
+    reviewedWording: isReviewedRange(band.provenance),
+    optimal: canDescribeAsOptimal(band.provenance, band.claims),
+    favourableDirection: canClaimFavourableDirection(band.provenance, band.claims),
+  };
+}
+
+// Most restrictive first. An unestablished review ranks with UNKNOWN.
+const RESTRICTION: Record<ReviewStatus | 'none', number> = { DISPUTED: 0, NEEDS_CONTEXT: 1, none: 2, UNKNOWN: 2, SAFE: 3 };
+
+/**
+ * Language for copy that speaks about several bands at once: the most
+ * restrictive status, and a permission only if every band grants it. No band
+ * at all means nothing could be established.
+ */
+export function combineLanguage(languages: readonly AuthorizedLanguage[]): AuthorizedLanguage {
+  if (languages.length === 0) return authorizedLanguage(null);
+  const strictest = [...languages].sort(
+    (a, b) => RESTRICTION[a.reviewStatus ?? 'none'] - RESTRICTION[b.reviewStatus ?? 'none'],
+  )[0]!;
+  return {
+    reviewStatus: strictest.reviewStatus,
+    reviewedWording: languages.every(l => l.reviewedWording),
+    optimal: languages.every(l => l.optimal),
+    favourableDirection: languages.every(l => l.favourableDirection),
+  };
+}
+
+/** Short status phrase, the owner's wording for each review state. */
+export function reviewPhrase(language: AuthorizedLanguage): string {
+  switch (language.reviewStatus) {
+    case 'NEEDS_CONTEXT': return 'More context needed';
+    case 'DISPUTED': return 'Interpretation unavailable pending clinical review';
+    case 'SAFE': return language.reviewedWording ? 'Reviewed band' : 'Not yet reviewed';
+    default: return 'Not yet reviewed';
+  }
+}
+
+/** The authorized statement that stands in for a claim the band cannot support. */
+export function reviewStatement(language: AuthorizedLanguage, placement: Placement = null): string {
+  if (language.reviewStatus === 'DISPUTED') return 'Interpretation unavailable pending clinical review.';
+  const pending = 'This band has not yet completed clinical review.';
+  if (language.reviewStatus === 'NEEDS_CONTEXT') {
+    return `More context needed. Amani's comparison band for this result has not yet completed clinical review.`;
+  }
+  if (language.reviewedWording) {
+    if (placement === 'outside') return "Your result falls outside Amani's reviewed comparison band.";
+    if (placement === 'within') return "Your result falls within Amani's reviewed comparison band.";
+    return "This compares your result with Amani's reviewed comparison band.";
+  }
+  if (placement === 'outside') return `Your result falls outside Amani's current comparison band. ${pending}`;
+  if (placement === 'within') return `Your result falls within Amani's current comparison band. ${pending}`;
+  return `Amani's comparison band for this result has not yet completed clinical review.`;
+}
+
+/** Each claim in `text` that `language` does not authorize. Empty means it may render. */
+export function unauthorizedClaims(text: string, language: AuthorizedLanguage): ('optimal' | 'favourable_direction' | 'evaluative')[] {
+  const out: ('optimal' | 'favourable_direction' | 'evaluative')[] = [];
+  if (!language.optimal && OPTIMAL.test(text)) out.push('optimal');
+  if (!language.favourableDirection && FAVOURABLE.test(text)) out.push('favourable_direction');
+  if (!language.reviewedWording && EVALUATIVE.test(text)) out.push('evaluative');
+  return out;
+}
+
+/** Replaces matching sentences with `replacement` (once), or drops them when it is empty. */
+function replaceSentences(text: string, matches: (sentence: string) => boolean, replacement: string): string {
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  if (!sentences.some(matches)) return text;
+  const kept: string[] = [];
+  let replaced = false;
+  for (const sentence of sentences) {
+    if (!matches(sentence)) kept.push(sentence);
+    else if (!replaced && replacement) {
+      kept.push(replacement);
+      replaced = true;
+    }
+  }
+  return kept.join(' ').trim();
+}
+
+/**
+ * Renders `text` within what `language` authorizes: every sentence carrying an
+ * unauthorized claim is replaced, once, by the band's authorized statement.
+ * Text with no such sentence is returned unchanged.
+ */
+export function authorizeText(text: string, language: AuthorizedLanguage, placement: Placement = null): string {
+  return replaceSentences(
+    text, s => unauthorizedClaims(s, language).length > 0, reviewStatement(language, placement),
+  );
+}
+
+/** A title carrying an unauthorized claim becomes "<subject> needs review". */
+export function authorizeTitle(title: string, subject: string, language: AuthorizedLanguage): string {
+  return unauthorizedClaims(title, language).length > 0 ? `${subject} needs review` : title;
+}
+
+export const BANDS_UNDER_REVIEW = "Amani's context bands are still under review.";
+
+export const FOCUS_AREA_BAND_SENTENCE =
+  `One or more of these markers is borderline or outside its Amani band. ${BANDS_UNDER_REVIEW}`;
+
+/** Top Priority fallback text, built locally like the deterministic branches
+ * above it rather than echoing TopFinding.fact. */
+export function primaryFindingSentence(
+  finding: Pick<TopFinding, 'displayName' | 'direction' | 'value' | 'unit'>,
+): string {
+  const where = finding.direction === 'high' ? 'above' : finding.direction === 'low' ? 'below' : 'outside';
+  return `${finding.displayName} is ${where} the Amani band at ${finding.value} ${finding.unit}. ${BANDS_UNDER_REVIEW}`;
+}
+
+/** Replaces every sentence that calls a band "optimal" with `replacement`
+ * (once), or drops those sentences when `replacement` is empty. Text with no
+ * such sentence is returned unchanged. Used where no single band's review
+ * state is known; authorizeText is the review-aware form. */
+export function withoutOptimalClaims(text: string, replacement = ''): string {
+  return replaceSentences(text, s => OPTIMAL.test(s), replacement);
+}

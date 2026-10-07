@@ -1,7 +1,7 @@
 # Engineering browser tests and external documentation
 
-This tooling is isolated from product code. It gates four synthetic browser smoke tests and six guard cases
-per browser, with one redirect-race test quarantined, not a live-backend or clinical validation suite. See
+This tooling is isolated from product code. It gates four synthetic browser smoke tests, six guard cases
+and nine V2-03 report-context cases per browser, with one redirect-race test quarantined, not a live-backend or clinical validation suite. See
 [TASK-043 execution evidence and outstanding gates](REPORT.md).
 
 ## Install and run
@@ -29,7 +29,7 @@ current platform. Do not symlink unrelated revisions to make discovery pass.
 | `npm test` | Existing Vitest suites, unchanged |
 | `npm run test:e2e:isolation` | Canary checks served modules with temporary root env files; run alone in a disposable worktree |
 | `npm run typecheck` | Existing app check plus E2E/config TypeScript check |
-| `npm run test:e2e` | 10 gated cases per browser in Chromium, WebKit, Firefox |
+| `npm run test:e2e` | 16 gated cases per browser in Chromium, WebKit, Firefox |
 | `npm run test:e2e -- --project=webkit` | One browser |
 | `npm run test:e2e -- --list` | Discover tests without starting a server |
 | `npm run test:e2e:headed -- --project=chromium` | Local visible browser |
@@ -106,13 +106,29 @@ explicit synthetic GET responses: the fixture profile and an empty report list.
 Unexpected HTTP requests are aborted and fail the test. Only WebSockets with
 origin exactly `ws://127.0.0.1:4173` connect; all other sockets are recorded by
 origin/path (no query strings), closed, and fail the test. Service workers are blocked. No generic backend success response hides missing mocks.
+
+V2-03 adds one opt-in fixture option, `syntheticReports` (empty by default, so
+existing tests keep the exact allowlist above). A test that sets it may read only
+those synthetic rows: `lab_reports` by `id`, and `biomarkers`, `report_analytes`
+and `interpretations` by `lab_report_id`, each with `select=*` (plus the
+`id,json_output,tier` projection ReportView polls for interpretations). For
+prior-report history (V2-03 amendment 2) it may also read `lab_reports` with
+exactly `select=id,report_date`, the synthetic user's `user_id`, a
+`report_date=lt.<date>` filter and `order=report_date.asc|desc` (optionally
+`limit=1`), answered only from the opted-in reports; and `biomarkers` with the
+exact historical projection and an `in.(...)` list made only of opted-in report
+ids. Any other filter, table or method still aborts and fails. To opt in two or
+more reports, wrap the array: `[[a, b], { scope: 'test' }]`, because Playwright
+reads a bare two-element array as a `[value, options]` tuple. The rows live in
+`e2e/reports/synthetic-reports.ts` and are invented values, not patient data.
 Session state stays in memory. Screenshots/traces may contain synthetic session
 strings, but these are deliberately invalid credentials and cannot access a
 service. Never replace them with real accounts, PHI or secrets.
 
 Future-suite folders contain planned scenarios only. Check the target commit
-before implementing any scenario. `testMatch` currently selects only
-`smoke.spec.ts` and six browser-free `network-guard.spec.ts` regression cases;
+before implementing any scenario. `testMatch` currently selects
+`smoke.spec.ts`, six browser-free `network-guard.spec.ts` regression cases and
+the V2-03 `reports/context-suppression.spec.ts` release-invariant cases;
 expand that selection deliberately as suites become ready. Run the guard cases
 without a server or browser using:
 

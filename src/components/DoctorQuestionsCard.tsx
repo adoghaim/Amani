@@ -1,13 +1,25 @@
 import { useState } from 'react';
 import { MessageSquare, Copy, CheckCircle2 } from 'lucide-react';
 import type { DoctorQuestion } from '../lib/insights/buildInsightSummary';
+import type { BiomarkerName } from '../types';
+import { authorizedLanguage, unauthorizedClaims, type AuthorizedLanguage } from '../lib/scoring/insightCopy';
 
 interface Props {
   questions: DoctorQuestion[];
+  /** Band language per analyte (amendment 4). Absent means not established. */
+  bandLanguage?: ReadonlyMap<BiomarkerName, AuthorizedLanguage>;
 }
 
-export function DoctorQuestionsCard({ questions }: Props) {
+export function DoctorQuestionsCard({ questions: built, bandLanguage }: Props) {
   const [copied, setCopied] = useState(false);
+  // A question is one sentence plus its follow-up, so it is dropped whole
+  // rather than left with an orphaned "What does this mean...?". It is dropped
+  // when it claims more than its marker's band authorizes: "optimal", or an
+  // "improved" movement (R1), against a band that cannot support it.
+  const questions = built.filter(q => unauthorizedClaims(
+    q.text,
+    bandLanguage?.get(q.relatedBiomarker) ?? authorizedLanguage(null),
+  ).length === 0);
 
   if (questions.length === 0) return null;
 
