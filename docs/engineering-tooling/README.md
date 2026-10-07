@@ -27,6 +27,8 @@ current platform. Do not symlink unrelated revisions to make discovery pass.
 | Command | Purpose |
 | --- | --- |
 | `npm test` | Existing Vitest suites, unchanged |
+| `npm run test:e2e:isolation` | Canary checks served modules with temporary root env files; run alone in a disposable worktree |
+| `npm run typecheck` | Existing app check plus E2E/config TypeScript check |
 | `npm run test:e2e` | 10 gated cases per browser in Chromium, WebKit, Firefox |
 | `npm run test:e2e -- --project=webkit` | One browser |
 | `npm run test:e2e -- --list` | Discover tests without starting a server |
@@ -63,7 +65,32 @@ Playwright owns `node e2e/server.mjs` and stops it after the run. This starts Vi
 through the unchanged `npm run dev` script, with an E2E config extending the
 existing `vite.config.ts`, bound only to `127.0.0.1:4173`. Port conflicts
 fail; an existing server is never reused. The wrapper clears inherited `VITE_*`
-variables and sets `envDir: false`, so developer `.env` files are not loaded.
+variables. The E2E config now sets `envDir` to the absolute path of the committed
+`e2e/no-env/` directory, which contains only `.gitkeep`. Keep that directory free
+of env files. This directs Vite's env-file lookup away from the project root.
+The override uses `satisfies UserConfig` before `mergeConfig`; `npm run typecheck`
+now also checks `e2e/**/*.ts` and `playwright.config.ts` through `e2e/tsconfig.json`.
+
+**Turn-6 correction:** the original claim that `envDir: false` prevented developer
+env loading was wrong. Installed Vite 5.4.8 accepts a string and falls back to
+the project root for a falsy value. The Lead proved the defect by placing
+synthetic `VITE_APP_URL` and `VITE_FREEMIUM_ACTIVE` canaries in `.env` and observing
+them in served app modules. This could affect test behaviour and artifacts even
+with request egress blocked. Earlier green smoke runs did not prove isolation.
+
+Run `npm run test:e2e:isolation` alone, with no dev server running, in a disposable
+worktree without `.env`, `.env.local`, `.env.e2e` or `.env.e2e.local`. The test
+creates those files exclusively (refusing to overwrite existing files), starts
+the actual E2E server, waits for its readiness output without sleeps, fetches
+`/src/lib/tier.ts` and `/src/components/pricing/PricingCard.tsx`, and asserts
+HTTP 200, synthetic backend injection, and absence of both file and inherited
+canaries and the injected feature flag. It stops its server and deletes only
+its own temporary files on completion or failure. Do not run builds or other
+app servers concurrently with this canary. The turn-6 sandbox denied server
+binding (`EPERM`); the canary's served-module assertions must still be run by
+the Lead. The code change and passing static checks are not runtime proof.
+
+
 Only a reserved `.invalid` backend URL and a non-credential placeholder key
 are supplied. No production account, backend, telemetry DSN or payment key is
 needed. HMR is disabled for the test server.
@@ -157,7 +184,8 @@ same isolated smoke command. It requests no repository secrets. Assertions fail
 the job. On failure it uploads `playwright-report/` and `test-results/` with
 seven-day retention. The intentional artifact probe is not selected in CI.
 
-`ci.yml` and all existing jobs/scripts remain unchanged. The new workflow does
+`ci.yml` and all existing jobs remain unchanged. The existing app typecheck is
+preserved and extended with the E2E/config check; other existing scripts remain unchanged. The new workflow does
 not modify branch protection and is not declared a release gate by this task.
 After independent review and successful repeated Node-20/Linux runs on PRs,
 the owner can require the emitted `Browser smoke` status check in branch

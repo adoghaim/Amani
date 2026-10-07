@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 
-// Never inherit client credentials/telemetry or read a developer's .env files.
+// Clear inherited client variables; e2e/vite.config.ts redirects env-file
+// lookup to the committed empty e2e/no-env directory.
 // This wraps the existing Vite config; it changes only the E2E server process.
 for (const name of Object.keys(process.env)) {
   if (name.startsWith('VITE_')) delete process.env[name];

@@ -117,3 +117,18 @@ Crew order: external software question → inspect installed version + repositor
 Code looking correct is not product proven correct. Committed deterministic Playwright tests are the browser-level release evidence; agent browser interaction and CLI screenshots/traces are diagnostic only. Playwright does not replace unit tests, integration tests, migration verification, RLS/security tests, clinical evals, adversarial review, native iOS QA, native Android QA, or TestFlight/device testing.
 
 Use the local Playwright CLI for reproduction and Playwright Test for deterministic QA. MCP is optional, not the default; enable it only for a demonstrated persistent browser-interaction need. Use synthetic fixtures only. See [tooling commands, isolation, CI rollout and Context7 provisioning](docs/engineering-tooling/README.md).
+
+
+### Turn-6 env-isolation correction
+
+The original tooling claim that `envDir: false` prevented developer `.env`
+loading was wrong: Vite 5.4.8 falls back to the project root. The Lead proved
+this with synthetic `VITE_APP_URL` and `VITE_FREEMIUM_ACTIVE` values in served
+modules. E2E now redirects env-file lookup to the absolute `e2e/no-env/` path;
+keep that committed directory empty except for `.gitkeep`. The wrapper also
+clears inherited `VITE_*` values. The override is checked as Vite `UserConfig`
+and `npm run typecheck` now includes all E2E TypeScript and `playwright.config.ts`.
+Run `npm run test:e2e:isolation` alone in a disposable worktree without root env
+files to verify served modules and cleanup. Turn-6 execution was blocked by
+sandbox `listen EPERM`; runtime isolation must not be claimed as proven until
+the Lead runs that canary successfully. See the linked tooling report for evidence.

@@ -1,17 +1,22 @@
 # TASK-043 implementation evidence
 
-Approach: the Lead's balanced follow-up measurements invalidate the prior
-Chromium-only, deterministic diagnosis. The application has a flaky redirect
-race across browsers; its mechanism remains unproven. Turn 5 removes the
-browser-conditioned expected failure and tags the strict session-restoration
-test `@quarantine`. Default configuration excludes it from all three CI projects;
-`E2E_QUARANTINE=1` deliberately selects it alone. Both `/app/reports` assertions
-remain unchanged. No runtime code is changed.
+Approach (turn 6): installed Vite 5.4.8 falls back to the project root for
+`envDir: false`; `mergeConfig` accepted the invalid option and E2E files were
+outside the normal typecheck. Replace it with the absolute committed empty
+`e2e/no-env/` directory, preserving the existing server launcher. Type the
+override with `satisfies UserConfig`, check E2E/config files through the existing
+`npm run typecheck`, and add a served-module canary with exclusive temporary env
+files and cleanup. Correct the prior false isolation claims explicitly. The
+redirect-race quarantine and runtime code remain unchanged. The canary cannot
+reach assertions here because this sandbox denies loopback binding; this is
+PARTIAL pending Lead execution, not a certification of isolation.
 
 ## 1. Exact branch and head
 
 `git branch --show-current` → `chore/engineering-tooling-playwright-context7`.
-`git rev-parse HEAD` → `2fd9433bbcbed73a1e137505d2542ee58a16d9e0` (also base).
+Original task base: `2fd9433bbcbed73a1e137505d2542ee58a16d9e0`.
+Turn-6 `git rev-parse HEAD` → `0900c6990b114bf33c3479168eee602035e1db78`.
+The tree was clean at turn-6 start; earlier turn results below are historical.
 No commit, push, merge or rebase attempted. The Lead owns the commit after the
 required independent check; the directive's committed-config gate remains there.
 
@@ -62,7 +67,14 @@ scripts supported. CI: two workers, one retry, forbid focused-only tests.
 
 The wrapper invokes the existing `npm run dev` script with an E2E config extending
 the original Vite config, fixed loopback host/port, and strict port binding.
-No existing server reuse. Inherited `VITE_*` values and `.env` loading are disabled.
+No existing server reuse. The wrapper clears inherited `VITE_*` values. Turn 6
+sets `envDir` to the absolute committed `e2e/no-env/` directory (only `.gitkeep`).
+The previous assertion that `envDir: false` disabled `.env` loading was wrong:
+Vite 5.4.8 falls back to the project root. The Lead's synthetic `.env` canary
+appeared in served tier/pricing modules. `satisfies UserConfig` now rejects
+that unsupported option before `mergeConfig`, and `npm run typecheck` includes
+all E2E TypeScript plus the root Playwright config. The new served-module canary
+remains blocked here by `listen EPERM`; no passing isolation result is claimed.
 The backend hostname is `.invalid`; all test responses are synthetic.
 
 ## 5. Tests created
@@ -312,8 +324,12 @@ values, symptoms or report contents. No real auth state on disk. Test network
 guard blocks unexpected HTTP calls and all WebSockets except the exact
 `ws://127.0.0.1:4173` origin; service workers are blocked. Offending sockets are
 closed and fail fixture teardown, with only origin/path retained.
-The server loads no `.env`, clears inherited `VITE_*` variables, and cannot
-silently reuse a separately configured server. Trace/PNG paths are ignored and
+Correction: the earlier sentence “The server loads no `.env`” was false.
+The Lead proved root `.env` values reached served modules under `envDir: false`,
+so those values could affect behaviour or enter artifacts despite blocked egress.
+The fixed config directs env-file lookup to the committed empty `e2e/no-env/`
+directory; the wrapper clears inherited `VITE_*` variables and refuses server
+reuse. Served-module proof is pending the Lead's canary run outside this sandbox. Trace/PNG paths are ignored and
 CI retention limited. Both instruction files explicitly include the complete
 Context7 privacy prohibition, good/bad examples, and clinical-evidence prohibition.
 
@@ -423,3 +439,61 @@ commit, control-directory write, or product change was attempted.
 The separate CI workflow still invokes `npm run test:e2e` with no quarantine
 opt-in. Existing `ci.yml` behaviour is unchanged. Lead verification of the
 30-case gate is outstanding; discovery is not browser execution evidence.
+
+
+## Turn-6 execution evidence and remaining gate
+
+The three source brief files are still absent locally. The supplied turn-6
+addendum is the authority. No Context7 call or Second Brain change was made.
+Changed this turn: `e2e/vite.config.ts`, `e2e/server.mjs`, `package.json`, both
+instruction files, this report and its README. Added `e2e/no-env/.gitkeep`,
+`e2e/tsconfig.json`, and `e2e/env-isolation.test.mjs`. No dependency changed.
+The dedicated tsconfig lives under an allowed path; the existing app typecheck
+still runs first. No smoke, quarantine or workflow file changed.
+
+| Exact command | Observed output/result |
+| --- | --- |
+| `npm run test:e2e:isolation` | Exit 1; 0 passed, 1 failed; `Server bind denied: EPERM`, `E2E server exited before readiness (code 1)`; no module assertions reached |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | 6 passed (347ms) |
+| `npm run test:e2e` | Exit 1 before browser tests; `listen EPERM: operation not permitted 127.0.0.1:4173` |
+| `npm test` | 51 files passed; 1211 tests passed |
+| `npm run typecheck` | Exit 0; app and E2E/config checks both ran |
+| `npm run lint` | Exit 0; zero errors, nine existing source warnings |
+| `npm run build` | Exit 0; 2042 modules, built in 3.12s; existing Browserslist notice |
+| `npm run test:e2e -- --list` | 30 tests in 2 files |
+| `E2E_QUARANTINE=1 npm run test:e2e -- --list` | 3 tests in 1 file |
+| `node --check e2e/env-isolation.test.mjs` | Exit 0 |
+
+A temporary negative typecheck replaced the envDir expression with `false`,
+ran `npm run typecheck`, and restored the file in Python `finally`. The check
+failed with `e2e/vite.config.ts(8,3): error TS2322: Type 'boolean' is not
+assignable to type 'string'` (plus the then-unused import warning). The restored
+configuration passed `npm run typecheck`. This proves the type hole is closed,
+not that served-module isolation passed.
+
+Lead reproduction: run `npm run test:e2e:isolation` alone in a disposable
+worktree with no root env files or existing server. It refuses overwrites,
+creates all four Vite env filenames with synthetic sentinel values, starts the
+actual wrapper, fetches the two affected app modules, checks sentinel absence
+and synthetic backend presence, then stops the server and removes its files.
+The test also injects inherited canaries to exercise the wrapper's scrub.
+No arbitrary sleeps are used; timers bound startup, requests and shutdown only.
+Do not run builds or app servers concurrently while the canary files exist.
+Then run `npm run test:e2e` for Chromium, WebKit and Firefox. Those runtime gates
+remain outstanding; no independent review or certification is claimed.
+
+Final scope checks: `git diff --check` exited 0 with no output;
+`git diff --numstat -- src supabase clinical tools/clinical .github/workflows/ci.yml`
+produced no output. `git diff --stat` showed only seven modified allowed files;
+`git status --short` additionally listed the three new E2E paths above.
+A Node assertion byte-compared both workflows, `playwright.config.ts` and
+`e2e/smoke.spec.ts` to turn-start HEAD and printed
+`PASS: both workflows, Playwright config and quarantine smoke file are byte-identical to turn-start HEAD`.
+The same check confirmed unchanged dependencies and original scripts except
+the explicitly extended typecheck. Cleanup was rechecked with:
+
+```sh
+node --input-type=module -e "import {existsSync} from 'node:fs'; import assert from 'node:assert/strict'; for (const p of ['.env','.env.local','.env.e2e','.env.e2e.local']) assert.equal(existsSync(p),false); console.log('PASS: no root env files remain')"
+```
+
+Output: `PASS: no root env files remain`. Tree left uncommitted.
