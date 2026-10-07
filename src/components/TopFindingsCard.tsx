@@ -19,7 +19,7 @@ const SECONDARY_STYLE: Record<string, FindingStyle> = {
   },
   optimal: {
     bg: 'bg-theme-surface', border: 'border-theme-neutral-100', nameColor: 'text-theme-text',
-    text: 'text-theme-text-body', badge: 'bg-theme-flag-ok-bg text-theme-flag-ok border border-theme-flag-ok-border', label: 'Optimal',
+    text: 'text-theme-text-body', badge: 'bg-theme-flag-ok-bg text-theme-flag-ok border border-theme-flag-ok-border', label: 'Within Amani band',
     leftBar: 'bg-theme-flag-ok-bg', iconBg: 'bg-theme-flag-ok-bg', iconColor: 'text-theme-flag-ok',
   },
 };

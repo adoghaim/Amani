@@ -1,0 +1,21 @@
+import type { BiomarkerName } from '../../types';
+import type { RangeProvenance } from './provenance';
+
+export type ContextModifier = 'sex' | 'age' | 'cycle' | 'pregnancy' | 'life_stage';
+export type ModifierFlag = 'requires_context' | 'UNKNOWN';
+
+/** Review state and context flags of one shipping catalog band. */
+export interface BandContext {
+  kind: 'amani_context' | 'lab_reference';
+  phase: string | null;
+  provenance: RangeProvenance;
+  modifiers: Record<ContextModifier, ModifierFlag>;
+}
+
+export interface AnalyteContext {
+  key: BiomarkerName;
+  cycleDependent: boolean;
+  bands: BandContext[];
+}
+
+export const ANALYTE_CONTEXT: readonly AnalyteContext[] = __CONTEXT__;

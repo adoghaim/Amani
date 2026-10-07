@@ -1,6 +1,7 @@
 import type { BiomarkerName, CyclePhase, AmaniStatus } from '../../types';
 import { getDisplayName, getRangesForPhase } from '../biomarkers/dictionary';
 import { computeAmaniStatus } from './scoreBiomarker';
+import { assessAmaniContext, contextFromReport } from './amaniContext';
 
 export type TrendDirection = 'up' | 'down' | 'stable';
 export type SignificanceTier = 'minor' | 'moderate' | 'significant';
@@ -208,11 +209,15 @@ export function compareReports(
     const prevStatus = computeAmaniStatus(curr.key, prev.value, cyclePhase);
     const currStatus = computeAmaniStatus(curr.key, curr.value, cyclePhase);
     const significance = computeSignificance(percentDelta, absoluteDelta, curr.key);
-    const boundaryCrossing = detectBoundaryCrossing(prevStatus, currStatus);
-    const distanceToNormalImprovement = computeDistanceToNormalImprovement(
+    // Withheld context (V2-03): keep the longitudinal values, but make no
+    // judgement about crossing, improving or worsening against a band Amani
+    // is not applying. ('unknown' would otherwise bucket as out_of_range.)
+    const withheld = assessAmaniContext(curr.key, curr.value, contextFromReport(cyclePhase)).kind === 'withheld';
+    const boundaryCrossing = withheld ? null : detectBoundaryCrossing(prevStatus, currStatus);
+    const distanceToNormalImprovement = withheld ? null : computeDistanceToNormalImprovement(
       curr.key, prev.value, curr.value, cyclePhase,
     );
-    const trajectoryStatus = computeTrajectoryStatus(
+    const trajectoryStatus = withheld ? null : computeTrajectoryStatus(
       prevStatus, currStatus, prev.value, curr.value,
       boundaryCrossing, distanceToNormalImprovement, significance, curr.key, cyclePhase,
     );

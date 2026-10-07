@@ -18,7 +18,7 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
       const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
       return `Your panel looks solid overall, with ${names} showing improvement since your last draw. The trend is moving in a positive direction.`;
     }
-    return `All measured values are within optimal ranges. This is a useful baseline to track over time.`;
+    return `All measured values are within Amani's context bands, which are still under review. This is a useful baseline to track over time.`;
   }
 
   const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;

@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { readCatalog, assertAuditInventory, generateArtifacts, renderCatalog, artifact } from './generate.mjs';
+import { readCatalog, assertAuditInventory, generateArtifacts, renderCatalog, renderContext, artifact, contextArtifact } from './generate.mjs';
 import { validateCatalog, validateRangeEvidence } from './validate.mjs';
 import { fallbackFindings, fallbackSummary } from './fallback-audit.mjs';
-import { renderSql, sqlPayload, FROZEN_V2_01_REVIEW_STATUS } from './sql.mjs';
+import { renderSql, renderReviewSql, sqlPayload, FROZEN_V2_01_REVIEW_STATUS } from './sql.mjs';
 import { renderAuditQueue } from './audit-queue.mjs';
 
 const fallbackIds = new Set(['lh/amani_context', 'estradiol/amani_context', 'estradiol/lab_reference', 'fsh/amani_context', 'fsh/lab_reference']);
@@ -56,7 +56,8 @@ test('inventory and shipping queue tolerate candidates but still detect missing 
 
 test('all frozen artifacts are checked before any mutable write, including next value change', () => {
   const c = readCatalog();
-  const files = { [artifact]: renderCatalog(c), ...renderSql(c) };
+  // TASK-044 adds the context artifact and the V2-03 review SQL; both SQL sets are frozen once present.
+  const files = { [artifact]: renderCatalog(c), [contextArtifact]: renderContext(c), ...renderSql(c), ...renderReviewSql(c) };
   const writes = [];
   const io = { read: name => files[name], write: (name, value) => { writes.push(name); files[name] = value; } };
   const altered = structuredClone(c);
@@ -64,7 +65,7 @@ test('all frozen artifacts are checked before any mutable write, including next 
   assert.throws(() => generateArtifacts(altered, io), /frozen/);
   assert.deepEqual(writes, []);
   assert.equal(files[artifact], renderCatalog(c));
-  for (const name of Object.keys(renderSql(c))) {
+  for (const name of [...Object.keys(renderSql(c)), ...Object.keys(renderReviewSql(c))]) {
     const changedFiles = { ...files, [artifact]: 'synthetic client drift', [name]: 'synthetic SQL drift' };
     assert.throws(() => generateArtifacts(c, { read: path => changedFiles[path], write: io.write }), /frozen/);
     assert.deepEqual(writes, []);
@@ -183,7 +184,7 @@ test('synthetic candidate survives validation while generate and check preserve 
   generateArtifacts(c, io);
   generateArtifacts(c, { ...io, check: true });
   assert.deepEqual(writes, []);
-  for (const [path, output] of Object.entries(renderSql(c))) assert.equal(output, readFileSync(path, 'utf8'));
+  for (const [path, output] of Object.entries({ ...renderSql(c), ...renderReviewSql(c) })) assert.equal(output, readFileSync(path, 'utf8'));
   assert.equal(renderAuditQueue(c), readFileSync('docs/clinical/AUDIT-QUEUE.md', 'utf8'));
   assert.equal(sqlPayload(c).ranges.length, 198);
 });

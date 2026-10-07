@@ -17,3 +17,23 @@ export function projectEntries(catalog) {
     return entry;
   });
 }
+
+// V2-03 runtime projection: review state and context modifiers for every
+// shipping band, keyed like the legacy dictionary. Values stay in
+// projectEntries so a band's endpoints have exactly one client source.
+// Fields are built in a fixed order so seed key order cannot change bytes.
+export function projectContext(catalog) {
+  validateCatalog(catalog);
+  return catalog.analytes.map(a => ({
+    key: a.legacy_key ?? a.slug,
+    cycleDependent: a.is_cycle_dependent === true,
+    bands: a.ranges.filter(r => !r.candidate_id).map(r => ({
+      kind: r.kind,
+      phase: r.phase,
+      provenance: { evidence_grade: r.evidence_grade, review_status: r.review_status, source: r.source,
+        source_date: r.source_date, reviewer: r.reviewer, reviewed_at: r.reviewed_at },
+      modifiers: { sex: r.modifiers.sex, age: r.modifiers.age, cycle: r.modifiers.cycle,
+        pregnancy: r.modifiers.pregnancy, life_stage: r.modifiers.life_stage },
+    })),
+  }));
+}

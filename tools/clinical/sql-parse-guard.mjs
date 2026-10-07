@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 export const clinicalSqlFiles = () => [
   'supabase/migrations/20261006000000_clinical_catalog.sql',
+  'supabase/migrations/20261007000000_clinical_range_review_status.sql',
   ...readdirSync('supabase/migrations/__verification__').filter(f => /^clinical-catalog\..*\.sql$/.test(f))
     .sort().map(f => `supabase/migrations/__verification__/${f}`),
   ...readdirSync('tools/clinical').filter(f => f.endsWith('.sql.txt')).sort().map(f => `tools/clinical/${f}`),

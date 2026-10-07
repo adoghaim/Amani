@@ -39,6 +39,39 @@ export function sqlPayload(catalog) {
       review_status: FROZEN_V2_01_REVIEW_STATUS }))),
   };
 }
+// V2-03 (TASK-044) status persistence: a NEW migration beside the frozen V2-01
+// one. It never edits clinical_ranges (whose CHECK forbids DISPUTED shipping
+// rows and whose V2-01 replay/rollback refuse any write); it records the
+// TASK-042 internal dispositions in clinical_range_reviews, keyed by identity.
+export const reviewMigrationArtifact = 'supabase/migrations/20261007000000_clinical_range_review_status.sql';
+export const reviewRollbackArtifact = 'supabase/migrations/__verification__/clinical-catalog.review-rollback.sql';
+export const reviewVerifyArtifact = 'supabase/migrations/__verification__/clinical-catalog.review-verify.sql';
+export function reviewPayload(catalog) {
+  validateCatalog(catalog);
+  const reviews = catalog.analytes.flatMap(a => a.ranges.filter(r => !r.candidate_id).map(r => ({
+    slug: a.slug, population: r.population, phase: r.phase, kind: r.kind, candidate_id: 'shipping',
+    review_status: r.review_status, disposition_basis: 'task042_internal_audit' })));
+  // Fail closed twice over: the table CHECK refuses SAFE as well. Approval
+  // needs attributable evidence columns this migration deliberately lacks.
+  if (reviews.some(r => !['NEEDS_CONTEXT', 'DISPUTED', 'UNKNOWN'].includes(r.review_status))) {
+    throw new Error('clinical_range_reviews cannot persist SAFE; approval requires a separately authorized evidence migration');
+  }
+  return { reviews };
+}
+export function renderReviewSql(catalog) {
+  const base = createHash('sha256').update(stableJson(sqlPayload(catalog))).digest('hex');
+  const payload = stableJson(reviewPayload(catalog));
+  const hash = createHash('sha256').update(payload).digest('hex');
+  const delimiter = `$review_${hash}$`;
+  if (payload.includes(delimiter)) throw new Error('SQL body delimiter appears in review seed');
+  const replacements = { __REVIEW_PAYLOAD__: "'" + payload.replaceAll("'", "''") + "'::jsonb", __REVIEW_HASH__: hash, __BASE_HASH__: base };
+  const render = name => readFileSync(new URL(name, import.meta.url), 'utf8')
+    .replaceAll('$review$', () => delimiter)
+    .replace(/__REVIEW_PAYLOAD__|__REVIEW_HASH__|__BASE_HASH__/g, marker => replacements[marker]);
+  return { [reviewMigrationArtifact]: render('review-status.sql.txt'),
+    [reviewRollbackArtifact]: render('review-status.rollback.sql.txt'),
+    [reviewVerifyArtifact]: render('review-status.verify.sql.txt') };
+}
 export function renderSql(catalog) {
   const payload = stableJson(sqlPayload(catalog));
   const clientRanges = projectEntries(catalog).flatMap(e => [

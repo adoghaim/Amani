@@ -29,10 +29,10 @@ const METRIC_META: Record<string, { label: string; description: string; optimalL
 };
 
 function getStatusColor(value: number, low: number, high: number) {
-  if (value >= low && value <= high) return { dot: 'bg-theme-flag-ok', text: 'text-theme-flag-ok', badge: 'bg-theme-flag-ok-bg border-theme-flag-ok-border', label: 'Optimal' };
+  if (value >= low && value <= high) return { dot: 'bg-theme-flag-ok', text: 'text-theme-flag-ok', badge: 'bg-theme-flag-ok-bg border-theme-flag-ok-border', label: 'Within Amani band' };
   const pctOutside = Math.abs(value > high ? (value - high) / high : (low - value) / (low || 1));
   if (pctOutside < 0.3) return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Borderline' };
-  return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Outside optimal' };
+  return { dot: 'bg-theme-flag-watch', text: 'text-theme-flag-watch', badge: 'bg-theme-flag-watch-bg border-theme-flag-watch-border', label: 'Outside Amani band' };
 }
 
 interface Props {
@@ -73,7 +73,7 @@ export function DerivedMetricsPanel({ metrics }: Props) {
                   </div>
                   <div className={`text-xs font-medium mt-1 ${status.text}`}>{status.label}</div>
                   <div className="text-xs text-theme-muted-text-3 mt-0.5">
-                    Optimal: {meta.optimalLow}–{meta.optimalHigh}{meta.unit}
+                    Amani band: {meta.optimalLow}–{meta.optimalHigh}{meta.unit}
                   </div>
                 </div>
               </div>

@@ -5,6 +5,7 @@ import {
   scoreBiomarker,
   statusToConcern,
 } from './scoreBiomarker';
+import { assessAmaniContext, contextFromReport } from './amaniContext';
 import type { AmaniStatus, BiomarkerName, CyclePhase, LabStatus } from '../../types';
 
 const ALL_PHASES: CyclePhase[] = [
@@ -110,12 +111,20 @@ describe('computeAmaniStatus — progesterone 2.0 ng/mL across the cycle', () =>
     expect(computeAmaniStatus('progesterone', 2.0, 'follicular')).toBe('out_of_range_high');
   });
 
-  // Without a phase the general range (0.1–25) applies, and a luteal-phase
-  // deficiency reads as optimal. This is the cost of an unknown cycle date.
-  it.each([null, undefined, 'unknown' as CyclePhase])(
-    'falls back to the wide general range when the phase is %s',
+  // V2-03 (owner ruling): this used to fall back to the unphased 0.1–25 band,
+  // so a luteal-phase deficiency read as optimal. Changed deliberately and made
+  // stronger: with no usable phase there is NO Amani status, for every value
+  // (including ones the old band called optimal or out of range), and the
+  // assessment says why instead of silently classifying.
+  it.each([null, undefined, 'unknown' as CyclePhase, 'not-a-phase'])(
+    'withholds the Amani status when the phase is %s',
     (phase) => {
-      expect(computeAmaniStatus('progesterone', 2.0, phase)).toBe('optimal');
+      for (const value of [0.05, 2.0, 12, 40]) {
+        expect(computeAmaniStatus('progesterone', value, phase)).toBe('unknown');
+        expect(assessAmaniContext('progesterone', value, contextFromReport(phase))).toEqual({
+          kind: 'withheld', reason: 'cycle_phase_missing', state: null, phase: null,
+        });
+      }
     },
   );
 });
@@ -160,23 +169,30 @@ describe('computeAmaniStatus — FSH 12 mIU/mL across the cycle', () => {
 });
 
 describe('computeAmaniStatus — phases with no dedicated ranges', () => {
-  // Nothing in the codebase produces a pregnancy phase today (cyclePredictor
-  // never emits one), and no dictionary entry defines pregnancy ranges. If a
-  // pregnancy phase is ever wired up, these values silently fall back to the
-  // non-pregnant general range — see the report accompanying this suite.
+  // V2-03 (owner ruling): pregnancy is not a menstrual-phase case. These used
+  // to fall back silently to the non-pregnant general range (and the old test
+  // only compared two fallbacks). Now each trimester is a non-cycling state
+  // and Amani withholds wherever the catalog flags pregnancy or cycle context.
   it.each(['pregnancy_t1', 'pregnancy_t2', 'pregnancy_t3'] as CyclePhase[])(
-    '%s falls back to the general range',
+    '%s withholds rather than using a general or menstrual band',
     (phase) => {
-      expect(computeAmaniStatus('progesterone', 2.0, phase)).toBe(
-        computeAmaniStatus('progesterone', 2.0, null),
-      );
+      for (const key of ['progesterone', 'estradiol', 'fsh', 'lh', 'ferritin', 'tsh'] as BiomarkerName[]) {
+        expect(computeAmaniStatus(key, 2.0, phase)).toBe('unknown');
+        expect(assessAmaniContext(key, 2.0, contextFromReport(phase))).toMatchObject({
+          kind: 'withheld', reason: 'non_cycling_state', state: 'pregnancy',
+        });
+      }
     },
   );
 
-  it('ignores the phase entirely for a marker with no phase ranges', () => {
-    for (const phase of ALL_PHASES) {
+  // Changed: this iterated ALL_PHASES, including the pregnancy trimesters that
+  // now withhold. Menstrual phases (and a missing phase) still cannot change
+  // a marker the catalog does not mark as cycle-dependent.
+  it('ignores the menstrual phase entirely for a marker with no phase ranges', () => {
+    for (const phase of ALL_PHASES.filter(p => !p.startsWith('pregnancy_'))) {
       expect(computeAmaniStatus('ferritin', 12, phase)).toBe('out_of_range_low');
     }
+    expect(computeAmaniStatus('ferritin', 12, null)).toBe('out_of_range_low');
   });
 });
 

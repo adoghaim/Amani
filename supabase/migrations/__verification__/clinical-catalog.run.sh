@@ -25,6 +25,56 @@ clinical_expect_mode() {
   actual=$(docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -tA -c 'SELECT mode FROM clinical_archive.task041_state;')
   if [ "$actual" != "$mode" ]; then echo "FAIL: $db recorded mode '$actual', expected '$mode'"; return 1; fi
 }
+# TASK-044 (V2-03) review-status migration, rehearsed on top of whichever V2-01
+# mode the calling case applied. It must leave V2-01 exactly as it found it.
+clinical_review_cycle() {
+  local db="$1" mode="$2" out
+  review_psql() { docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 "$@"; }
+  docker cp "$HERE/../20261007000000_clinical_range_review_status.sql" "$CONTAINER:/tmp/review-forward.sql" >/dev/null
+  docker cp "$HERE/clinical-catalog.review-rollback.sql" "$CONTAINER:/tmp/review-rollback.sql" >/dev/null
+  docker cp "$HERE/clinical-catalog.review-verify.sql" "$CONTAINER:/tmp/review-verify.sql" >/dev/null
+  clinical_expect_mode "$db" "$mode" || return 1
+  # Refuses before creating anything when a V2-01 range was written after apply.
+  review_psql -q -c "UPDATE public.clinical_ranges SET notes=notes || ' probe' WHERE slug='tsh' AND kind='amani_context' AND phase IS NULL;"
+  if out=$(review_psql -q -f /tmp/review-forward.sql 2>&1); then echo "FAIL: $db review forward accepted a V2-01 write"; return 1; fi
+  if ! grep -q 'clinical_ranges changed since it was applied' <<<"$out"; then echo "FAIL: $db review forward refused for the wrong reason: $out"; return 1; fi
+  review_psql -q -c "UPDATE public.clinical_ranges SET notes=left(notes, length(notes)-6) WHERE slug='tsh' AND kind='amani_context' AND phase IS NULL;"
+  review_psql -q -c "DO \$\$ BEGIN IF to_regclass('public.clinical_range_reviews') IS NOT NULL OR to_regclass('clinical_archive.task044_state') IS NOT NULL
+    THEN RAISE EXCEPTION 'refused review forward left state behind'; END IF; END \$\$;"
+  # Forward, verify, replay, verify.
+  review_psql -q -f /tmp/review-forward.sql -f /tmp/review-verify.sql >/dev/null
+  review_psql -q -f /tmp/review-forward.sql -f /tmp/review-verify.sql >/dev/null
+  # V2-01 still verifies, still replays as a no-op, and its rollback is blocked
+  # while the review table depends on the catalog (roll back V2-03 first).
+  review_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
+  if out=$(review_psql -q -f /tmp/clinical-catalog.rollback.sql 2>&1); then echo "FAIL: $db V2-01 rollback ran under V2-03"; return 1; fi
+  if ! grep -q 'refuses new catalog dependencies' <<<"$out"; then echo "FAIL: $db V2-01 rollback refused for the wrong reason: $out"; return 1; fi
+  # Intervening review writes stop both replay and rollback.
+  review_psql -q -c "UPDATE public.clinical_range_reviews SET review_status='UNKNOWN' WHERE slug='progesterone' AND kind='amani_context' AND phase='luteal';"
+  for operation in /tmp/review-forward.sql /tmp/review-rollback.sql; do
+    if review_psql -q -f "$operation" >/dev/null 2>&1; then echo "FAIL: $db $operation accepted an intervening review write"; return 1; fi
+  done
+  review_psql -q -c "UPDATE public.clinical_range_reviews SET review_status='DISPUTED' WHERE slug='progesterone' AND kind='amani_context' AND phase='luteal';"
+  # An unexpected dependent view stops rollback.
+  review_psql -q -c 'CREATE VIEW public.fixture_review_dependent AS SELECT * FROM public.clinical_range_reviews;'
+  if review_psql -q -f /tmp/review-rollback.sql >/dev/null 2>&1; then echo "FAIL: $db review rollback accepted a dependent view"; return 1; fi
+  review_psql -q -c 'DROP VIEW public.fixture_review_dependent;'
+  review_psql -q -f /tmp/review-verify.sql >/dev/null
+  review_psql -q -f /tmp/review-rollback.sql
+  review_psql -q -c "DO \$\$ BEGIN
+    IF to_regclass('public.clinical_range_reviews') IS NOT NULL OR to_regclass('clinical_archive.clinical_range_reviews') IS NULL
+      OR (SELECT status FROM clinical_archive.task044_state)<>'rolled_back'
+      THEN RAISE EXCEPTION 'review rollback did not archive'; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='clinical_archive.clinical_range_reviews'::regclass AND contype='f')
+      THEN RAISE EXCEPTION 'archived reviews still constrain the catalog'; END IF;
+    IF (SELECT count(*) FROM clinical_archive.clinical_range_reviews)<>198 THEN RAISE EXCEPTION 'archived reviews lost rows'; END IF;
+    END \$\$;"
+  # V2-01 is exactly as before, and a rolled-back V2-03 cannot silently re-apply.
+  review_psql -q -f /tmp/clinical-forward.sql -f /tmp/clinical-catalog.verify.sql >/dev/null
+  if out=$(review_psql -q -f /tmp/review-forward.sql 2>&1); then echo "FAIL: $db re-applied a rolled-back review migration"; return 1; fi
+  if ! grep -q 'explicit new migration required' <<<"$out"; then echo "FAIL: $db review re-apply refused for the wrong reason: $out"; return 1; fi
+  echo "PASS: $db ($mode) V2-03 review forward, verify, replay, V2-01 coexistence, refusal guards and rollback"
+}
 clinical_case() {
   local db="$1"
   local missing_synonyms="$2"
@@ -87,6 +137,7 @@ clinical_case() {
   clinical_expect_mode "$db" production || return 1
   # Reference for the chain case's direct comparison (amendment 4, harness item 2).
   clinical_psql -tA -f /tmp/clinical-catalog.fingerprint.sql > "$CLINICAL_TMP/$db.fingerprint"
+  clinical_review_cycle "$db" production || return 1
   clinical_psql -q -c 'ALTER TABLE public.lab_results ADD CONSTRAINT fixture_unexpected_fkey FOREIGN KEY(biomarker_name) REFERENCES clinical_archive.biomarker_definitions(name);'
   if clinical_psql -q -f /tmp/clinical-catalog.rollback.sql >/dev/null 2>&1; then
     echo 'FAIL: rollback accepted unexpected archive FK'; return 1
@@ -152,6 +203,7 @@ clinical_absent_case() {
   if [ "$(clinical_psql -tA -f /tmp/clinical-catalog.fingerprint.sql)" != "$(cat "$CLINICAL_TMP/clinical_snapshot.fingerprint")" ]; then
     echo 'FAIL: absent mode built different tables, grants or RLS than production mode'; return 1
   fi
+  clinical_review_cycle "$db" absent || return 1
   absent=$(clinical_psql -tAc "SELECT jsonb_build_object('entries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY slug) FROM public.clinical_catalog_entries t),'ranges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM public.clinical_ranges t));")
   archival=$(docker exec "$CONTAINER" psql -U postgres -d clinical_snapshot -tAc "SELECT jsonb_build_object('entries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY slug) FROM clinical_archive.clinical_catalog_entries t),'ranges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM clinical_archive.clinical_ranges t));")
   if [ "$absent" != "$archival" ]; then echo 'FAIL: absent and archival projections differ'; return 1; fi
@@ -245,6 +297,7 @@ clinical_chain_case() {
       echo "FAIL: chain mode built different tables, grants or RLS than production mode ($reference)"; return 1
     fi
   done
+  clinical_review_cycle "$db" chain || return 1
   # Dedicated canonical_analytes rollback fixture (Lead turn 6). An outside FK to
   # the seeded identity must refuse rollback, whether it would block the delete
   # (the extraction link) or silently cascade from it (an ON DELETE CASCADE

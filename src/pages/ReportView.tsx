@@ -13,7 +13,7 @@ import { NextBestSteps } from '../components/NextBestSteps';
 import { buildCards } from '../lib/cards/buildCards';
 import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
 import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
-import { scoreBiomarker } from '../lib/scoring/scoreBiomarker';
+import { computeAmaniStatus, scoreBiomarker, statusToConcern } from '../lib/scoring/scoreBiomarker';
 import { SystemSummaryCards } from '../components/SystemSummaryCards';
 import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
@@ -1569,9 +1569,9 @@ export function ReportView() {
                       if (outOfRange.length === 0 && borderline.length === 0) {
                         if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `All values are within optimal range, and ${name} has improved since your last draw.`;
+                          return `All values are within Amani's context bands, and ${name} has improved since your last draw.`;
                         }
-                        return 'All measured values are within the Amani optimal range.';
+                        return 'All scored values are within Amani\'s context bands, which are still under review.';
                       }
 
                       if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
@@ -2007,7 +2007,9 @@ export function ReportView() {
 
               <div className="mt-5 space-y-2">
                 {filteredCategories.map(({ category, items }) => {
-                  const flaggedCount = items.filter(b => b.flagged === 'out_of_range' || b.flagged === 'borderline').length;
+                  // Counted live, not from the persisted upload-time flag: a flag stored
+                  // before V2-03 may have come from a fallback band Amani now withholds.
+                  const flaggedCount = items.filter(b => statusToConcern(computeAmaniStatus(b.name as BiomarkerName, b.value, cyclePhase)) > 0).length;
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {
@@ -2021,6 +2023,7 @@ export function ReportView() {
                     <div key={category} className="rounded-xl border border-theme-neutral-200 overflow-hidden">
                       <button
                         onClick={toggleCollapsed}
+                        aria-expanded={!isCollapsed}
                         className="flex items-center justify-between w-full px-4 py-3 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
@@ -2029,7 +2032,7 @@ export function ReportView() {
                           </span>
                           {flaggedCount > 0 && (
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-flag-watch-bg text-theme-flag-watch">
-                              {flaggedCount} outside optimal
+                              {flaggedCount} outside Amani band
                             </span>
                           )}
                         </div>

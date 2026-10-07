@@ -1,5 +1,15 @@
 # reports
 
-Planned scenarios: Synthetic report upload, list/detail navigation, and deletion against an isolated disposable backend. Initial smoke renders the empty reports route without uploading or deleting anything.
+Implemented: `context-suppression.spec.ts` (V2-03, TASK-044) renders the real report page
+from synthetic rows (`synthetic-reports.ts`) behind the network guard and proves, on all
+three browsers, that the laboratory range and Amani context band are separate, that no
+unreviewed band reads as "Optimal", and that a cycle-dependent hormone with no recorded
+phase gets no Amani score while its raw value and lab range stay visible. A second fixture
+with a recorded luteal phase proves the phase-specific path.
 
-This is a future-suite placeholder, not implemented coverage. Confirm functionality in the target commit before adding tests. Use synthetic data only; no production credentials, PHI, destructive production requests, or arbitrary sleeps. Extend the smoke-only test selection deliberately when adding a suite. See [engineering tooling](../../docs/engineering-tooling/README.md).
+Still planned: synthetic report upload, list/detail navigation, and deletion against an
+isolated disposable backend.
+
+Use synthetic data only; no production credentials, PHI, destructive production requests, or
+arbitrary sleeps. Extend the test selection deliberately when adding a suite. See
+[engineering tooling](../../docs/engineering-tooling/README.md).
