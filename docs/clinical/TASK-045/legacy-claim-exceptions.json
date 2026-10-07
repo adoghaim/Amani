@@ -903,5 +903,245 @@
     "file": "src/pages/Terms.tsx",
     "text": "These terms describe how Amani actually works and what we are promising, but they have not yet been reviewed by a lawyer. The sections on liability and disputes in particular are placeholders. We are publishing them in draft rather than leaving the link dead.",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/lib/scoring/amaniContext.ts",
+    "text": "Disputed range, under review",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/amaniContext.ts",
+    "text": "Needs more context, under review",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/amaniContext.ts",
+    "text": "Not yet reviewed",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/amaniContext.ts",
+    "text": "Reviewed range",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/amaniContext.ts",
+    "text": "This marker can read differently during ${…}, and Amani has no reviewed context for it yet, so it does not score this result. Your result and your lab's range are shown as reported.",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/amaniContext.ts",
+    "text": "This marker changes meaning across the menstrual cycle, and Amani has no context band for the recorded phase. Your result and your lab's range are shown as reported.",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/compareReports.ts",
+    "text": "outside the Amani band",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/compareReports.ts",
+    "text": "within the Amani band",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Context needed",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "No Range",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Outside Amani band",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Within Amani band",
+    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+  },
+  {
+    "file": "src/utils/cyclePredictor.ts",
+    "text": "Progesterone is elevated. You may notice shifts in energy, mood, or sleep.",
+    "reason": "Clinical debt: cycle-phase hormone/symptom interpretation outside the policy author. Migration deferred behind Stage-1 independent verification; this pin does not establish clinical authority."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Both ferritin (iron storage) and iron saturation (transport) are below optimal. This pattern is consistent with iron deficiency that may precede anemia. Common symptoms include fatigue, hair loss, shortness of breath, and reduced exercise tolerance. This is worth discussing with your provider, especially if you have heavy periods.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Cardiovascular Risk Cluster",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Elevated HbA1c",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Ferritin is below 30 ng/mL, which is below the Amani optimal range even when within the standard lab reference range. Some clinicians consider functional iron deficiency at this level, particularly in women with heavy periods or active lifestyles. Symptoms such as fatigue and hair loss may be present before anemia develops.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "HbA1c is at or above 5.7%, which some guidelines classify as prediabetes range. This reflects average blood sugar over the prior 2–3 months. Worth discussing with your provider alongside fasting glucose and any metabolic symptoms.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Higher than typical — worth discussing with your provider in the context of your full thyroid panel.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Iron Deficiency Pattern",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "May suggest early insulin resistance — worth discussing with your provider.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Moderately elevated — some clinicians discuss FAI alongside symptoms such as acne, hair changes, or irregular cycles.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Multiple androgen-related markers are outside the optimal range. Elevated testosterone or DHEA-S with low SHBG, or an LH:FSH ratio above 2, are patterns clinicians commonly evaluate in the context of PCOS (polycystic ovary syndrome). This pattern should be discussed with your provider alongside cycle history, symptoms, and any imaging.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Multiple liver enzymes are above the Amani optimal range. Clinicians commonly evaluate elevated ALT, AST, and GGT together to assess liver health. Contributing factors can include fatty liver, alcohol, medications, or metabolic conditions. This pattern is worth discussing with your provider.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Often consistent with a favorable metabolic and cardiovascular risk profile.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Outside the optimal range — non-HDL is a strong predictor of cardiovascular risk worth discussing with your provider.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Outside the preferred range — clinicians commonly evaluate this in the context of overall cardiovascular health.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Outside the typical range for women — clinicians commonly evaluate this in the context of androgen-related symptoms.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Outside the typical range — clinicians commonly evaluate this alongside glucose trends and HbA1c.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Possible Luteal Phase Insufficiency",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Progesterone is below the expected range for the luteal phase (optimal: 5–25 ng/mL). Adequate progesterone after ovulation supports uterine lining health and cycle regularity. This pattern may warrant testing on a specific cycle day (typically Day 21 of a 28-day cycle) and discussion with your provider.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "TSH is in the higher-normal range alongside a lower Free T3. Some clinicians evaluate this pattern in the context of suboptimal T4-to-T3 conversion, particularly when symptoms such as fatigue, brain fog, or cold sensitivity are present. This combination may be worth discussing in the context of your full thyroid panel.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Three or more metabolic markers are outside optimal ranges. Clinicians commonly evaluate combinations of fasting glucose, insulin, triglycerides, and HDL together as they can reflect overall metabolic and insulin sensitivity. This cluster pattern may be worth a focused conversation with your provider.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Two or more cardiovascular risk markers are outside the optimal range. LDL, ApoB, hs-CRP, and Lp(a) are commonly evaluated together when assessing cardiovascular health. This combination may be worth a dedicated conversation with your provider, especially if you have a family history of heart disease.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Vitamin D Below Optimal",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Vitamin D is below 30 ng/mL, which is generally considered deficient. Vitamin D plays a role in immune function, bone health, mood regulation, and hormone signaling. This is commonly discussed with a provider, particularly if you have limited sun exposure or related symptoms.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Vitamin D is within the clinical reference range but below the Amani optimal threshold of 50 ng/mL. Vitamin D plays a role in immune function, hormone signaling, and mood regulation. Some clinicians target higher levels. This may be worth discussing with your provider.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Within a commonly cited range, suggesting typical T4-to-T3 conversion.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Within a typical range for women; reflects the proportion of unbound, biologically active testosterone.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Within the optimal range — reflects a favorable balance of atherogenic particles.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/utils/derivedMetrics.ts",
+    "text": "Your TPO antibodies are elevated (above 100 IU/mL) and TSH is above the Amani optimal range. Clinicians commonly evaluate this combination in the context of autoimmune thyroid conditions such as Hashimoto's thyroiditis. This pattern may be worth discussing with your provider alongside any thyroid-related symptoms such as fatigue, hair loss, or weight changes.",
+    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+  },
+  {
+    "file": "src/features/onboarding/steps/PersonalContextStep.tsx",
+    "text": "Age range",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/features/onboarding/steps/PersonalContextStep.tsx",
+    "text": "Select age range",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/features/onboarding/steps/WelcomeStep.tsx",
+    "text": "Amani helps you understand your lab results in plain language, track changes over time, and prepare better questions for your doctor.",
+    "reason": "Non-clinical lexical match: onboarding product description uses better for question preparation, not clinical improvement in a result."
+  },
+  {
+    "file": "src/features/settings/PersonalContextCard.tsx",
+    "text": "Age range",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/features/settings/PersonalContextCard.tsx",
+    "text": "Select age range",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/lib/cards/cardMap.ts",
+    "text": "HDL is low, so it may be helpful to look at the full lipid pattern over time rather than focusing on one marker alone.",
+    "reason": "Clinical debt: legacy result interpretation/advice in card producer; authority and policy migration deferred behind Stage-1 independent verification. Not clinical authorization."
+  },
+  {
+    "file": "src/lib/cards/cardMap.ts",
+    "text": "TPO antibodies are still above range, so this area is worth tracking alongside thyroid function markers and symptoms.",
+    "reason": "Clinical debt: legacy result interpretation/advice in card producer; authority and policy migration deferred behind Stage-1 independent verification. Not clinical authorization."
   }
 ]

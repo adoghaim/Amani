@@ -1,0 +1,137 @@
+[
+  {
+    "directory": "src",
+    "mode": "excluded",
+    "reason": "Application bootstrap, CSS and routing direct files; no clinical rule producer here. Child directories classified separately; new directory fails closed."
+  },
+  {
+    "directory": "src/components",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/components/auth",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/components/freemium",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/components/pricing",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/contexts",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/onboarding",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/onboarding/steps",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/settings",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/hooks",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib",
+    "mode": "excluded",
+    "reason": "Direct modules include cycle-context UI (deferred clinical debt behind Stage-1 gate), service/native plumbing and forbidden entitlement/purchase logic. This exclusion is not clinical authorization; children classified separately."
+  },
+  {
+    "directory": "src/lib/biomarkers",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/capacitor-stubs",
+    "mode": "excluded",
+    "reason": "Native API stubs with technical errors, not clinical interpretation."
+  },
+  {
+    "directory": "src/lib/cards",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/freemium",
+    "mode": "excluded",
+    "reason": "User-visible purchase/locked-report copy; forbidden freemium/entitlement scope. Deferred to owner-authorized scope, not certified clinical-free."
+  },
+  {
+    "directory": "src/lib/insights",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/observability",
+    "mode": "excluded",
+    "reason": "Telemetry initialization and privacy scrubbing; no rendered copy. Separate telemetry/security contracts remain unchanged."
+  },
+  {
+    "directory": "src/lib/personalization",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/scoring",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/pages",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/styles",
+    "mode": "excluded",
+    "reason": "CSS presentation only; no clinical prose author in current files."
+  },
+  {
+    "directory": "src/types",
+    "mode": "excluded",
+    "reason": "Type declarations only; no runtime text producer."
+  },
+  {
+    "directory": "src/utils",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/utils/parser",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/utils/parser/__fixtures__",
+    "mode": "excluded",
+    "reason": "Synthetic parser input data, not production copy; excluded test fixtures."
+  },
+  {
+    "directory": "src/utils/parser/__snapshots__",
+    "mode": "excluded",
+    "reason": "Parser test snapshots, not production copy."
+  }
+]
