@@ -1,10 +1,13 @@
+import { PRODUCT_DISCLAIMERS, type ProductDisclaimer } from '../scoring/insightCopy';
+
 export interface CardContent {
   title: string;
   summary: string;
   examples: string[];
   discussionItems: string[];
   trackingItems: string[];
-  note: string;
+  /** Only a policy product disclaimer: its authority travels to the DOM. */
+  note: ProductDisclaimer;
 }
 
 export type CardKey =
@@ -15,12 +18,19 @@ export type CardKey =
   | 'kidney_hydration'
   | 'nutrient_sufficiency';
 
-const SAFETY_NOTE = 'Educational information only. Discuss changes with your provider, especially if you are pregnant, breastfeeding, taking medications, or managing kidney-related concerns.';
+/*
+  V2-03b Stage 2. Notes are the policy's product disclaimers (fixed text, no
+  result selects their wording). Two summaries asserted her result: "TPO
+  antibodies are still above range" and "HDL is low", the latter shown for any
+  flagged lipid even when HDL was not. Summaries now describe the area only.
+  The food and discussion lists remain classified debt (REPORT.md).
+*/
+const SAFETY_NOTE = PRODUCT_DISCLAIMERS.guidance;
 
 export const CARD_MAP: Record<CardKey, CardContent> = {
   thyroid_autoimmunity: {
-    title: 'Thyroid Autoimmunity Support',
-    summary: 'TPO antibodies are still above range, so this area is worth tracking alongside thyroid function markers and symptoms.',
+    title: 'Thyroid Antibody Context',
+    summary: 'TPO antibodies are usually read together with TSH, Free T4, Free T3 and any thyroid-related symptoms.',
     examples: [
       'Brazil nuts',
       'eggs',
@@ -44,8 +54,8 @@ export const CARD_MAP: Record<CardKey, CardContent> = {
   },
 
   cardiovascular: {
-    title: 'Cardiovascular Support',
-    summary: 'HDL is low, so it may be helpful to look at the full lipid pattern over time rather than focusing on one marker alone.',
+    title: 'Lipid Context',
+    summary: 'HDL, LDL, triglycerides, total cholesterol and ApoB are usually read together as one lipid pattern over time.',
     examples: [
       'olive oil',
       'avocado',
@@ -84,11 +94,11 @@ export const CARD_MAP: Record<CardKey, CardContent> = {
       'progesterone',
       'estradiol',
     ],
-    note: 'Educational information only. Hormone values are timing-sensitive, so discuss cycle timing and symptoms with your provider.',
+    note: PRODUCT_DISCLAIMERS.guidanceCycle,
   },
 
   metabolic: {
-    title: 'Metabolic Support',
+    title: 'Metabolic Context',
     summary: 'Glucose-related markers are useful to track together because one marker alone may not show the full metabolic picture.',
     examples: [
       'protein-forward meals',
@@ -129,11 +139,11 @@ export const CARD_MAP: Record<CardKey, CardContent> = {
       'eGFR',
       'BUN/Creatinine Ratio',
     ],
-    note: 'Educational information only. Because kidney-related markers are involved, discuss major diet or supplement changes with your provider first.',
+    note: PRODUCT_DISCLAIMERS.guidanceKidney,
   },
 
   nutrient_sufficiency: {
-    title: 'Nutrient Sufficiency Context',
+    title: 'Nutrient Context',
     summary: 'Nutrient and iron-related markers move together over time. Tracking them as a panel gives a fuller picture than any single value.',
     examples: [
       'leafy greens',

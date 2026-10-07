@@ -16,11 +16,13 @@ export interface FlaggedSignal {
   category: BiomarkerCategory;
 }
 
+// V2-03b: a reason names what the marker measures, never a condition
+// ("autoimmune", "anemia screening", "cycle disruption", "genetic cardiovascular").
 export const RECOMMENDED_LABS: Record<BiomarkerCategory, RecommendedLab[]> = {
   hormones: [
     { name: 'amh', reason: 'Adds ovarian reserve context', relatedTo: [] },
     { name: 'free_testosterone', reason: 'Adds androgen context', relatedTo: [] },
-    { name: 'prolactin', reason: 'Adds cycle disruption context', relatedTo: [] },
+    { name: 'prolactin', reason: 'Adds cycle hormone context', relatedTo: [] },
   ],
   thyroid: [
     {
@@ -33,7 +35,7 @@ export const RECOMMENDED_LABS: Record<BiomarkerCategory, RecommendedLab[]> = {
       reason: 'Adds thyroid conversion context',
       relatedTo: ['tpo_antibodies', 'tg_antibodies', 'tsh', 'free_t4', 'free_t3'],
     },
-    { name: 'tpo_antibodies', reason: 'Adds autoimmune thyroid context', relatedTo: [] },
+    { name: 'tpo_antibodies', reason: 'Adds thyroid antibody context', relatedTo: [] },
   ],
   metabolic: [
     {
@@ -54,10 +56,10 @@ export const RECOMMENDED_LABS: Record<BiomarkerCategory, RecommendedLab[]> = {
       reason: 'Adds particle burden context',
       relatedTo: ['ldl_cholesterol', 'hdl_cholesterol', 'triglycerides', 'non_hdl_cholesterol'],
     },
-    { name: 'lpa', reason: 'Adds genetic cardiovascular context', relatedTo: ['ldl_cholesterol', 'apob'] },
+    { name: 'lpa', reason: 'Adds lipoprotein(a) context', relatedTo: ['ldl_cholesterol', 'apob'] },
     {
       name: 'hs_crp',
-      reason: 'Adds vascular inflammation context',
+      reason: 'Adds inflammation marker context',
       relatedTo: ['ldl_cholesterol', 'hdl_cholesterol', 'esr'],
     },
   ],
@@ -73,7 +75,7 @@ export const RECOMMENDED_LABS: Record<BiomarkerCategory, RecommendedLab[]> = {
     { name: 'esr', reason: 'Adds general inflammation context', relatedTo: [] },
     {
       name: 'hs_crp',
-      reason: 'Relevant to cardiovascular inflammation context',
+      reason: 'Adds inflammation marker context',
       relatedTo: ['ldl_cholesterol', 'hdl_cholesterol', 'esr'],
     },
   ],
@@ -92,7 +94,7 @@ export const RECOMMENDED_LABS: Record<BiomarkerCategory, RecommendedLab[]> = {
     { name: 'magnesium', reason: 'Adds enzyme and hormone context', relatedTo: [] },
   ],
   blood: [
-    { name: 'hemoglobin', reason: 'Adds anemia screening context', relatedTo: [] },
+    { name: 'hemoglobin', reason: 'Adds red blood cell context', relatedTo: [] },
     { name: 'wbc', reason: 'Adds immune status context', relatedTo: [] },
   ],
 };

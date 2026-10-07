@@ -17,9 +17,11 @@ import {
   type NonCyclingState,
 } from './amaniContext';
 import { compareReports } from './compareReports';
-import { SYSTEM_LABEL_CONFIG, groupBySystem } from './groupBySystem';
+import { groupBySystem } from './groupBySystem';
+import { comparisonBandLabel, systemSummaryLabel } from './insightCopy';
 import { scoreBiomarker } from './scoreBiomarker';
-import { STATUS_PILL_CONFIG, amaniPillLabel } from './statusPill';
+
+const pillText = (a: AmaniAssessment, value = 1.5) => comparisonBandLabel(a, value).text;
 
 const STATES: NonCyclingState[] = ['pregnancy', 'postpartum', 'hormonal_contraception', 'hormone_therapy', 'perimenopause', 'menopause'];
 const cycleKeys = ANALYTE_CONTEXT.filter(a => requiresCycleContext(a.key)).map(a => a.key);
@@ -156,29 +158,45 @@ describe('invariant 3 — UNKNOWN, DISPUTED and NEEDS_CONTEXT never read as unqu
       for (const phase of [null, ...MENSTRUAL_PHASES]) {
         for (const value of valuesFor(e.key)) {
           const a = assessAmaniContext(e.key, value, contextFromReport(phase));
-          expect(amaniPillLabel(a)).not.toMatch(/optimal/i);
+          expect(pillText(a, value)).not.toMatch(/optimal|normal|borderline/i);
         }
       }
     }
   });
 
-  it('the only path to "Optimal" is canDescribeAsOptimal on the applied band', () => {
+  /*
+    V2-03b Stage 2 replaces "the only path to Optimal is canDescribeAsOptimal".
+    OPTIMAL_TARGET_CLAIM needs authority the policy can trace: a reviewed rule
+    and a target-evidence id. A boolean on the band cannot supply either, so the
+    pill has no path to "Optimal" at all, including SAFE with optimal_target set.
+  */
+  it('no band, even SAFE with optimal-target evidence, makes the pill say "Optimal"', () => {
     const reviewed: RangeProvenance = { evidence_grade: 'A', review_status: 'SAFE', source: 'synthetic fixture',
       source_date: '2000-01-01', reviewer: 'synthetic reviewer', reviewed_at: '2000-01-01' };
     const optimalTarget: ClaimEvidence = { ...NO_CLAIM_EVIDENCE, optimal_target: true };
     const scored = (provenance: RangeProvenance, claims: ClaimEvidence = optimalTarget): AmaniAssessment => ({ kind: 'scored', status: 'optimal',
       band: { min: 1, max: 2, phase: null, provenance, claims, describeAsOptimal: canDescribeAsOptimal(provenance, claims) } });
-    expect(amaniPillLabel(scored(reviewed))).toBe('Optimal');
-    // Amendment 4 R2: SAFE without optimal-target evidence does not say "Optimal".
-    expect(amaniPillLabel(scored(reviewed, NO_CLAIM_EVIDENCE))).toBe('Within Amani band');
+    const granted = scored(reviewed);
+    expect(granted.kind === 'scored' && granted.band.describeAsOptimal).toBe(true);
+    expect(pillText(scored(reviewed))).toBe('Within Amani band');
+    expect(pillText(scored(reviewed, NO_CLAIM_EVIDENCE))).toBe('Within Amani band');
     for (const review_status of ['UNKNOWN', 'DISPUTED', 'NEEDS_CONTEXT'] as const) {
-      expect(amaniPillLabel(scored({ ...reviewed, review_status }))).toBe('Within Amani band');
+      expect(pillText(scored({ ...reviewed, review_status }))).toBe('Within Amani band');
     }
-    expect(amaniPillLabel(scored({ ...reviewed, evidence_grade: 'unsourced' }))).toBe('Within Amani band');
+    expect(comparisonBandLabel(scored(reviewed), 1.5).category).toBe('comparison_band');
   });
 
-  it('no fixed pill label says optimal', () => {
-    for (const config of Object.values(STATUS_PILL_CONFIG)) expect(config.label).not.toMatch(/optimal/i);
+  it('placement is arithmetic on the band, not the status', () => {
+    const provenance: RangeProvenance = { evidence_grade: 'unsourced', review_status: 'UNKNOWN', source: null, source_date: null, reviewer: null, reviewed_at: null };
+    const band = (min: number | null, max: number | null) => ({ min, max, phase: null, provenance, claims: NO_CLAIM_EVIDENCE, describeAsOptimal: false });
+    // A higher-is-better status calls a value above the band 'optimal'; it is still above the band.
+    expect(comparisonBandLabel({ kind: 'scored', status: 'optimal', band: band(50, 90) }, 120)).toMatchObject({ text: 'Outside Amani band', cue: 'attention' });
+    // 'normal' arises inside a one-sided band, so it is within, never "Normal".
+    expect(comparisonBandLabel({ kind: 'scored', status: 'normal', band: band(50, null) }, 60)).toMatchObject({ text: 'Within Amani band', cue: 'neutral' });
+    expect(comparisonBandLabel({ kind: 'scored', status: 'normal', band: band(null, null) }, 60).text).toBe('No Amani band');
+    for (const status of ['borderline_low', 'out_of_range_low'] as const) {
+      expect(comparisonBandLabel({ kind: 'scored', status, band: band(50, 90) }, 40)).toMatchObject({ text: 'Outside Amani band', cue: 'attention' });
+    }
   });
 
   it('no component or page hard-codes an "Optimal" status label', () => {
@@ -191,11 +209,11 @@ describe('invariant 3 — UNKNOWN, DISPUTED and NEEDS_CONTEXT never read as unqu
       }
     };
     ['src/components', 'src/pages', 'src/lib/scoring'].forEach(walk);
-    const offenders = files.filter(f => /(['"`>])\s*Optimal\s*(['"`<])/.test(readFileSync(f, 'utf8'))
-      && f !== join('src/lib/scoring', 'statusPill.ts'));
-    expect(offenders).toEqual([]);
-    // statusPill.ts may say it only behind the canDescribeAsOptimal gate.
-    expect(readFileSync('src/lib/scoring/statusPill.ts', 'utf8')).toMatch(/band\.describeAsOptimal\) return 'Optimal'/);
+    // V2-03b: no exemption left. statusPill.ts is unreachable from the app
+    // (see the reachability proof in optimalWording.test.ts) and still carries
+    // its gated label, so it is the one known match.
+    const offenders = files.filter(f => /(['"`>])\s*Optimal\s*(['"`<])/.test(readFileSync(f, 'utf8')));
+    expect(offenders).toEqual([join('src/lib/scoring', 'statusPill.ts')]);
   });
 });
 
@@ -222,7 +240,7 @@ describe('system summaries under withheld context', () => {
     const scored = [scoreBiomarker('progesterone', 2, 'ng/mL', 0.2, 25, null), scoreBiomarker('estradiol', 120, 'pg/mL', null, null, null)];
     const [hormones] = groupBySystem(scored);
     expect(hormones).toMatchObject({ category: 'hormones', systemLabel: 'not_scored', scoredCount: 0, totalCount: 2, flaggedCount: 0 });
-    expect(SYSTEM_LABEL_CONFIG.not_scored.label).toBe('Not scored');
+    expect(systemSummaryLabel(hormones!.scoredCount, hormones!.flaggedCount)).toMatchObject({ text: 'Not scored', cue: 'neutral' });
   });
 
   it('a phase makes the same system scorable', () => {

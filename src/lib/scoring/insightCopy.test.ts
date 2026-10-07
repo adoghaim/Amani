@@ -49,14 +49,22 @@ describe('Top Priority fallback (ReportView branch 3) — the luteal progesteron
   const summary = buildInsightSummary(panel, null, 'luteal');
   const pf = summary.primaryFinding!;
 
-  it('the out-of-scope builder still emits the optimality claim, so the guard is load-bearing', () => {
+  // V2-03b Stage 2 replaces "the builder still emits the optimality claim": the
+  // builder's fact is now the policy's own sentence, so nothing is left to qualify.
+  it('the builder no longer emits the optimality claim; its fact is the policy sentence', () => {
     expect(pf.key).toBe('progesterone');
-    expect(pf.fact).toBe('Progesterone is below the optimal range at 2 ng/mL');
+    expect(pf.fact).toBe("Progesterone is below the Amani band at 2 ng/mL. Amani's context bands are still under review.");
   });
 
   it('the rendered sentence names the Amani band and its review state instead', () => {
     expect(primaryFindingSentence(pf))
       .toBe("Progesterone is below the Amani band at 2 ng/mL. Amani's context bands are still under review.");
+  });
+
+  it('a DISPUTED band withholds placement in the rendered sentence', () => {
+    expect(summary.bandLanguage?.get('progesterone')?.reviewStatus).toBe('DISPUTED');
+    expect(primaryFindingSentence(pf, summary.bandLanguage!.get('progesterone')))
+      .toBe('Progesterone was measured at 2 ng/mL. Interpretation unavailable pending clinical review.');
   });
 
   it.each([['high', 'above'], ['low', 'below'], ['unknown', 'outside']] as const)(
@@ -67,25 +75,39 @@ describe('Top Priority fallback (ReportView branch 3) — the luteal progesteron
     });
 });
 
+/*
+  V2-03b Stage 2 replaces "the cycle_hormones rule still says optimal; the
+  qualified text does not". The rule sentence no longer exists: the builder
+  composes the policy's placement, which a DISPUTED band (luteal progesterone)
+  withholds entirely, so no qualifier is needed and none is applied.
+*/
 describe('Focus areas — the persistent half of the breach', () => {
-  it('the cycle_hormones rule still says "optimal"; the qualified text does not', () => {
+  it('the cycle_hormones area is the policy statement for its bands, with no placement under DISPUTED', () => {
     const summary = buildInsightSummary(panel, null, 'luteal');
     const scored = panel.map(b => scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, 'luteal'));
     const area = buildFocusAreas(summary, summary.watchSignals, scored).find(a => a.id === 'hormones_cycle_hormones');
-    expect(area?.whyItMatters).toMatch(/outside the optimal range/);
-    const shown = withoutOptimalClaims(area!.whyItMatters, FOCUS_AREA_BAND_SENTENCE);
-    expect(shown).toBe(`${FOCUS_AREA_BAND_SENTENCE} Cycle phase context matters when interpreting these values.`);
+    expect(summary.bandLanguage?.get('progesterone')?.reviewStatus).toBe('DISPUTED');
+    expect(area?.whyItMatters).toBe('Interpretation unavailable pending clinical review.');
+    expect(area?.whyItMatters).not.toMatch(/optimal|borderline|reference range|outside|within|elevated|low\b/i);
+  });
+
+  it('an UNKNOWN band states placement with its review state, and never the lab\'s "reference range"', () => {
+    const tsh = [{ key: 'tsh' as const, value: 6, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5 }];
+    const summary = buildInsightSummary(tsh, null, null);
+    const [area] = buildFocusAreas(summary, [], tsh.map(b => scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, null)));
+    expect(area!.whyItMatters).toBe("TSH is outside Amani's current comparison band. This band has not yet completed clinical review.");
   });
 });
 
 describe('BiomarkerCard "Why this matters" explanations', () => {
-  it('every explanation survives qualification non-empty and without "optimal"', () => {
+  // V2-03b Stage 2 replaces "survives qualification": the interpretive
+  // sentences are gone at the source, so the stronger property holds unqualified.
+  it('every explanation says what the test measures, with no optimality, judgement, risk or condition', () => {
     const entries = Object.entries(BIOMARKER_EXPLANATIONS);
-    expect(entries.some(([, text]) => claimsOptimal(text!))).toBe(true);
+    expect(entries.length).toBeGreaterThan(15);
     for (const [key, text] of entries) {
-      const shown = withoutOptimalClaims(text!);
-      expect(shown, key).not.toBe('');
-      expect(claimsOptimal(shown), key).toBe(false);
+      expect(withoutOptimalClaims(text!), key).toBe(text);
+      expect(text, key).not.toMatch(/optimal|elevated|\blow levels|\bhigher levels|risk|favou?rable|harmful|associated with|indicat|autoimmun|deficien/i);
     }
   });
 });
@@ -172,51 +194,72 @@ describe('R2 — insight-flag cards through the real rules, gate and catalog', (
     return { gated, shown: authorizeInsightMatches(gated, biomarkers, ctx) };
   };
 
-  it('the frozen rule copy still carries the claims, so this guard is load-bearing', () => {
-    expect(INSIGHT_RULES.find(r => r.rule_id === 'vitamin_d_deficiency')!.title).toBe('Vitamin D Below Optimal');
-    expect(cards({ vitamin_d_25_oh: 40 }, null).gated[0]!.description).toMatch(/Amani optimal threshold/);
+  /*
+    V2-03b Stage 2 replaces the four tests that read the rules' own titles and
+    descriptions through authorizeTitle/authorizeText. Those filtered prose
+    for "optimal" and kept the rest, which is how "worth discussing with your
+    provider" and condition names (PCOS, Hashimoto's, prediabetes) still
+    reached the page. The rules now author nothing; the policy words a match.
+  */
+  it('the rules author no language: a match is an id, a severity and its inputs', () => {
+    for (const rule of INSIGHT_RULES) expect(Object.keys(rule).sort()).toEqual(['biomarkers_involved', 'check', 'rule_id', 'severity']);
+    const matches = evaluateInsightRules(panelOf({ vitamin_d_25_oh: 40, hemoglobin_a1c: 6 }), null);
+    expect(matches.length).toBe(2);
+    for (const m of matches) expect(Object.keys(m).sort()).toEqual(['biomarkers_involved', 'rule_id', 'severity']);
   });
 
-  it('"Vitamin D Below Optimal" renders as "Vitamin D needs review" against its NEEDS_CONTEXT band', () => {
+  it('a vitamin D match against its NEEDS_CONTEXT band: values, review state, no condition, no advice', () => {
     for (const value of [20, 40]) {
       const [card] = cards({ vitamin_d_25_oh: value }, null).shown;
-      expect(card!.title).toBe('Vitamin D needs review');
-      expect(card!.description).not.toMatch(/optimal/i);
+      expect(card!.title.text).toBe('Vitamin D: pattern-rule match');
+      expect(card!.description.text).toBe(
+        "More context needed. Amani's comparison band for this result has not yet completed clinical review."
+        + ` Measured: Vitamin D ${value}. These values matched one of Amani's pattern rules, which have not yet completed clinical review.`);
+      expect(card!.description.authority).toMatchObject({ kind: 'amani_comparison_band', reviewStatus: 'NEEDS_CONTEXT' });
     }
-    expect(cards({ vitamin_d_25_oh: 40 }, null).shown[0]!.description).toMatch(/^More context needed\. /);
-    // A sentence with no claim is kept verbatim.
-    expect(cards({ vitamin_d_25_oh: 20 }, null).shown[0]!.description)
-      .toMatch(/^Vitamin D is below 30 ng\/mL, which is generally considered deficient\./);
   });
 
-  it('the luteal progesterone card against its DISPUTED band says interpretation is unavailable', () => {
+  it('the luteal progesterone card against its DISPUTED band withholds the match as well as the placement', () => {
     const [card] = cards({ progesterone: 2 }, 'luteal').shown;
     expect(card!.rule_id).toBe('possible_luteal_insufficiency');
-    expect(card!.description).toMatch(/^Interpretation unavailable pending clinical review\. /);
-    expect(card!.description).not.toMatch(/optimal/i);
+    expect(card!.description.text).toBe('Interpretation unavailable pending clinical review. Measured: Progesterone 2.');
   });
 
-  it('property: no shown card claims optimal, favourable direction or evaluative wording, in any context', () => {
+  const CONDITION_OR_ADVICE = /optimal|deficien|insufficien|resistance|prediabet|an(a)?emi|autoimmun|hashimoto|pcos|polycystic|risk|liver health|elevat|concern|worth|discuss|provider|doctor|clinician|should|recommend|consider|improv|worse|healthy|favou?rable|typical/i;
+
+  it('property: every shown card, in every context, is a neutral comparison observation with no condition or advice', () => {
     const everything = {
       tpo_antibodies: 200, tsh: 3, fasting_glucose: 100, fasting_insulin: 15, triglycerides: 150,
       hdl_cholesterol: 40, progesterone: 0.5, ferritin: 20, iron_saturation: 20, lh: 30, fsh: 6, total_testosterone: 80,
       dheas: 400, shbg: 30, free_t4: 1, free_t3: 2.5, ldl_cholesterol: 130, apob: 100, hs_crp: 2, lpa: 80,
       alt: 30, ast: 30, ggt: 30, vitamin_d_25_oh: 40, hemoglobin_a1c: 6,
     };
-    let claimsSeen = 0;
+    let shownCount = 0;
     for (const phase of [null, 'unknown', 'menstrual', 'follicular', 'ovulatory', 'luteal', 'pregnancy_t1']) {
       for (const values of [everything, { ...everything, progesterone: 2, ferritin: 25 }]) {
         const { gated, shown } = cards(values, phase);
-        claimsSeen += gated.filter(m => /optimal/i.test(m.title + m.description)).length;
         expect(shown.map(m => m.rule_id)).toEqual(gated.map(m => m.rule_id));
         expect(shown.map(m => [m.severity, m.biomarkers_involved])).toEqual(gated.map(m => [m.severity, m.biomarkers_involved]));
         for (const m of shown) {
-          expect(unauthorizedClaims(m.title, authorizedLanguage(null)), `${phase} ${m.rule_id} title`).toEqual([]);
-          expect(unauthorizedClaims(m.description, authorizedLanguage(null)), `${phase} ${m.rule_id}`).toEqual([]);
-          expect(m.description.length).toBeGreaterThan(0);
+          shownCount++;
+          for (const part of [m.title, m.description, m.badge]) {
+            expect(part.category, `${phase} ${m.rule_id}`).toBe('comparison_band');
+            expect(part.cue, `${phase} ${m.rule_id}`).toBe('attention');
+            expect(part.text, `${phase} ${m.rule_id}`).not.toMatch(CONDITION_OR_ADVICE);
+            expect(unauthorizedClaims(part.text, authorizedLanguage(null)), `${phase} ${m.rule_id}`).toEqual([]);
+          }
         }
       }
     }
-    expect(claimsSeen).toBeGreaterThan(10);
+    expect(shownCount).toBeGreaterThan(20);
+  });
+
+  it('negative control: the condition-or-advice pattern sees the old rule copy', () => {
+    for (const old of [
+      'May suggest early insulin resistance — worth discussing with your provider.',
+      'Possible PCOS-Related Pattern', 'Vitamin D Below Optimal', 'Elevated HbA1c',
+      "This pattern may be worth discussing with your provider alongside any thyroid-related symptoms.",
+      'This pattern is consistent with iron deficiency that may precede anemia.',
+    ]) expect(old).toMatch(CONDITION_OR_ADVICE);
   });
 });

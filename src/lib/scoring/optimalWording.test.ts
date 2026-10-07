@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import { AUTHORITY_CATEGORIES, type AuthorityCategory } from './insightCopy';
 
 /*
   V2-03 amendment 2 (B3): the earlier scan only caught a quote-bounded,
@@ -69,8 +70,10 @@ describe('invariant 3 — no user-facing copy calls an unreviewed band "optimal"
     const offenders = ['src/components', 'src/pages', 'src/lib/scoring', 'src/lib/biomarkers']
       .flatMap(sourceFiles)
       .flatMap(f => optimalCopy(f).map(text => `${f}: ${text}`))
-      // statusPill.ts may say it only behind canDescribeAsOptimal (asserted in amaniContext.test.ts).
-      .filter(hit => hit !== `${join('src/lib/scoring', 'statusPill.ts')}: Optimal`);
+      // statusPill.ts is unreachable from the app (reachability proof below) and keeps its gated label.
+      .filter(hit => hit !== `${join('src/lib/scoring', 'statusPill.ts')}: Optimal`)
+      // The policy's own category identifier (AUTHORITY_CATEGORIES), compared in code, never rendered.
+      .filter(hit => hit !== `${join('src/lib/scoring', 'insightCopy.ts')}: OPTIMAL_TARGET_CLAIM`);
     expect(offenders).toEqual([]);
   });
 
@@ -86,12 +89,11 @@ describe('invariant 3 — no user-facing copy calls an unreviewed band "optimal"
       .flatMap(sourceFiles)
       .map(f => [f, optimalCopy(f).length] as const)
       .filter(([, n]) => n > 0));
+    // V2-03b Stage 2: buildFocusAreas (5), buildInsightSummary (8),
+    // derivedMetrics (13) and biomarkerExplanations (1) now author none.
+    // buildPersonalInsights is unreachable from the app (reachability proof).
     expect(counts).toEqual({
-      [join('src/lib/insights', 'biomarkerExplanations.ts')]: 1,
-      [join('src/lib/insights', 'buildFocusAreas.ts')]: 5,
-      [join('src/lib/insights', 'buildInsightSummary.ts')]: 8,
       [join('src/lib/insights', 'buildPersonalInsights.ts')]: 3,
-      'src/utils/derivedMetrics.ts': 13,
     });
   });
 });
@@ -118,6 +120,8 @@ const IDENTITY_FIELDS = new Set([
   'TopFinding.rangeLabel',
   // boundaryCrossing.direction: 'improved' | 'worsened' | 'stable' from compareReports, typed string.
   'BiggestChange.direction',
+  // A formula such as "(Fasting Glucose × Fasting Insulin) ÷ 405".
+  'ComputedDerivedMetric.formulaNote',
 ]);
 const RENDER_SINKS_REVIEWED = [
   // Questions that claim optimality are dropped whole by claimsOptimal before
@@ -125,6 +129,11 @@ const RENDER_SINKS_REVIEWED = [
   'src/components/DoctorQuestionsCard.tsx: DoctorQuestion.text',
   // Rule titles in buildFocusAreas.ts; none says "optimal", held by the count pin above.
   'src/components/FocusAreas.tsx: FocusArea.title',
+  // V2-03b: no longer qualified at the sink. buildFocusAreas composes it only
+  // from insightCopy output (focusAreaObservation, describeComparisonBand,
+  // describeMeasuredMovement); FocusAreas.test.tsx proves the builder authors
+  // no clinical sentence, and the claim inventory pins that file.
+  'src/components/FocusAreas.tsx: FocusArea.whyItMatters',
   // Watch-signal titles; none says "optimal", held by the count pin above. Not rendered by any route.
   'src/components/WhatToWatchCard.tsx: WatchSignal.title',
   // buildHealthStory.ts has no "optimal" string, held by the count pin above.
@@ -336,8 +345,93 @@ function claimInventory(base = '.') {
 function assertClaimInventory(base = '.') {
   expect(claimInventory(base)).toEqual(legacyClaims.map(({ file, text }) => ({ file, text })));
 }
-interface LegacyClaimException { file: string; text: string; reason: string }
+
+/*
+  V2-03b Stage 2: every pinned literal carries a classification the code
+  checks, not a reason string alone. Authorized categories cannot be pinned:
+  authorized language is authored by insightCopy.ts, so a pinned literal is
+  either not clinical language at all (with a basis whose shape or location
+  is verified below) or UNAUTHORIZED_DEBT (with a disposition verified below).
+*/
+const NON_CLINICAL_BASES = [
+  'css_token', 'legal_disclosure', 'extraction_ui', 'form_label', 'input_matching_token',
+  'design_sample', 'non_clinical_wording',
+] as const;
+type NonClinicalBasis = typeof NON_CLINICAL_BASES[number];
+const DEBT_DISPOSITIONS = ['unreachable', 'deferred'] as const;
+type DebtDisposition = typeof DEBT_DISPOSITIONS[number];
+type LegacyClaimException =
+  | { file: string; text: string; category: 'NOT_CLINICAL_LANGUAGE'; basis: NonClinicalBasis; reason: string }
+  | { file: string; text: string; category: Extract<AuthorityCategory, 'UNAUTHORIZED_DEBT'>; disposition: DebtDisposition; reason: string };
 const legacyClaims = JSON.parse(readFileSync('docs/clinical/TASK-045/legacy-claim-exceptions.json', 'utf8')) as LegacyClaimException[];
+
+// Where each non-clinical basis may occur. A basis outside its files fails.
+const BASIS_FILES: Record<Exclude<NonClinicalBasis, 'css_token'>, (file: string, text: string) => boolean> = {
+  // Legal, contact and data-handling pages, and the landing page's own disclaimer.
+  legal_disclosure: (f, text) => /^src\/pages\/(Privacy|Terms|Contact|DeleteAccount)\.tsx$/.test(f)
+    || (f === 'src/pages/Landing.tsx' && /does not diagnose/.test(text)),
+  extraction_ui: f => /^src\/(pages\/(NewReport|ParserDebugger)|components\/ReviewBiomarkers)\.tsx$/.test(f),
+  form_label: f => f.startsWith('src/features/'),
+  input_matching_token: f => f === 'src/utils/parser/valueExtraction.ts' || f === 'src/lib/insights/categorizeNextSteps.ts',
+  design_sample: f => f === 'src/pages/DesignGallery.tsx',
+  non_clinical_wording: f => [
+    'src/pages/SuccessPage.tsx', 'src/features/onboarding/steps/WelcomeStep.tsx', 'src/lib/insights/buildInsightSummary.ts',
+    'src/pages/DesignGallery.tsx',
+  ].includes(f),
+};
+// Every whitespace-separated token is a utility class, and at least one is hyphenated.
+const isCssTokens = (text: string) => text.split(/\s+/).every(t => /^[a-z0-9:[\].\-/]+$/.test(t)) && /-/.test(text);
+
+/*
+  Reachability. An UNAUTHORIZED_DEBT literal is 'unreachable' only while no
+  module reachable from the app entry (static or dynamic import) can load its
+  file. A 'deferred' literal must be reachable, so the classification cannot
+  hide rendered debt behind the wrong disposition.
+*/
+function resolveImport(from: string, spec: string): string | null {
+  if (!spec.startsWith('.')) return null;
+  const base = join(from, '..', spec);
+  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), join(base, 'index.tsx')]) {
+    if (statSync(candidate, { throwIfNoEntry: false })?.isFile()) return candidate;
+  }
+  return null;
+}
+function reachableFrom(entry: string): Set<string> {
+  const seen = new Set<string>();
+  const queue = [entry];
+  while (queue.length > 0) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    for (const { fileName } of ts.preProcessFile(readFileSync(file, 'utf8'), true, true).importedFiles) {
+      const target = resolveImport(file, fileName);
+      if (target && !seen.has(target)) queue.push(target);
+    }
+  }
+  return seen;
+}
+function classificationProblems(entries: readonly LegacyClaimException[], base = '.'): string[] {
+  const reachable = new Set([...reachableFrom(join(base, 'src/main.tsx'))].map(f => relativeTo(base, f)));
+  const problems: string[] = [];
+  for (const e of entries) {
+    const where = `${e.file}: ${e.text}`;
+    if (!e.reason?.trim()) problems.push(`${where}: no reason`);
+    if (e.category === 'NOT_CLINICAL_LANGUAGE') {
+      if (!(NON_CLINICAL_BASES as readonly string[]).includes(e.basis)) problems.push(`${where}: unknown basis ${e.basis}`);
+      else if (e.basis === 'css_token' ? !isCssTokens(e.text) : !BASIS_FILES[e.basis](e.file, e.text)) problems.push(`${where}: basis ${e.basis} does not fit`);
+    } else if (e.category === 'UNAUTHORIZED_DEBT') {
+      if (!(DEBT_DISPOSITIONS as readonly string[]).includes(e.disposition)) problems.push(`${where}: unknown disposition ${e.disposition}`);
+      else if ((e.disposition === 'unreachable') === reachable.has(e.file)) {
+        problems.push(`${where}: disposition ${e.disposition} but the file is ${reachable.has(e.file) ? '' : 'not '}reachable from src/main.tsx`);
+      }
+    } else if ((AUTHORITY_CATEGORIES as readonly string[]).includes((e as { category: string }).category)) {
+      problems.push(`${where}: ${(e as { category: string }).category} must be authored by the policy, not pinned`);
+    } else {
+      problems.push(`${where}: unclassified (${(e as { category?: string }).category})`);
+    }
+  }
+  return problems;
+}
 
 describe('standing rule 2 — policy owns clinical-language sentences', () => {
   it('detects placement, review state and clinical meaning in builders and JSX', () => {
@@ -382,6 +476,51 @@ describe('standing rule 2 — policy owns clinical-language sentences', () => {
     expect(legacyClaims.every(entry => entry.reason.trim().length > 0)).toBe(true);
     assertClaimInventory();
   });
+});
+
+describe('V2-03b Stage 2 — every pinned literal is classified by authority, structurally', () => {
+  it('each entry is NOT_CLINICAL_LANGUAGE with a verified basis or UNAUTHORIZED_DEBT with a verified disposition', () => {
+    expect(classificationProblems(legacyClaims)).toEqual([]);
+  });
+
+  it('no pinned literal carries an authorized category: authorized language is the policy\'s alone', () => {
+    const authorized = AUTHORITY_CATEGORIES.filter(c => c !== 'UNAUTHORIZED_DEBT');
+    expect(legacyClaims.filter(e => (authorized as readonly string[]).includes(e.category))).toEqual([]);
+  });
+
+  it('negative controls: each classification rule fails when violated', () => {
+    const [debt] = legacyClaims.filter(e => e.category === 'UNAUTHORIZED_DEBT' && e.disposition === 'deferred');
+    const [unreachable] = legacyClaims.filter(e => e.category === 'UNAUTHORIZED_DEBT' && e.disposition === 'unreachable');
+    expect(debt && unreachable).toBeTruthy();
+    const probes: [LegacyClaimException, RegExp][] = [
+      [{ ...debt!, category: 'FACTUAL_OBSERVATION' } as unknown as LegacyClaimException, /must be authored by the policy/],
+      [{ ...debt!, category: 'SAFETY_CRITICAL_WARNING' } as unknown as LegacyClaimException, /must be authored by the policy/],
+      [{ ...debt!, category: 'LEGACY' } as unknown as LegacyClaimException, /unclassified/],
+      [{ ...debt!, disposition: 'unreachable' } as LegacyClaimException, /not reachable|is reachable/],
+      [{ ...unreachable!, disposition: 'deferred' } as LegacyClaimException, /not reachable/],
+      [{ file: 'src/pages/ReportView.tsx', text: 'Normal', category: 'NOT_CLINICAL_LANGUAGE', basis: 'css_token', reason: 'probe' }, /does not fit/],
+      [{ file: 'src/pages/ReportView.tsx', text: 'Your result is normal.', category: 'NOT_CLINICAL_LANGUAGE', basis: 'legal_disclosure', reason: 'probe' }, /does not fit/],
+      [{ ...debt!, reason: ' ' }, /no reason/],
+    ];
+    for (const [probe, message] of probes) {
+      expect(classificationProblems([probe]).join('\n'), JSON.stringify(probe)).toMatch(message);
+    }
+  });
+
+  it('reachability sees a dead producer once a reachable module imports it', () => {
+    const [unreachable] = legacyClaims.filter(e => e.category === 'UNAUTHORIZED_DEBT' && e.disposition === 'unreachable');
+    const dir = mkdtempSync(join(tmpdir(), 'claim-reach-'));
+    try {
+      cpSync('src', join(dir, 'src'), { recursive: true });
+      expect(classificationProblems([unreachable!], dir)).toEqual([]);
+      const viewPath = join(dir, 'src/pages/ReportView.tsx');
+      const spec = `../${unreachable!.file.replace(/^src\//, '').replace(/\.tsx?$/, '')}`;
+      writeFileSync(viewPath, `import '${spec}';\n${readFileSync(viewPath, 'utf8')}`);
+      expect(classificationProblems([unreachable!], dir).join('\n')).toMatch(/is reachable from src\/main\.tsx/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 

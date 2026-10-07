@@ -2,7 +2,7 @@ import type { BiomarkerName, CyclePhase, AmaniStatus } from '../../types';
 import { getDisplayName, getRangesForPhase } from '../biomarkers/dictionary';
 import { computeAmaniStatus } from './scoreBiomarker';
 import { assessAmaniContext, contextFromReport } from './amaniContext';
-import { authorizedLanguage, type AuthorizedLanguage, type ReviewStatus } from './insightCopy';
+import { authorizedLanguage, BOUNDARY_BUCKET_LABEL, type AuthorizedLanguage, type ReviewStatus } from './insightCopy';
 
 export type TrendDirection = 'up' | 'down' | 'stable';
 export type SignificanceTier = 'minor' | 'moderate' | 'significant';
@@ -28,15 +28,10 @@ export type TrajectoryStatus =
   'within_band', never 'optimal'. Every shipping Amani band is UNKNOWN,
   DISPUTED or NEEDS_CONTEXT, so a crossing must not be printable as
   "optimal range". Renaming the bucket makes that mistake impossible rather
-  than guarded; BOUNDARY_BUCKET_LABEL mirrors amaniPillLabel's neutral wording.
+  than guarded. V2-03b: the labels are band language, authored by the policy.
 */
-export type BoundaryBucket = 'within_band' | 'borderline' | 'out_of_range';
-
-export const BOUNDARY_BUCKET_LABEL: Record<BoundaryBucket, string> = {
-  within_band: 'within the Amani band',
-  borderline: 'borderline',
-  out_of_range: 'outside the Amani band',
-};
+export type BoundaryBucket = keyof typeof BOUNDARY_BUCKET_LABEL;
+export { BOUNDARY_BUCKET_LABEL };
 
 /** Label for a bucket; null for anything that is not a known bucket, so no caller can echo a raw value. */
 export function boundaryBucketLabel(bucket: string): string | null {

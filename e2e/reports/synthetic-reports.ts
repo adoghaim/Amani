@@ -10,6 +10,8 @@ export interface SyntheticReport {
   report: Record<string, unknown> & { id: string; report_date: string };
   biomarkers: Record<string, unknown>[];
   interpretation: Record<string, unknown>;
+  /** Full-lab-panel rows (report_analytes). Absent: none. */
+  analytes?: Record<string, unknown>[];
 }
 
 type Marker = [name: string, value: number, raw: string, unit: string, min: number | null, max: number | null];
@@ -90,3 +92,51 @@ export const vitaminDReport = report(7, 'unknown', [['vitamin_d_25_oh', 40, '40'
 // 'changed_still_high', which used to fall through to "is unchanged".
 export const movedPriorReport = report(8, 'unknown', [['tsh', 9, '9.0', 'uIU/mL', 0.45, 4.5]], '2025-12-01');
 export const movedCurrentReport = report(9, 'unknown', [['tsh', 6, '6.0', 'uIU/mL', 0.45, 4.5]]);
+
+/*
+  V2-03b Stage 2. One report pair that renders every migrated surface: TSH
+  6 -> 9 and ferritin 25 -> 20 outside unreviewed Amani bands (pill, systems,
+  headline, movement, trajectory, focus areas, story, doctor questions), HbA1c
+  6.0 and ferritin 20 matching pattern rules, HOMA-IR from glucose 95 and insulin
+  12, and one lab-panel row 0.5 above its lab's upper bound, inside the 8% margin
+  the page used to label "Borderline". The model's headline and primary concern
+  carry every claim class on purpose: none of it may render.
+*/
+const STAGE2_PANEL: Marker[] = [
+  ['tsh', 9, '9.0', 'uIU/mL', 0.45, 4.5],
+  ['ferritin', 20, '20', 'ng/mL', 15, 150],
+  ['hemoglobin_a1c', 6, '6.0', '%', 4, 5.6],
+  ['fasting_glucose', 95, '95', 'mg/dL', 70, 99],
+  ['fasting_insulin', 12, '12', 'uIU/mL', 2, 20],
+];
+const stage2Current = report(0, 'unknown', STAGE2_PANEL, '2026-02-02');
+export const stage2CurrentReport: SyntheticReport = {
+  ...stage2Current,
+  interpretation: {
+    ...stage2Current.interpretation,
+    json_output: {
+      headline: 'Your thyroid has worsened and is worth discussing with your doctor urgently.',
+      primary_concern: {
+        title: 'Thyroid is the top priority', summary: 'This is abnormal and concerning.',
+        why_it_matters: 'You should seek care.', canonical_slug: 'tsh',
+      },
+      summary_bullets: [], what_you_can_do_now: [], what_to_do_next: [], pattern_signals: [],
+      disclaimer: 'Synthetic fixture. Not medical advice.',
+    },
+  },
+  analytes: [{
+    id: '00000000-0000-4000-c000-000000000001', lab_report_id: stage2Current.report.id,
+    raw_name: 'Sodium', display_name: 'Sodium', value_numeric: 145.5, raw_value_text: '145.5', unit: 'mmol/L',
+    normalized_min: 136, normalized_max: 145, normalized_operator: null, normalized_operator_value: null,
+    raw_reference_range: '136-145', parse_status: 'mapped', canonical_slug: 'sodium', is_core: false,
+    confidence_score: 'high', normalization_status: 'mapped', source_format: 'text',
+  }],
+};
+export const stage2PriorReport = report(0, 'unknown', [
+  ['tsh', 6, '6.0', 'uIU/mL', 0.45, 4.5], ['ferritin', 25, '25', 'ng/mL', 15, 150],
+], '2026-01-05');
+// report(0) twice would share ids; give the prior pair its own.
+stage2PriorReport.report.id = '00000000-0000-4000-a000-000000000099';
+stage2PriorReport.biomarkers.forEach((b, i) => { b['id'] = `00000000-0000-4000-9000-00000000099${i + 1}`; b['lab_report_id'] = stage2PriorReport.report.id; });
+stage2PriorReport.interpretation['lab_report_id'] = stage2PriorReport.report.id;
+stage2PriorReport.interpretation['id'] = '00000000-0000-4000-b000-000000000099';

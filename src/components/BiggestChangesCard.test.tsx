@@ -20,7 +20,8 @@ describe('BiggestChangesCard never calls an Amani band "optimal"', () => {
       change('tsh', 'normalized', { from: 'borderline', to: 'within_band', direction: 'improved' }),
       change('ferritin', 'newly_abnormal', { from: 'within_band', to: 'out_of_range', direction: 'worsened' }),
     ]);
-    expect(text).toContain('Improved from borderline to within the Amani band');
+    // V2-03b: the policy's bucket label; "borderline" was a status word, not a placement.
+    expect(text).toContain('Improved from just outside the Amani band to within the Amani band');
     expect(text).toContain('Moved from within the Amani band to outside the Amani band');
     expect(text).not.toMatch(/optimal/i);
   });

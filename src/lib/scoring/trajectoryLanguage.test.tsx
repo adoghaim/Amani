@@ -138,12 +138,19 @@ describe('R1 — the trajectory card', () => {
     expect(text(html(MOVEMENTS[1]!, lang('UNKNOWN')))).toContain('TSH changed from its previous range classification.');
   });
 
-  it('only SAFE plus directional evidence restores "improved" and the green check', () => {
+  /*
+    V2-03b Stage 2 replaces "only SAFE plus directional evidence restores
+    improved and the green check". That authority was a boolean on the band,
+    not a reviewed rule the policy can trace (OPTIMAL_TARGET and favourable
+    claims need one), so no band restores it any longer.
+  */
+  it('even SAFE with directional evidence reads as a movement, with no green check', () => {
     for (const c of MOVEMENTS) {
       const h = html(c, AUTHORIZED);
-      expect(text(h)).toMatch(/improved/);
-      expect(h).toContain('text-theme-flag-ok');
-      expect(h).toContain('data-bullet-kind="improved"');
+      expect(text(h), `${c.trajectoryStatus}`).not.toMatch(/improv|right direction|better/i);
+      expect(h).not.toMatch(/text-theme-flag-(?:ok|watch|low)/);
+      expect(h).toContain('data-bullet-kind="changed"');
+      expect(text(h)).toMatch(/TSH changed from /);
     }
   });
 

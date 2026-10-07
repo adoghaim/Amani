@@ -234,21 +234,6 @@ export function phaseLabel(phase: CyclePhase): string {
   }
 }
 
-export function phaseDescription(phase: CyclePhase): string {
-  switch (phase) {
-    case 'menstrual':
-      return 'Your body is shedding the uterine lining. Energy levels may be lower during this time.';
-    case 'follicular':
-      return 'Estrogen is rising. Energy and focus typically increase through this phase.';
-    case 'ovulatory':
-      return 'Ovulation is occurring or approaching. This is the fertile window of your cycle.';
-    case 'luteal':
-      return 'Progesterone is elevated. You may notice shifts in energy, mood, or sleep.';
-    default:
-      return 'Log a period to get cycle phase insights.';
-  }
-}
-
 export function formatDate(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }

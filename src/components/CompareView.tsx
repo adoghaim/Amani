@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Card } from './Card';
 import { LabReport, Biomarker } from '../types';
+import { COMPARE_SHIFTS_NOTE } from '../lib/scoring/insightCopy';
 
 interface CompareViewProps {
   reports: LabReport[];
@@ -167,7 +168,7 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
               ))}
             </ul>
             <p className="text-xs text-theme-muted-text italic border-t border-theme-border pt-3">
-              Fluctuations can be normal. Context matters.
+              {COMPARE_SHIFTS_NOTE}
             </p>
           </div>
         )}

@@ -1,3 +1,135 @@
+# TASK-045 — turn 7 / Stage 2: classify by authority, then migrate (PARTIAL)
+
+Approach: make the owner's seven authority categories a type in the one policy module (`src/lib/scoring/insightCopy.ts`), give every pinned literal a classification the guard verifies structurally, then migrate rendered surfaces so each user-visible clinical statement is produced by the policy with its authority attached. Where no authority exists the language is replaced by a factual or comparison-band observation, or the producer is proven unreachable. No clinical value, threshold, evidence grade or review status changed; no band is `SAFE`.
+
+## 1. The authority model, as code
+
+- `AUTHORITY_CATEGORIES` holds the owner's seven categories. `LANGUAGE_AUTHORITY` maps each `ClinicalLanguage` variant to exactly one; the mapping is exhaustive by type, and `UNAUTHORIZED_DEBT` has no variant, so the policy cannot mint it.
+- Cues: `neutral` and `attention` are the only cues a factual or comparison-band value can carry (compile-time). `warning` and `critical` belong to the safety channel and to rule-citing clinical actions. `CUE_STYLE` is the only place cue becomes colour, so presentation follows authority, never a raw status.
+- Sources travel with the language (`authority.kind`): `lab_data`, `patient_lab_interval`, `personal_history`, `amani_comparison_band` (with review status), `reviewed_amani_rule`, `optimal_target_evidence`, `deterministic_safety_rule`, `product_disclaimer`. Rendered elements carry `data-language-category/source/cue`.
+- Producers today: FACTUAL and COMPARISON_BAND (many); CLINICAL_ACTION only as five result-independent product disclaimers (`PRODUCT_DISCLAIMERS`, authority: NUTRIENT_GUIDELINES.md rule 2); SAFETY_CRITICAL_WARNING only through `evaluateSafetyRules`, whose registry is empty; REVIEWED_CLINICAL_INTERPRETATION and OPTIMAL_TARGET_CLAIM: none. A test proves by AST that no production module other than `insightCopy.ts` constructs a language object, that exactly one place mints a safety warning, and that nothing mints the other two.
+
+## 2. The pin: 297 → 143 entries, every one classified and verified
+
+`legacy-claim-exceptions.json` entries now carry `category` plus a `basis` or `disposition`, checked by `classificationProblems` in `optimalWording.test.ts`:
+
+| Classification | Count | What the guard verifies |
+| --- | --- | --- |
+| NOT_CLINICAL_LANGUAGE / `legal_disclosure` | 22 | file is Privacy, Terms, Contact, DeleteAccount, or the Landing disclaimer sentence |
+| `extraction_ui` | 21 | file is NewReport, ParserDebugger or ReviewBiomarkers |
+| `css_token` | 13 | every token is a utility class |
+| `non_clinical_wording` | 6 | file on an explicit list (extraction-confidence badge, onboarding, purchase page, design gallery) |
+| `form_label` | 4 | `src/features/**` |
+| `design_sample` | 4 | DesignGallery |
+| `input_matching_token` | 3 | parser / next-step categorizer |
+| UNAUTHORIZED_DEBT / `unreachable` | 62 | file NOT reachable from `src/main.tsx` by static or dynamic import |
+| UNAUTHORIZED_DEBT / `deferred` | 8 | file IS reachable (so rendered debt cannot hide as `unreachable`) |
+| any authorized category | 0 | forbidden: authorized language is the policy's alone |
+
+Committed negative controls fail each rule (authorized category pinned, unknown category, wrong disposition both ways, wrong basis by shape and by file, empty reason), and a reachability probe imports a dead producer from ReportView and fails.
+
+**Unreachable (suppressed, not migrated):** QuickHighlights, TopFindingsCard, PrimaryInsightCard, BiggestChangesCard, YourPatternsCard, WhatToWatchCard, WhatToDoNextCard, WhatThisMeansCard, `buildPersonalInsights.ts`, `statusPill.ts`. My sandbox cannot delete files (shell `rm` needs interactive approval), so they stay with their pin entries; deleting them is recommended and the guard will then require their 62 entries removed.
+
+**Deferred (rendered, unauthorized, with reason):** Support plan heading and "Topics to discuss" (food/nutrient guidance chosen by band-derived focus areas); Next Best Steps "Discuss" bucket heading over model-written steps; `src/types` "Nutrients & Deficiency" (outside allowed paths; no longer rendered on the report page); Landing marketing examples ×4 ("Ferritin is low", "worrying on day 21", "sits where it should").
+
+## 3. The 23 open R1–R4 defects (14 rendered): all closed
+
+| Defect | Disposition |
+| --- | --- |
+| **Lab-interval `Borderline` (release invariant 1)**, ReportView full lab panel | `labIntervalPlacement` states placement against her lab's printed bounds with no margin: "Above/Below/Within your lab's range". A second instance the pin could not see was also fixed: the biomarker card printed `Your lab's range: borderline high` from `computeLabStatus`'s 8% buffer. |
+| `Normal`, `Borderline Low/High` pills | `comparisonBandLabel`: "Within/Outside Amani band" by arithmetic on the applied band. Found while doing this: `normal` is produced only *inside* a one-sided band, so the card's note "outside Amani's context band but inside the wider band" was false; removed. A higher-is-better value above the band (HDL) is now stated as outside rather than labelled by its favourable status. |
+| "Within Amani bands", "Mild/Needs Attention" | `systemSummaryLabel` from counts; neutral or attention cue; red count badge removed. |
+| Derived-metric `Borderline` | `derivedMetricObservation`: placement against the metric's code-only band, review not established. |
+| Focus-area "is borderline-high/-low" | `focusAreaObservation`; DISPUTED withholds placement. |
+| ReportView headline ×5 (borderline, monitoring, "optimize", "top priorities", "stable overall") | `reportHeadline`, placement only, DISPUTED withheld, review disclosure. The model headline no longer renders when Amani has data. |
+| QuickHighlights ×6, TopFindingsCard ×2 | unreachable (above). |
+
+## 4. R2 provider advice, instance by instance
+
+Sixteen sentences of advice or condition interpretation, not only the brief's eight "discuss with your provider" instances: the HOMA-IR, non-HDL and FT3:FT4 interpretations, and the autoimmune-thyroid, insulin-resistance, luteal-insufficiency (two branches, one advising re-testing), iron-deficiency (two branches), PCOS, cardiovascular-cluster, liver-enzyme, vitamin D (two branches), thyroid-conversion and HbA1c ("prediabetes range") rule descriptions. For each I looked for the three admissible authorities: (a) a deterministic safety rule: `SAFETY_RULES` is empty and no rule id is registered; (b) an approved clinical rule: no reviewed-rule registry exists, and the clinical catalog holds analyte bands only, not pattern rules; (c) another authorized pathway: NUTRIENT_GUIDELINES governs nutrient discussion in model output, not these rules. **None has authority**, so none remains as advice. The rules themselves (thresholds, conditions, gate, dependency proofs) are unchanged: each `check` now returns a boolean, and the card states the measured inputs, that an unreviewed Amani rule matched, and the bands' review state. Condition-naming titles ("Possible PCOS-Related Pattern", "Iron Deficiency Pattern", "Elevated HbA1c", "Vitamin D Below Optimal") became "<markers>: pattern-rule match"; the "Discuss with provider" red badge became a neutral "Not yet reviewed". The panel is "Pattern-rule matches", not "Clinical insight flags". The panel footers are the policy's product disclaimers.
+
+## 5. Other surfaces migrated
+
+Primary-finding block (model `primary_concern` no longer renders; label "Primary finding"; warning triangle removed; DISPUTED withheld) · primary movement and headline for movement toward a band (same observation as away) · trajectory card (favourable branches and green check removed; bucket labels moved to the policy) · health story ("right/wrong direction", "needs follow-up", "generally within reference ranges") · focus-area titles ("Thyroid autoimmunity" → "Thyroid antibodies"), chips (neutral attention cue), intro and empty state · guidance-card summaries that asserted her result ("TPO antibodies are still above range"; "HDL is low", shown for any flagged lipid) and notes · Next Best Steps injected "Discuss whether X should be rechecked…" removed, bucket colours neutral · "Recommended labs … suggested" → "Related markers not on this report"; condition names removed from reasons · doctor-question premises ("improved", "better", "elevated", "stable", "monitoring", "recheck") → `DOCTOR_QUESTIONS` templates · watch-signal and `fact` strings (unrendered) via the policy · biomarker "Why this matters": interpretive sentences removed, definitions kept · Tracker compare note "Fluctuations can be normal" · Today-card trimester note "Many ranges shift in pregnancy" · unused `phaseDescription` removed.
+
+**Defect found by the new page test:** on a first report, a thyroid focus area said "TSH has changed since your prior report": the first-recorded placeholder (previous value 0) was read as a movement. Fixed at the source.
+
+## 6. Safety separation, both directions
+
+A separate renderer (`SafetyWarnings`, `role="alert"`) takes only `SafetyWarning` values, mounted above the analysis. A rule receives only `(value, unit)`, never a band, review state or movement, and must carry approval (fails closed without it).
+- **Direction 1 (never suppressed):** with a synthetic approved rule injected, the warning renders verbatim, critical cue, on a page where every band is unreviewed and the band channel is neutral, even though its words are exactly those the band channel forbids. Logic and jsdom page tests.
+- **Direction 2 (never masquerades):** every band and factual constructor under every review state yields only `neutral`/`attention`; with the real empty registry no value of any catalog analyte produces a warning; on the page, a TSH of 400 produces no safety element, no warning or critical cue, no `role="alert"`.
+- **Not proven:** a browser direction-1 proof. The registry is empty and the browser has no injection hook; adding one would be test-only production code. Logic and jsdom only.
+
+## 7. Per-surface proof matrix
+
+Logic = Vitest unit/render. Page = `src/pages/ReportView.language.test.tsx` (real ReportView in jsdom, mocked Supabase, every collapsible opened, page-wide). Browser = Playwright, **written, not run by me**.
+
+| Surface | Logic | Page (jsdom) | Browser spec |
+| --- | --- | --- | --- |
+| Biomarker pill | catalog sweep (>5,000 cases), synthetic one-sided and higher-is-better bands | page-wide, R3 colours | clinical-language-policy, context-suppression 2/3/6 |
+| Lab interval, card and full panel (invariant 1) | placement unit tests, expanded card at 4.56 vs 4.5 | Sodium 145.5 vs 145 row | clinical-language-policy (Sodium row) |
+| System cards | `systemSummaryLabel`, render | page-wide, R3 | context-suppression 3, clinical-language-policy |
+| Headline | DISPUTED withholding, zero-scored, all-within | two-report and first-report fixtures | V2-03b loop, clinical-language-policy |
+| Primary finding | DISPUTED sentence | first-report fixture | context-suppression 6 |
+| Trajectory | existing sweeps, now incl. synthetic SAFE | page-wide | context-suppression 9, V2-03b loop |
+| Health story | exhaustive status × direction × language sweep | page-wide | context-suppression 11 |
+| Focus areas | builder authors no claim (AST), DISPUTED card | page-wide, first report | context-suppression 6, V2-03b loop |
+| Pattern-rule matches | property over all rules × contexts; expanded render | page-wide, both cards expanded | context-suppression 6/7/8/10, clinical-language-policy |
+| Derived metrics | all five metrics; panel render | page-wide | clinical-language-policy |
+| Support plan, Next Best Steps, related markers, doctor questions | template and render tests | page-wide | clinical-language-policy |
+| Safety channel | both directions | both directions | direction 2 only |
+
+## 8. Negative controls (each mutation alone, restored, suite re-run green)
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| NC1 | lab placement returns "Borderline" inside an 8% margin | 7 fail (logic + page, incl. invariant-1 row) |
+| NC2 | pill says "Normal" for a `normal` status | **1 fail** (synthetic one-sided band). The catalog sweep and page cannot reach a `normal` status today, so this invariant has logic proof only. |
+| NC3 | pattern card appends "worth discussing with your provider" | 9 fail (logic + page) |
+| NC4 | attention cue uses amber | 7 fail (incl. page R3) |
+| NC5 | page mounts safety warnings only when all bands reviewed | 1 fail (page direction 1) |
+| NC5b | evaluator drops warnings containing "urgent/seek care" | 2 fail (logic + page direction 1) |
+| NC6 | outside-band pill carries the `critical` cue | 4 fail (sweep, page R3, page direction 2) |
+| NC7 | model headline renders before Amani's | **1 fail** (first-report page test only; the two-report fixture takes the movement headline) |
+| NC8 | a pinned debt entry relabelled CLINICAL_ACTION_RECOMMENDATION | 2 fail |
+| NC9 | ReportView imports QuickHighlights | fails, naming QuickHighlights and, transitively, statusPill |
+
+Existing tests changed only where behaviour changed, each replacement stated in place and stronger: the "Optimal" pill path (now none, even SAFE plus target evidence), trajectory and story "improved / right direction" under synthetic authority (now neutral), insight-card titles and descriptions (now policy), focus-area and `fact` "load-bearing claim" tests (now: the builder authors none), doctor-question builder, explanations, BiggestChangesCard bucket label, and the browser assertions in context-suppression 6/7/8/10.
+
+## 9. Not covered (stated, not asserted away)
+
+- **Server interpretation: deferred.** `generate-interpretation` is unchanged. The page no longer renders the model headline (when Amani has data) or `primary_concern`, but still renders model text in `summary_bullets` (when no primary concern), `pattern_signals` (with red/amber confidence styling), `what_you_can_do_now` / `what_to_do_next` under Next Best Steps, per-marker `plain_english_meaning`, `timing_notes`, `common_non_alarm_reasons`, `when_clinicians_follow_up`, `cycle_context.explanation`, the disclaimer, and the headline when no biomarker mapped. Tracker's InsightsModal (`lab-insights`) and the Basic freemium panel (forbidden scope) also render model text. "Because the LLM generated it" is inadmissible, so all of this is unauthorized; see open question 1.
+- Favourable direction and "Optimal" now have **no** rendering path, even under SAFE with ClaimEvidence booleans: a boolean is not traceable authority. If the owner wants those claims back, they need a reviewed-rule registry the policy can cite.
+- Browser suites, all three browsers, browser negative controls, env canary, Docker harness, `check:functions` (Deno), hosted CI: **not run** (Playwright and Docker commands are not permitted in this sandbox). Lead to run.
+- The guard remains lexical (open vocabulary; lowercase single-word JSX text exempt, as Fable noted). The page tests are the semantic backstop for the report page only.
+- The jsdom and browser page-wide checks exclude exactly one thing: elements whose `data-language-source` is `product_disclaimer`, by authority attribute, never by text.
+- Higher-is-better: the pill states arithmetic placement while counts and focus areas follow status, so an HDL above its band reads "Outside Amani band" on the card but is not counted. No threshold was changed to reconcile them.
+- DerivedMetricsPanel renders only HOMA-IR (its META keys match one computed metric name); pre-existing, unchanged.
+- Remaining explanation definitions, food chips (green) and nutrient topics are unreviewed reference content.
+
+## 10. Open questions for the Lead / owner
+
+1. **Model-written prose:** suppress it entirely until a reviewed-claims schema exists, constrain the server to factual output under a policy validator (like `nutrient-policy.ts`), or render it in a container labelled as unreviewed AI text?
+2. **Doctor questions:** premises are now neutral, but the card itself suggests what to ask a clinician from band data. Is that an authorized pathway, or R2-class advice to remove?
+3. **Landing marketing** examples model clinical judgement about a fictional patient. Rule on marketing copy.
+4. **Support plan** food and nutrient-topic lists: authorize through the Clinical Truth Layer, or suppress?
+5. **Delete** the ten unreachable producers (and their 62 pin entries) in the Lead's commit?
+6. Documentation (Context7, carried over): how to share `insightCopy.ts` with the Deno edge functions for a server-side policy, given the installed toolchain.
+
+## Commands (turn 7, final tree)
+
+- `npx vitest run` — 67 files, **1435 passed**.
+- `npm run typecheck` — passed (app, clinical tooling, E2E TypeScript incl. both specs).
+- `npm run lint` — 0 errors, the 9 existing warnings.
+- `npm run build` — passed.
+- `npm run clinical:check` — catalog 83 entries, audit 83 analytes / 198 ranges match. `npm run clinical:test` — 50/50.
+- Negative controls NC1–NC9: targeted `npx vitest run …` per mutation (table above), each restored and the full suite re-run green.
+- `git diff --stat 1284d12 -- supabase clinical .github src/lib/freemium src/components/freemium src/stripe-config.ts` — empty.
+- Not run: `npx playwright test` (all browsers), env canary, Docker harness, `check:functions`. SKIPPED for the Lead.
+
+---
+
 # TASK-045 — turn 6 / amendment 4: guard coverage by dimension (PARTIAL)
 
 Approach: the producer-literal guard in `src/lib/scoring/optimalWording.test.ts` had three independent coverage dimensions and only one was probed. Fix each at its root, give each its own committed probe and negative control, then regenerate the pin and classify every new entry. No production source, clinical value, threshold, evidence grade or review status changed. Only the guard, its two JSON inputs and this report changed.

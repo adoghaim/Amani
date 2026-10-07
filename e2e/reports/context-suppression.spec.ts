@@ -26,9 +26,12 @@ const card = (page: Page, name: string) => page.getByRole('article', { name: `${
 
 // V2-03 amendment 2 (B1). The PCOS and luteal-insufficiency rules are
 // unchanged; the page drops any pattern built from an input it withholds.
+// V2-03b Stage 2: the panel is "Pattern-rule matches"; no rule here carries
+// clinical authority, so neither the heading nor a card names a condition.
 async function openInsightFlags(page: Page) {
   await page.getByRole('button', { name: /^Patterns & Insights/ }).click();
-  await expect(page.getByRole('heading', { name: 'Clinical insight flags' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pattern-rule matches' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Clinical insight flags' })).toHaveCount(0);
 }
 
 // Amendment 4 (R2): a flag card is a button carrying its title; expanding it
@@ -123,22 +126,33 @@ test.describe('cycle phase recorded on the report', () => {
     // Amendment 3. The fixture has no AI primary_concern, so Top Priority takes
     // its deterministic fallback, which used to echo TopFinding.fact verbatim:
     // "Progesterone is below the optimal range at 2 ng/mL".
-    await expect(page.getByText(
-      "Progesterone is below the Amani band at 2 ng/mL. Amani's context bands are still under review.",
+    // V2-03b Stage 2: the luteal band is DISPUTED, so this sentence now
+    // withholds placement as every other sentence does (it said "below the
+    // Amani band"), and the label is "Primary finding", not "Top Priority".
+    const primary = page.getByTestId('primary-finding');
+    await expect(primary.getByText(
+      'Progesterone was measured at 2 ng/mL. Interpretation unavailable pending clinical review.',
       { exact: true },
     )).toBeVisible();
+    await expect(primary).toContainText('Primary finding');
+    await expect(primary).not.toContainText(/below|above|outside|Top Priority|Main Focus/);
     // The persistent half: the cycle_hormones focus area said "Reproductive-hormone
     // markers are outside the optimal range" for the life of the report.
+    // V2-03b Stage 2: the area is now the policy's statement for its bands; a
+    // DISPUTED band withholds placement, so it states no placement at all.
     const focus = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Cycle hormones', exact: true }) });
-    await expect(focus.getByText(/^One or more of these markers is borderline or outside its Amani band\./)).toBeVisible();
+    await expect(focus.getByText('Interpretation unavailable pending clinical review.', { exact: true })).toBeVisible();
+    await expect(focus).not.toContainText(/borderline|outside|within|above|below/i);
     // Any casing, any position, anywhere on the page.
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
     // Amendment 4 (R2). The luteal-insufficiency card is legitimately shown
     // here, and its frozen copy said "(optimal: 5–25 ng/mL)" about a DISPUTED
     // band. With the panel open and the card expanded, it must not.
+    // V2-03b Stage 2: its title no longer names a condition.
     await openInsightFlags(page);
-    await expandFlag(page, 'Possible Luteal Phase Insufficiency');
-    await expect(page.getByText(/^Interpretation unavailable pending clinical review\. /)).toBeVisible();
+    await expandFlag(page, 'Progesterone: pattern-rule match');
+    await expect(page.getByText(/^Interpretation unavailable pending clinical review\. Measured: Progesterone 2 ng\/mL\.$/)).toBeVisible();
+    await expect(page.getByText(/Luteal Phase Insufficiency|insufficien/i)).toHaveCount(0);
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
 });
@@ -150,10 +164,11 @@ test.describe('pattern cards from withheld inputs', () => {
     await openReport(page, patternMissingPhaseReport.report.id);
     await openInsightFlags(page);
     // A rule on an analyte that needs no context still renders: the panel is live.
-    await expect(page.getByText('Elevated HbA1c', { exact: true })).toBeVisible();
-    await expect(page.getByText('Possible PCOS-Related Pattern', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Possible Luteal Phase Insufficiency', { exact: true })).toHaveCount(0);
-    await expect(page.getByText(/PCOS|Progesterone is very low/)).toHaveCount(0);
+    // V2-03b Stage 2: it is titled by its marker, not "Elevated HbA1c".
+    await expect(page.getByText('HbA1c: pattern-rule match', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /pattern-rule match/ })).toHaveCount(1);
+    await expect(page.getByText(/Total Testosterone and LH and FSH|Progesterone: pattern-rule match/)).toHaveCount(0);
+    await expect(page.getByText(/PCOS|Progesterone is very low|Elevated HbA1c/)).toHaveCount(0);
   });
 });
 
@@ -163,12 +178,19 @@ test.describe('pattern cards once context is recorded', () => {
   test('8. the same values with a recorded phase let the unchanged rule speak', async ({ page }) => {
     await openReport(page, patternFollicularReport.report.id);
     await openInsightFlags(page);
-    await expect(page.getByText('Possible PCOS-Related Pattern', { exact: true })).toBeVisible();
-    await expect(page.getByText('Elevated HbA1c', { exact: true })).toBeVisible();
+    // V2-03b Stage 2: the same unchanged rule still matches and still renders,
+    // titled by its measured inputs rather than a condition.
+    await expect(page.getByText('Total Testosterone and LH and FSH: pattern-rule match', { exact: true })).toBeVisible();
+    await expect(page.getByText('HbA1c: pattern-rule match', { exact: true })).toBeVisible();
     // Amendment 4 (R2). The card speaks, but only within what its bands
-    // authorize: its frozen "outside the optimal range" sentence is replaced.
-    await expandFlag(page, 'Possible PCOS-Related Pattern');
-    await expect(page.getByText(/Elevated testosterone or DHEA-S with low SHBG/)).toBeVisible();
+    // authorize. V2-03b: it states the measured values and that an unreviewed
+    // rule matched; it names no condition and gives no advice.
+    await expandFlag(page, 'Total Testosterone and LH and FSH: pattern-rule match');
+    // A follicular LH or FSH band is DISPUTED, so the card withholds the match too
+    // (logic twin: clinicalLanguageStage2.test.tsx).
+    await expect(page.getByText('Interpretation unavailable pending clinical review. Measured: Total Testosterone 80 ng/dL; LH 30 mIU/mL; FSH 6 mIU/mL.', { exact: true })).toBeVisible();
+    // Page-wide; the panel's own product disclaimer is the only provider wording.
+    await expect(page.getByText(/PCOS|polycystic|Elevated testosterone|should be discussed|worth discussing/i)).toHaveCount(0);
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
 });
@@ -181,11 +203,12 @@ test.describe('an insight flag against a NEEDS_CONTEXT band', () => {
   test('10. "Vitamin D Below Optimal" never renders; the card says it needs review', async ({ page }) => {
     await openReport(page, vitaminDReport.report.id);
     await openInsightFlags(page);
-    await expect(page.getByText('Vitamin D needs review', { exact: true })).toBeVisible();
-    await expect(page.getByText('Vitamin D Below Optimal', { exact: true })).toHaveCount(0);
-    await expandFlag(page, 'Vitamin D needs review');
-    await expect(page.getByText(/^More context needed\. Amani's comparison band for this result has not yet completed clinical review\. /)).toBeVisible();
-    await expect(page.getByText(/optimal/i)).toHaveCount(0);
+    // V2-03b Stage 2: titled by its marker; "needs review" read as advice.
+    await expect(page.getByText('Vitamin D: pattern-rule match', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Vitamin D Below Optimal|Vitamin D needs review/)).toHaveCount(0);
+    await expandFlag(page, 'Vitamin D: pattern-rule match');
+    await expect(page.getByText(/^More context needed\. Amani's comparison band for this result has not yet completed clinical review\. Measured: Vitamin D 40 ng\/mL\. /)).toBeVisible();
+    await expect(page.getByText(/deficien|worth discussing|optimal/i)).toHaveCount(0);
   });
 });
 

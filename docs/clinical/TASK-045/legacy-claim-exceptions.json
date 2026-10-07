@@ -2,1486 +2,1002 @@
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "${…} ${…} shifted outside the Amani band — worth tracking at your next draw.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "${…} both remain outside the Amani band but have improved since the prior report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "${…} has improved while ${…} has moved in the opposite direction.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "${…} has moved into a better range since your last report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "${…} have both improved since your last report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "${…} remains outside the Amani band but has improved since the prior report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Improved",
-    "reason": "Favourable wording behind a policy gate: BoundaryCrossing.direction is \"improved\" only for a band authorizing favourable direction (SAFE plus directional evidence; no catalog band qualifies), and \"Optimal\" only when describeAsOptimal holds. Unreachable with the current catalog. BiggestChangesCard is not imported by any route. Authorship outside insightCopy is debt; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Improved",
-    "reason": "Favourable wording behind a policy gate: BoundaryCrossing.direction is \"improved\" only for a band authorizing favourable direction (SAFE plus directional evidence; no catalog band qualifies), and \"Optimal\" only when describeAsOptimal holds. Unreachable with the current catalog. BiggestChangesCard is not imported by any route. Authorship outside insightCopy is debt; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Improving, still elevated",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Improving, still low",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Moved out of range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Moving further above the Amani band${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Moving further below the Amani band${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Still below the Amani band, but moving in the right direction${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Still elevated, but moving toward the Amani band${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Worsening, still elevated",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/BiggestChangesCard.tsx",
     "text": "Worsening, still low",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Amani context band",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Far above range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Far below range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Showing Amani's context band for the",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "This result is outside Amani's context band but inside the wider band Amani uses before flagging a result as out of range. Amani's bands are its own context, not your laboratory's range.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Within your lab's range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Within your older history range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Within your usual range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Your lab's range:",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/BiomarkerCard.tsx",
-    "text": "Your lab's range:",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/CompareView.tsx",
-    "text": "Fluctuations can be normal. Context matters.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/DerivedMetricsPanel.tsx",
-    "text": "Amani band:",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/DerivedMetricsPanel.tsx",
-    "text": "Borderline",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/components/DerivedMetricsPanel.tsx",
-    "text": "Derived metrics are educational calculations and not diagnostic values. Always discuss with your healthcare provider.",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/components/DerivedMetricsPanel.tsx",
-    "text": "Outside Amani band",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/DerivedMetricsPanel.tsx",
-    "text": "Reflects the conversion efficiency of inactive T4 to active T3. Typical range is 0.20–0.30.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/DerivedMetricsPanel.tsx",
-    "text": "Within Amani band",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/FocusAreas.tsx",
-    "text": "Your panel is generally within range. Continue tracking baseline markers.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/GuidanceCards.tsx",
     "text": "Practical food, tracking, and discussion topics based on this report",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Support plan headings over food examples and nutrient discussion topics, selected by band-derived focus areas. A CLINICAL_ACTION_RECOMMENDATION with no authorizing rule; the food and nutrient lists need Clinical Truth Layer and NUTRIENT_GUIDELINES review, not a wording change. Deferred, rendered. This turn removed the result-asserting card summaries and moved the notes into the policy."
   },
   {
     "file": "src/components/GuidanceCards.tsx",
     "text": "Topics to discuss",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/components/InsightFlagsPanel.tsx",
-    "text": "Discuss with provider",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/components/InsightFlagsPanel.tsx",
-    "text": "These flags are educational pattern observations, not diagnoses. Always discuss results with your healthcare provider.",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Support plan headings over food examples and nutrient discussion topics, selected by band-derived focus areas. A CLINICAL_ACTION_RECOMMENDATION with no authorizing rule; the food and nutrient lists need Clinical Truth Layer and NUTRIENT_GUIDELINES review, not a wording change. Deferred, rendered. This turn removed the result-asserting card summaries and moved the notes into the policy."
   },
   {
     "file": "src/components/NextBestSteps.tsx",
     "text": "Discuss",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/components/NextBestSteps.tsx",
-    "text": "Discuss whether ${…} should be rechecked and what range your provider wants to target.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Bucket heading over model-written next steps (generate-interpretation what_you_can_do_now / what_to_do_next). The text it heads is model output, deferred with the server interpretation. This turn removed the band-derived injected sentence 'Discuss whether <marker> should be rechecked and what range your provider wants to target'."
   },
   {
     "file": "src/components/PeriodLogModal.tsx",
     "text": "font-normal",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "${…} ${…} ${…} at ${…} ${…} and ${…} ${…} from ${…} ${…} since ${…}. This trend is worth discussing with your provider.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "${…} ${…} ${…} at ${…} ${…}, but ${…} improved from ${…} ${…} since ${…}${…}. This is a meaningful move in the right direction, even though the level remains above range. Continue tracking this over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "${…} ${…} ${…} at ${…} ${…}, which stands out as the most abnormal result in this report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "(a ${…}% improvement)",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "Far above range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "Far below range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "Improved into range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "Improving, still ${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "Range:",
-    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "Worsening, still ${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "outside the Amani band",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "significantly elevated",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "text-xs text-theme-flag-low font-normal ml-1",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/PrimaryInsightCard.tsx",
     "text": "text-xs text-theme-flag-low font-normal ml-1",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/QuickHighlights.tsx",
     "text": "Discuss",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/QuickHighlights.tsx",
     "text": "Monitor",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/QuickHighlights.tsx",
     "text": "Needs Attention",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/QuickHighlights.tsx",
     "text": "Reassuring",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/QuickHighlights.tsx",
     "text": "font-normal text-xs text-theme-muted-text-2 ml-1",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/QuickHighlights.tsx",
     "text": "worth reviewing",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/QuickHighlights.tsx",
     "text": "worth reviewing",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
-  },
-  {
-    "file": "src/components/RecommendedLabs.tsx",
-    "text": "Recommended labs",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/RecommendedLabs.tsx",
-    "text": "suggested based on this report",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/ReviewBiomarkers.tsx",
     "text": "Needs review (",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/components/ReviewBiomarkers.tsx",
     "text": "Reference range (raw)",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/components/ReviewBiomarkers.tsx",
     "text": "Review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/components/ReviewBiomarkers.tsx",
     "text": "need review.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/components/ReviewBiomarkers.tsx",
     "text": "text-theme-neutral-500 font-normal ml-1",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/SubscriptionStatus.tsx",
     "text": "font-normal",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/SymptomLogModal.tsx",
     "text": "font-normal",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
-  },
-  {
-    "file": "src/components/SystemSummaryCards.tsx",
-    "text": "Scored against Amani context bands, which are still under review. Select a system to filter biomarkers.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/TopFindingsCard.tsx",
     "text": "Borderline",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/TopFindingsCard.tsx",
     "text": "Borderline",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a single-word clinical judgement (reassurance, monitoring, discussion or attention badge) authored outside insightCopy with no review authority. The component is not imported by any route at 2026-10-07 (ReportView marks it subsumed), so it is not rendered today, but it remains a live producer. Pinned only so the inventory is exact; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/TopFindingsCard.tsx",
     "text": "Far above range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/TopFindingsCard.tsx",
     "text": "Far below range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/TopFindingsCard.tsx",
     "text": "Outside Range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/TopFindingsCard.tsx",
     "text": "Within Amani band",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/TopFindingsCard.tsx",
     "text": "font-normal text-xs text-theme-muted-text-2 ml-1",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "${…} are both outside the Amani band and are the two findings most worth discussing with your provider.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "${…} is near the edge of the Amani band, though ${…} ${…} improved. The overall trend is positive.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "${…} is outside the Amani band and is the top priority. ${…} is borderline — worth monitoring, but not urgent on its own.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "${…} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "${…} remains the primary area to keep an eye on, while ${…} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "All measured values are within Amani's context bands, which are still under review. This is a useful baseline to track over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "Your panel looks solid overall, with ${…} showing improvement since your last draw. The trend is moving in a positive direction.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatThisMeansCard.tsx",
     "text": "text-[15px] text-theme-text leading-[1.7] font-normal",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/components/WhatToDoNextCard.tsx",
     "text": "Discuss with your provider",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/WhatToWatchCard.tsx",
     "text": "Range shift",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/YourPatternsCard.tsx",
     "text": "Improving trend",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/YourTrajectoryCard.tsx",
-    "text": "${…} ${…} improved from ${…} to ${…} ${…}${…}, still outside the Amani band.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/YourTrajectoryCard.tsx",
-    "text": "${…} ${…} moved toward the Amani band${…}.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/YourTrajectoryCard.tsx",
-    "text": "${…} changed from its previous range classification${…}. ${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/components/YourTrajectoryCard.tsx",
-    "text": "${…} improved from ${…} to ${…}${…}.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/features/onboarding/steps/PersonalContextStep.tsx",
     "text": "Age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
     "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
   },
   {
     "file": "src/features/onboarding/steps/PersonalContextStep.tsx",
     "text": "Select age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
     "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
   },
   {
     "file": "src/features/onboarding/steps/WelcomeStep.tsx",
     "text": "Amani helps you understand your lab results in plain language, track changes over time, and prepare better questions for your doctor.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
     "reason": "Non-clinical lexical match: onboarding product description uses better for question preparation, not clinical improvement in a result."
   },
   {
     "file": "src/features/settings/PersonalContextCard.tsx",
     "text": "Age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
     "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
   },
   {
     "file": "src/features/settings/PersonalContextCard.tsx",
     "text": "Select age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
     "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
-  },
-  {
-    "file": "src/lib/cards/cardMap.ts",
-    "text": "Educational information only. Because kidney-related markers are involved, discuss major diet or supplement changes with your provider first.",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/lib/cards/cardMap.ts",
-    "text": "Educational information only. Discuss changes with your provider, especially if you are pregnant, breastfeeding, taking medications, or managing kidney-related concerns.",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/lib/cards/cardMap.ts",
-    "text": "Educational information only. Hormone values are timing-sensitive, so discuss cycle timing and symptoms with your provider.",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/lib/cards/cardMap.ts",
-    "text": "HDL is low, so it may be helpful to look at the full lipid pattern over time rather than focusing on one marker alone.",
-    "reason": "Clinical debt: legacy result interpretation/advice in card producer; authority and policy migration deferred behind Stage-1 independent verification. Not clinical authorization."
-  },
-  {
-    "file": "src/lib/cards/cardMap.ts",
-    "text": "TPO antibodies are still above range, so this area is worth tracking alongside thyroid function markers and symptoms.",
-    "reason": "Clinical debt: legacy result interpretation/advice in card producer; authority and policy migration deferred behind Stage-1 independent verification. Not clinical authorization."
-  },
-  {
-    "file": "src/lib/cyclePhase.ts",
-    "text": "First trimester. Many ranges shift in pregnancy.",
-    "reason": "Clinical debt: cycle-phase hormone/symptom interpretation outside the policy author. Migration deferred behind Stage-1 independent verification; this pin does not establish clinical authority."
-  },
-  {
-    "file": "src/lib/cyclePhase.ts",
-    "text": "Second trimester. Many ranges shift in pregnancy.",
-    "reason": "Clinical debt: cycle-phase hormone/symptom interpretation outside the policy author. Migration deferred behind Stage-1 independent verification; this pin does not establish clinical authority."
-  },
-  {
-    "file": "src/lib/cyclePhase.ts",
-    "text": "Third trimester. Many ranges shift in pregnancy.",
-    "reason": "Clinical debt: cycle-phase hormone/symptom interpretation outside the policy author. Migration deferred behind Stage-1 independent verification; this pin does not establish clinical authority."
-  },
-  {
-    "file": "src/lib/insights/biomarkerExplanations.ts",
-    "text": "Ferritin is the primary storage protein for iron in the body. Low levels can reflect depleted iron stores even before blood counts change, while elevated levels may indicate inflammation or excess iron storage.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/biomarkerExplanations.ts",
-    "text": "High-sensitivity CRP is a protein the liver produces in response to inflammation. Elevated levels can indicate systemic inflammatory activity and are considered in the context of cardiovascular and metabolic health.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/biomarkerExplanations.ts",
-    "text": "LDL carries cholesterol through the bloodstream and is involved in cellular repair and hormone production. When persistently elevated, it is a factor considered in cardiovascular risk assessment.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/biomarkerExplanations.ts",
-    "text": "TPO antibodies are produced when the immune system mistakenly targets thyroid peroxidase, an enzyme involved in thyroid hormone production. Elevated levels are often associated with autoimmune thyroid conditions.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/biomarkerExplanations.ts",
-    "text": "TSH is produced by the pituitary gland and signals the thyroid to make hormones. Levels outside the optimal range can reflect how well the thyroid-pituitary feedback loop is functioning.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/biomarkerExplanations.ts",
-    "text": "Total cholesterol is the sum of all cholesterol types in the blood. It is one component of cardiovascular risk assessment but is most meaningful when interpreted alongside HDL, LDL, and triglycerides together.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Androgen-related markers are outside the optimal range. Tracking them together gives a clearer picture than any single value.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Glucose-related markers are outside the optimal range. Tracking these together gives a fuller picture of insulin sensitivity over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Inflammation markers are elevated. A single reading can reflect short-term factors; tracking over time helps reveal the pattern.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Inflammation markers are outside their reference range. Tracking these together helps reveal whether the pattern persists.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Iron-related markers are outside the optimal range. These move together and are best interpreted as a panel.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Markers tied to hydration and kidney filtration are outside the optimal range. A single reading may reflect hydration status rather than kidney function on its own.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Multiple metabolic markers are outside their reference range. Tracking these together can highlight blood-sugar trends.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Multiple reproductive-hormone markers are outside their reference range. Tracking them together gives the clearest picture over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Multiple thyroid markers are outside their reference range. Tracking these together gives the clearest picture over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "One or more hematology markers are outside their reference range. Tracking these together gives the clearest picture over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "One or more kidney markers are outside their reference range. Tracking these together helps clarify whether the pattern is consistent.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "One or more lipid markers are outside their reference range. Tracking these together helps frame cardiovascular risk over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "One or more liver markers are outside their reference range. Tracking these together gives the clearest picture over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "One or more nutrient markers are outside their reference range. Tracking these together helps clarify nutrient status over time.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Reproductive-hormone markers are outside the optimal range. Cycle phase context matters when interpreting these values.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "Thyroid antibodies are elevated, suggesting an autoimmune component worth tracking alongside thyroid function markers.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "but this marker is still outside range.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "is borderline-high",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "is borderline-low",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "is elevated",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildFocusAreas.ts",
-    "text": "is low",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildHealthStory.ts",
-    "text": "Your overall panel is generally within reference ranges.",
-    "reason": "Policy-authorship debt with reassurance character: whole-panel placement against lab reference ranges, authored outside insightCopy. Pinned, not approved; Stage 2 must route it through the policy."
-  },
-  {
-    "file": "src/lib/insights/buildHealthStory.ts",
-    "text": "has shifted in the wrong direction since your prior report",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildHealthStory.ts",
-    "text": "is moving in the right direction but still needs follow-up",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…} ${…} each outside their optimal range. Tracking them as a group over time can help reveal whether this is a consistent pattern.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
   },
   {
     "file": "src/lib/insights/buildInsightSummary.ts",
     "text": "${…} analyte${…} with usable values. More markers improve insight depth.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…} decreased from ${…} to ${…} ${…}${…}${…} — meaningful improvement, though it remains elevated above the optimal range.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…} decreased from ${…} to ${…} ${…}${…}${…}, moving further below the optimal range.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…} increased from ${…} to ${…} ${…}${…}${…} — meaningful improvement, though it remains below the optimal range.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…} increased from ${…} to ${…} ${…}${…}${…}, moving further above the optimal range.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…} is ${…} ${…} — first result on record, currently out of range.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…} is ${…} the optimal range at ${…} ${…}",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…}: improving from the prior report",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "${…}: range shifted since last report",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "(${…}% improvement)",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": ", and it has worsened from ${…} ${…} since the prior report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": ", though it has improved from ${…} ${…} since the prior report${…}.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "Are there lifestyle or routine considerations I should discuss before making changes?",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Report-confidence badge wording about extraction quality and data coverage (parser confidence, number of usable values); asserts nothing about a result."
   },
   {
     "file": "src/lib/insights/buildInsightSummary.ts",
     "text": "Extraction confidence is high across most analytes.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Report-confidence badge wording about extraction quality and data coverage (parser confidence, number of usable values); asserts nothing about a result."
   },
   {
     "file": "src/lib/insights/buildInsightSummary.ts",
     "text": "Extraction confidence is low. This panel may benefit from re-upload or manual review.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "Has been ${…}${…} since the last panel, while staying within the same range category. Worth tracking to see if this holds across future reports.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "Moved from ${…} to ${…} ${…}${…} — a meaningful step toward the optimal range. It remains ${…}, so continued monitoring is worthwhile.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "My ${…} ${…} better than the prior result but ${…} ${…}. Is this rate of change clinically meaningful, and how should we approach it from here?",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "My ${…} ${…} from ${…} to ${…} ${…}${…}. Is this something I should continue monitoring?",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "My ${…} improved from ${…} to ${…}. Is this change clinically meaningful?",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "My ${…} moved from ${…} to ${…}. How should I interpret this alongside ${…}?",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "Should we recheck ${…} in a few months to see how it's tracking?",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/lib/insights/buildInsightSummary.ts",
-    "text": "outside the optimal range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Report-confidence badge wording about extraction quality and data coverage (parser confidence, number of usable values); asserts nothing about a result."
   },
   {
     "file": "src/lib/insights/buildPersonalInsights.ts",
     "text": "You've been logging ${…} and your ${…} is outside the optimal range — these may be worth reviewing together with your provider.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/insights/buildPersonalInsights.ts",
     "text": "Your ${…} has been ${…} across your recent reports while remaining outside the optimal range. Worth bringing to your provider's attention.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/insights/buildPersonalInsights.ts",
     "text": "Your ${…} is ${…} across your recent reports — a positive direction, though it remains outside the optimal range. Continue tracking.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/insights/categorizeNextSteps.ts",
     "text": "review with",
-    "reason": "Matching token used to categorize existing input, not emitted copy. Pinned exactly."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "input_matching_token",
+    "reason": "Matching token used to classify parsed lab text or model-written steps; never rendered as copy."
   },
   {
     "file": "src/lib/insights/categorizeNextSteps.ts",
     "text": "topics to discuss",
-    "reason": "Consultative provider-referral heading or educational disclaimer: directs the reader to a clinician and asserts no meaning about a result. Pinned exactly. Must not be removed by language migration, because removing referral framing would suppress safety language (separation rule, direction 1). Not clinical authorization."
-  },
-  {
-    "file": "src/lib/scoring/amaniContext.ts",
-    "text": "Disputed range, under review",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/amaniContext.ts",
-    "text": "Needs more context, under review",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/amaniContext.ts",
-    "text": "Not yet reviewed",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/amaniContext.ts",
-    "text": "Reviewed range",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/amaniContext.ts",
-    "text": "This marker can read differently during ${…}, and Amani has no reviewed context for it yet, so it does not score this result. Your result and your lab's range are shown as reported.",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/amaniContext.ts",
-    "text": "This marker changes meaning across the menstrual cycle, and Amani has no context band for the recorded phase. Your result and your lab's range are shown as reported.",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/compareReports.ts",
-    "text": "outside the Amani band",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/compareReports.ts",
-    "text": "within the Amani band",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
-  },
-  {
-    "file": "src/lib/scoring/groupBySystem.ts",
-    "text": "Mild Attention",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/lib/scoring/groupBySystem.ts",
-    "text": "Needs Attention",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/lib/scoring/groupBySystem.ts",
-    "text": "Within Amani bands",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "input_matching_token",
+    "reason": "Matching token used to classify parsed lab text or model-written steps; never rendered as copy."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "Borderline High",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "Borderline Low",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "Context needed",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "No Range",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "Normal",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "Optimal",
-    "reason": "Favourable wording behind a policy gate: BoundaryCrossing.direction is \"improved\" only for a band authorizing favourable direction (SAFE plus directional evidence; no catalog band qualifies), and \"Optimal\" only when describeAsOptimal holds. Unreachable with the current catalog. BiggestChangesCard is not imported by any route. Authorship outside insightCopy is debt; this pin approves nothing."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "Outside Amani band",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/lib/scoring/statusPill.ts",
     "text": "Within Amani band",
-    "reason": "Policy-authorship debt: existing comparison-band placement, withholding or review-state label authored outside insightCopy. Centralization deferred behind Stage-1 independent verification; pinning does not authorize an interpretation or approve this label."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/pages/Contact.tsx",
     "text": ", which are awaiting legal review.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Contact.tsx",
     "text": "Draft — pending review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Contact.tsx",
     "text": "This inbox is not monitored around the clock and we are not clinicians. If you are having a medical emergency, call your local emergency number or go to an emergency department. For questions about your own results, speak to the provider who ordered them — Amani is educational only and does not diagnose conditions or give medical advice.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/DeleteAccount.tsx",
     "text": "All extracted biomarker values, reference ranges and flags",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/DesignGallery.tsx",
     "text": "Below range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
     "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
   },
   {
     "file": "src/pages/DesignGallery.tsx",
     "text": "Biomarker card — in range, watch, below range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
     "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
   },
   {
     "file": "src/pages/DesignGallery.tsx",
     "text": "Elevated, for content that outranks its neighbours.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
     "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
   },
   {
     "file": "src/pages/DesignGallery.tsx",
     "text": "Flat by default — no elevation claim.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
     "reason": "Non-clinical lexical match in the static design gallery: \"elevation\" is visual shadow depth, not a result. Pinned exactly."
   },
   {
     "file": "src/pages/DesignGallery.tsx",
     "text": "In range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
     "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
   },
   {
     "file": "src/pages/Landing.tsx",
     "text": "Amani is educational. It does not diagnose, prescribe, or replace your clinician — it helps you walk into the appointment knowing what to ask. Anything that concerns you belongs in front of a licensed provider.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Landing.tsx",
     "text": "Cycle dates and anything you have noticed — sleep, energy, a new supplement. This is what turns a reference range into an answer.",
-    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
   },
   {
     "file": "src/pages/Landing.tsx",
     "text": "Ferritin is low",
-    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
   },
   {
     "file": "src/pages/Landing.tsx",
     "text": "The same hormone can be normal on day 3 and worrying on day 21. Amani reads every result in the context of where you actually are, then explains it in language you can take to your doctor.",
-    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
   },
   {
     "file": "src/pages/Landing.tsx",
     "text": "and has been falling since October. Everything else sits where it should for day 21.",
-    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "High",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Non-clinical lexical match: extraction-confidence tier (share of parsed items needing review), not a result level. Pinned exactly."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "Low",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Non-clinical lexical match: extraction-confidence tier (share of parsed items needing review), not a result level. Pinned exactly."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "Needs review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "Review what Amani found — edit, remove, or add anything before saving.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "Review your report",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "We extracted your report details automatically — review anything below before saving",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "We extracted your report details automatically — review anything below before saving.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "may need review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "text-theme-neutral-400 font-normal text-sm",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/pages/NewReport.tsx",
     "text": "text-theme-neutral-400 font-normal text-sm",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Flagged for review — excluded from AI highlights (${…})",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Needs review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Parsed Value / Unit / Range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Per-analyte extraction details: value, unit, reference range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Ref range (raw)",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Reference range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Reference range (raw)",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Review:",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/ParserDebugger.tsx",
     "text": "Stage 3 — Parsed Value / Unit / Range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
     "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": ". It is protected by this policy, by the security measures described below, and by whatever consumer privacy law applies where you live. If you would rather your lab results stayed only inside your provider&rsquo;s patient portal, that is a completely reasonable choice, and you should not upload them here.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "A preferred name, age range, sex at birth, reproductive status (including whether you are pregnant, trying to conceive, postpartum, or using birth control), health goals, symptoms you want kept in mind, supplements or medications you are taking, and any known conditions you tell us about. Also your typical cycle length and period length.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "Amani provides educational information. It does not diagnose conditions and does not provide medical advice. Always consult a licensed healthcare provider about your health concerns.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "Draft — pending legal review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "Sentry — error monitoring",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "The PDF or photo you upload, the name of the lab and the date of the report, and every biomarker we extract from it — the test name, value, unit, and reference range. Alongside each report we store the cycle context you give it: your last period start date, average cycle length, the cycle day and phase we estimate from those, and the symptoms and context you attach to that specific report.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "This is the part you should read closely. To produce an interpretation we send OpenAI the biomarker names, values, units, and reference ranges from your report, the cycle context attached to that report, and a short profile block containing your preferred first name, age range, sex at birth, reproductive status, health goals, and the symptoms you asked us to keep in mind.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "This policy accurately describes what Amani does with your data today, but it has not yet been reviewed by a lawyer. We are publishing it in draft so you can see exactly how your health information is handled before you share any. If anything here is unclear or looks wrong to you, please",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "We do not sell your data, run ads, or use advertising or analytics trackers. We do use an error-monitoring service, configured so that it cannot record what is on your screen.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "We do not sell your personal information. We do not share it with advertisers or data brokers. We do not use it to build profiles for anyone else. The app contains no advertising SDKs and no product-analytics SDKs — the only third-party code in it that reports anything back about your session is the error monitoring and the in-app purchase processing described below.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "We do not send OpenAI your email address or your password. The supplements and conditions you entered during onboarding are also not sent &mdash; those are a separate profile field from anything you log in the Tracker. OpenAI states that data submitted through its API is not used to train its models and is retained only for a limited period for abuse monitoring; we rely on that commitment but we do not control it.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
     "text": "We use your data to run the product you signed up for: extracting biomarkers from the reports you upload, scoring them against reference ranges and where you are in your cycle, generating educational explanations, tracking changes across reports, managing your account and subscription, and keeping the service secure.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/ReportView.tsx",
-    "text": "${…} ${…} but ${…} improved since ${…}.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} ${…} but ${…} improved since your prior report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} ${…} still ${…}, but the trend is moving in the right direction. Continue tracking this${…}.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} Your ${…} ${…} also ${…} and worth monitoring.",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} Your ${…} ${…} since your last report and ${…} worth monitoring.",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} and ${…} are both borderline. Worth monitoring but no urgent flags.",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} and ${…} are both outside the Amani band. These are your top priorities.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} elevated",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} is borderline. Worth keeping an eye on over time.",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} is outside the Amani band and ${…} is borderline. These are the two areas worth focusing on.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} is outside the Amani band and is the primary finding on this panel.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "${…} is outside the Amani band, though ${…} has improved since your last report.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "All scored values are within Amani's context bands, which are still under review.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "All values are within Amani's context bands, and ${…} has improved since your last draw.",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "Borderline",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): an app-defined \"Borderline\" margin around the lab-printed interval, rendered as a placement judgement the lab did not make, with no review authority. Pinned only so the inventory is exact; this pin approves nothing."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "In range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "No range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "No range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "Out of range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "Your standard lab ranges look stable overall, with ${…} standing out as the main area to optimize.",
-    "reason": "OPEN R1–R4-class defect, not debt (amendment 4): a short clinical judgement of placement, attention or monitoring, authored outside insightCopy and rendered to users with no review authority. Became visible when the guard stopped exempting single words and plurals. Pinned only so the inventory is exact; this pin approves nothing, and closure requires routing through the policy under an owner ruling."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "above range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "below range",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
     "text": "ml-2 text-sm font-normal text-theme-primary",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "outside Amani band",
-    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/pages/ReportView.tsx",
     "text": "text-theme-neutral-500 font-normal ml-1 text-xs",
-    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
     "file": "src/pages/SuccessPage.tsx",
     "text": "Your payment went through, but activation is taking longer than usual. Nothing is lost — it normally completes on its own within a few minutes.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
     "reason": "Non-clinical lexical match: purchase-activation timing (\"normally completes\"), not a result assessment. File is in forbidden subscription scope; pinned exactly, not edited."
   },
   {
     "file": "src/pages/Terms.tsx",
     "text": "Amani is not monitored and cannot help you.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Terms.tsx",
     "text": "Amani reads your report automatically, and automatic reading of a scanned document is imperfect. A value can be misread, a unit can be misinterpreted, a reference range can be picked up from the wrong row, and a test can be missed entirely. The explanations are generated by an AI model and can be wrong or incomplete even when the extraction was correct.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Terms.tsx",
     "text": "Draft — pending legal review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Terms.tsx",
     "text": "These terms describe how Amani actually works and what we are promising, but they have not yet been reviewed by a lawyer. The sections on liability and disputes in particular are placeholders. We are publishing them in draft rather than leaving the link dead.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Terms.tsx",
     "text": "You upload a lab report as a PDF or a photo. Amani extracts the biomarkers from it, scores them against reference ranges and against where you are in your menstrual cycle, and generates a plain-language explanation along with questions worth asking your doctor. It tracks how your results change over time and lets you log periods and symptoms alongside them.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/types/index.ts",
     "text": "Nutrients & Deficiency",
-    "reason": "Category navigation label naming a clinical concept (deficiency) for a biomarker group; asserts nothing about a result. Runtime CATEGORY_DISPLAY table, which is why src/types is scanned. Pinned exactly; wording review deferred to Stage 2."
-  },
-  {
-    "file": "src/utils/cyclePredictor.ts",
-    "text": "Progesterone is elevated. You may notice shifts in energy, mood, or sleep.",
-    "reason": "Clinical debt: cycle-phase hormone/symptom interpretation outside the policy author. Migration deferred behind Stage-1 independent verification; this pin does not establish clinical authority."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Borderline — may warrant monitoring alongside symptoms and lifestyle factors.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Borderline — some clinicians discuss lifestyle factors that influence this ratio.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Both ferritin (iron storage) and iron saturation (transport) are below optimal. This pattern is consistent with iron deficiency that may precede anemia. Common symptoms include fatigue, hair loss, shortness of breath, and reduced exercise tolerance. This is worth discussing with your provider, especially if you have heavy periods.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Cardiovascular Risk Cluster",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Elevated HbA1c",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Ferritin is below 30 ng/mL, which is below the Amani optimal range even when within the standard lab reference range. Some clinicians consider functional iron deficiency at this level, particularly in women with heavy periods or active lifestyles. Symptoms such as fatigue and hair loss may be present before anemia develops.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "HbA1c is at or above 5.7%, which some guidelines classify as prediabetes range. This reflects average blood sugar over the prior 2–3 months. Worth discussing with your provider alongside fasting glucose and any metabolic symptoms.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Higher than typical — worth discussing with your provider in the context of your full thyroid panel.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Iron Deficiency Pattern",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Liver Enzyme Elevation",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Lower than typical — some clinicians discuss this in the context of poor T4-to-T3 conversion, particularly with symptoms of fatigue or brain fog.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "May suggest early insulin resistance — worth discussing with your provider.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Moderately elevated — some clinicians discuss FAI alongside symptoms such as acne, hair changes, or irregular cycles.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Multiple androgen-related markers are outside the optimal range. Elevated testosterone or DHEA-S with low SHBG, or an LH:FSH ratio above 2, are patterns clinicians commonly evaluate in the context of PCOS (polycystic ovary syndrome). This pattern should be discussed with your provider alongside cycle history, symptoms, and any imaging.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Multiple liver enzymes are above the Amani optimal range. Clinicians commonly evaluate elevated ALT, AST, and GGT together to assess liver health. Contributing factors can include fatty liver, alcohol, medications, or metabolic conditions. This pattern is worth discussing with your provider.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Often consistent with a favorable metabolic and cardiovascular risk profile.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Outside the optimal range — non-HDL is a strong predictor of cardiovascular risk worth discussing with your provider.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Outside the preferred range — clinicians commonly evaluate this in the context of overall cardiovascular health.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Outside the typical range for women — clinicians commonly evaluate this in the context of androgen-related symptoms.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Outside the typical range — clinicians commonly evaluate this alongside glucose trends and HbA1c.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Possible Luteal Phase Insufficiency",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Progesterone is below the expected range for the luteal phase (optimal: 5–25 ng/mL). Adequate progesterone after ovulation supports uterine lining health and cycle regularity. This pattern may warrant testing on a specific cycle day (typically Day 21 of a 28-day cycle) and discussion with your provider.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "TSH is in the higher-normal range alongside a lower Free T3. Some clinicians evaluate this pattern in the context of suboptimal T4-to-T3 conversion, particularly when symptoms such as fatigue, brain fog, or cold sensitivity are present. This combination may be worth discussing in the context of your full thyroid panel.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Three or more metabolic markers are outside optimal ranges. Clinicians commonly evaluate combinations of fasting glucose, insulin, triglycerides, and HDL together as they can reflect overall metabolic and insulin sensitivity. This cluster pattern may be worth a focused conversation with your provider.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Two or more cardiovascular risk markers are outside the optimal range. LDL, ApoB, hs-CRP, and Lp(a) are commonly evaluated together when assessing cardiovascular health. This combination may be worth a dedicated conversation with your provider, especially if you have a family history of heart disease.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Vitamin D Below Optimal",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Vitamin D is below 30 ng/mL, which is generally considered deficient. Vitamin D plays a role in immune function, bone health, mood regulation, and hormone signaling. This is commonly discussed with a provider, particularly if you have limited sun exposure or related symptoms.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Vitamin D is within the clinical reference range but below the Amani optimal threshold of 50 ng/mL. Vitamin D plays a role in immune function, hormone signaling, and mood regulation. Some clinicians target higher levels. This may be worth discussing with your provider.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Within a commonly cited range, suggesting typical T4-to-T3 conversion.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Within a typical range for women; reflects the proportion of unbound, biologically active testosterone.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Within the optimal range — reflects a favorable balance of atherogenic particles.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
-  },
-  {
-    "file": "src/utils/derivedMetrics.ts",
-    "text": "Your TPO antibodies are elevated (above 100 IU/mL) and TSH is above the Amani optimal range. Clinicians commonly evaluate this combination in the context of autoimmune thyroid conditions such as Hashimoto's thyroiditis. This pattern may be worth discussing with your provider alongside any thyroid-related symptoms such as fatigue, hair loss, or weight changes.",
-    "reason": "Clinical debt: legacy derived-metric interpretation, evaluation or provider advice. Amendment 3 authorizes pinning only, not rewriting or neutralizing potentially independently authorized safety advice. Authority must be established during Stage 2 after independent Stage-1 closure; this pin grants none."
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Category label 'Nutrients & Deficiency' names a condition. src/types is outside this task's allowed paths, so the literal stays and is deferred. It no longer renders on the report page, which uses insightCopy.systemDisplayLabel ('Nutrients'); SystemGroup.label still carries it unrendered."
   },
   {
     "file": "src/utils/parser/valueExtraction.ts",
     "text": "Borderline",
-    "reason": "Matching token used to categorize existing input, not emitted copy. Pinned exactly."
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "input_matching_token",
+    "reason": "Matching token used to classify parsed lab text or model-written steps; never rendered as copy."
   }
 ]

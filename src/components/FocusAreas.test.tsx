@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FocusAreas } from './FocusAreas';
 import { DoctorQuestionsCard } from './DoctorQuestionsCard';
-import { FOCUS_AREA_BAND_SENTENCE, type AuthorizedLanguage } from '../lib/scoring/insightCopy';
+import { type AuthorizedLanguage } from '../lib/scoring/insightCopy';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 
@@ -24,20 +24,41 @@ function builderStrings(): string[] {
 
 const text = (html: string) => html.replace(/<[^>]+>/g, ' ');
 
-describe('FocusAreas renders no "optimal" claim from src/lib/insights copy', () => {
+/*
+  V2-03b Stage 2 replaces "the builder source still carries the claim the card
+  must qualify". The builder no longer authors a sentence: it composes policy
+  output. So the stronger statement holds and is checked here, together with
+  a negative control showing the check sees the old rule copy.
+*/
+const CLAIM_WORDS = /optimal|borderline|elevated|reference range|autoimmun|risk|insulin sensitivity|reassur|worth|should|is low|is high/i;
+
+describe('FocusAreas renders only policy language from the builder', () => {
   const strings = builderStrings();
 
-  it('the builder source still carries the claim the card must qualify', () => {
-    expect(strings.filter(s => /optimal/i.test(s)).length).toBeGreaterThan(0);
+  it('the builder source authors no clinical sentence', () => {
+    expect(strings.filter(s => CLAIM_WORDS.test(s))).toEqual([]);
+  });
+
+  it('negative control: the check sees the rule copy it replaced', () => {
+    for (const old of [
+      'Thyroid antibodies are elevated, suggesting an autoimmune component worth tracking alongside thyroid function markers.',
+      'One or more lipid markers are outside their reference range. Tracking these together helps frame cardiovascular risk over time.',
+      'is borderline-high',
+    ]) expect(old).toMatch(CLAIM_WORDS);
   });
 
   it.each(strings)('%s', whyItMatters => {
     const html = renderToStaticMarkup(
       <FocusAreas focusAreas={[{ id: 'x', title: 'Area', whyItMatters, relatedMarkers: [], isPrimaryAligned: false }]} />,
     );
-    expect(text(html)).not.toMatch(/optimal/i);
-    if (/optimal/i.test(whyItMatters)) expect(html).toContain(FOCUS_AREA_BAND_SENTENCE.replace("'", '&#x27;'));
-    else expect(html).toContain(whyItMatters.replace(/'/g, '&#x27;'));
+    expect(html).toContain(whyItMatters.replace(/'/g, '&#x27;'));
+  });
+
+  it('a chip is the neutral attention cue, never red, amber or green', () => {
+    const html = renderToStaticMarkup(<FocusAreas focusAreas={[{ id: 'x', title: 'Area', whyItMatters: 'w',
+      relatedMarkers: [{ slug: 'tsh', displayName: 'TSH', status: 'outside' }], isPrimaryAligned: false }]} />);
+    expect(html).toContain('data-language-cue="attention"');
+    expect(html).not.toMatch(/flag-(?:ok|watch|low)/);
   });
 });
 
@@ -64,22 +85,32 @@ describe('DoctorQuestionsCard drops a question that asserts optimality', () => {
 describe('DoctorQuestionsCard drops a question that calls an unauthorized movement "improved"', () => {
   const tsh = (value: number, reportDate?: string) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5, reportDate });
   const summary = buildInsightSummary([tsh(2.0)], [tsh(2.7, '2025-12-01')], null, '2025-12-01');
-  const improvedQuestion = summary.questionsForDoctor.find(q => /improv/i.test(q.text));
+  const improvedQuestion = { text: 'My TSH improved from borderline to within band. Is this change clinically meaningful?', relatedBiomarker: 'tsh' as const };
 
-  it('the builder still emits the claim, so the card is load-bearing', () => {
-    expect(improvedQuestion?.text).toBe('My TSH improved from borderline to within band. Is this change clinically meaningful?');
+  /*
+    V2-03b Stage 2 replaces "the builder still emits the claim, so the card is
+    load-bearing". The builder now words every question through the policy,
+    so the crossing question states values; the card filter is still proven
+    on the old question text below.
+  */
+  it('the builder words the crossing question by value, with no judgement', () => {
+    expect(summary.questionsForDoctor[0]?.text).toBe('My TSH changed from 2.7 to 2 uIU/mL. Is this change clinically meaningful?');
+    for (const q of summary.questionsForDoctor) {
+      expect(q.text).not.toMatch(/improv|better|worse|elevated|stable|monitor|should|optimal/i);
+    }
   });
 
-  it('with the real band language, and with none, the question is not rendered', () => {
+  it('with the real band language, and with none, a favourable question is not rendered', () => {
     for (const bandLanguage of [bandLanguageByKey(summary.deltaMap.values()), undefined]) {
-      const html = renderToStaticMarkup(<DoctorQuestionsCard questions={summary.questionsForDoctor} bandLanguage={bandLanguage} />);
+      const html = renderToStaticMarkup(<DoctorQuestionsCard questions={[...summary.questionsForDoctor, improvedQuestion]} bandLanguage={bandLanguage} />);
       expect(text(html)).not.toMatch(/improv/i);
+      expect(text(html)).toContain('My TSH changed from 2.7 to 2 uIU/mL.');
     }
   });
 
   it('only a band authorizing a favourable direction would let it through', () => {
     const authorized: AuthorizedLanguage = { reviewStatus: 'SAFE', reviewedWording: true, optimal: false, favourableDirection: true };
-    const html = renderToStaticMarkup(<DoctorQuestionsCard questions={[improvedQuestion!]} bandLanguage={new Map([['tsh', authorized]])} />);
+    const html = renderToStaticMarkup(<DoctorQuestionsCard questions={[improvedQuestion]} bandLanguage={new Map([['tsh', authorized]])} />);
     expect(text(html)).toContain('My TSH improved from borderline to within band.');
   });
 });

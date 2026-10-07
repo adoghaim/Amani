@@ -1,14 +1,18 @@
-import { CheckCircle2, AlertCircle, TrendingUp, Sparkles, LineChart, ArrowRightLeft } from 'lucide-react';
+import { Sparkles, LineChart, ArrowRightLeft } from 'lucide-react';
 import type { BiggestChange, TopFinding } from '../lib/insights/buildInsightSummary';
 import type { BiomarkerName } from '../types';
-import { boundaryBucketLabel } from '../lib/scoring/compareReports';
-import { authorizedLanguage, reviewStatement, type AuthorizedLanguage } from '../lib/scoring/insightCopy';
+import { authorizedLanguage, crossingObservation, type AuthorizedLanguage, valuesChangeObservation } from '../lib/scoring/insightCopy';
 import { describeMeasuredMovement, describeComparisonBand, type ClinicalLanguage } from '../lib/scoring/insightCopy';
 import { ClinicalObservation } from './ClinicalObservation';
 
-// 'changed' is a movement toward a band that does not authorize a favourable
-// direction (V2-03 amendment 4, R1): neutral words, neutral icon.
-type BulletKind = 'improved' | 'changed' | 'worsened' | 'stable_elevated' | 'first';
+/*
+  'changed' is a movement toward a band (V2-03 amendment 4, R1): neutral words,
+  neutral icon. V2-03b Stage 2 removed the 'improved' kind, its wording and its
+  green check. Their only authority was a boolean on the band, not a reviewed
+  rule the policy can trace, so even a SAFE band now reads as a movement. The
+  'worsened' and 'stable_elevated' kinds keep their ranking and render neutrally.
+*/
+type BulletKind = 'changed' | 'worsened' | 'stable_elevated' | 'first';
 
 interface TrajectoryBullet {
   kind: BulletKind;
@@ -44,37 +48,21 @@ function bulletForChange(change: BiggestChange, isPrimary: boolean, language: Au
   const sinceClause = priorIsOlderThanImmediatePrior && priorReportDate
     ? ` since ${formatPriorDate(priorReportDate)}`
     : '';
-  // R1: favourable wording and the green check need a destination band that
-  // authorizes them. Otherwise the movement is described, never judged.
-  const favourable = language.favourableDirection;
-  const pending = reviewStatement(language);
-  // Neutral bucket wording only (V2-03 amendment 2). A bucket that is not a
-  // known one is never echoed; the sentence names only the Amani band.
-  const crossingText = (bc: NonNullable<typeof boundaryCrossing>) => {
-    if (!favourable) return `${displayName} changed from its previous range classification${sinceClause}. ${pending}`;
-    const from = boundaryBucketLabel(bc.from);
-    const to = boundaryBucketLabel(bc.to);
-    if (from && to) return `${displayName} improved from ${from} to ${to}${sinceClause}.`;
-    return `${displayName} ${c.has} moved toward the Amani band${sinceClause}.`;
-  };
-  const towardKind: BulletKind = favourable ? 'improved' : 'changed';
 
   if (isFirstRecorded) {
     return { kind: 'first', isPrimary, text: `${displayName} ${c.is} measured for the first time at ${currentValue} ${unit}.` };
   }
+  // A crossing names no bucket: no raw or neutral bucket label is echoed.
   if ((trajectoryStatus === 'normalized' || trajectoryStatus === 'changed_into_band') && boundaryCrossing) {
-    return { kind: towardKind, isPrimary, text: crossingText(boundaryCrossing) };
+    return { kind: 'changed', isPrimary, text: crossingObservation(displayName, sinceClause, language).text };
   }
   if (boundaryCrossing && (boundaryCrossing.direction === 'improved' || boundaryCrossing.direction === 'changed')) {
-    return { kind: towardKind, isPrimary, text: crossingText(boundaryCrossing) };
+    return { kind: 'changed', isPrimary, text: crossingObservation(displayName, sinceClause, language).text };
   }
   if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low'
     || trajectoryStatus === 'changed_still_high' || trajectoryStatus === 'changed_still_low') {
     const values = { previous: previousValue, current: currentValue, unit };
-    if (!favourable) {
-      return { kind: 'changed', isPrimary, values, text: `${displayName} changed from ${previousValue} to ${currentValue} ${unit}${sinceClause}. ${pending}` };
-    }
-    return { kind: 'improved', isPrimary, values, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside the Amani band.` };
+    return { kind: 'changed', isPrimary, values, text: valuesChangeObservation(displayName, previousValue, currentValue, unit, sinceClause, language).text };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
     const observations = [describeMeasuredMovement(change, 'direction'), describeComparisonBand(language, 'outside')];
@@ -94,7 +82,6 @@ function bulletForChange(change: BiggestChange, isPrimary: boolean, language: Au
 const KIND_PRIORITY: Record<BulletKind, number> = {
   worsened: 0,
   stable_elevated: 1,
-  improved: 2,
   changed: 2,
   first: 3,
 };
@@ -135,7 +122,7 @@ export function selectTrajectoryBullets(
     if (bullet) bullets.push({ ...bullet, key: change.key });
   }
 
-  // Sort: primary with historical context first, then worsened > stable_elevated > improved = changed > first,
+  // Sort: primary with historical context first, then worsened > stable_elevated > changed > first,
   // then significance: significant > moderate > minor
   const indexedBullets = bullets.map((b, i) => ({ b, change: changes[i] }));
   indexedBullets.sort((a, b) => {
@@ -190,10 +177,7 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount, bandL
 }
 
 function BulletIcon({ kind }: { kind: BulletKind }) {
-  // The green check is a clinical signal: only an authorized 'improved' gets it.
-  if (kind === 'improved') return <CheckCircle2 className="w-4 h-4 text-theme-flag-ok" />;
-  if (kind === 'changed') return <ArrowRightLeft className="w-4 h-4 text-theme-muted-text-3" />;
-  if (kind === 'worsened') return <TrendingUp className="w-4 h-4 text-theme-flag-watch" />;
-  if (kind === 'stable_elevated') return <AlertCircle className="w-4 h-4 text-theme-flag-watch" />;
-  return <Sparkles className="w-4 h-4 text-theme-cat-sleep" />;
+  // No green check, and no amber for a band movement (R3): one neutral icon.
+  if (kind === 'first') return <Sparkles className="w-4 h-4 text-theme-cat-sleep" />;
+  return <ArrowRightLeft className="w-4 h-4 text-theme-muted-text-3" />;
 }

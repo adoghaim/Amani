@@ -23,15 +23,19 @@ import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
-import { authorizedLanguage, primaryFindingSentence, describeMeasuredMovement, describeComparisonBand } from '../lib/scoring/insightCopy';
+import {
+  authorizedLanguage, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
+  labIntervalObservation, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL, primaryFindingSentence, reportHeadline,
+  systemDisplayLabel, type AuthorizedLanguage,
+} from '../lib/scoring/insightCopy';
+import { SafetyWarnings } from '../components/SafetyWarnings';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
-import { contextFromReport } from '../lib/scoring/amaniContext';
+import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
-import { classifyLabValue } from '../utils/classifyLabValue';
-import { buildInsightSummary, formatPriorReportDate } from '../lib/insights/buildInsightSummary';
+import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
-import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
+import { PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourTrajectoryCard } from '../components/YourTrajectoryCard';
 import type { BaselineStatus, BaselineStaleness, TrendDirection, TrendStrength } from '../types';
 import type { InsightSummary, BiggestChange } from '../lib/insights/buildInsightSummary';
@@ -42,7 +46,7 @@ import type {
 import {
   RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, CalendarDays,
-  CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
+  CheckCircle2, Loader2, Info, Activity, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -132,17 +136,6 @@ const CORE_BIOMARKER_CATEGORIES_UI: Record<string, string> = {
   serum_iron: 'Nutrients (Iron)', tibc: 'Nutrients (Iron)', uibc: 'Nutrients (Iron)',
 };
 
-type StatusStyle = { bg: string; text: string; dot: string; label: string };
-
-const STATUS_STYLE: Record<string, StatusStyle> = {
-  in_range:    { bg: 'bg-theme-flag-ok-bg', text: 'text-theme-flag-ok', dot: 'bg-theme-flag-ok', label: 'In range' },
-  out_of_range:{ bg: 'bg-theme-flag-low-bg',     text: 'text-theme-flag-low',     dot: 'bg-theme-flag-low',     label: 'Out of range' },
-  borderline:  { bg: 'bg-theme-flag-watch-bg',   text: 'text-theme-flag-watch',   dot: 'bg-theme-flag-watch',   label: 'Borderline' },
-  unknown:     { bg: 'bg-theme-neutral-100',   text: 'text-theme-neutral-500',    dot: 'bg-theme-neutral-400',    label: 'No range' },
-};
-
-const STATUS_STYLE_FALLBACK: StatusStyle = { bg: 'bg-theme-neutral-100', text: 'text-theme-neutral-500', dot: 'bg-theme-neutral-400', label: 'No range' };
-
 const CONFIDENCE_STYLE: Record<string, string> = {
   high:   'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border',
   medium: 'text-theme-flag-watch bg-theme-flag-watch-bg border-theme-flag-watch-border',
@@ -172,20 +165,6 @@ interface OpeningContext {
   anyWorsening: boolean;
   worseningChange: BiggestChange | null;
   anyBoundaryCrossImproved: boolean;
-}
-
-function isPluralSubject(displayName: string): boolean {
-  const n = displayName.toLowerCase();
-  return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(n);
-}
-
-function conjugate(displayName: string): { remains: string; has: string; is: string } {
-  const plural = isPluralSubject(displayName);
-  return {
-    remains: plural ? 'remain' : 'remains',
-    has: plural ? 'have' : 'has',
-    is: plural ? 'are' : 'is',
-  };
 }
 
 function getOpeningContext(summary: InsightSummary): OpeningContext {
@@ -298,16 +277,23 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
   };
 }
 
+/*
+  Release invariant 1. This row is her laboratory's interval, so it says only
+  where the value sits against that interval as printed. It used to add an 8%
+  margin and call a value past the lab's bound "Borderline", a placement her
+  lab never made, coloured green, amber or red.
+*/
 function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
-  const status = classifyLabValue(
+  const label = analyte.display_name || analyte.raw_name;
+  const placement = labIntervalObservation(
+    label,
     analyte.value_numeric,
     analyte.normalized_min,
     analyte.normalized_max,
     analyte.normalized_operator,
-    analyte.normalized_operator_value
+    analyte.normalized_operator_value,
   );
-  const style = STATUS_STYLE[status] ?? STATUS_STYLE.unknown ?? STATUS_STYLE_FALLBACK;
-  const label = analyte.display_name || analyte.raw_name;
+  const style = CUE_STYLE[placement?.cue ?? 'neutral'];
   const isUnmapped = analyte.parse_status === 'unmapped';
   return (
     <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-theme-neutral-50 transition-colors">
@@ -327,9 +313,10 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
           {analyte.raw_value_text ?? analyte.value_numeric}
           {analyte.unit && <span className="text-theme-neutral-500 font-normal ml-1 text-xs">{analyte.unit}</span>}
         </span>
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}
+          data-language-category={placement?.category} data-language-source={placement?.authority.kind} data-language-cue={placement?.cue}>
           <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-          {style.label}
+          {placement?.text ?? NO_LAB_INTERVAL}
         </span>
       </div>
     </div>
@@ -368,24 +355,6 @@ function normalizeInterpretation(raw: unknown): AIInterpretation {
         ? [String(data.suggested_followups_to_discuss)]
         : [],
   };
-}
-
-function systemContextPhrase(key: BiomarkerName | null): string | null {
-  if (!key) return null;
-  const cat = getCategory(key);
-  if (!cat) return null;
-  switch (cat) {
-    case 'thyroid':       return 'thyroid function markers';
-    case 'lipids':        return 'the lipid panel';
-    case 'hormones':      return 'the rest of your hormone panel';
-    case 'metabolic':     return 'blood-sugar markers';
-    case 'kidney':        return 'kidney function markers';
-    case 'liver':         return 'liver function markers';
-    case 'inflammation':  return 'inflammation markers';
-    case 'nutrients':     return 'the rest of your nutrient panel';
-    case 'blood':         return 'the rest of your hematology panel';
-    default:              return null;
-  }
 }
 
 export function ReportView() {
@@ -928,18 +897,26 @@ export function ReportView() {
     ));
   }, [biomarkers, report]);
 
-  // Optimization-only state: clinical labs are clean (no marker outside the
-  // lab's reference range) but at least one marker is outside Amani's tighter
-  // optimal range. Used to soften "Top Priority" → "Main Focus" and to swap
-  // the headline to acknowledge both truths (Phase 8B).
-  const isOptimizationOnly = useMemo(() => {
-    const clinicallyOutOfRange = scoredBiomarkers.some(
-      s => s.labStatus === 'out_of_range_low' || s.labStatus === 'out_of_range_high',
-    );
-    const outsideOptimal = scoredBiomarkers.some(s => s.concern > 0);
-    return !clinicallyOutOfRange && outsideOptimal;
-  }, [scoredBiomarkers]);
-  const topPriorityLabel = isOptimizationOnly ? 'Main Focus' : 'Top Priority';
+  /*
+    V2-03b. "Top Priority" / "Main Focus" and the optimization-only headline
+    ranked her results and called her lab results "stable" from Amani's bands
+    (and a lab margin Amani added). The label is now a neutral selection name
+    and the headline is the policy's placement sentence. Each scored marker's
+    band language, with the report's own phase, decides what may be said.
+  */
+  const markerBandLanguage = useMemo(() => {
+    const context = contextFromReport(report?.estimated_cycle_phase);
+    const map = new Map<string, AuthorizedLanguage>();
+    for (const b of biomarkers) {
+      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context);
+      if (assessment.kind === 'scored') map.set(b.name, authorizedLanguage(assessment.band));
+    }
+    return map;
+  }, [biomarkers, report]);
+  const safetyWarnings = useMemo(
+    () => evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
+    [biomarkers],
+  );
 
   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
   // server's interpretation already carries one but it's not surfaced to the
@@ -947,8 +924,9 @@ export function ReportView() {
   // honest "first tracked" / "improved" / "worsened" sentence.
   const primaryBandLanguage = useMemo(() => {
     const key = insightSummary?.primaryFinding?.key;
-    return (key ? insightSummary?.deltaMap.get(key)?.bandLanguage : undefined) ?? authorizedLanguage(null);
-  }, [insightSummary]);
+    // The current band, with or without a prior report: a first report has no delta.
+    return (key ? markerBandLanguage.get(key) ?? insightSummary?.deltaMap.get(key)?.bandLanguage : undefined) ?? authorizedLanguage(null);
+  }, [insightSummary, markerBandLanguage]);
 
   const frontendPrimaryContext = useMemo<PrimaryContext | null>(() => {
     if (!insightSummary?.primaryFinding) return null;
@@ -1499,6 +1477,9 @@ export function ReportView() {
             && (generating || accessState?.access === 'error' || accessState?.access === 'generation_needed')
             && freemiumPanel}
 
+          {/* ── A. Safety channel: approved deterministic rules only, never band-derived ── */}
+          {!isProcessing && <SafetyWarnings warnings={safetyWarnings} />}
+
           {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
@@ -1526,81 +1507,23 @@ export function ReportView() {
                     const isStableAbnormal = ctx?.primaryIsStableAbnormal && ctx?.primaryStableChange !== null;
 
                     if (insightSummary) {
-                      const allFindings = insightSummary.primaryFinding ? [insightSummary.primaryFinding, ...insightSummary.topFindings] : insightSummary.topFindings;
-                      const outOfRange = allFindings.filter(f => f.status === 'out_of_range');
-                      const borderline = allFindings.filter(f => f.status === 'borderline');
-                      const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
-                      const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
-                      const topConj = topName ? conjugate(topName) : { remains: 'remains', has: 'has', is: 'is' };
-                      const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? `${topConj.remains} low` : `${topConj.remains} elevated`;
-
-                      // Force trajectory headline override if improving
-                      if (isImproving && ctx.primaryImprovingChange) {
-                        const ch = ctx.primaryImprovingChange;
-                        const worsened = ctx.worseningChange;
-                        const secondaryFinding = outOfRange.find(f => f.displayName !== topName)
-                          ?? borderline.find(f => f.displayName !== topName)
-                          ?? null;
-                        const main = ch.priorReportDate
-                          ? `${topName} ${dirLabel} but ${topConj.has} improved since ${formatPriorReportDate(ch.priorReportDate)}.`
-                          : `${topName} ${dirLabel} but ${topConj.has} improved since your prior report.`;
-                        if (worsened && worsened.displayName !== topName) {
-                          const wConj = conjugate(worsened.displayName);
-                          const w = worsened.trendDirection === 'up' ? `${wConj.has} risen` : worsened.trendDirection === 'down' ? `${wConj.has} dropped` : `${wConj.has} shifted`;
-                          return `${main} Your ${worsened.displayName} ${w} since your last report and ${wConj.is} worth monitoring.`;
-                        }
-                        if (secondaryFinding) {
-                          const sConj = conjugate(secondaryFinding.displayName);
-                          const dirWord = secondaryFinding.direction === 'low' ? 'low' : 'high';
-                          return `${main} Your ${secondaryFinding.displayName} ${sConj.is} also ${dirWord} and worth monitoring.`;
-                        }
-                        return main;
-                      }
-
-                      // A comparison trajectory authorizes observations, never advice.
-                      const observedChange = isWorsening ? ctx.primaryWorseningChange
+                      // A comparison trajectory authorizes observations, never
+                      // judgement or advice, in either direction (R1, R2).
+                      const observedChange = isImproving ? ctx.primaryImprovingChange
+                        : isWorsening ? ctx.primaryWorseningChange
                         : isStableAbnormal ? ctx.primaryStableChange : null;
                       if (observedChange) {
                         return <ClinicalObservation language={describeMeasuredMovement(observedChange)} />;
                       }
 
-                      // Deterministic safety net (Phase 8B): when labs are clinically
-                      // stable but at least one marker is outside Amani's optimal range,
-                      // override any AI headline so it never says "all within range"
-                      // while the UI flags a marker as Outside Optimal.
-                      if (isOptimizationOnly && insightSummary.primaryFinding) {
-                        return `Your standard lab ranges look stable overall, with ${insightSummary.primaryFinding.displayName} standing out as the main area to optimize.`;
-                      }
-
-                      // If AI headline available and no trajectory override, use AI headline
-                      if (interpretation?.headline) return interpretation.headline;
-
-                      // Fallbacks if no AI headline
-                      if (outOfRange.length === 0 && borderline.length === 0) {
-                        if (ctx?.anyBoundaryCrossImproved) {
-                          const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `All values are within Amani's context bands, and ${name} has improved since your last draw.`;
-                        }
-                        return 'All scored values are within Amani\'s context bands, which are still under review.';
-                      }
-
-                      if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
-                        return `${topName} is outside the Amani band and ${secondName} is borderline. These are the two areas worth focusing on.`;
-                      }
-                      if (outOfRange.length >= 2 && secondName) {
-                        return `${topName} and ${secondName} are both outside the Amani band. These are your top priorities.`;
-                      }
-                      if (outOfRange.length === 1 && borderline.length === 0) {
-                        if (ctx?.anyBoundaryCrossImproved) {
-                          const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `${topName} is outside the Amani band, though ${name} has improved since your last report.`;
-                        }
-                        return `${topName} is outside the Amani band and is the primary finding on this panel.`;
-                      }
-                      if (borderline.length >= 2 && secondName) {
-                        return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;
-                      }
-                      return `${topName} is borderline. Worth keeping an eye on over time.`;
+                      // Amani writes the headline from its own data. A model headline
+                      // is not authority for clinical meaning ("because the LLM
+                      // generated it" is inadmissible), and it could read "all within
+                      // range" while a card says otherwise (Phase 8B, kept).
+                      const allFindings = insightSummary.primaryFinding ? [insightSummary.primaryFinding, ...insightSummary.topFindings] : insightSummary.topFindings;
+                      const outside = allFindings.map(f => ({ name: f.displayName, language: markerBandLanguage.get(f.key) ?? authorizedLanguage(null) }));
+                      const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
+                      return <ClinicalObservation language={headline} />;
                     }
                     return interpretation?.headline || '';
                   })()}
@@ -1613,43 +1536,13 @@ export function ReportView() {
                 const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
                 const isWorsening = ctx?.primaryIsWorsening && ctx?.primaryWorseningChange !== null;
                 const isStableAbnormal = ctx?.primaryIsStableAbnormal && ctx?.primaryStableChange !== null;
-                const aiTitleMatchesPrimary =
-                  !!interpretation?.primary_concern &&
-                  !!insightSummary?.primaryFinding &&
-                  (interpretation.primary_concern as { canonical_slug?: string }).canonical_slug === insightSummary.primaryFinding.key;
-
-                // 1a. Deterministic Override — Improving
-                if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
-                  const pf = insightSummary.primaryFinding;
-                  const conj = conjugate(pf.displayName);
-                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
-                  const subnote = `${pf.displayName} ${conj.is} still ${dirWord === 'low' ? 'below range' : 'above range'}, but the trend is moving in the right direction. Continue tracking this${ctxPhrase ? ` alongside ${ctxPhrase}` : ''}.`;
-                  return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-flag-ok/15">
-                          <AlertTriangle className="w-5 h-5 text-theme-flag-ok" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-theme-flag-ok">
-                            {topPriorityLabel}
-                          </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
-                          </p>
-                          <p className="text-xs text-theme-flag-ok leading-relaxed border-l-2 border-theme-flag-ok-border/60 pl-3">
-                            {subnote}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
 
                 // Comparison movement and magnitude keep a neutral attention cue.
                 // AI prose is not independent authority for advice in this channel.
-                const observedChange = isWorsening ? ctx.primaryWorseningChange
+                // V2-03b: movement toward a band is the same observation; its
+                // green "right direction" branch had only a boolean's authority.
+                const observedChange = isImproving ? ctx.primaryImprovingChange
+                  : isWorsening ? ctx.primaryWorseningChange
                   : isStableAbnormal ? ctx.primaryStableChange : null;
                 if (observedChange && insightSummary?.primaryFinding) {
                   return (
@@ -1670,52 +1563,26 @@ export function ReportView() {
                   );
                 }
 
-                // 2. Standard AI Path — only when AI title matches deterministic primary
-                if (interpretation?.primary_concern && aiTitleMatchesPrimary) {
-                  return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            {topPriorityLabel}
-                          </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {interpretation.primary_concern.title}
-                          </p>
-                          <p className="text-sm text-theme-text-body leading-relaxed">
-                            {interpretation.primary_concern.summary}
-                          </p>
-                          {interpretation.primary_concern.why_it_matters && (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
-                              {interpretation.primary_concern.why_it_matters}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // 3. Complete Fallback Path
+                // V2-03b: the model's primary_concern title, summary and
+                // why_it_matters no longer render here. A model is not authority
+                // for clinical meaning, and the warning triangle signalled danger
+                // from an unreviewed band. The deterministic finding remains.
                 if (insightSummary?.primaryFinding) {
                   return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                    <div data-testid="primary-finding" className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
+                        <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Info aria-hidden="true" className="w-5 h-5 text-theme-muted-text-2" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            {topPriorityLabel}
+                          <p className="text-[11px] font-extrabold text-theme-muted-text-2 uppercase tracking-[0.15em] mb-2">
+                            {PRIMARY_FINDING_LABEL}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {primaryFindingSentence(insightSummary.primaryFinding)}
+                            {primaryFindingSentence(insightSummary.primaryFinding, primaryBandLanguage)}
                           </p>
                         </div>
                       </div>
@@ -1938,7 +1805,7 @@ export function ReportView() {
                   Health Systems
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-theme-primary">
-                      : {CATEGORY_DISPLAY[activeCategory].label}
+                      : {systemDisplayLabel(activeCategory)}
                       <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
                         clear
                       </button>
@@ -1984,11 +1851,11 @@ export function ReportView() {
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="text-sm font-semibold text-theme-text">
-                            {CATEGORY_DISPLAY[category].label}
+                            {systemDisplayLabel(category)}
                           </span>
                           {flaggedCount > 0 && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-flag-watch-bg text-theme-flag-watch">
-                              {flaggedCount} outside Amani band
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CUE_STYLE.attention.bg} ${CUE_STYLE.attention.text}`}>
+                              {outsideBandCount(flaggedCount)}
                             </span>
                           )}
                         </div>

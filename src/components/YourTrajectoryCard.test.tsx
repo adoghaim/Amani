@@ -82,10 +82,9 @@ describe('B2 — a boundary crossing never prints "optimal" for an unreviewed ba
 
   it('a bucket it does not recognise is never echoed', () => {
     const c = { ...change('tsh', 'normalized', 'significant'), boundaryCrossing: { from: 'out_of_range', to: 'optimal', direction: 'improved' } };
-    // Amendment 4 R1: the bucket-echo guard only matters where favourable
-    // wording is authorized, so it is now exercised with synthetic authority.
+    // V2-03b: no crossing sentence names a bucket, even under synthetic authority.
     const [bullet] = selectTrajectoryBullets([c], null, new Map([['tsh', AUTHORIZED]]));
-    expect(bullet?.text).toBe('tsh has moved toward the Amani band.');
+    expect(bullet?.text).toBe("tsh changed from its previous range classification. This compares your result with Amani's reviewed comparison band.");
     const [neutral] = selectTrajectoryBullets([c], null);
     expect(neutral?.text).not.toMatch(/optimal|improv/i);
   });

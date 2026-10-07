@@ -131,11 +131,13 @@ export function GuidanceCards({ cards }: GuidanceCardsProps) {
 
                   {card.note && (
                     <div className="mt-2.5 pt-2 border-t border-theme-border-inner">
+                      {/* "Note", not "Safety note": a disclaimer is not the safety channel. */}
                       <p className="text-[10px] uppercase tracking-wide font-medium text-theme-muted-text-3 mb-0.5">
-                        Safety note
+                        Note
                       </p>
-                      <p className="text-[11px] text-theme-muted-text-3 leading-relaxed">
-                        {card.note}
+                      <p className="text-[11px] text-theme-muted-text-3 leading-relaxed"
+                        data-language-category={card.note.category} data-language-source={card.note.authority.kind}>
+                        {card.note.text}
                       </p>
                     </div>
                   )}

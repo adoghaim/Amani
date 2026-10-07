@@ -110,7 +110,8 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
         }
         const byReport: Record<string, (r: SyntheticReport) => unknown[]> = {
           '/rest/v1/biomarkers': r => r.biomarkers,
-          '/rest/v1/report_analytes': () => [],
+          // V2-03b: a fixture may carry its own lab-panel rows; absent means [] as before.
+          '/rest/v1/report_analytes': r => r.analytes ?? [],
           '/rest/v1/interpretations': r => [r.interpretation],
         };
         // ReportView also polls interpretations with this narrower projection
