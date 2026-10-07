@@ -1,4 +1,5 @@
 import type { ComputedDerivedMetric } from '../utils/derivedMetrics';
+import { withoutOptimalClaims } from '../lib/scoring/insightCopy';
 
 const METRIC_META: Record<string, { label: string; description: string; optimalLow: number; optimalHigh: number; unit: string }> = {
   HOMA_IR: {
@@ -65,7 +66,7 @@ export function DerivedMetricsPanel({ metrics }: Props) {
                     <h3 className="text-sm text-theme-text">{meta.label}</h3>
                   </div>
                   <p className="text-xs text-theme-muted-text-2 mb-3">{meta.description}</p>
-                  <p className="text-sm text-theme-text">{metric.interpretation}</p>
+                  <p className="text-sm text-theme-text">{withoutOptimalClaims(metric.interpretation)}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-2xl font-bold text-theme-text">

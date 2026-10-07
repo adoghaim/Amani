@@ -20,6 +20,7 @@ import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { gateInsightMatches } from '../lib/scoring/insightGate';
+import { primaryFindingSentence } from '../lib/scoring/insightCopy';
 import { contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import { classifyLabValue } from '../utils/classifyLabValue';
@@ -1768,7 +1769,7 @@ export function ReportView() {
                             {insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.fact}
+                            {primaryFindingSentence(insightSummary.primaryFinding)}
                           </p>
                         </div>
                       </div>

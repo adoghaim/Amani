@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AlertTriangle, TrendingUp, TrendingDown, ArrowDownRight, ArrowUpRight, Minus, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 import type { TopFinding, BiggestChange } from '../lib/insights/buildInsightSummary';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
+import { withoutOptimalClaims } from '../lib/scoring/insightCopy';
 
 interface Props {
   finding: TopFinding;
@@ -23,7 +24,7 @@ function getTrajectory(delta: BiggestChange | null | undefined): Trajectory {
 
 export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
   const [explanationOpen, setExplanationOpen] = useState(false);
-  const biomarkerExplanation = getBiomarkerExplanation(finding.key);
+  const biomarkerExplanation = withoutOptimalClaims(getBiomarkerExplanation(finding.key) ?? '');
   const isExtreme = finding.deviationMultiplier >= 3;
   const dirLabel = finding.direction === 'high' ? 'significantly elevated' : finding.direction === 'low' ? 'significantly low' : 'outside the Amani band';
   const extremeLabel = finding.direction === 'low' ? 'Far below range' : 'Far above range';

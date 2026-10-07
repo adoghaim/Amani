@@ -1,5 +1,6 @@
 import { Compass } from 'lucide-react';
 import type { FocusArea, FocusAreaMarker } from '../lib/insights/buildFocusAreas';
+import { FOCUS_AREA_BAND_SENTENCE, withoutOptimalClaims } from '../lib/scoring/insightCopy';
 
 interface FocusAreasProps {
   focusAreas: FocusArea[];
@@ -66,7 +67,7 @@ export function FocusAreas({ focusAreas }: FocusAreasProps) {
                 {area.title}
               </h3>
               <p className="text-xs text-theme-muted-text-2 leading-relaxed mt-1.5">
-                {area.whyItMatters}
+                {withoutOptimalClaims(area.whyItMatters, FOCUS_AREA_BAND_SENTENCE)}
               </p>
 
               {area.relatedMarkers.length > 0 && (

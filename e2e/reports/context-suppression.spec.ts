@@ -50,7 +50,12 @@ test.describe('cycle phase missing from the report', () => {
     await expect(tsh.getByText('Not yet reviewed', { exact: true })).toBeVisible();
     await tsh.getByRole('button').click();
     await expect(tsh.getByText("Within your lab's range", { exact: true })).toBeVisible();
-    await expect(page.getByText(/\bOptimal\b/)).toHaveCount(0);
+    // Amendment 3: the expanded card's "Why this matters" copy comes from
+    // src/lib/insights and said "outside the optimal range" until qualified.
+    await expect(tsh.getByText('Why this matters', { exact: true })).toBeVisible();
+    await expect(tsh.getByText(/^TSH is produced by the pituitary gland/)).toBeVisible();
+    // Any casing, any position, anywhere on the page.
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
 
   test('3. a cycle-dependent hormone with missing phase receives no Amani context score', async ({ page }) => {
@@ -61,7 +66,8 @@ test.describe('cycle phase missing from the report', () => {
       await expect(note).toContainText('Add or confirm your cycle phase for a more specific interpretation.');
       await expect(marker.getByText('Context needed', { exact: true })).toBeVisible();
       await expect(marker.getByRole('term').filter({ hasText: 'Amani context band' })).toHaveCount(0);
-      await expect(marker.getByText(/Within Amani band|Outside Amani band|Borderline|Normal|Optimal/)).toHaveCount(0);
+      await expect(marker.getByText(/Within Amani band|Outside Amani band|Borderline|Normal/)).toHaveCount(0);
+      await expect(marker.getByText(/optimal/i)).toHaveCount(0);
     }
     // A system whose markers are all withheld is not summarised as reassuring.
     await expect(page.getByRole('button', { name: /^Hormones Not scored 4 markers · 0 scored by Amani$/ })).toBeVisible();
@@ -101,7 +107,19 @@ test.describe('cycle phase recorded on the report', () => {
     const lh = card(page, 'LH');
     await expect(lh.getByRole('note')).toHaveCount(0);
     await expect(lh.getByRole('term').filter({ hasText: 'Amani context band (luteal phase):' })).toBeVisible();
-    await expect(page.getByText(/\bOptimal\b/)).toHaveCount(0);
+    // Amendment 3. The fixture has no AI primary_concern, so Top Priority takes
+    // its deterministic fallback, which used to echo TopFinding.fact verbatim:
+    // "Progesterone is below the optimal range at 2 ng/mL".
+    await expect(page.getByText(
+      "Progesterone is below the Amani band at 2 ng/mL. Amani's context bands are still under review.",
+      { exact: true },
+    )).toBeVisible();
+    // The persistent half: the cycle_hormones focus area said "Reproductive-hormone
+    // markers are outside the optimal range" for the life of the report.
+    const focus = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Cycle hormones', exact: true }) });
+    await expect(focus.getByText(/^One or more of these markers is borderline or outside its Amani band\./)).toBeVisible();
+    // Any casing, any position, anywhere on the page.
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
 });
 

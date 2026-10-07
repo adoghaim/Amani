@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Minus, List } from 'lucide-react';
 import type { TopFinding } from '../lib/insights/buildInsightSummary';
+import { primaryFindingSentence } from '../lib/scoring/insightCopy';
 
 type FindingStyle = {
   bg: string; border: string; text: string; badge: string;
@@ -94,7 +95,7 @@ export function TopFindingsCard({ findings, aiExplanations, isPrimary = true }: 
                     </div>
                   </div>
                   <p className={`text-xs leading-relaxed ${style.text}`}>
-                    {aiExplanation ?? finding.fact}
+                    {aiExplanation ?? primaryFindingSentence(finding)}
                   </p>
                 </div>
               </div>

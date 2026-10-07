@@ -14,6 +14,7 @@ import {
 import { getDisplayName } from '../lib/biomarkers/dictionary';
 import type { BiomarkerName, CyclePhase, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
+import { withoutOptimalClaims } from '../lib/scoring/insightCopy';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
@@ -378,7 +379,7 @@ export function BiomarkerCard({
           />
 
           {(() => {
-            const explanation = getBiomarkerExplanation(name);
+            const explanation = withoutOptimalClaims(getBiomarkerExplanation(name) ?? '');
             if (!explanation) return null;
             return (
               <div className="flex items-start gap-2 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2.5">

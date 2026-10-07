@@ -19,6 +19,8 @@ word "Optimal" is reachable only through `canDescribeAsOptimal`, which no band p
 The report card shows the laboratory's interval (from `biomarkers.reference_min/max` only)
 and Amani's band as two separately labelled rows. Turn 4 (amendment 2, §9) extends the same
 rules to the insight-flag panel and the trajectory card, where review found two breaches.
+Turn 5 (amendment 3, §10) closes a third: copy built in `src/lib/insights` reached the page
+verbatim through in-scope call sites and still said "optimal range".
 
 ## 2. Design decisions the Lead should check
 
@@ -86,6 +88,27 @@ report page that the matrix said was covered:
 Both are fixed in turn 4 (§9). They are recorded here because the earlier coverage claim was
 wrong, not because they are now green.
 
+**Second correction on the record (Lead amendment 3).** The turn-4 version of this matrix still
+said invariant 3 was covered on the report page. **It was breached, persistently, on the primary
+page**, for this task's own luteal fixture (progesterone 2, LH 30, a known luteal phase, so
+withholding never applied):
+
+- **Top Priority.** `ReportView.tsx` branch 3 is the fallback used when there is no
+  `primary_concern`. Every report passes through it while `status` is `ready` and before AI
+  interpretation exists. It rendered `TopFinding.fact` verbatim: **"Progesterone is below the
+  optimal range at 2 ng/mL"**, about a band whose review status is `DISPUTED`.
+- **Focus areas.** `src/components/FocusAreas.tsx` is gated only on `!isProcessing`. It rendered
+  `FocusArea.whyItMatters` verbatim: **"Reproductive-hormone markers are outside the optimal
+  range…"**, for the life of the report and independent of AI state. It fires on the follicular
+  fixture too.
+
+Both proofs were blind to it. Specs 2 and 6 still asserted the capital-only, word-bounded
+`/\bOptimal\b/` that amendment 2 had ruled insufficient, so a lowercase "optimal range"
+mid-sentence passed. The Vitest scan pinned the out-of-scope definitions by count but did not
+follow them to where they render. Both are fixed in turn 5 (§10). Widening spec 2 exposed a
+third render site of the same class, also fixed there: the expanded TSH card's "Why this
+matters" text ("Levels outside the optimal range can reflect…").
+
 The matrix states coverage **per surface**. "Covered" means a logic test and a browser test
 both fail if the invariant breaks on that surface. Each new turn-4 proof was run against the
 reverted fix and seen to fail (§9).
@@ -94,12 +117,16 @@ reverted fix and seen to fail (§9).
 |---|---|---|---|---|
 | 1 | Lab interval never confused with catalog `lab_reference` | Biomarker card | `amaniContext.test.ts` "invariant 1"; `BiomarkerCard.test.tsx` | spec 1, spec 5 |
 | 2 | Amani band carries review status | Biomarker card | `amaniContext.test.ts` "invariant 2" | spec 1/2 ("Not yet reviewed"), spec 6 ("Disputed range, under review") |
-| 3 | No unreviewed band reads as unqualified "optimal" | Biomarker card, status pill | `amaniContext.test.ts` "invariant 3" (the gate is `canDescribeAsOptimal`) | spec 2, spec 6 (no `\bOptimal\b` on the page) |
+| 3 | No unreviewed band reads as unqualified "optimal" | Biomarker card, status pill | `amaniContext.test.ts` "invariant 3" (the gate is `canDescribeAsOptimal`) | spec 2, spec 6 (no `/optimal/i` anywhere on the page; turn 4 used `\bOptimal\b`, which could not see the breaches below) |
+| 3 | 〃 | **Top Priority fallback** (amendment 3) | `insightCopy.test.ts` (real `buildInsightSummary` on the luteal panel still emits the claim; the rendered sentence does not); render-path scan in `optimalWording.test.ts` | **spec 6** (exact qualified sentence; no `/optimal/i`) |
+| 3 | 〃 | **Focus areas** (amendment 3) | `insightCopy.test.ts` (real `buildFocusAreas`); `FocusAreas.test.tsx` (every string in the builder source, rendered); render-path scan | **spec 6** (Cycle hormones card text; no `/optimal/i`) |
+| 3 | 〃 | **Biomarker card "Why this matters"** (amendment 3) | `insightCopy.test.ts` (every explanation qualified, non-empty); render-path scan | **spec 2** (TSH expanded; explanation visible; no `/optimal/i`) |
+| 3 | 〃 | `DoctorQuestionsCard` | `FocusAreas.test.tsx` (an optimality question is dropped whole) | Not exercised: no fixture produces such a question (the generating branch needs a concern-2 status with no direction) |
 | 3 | 〃 | **Your trajectory** (B2, found by review) | `YourTrajectoryCard.test.tsx` "B2" (real compare → summary → card chain; every sentence; an unknown bucket is never echoed) | **spec 9** (two reports; no `/optimal/i` anywhere on the page) |
 | 3 | 〃 | `BiggestChangesCard`, `WhatThisMeansCard`, `PrimaryInsightCard` (no page renders them today) | `BiggestChangesCard.test.tsx`; `optimalWording.test.ts` | Not browser-visible: no route renders them |
 | 3 | 〃 | All copy in `src/components`, `src/pages`, `src/lib/scoring`, `src/lib/biomarkers` | `optimalWording.test.ts`: TypeScript-AST scan of every string, template chunk and JSX text, any casing and position; a self-test proves it catches the B2 sentence | (per-surface specs above) |
 | 3 | 〃 | **Insight-flag copy** (`src/utils/derivedMetrics.ts`, frozen clinical wording) | **NOT covered.** Pinned by count in `optimalWording.test.ts` so it cannot grow | **NOT covered.** e.g. "Vitamin D Below Optimal" can still render |
-| 3 | 〃 | **Narrative insight copy** (`src/lib/insights/**`, outside allowed paths) | **NOT covered.** Pinned by count | **NOT covered** (§7) |
+| 3 | 〃 | **Narrative insight copy** (`src/lib/insights/**`, outside allowed paths) | Definitions pinned by count; **every in-scope render site** qualified and held by the render-path scan (§10) | Specs 2 and 6 for the three live sites |
 | 3 | 〃 | Server AI interpretation (`supabase/functions/**`, forbidden) | **NOT covered** | **NOT covered** (§7) |
 | 4 | Missing context withholds; no broad fallback | Biomarker card, system summary | `amaniContext.test.ts` "invariant 4"; `amaniContext.data.test.ts` (data-driven); `scoreBiomarker.test.ts` | spec 3 (progesterone, estradiol, **LH, FSH**; Hormones "Not scored 4 markers") |
 | 4 | 〃 | Report comparison deltas | `amaniContext.test.ts` "longitudinal history" | spec 9 renders the trajectory surface; a withheld marker's trajectory is not separately browser-proven |
@@ -169,9 +196,18 @@ unreviewed band:
    "optimal" terms beside a card that says "Context needed" or "Not yet reviewed".
 2. **Narrative insight copy** — `src/lib/insights/**` (outside allowed paths): 17 string
    nodes across four files say "optimal" (e.g. "remains elevated above the optimal range").
-   Pinned by count in `optimalWording.test.ts`. One side effect of the B2 rename reaches this
-   code without editing it: its boundary sentences now read "from borderline to within band"
-   instead of "to optimal".
+   The definitions are still there and still pinned by count. **Turn 4 recorded this surface
+   as "not covered" while two of those strings rendered unqualified on the primary report page:**
+   - `TopFinding.fact` ("Progesterone is below the optimal range at 2 ng/mL"), through Top
+     Priority branch 3 in `ReportView.tsx`;
+   - `FocusArea.whyItMatters` ("Reproductive-hormone markers are outside the optimal range…"),
+     through `src/components/FocusAreas.tsx`.
+
+   §3 claimed invariant 3 was covered on that page while it was persistently breached. Turn 5
+   qualifies both strings at the call site, plus the BiomarkerCard explanation, without editing
+   `src/lib/insights/**` (§10). The definitions themselves remain, and a separate task owns them.
+   One side effect of the B2 rename reaches this code without any edit to it: its boundary
+   sentences now read "from borderline to within band" instead of "to optimal".
 3. **Insight-flag copy** — `src/utils/derivedMetrics.ts`: 13 string nodes (titles such as
    "Vitamin D Below Optimal"; descriptions such as "below the Amani optimal range", and the
    PCOS copy "outside the optimal range"). Amendment 2 forbids changing rule thresholds or
@@ -182,6 +218,17 @@ unreviewed band:
    review state; relabelled "Amani band" in turn 2, still unreviewed.
 
 ## 7a. Inferred / residual risks
+
+- **Render-path scan blind spots (turn 5).** The scan follows declared types, not values, so a
+  component that redeclares the shape structurally evades it. `InsightFlagsPanel` declares its
+  own `FlagItem`, so frozen `derivedMetrics` copy reaches it unseen; that copy is §7 item 3,
+  deferred by ruling. The scan also does not trace function parameters across components, JSX
+  attribute values, or filters, which is why `DoctorQuestion.text` is a reviewed entry.
+  Identity fields (display names, units, ids, dates, range labels, crossing direction) are
+  exempt by a reviewed list, not by proof.
+- **Spec 6's page-wide `/optimal/i` holds only while "Patterns & Insights" is collapsed.** If a
+  user opens that panel on the luteal fixture, the frozen luteal-insufficiency description
+  ("optimal: 5–25 ng/mL") is a legitimately shown card. §7 item 3 still applies to it.
 
 - **B1 gate scope.** A rule is dropped only when a declared analyte is **present** on the
   report and withheld. A declared analyte absent from the report is not an input, so it does
@@ -249,3 +296,80 @@ back to "optimal range", spec 7 failed on chromium (`Possible PCOS-Related Patte
 expected 0), and so did spec 9 (`/optimal/i` count 1, expected 0). Seven Vitest cases failed:
 the `insightGate` wiring test, both B2 suites, `BiggestChangesCard` and the AST scan. With the
 fixes restored, all of them pass on all three browsers.
+
+## 10. Amendment 3 (turn 5) — out-of-scope copy rendered verbatim on the report page
+
+**Root cause.** Copy built in `src/lib/insights`, outside allowed paths, reached the page
+verbatim through in-scope call sites. The fix only touches those call sites.
+**`src/lib/insights/**`, `src/utils/derivedMetrics.ts` and `supabase/**` are byte-unchanged.**
+
+**Fix.** `src/lib/scoring/insightCopy.ts` holds the render-side qualifiers. Nothing in it passes
+`canDescribeAsOptimal`, so nothing in it says "optimal".
+- **`ReportView.tsx` branch 3** now builds its text locally, as branches 1a–1c already did, and no
+  longer echoes `.fact`. `primaryFindingSentence` gives "Progesterone is below the Amani band at
+  2 ng/mL. Amani's context bands are still under review."
+- **`FocusAreas.tsx`** renders `withoutOptimalClaims(whyItMatters, FOCUS_AREA_BAND_SENTENCE)`.
+  The sentences that claim optimality are replaced, once, with "One or more of these markers is
+  borderline or outside its Amani band. Amani's context bands are still under review." The rule's
+  other sentences stay, for example "Cycle phase context matters…". No rule threshold or match
+  logic changed.
+- **`BiomarkerCard` "Why this matters"** (same class, also live) drops the TSH optimality
+  sentence. Widening spec 2's pattern exposed it, because spec 2 expands the TSH card.
+- **Same class, closed defensively, not live today:**
+  - `DoctorQuestionsCard` drops an optimality question whole. No fixture produces one.
+  - `PrimaryInsightCard`, `TopFindingsCard` and `WhatToWatchCard` use the same qualifiers. No
+    route renders them.
+  - `DerivedMetricsPanel` interpretation uses them too. The panel renders only the HOMA-IR
+    entry, and that copy has no "optimal".
+
+**B3 finished.** `context-suppression.spec.ts` now uses `/optimal/i` everywhere it used
+`/\bOptimal\b/`, in specs 2 and 6. Spec 3's per-marker status regex had `Optimal` inside an
+alternation; I moved it to its own case-insensitive assertion. Three assertions were added:
+- spec 6 checks the exact Top Priority sentence;
+- spec 6 checks the Cycle hormones focus-area text;
+- spec 2 checks that the qualified explanation renders.
+
+Spec 8 still has no page-wide "optimal" assertion: the PCOS card it legitimately shows carries
+frozen copy (§7 item 3).
+
+**Render-path scan** (`optimalWording.test.ts`). It uses the TypeScript checker on every JSX child
+expression in `src/components` and `src/pages`. It flags a free-text value (type `string`, not a
+literal union) when it is read from a property, or returned by a function, declared in
+`src/lib/insights/**` or `src/utils/derivedMetrics.ts`. It follows local consts to their
+initialisers. A read passes only inside `withoutOptimalClaims` or `primaryFindingSentence`. Four
+remaining sinks are listed exactly, each with its reason, and identity fields are on a reviewed
+list. A self-test on a probe file shows the scan catches `{f.fact}` and a `whyItMatters` passed
+through a local const, and lets the qualified form through.
+
+**Negative controls (each run, then restored by re-applying the fix):**
+1. **Branch 3 reverted** to `{insightSummary.primaryFinding.fact}`.
+   - `npx vitest run src/lib/scoring/optimalWording.test.ts`: 1 failed, with extra sink
+     `src/pages/ReportView.tsx: TopFinding.fact`.
+   - `npm run test:e2e -- e2e/reports/context-suppression.spec.ts --project=chromium --reporter=line --grep "6\. valid context"`:
+     failed. The page snapshot showed the paragraph "Progesterone is below the optimal range at
+     2 ng/mL".
+2. **FocusAreas reverted** to `{area.whyItMatters}`.
+   - The same Vitest command plus `src/components/FocusAreas.test.tsx`: 6 failed across both files.
+   - Spec 6 failed on the Cycle hormones locator. The snapshot showed "Reproductive-hormone
+     markers are outside the optimal range. Cycle phase context matters…".
+3. **BiomarkerCard explanation left unqualified.**
+   - The scan failed with `src/components/BiomarkerCard.tsx: getBiomarkerExplanation()`.
+   - Spec 2 (`--grep "2\. an unapproved"`) failed: `getByText(/optimal/i)` expected 0, received 1.
+4. **Old pattern, with control 3 still in place.** Spec 2's pattern restored to `/\bOptimal\b/`:
+   spec 2 **passed**. That is direct proof the turn-4 browser assertion could not see this
+   defect class.
+
+**Verified in turn 5, in this worktree:**
+- `npm test`: 60 files, 1338 tests.
+- `npm run typecheck`: 0 errors. `npm run lint`: 0 errors, 9 pre-existing warnings.
+- `npm run build`: success.
+- `npm run clinical:check`: 83 entries; 83 analytes / 198 ranges. `npm run clinical:test`: 50/50.
+- `npm run test:e2e`: 57/57 across chromium, webkit and firefox.
+- `npm run test:e2e:isolation`: passes.
+- `npm run test:e2e -- --repeat-each=3`, run four times: three runs gave 171/171. **The first
+  printed "160 passed", and a `tail` cut lost its line about the other 11.** It did not
+  reproduce, so the Lead should treat it as a possible flake and re-run.
+- `FreemiumReportPanel.test.tsx` passes untouched.
+
+No SQL, migration, catalog, `src/lib/insights/**`, `src/utils/derivedMetrics.ts` or `supabase/**`
+file changed, so the Docker harness was not re-run. It is SKIPPED by policy in any case.

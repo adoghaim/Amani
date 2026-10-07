@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { MessageSquare, Copy, CheckCircle2 } from 'lucide-react';
 import type { DoctorQuestion } from '../lib/insights/buildInsightSummary';
+import { claimsOptimal } from '../lib/scoring/insightCopy';
 
 interface Props {
   questions: DoctorQuestion[];
 }
 
-export function DoctorQuestionsCard({ questions }: Props) {
+export function DoctorQuestionsCard({ questions: built }: Props) {
   const [copied, setCopied] = useState(false);
+  // A question is one sentence plus its follow-up, so it is dropped whole
+  // rather than left with an orphaned "What does this mean...?".
+  const questions = built.filter(q => !claimsOptimal(q.text));
 
   if (questions.length === 0) return null;
 
