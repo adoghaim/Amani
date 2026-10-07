@@ -1,3 +1,49 @@
+# TASK-045 — turn 6 / amendment 4: guard coverage by dimension (PARTIAL)
+
+Approach: the producer-literal guard in `src/lib/scoring/optimalWording.test.ts` had three independent coverage dimensions and only one was probed. Fix each at its root, give each its own committed probe and negative control, then regenerate the pin and classify every new entry. No production source, clinical value, threshold, evidence grade or review status changed. Only the guard, its two JSON inputs and this report changed.
+
+## Coverage enumerated per dimension (standing rule 4)
+
+| Dimension | Before | Now | Committed probe | Negative control (temporary mutation, restored) |
+| --- | --- | --- | --- | --- |
+| Directories | Scanned an allow-list of roots. `excluded` accepted any non-empty reason string. `src/types` reason was false. `src/lib` direct files were excluded with a reason admitting they hold clinical copy. | The inventory scans **every** `.ts/.tsx` under `src` except tests, the policy author and `test-data` dirs. There is no directory allow-list. `excluded` is proven by scanning the directory's direct files: any match fails. `test-data` is proven by scanning every production file's static and dynamic imports: any import reaching test data fails. `src/lib` and `src/types` are reclassified `scanned`, and the false `src/types` reason was replaced, not reworded. | (a) A claim in a new top-level dir and in a new dir under a scanned tree fails both the directory and the inventory checks. (b) `'Reassuring'` dropped into **each** of the 5 excluded dirs fails the exclusion proof and the inventory. (c) A production re-export of a parser fixture fails the test-data proof. | Exclusion scan disabled → probe (b) fails (`src: expected [Function] to throw`), 15/16 pass. Import proof disabled → probe (c) fails, 15/16 pass. |
+| Shapes | `/\s/` gate: every one-word string was skipped. | The same identifier test as the optimal scan (`/^[a-z][a-z0-9_]*$/`): only lowercase snake_case code values are exempt. | Unit test: `Normal`, `Abnormal`, `Reassuring`, `Discuss`, `Monitor`, `NORMAL`, `font-normal` are detected in both object literals and JSX. Inventory probe: a single word appended to 4 **existing** scanned files fails the inventory. | Old `/\s/` gate restored → the shape unit test fails, and the pin no longer matches. Built-in controls: `'normal'`, `'reassuring'`, `'discuss'`, `'monitor'`, `'Track'` and `'Retest'` are not hits, and a snake_case value appended to `statusPill.ts` passes. |
+| Vocabulary | Singular `band\|range`; `review(?:ed)?`, `concerning`, `reassuring`, `elevated`, `risk`, `caution` and `worth discussing` were exact forms. | `bands?`, `ranges?`, `review\w*`, `concern\w*`, `reassur\w*`, `elevat\w*`, `risks?`, `caution\w*`, `discuss\w*` and `monitor\w*` are inflected forms. Tense variants of `is high/low` were added. New concepts: `borderline`, `needs/mild attention`, `optimi[sz]\w*`, `urgent\w*`, and whole-string `High`/`Low`. | Unit test with 8 plural/inflected phrases. Inventory probe: `Within Amani bands`, `Generally within reference ranges.` and the original worsened sentence are each placed in **every** scanned directory (20), and each fails. | Singular `band\|range` restored → the vocabulary unit test fails (`Within Amani bands: expected []`), and 8 pinned entries disappear (289 vs 297). The shape test still passes, so the mutation affects only its own dimension. |
+
+Order note: with a mutated guard the coverage probes also fail at their positive control, because the pin no longer matches. The dimension-specific evidence is therefore the unit test named in each row and the specific failure messages above, not the count of failing tests.
+
+### Not covered (stated, not asserted away)
+- **Vocabulary is open-ended.** Candidate words measured and **not** added: `flag*`/`watch*`/bare `low`/`high` as words. These are dominated by CSS tokens (`text-theme-flag-low`, 532 and 181 matches). `stable`, `typical`, `lifestyle` and "keeping an eye on" are also missing. A claim phrased only with those words is invisible.
+- **Lowercase single words** are exempt by design (`'normal'` rendered raw would pass), as are dynamically assembled strings, AI/server text and imported remote copy.
+- `.snap` files and non-TS assets are not text-scanned. The `test-data` proof is import-based.
+- The guard is lexical. It is not a semantic proof that any file is claim-free.
+
+## Pin regenerated: 229 → 297 entries (51 files)
+
+68 newly visible entries, no removals. Every new entry carries an individual reason category. The 229 carried entries keep their exact reasons. The file is re-ordered because the inventory now walks `src` instead of a root list, so the diff is large but the content change is additive. Classification of the 68:
+
+| Class | Count | Entries |
+| --- | --- | --- |
+| **OPEN R1–R4-class defect, rendered** | 14 | `statusPill.ts` `Normal`, `Borderline Low`, `Borderline High` (BiomarkerCard pill on unreviewed Amani bands); `groupBySystem.ts` `Within Amani bands`, `Mild Attention`, `Needs Attention` (SystemSummaryCards); `DerivedMetricsPanel.tsx` `Borderline`; `buildFocusAreas.ts` `is borderline-high/-low`; `ReportView.tsx` "…worth monitoring" ×2, "…are both borderline. Worth monitoring but no urgent flags.", "…is borderline. Worth keeping an eye on over time.", "…the main area to optimize." |
+| **OPEN, app-made margin on the lab interval** | 1 | `ReportView.tsx` `Borderline` (AnalyteRow, `classifyLabValue`) |
+| **OPEN, producer not routed today** | 8 | `QuickHighlights.tsx` `Reassuring`, `Monitor`, `Discuss`, `Needs Attention`, "worth reviewing" ×2; `TopFindingsCard.tsx` `Borderline` ×2. Neither component is imported by any route (ReportView marks both as subsumed). |
+| Gated favourable wording, unreachable | 3 | `BiggestChangesCard.tsx` `Improved` ×2 (direction `improved` needs SAFE + directional evidence; the component is also unrouted); `statusPill.ts` `Optimal` (behind `describeAsOptimal`) |
+| Provider referral / disclaimer (safety framing, must not be suppressed) | 11 | NextBestSteps `Discuss` bucket heading, WhatToDoNextCard, InsightFlagsPanel ×2, GuidanceCards ×2, DerivedMetricsPanel disclaimer, cardMap ×3, categorizeNextSteps |
+| Clinical debt (existing categories) | 9 | derivedMetrics ×4; cyclePhase trimester "Many ranges shift in pregnancy." ×3; buildHealthStory "generally within reference ranges" (reassurance character); types `Nutrients & Deficiency` |
+| Non-clinical lexical / legal / CSS / extraction | 22 | Privacy ×6, Terms ×2, Contact, Landing, DeleteAccount; `font-normal` ×3; NewReport confidence `High`/`Low`; ParserDebugger/ReviewBiomarkers `Review`; PrimaryInsightCard `Range:`; valueExtraction `Borderline` token; SuccessPage "normally completes"; DesignGallery "elevation" |
+
+**The 23 OPEN entries are not debt.** They are unauthorized clinical judgements of the same class R1–R4 closes. The pin records them exactly so nothing new can join them, and approves none of them. I did not rewrite them: amendment 4 authorizes classification, and "pinning copy as debt does not authorize rewriting it". The 14 rendered entries need an owner ruling before Stage-1 closure (see open questions). One disagreement, stated: the Lead listed NextBestSteps `Discuss` with the unauthorized judgements. In source it is a bucket heading over AI-supplied next steps and asserts nothing about a result, so I classified it as referral framing. The AI text beneath it is unpolicied (server interpretation deferred).
+
+## Commands (turn 6, final tree)
+- `npx vitest run src/lib/scoring/optimalWording.test.ts` — 16 passed.
+- `npm test` — 65 files, 1431 passed (an earlier run, before a type-only fix to the test file, gave the same result).
+- `npm run typecheck` — passed after typing one tuple array in the shape probe. `npm run lint` — 0 errors, 9 existing warnings. `npm run build` — passed.
+- `npm run clinical:check` — catalog 83 entries / audit 83 analytes / 198 ranges match. `npm run clinical:test` — 50/50.
+- Negative controls M1–M4 above were each run with `npx vitest run src/lib/scoring/optimalWording.test.ts` and restored. The final run above is on the restored tree.
+- Not run by me: Playwright browsers, env canary, Docker harness, `check:functions` (Deno), CI. These are SKIPPED for the Lead.
+
+---
+
 # TASK-045 — turn 3 / amendment 2 evidence (PARTIAL)
 
 Approach: the thyroid movement branch in `buildFocusAreas` hand-authored an unqualified placement sentence after consuming the movement policy. It discarded the available review authority, contradicted DISPUTED withholding, and falsely asserted persistence for newly_abnormal. Thread `insightSummary.deltaMap` into the builder, compose the existing policy's movement and comparison-band outputs, require the policy statement on the rendered card for each review state, and extend the source/render-path guard with exact, reasoned legacy exceptions. Stage 2 remains gated; this report does not certify the implementation.

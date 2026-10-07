@@ -2,7 +2,7 @@
   {
     "directory": "src",
     "mode": "excluded",
-    "reason": "Application bootstrap, CSS and routing direct files; no clinical rule producer here. Child directories classified separately; new directory fails closed."
+    "reason": "Application bootstrap, routing and Stripe catalog direct files (App.tsx, main.tsx, stripe-config.ts, vite-env.d.ts). Exclusion is proven, not asserted: the guard scans these files and fails if any claim appears. Children classified separately; a new directory fails closed."
   },
   {
     "directory": "src/components",
@@ -56,8 +56,8 @@
   },
   {
     "directory": "src/lib",
-    "mode": "excluded",
-    "reason": "Direct modules include cycle-context UI (deferred clinical debt behind Stage-1 gate), service/native plumbing and forbidden entitlement/purchase logic. This exclusion is not clinical authorization; children classified separately."
+    "mode": "scanned",
+    "reason": "Reclassified in amendment 4. Direct modules author clinical copy (cyclePhase.ts pregnancy and phase text, cycleContextCard.ts) beside service, native and entitlement plumbing. Scanned; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
     "directory": "src/lib/biomarkers",
@@ -67,7 +67,7 @@
   {
     "directory": "src/lib/capacitor-stubs",
     "mode": "excluded",
-    "reason": "Native API stubs with technical errors, not clinical interpretation."
+    "reason": "Native API stubs with technical errors. Exclusion proven by scan: the guard fails if any claim appears."
   },
   {
     "directory": "src/lib/cards",
@@ -77,7 +77,7 @@
   {
     "directory": "src/lib/freemium",
     "mode": "excluded",
-    "reason": "User-visible purchase/locked-report copy; forbidden freemium/entitlement scope. Deferred to owner-authorized scope, not certified clinical-free."
+    "reason": "User-visible purchase/locked-report copy in forbidden freemium/entitlement scope. Exclusion proven by scan under the current vocabulary (zero matches); not certified clinical-free beyond that vocabulary, and the guard fails if a claim appears."
   },
   {
     "directory": "src/lib/insights",
@@ -87,7 +87,7 @@
   {
     "directory": "src/lib/observability",
     "mode": "excluded",
-    "reason": "Telemetry initialization and privacy scrubbing; no rendered copy. Separate telemetry/security contracts remain unchanged."
+    "reason": "Telemetry initialization and privacy scrubbing; no rendered copy. Exclusion proven by scan: the guard fails if any claim appears."
   },
   {
     "directory": "src/lib/personalization",
@@ -107,12 +107,12 @@
   {
     "directory": "src/styles",
     "mode": "excluded",
-    "reason": "CSS presentation only; no clinical prose author in current files."
+    "reason": "CSS only; contains no .ts/.tsx source. Exclusion proven by scan: a TypeScript file with a claim added here fails the guard."
   },
   {
     "directory": "src/types",
-    "mode": "excluded",
-    "reason": "Type declarations only; no runtime text producer."
+    "mode": "scanned",
+    "reason": "Reclassified in amendment 4. The earlier reason (\"type declarations only\") was false: index.ts exports the runtime CATEGORY_DISPLAY label table rendered by ReportView and RecommendedLabs. Scanned; matches are pinned, not clinically approved."
   },
   {
     "directory": "src/utils",
@@ -126,12 +126,12 @@
   },
   {
     "directory": "src/utils/parser/__fixtures__",
-    "mode": "excluded",
-    "reason": "Synthetic parser input data, not production copy; excluded test fixtures."
+    "mode": "test-data",
+    "reason": "Synthetic parser input data. Outside the inventory only because the guard proves no production module imports it; an import from production code fails the guard."
   },
   {
     "directory": "src/utils/parser/__snapshots__",
-    "mode": "excluded",
-    "reason": "Parser test snapshots, not production copy."
+    "mode": "test-data",
+    "reason": "Parser test snapshots (.snap). Outside the inventory only because the guard proves no production module imports it; an import from production code fails the guard."
   }
 ]

@@ -220,12 +220,39 @@ describe('invariant 3 — out-of-scope copy cannot reach the page unqualified', 
  * outside insightCopy. Scan producers as well as JSX sinks, including unused
  * branches. Exact legacy exceptions are debt, not clinical authorization.
  * This is a lexical guard, not a proof that arbitrary English is claim-free.
+ *
+ * Standing rule 4: coverage is enumerated per dimension, each with its own
+ * probe in the coverage suite below.
+ *   Directories: every directory under src is classified. 'excluded' is
+ *     proven claim-free by scanning; 'test-data' is proven unimported by
+ *     production code. Nothing is accepted on a reason string alone.
+ *   Shapes: string literals, assembled templates and JSX text. Only
+ *     lowercase snake_case code values are exempt; single words such as
+ *     'Normal' or 'Reassuring' are scanned.
+ *   Vocabulary: CLAIM below, with inflected forms (bands, ranges, reviews,
+ *     concerns, risks, discussing, monitoring). A concept with no listed word
+ *     is not covered; REPORT.md lists the known gaps.
  */
+const CLAIM = new RegExp('\\b(?:' + [
+  'bands?', 'ranges?', 'review\\w*', 'context needed',
+  'optimal\\w*', 'optimi[sz]\\w*', 'borderline', '(?:needs|mild) attention', 'urgent\\w*',
+  // Whole-string labels only: as words these are dominated by CSS tokens (flag-low).
+  '^(?:high|low)$',
+  'normal(?:ly)?','abnormal\\w*', 'healthy', 'healthier', 'unhealthy',
+  'improv\\w*', 'worsen\\w*', 'deteriorat\\w*', 'better', 'worse',
+  'concern\\w*', 'reassur\\w*', 'elevat\\w*', 'deficien\\w*', 'insufficien\\w*',
+  'risks?', 'risky', 'suggest\\w*', 'recommend\\w*', 'should', 'caution\\w*',
+  'discuss\\w*', 'monitor\\w*', 'talk (?:to|with) your (?:doctor|provider)s?', 'seek care',
+  '(?:is|are|was|were|remains?|remained) (?:high|low)', '(?:positive|wrong|right) directions?',
+].join('|') + ')\\b', 'i');
+// Lowercase snake_case is a code value (AmaniStatus 'normal', bucket 'discuss'),
+// the same test the optimal scan above uses. Anything else is potential copy.
+const isCodeValue = (text: string) => /^[a-z][a-z0-9_]*$/.test(text);
+
 function clinicalClaimCopy(file: string, source = readFileSync(file, 'utf8')): string[] {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true,
     file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const hits: string[] = [];
-  const claim = /\b(?:band|range|review(?:ed)?|context needed|optimal|normal|abnormal|healthy|unhealthy|improv\w*|worsen\w*|deteriorat\w*|better|worse|concerning|reassuring|elevated|deficien\w*|insufficien\w*|risk|suggest\w*|recommend\w*|should|caution|worth discussing|talk to your doctor|seek care|(?:is|are|remains?) (?:high|low)|(?:positive|wrong|right) direction)\b/i;
   const visit = (n: ts.Node) => {
     if (ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) return;
     // Assemble template chunks so interpolations cannot split a claim into
@@ -238,9 +265,7 @@ function clinicalClaimCopy(file: string, source = readFileSync(file, 'utf8')): s
     }
     if (text !== undefined) {
       text = text.trim().replace(/\s+/g, ' ');
-      // Status keys and class names are not prose. Short labels containing
-      // spaces ARE scanned: a claim need not end with punctuation.
-      if (/\s/.test(text) && claim.test(text)) hits.push(text);
+      if (!isCodeValue(text) && CLAIM.test(text)) hits.push(text);
     }
     ts.forEachChild(n, visit);
   };
@@ -248,16 +273,10 @@ function clinicalClaimCopy(file: string, source = readFileSync(file, 'utf8')): s
   return hits.sort();
 }
 
-const CLAIM_ROOTS = [
-  'src/lib/insights', 'src/components', 'src/pages', 'src/lib/scoring',
-  'src/utils', 'src/lib/personalization', 'src/lib/biomarkers',
-  'src/features', 'src/contexts', 'src/hooks', 'src/lib/cards',
-];
 // insightCopy.ts is the ONLY exempt production module: the policy author.
-// Parser fixtures/snapshots and test files are test data, not production authors.
 const POLICY_AUTHOR = 'src/lib/scoring/insightCopy.ts';
-const TEST_DATA_ROOTS = ['src/utils/parser/__fixtures__', 'src/utils/parser/__snapshots__'];
-interface DirectoryClassification { directory: string; mode: 'scanned' | 'excluded'; reason: string }
+type CoverageMode = 'scanned' | 'excluded' | 'test-data';
+interface DirectoryClassification { directory: string; mode: CoverageMode; reason: string }
 const directoryCoverage = JSON.parse(readFileSync('docs/clinical/TASK-045/claim-directory-coverage.json', 'utf8')) as DirectoryClassification[];
 
 function directories(root: string): string[] {
@@ -269,22 +288,50 @@ function directories(root: string): string[] {
 function isUnder(path: string, root: string): boolean {
   return path === root || path.startsWith(root + '/');
 }
+// Production sources directly inside one directory; children are classified separately.
+function directSources(dir: string): string[] {
+  return readdirSync(dir).map(name => join(dir, name))
+    .filter(path => statSync(path).isFile() && /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path));
+}
+function testDataRoots(base: string): string[] {
+  return directoryCoverage.filter(e => e.mode === 'test-data').map(e => join(base, e.directory));
+}
+// Every .ts/.tsx under src except tests and proven test data: no directory allow-list.
+function productionSources(base: string): string[] {
+  const testData = testDataRoots(base);
+  return sourceFiles(join(base, 'src')).filter(file => !testData.some(root => isUnder(file, root)));
+}
+function relativeTo(base: string, file: string): string {
+  return base === '.' ? file : file.slice(base.length + 1);
+}
 function assertDirectoryCoverage(base = '.') {
   // Exact directory inventory, not inherited permission from a scanned ancestor:
   // even a new nested directory must be deliberately classified.
   expect(directories(join(base, 'src'))).toEqual(directoryCoverage.map(e => join(base, e.directory)).sort());
   for (const entry of directoryCoverage) {
-    expect(entry.reason.trim().length).toBeGreaterThan(0);
-    const scanned = CLAIM_ROOTS.some(root => isUnder(entry.directory, root))
-      && !TEST_DATA_ROOTS.some(root => isUnder(entry.directory, root));
-    expect(entry.mode, entry.directory).toBe(scanned ? 'scanned' : 'excluded');
+    expect(entry.reason.trim().length, entry.directory).toBeGreaterThan(0);
+    expect(['scanned', 'excluded', 'test-data'], entry.directory).toContain(entry.mode);
+    if (entry.mode !== 'excluded') continue;
+    // Proven, not asserted: an exclusion holds only while its scan finds nothing.
+    const hits = directSources(join(base, entry.directory))
+      .flatMap(file => clinicalClaimCopy(file).map(text => `${relativeTo(base, file)}: ${text}`));
+    expect(hits, `${entry.directory} is excluded but authors claims`).toEqual([]);
+  }
+  // Test data stays outside the inventory only because no production module can reach it.
+  const testData = testDataRoots(base);
+  const testDataNames = testData.map(root => root.split('/').pop()!);
+  for (const file of productionSources(base)) {
+    for (const { fileName } of ts.preProcessFile(readFileSync(file, 'utf8'), true, true).importedFiles) {
+      const target = fileName.startsWith('.') ? join(file, '..', fileName) : fileName;
+      const leaks = testData.some(root => isUnder(target, root)) || testDataNames.some(name => fileName.includes(name));
+      expect(leaks, `${relativeTo(base, file)} imports test data ${fileName}`).toBe(false);
+    }
   }
 }
 function claimInventory(base = '.') {
-  return CLAIM_ROOTS.flatMap(root => sourceFiles(join(base, root)))
-    .filter(file => file !== join(base, POLICY_AUTHOR)
-      && !TEST_DATA_ROOTS.some(root => isUnder(file, join(base, root))))
-    .flatMap(file => clinicalClaimCopy(file).map(text => ({ file: file.slice(base === '.' ? 0 : base.length + 1), text })));
+  return productionSources(base)
+    .filter(file => file !== join(base, POLICY_AUTHOR))
+    .flatMap(file => clinicalClaimCopy(file).map(text => ({ file: relativeTo(base, file), text })));
 }
 function assertClaimInventory(base = '.') {
   expect(claimInventory(base)).toEqual(legacyClaims.map(({ file, text }) => ({ file, text })));
@@ -311,6 +358,26 @@ describe('standing rule 2 — policy owns clinical-language sentences', () => {
     expect(clinicalClaimCopy('builder.ts', "// This worsened.\nconst status = 'newly_abnormal';" )).toEqual([]);
   });
 
+  it('vocabulary: plural and inflected forms are claims, not only the singular', () => {
+    for (const text of ['Within Amani bands', 'generally within reference ranges.', 'Pending reviews',
+      'Two concerns', 'Known risks', 'Worth monitoring', 'Discussing this', 'Values were low']) {
+      expect(clinicalClaimCopy('builder.ts', `const copy = ${JSON.stringify(text)};`), text).toEqual([text]);
+    }
+  });
+
+  it('shape: single-word labels are scanned; only snake_case code values are exempt', () => {
+    for (const word of ['Normal', 'Abnormal', 'Reassuring', 'Discuss', 'Monitor', 'NORMAL', 'font-normal']) {
+      expect(clinicalClaimCopy('labels.ts', `const l = { label: ${JSON.stringify(word)} };`), word).toEqual([word]);
+      expect(clinicalClaimCopy('Label.tsx', `const L = () => <span>${word}</span>;`), word).toEqual([word]);
+    }
+    // Negative controls: code values and single words outside the vocabulary.
+    expect(clinicalClaimCopy('keys.ts', [
+      "if (s === 'normal' || s === 'reassuring' || s === 'out_of_range_high') {}",
+      "const b = 'discuss'; const m = 'monitor';",
+      "const l = { label: 'Track' }; const r = 'Retest';",
+    ].join('\n'))).toEqual([]);
+  });
+
   it('every legacy exception has a reason and exact text; new or changed claims fail', () => {
     expect(legacyClaims.every(entry => entry.reason.trim().length > 0)).toBe(true);
     assertClaimInventory();
@@ -318,50 +385,106 @@ describe('standing rule 2 — policy owns clinical-language sentences', () => {
 });
 
 
-describe('standing rule 3 — coverage of the clinical-copy guard', () => {
-  it('classifies every src directory, including excluded user-visible producers', () => {
+describe('standing rules 3 and 4 — coverage of the clinical-copy guard, one probe per dimension', { timeout: 120_000 }, () => {
+  it('classifies every src directory and proves every exclusion by scanning', () => {
     assertDirectoryCoverage();
   });
 
-  it('rejects unpinned claims in every newly required root, outside the original three', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'claim-inventory-'));
+  // Each probe mutates a copy of src. Both checks pass on the unmodified copy
+  // before and after, so a throw is caused by the probe and nothing else.
+  function withSrcCopy(prefix: string, body: (dir: string) => void) {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
     try {
       cpSync('src', join(dir, 'src'), { recursive: true });
-      assertClaimInventory(dir); // Positive control uses the same real inventory.
-      for (const root of ['src/lib/scoring', 'src/utils', 'src/lib/personalization', 'src/lib/biomarkers']) {
-        const probe = join(dir, root, 'UnpinnedClaim.ts');
-        try {
-          writeFileSync(probe, "export const copy = 'This worsened and is worth discussing with your provider.';");
-          expect(claimInventory(dir)).toContainEqual({ file: root + '/UnpinnedClaim.ts', text: 'This worsened and is worth discussing with your provider.' });
-          expect(() => assertClaimInventory(dir)).toThrow();
-        } finally {
-          rmSync(probe, { force: true });
-        }
-      }
       assertClaimInventory(dir);
+      assertDirectoryCoverage(dir);
+      body(dir);
+      assertClaimInventory(dir);
+      assertDirectoryCoverage(dir);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
-
-  it('rejects a new producer directory outside all scanned roots and under a scanned root', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'claim-coverage-'));
+  }
+  function withProbe(path: string, content: string, check: () => void) {
+    const original = statSync(path, { throwIfNoEntry: false }) ? readFileSync(path, 'utf8') : undefined;
     try {
-      cpSync('src', join(dir, 'src'), { recursive: true });
-      assertDirectoryCoverage(dir);
+      writeFileSync(path, original === undefined ? content : `${original}\n${content}\n`);
+      check();
+    } finally {
+      if (original === undefined) rmSync(path, { force: true });
+      else writeFileSync(path, original);
+    }
+  }
+
+  it('directory: a claim in a new directory, outside or under a scanned tree, fails both checks', () => {
+    withSrcCopy('claim-dir-', dir => {
       for (const root of ['src/newClinicalSurface', 'src/lib/scoring/newSurface']) {
         const probe = join(dir, root);
         try {
           mkdirSync(probe);
-          writeFileSync(join(probe, 'Card.tsx'), '<p>Your result is healthy.</p>');
-          expect(() => assertDirectoryCoverage(dir)).toThrow();
+          writeFileSync(join(probe, 'Card.tsx'), 'export const C = () => <p>Your result is healthy.</p>;');
+          expect(() => assertDirectoryCoverage(dir), root).toThrow();
+          expect(claimInventory(dir)).toContainEqual({ file: `${root}/Card.tsx`, text: 'Your result is healthy.' });
+          expect(() => assertClaimInventory(dir), root).toThrow();
         } finally {
           rmSync(probe, { recursive: true, force: true });
         }
       }
-      assertDirectoryCoverage(dir);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    });
+  });
+
+  it('directory: a claim inside any excluded directory breaks its exclusion proof', () => {
+    const excluded = directoryCoverage.filter(e => e.mode === 'excluded').map(e => e.directory);
+    expect(excluded.length).toBeGreaterThan(0);
+    withSrcCopy('claim-excluded-', dir => {
+      for (const root of excluded) {
+        withProbe(join(dir, root, 'UnpinnedClaim.ts'), "export const label = 'Reassuring';", () => {
+          expect(() => assertDirectoryCoverage(dir), root).toThrow(/excluded but authors claims/);
+          expect(() => assertClaimInventory(dir), root).toThrow();
+        });
+      }
+    });
+  });
+
+  it('directory: production code importing test data breaks the test-data exclusion', () => {
+    withSrcCopy('claim-testdata-', dir => {
+      withProbe(join(dir, 'src/utils/fixtureLeak.ts'), "export * from './parser/__fixtures__/quest';", () => {
+        expect(() => assertDirectoryCoverage(dir)).toThrow(/imports test data/);
+      });
+    });
+  });
+
+  it('shape: a single-word claim appended to an already-scanned file fails the inventory', () => {
+    withSrcCopy('claim-shape-', dir => {
+      for (const [file, word] of <Array<[string, string]>>[
+        ['src/components/QuickHighlights.tsx', 'Abnormal'],
+        ['src/lib/scoring/statusPill.ts', 'Reassuring'],
+        ['src/lib/insights/buildFocusAreas.ts', 'Monitor'],
+        ['src/utils/derivedMetrics.ts', 'Normal'],
+      ]) {
+        withProbe(join(dir, file), `export const probeLabel = ${JSON.stringify(word)};`, () => {
+          expect(claimInventory(dir)).toContainEqual({ file, text: word });
+          expect(() => assertClaimInventory(dir), file).toThrow();
+        });
+      }
+      // Negative control: a snake_case code value in the same position passes.
+      withProbe(join(dir, 'src/lib/scoring/statusPill.ts'), "export const probeKey = 'reassuring';", () => {
+        assertClaimInventory(dir);
+      });
+    });
+  });
+
+  it('vocabulary: a plural phrase in every scanned directory fails the inventory', () => {
+    const scanned = directoryCoverage.filter(e => e.mode === 'scanned').map(e => e.directory);
+    withSrcCopy('claim-vocab-', dir => {
+      for (const root of scanned) {
+        for (const text of ['Within Amani bands', 'Generally within reference ranges.', 'This worsened and is worth discussing with your provider.']) {
+          withProbe(join(dir, root, 'UnpinnedClaim.ts'), `export const copy = ${JSON.stringify(text)};`, () => {
+            expect(claimInventory(dir), root).toContainEqual({ file: `${root}/UnpinnedClaim.ts`, text });
+            expect(() => assertClaimInventory(dir), root).toThrow();
+          });
+        }
+      }
+    });
   });
 });
