@@ -1,3 +1,59 @@
+# TASK-045 — turn 2 amendment implementation evidence (PARTIAL)
+
+Approach: `buildFocusAreas.trajectoryPhrase` independently translated raw comparison statuses and boundary directions into clinical benefit/harm. The renderer only removed optimality claims, and the browser proof only checked primary/trajectory locators. Replace those branches with the existing policy's factual magnitude constructor, make the thyroid composition consume its complete sentence, and strengthen the existing browser cases with a page-wide prohibition plus an explicit rendered focus-card requirement. No new authority model, clinical rule, threshold, value, or evidence grade is introduced.
+
+## Turn-2 scope and evidence
+
+Branch origin remains `1284d128a44e17b8833ff42fa79515d828a28084`; this turn started clean at `3011c35765d5afad7782a9587b17fb21f682d6b5` on `v2/03b-clinical-language-policy`. Changes remain uncommitted. The read-only control-folder contract, TASK-044 synthesis and amendments 2/5 were read before tests. No control-folder or vault write occurred.
+
+- Deleted both boundary-direction branches and the entire raw-status switch in `trajectoryPhrase`. No favourable wording remains in this function, so no synthetic or real band is implicitly granted favourable authority.
+- `describeMeasuredMovement(change, 'magnitude')` now supplies the sentence. Meaningful movement reads “TSH has changed since your prior report.” Minor movement reads “TSH has not changed significantly.” The existing deterministic significance field supplies the latter; a raw `stable_abnormal` label cannot establish it.
+- The thyroid sentence explicitly identifies the remaining comparison as Amani's current comparison band. Other focus-area prose, pattern rules, chip severity and legacy string transport are unchanged and remain deferred. This is the amendment's trajectory fix, not certification of the entire focus-area surface or R1–R4 globally.
+- Both existing V2-03b cases now assert the supplied forbidden vocabulary **page-wide**, with no locator exclusions. They also require the Thyroid function article and its factual sentence to be visible. Existing scoped checks remain additional checks, not substitutes.
+- No existing test assertion was weakened. The existing source-enumeration test now generates seven fewer cases because the removed branch literals no longer exist; thirteen new focused tests yield a net increase from 1415 to 1421. Exhaustiveness and analyte-declaration tests remain unchanged.
+
+## Per-surface proof matrix (turn-2 delta)
+
+| Surface / invariant | Executed logic evidence | Browser evidence and limit |
+| --- | --- | --- |
+| Focus-area adverse trajectories, R1 | 12 cases: worsening_still_high, worsening_still_low, newly_abnormal without crossing, worsened crossing × UNKNOWN/DISPUTED/NEEDS_CONTEXT. Synthetic review metadata enters real assessment/summary; each case requires a nonempty thyroid area and renders FocusAreas to static markup. Numeric bands are unchanged. | Existing 6→9 fixture now explicitly requires the focus article; page-wide prohibition includes wrong direction. Runtime blocked before test bodies. Low-side and status-only cases have logic coverage, not distinct browser fixtures. |
+| Focus-area magnitude, R4 | Additional case verifies both minor 6→6.1 and significant 6→9, including a deliberately inconsistent stable status, using real significance calculation. | Existing 6→6.1 fixture explicitly requires the focus magnitude sentence. Runtime blocked. |
+| Headline, primary, trajectory, story and other mounted page text | Existing policy and exhaustive trajectory suites pass; no broader migration done | Both existing V2-03b specs use a page-wide forbidden-language assertion after opening the report; no rendered surface is excluded. Collapsed/unmounted panels and alternate report fixtures are not thereby covered. |
+| Safety separation / remaining focus-area patterns and chip severity | No new proof claimed; safety producers and renderers unchanged | No safety fixture or global R3 proof added. Remains deferred behind Stage 1. |
+| Server interpretation and remaining inventory | Unchanged | Stage 2 remains blocked pending Lead runtime verification and review. Historical inventory below still describes these deferred paths. |
+
+## Commands and observed outcomes
+
+- `npx vitest run src/lib/insights/buildFocusAreas.test.tsx src/components/FocusAreas.test.tsx src/lib/scoring/clinicalLanguagePolicy.test.tsx src/lib/scoring/healthStoryTrajectory.test.ts src/lib/scoring/trajectoryLanguage.test.tsx` — 98 passed, five files.
+- `npm test` — 1421 passed, 65 files.
+- `npm run typecheck` — passed.
+- `npm run lint` — passed, zero errors, nine existing warnings.
+- `npm run build` — passed; existing Browserslist age warning.
+- `npm run clinical:check && npm run clinical:test` — projections match 83 analytes / 198 ranges; 50 passed, including SQL parse guard and frozen/value identity checks.
+- `npx playwright test e2e/reports/context-suppression.spec.ts --project=chromium --grep V2-03b --workers=1` — blocked before test bodies: `listen EPERM 127.0.0.1:4173`, both with the fix and with the negative-control mutation.
+- `git diff --check` — passed.
+
+No three-browser pass, browser negative-control assertion failure, Docker harness, env-canary, hosted CI or independent-review result is claimed. The canary requires a disposable worktree, incompatible with this implementer's no-Git-writes/stay-in-worktree contract, and requires the denied listener. Lead must run these gates. No external documentation question arose for this focused amendment; the earlier server-packaging question remains pending.
+
+## Negative-control reproduction and limits
+
+Temporarily replaced only `function trajectoryPhrase` through the line before `const CATEGORY_CLOSER` with the original function from `git show 3011c35765d5afad7782a9587b17fb21f682d6b5:src/lib/insights/buildFocusAreas.ts`. Kept the new tests and composition in place. Ran:
+
+```sh
+npx vitest run src/lib/insights/buildFocusAreas.test.tsx
+npx playwright test e2e/reports/context-suppression.spec.ts --project=chromium --grep V2-03b --workers=1
+```
+
+The logic command exited 1: **all 12 adverse cases failed the forbidden-language assertion**, receiving “has shifted in the wrong direction”; the magnitude case also failed its exact sentence assertion (13 failed total). The latter is a sentence-shape failure under the old producer, not an independently established R4 negative control. The browser command exited 1 at server startup, which does **not** count as a successful negative control. A Python `finally` restored the fixed file bytes. Focused and full suites were then rerun with the fix restored. No mutations remain.
+
+## Second Brain handoff (no vault write)
+
+Confirmed this session: start HEAD/branch via Git read commands; the implementation and executed checks above. Local Brain snapshot is dated 2026-09-22 and was read via Load Project Context / Update Second Brain; no pull was attempted because this task prohibits network and vault writes. No new clinical decision and no pending item resolved. Pending: Lead browser execution and negative control, independent review, remaining Stage-1 gaps, then Stage-2 migration and full release gates. Historical release facts were not treated as current production evidence.
+
+---
+
+# Historical turn-1 report (superseded only by the turn-2 delta above)
+
 # TASK-045 — turn 1 implementation evidence (PARTIAL)
 
 Approach: the defect originates in asymmetric language authorization: legacy permissions gate favourable claims, while raw adverse comparison statuses independently choose judgement, advice and amber presentation. Extend the existing `insightCopy.ts` with source-bearing, categorized language; migrate the initial adverse/magnitude paths to factual observations and neutral comparison descriptions; retain numeric calculations, ranking and data-display contracts; test these paths before broader migration. This is an implementation handoff, not an independent review or a declaration that R1–R4 are closed.

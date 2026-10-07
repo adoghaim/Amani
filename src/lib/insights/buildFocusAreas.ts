@@ -1,5 +1,6 @@
 import type { BiomarkerName, BiomarkerCategory } from '../../types';
 import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
+import { describeMeasuredMovement } from '../scoring/insightCopy';
 import type { ScoredBiomarker } from '../scoring/scoreBiomarker';
 import type { InsightSummary, WatchSignal, BiggestChange } from './buildInsightSummary';
 
@@ -147,25 +148,9 @@ function statusPhrase(s: ScoredBiomarker): string | null {
 
 function trajectoryPhrase(change: BiggestChange | null | undefined): string {
   if (!change) return '';
-  const dir = change.boundaryCrossing?.direction;
-  if (dir === 'improved') return 'is moving in the right direction';
-  if (dir === 'worsened') return 'has shifted in the wrong direction';
-
-  switch (change.trajectoryStatus) {
-    case 'improving_still_high':
-    case 'improving_still_low':
-    case 'normalized':
-      return 'is moving in the right direction';
-    case 'worsening_still_high':
-    case 'worsening_still_low':
-    case 'newly_abnormal':
-      return 'has shifted in the wrong direction';
-    case 'stable_abnormal':
-    case 'stable_normal':
-      return 'has not changed significantly';
-    default:
-      return '';
-  }
+  // Raw band statuses and crossings carry no clinical direction authority.
+  // Magnitude comes from the existing deterministic change calculation (R4).
+  return describeMeasuredMovement(change, 'magnitude').text;
 }
 
 const CATEGORY_CLOSER: Record<BiomarkerCategory, (primary: string) => string> = {
@@ -209,12 +194,7 @@ function buildValueFreeWhy(
   // an explicit trend sentence that pairs with an out-of-range qualifier closer.
   if (category === 'thyroid') {
     if (trajectory) {
-      const trendClause = trajectory.startsWith('is ')
-        ? trajectory.slice(3) // "is moving in the right direction" -> "moving in the right direction"
-        : trajectory.startsWith('has ')
-          ? trajectory // "has shifted in the wrong direction" / "has not changed significantly"
-          : trajectory;
-      return `${primaryName} remains the main thyroid signal. The trend ${trendClause === trajectory ? trajectory : `is ${trendClause}`}, ${closer}`;
+      return `${primaryName} remains the main thyroid signal. ${trajectory} This marker remains outside Amani's current comparison band.`;
     }
     return `${primaryName} ${phrase} and remains the main thyroid signal, ${closer}`;
   }

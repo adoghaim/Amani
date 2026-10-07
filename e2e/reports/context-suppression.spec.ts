@@ -252,6 +252,12 @@ for (const [label, previous, current, sentence] of [
     test.use({ authenticated: true, syntheticReports: [[latest, prior], { scope: 'test' }] });
     test('observation surfaces preserve movement without clinical meaning', async ({ page }) => {
       await openReport(page, latest.report.id);
+      // Page-wide by default: no card may silently sit outside this invariant.
+      await expect(page.getByText(/wrong direction|worsen|deteriorat|improv|healthier|worth discussing|talk to your doctor|seek care/i)).toHaveCount(0);
+      const focus = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Thyroid function', exact: true }) });
+      await expect(focus).toBeVisible();
+      await expect(focus).toContainText(label === 'away'
+        ? 'TSH has changed since your prior report.' : 'TSH has not changed significantly.');
       const primary = page.getByTestId('primary-movement-observation');
       await expect(primary).toBeVisible();
       await expect(primary).toContainText(sentence);
