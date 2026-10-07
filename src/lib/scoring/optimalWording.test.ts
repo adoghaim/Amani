@@ -215,3 +215,65 @@ describe('invariant 3 — out-of-scope copy cannot reach the page unqualified', 
     expect(unqualifiedRenderSinks(['src/components', 'src/pages'])).toEqual(RENDER_SINKS_REVIEWED);
   }, 120_000);
 });
+
+/* Standing rule 2: qualifiers do not permit authorship of new clinical prose
+ * outside insightCopy. Scan producers as well as JSX sinks, including unused
+ * branches. Exact legacy exceptions are debt, not clinical authorization.
+ * This is a lexical guard, not a proof that arbitrary English is claim-free.
+ */
+function clinicalClaimCopy(file: string, source = readFileSync(file, 'utf8')): string[] {
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const hits: string[] = [];
+  const claim = /\b(?:band|range|review(?:ed)?|context needed|optimal|normal|abnormal|healthy|unhealthy|improv\w*|worsen\w*|deteriorat\w*|better|worse|concerning|reassuring|elevated|deficien\w*|insufficien\w*|risk|suggest\w*|recommend\w*|should|caution|worth discussing|talk to your doctor|seek care|(?:is|are|remains?) (?:high|low)|(?:positive|wrong|right) direction)\b/i;
+  const visit = (n: ts.Node) => {
+    if (ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) return;
+    // Assemble template chunks so interpolations cannot split a claim into
+    // seemingly harmless fragments. Inspect nested expressions separately.
+    let text: string | undefined;
+    if (ts.isTemplateExpression(n)) {
+      text = n.head.text + n.templateSpans.map(s => '${…}' + s.literal.text).join('');
+    } else if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isJsxText(n)) {
+      text = n.text;
+    }
+    if (text !== undefined) {
+      text = text.trim().replace(/\s+/g, ' ');
+      // Status keys and class names are not prose. Short labels containing
+      // spaces ARE scanned: a claim need not end with punctuation.
+      if (/\s/.test(text) && claim.test(text)) hits.push(text);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return hits.sort();
+}
+
+const CLAIM_ROOTS = ['src/lib/insights', 'src/components', 'src/pages'];
+interface LegacyClaimException { file: string; text: string; reason: string }
+const legacyClaims = JSON.parse(readFileSync('docs/clinical/TASK-045/legacy-claim-exceptions.json', 'utf8')) as LegacyClaimException[];
+
+describe('standing rule 2 — policy owns clinical-language sentences', () => {
+  it('detects placement, review state and clinical meaning in builders and JSX', () => {
+    const sentences = [
+      "This marker remains outside Amani's current comparison band.",
+      'This band has not yet completed clinical review.',
+      'Interpretation unavailable pending clinical review.',
+      'Your result is healthy.',
+      'This worsened and is worth discussing.',
+      'Your result is low.',
+    ];
+    for (const sentence of sentences) {
+      expect(clinicalClaimCopy('builder.ts', `const copy = ${JSON.stringify(sentence)};`)).toEqual([sentence]);
+      expect(clinicalClaimCopy('Card.tsx', `<p>${sentence}</p>`)).toEqual([sentence]);
+    }
+    expect(clinicalClaimCopy('builder.ts', 'const copy = `${name} remains ${placement} the comparison band.`;'))
+      .toEqual(['${…} remains ${…} the comparison band.']);
+    expect(clinicalClaimCopy('builder.ts', "// This worsened.\nconst status = 'newly_abnormal';" )).toEqual([]);
+  });
+
+  it('every legacy exception has a reason and exact text; new or changed claims fail', () => {
+    expect(legacyClaims.every(entry => entry.reason.trim().length > 0)).toBe(true);
+    const actual = CLAIM_ROOTS.flatMap(sourceFiles).flatMap(file => clinicalClaimCopy(file).map(text => ({ file, text })));
+    expect(actual).toEqual(legacyClaims.map(({ file, text }) => ({ file, text })));
+  });
+});

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FocusAreas } from '../../components/FocusAreas';
 import * as context from '../scoring/amaniContext';
+import { reviewStatement } from '../scoring/insightCopy';
 import { scoreBiomarker } from '../scoring/scoreBiomarker';
 import { buildInsightSummary, type BiggestChange } from './buildInsightSummary';
 import { buildFocusAreas } from './buildFocusAreas';
@@ -42,6 +43,20 @@ describe.each(['UNKNOWN', 'DISPUTED', 'NEEDS_CONTEXT'] as const)('focus-area mov
     expect(html).toContain('Thyroid function');
     expect(html).toContain('TSH has changed since your prior report.');
     expect(html).not.toMatch(forbidden);
+    const statement = reviewStatement(summary.deltaMap.get('tsh')!.bandLanguage, 'outside');
+    const requiredDisclosure = {
+      UNKNOWN: 'This band has not yet completed clinical review.',
+      DISPUTED: 'Interpretation unavailable pending clinical review.',
+      NEEDS_CONTEXT: "More context needed. Amani's comparison band for this result has not yet completed clinical review.",
+    }[review_status];
+    expect(statement).toContain(requiredDisclosure);
+    // Compare rendered text first: the negative control must fail on the card.
+    expect(html.replace(/&#x27;/g, "'")).toContain(statement);
+    expect(areas[0]!.whyItMatters).toContain(statement);
+    expect(html).not.toMatch(/remains outside/i);
+    if (review_status === 'DISPUTED') {
+      expect(html).not.toMatch(/(?:outside|within|inside|above|below).*?(?:band|range)/i);
+    }
   });
 });
 

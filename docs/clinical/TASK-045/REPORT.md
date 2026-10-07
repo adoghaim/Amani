@@ -1,3 +1,71 @@
+# TASK-045 — turn 3 / amendment 2 evidence (PARTIAL)
+
+Approach: the thyroid movement branch in `buildFocusAreas` hand-authored an unqualified placement sentence after consuming the movement policy. It discarded the available review authority, contradicted DISPUTED withholding, and falsely asserted persistence for newly_abnormal. Thread `insightSummary.deltaMap` into the builder, compose the existing policy's movement and comparison-band outputs, require the policy statement on the rendered card for each review state, and extend the source/render-path guard with exact, reasoned legacy exceptions. Stage 2 remains gated; this report does not certify the implementation.
+
+## Scope and changes
+
+Branch origin: `1284d128a44e17b8833ff42fa79515d828a28084`. This turn started clean at `35ff9a230b18e84f5c1405eac4ca196b8cf4e039` on `v2/03b-clinical-language-policy`. Contract and TASK-044 synthesis/amendments 2 and 5 were found in the control task folders and read without writing there. The initially supplied relative paths were absent. Changes are uncommitted.
+
+- `buildValueFreeWhy` receives the summary's delta map through `buildOneArea`. The thyroid movement branch calls `describeComparisonBand` with its actual `bandLanguage` and outside placement; absent metadata uses `authorizedLanguage(null)`. The policy already supplies all required wording, so no policy sentence was added or copied into a builder. Removed the local “main thyroid signal” lead from this branch as well; the composed result consists entirely of policy output.
+- UNKNOWN now discloses pending review. DISPUTED emits only the unavailable interpretation statement, without placement. NEEDS_CONTEXT emits the context/review statement. No branch asserts that a newly abnormal result *remains* outside.
+- Existing 12 review-state/trajectory tests were strengthened, not replaced or relaxed: they render an actual nonempty thyroid FocusAreas card, require its own policy statement and independently pin the required disclosure, reject persistence, and reject placement for DISPUTED. The existing R4 magnitude test is unchanged.
+- Both existing browser fixtures (6→9 and 6→6.1) now require the focus card's pending-review disclosure and reject “remains outside.” Existing page-wide and scoped prohibitions remain intact.
+- `optimalWording.test.ts` retains its existing AST and type-checker render-sink guards unchanged and adds a producer-literal guard over `src/lib/insights`, `src/components`, and `src/pages`. It inspects strings, complete interpolated templates and JSX text, case-insensitively, for placement, review-state and clinical-meaning concepts. Templates are assembled across interpolation boundaries. Status keys, comments and identifiers are not prose. Qualifying a locally authored sentence does not exempt it from this guard.
+- `legacy-claim-exceptions.json` lists all 181 existing matched literals in 30 modules, with exact file/text/reason. It includes legacy clinical debt and conservative lexical matches (CSS font weight, extraction labels, legal text, design-gallery and marketing examples). These are explicit exceptions to the new guard, **not approvals of their clinical wording**. Clinical debt remains deferred behind the independent Stage-1 gate. No wildcard source exemption or count-only baseline is used: additions, changes and removals require updating the exact inventory. The defective sentence is absent from the exceptions.
+
+No clinical values, thresholds, evidence grades, SAFE status, migrations, server functions, entitlement, freemium, visibility, confidentiality, subscription logic or CI configuration changed.
+
+## Per-surface proof and limits
+
+| Surface / requirement | Executed evidence | Not established |
+| --- | --- | --- |
+| Thyroid focus movement, UNKNOWN disclosure | Real assessment/summary and static card render across four trajectory inputs; asserts the policy statement plus independently pinned pending clause | Browser runtime; other focus categories and pattern-rule branches |
+| Thyroid focus movement, DISPUTED withholding | Same four card cases; asserts unavailable statement and rejects outside/within/inside/above/below placement claims | Distinct browser DISPUTED fixture; current catalog thyroid status is UNKNOWN |
+| Thyroid focus movement, NEEDS_CONTEXT | Same four card cases; asserts policy context/review clause | Distinct browser context-status fixture |
+| Newly abnormal persistence | Both status-only and explicit-crossing cases reject “remains outside”; policy uses current placement without persistence | Browser newly-abnormal fixture |
+| Standing rule 2, new builder/component/page literals | AST fixtures cover placement, review, harm, advice, health and low-result language in builder strings/JSX plus interpolation; restored real defect fails inventory assertion | Arbitrary English semantics, dynamically assembled strings, imported remote/AI text, producers outside the three scanned roots |
+| Existing headline/primary/trajectory/story, R1–R4 | Existing focused suites and full Vitest pass; no policy or scoring calculation changed | Global R1–R4 closure and independent review |
+| Focus markers/chips, other focus branches, other clinical surfaces | Existing behavior and exact legacy inventory retained | Still clinical-language debt; plain-string FocusArea transport and legacy severity remain to migrate |
+| Genuine safety / comparison separation | No safety channel edited | No new genuine safety fixture or two-direction safety proof; remains required before global closure |
+| Server interpretation and broader migration | Unchanged, deferred per Stage-1 gate; historical per-surface inventory below still applies | No server language migration or release claim |
+
+The source guard is intentionally conservative, not a semantic proof. It catches the escaped literal even in an unused branch, but cannot certify every clinical statement. Literal exceptions preserve visibility of the existing debt rather than calling it safe. Stage 2 must remove exceptions as their surfaces move to policy-owned copy. The historical matrix below is prior-turn evidence, not a claim that its counts or descriptions are current.
+
+## Commands and results
+
+- `npx vitest run src/lib/insights/buildFocusAreas.test.tsx src/components/FocusAreas.test.tsx src/lib/scoring/clinicalLanguagePolicy.test.tsx src/lib/scoring/healthStoryTrajectory.test.ts src/lib/scoring/trajectoryLanguage.test.tsx src/lib/scoring/optimalWording.test.ts` — 106 passed, six files, restored tree.
+- `npm test` — 1423 passed, 65 files, restored tree.
+- `npm run typecheck` — passed, including E2E TypeScript.
+- `npm run lint` — passed, zero errors, nine existing warnings.
+- `npm run build` — passed; existing Browserslist data-age warning.
+- `npm run clinical:check && npm run clinical:test` — matching projections (83 analytes / 198 ranges); 50 passed, including frozen/value-identity, SQL parse guard, audit and drift checks.
+- `npx playwright test e2e/reports/context-suppression.spec.ts --project=chromium --grep V2-03b --workers=1` — blocked before assertions by `listen EPERM 127.0.0.1:4173`, on fixed tree and negative-control tree. No browser pass or browser negative-control failure is claimed.
+- `git diff --check` — passed.
+- Env canary not run: requires a disposable worktree, while this task restricts execution to the launched worktree and forbids Git metadata writes. Existing env/network guards remain unchanged. Docker harness, all-three-browser suites, CI, Edge Function typecheck and independent review not run here. Lead owns those remaining gates.
+
+## Executed negative controls
+
+Each source mutation was temporary and restored byte-for-byte in `finally`. Final focused/full tests ran after restoration. Local runner scripts/logs are under the system temporary directory, outside the worktree; the mutations below are sufficient to reproduce them without those scripts.
+
+| Mutation in thyroid movement return | Command | Observed result |
+| --- | --- | --- |
+| Replace `${band.text}` with the original literal `This marker remains outside Amani's current comparison band.` | `npx vitest run src/lib/insights/buildFocusAreas.test.tsx src/lib/scoring/optimalWording.test.ts` | 13 assertion failures / 8 passes: twelve rendered-card disclosure failures and the exact source-inventory failure (182 actual vs 181 allowed) |
+| Append `Your result falls outside Amani's current comparison band.` after the valid policy statement | `npx vitest run src/lib/insights/buildFocusAreas.test.tsx` | 4 failures / 9 passes: every DISPUTED rendered-card placement assertion fails even though the review statement remains present |
+| Append `This marker remains outside Amani's current comparison band.` after the valid policy statement | `npx vitest run src/lib/insights/buildFocusAreas.test.tsx` | 12 failures / 1 pass: rendered-card persistence assertion fails, including newly_abnormal |
+| Restore original literal, then run browser cases | `npx playwright test e2e/reports/context-suppression.spec.ts --project=chromium --grep V2-03b --workers=1` | Server bind denied; browser assertion sensitivity remains unverified |
+
+## Remaining handoff / Second Brain update proposal
+
+- Confirmed locally on 2026-10-07: branch/starting SHA through Git; implementation and exact test outcomes above. No commit, merge, push, deployment, control-folder write or vault write occurred.
+- Decision implemented: the owner's amendment-2 ruling and standing rule 2; no independent clinical decision was made.
+- Pending: Lead browser execution and negative controls, independent review, Stage-1 closure, Stage-2 migration (including server and safety proofs), env canary, Docker and CI. Do not resolve any of these by inference from green unit tests.
+- Local Brain snapshot is dated 2026-09-22 and was read without pull under the no-network/no-write contract. Its historical release/branch facts were not used as present authority; no production/store state was checked or proposed for update.
+- Documentation questions: none new for this amendment. The earlier server packaging/authority questions remain deferred to Stage 2.
+
+---
+
+## Historical turn-2 report (retained; superseded by turn-3 findings above)
+
 # TASK-045 — turn 2 amendment implementation evidence (PARTIAL)
 
 Approach: `buildFocusAreas.trajectoryPhrase` independently translated raw comparison statuses and boundary directions into clinical benefit/harm. The renderer only removed optimality claims, and the browser proof only checked primary/trajectory locators. Replace those branches with the existing policy's factual magnitude constructor, make the thyroid composition consume its complete sentence, and strengthen the existing browser cases with a page-wide prohibition plus an explicit rendered focus-card requirement. No new authority model, clinical rule, threshold, value, or evidence grade is introduced.

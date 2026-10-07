@@ -1,0 +1,907 @@
+[
+  {
+    "file": "src/lib/insights/biomarkerExplanations.ts",
+    "text": "Ferritin is the primary storage protein for iron in the body. Low levels can reflect depleted iron stores even before blood counts change, while elevated levels may indicate inflammation or excess iron storage.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/biomarkerExplanations.ts",
+    "text": "High-sensitivity CRP is a protein the liver produces in response to inflammation. Elevated levels can indicate systemic inflammatory activity and are considered in the context of cardiovascular and metabolic health.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/biomarkerExplanations.ts",
+    "text": "LDL carries cholesterol through the bloodstream and is involved in cellular repair and hormone production. When persistently elevated, it is a factor considered in cardiovascular risk assessment.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/biomarkerExplanations.ts",
+    "text": "TPO antibodies are produced when the immune system mistakenly targets thyroid peroxidase, an enzyme involved in thyroid hormone production. Elevated levels are often associated with autoimmune thyroid conditions.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/biomarkerExplanations.ts",
+    "text": "TSH is produced by the pituitary gland and signals the thyroid to make hormones. Levels outside the optimal range can reflect how well the thyroid-pituitary feedback loop is functioning.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/biomarkerExplanations.ts",
+    "text": "Total cholesterol is the sum of all cholesterol types in the blood. It is one component of cardiovascular risk assessment but is most meaningful when interpreted alongside HDL, LDL, and triglycerides together.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Androgen-related markers are outside the optimal range. Tracking them together gives a clearer picture than any single value.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Glucose-related markers are outside the optimal range. Tracking these together gives a fuller picture of insulin sensitivity over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Inflammation markers are elevated. A single reading can reflect short-term factors; tracking over time helps reveal the pattern.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Inflammation markers are outside their reference range. Tracking these together helps reveal whether the pattern persists.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Iron-related markers are outside the optimal range. These move together and are best interpreted as a panel.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Markers tied to hydration and kidney filtration are outside the optimal range. A single reading may reflect hydration status rather than kidney function on its own.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Multiple metabolic markers are outside their reference range. Tracking these together can highlight blood-sugar trends.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Multiple reproductive-hormone markers are outside their reference range. Tracking them together gives the clearest picture over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Multiple thyroid markers are outside their reference range. Tracking these together gives the clearest picture over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "One or more hematology markers are outside their reference range. Tracking these together gives the clearest picture over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "One or more kidney markers are outside their reference range. Tracking these together helps clarify whether the pattern is consistent.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "One or more lipid markers are outside their reference range. Tracking these together helps frame cardiovascular risk over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "One or more liver markers are outside their reference range. Tracking these together gives the clearest picture over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "One or more nutrient markers are outside their reference range. Tracking these together helps clarify nutrient status over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Reproductive-hormone markers are outside the optimal range. Cycle phase context matters when interpreting these values.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "Thyroid antibodies are elevated, suggesting an autoimmune component worth tracking alongside thyroid function markers.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "but this marker is still outside range.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "is elevated",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildFocusAreas.ts",
+    "text": "is low",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildHealthStory.ts",
+    "text": "has shifted in the wrong direction since your prior report",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildHealthStory.ts",
+    "text": "is moving in the right direction but still needs follow-up",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} ${…} each outside their optimal range. Tracking them as a group over time can help reveal whether this is a consistent pattern.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} analyte${…} with usable values. More markers improve insight depth.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} decreased from ${…} to ${…} ${…}${…}${…} — meaningful improvement, though it remains elevated above the optimal range.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} decreased from ${…} to ${…} ${…}${…}${…}, moving further below the optimal range.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} increased from ${…} to ${…} ${…}${…}${…} — meaningful improvement, though it remains below the optimal range.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} increased from ${…} to ${…} ${…}${…}${…}, moving further above the optimal range.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} is ${…} ${…} — first result on record, currently out of range.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} is ${…} the optimal range at ${…} ${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…}: improving from the prior report",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…}: range shifted since last report",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "(${…}% improvement)",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": ", and it has worsened from ${…} ${…} since the prior report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": ", though it has improved from ${…} ${…} since the prior report${…}.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Are there lifestyle or routine considerations I should discuss before making changes?",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Extraction confidence is high across most analytes.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Extraction confidence is low. This panel may benefit from re-upload or manual review.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Has been ${…}${…} since the last panel, while staying within the same range category. Worth tracking to see if this holds across future reports.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Moved from ${…} to ${…} ${…}${…} — a meaningful step toward the optimal range. It remains ${…}, so continued monitoring is worthwhile.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "My ${…} ${…} better than the prior result but ${…} ${…}. Is this rate of change clinically meaningful, and how should we approach it from here?",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "My ${…} ${…} from ${…} to ${…} ${…}${…}. Is this something I should continue monitoring?",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "My ${…} improved from ${…} to ${…}. Is this change clinically meaningful?",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "My ${…} moved from ${…} to ${…}. How should I interpret this alongside ${…}?",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Should we recheck ${…} in a few months to see how it's tracking?",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "outside the optimal range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildPersonalInsights.ts",
+    "text": "You've been logging ${…} and your ${…} is outside the optimal range — these may be worth reviewing together with your provider.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildPersonalInsights.ts",
+    "text": "Your ${…} has been ${…} across your recent reports while remaining outside the optimal range. Worth bringing to your provider's attention.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/buildPersonalInsights.ts",
+    "text": "Your ${…} is ${…} across your recent reports — a positive direction, though it remains outside the optimal range. Continue tracking.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/lib/insights/categorizeNextSteps.ts",
+    "text": "review with",
+    "reason": "Matching token used to categorize existing input, not emitted copy. Pinned exactly."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} ${…} shifted outside the Amani band — worth tracking at your next draw.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} both remain outside the Amani band but have improved since the prior report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} has improved while ${…} has moved in the opposite direction.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} has moved into a better range since your last report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} have both improved since your last report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} remains outside the Amani band but has improved since the prior report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Improving, still elevated",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Improving, still low",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Moved out of range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Moving further above the Amani band${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Moving further below the Amani band${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Still below the Amani band, but moving in the right direction${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Still elevated, but moving toward the Amani band${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Worsening, still elevated",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Worsening, still low",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Amani context band",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Far above range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Far below range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Showing Amani's context band for the",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "This result is outside Amani's context band but inside the wider band Amani uses before flagging a result as out of range. Amani's bands are its own context, not your laboratory's range.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Within your lab's range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Within your older history range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Within your usual range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Your lab's range:",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/BiomarkerCard.tsx",
+    "text": "Your lab's range:",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/CompareView.tsx",
+    "text": "Fluctuations can be normal. Context matters.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/DerivedMetricsPanel.tsx",
+    "text": "Amani band:",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/DerivedMetricsPanel.tsx",
+    "text": "Outside Amani band",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/DerivedMetricsPanel.tsx",
+    "text": "Reflects the conversion efficiency of inactive T4 to active T3. Typical range is 0.20–0.30.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/DerivedMetricsPanel.tsx",
+    "text": "Within Amani band",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/FocusAreas.tsx",
+    "text": "Your panel is generally within range. Continue tracking baseline markers.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/NextBestSteps.tsx",
+    "text": "Discuss whether ${…} should be rechecked and what range your provider wants to target.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "${…} ${…} ${…} at ${…} ${…} and ${…} ${…} from ${…} ${…} since ${…}. This trend is worth discussing with your provider.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "${…} ${…} ${…} at ${…} ${…}, but ${…} improved from ${…} ${…} since ${…}${…}. This is a meaningful move in the right direction, even though the level remains above range. Continue tracking this over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "${…} ${…} ${…} at ${…} ${…}, which stands out as the most abnormal result in this report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "(a ${…}% improvement)",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Far above range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Far below range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Improved into range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Improving, still ${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Worsening, still ${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "outside the Amani band",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "significantly elevated",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "text-xs text-theme-flag-low font-normal ml-1",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "text-xs text-theme-flag-low font-normal ml-1",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "font-normal text-xs text-theme-muted-text-2 ml-1",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/components/RecommendedLabs.tsx",
+    "text": "Recommended labs",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/RecommendedLabs.tsx",
+    "text": "suggested based on this report",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "Needs review (",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "Reference range (raw)",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "need review.",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "text-theme-neutral-500 font-normal ml-1",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/components/SystemSummaryCards.tsx",
+    "text": "Scored against Amani context bands, which are still under review. Select a system to filter biomarkers.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Far above range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Far below range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Outside Range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Within Amani band",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "font-normal text-xs text-theme-muted-text-2 ml-1",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} are both outside the Amani band and are the two findings most worth discussing with your provider.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} is near the edge of the Amani band, though ${…} ${…} improved. The overall trend is positive.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} is outside the Amani band and is the top priority. ${…} is borderline — worth monitoring, but not urgent on its own.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} remains the primary area to keep an eye on, while ${…} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "All measured values are within Amani's context bands, which are still under review. This is a useful baseline to track over time.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "Your panel looks solid overall, with ${…} showing improvement since your last draw. The trend is moving in a positive direction.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "text-[15px] text-theme-text leading-[1.7] font-normal",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/components/WhatToWatchCard.tsx",
+    "text": "Range shift",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/YourPatternsCard.tsx",
+    "text": "Improving trend",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/YourTrajectoryCard.tsx",
+    "text": "${…} ${…} improved from ${…} to ${…} ${…}${…}, still outside the Amani band.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/YourTrajectoryCard.tsx",
+    "text": "${…} ${…} moved toward the Amani band${…}.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/YourTrajectoryCard.tsx",
+    "text": "${…} changed from its previous range classification${…}. ${…}",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/components/YourTrajectoryCard.tsx",
+    "text": "${…} improved from ${…} to ${…}${…}.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/Contact.tsx",
+    "text": ", which are awaiting legal review.",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Contact.tsx",
+    "text": "Draft — pending review",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "Below range",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "Biomarker card — in range, watch, below range",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "Elevated, for content that outranks its neighbours.",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "In range",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/Landing.tsx",
+    "text": "Cycle dates and anything you have noticed — sleep, energy, a new supplement. This is what turns a reference range into an answer.",
+    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+  },
+  {
+    "file": "src/pages/Landing.tsx",
+    "text": "Ferritin is low",
+    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+  },
+  {
+    "file": "src/pages/Landing.tsx",
+    "text": "The same hormone can be normal on day 3 and worrying on day 21. Amani reads every result in the context of where you actually are, then explains it in language you can take to your doctor.",
+    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+  },
+  {
+    "file": "src/pages/Landing.tsx",
+    "text": "and has been falling since October. Everything else sits where it should for day 21.",
+    "reason": "Static marketing example; Stage 2 must audit clinical claims separately. Existing wording pinned, not approved as a patient-result claim."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "Needs review",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "Review what Amani found — edit, remove, or add anything before saving.",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "Review your report",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "We extracted your report details automatically — review anything below before saving",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "We extracted your report details automatically — review anything below before saving.",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "may need review",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "text-theme-neutral-400 font-normal text-sm",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "text-theme-neutral-400 font-normal text-sm",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Flagged for review — excluded from AI highlights (${…})",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Needs review",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Parsed Value / Unit / Range",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Per-analyte extraction details: value, unit, reference range",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Ref range (raw)",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Reference range",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Reference range (raw)",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Stage 3 — Parsed Value / Unit / Range",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": ". It is protected by this policy, by the security measures described below, and by whatever consumer privacy law applies where you live. If you would rather your lab results stayed only inside your provider&rsquo;s patient portal, that is a completely reasonable choice, and you should not upload them here.",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "A preferred name, age range, sex at birth, reproductive status (including whether you are pregnant, trying to conceive, postpartum, or using birth control), health goals, symptoms you want kept in mind, supplements or medications you are taking, and any known conditions you tell us about. Also your typical cycle length and period length.",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "Draft — pending legal review",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "The PDF or photo you upload, the name of the lab and the date of the report, and every biomarker we extract from it — the test name, value, unit, and reference range. Alongside each report we store the cycle context you give it: your last period start date, average cycle length, the cycle day and phase we estimate from those, and the symptoms and context you attach to that specific report.",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "This is the part you should read closely. To produce an interpretation we send OpenAI the biomarker names, values, units, and reference ranges from your report, the cycle context attached to that report, and a short profile block containing your preferred first name, age range, sex at birth, reproductive status, health goals, and the symptoms you asked us to keep in mind.",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "This policy accurately describes what Amani does with your data today, but it has not yet been reviewed by a lawyer. We are publishing it in draft so you can see exactly how your health information is handled before you share any. If anything here is unclear or looks wrong to you, please",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} ${…} but ${…} improved since ${…}.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} ${…} but ${…} improved since your prior report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} ${…} still ${…}, but the trend is moving in the right direction. Continue tracking this${…}.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} and ${…} are both outside the Amani band. These are your top priorities.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} elevated",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} is outside the Amani band and ${…} is borderline. These are the two areas worth focusing on.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} is outside the Amani band and is the primary finding on this panel.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "${…} is outside the Amani band, though ${…} has improved since your last report.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "All scored values are within Amani's context bands, which are still under review.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "All values are within Amani's context bands, and ${…} has improved since your last draw.",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "In range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "No range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "No range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "Out of range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "above range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "below range",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "ml-2 text-sm font-normal text-theme-primary",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "outside Amani band",
+    "reason": "Pre-existing legacy copy deferred behind the Stage-1 independent verification gate. Pinned verbatim to prevent additions or changes; not clinical authorization. See REPORT.md migration inventory."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "text-theme-neutral-500 font-normal ml-1 text-xs",
+    "reason": "Non-copy CSS class literal; normal denotes font weight, not a clinical result."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "Amani reads your report automatically, and automatic reading of a scanned document is imperfect. A value can be misread, a unit can be misinterpreted, a reference range can be picked up from the wrong row, and a test can be missed entirely. The explanations are generated by an AI model and can be wrong or incomplete even when the extraction was correct.",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "Draft — pending legal review",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "These terms describe how Amani actually works and what we are promising, but they have not yet been reviewed by a lawyer. The sections on liability and disputes in particular are placeholders. We are publishing them in draft rather than leaving the link dead.",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  }
+]

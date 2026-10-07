@@ -1,6 +1,6 @@
 import type { BiomarkerName, BiomarkerCategory } from '../../types';
 import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
-import { describeMeasuredMovement } from '../scoring/insightCopy';
+import { authorizedLanguage, describeComparisonBand, describeMeasuredMovement } from '../scoring/insightCopy';
 import type { ScoredBiomarker } from '../scoring/scoreBiomarker';
 import type { InsightSummary, WatchSignal, BiggestChange } from './buildInsightSummary';
 
@@ -177,6 +177,7 @@ function buildValueFreeWhy(
   topMarkers: ScoredBiomarker[],
   category: BiomarkerCategory,
   biggestChanges: BiggestChange[] | undefined,
+  deltaMap: InsightSummary['deltaMap'],
 ): string | null {
   const flagged = topMarkers.filter(m => m.concern > 0);
   const primary = flagged[0];
@@ -190,11 +191,12 @@ function buildValueFreeWhy(
   const trajectory = trajectoryPhrase(change);
   const closer = CATEGORY_CLOSER[category](primaryName);
 
-  // Special composition for thyroid: lead with the primary signal, follow with
-  // an explicit trend sentence that pairs with an out-of-range qualifier closer.
+  // Movement and band placement have separate policy authorities. In particular,
+  // DISPUTED must withhold placement and no trajectory establishes persistence.
   if (category === 'thyroid') {
     if (trajectory) {
-      return `${primaryName} remains the main thyroid signal. ${trajectory} This marker remains outside Amani's current comparison band.`;
+      const band = describeComparisonBand(deltaMap.get(primary.key)?.bandLanguage ?? authorizedLanguage(null), 'outside');
+      return `${trajectory} ${band.text}`;
     }
     return `${primaryName} ${phrase} and remains the main thyroid signal, ${closer}`;
   }
@@ -273,6 +275,7 @@ function buildOneArea(
   bucket: SystemBucket,
   watchSignals: WatchSignal[],
   biggestChanges: BiggestChange[] | undefined,
+  deltaMap: InsightSummary['deltaMap'],
 ): FocusArea {
   const { category, markers } = bucket;
 
@@ -306,7 +309,7 @@ function buildOneArea(
   );
 
   const whyItMatters = matchedRule?.whyItMatters
-    ?? buildValueFreeWhy(topMarkers, category, biggestChanges)
+    ?? buildValueFreeWhy(topMarkers, category, biggestChanges, deltaMap)
     ?? CATEGORY_DEFAULT_WHY[category];
 
   return { id, title, whyItMatters, relatedMarkers, isPrimaryAligned: false };
@@ -328,7 +331,7 @@ export function buildFocusAreas(
   if (buckets.length === 0) return [];
 
   const top = buckets.slice(0, 3);
-  const focusAreas = top.map(b => buildOneArea(b, watchSignals, insightSummary.biggestChanges));
+  const focusAreas = top.map(b => buildOneArea(b, watchSignals, insightSummary.biggestChanges, insightSummary.deltaMap));
 
   const annotated = focusAreas.map(fa => ({
     ...fa,

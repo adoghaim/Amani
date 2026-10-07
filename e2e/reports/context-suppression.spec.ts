@@ -258,6 +258,8 @@ for (const [label, previous, current, sentence] of [
       await expect(focus).toBeVisible();
       await expect(focus).toContainText(label === 'away'
         ? 'TSH has changed since your prior report.' : 'TSH has not changed significantly.');
+      await expect(focus).toContainText('This band has not yet completed clinical review.');
+      await expect(focus).not.toContainText('remains outside');
       const primary = page.getByTestId('primary-movement-observation');
       await expect(primary).toBeVisible();
       await expect(primary).toContainText(sentence);
