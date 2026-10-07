@@ -1,6 +1,9 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { lutealPhaseReport, missingPhaseReport } from './synthetic-reports';
+import {
+  lutealPhaseReport, missingPhaseReport, patternFollicularReport, patternMissingPhaseReport,
+  trajectoryCurrentReport, trajectoryPriorReport,
+} from './synthetic-reports';
 
 // V2-03 release invariants in a real browser, against the real ReportView,
 // with synthetic report rows behind the network guard. CONTRACT section 5.
@@ -51,7 +54,7 @@ test.describe('cycle phase missing from the report', () => {
   });
 
   test('3. a cycle-dependent hormone with missing phase receives no Amani context score', async ({ page }) => {
-    for (const name of ['Progesterone', 'Estradiol (E2)']) {
+    for (const name of ['Progesterone', 'Estradiol (E2)', 'LH', 'FSH']) {
       const marker = card(page, name);
       const note = marker.getByRole('note');
       await expect(note).toContainText('Amani context score unavailable');
@@ -61,7 +64,7 @@ test.describe('cycle phase missing from the report', () => {
       await expect(marker.getByText(/Within Amani band|Outside Amani band|Borderline|Normal|Optimal/)).toHaveCount(0);
     }
     // A system whose markers are all withheld is not summarised as reassuring.
-    await expect(page.getByRole('button', { name: /^Hormones Not scored 2 markers · 0 scored by Amani$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Hormones Not scored 4 markers · 0 scored by Amani$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Hormones Within Amani bands/ })).toHaveCount(0);
   });
 
@@ -94,6 +97,61 @@ test.describe('cycle phase recorded on the report', () => {
     await expect(progesterone.getByText('Outside Amani band', { exact: true })).toBeVisible();
     await expect(progesterone.getByRole('definition').filter({ hasText: '0.2–25 ng/mL' })).toBeVisible();
     await expect(progesterone.getByText('2.0', { exact: true })).toBeVisible();
+    // The same phase makes LH scorable against its phase band too.
+    const lh = card(page, 'LH');
+    await expect(lh.getByRole('note')).toHaveCount(0);
+    await expect(lh.getByRole('term').filter({ hasText: 'Amani context band (luteal phase):' })).toBeVisible();
     await expect(page.getByText(/\bOptimal\b/)).toHaveCount(0);
+  });
+});
+
+// V2-03 amendment 2 (B1). The PCOS and luteal-insufficiency rules are
+// unchanged; the page drops any pattern built from an input it withholds.
+async function openInsightFlags(page: Page) {
+  await page.getByRole('button', { name: /^Patterns & Insights/ }).click();
+  await expect(page.getByRole('heading', { name: 'Clinical insight flags' })).toBeVisible();
+}
+
+test.describe('pattern cards from withheld inputs', () => {
+  test.use({ authenticated: true, syntheticReports: [patternMissingPhaseReport] });
+
+  test('7. no pattern is asserted from hormones Amani withholds for a missing phase', async ({ page }) => {
+    await openReport(page, patternMissingPhaseReport.report.id);
+    await openInsightFlags(page);
+    // A rule on an analyte that needs no context still renders: the panel is live.
+    await expect(page.getByText('Elevated HbA1c', { exact: true })).toBeVisible();
+    await expect(page.getByText('Possible PCOS-Related Pattern', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Possible Luteal Phase Insufficiency', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/PCOS|Progesterone is very low/)).toHaveCount(0);
+  });
+});
+
+test.describe('pattern cards once context is recorded', () => {
+  test.use({ authenticated: true, syntheticReports: [patternFollicularReport] });
+
+  test('8. the same values with a recorded phase let the unchanged rule speak', async ({ page }) => {
+    await openReport(page, patternFollicularReport.report.id);
+    await openInsightFlags(page);
+    await expect(page.getByText('Possible PCOS-Related Pattern', { exact: true })).toBeVisible();
+    await expect(page.getByText('Elevated HbA1c', { exact: true })).toBeVisible();
+  });
+});
+
+// V2-03 amendment 2 (B2). Two reports, so "Your trajectory" actually renders.
+test.describe('trajectory across two reports', () => {
+  // Wrapped: Playwright reads a bare two-element array as a [value, options] tuple.
+  test.use({ authenticated: true, syntheticReports: [[trajectoryCurrentReport, trajectoryPriorReport], { scope: 'test' }] });
+
+  test('9. a crossing into an unreviewed band never reads "optimal"', async ({ page }) => {
+    await openReport(page, trajectoryCurrentReport.report.id);
+    // The innermost element holding both the card heading and its bullet list.
+    const trajectory = page.locator('div')
+      .filter({ has: page.getByRole('heading', { name: 'Your trajectory', exact: true }) })
+      .filter({ has: page.getByRole('list') })
+      .last();
+    await expect(trajectory.getByText(/^TSH improved from borderline to /)).toBeVisible();
+    // Any casing, any position, anywhere on the page.
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
+    await expect(trajectory.getByText('TSH improved from borderline to within the Amani band.', { exact: true })).toBeVisible();
   });
 });

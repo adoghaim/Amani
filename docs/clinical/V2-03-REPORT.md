@@ -17,7 +17,8 @@ band), and without a usable phase, or under any non-cycling state, Amani **withh
 status, no band, no fallback. Every applied band carries its catalog review state, and the
 word "Optimal" is reachable only through `canDescribeAsOptimal`, which no band passes today.
 The report card shows the laboratory's interval (from `biomarkers.reference_min/max` only)
-and Amani's band as two separately labelled rows.
+and Amani's band as two separately labelled rows. Turn 4 (amendment 2, §9) extends the same
+rules to the insight-flag panel and the trajectory card, where review found two breaches.
 
 ## 2. Design decisions the Lead should check
 
@@ -65,39 +66,68 @@ and Amani's band as two separately labelled rows.
   `lab_reports.estimated_cycle_phase`. The model accepts the other states so V2-04 can feed
   them; nothing invents them.
 
-## 3. Invariant proof matrix (CONTRACT §0c, dual-proof rule §0b)
+## 3. Invariant proof matrix (CONTRACT §0c, dual-proof rule §0b) — rewritten in turn 4
 
-| # | Invariant | Logic proof (Vitest / node) | Browser proof (Playwright, chromium + webkit + firefox) |
-|---|---|---|---|
-| 1 | Lab interval never confused with catalog `lab_reference` | `amaniContext.test.ts` "invariant 1"; `BiomarkerCard.test.tsx` (no catalog clinical shown when report has none; one-sided interval) | spec 1 (TSH lab 0.45–4.5 vs Amani 1–2.5; catalog 0.4–4 absent), spec 5 (estradiol "Not provided on your report") |
-| 2 | Amani band carries review status | `amaniContext.test.ts` "invariant 2" (every marker × phase equals catalog status; all three statuses seen) | spec 1/2 ("Not yet reviewed"), spec 6 ("Disputed range, under review") |
-| 3 | UNKNOWN/DISPUTED/NEEDS_CONTEXT never unqualified "Optimal" | `amaniContext.test.ts` "invariant 3" (every marker × value × phase; synthetic SAFE fixture proves the gate is `canDescribeAsOptimal`; source scan for hard-coded labels); `provenance.test.ts` unchanged | spec 2 and spec 6: zero `\bOptimal\b` on the page; "Within Amani band" shown instead |
-| 4 | Missing context withholds; no broad fallback | `amaniContext.test.ts` "invariant 4"; `amaniContext.data.test.ts` (flipping catalog flags flips behaviour — data-driven, no list); `scoreBiomarker.test.ts` (replaced tests, see §5); system summary "not scored" | spec 3 (progesterone and estradiol: note copy, "Context needed", no band row, Hormones system "Not scored"), spec 6 (luteal phase enables the phase band) |
-| 5 | Raw result and lab range always visible | `BiomarkerCard.test.tsx` (withheld, scored, pregnancy and unsupplied cases) | spec 4 (raw "2.0", "120"), spec 5 (0.2–25 ng/mL) |
-| 6 | No frozen migration edited | `review-status.test.mjs` (frozen bytes equal frozen generator; review SQL never writes a V2-01 table; V2-01 never creatable); `convergence.test.mjs`; `clinical:check` | **Not browser-visible.** Docker harness (Lead) |
-| 7 | No migration applied to production | **Not executable in code.** Procedural: nothing here calls `supabase db push`/`migration up`; migration header says "No production application authorized" | **Not browser-visible.** |
+**Correction on the record (Lead amendment 2, B4).** The turn-2/3 version of this matrix
+claimed invariants 3 and 4 were proven and listed only the two out-of-scope surfaces as
+unresolved. Independent review then found **two in-scope, actively rendered breaches** on the
+report page that the matrix said was covered:
 
-## 4. Verified (commands run in this worktree, all passing)
+- **B1 (Fable review):** the insight-flag panel asserted "Possible PCOS-Related Pattern" from
+  LH and FSH that the cards above it withheld, and the luteal-insufficiency rule fired from its
+  explicit no-phase branch. Missed because the E2E fixtures carried **no LH or FSH**, so the
+  rule was never exercised in a browser, and no logic test looked past the card.
+- **B2 (independent Sonnet review):** "Your trajectory" printed "TSH improved from borderline
+  to optimal range" for unreviewed bands. Missed because **no Playwright fixture had two
+  reports**, so the card never rendered in a browser, and the Vitest source scan only matched a
+  quote-bounded, capitalised `"Optimal"`, so lowercase `optimal range` mid-sentence slipped
+  through.
 
-- `npm run clinical:generate` then `npm run clinical:check` — catalog, context projection,
-  V2-01 SQL (unchanged), V2-03 SQL and audit queue all match.
-- `npm run clinical:test` — 50/50 (adds `review-status.test.mjs`, 8 tests incl. the turn-3
-  least-privilege test; also wired into
-  `clinical:test:ci`). Includes the static SQL parse guard and the `--compile-sql` emission
-  for the new migration, rollback and verify files.
-- `npx vitest run` — 55 files, 1248 tests.
-- `npm run typecheck` — app, clinical tools and E2E.
-- `npm run lint` — 0 errors; 9 warnings, all pre-existing `react-hooks/exhaustive-deps` on
-  effects this task did not change.
+Both are fixed in turn 4 (§9). They are recorded here because the earlier coverage claim was
+wrong, not because they are now green.
+
+The matrix states coverage **per surface**. "Covered" means a logic test and a browser test
+both fail if the invariant breaks on that surface. Each new turn-4 proof was run against the
+reverted fix and seen to fail (§9).
+
+| # | Invariant | Surface | Logic proof | Browser proof (chromium + webkit + firefox) |
+|---|---|---|---|---|
+| 1 | Lab interval never confused with catalog `lab_reference` | Biomarker card | `amaniContext.test.ts` "invariant 1"; `BiomarkerCard.test.tsx` | spec 1, spec 5 |
+| 2 | Amani band carries review status | Biomarker card | `amaniContext.test.ts` "invariant 2" | spec 1/2 ("Not yet reviewed"), spec 6 ("Disputed range, under review") |
+| 3 | No unreviewed band reads as unqualified "optimal" | Biomarker card, status pill | `amaniContext.test.ts` "invariant 3" (the gate is `canDescribeAsOptimal`) | spec 2, spec 6 (no `\bOptimal\b` on the page) |
+| 3 | 〃 | **Your trajectory** (B2, found by review) | `YourTrajectoryCard.test.tsx` "B2" (real compare → summary → card chain; every sentence; an unknown bucket is never echoed) | **spec 9** (two reports; no `/optimal/i` anywhere on the page) |
+| 3 | 〃 | `BiggestChangesCard`, `WhatThisMeansCard`, `PrimaryInsightCard` (no page renders them today) | `BiggestChangesCard.test.tsx`; `optimalWording.test.ts` | Not browser-visible: no route renders them |
+| 3 | 〃 | All copy in `src/components`, `src/pages`, `src/lib/scoring`, `src/lib/biomarkers` | `optimalWording.test.ts`: TypeScript-AST scan of every string, template chunk and JSX text, any casing and position; a self-test proves it catches the B2 sentence | (per-surface specs above) |
+| 3 | 〃 | **Insight-flag copy** (`src/utils/derivedMetrics.ts`, frozen clinical wording) | **NOT covered.** Pinned by count in `optimalWording.test.ts` so it cannot grow | **NOT covered.** e.g. "Vitamin D Below Optimal" can still render |
+| 3 | 〃 | **Narrative insight copy** (`src/lib/insights/**`, outside allowed paths) | **NOT covered.** Pinned by count | **NOT covered** (§7) |
+| 3 | 〃 | Server AI interpretation (`supabase/functions/**`, forbidden) | **NOT covered** | **NOT covered** (§7) |
+| 4 | Missing context withholds; no broad fallback | Biomarker card, system summary | `amaniContext.test.ts` "invariant 4"; `amaniContext.data.test.ts` (data-driven); `scoreBiomarker.test.ts` | spec 3 (progesterone, estradiol, **LH, FSH**; Hormones "Not scored 4 markers") |
+| 4 | 〃 | Report comparison deltas | `amaniContext.test.ts` "longitudinal history" | spec 9 renders the trajectory surface; a withheld marker's trajectory is not separately browser-proven |
+| 4 | 〃 | **Insight-flag panel** (B1, found by review) | `insightGate.test.ts` (PCOS from a surge-shaped LH:FSH, the luteal no-phase branch, pregnancy, a property over every rule × context, ReportView wiring) | **spec 7** (no PCOS or luteal-insufficiency card when unphased) and **spec 8** (same values with a recorded phase: the unchanged rule renders) |
+| 4 | 〃 | Server AI interpretation | **NOT covered** | **NOT covered** (§7) |
+| 5 | Raw result and lab range always visible | Biomarker card | `BiomarkerCard.test.tsx` | spec 4, spec 5 |
+| 6 | No frozen migration edited | Repository | `review-status.test.mjs`; `convergence.test.mjs`; `clinical:check` | **Not browser-visible.** Docker harness (Lead) |
+| 7 | No migration applied to production | Procedure | **Not executable in code.** | **Not browser-visible.** |
+
+## 4. Verified (commands run in this worktree in turn 4, all passing)
+
+- `npm run clinical:check` — catalog, context projection, V2-01 SQL (unchanged), V2-03 SQL
+  and audit queue match (83 entries; 83 analytes / 198 ranges).
+- `npm run clinical:test` — 50/50, including the static SQL parse guard.
+- `npm test` — 58 files, 1270 tests.
+- `npm run typecheck` — app, clinical tools and E2E: 0 errors.
+- `npm run lint` — 0 errors; 9 warnings, all pre-existing `react-hooks/exhaustive-deps`.
 - `npm run build` — success.
-- `npm run test:e2e -- --repeat-each=3` — 144/144 (16 gated cases × 3 browsers × 3 repeats);
-  network guard still fails on any unlisted request; quarantined race test still excluded.
-- `npm run test:e2e:isolation` — env canary passes (no root env files in this worktree).
+- `npm run test:e2e` — 57/57 (19 gated cases × 3 browsers); `--repeat-each=3` — 171/171.
+  The network guard is no less strict: the two new history handlers answer only the exact
+  projections, filters and orderings ReportView sends, and only from opted-in fixtures. The
+  quarantined race test is still excluded.
+- `npm run test:e2e:isolation` — env canary passes.
 - `git status`: `supabase/migrations/20261006000000_clinical_catalog.sql` unmodified.
 
 ## 5. Existing tests changed because behaviour legitimately changed
 
-All in `src/lib/scoring/scoreBiomarker.test.ts`; each replacement is stronger:
+Turns 2–3, all in `src/lib/scoring/scoreBiomarker.test.ts`; each replacement is stronger:
 - "falls back to the wide general range when the phase is null/undefined/unknown" asserted
   progesterone 2.0 → `optimal` (the false reassurance this task removes). Replaced by
   "withholds the Amani status when the phase is …" over four phase inputs **and** four values
@@ -111,52 +141,60 @@ All in `src/lib/scoring/scoreBiomarker.test.ts`; each replacement is stronger:
 - `tools/clinical/audit-amendment.test.mjs` fixture now includes the new artifacts; its frozen
   loop also covers the V2-03 SQL. No assertion relaxed.
 
+Turn 4:
+- `e2e/reports/context-suppression.spec.ts` spec 3: the fixture gained LH and FSH (B3), so the
+  Hormones summary now reads "Not scored **4** markers" instead of 2, and the per-marker
+  withheld assertions now loop over LH and FSH as well. Stronger: more markers, same checks.
+- Spec 6 additionally asserts that LH is scored against its luteal-phase band.
+- The old quote-bounded `"Optimal"` scan in `amaniContext.test.ts` is **kept**; the broader
+  AST scan is added beside it, not substituted.
+
 ## 6. Not verified here (Lead to run)
 
-- **Turn 3: the harness must be re-run** after the A4 grant change. Turn 2's green harness run
-  (Lead, commit `b11d7ea`) predates it and asserted the opposite `authenticated` privilege.
-  The new verify asserts `authenticated`/`anon` cannot `SELECT`, `service_role` can, and the
-  only policy is `{service_role}`; all four V2-01 modes run that verify. Not executed here.
-- **Docker harness: SKIPPED** (no Docker by policy). `clinical-catalog.run.sh` now runs
-  `clinical_review_cycle` inside the production/backfill, absent and chain cases: refusal on a
-  V2-01 write, forward, verify, replay, V2-01 replay coexistence, V2-01 rollback refusal while
-  V2-03 is applied, intervening-write and dependent-view refusals, rollback/archive, and
-  re-apply refusal. `bash -n` passes; none of it has executed.
+- **Docker harness: SKIPPED** (no Docker by policy). Turn 4 changed no SQL, migration or
+  harness file; the turn-3 note stands: the harness must be re-run after the A4 grant change.
 - **plpgsql compile of the new DO bodies**: emitted by the parse guard, executed only by the
   harness.
 - `npm run check:functions` — not run (needs Deno download; no network). No edge function changed.
 
-## 7. UNRESOLVED USER-VISIBLE INCONSISTENCY (Lead ruling A5 — out of scope, needs its own task)
+## 7. UNRESOLVED USER-VISIBLE INCONSISTENCIES (not fixed in this task)
 
-The seven invariants hold in the surfaces this task changed (the report card, system
-summaries, top findings, derived metrics, report comparison). **They do not hold everywhere a
-user can read about the same result.** Two surfaces outside this task's allowed paths can
-still assert optimality — or its negation — against a band V2-03 withholds or has not
-reviewed:
+The invariants hold on the surfaces marked covered in §3. **They do not hold everywhere a user
+can read about the same result.** Four surfaces can still assert optimality against an
+unreviewed band:
 
 1. **Server-side AI interpretation** — `supabase/functions/generate-interpretation/**` (and
-   its siblings `extract-biomarkers`, `lab-insights`). Forbidden path. It does not read the
-   catalog range tables or `amaniContext`, so it can describe a phase-less reproductive
-   hormone, or any UNKNOWN/DISPUTED band, in "optimal" terms while the card beside it says
-   "Context needed" or "Not yet reviewed". I did not trace exactly what range context it
-   receives.
-2. **Narrative insight copy** — `src/lib/insights/**`. Outside allowed paths. Several
-   sentences say "outside the optimal range". Withheld markers now carry zero concern, so they
-   no longer trigger that copy, but **scored** markers on UNKNOWN/DISPUTED bands still can,
-   which is an unqualified optimality claim the card itself no longer makes.
-
-Not touched here by ruling. The Lead is raising it with the owner as a follow-up task
-(candidate V2-03b).
+   `extract-biomarkers`, `lab-insights`). Forbidden path (Lead ruling A5). It does not read
+   `amaniContext`, so it can describe a phase-less hormone or any UNKNOWN/DISPUTED band in
+   "optimal" terms beside a card that says "Context needed" or "Not yet reviewed".
+2. **Narrative insight copy** — `src/lib/insights/**` (outside allowed paths): 17 string
+   nodes across four files say "optimal" (e.g. "remains elevated above the optimal range").
+   Pinned by count in `optimalWording.test.ts`. One side effect of the B2 rename reaches this
+   code without editing it: its boundary sentences now read "from borderline to within band"
+   instead of "to optimal".
+3. **Insight-flag copy** — `src/utils/derivedMetrics.ts`: 13 string nodes (titles such as
+   "Vitamin D Below Optimal"; descriptions such as "below the Amani optimal range", and the
+   PCOS copy "outside the optimal range"). Amendment 2 forbids changing rule thresholds or
+   clinical wording, so B1 gates **which cards render**, not what they say. When a card is
+   legitimately shown (e.g. spec 8, with a recorded phase), its frozen copy can still say
+   "optimal". Pinned by count.
+4. **Derived-metric thresholds** (`DerivedMetricsPanel`) are not catalog ranges and carry no
+   review state; relabelled "Amani band" in turn 2, still unreviewed.
 
 ## 7a. Inferred / residual risks
 
-- Positive "within optimal" claims in `src/components/**` and `src/pages/**` were
-  requalified; the two surfaces in §7 were not.
+- **B1 gate scope.** A rule is dropped only when a declared analyte is **present** on the
+  report and withheld. A declared analyte absent from the report is not an input, so it does
+  not gate (proven: PCOS from total testosterone + SHBG alone still renders unphased). Every
+  current rule declares analytes; a rule with none would be ungated (tested), and a test
+  fails if any rule ships with an empty `biomarkers_involved`. The gate trusts each rule's
+  declared list: if a rule's `check` read an analyte it did not declare, the gate could not
+  see it. Today the declared lists match the `check` bodies by inspection, not by test.
+- **"Improved" is still a direction judgement** against an unreviewed band ("TSH improved
+  from borderline to within the Amani band", with a green check). Only the word "optimal" was
+  ruled out; whether "improved" also needs qualification is an owner question.
 - **Persisted `biomarkers.flagged`** on pre-V2-03 rows may have come from the fallback band.
-  The category count now computes live; the in-category sort order still uses the stored flag
-  (order only, no label). New uploads persist `unknown` for withheld hormones.
-- **Derived-metric thresholds** (`DerivedMetricsPanel`) are not catalog ranges; relabelled to
-  "Amani band", not reviewed.
+  The category count now computes live; the in-category sort order still uses the stored flag.
 - **Partially scored systems** say "N markers · K scored by Amani"; their label reflects only
   the scored markers.
 
@@ -175,9 +213,39 @@ Not touched here by ruling. The Lead is raising it with the owner as a follow-up
 4. **`playwright.config.ts` `testMatch` (A1).** Kept. `allowed_paths` amended to include that
    file for additive test discovery only. The single added glob is
    `'**/reports/context-suppression.spec.ts'`; projects, timeouts, trace/screenshot settings
-   and the quarantine `grepInvert` are unchanged.
+   and the quarantine `grepInvert` are unchanged. Turn 4 did not touch the config.
 5. **Server interpretation and `src/lib/insights/**` (A5).** Recorded in §7 as an unresolved
    user-visible inconsistency; not touched.
 6. Context7: none needed. The only version-sensitive SQL (`UNIQUE NULLS NOT DISTINCT`, PG15+)
    is already used by the frozen V2-01 migration; `pg_policies.roles` (`name[]`) is
    long-standing catalog behaviour.
+
+## 9. Amendment 2 (turn 4) — two review-found breaches and the proof gaps behind them
+
+**B1: PCOS and luteal-insufficiency cards built from withheld inputs.** `ReportView` now wraps
+`evaluateInsightRules(...)` in `gateInsightMatches(..., biomarkers, contextFromReport(phase))`
+(`src/lib/scoring/insightGate.ts`). A match is dropped when any analyte it declares is present
+on the report and `assessAmaniContext` returns `withheld` for the report's context. The gate is
+mechanical: `src/utils/derivedMetrics.ts` is **unchanged**, with no threshold, wording or
+signature edits. In the real catalog, the unphased withheld set among rule analytes is exactly
+`progesterone, lh, fsh`. Under pregnancy it covers most rule analytes, so most cards are dropped.
+
+**B2: "improved from borderline to optimal range".** The `compareReports` bucket for the
+`optimal` and `normal` statuses is renamed `'within_band'`, and the type no longer admits
+`'optimal'`. The labels live in one place, `BOUNDARY_BUCKET_LABEL`: "within the Amani band",
+"borderline" and "outside the Amani band", mirroring `amaniPillLabel`. `boundaryBucketLabel`
+returns null for anything else, so no caller can echo a raw bucket. `YourTrajectoryCard` and
+`BiggestChangesCard` use it, and their "outside optimal" sentences now say "outside the Amani
+band". The same wording fix was applied to `WhatThisMeansCard`, `PrimaryInsightCard` and four
+`ReportView` headline fallbacks.
+
+**B3: proofs that can see the defect.** The synthetic fixtures now carry LH and FSH. Two new
+pattern fixtures were added (unphased and follicular, with the same values), plus a two-report
+trajectory fixture. The E2E network guard gained two exact history handlers. The source scan is
+now AST-based, matches any casing in any position, and self-tests against the B2 sentence.
+
+**Negative controls (run, then reverted).** With the gate removed and the bucket label set
+back to "optimal range", spec 7 failed on chromium (`Possible PCOS-Related Pattern` count 1,
+expected 0), and so did spec 9 (`/optimal/i` count 1, expected 0). Seven Vitest cases failed:
+the `insightGate` wiring test, both B2 suites, `BiggestChangesCard` and the AST scan. With the
+fixes restored, all of them pass on all three browsers.

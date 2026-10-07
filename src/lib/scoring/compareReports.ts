@@ -17,9 +17,31 @@ export type TrajectoryStatus =
   | 'stable_normal'
   | null;
 
+/*
+  V2-03 amendment 2: the bucket for 'optimal' and 'normal' statuses is
+  'within_band', never 'optimal'. Every shipping Amani band is UNKNOWN,
+  DISPUTED or NEEDS_CONTEXT, so a crossing must not be printable as
+  "optimal range". Renaming the bucket makes that mistake impossible rather
+  than guarded; BOUNDARY_BUCKET_LABEL mirrors amaniPillLabel's neutral wording.
+*/
+export type BoundaryBucket = 'within_band' | 'borderline' | 'out_of_range';
+
+export const BOUNDARY_BUCKET_LABEL: Record<BoundaryBucket, string> = {
+  within_band: 'within the Amani band',
+  borderline: 'borderline',
+  out_of_range: 'outside the Amani band',
+};
+
+/** Label for a bucket; null for anything that is not a known bucket, so no caller can echo a raw value. */
+export function boundaryBucketLabel(bucket: string): string | null {
+  return Object.prototype.hasOwnProperty.call(BOUNDARY_BUCKET_LABEL, bucket)
+    ? BOUNDARY_BUCKET_LABEL[bucket as BoundaryBucket]
+    : null;
+}
+
 export interface BoundaryCrossing {
-  from: 'optimal' | 'borderline' | 'out_of_range';
-  to: 'optimal' | 'borderline' | 'out_of_range';
+  from: BoundaryBucket;
+  to: BoundaryBucket;
   direction: 'improved' | 'worsened';
 }
 
@@ -59,8 +81,8 @@ const MIN_ABSOLUTE_DELTA: Record<string, number> = {
 
 const NEAR_ZERO_THRESHOLD = 0.5;
 
-function statusBucket(status: AmaniStatus): 'optimal' | 'borderline' | 'out_of_range' {
-  if (status === 'optimal' || status === 'normal') return 'optimal';
+function statusBucket(status: AmaniStatus): BoundaryBucket {
+  if (status === 'optimal' || status === 'normal') return 'within_band';
   if (status === 'borderline_low' || status === 'borderline_high') return 'borderline';
   return 'out_of_range';
 }
@@ -74,7 +96,7 @@ function isLowStatus(status: AmaniStatus): boolean {
 }
 
 function isAbnormal(status: AmaniStatus): boolean {
-  return statusBucket(status) !== 'optimal';
+  return statusBucket(status) !== 'within_band';
 }
 
 function computeSignificance(
@@ -99,7 +121,7 @@ function detectBoundaryCrossing(
   const currBucket = statusBucket(currStatus);
   if (prevBucket === currBucket) return null;
 
-  const severity: Record<string, number> = { optimal: 0, borderline: 1, out_of_range: 2 };
+  const severity: Record<BoundaryBucket, number> = { within_band: 0, borderline: 1, out_of_range: 2 };
   const direction = (severity[currBucket] ?? 0) < (severity[prevBucket] ?? 0) ? 'improved' : 'worsened';
 
   return { from: prevBucket, to: currBucket, direction };

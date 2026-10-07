@@ -79,6 +79,23 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
           '/rest/v1/iap_beta_testers',
           '/rest/v1/complimentary_entitlements',
         ];
+        // Prior-report history for opted-in synthetic reports (V2-03 amendment
+        // 2): the exact projection, filters and orderings ReportView requests.
+        // With no synthetic reports this answers [] exactly as before.
+        if (url.pathname === '/rest/v1/lab_reports' && url.searchParams.get('select') === 'id,report_date'
+          && url.searchParams.get('user_id') === `eq.${userId}`) {
+          const before = /^lt\.(\d{4}-\d{2}-\d{2})$/.exec(url.searchParams.get('report_date') ?? '')?.[1];
+          const order = url.searchParams.get('order');
+          const limit = url.searchParams.get('limit');
+          if (before && (order === 'report_date.desc' || order === 'report_date.asc') && (limit === null || limit === '1')) {
+            const rows = syntheticReports
+              .map(r => ({ id: r.report.id, report_date: r.report.report_date }))
+              .filter(r => r.report_date < before)
+              .sort((a, b) => (order === 'report_date.asc' ? 1 : -1) * a.report_date.localeCompare(b.report_date));
+            await route.fulfill({ json: limit === '1' ? rows.slice(0, 1) : rows });
+            return;
+          }
+        }
         if (emptyUserTables.includes(url.pathname) && url.searchParams.get('user_id') === `eq.${userId}`) {
           await route.fulfill({ json: [] });
           return;
@@ -104,6 +121,17 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
         if (Object.hasOwn(byReport, url.pathname) && allowedSelect) {
           const match = reportFor(url.searchParams.get('lab_report_id'));
           if (match) { await route.fulfill({ json: byReport[url.pathname](match) }); return; }
+        }
+        // ReportView's historical read: one projection, an in-list of fixture ids only.
+        const historyColumns = ['name', 'value', 'unit', 'reference_min', 'reference_max', 'lab_report_id'] as const;
+        if (url.pathname === '/rest/v1/biomarkers' && select === historyColumns.join(',')) {
+          const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];
+          const matches = ids.map(id => syntheticReports.find(r => r.report.id === id));
+          if (ids.length > 0 && matches.every(m => m !== undefined)) {
+            await route.fulfill({ json: matches.flatMap(m => m!.biomarkers.map(b =>
+              Object.fromEntries(historyColumns.map(c => [c, b[c]])))) });
+            return;
+          }
         }
         // This existing view is read without a user filter by useSubscription.
         // An empty response grants no subscription; no real backend is involved.

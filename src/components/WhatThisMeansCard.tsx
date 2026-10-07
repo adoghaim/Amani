@@ -30,7 +30,7 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
 
   if (improved.length > 0 && borderline.length > 0 && outOfRange.length === 0) {
     const names = improved.slice(0, 2).map(c => c.displayName).join(' and ');
-    return `${topName} is near the edge of optimal range, though ${names} ${improved.length === 1 ? 'has' : 'have'} improved. The overall trend is positive.`;
+    return `${topName} is near the edge of the Amani band, though ${names} ${improved.length === 1 ? 'has' : 'have'} improved. The overall trend is positive.`;
   }
 
   if (worsened.length > 0 && outOfRange.length > 0 && worsened[0]) {
@@ -39,12 +39,12 @@ function buildFallbackText(topFindings: TopFinding[], biggestChanges: BiggestCha
 
   if (outOfRange.length >= 2) {
     const names = outOfRange.slice(0, 2).map(f => f.displayName).join(' and ');
-    return `${names} are both outside optimal range and are the two findings most worth discussing with your provider.`;
+    return `${names} are both outside the Amani band and are the two findings most worth discussing with your provider.`;
   }
 
   if (outOfRange.length === 1 && borderline.length > 0 && borderline[0]) {
     const borderName = borderline[0].displayName;
-    return `${topName} is outside optimal range and is the top priority. ${borderName} is borderline — worth monitoring, but not urgent on its own.`;
+    return `${topName} is outside the Amani band and is the top priority. ${borderName} is borderline — worth monitoring, but not urgent on its own.`;
   }
 
   if (outOfRange.length === 1) {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { YourTrajectoryCard, selectTrajectoryBullets } from './YourTrajectoryCard';
-import type { BiggestChange } from '../lib/insights/buildInsightSummary';
+import { buildInsightSummary, type BiggestChange } from '../lib/insights/buildInsightSummary';
+import { BOUNDARY_BUCKET_LABEL, boundaryBucketLabel, compareReports } from '../lib/scoring/compareReports';
 
 const change = (key: BiggestChange['key'], trajectoryStatus: BiggestChange['trajectoryStatus'],
   significance: BiggestChange['significance']): BiggestChange => ({
@@ -30,6 +31,48 @@ function baseOrder(input: BiggestChange[]) {
     .sort((a, b) => rank[a.significance] - rank[b.significance])
     .slice(0, 4).map(x => x.key);
 }
+
+// V2-03 amendment 2 (B2). Synthetic values only. TSH 2.7 -> 2.0 crosses from
+// borderline into the (unreviewed) Amani band: the exact reviewer reproduction.
+describe('B2 — a boundary crossing never prints "optimal" for an unreviewed band', () => {
+  const tsh = (value: number, reportDate?: string) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5, reportDate });
+
+  it('the bucket for optimal and normal statuses is "within_band", never "optimal"', () => {
+    const [delta] = compareReports([tsh(2.7)], [tsh(2.0)], null);
+    expect(delta?.boundaryCrossing).toEqual({ from: 'borderline', to: 'within_band', direction: 'improved' });
+    expect(Object.keys(BOUNDARY_BUCKET_LABEL).sort()).toEqual(['borderline', 'out_of_range', 'within_band']);
+    for (const label of Object.values(BOUNDARY_BUCKET_LABEL)) expect(label).not.toMatch(/optimal/i);
+    expect(boundaryBucketLabel('optimal')).toBeNull();
+  });
+
+  it('the real compare -> summary -> card chain renders neutral wording', () => {
+    const summary = buildInsightSummary([tsh(2.0)], [tsh(2.7, '2025-12-01')], null, '2025-12-01');
+    const html = renderToStaticMarkup(<YourTrajectoryCard changes={summary.biggestChanges} primaryFinding={summary.primaryFinding} reportCount={1} />);
+    const text = html.replace(/<[^>]+>/g, ' ');
+    expect(text).toContain('TSH improved from borderline to within the Amani band.');
+    expect(text).not.toMatch(/optimal/i);
+    // The summary's own fact line carries the bucket too; it must not say optimal either.
+    expect(summary.biggestChanges.map(c => c.fact).join(' ')).not.toMatch(/optimal/i);
+  });
+
+  it('every trajectory sentence avoids "optimal", in any casing', () => {
+    const statuses = ['improving_still_high', 'improving_still_low', 'worsening_still_high', 'worsening_still_low',
+      'newly_abnormal', 'stable_abnormal', 'normalized'] as const;
+    for (const status of statuses) {
+      const c = { ...change('tsh', status, 'significant'),
+        boundaryCrossing: status === 'normalized' ? { from: 'out_of_range', to: 'within_band', direction: 'improved' } : null };
+      const [bullet] = selectTrajectoryBullets([c], null);
+      expect(bullet?.text, status).toBeDefined();
+      expect(bullet!.text, status).not.toMatch(/optimal/i);
+    }
+  });
+
+  it('a bucket it does not recognise is never echoed', () => {
+    const c = { ...change('tsh', 'normalized', 'significant'), boundaryCrossing: { from: 'out_of_range', to: 'optimal', direction: 'improved' } };
+    const [bullet] = selectTrajectoryBullets([c], null);
+    expect(bullet?.text).toBe('tsh has moved toward the Amani band.');
+  });
+});
 
 describe('YourTrajectoryCard ordering is unchanged from base', () => {
   it('renders bullets in the base order, including the index-pairing quirk', () => {

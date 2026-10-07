@@ -19,6 +19,8 @@ import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
+import { gateInsightMatches } from '../lib/scoring/insightGate';
+import { contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import { classifyLabValue } from '../utils/classifyLabValue';
 import { buildInsightSummary, formatPriorReportDate } from '../lib/insights/buildInsightSummary';
@@ -763,8 +765,14 @@ export function ReportView() {
   };
 
   const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
+  // V2-03: no pattern card may be built from an input Amani withholds for
+  // this report's context (e.g. a PCOS pattern from an unphased LH:FSH ratio).
   const insightFlags = useMemo(
-    () => evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+    () => gateInsightMatches(
+      evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+      biomarkers,
+      contextFromReport(report?.estimated_cycle_phase),
+    ),
     [biomarkers, report]
   );
 
@@ -1575,17 +1583,17 @@ export function ReportView() {
                       }
 
                       if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
-                        return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
+                        return `${topName} is outside the Amani band and ${secondName} is borderline. These are the two areas worth focusing on.`;
                       }
                       if (outOfRange.length >= 2 && secondName) {
-                        return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
+                        return `${topName} and ${secondName} are both outside the Amani band. These are your top priorities.`;
                       }
                       if (outOfRange.length === 1 && borderline.length === 0) {
                         if (ctx?.anyBoundaryCrossImproved) {
                           const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
+                          return `${topName} is outside the Amani band, though ${name} has improved since your last report.`;
                         }
-                        return `${topName} is outside optimal range and is the primary finding on this panel.`;
+                        return `${topName} is outside the Amani band and is the primary finding on this panel.`;
                       }
                       if (borderline.length >= 2 && secondName) {
                         return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;

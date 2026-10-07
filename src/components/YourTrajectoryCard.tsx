@@ -1,5 +1,6 @@
 import { CheckCircle2, AlertCircle, TrendingUp, Sparkles, LineChart } from 'lucide-react';
 import type { BiggestChange, TopFinding } from '../lib/insights/buildInsightSummary';
+import { boundaryBucketLabel } from '../lib/scoring/compareReports';
 
 type BulletKind = 'improved' | 'worsened' | 'stable_elevated' | 'first';
 
@@ -10,12 +11,6 @@ interface TrajectoryBullet {
   /** Present only when this exact bullet renders both numeric values. */
   values?: { previous: number; current: number; unit: string };
 }
-
-const BUCKET_LABEL: Record<string, string> = {
-  optimal: 'optimal range',
-  borderline: 'borderline',
-  out_of_range: 'out of range',
-};
 
 function isPlural(name: string): boolean {
   return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/i.test(name);
@@ -39,32 +34,39 @@ function formatPriorDate(date: string): string {
 function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryBullet | null {
   const { displayName, trajectoryStatus, boundaryCrossing, trendDirection, previousValue, currentValue, unit, isFirstRecorded, priorReportDate, priorIsOlderThanImmediatePrior } = change;
   const c = conjugate(displayName);
-  const formatBoundary = (b: string) => BUCKET_LABEL[b] ?? b.replace(/_/g, ' ');
   const sinceClause = priorIsOlderThanImmediatePrior && priorReportDate
     ? ` since ${formatPriorDate(priorReportDate)}`
     : '';
+  // Neutral bucket wording only (V2-03 amendment 2). A bucket that is not a
+  // known one is never echoed; the sentence names only the Amani band.
+  const crossingText = (bc: NonNullable<typeof boundaryCrossing>) => {
+    const from = boundaryBucketLabel(bc.from);
+    const to = boundaryBucketLabel(bc.to);
+    if (from && to) return `${displayName} improved from ${from} to ${to}${sinceClause}.`;
+    return `${displayName} ${c.has} moved toward the Amani band${sinceClause}.`;
+  };
 
   if (isFirstRecorded) {
     return { kind: 'first', isPrimary, text: `${displayName} ${c.is} measured for the first time at ${currentValue} ${unit}.` };
   }
   if (trajectoryStatus === 'normalized' && boundaryCrossing) {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
+    return { kind: 'improved', isPrimary, text: crossingText(boundaryCrossing) };
   }
   if (boundaryCrossing && boundaryCrossing.direction === 'improved') {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
+    return { kind: 'improved', isPrimary, text: crossingText(boundaryCrossing) };
   }
   if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low') {
-    return { kind: 'improved', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
+    return { kind: 'improved', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside the Amani band.` };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
     const verb = trendDirection === 'up' ? 'risen' : trendDirection === 'down' ? 'dropped' : 'shifted';
-    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
+    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside the Amani band.` };
   }
   if (trajectoryStatus === 'newly_abnormal') {
-    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside optimal at ${currentValue} ${unit}.` };
+    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside the Amani band at ${currentValue} ${unit}.` };
   }
   if (trajectoryStatus === 'stable_abnormal') {
-    return { kind: 'stable_elevated', isPrimary, text: `${displayName} ${c.remains} outside optimal and ${c.is} being tracked over time.` };
+    return { kind: 'stable_elevated', isPrimary, text: `${displayName} ${c.remains} outside the Amani band and ${c.is} being tracked over time.` };
   }
   return null;
 }

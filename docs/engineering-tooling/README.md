@@ -1,7 +1,7 @@
 # Engineering browser tests and external documentation
 
 This tooling is isolated from product code. It gates four synthetic browser smoke tests, six guard cases
-and six V2-03 report-context cases per browser, with one redirect-race test quarantined, not a live-backend or clinical validation suite. See
+and nine V2-03 report-context cases per browser, with one redirect-race test quarantined, not a live-backend or clinical validation suite. See
 [TASK-043 execution evidence and outstanding gates](REPORT.md).
 
 ## Install and run
@@ -111,8 +111,15 @@ V2-03 adds one opt-in fixture option, `syntheticReports` (empty by default, so
 existing tests keep the exact allowlist above). A test that sets it may read only
 those synthetic rows: `lab_reports` by `id`, and `biomarkers`, `report_analytes`
 and `interpretations` by `lab_report_id`, each with `select=*` (plus the
-`id,json_output,tier` projection ReportView polls for interpretations). Any other
-filter, table or method still aborts and fails. The rows live in
+`id,json_output,tier` projection ReportView polls for interpretations). For
+prior-report history (V2-03 amendment 2) it may also read `lab_reports` with
+exactly `select=id,report_date`, the synthetic user's `user_id`, a
+`report_date=lt.<date>` filter and `order=report_date.asc|desc` (optionally
+`limit=1`), answered only from the opted-in reports; and `biomarkers` with the
+exact historical projection and an `in.(...)` list made only of opted-in report
+ids. Any other filter, table or method still aborts and fails. To opt in two or
+more reports, wrap the array: `[[a, b], { scope: 'test' }]`, because Playwright
+reads a bare two-element array as a `[value, options]` tuple. The rows live in
 `e2e/reports/synthetic-reports.ts` and are invented values, not patient data.
 Session state stays in memory. Screenshots/traces may contain synthetic session
 strings, but these are deliberately invalid credentials and cannot access a
