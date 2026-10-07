@@ -91,8 +91,10 @@ BEGIN
   END IF;
   ALTER TABLE public.clinical_range_reviews ENABLE ROW LEVEL SECURITY;
   REVOKE ALL ON public.clinical_range_reviews FROM PUBLIC, anon, authenticated, service_role;
-  GRANT SELECT ON public.clinical_range_reviews TO authenticated, service_role;
-  CREATE POLICY clinical_range_reviews_read ON public.clinical_range_reviews FOR SELECT TO authenticated, service_role USING(true);
+  -- Least privilege: no client consumer is authorized. Review state reaches the
+  -- app from the generated catalog projection, never from this table.
+  GRANT SELECT ON public.clinical_range_reviews TO service_role;
+  CREATE POLICY clinical_range_reviews_read ON public.clinical_range_reviews FOR SELECT TO service_role USING(true);
 
   CREATE TABLE clinical_archive.task044_state (
     singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton), seed_hash text NOT NULL, base_seed_hash text NOT NULL,

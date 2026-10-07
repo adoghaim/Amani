@@ -30,7 +30,10 @@ BEGIN
     END LOOP;
   END LOOP;
   IF has_table_privilege('anon','public.clinical_range_reviews','SELECT') THEN RAISE EXCEPTION 'anon can read reviews'; END IF;
-  IF NOT has_table_privilege('authenticated','public.clinical_range_reviews','SELECT') THEN RAISE EXCEPTION 'authenticated cannot read reviews'; END IF;
+  IF has_table_privilege('authenticated','public.clinical_range_reviews','SELECT') THEN RAISE EXCEPTION 'authenticated can read reviews'; END IF;
+  IF NOT has_table_privilege('service_role','public.clinical_range_reviews','SELECT') THEN RAISE EXCEPTION 'service_role cannot read reviews'; END IF;
+  IF (SELECT array_agg(roles::text ORDER BY policyname) FROM pg_policies WHERE schemaname='public' AND tablename='clinical_range_reviews')
+     IS DISTINCT FROM ARRAY['{service_role}'] THEN RAISE EXCEPTION 'review policy is not service_role only'; END IF;
   IF has_table_privilege('authenticated','clinical_archive.task044_state','SELECT') OR has_schema_privilege('authenticated','clinical_archive','USAGE')
     THEN RAISE EXCEPTION 'review state exposed'; END IF;
   -- SAFE stays impossible without a separately authorized evidence migration.

@@ -69,6 +69,22 @@ test('the review migration never writes to a V2-01 table', () => {
   assert.match(sql, /RAISE EXCEPTION 'TASK-044 V2-01 % changed since it was applied'/);
 });
 
+test('review table is readable by service_role only: no client role has a grant or policy', () => {
+  const sql = readFileSync(reviewMigrationArtifact, 'utf8').replace(/seed jsonb := '.*'::jsonb;/, '');
+  const grants = [...sql.matchAll(/GRANT\s+(.+?)\s+ON\s+public\.clinical_range_reviews\s+TO\s+([^;]+);/g)];
+  assert.deepEqual(grants.map(m => [m[1], m[2].trim()]), [['SELECT', 'service_role']]);
+  const policies = [...sql.matchAll(/CREATE POLICY\s+\w+\s+ON\s+public\.clinical_range_reviews\s+FOR\s+(\w+)\s+TO\s+(.+?)\s+USING/g)];
+  assert.deepEqual(policies.map(m => [m[1], m[2].trim()]), [['SELECT', 'service_role']]);
+  assert.match(sql, /ALTER TABLE public\.clinical_range_reviews ENABLE ROW LEVEL SECURITY;/);
+  assert.match(sql, /REVOKE ALL ON public\.clinical_range_reviews FROM PUBLIC, anon, authenticated, service_role;/);
+  assert.doesNotMatch(sql, /\bTO\s+(?:[\w, ]*\b)?(?:anon|authenticated|PUBLIC)\b/);
+  // The generated harness verify asserts the same effective privileges.
+  const verify = readFileSync(reviewVerifyArtifact, 'utf8');
+  assert.match(verify, /IF has_table_privilege\('authenticated','public\.clinical_range_reviews','SELECT'\) THEN RAISE EXCEPTION/);
+  assert.match(verify, /IF NOT has_table_privilege\('service_role','public\.clinical_range_reviews','SELECT'\) THEN RAISE EXCEPTION/);
+  assert.match(verify, /review policy is not service_role only/);
+});
+
 test('new migration is dated after the frozen one and covered by the SQL parse guard', () => {
   assert.ok(reviewMigrationArtifact.split('/').at(-1).slice(0, 14) >= '20261007000000');
   const files = clinicalSqlFiles();
