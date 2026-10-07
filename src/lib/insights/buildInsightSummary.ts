@@ -5,8 +5,8 @@ import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
 import { assessAmaniContext, contextFromReport } from '../scoring/amaniContext';
 import {
-  authorizedLanguage, describeMeasuredMovement, DOCTOR_QUESTIONS, primaryFindingSentence, WATCH_SIGNALS,
-  type AuthorizedLanguage,
+  authorizedLanguage, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, WATCH_SIGNALS,
+  type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
 } from '../scoring/insightCopy';
 
 export interface TopFinding {
@@ -44,10 +44,8 @@ export interface BiggestChange {
   priorIsOlderThanImmediatePrior: boolean;
 }
 
-export interface DoctorQuestion {
-  text: string;
-  relatedBiomarker: BiomarkerName;
-}
+/** A policy-issued DISCUSSION_PREP_PROMPT; only issued prompts render. */
+export type DoctorQuestion = DiscussionPrepPrompt;
 
 export type WatchSignalType = 'system' | 'boundary' | 'trend' | 'pattern';
 
@@ -243,130 +241,61 @@ function buildBiggestChanges(deltas: BiomarkerDelta[], immediatePriorReportDate:
 }
 
 /*
-  V2-03b Stage 2. Selection and order are unchanged. The wording is the
-  policy's (insightCopy.DOCTOR_QUESTIONS): measured values and placement with
-  review state, never "improved", "better", "elevated", "stable" or a prompt to
-  keep monitoring. Crossings are stated by value, not by bucket name.
+  V2-03b Stage 2, owner R2: discussion preparation, not escalation. Questions
+  rest only on admissible premises, and those premises also choose them:
+  1. a measured change the deterministic magnitude calculation does not call
+     minor (largest first), stated by value;
+  2. two or more of her values outside their laboratory intervals in one body
+     system, then each remaining one alone, stated against the interval as
+     printed. An Amani band, its concern score or its crossing no longer
+     selects or words a question: none is a reviewed interpretation.
+  The context question assumes nothing, so it closes every list, and the card
+  appears on any report rather than only on one Amani ranks as abnormal.
 */
-function buildDoctorQuestions(
-  scored: ScoredBiomarker[],
-  deltas: BiomarkerDelta[],
-  primaryFinding: TopFinding | null,
-  bandLanguage: ReadonlyMap<BiomarkerName, AuthorizedLanguage>,
-): DoctorQuestion[] {
-  const questions: DoctorQuestion[] = [];
+const SIGNIFICANCE_RANK = { significant: 2, moderate: 1, minor: 0 } as const;
+const MAX_QUESTIONS = 5;
+
+function buildDoctorQuestions(current: BiomarkerInput[], deltas: BiomarkerDelta[]): DiscussionPrepPrompt[] {
+  const questions: DiscussionPrepPrompt[] = [];
   const used = new Set<BiomarkerName>();
+  const room = () => questions.length < MAX_QUESTIONS - 1;
 
-  // 1. Boundary crossings (highest priority)
-  const boundaryCrossings = deltas.filter(d => d.boundaryCrossing !== null);
-  for (const d of boundaryCrossings.slice(0, 2)) {
-    if (used.has(d.key)) continue;
+  const changes = deltas
+    .filter(d => d.significance !== 'minor' && d.currentValue !== d.previousValue)
+    .sort((a, b) => SIGNIFICANCE_RANK[b.significance] - SIGNIFICANCE_RANK[a.significance]);
+  for (const d of changes.slice(0, 2)) {
     used.add(d.key);
-    const name = d.displayName;
-
-    const systemPeers = scored
-      .filter(s => s.key !== d.key && getCategory(s.key) === getCategory(d.key) && s.concern > 0)
-      .slice(0, 2)
-      .map(s => getDisplayName(s.key));
-
-    questions.push({
-      text: systemPeers.length > 0
-        ? DOCTOR_QUESTIONS.changeAlongside(name, d.previousValue, d.currentValue, d.unit, systemPeers)
-        : DOCTOR_QUESTIONS.change(name, d.previousValue, d.currentValue, d.unit),
-      relatedBiomarker: d.key,
-    });
+    questions.push(DISCUSSION_PREP.change(d.displayName, d.previousValue, d.currentValue, d.unit));
   }
 
-  // 2. System clusters: 2+ flagged markers in the same system
-  const categoryMap = new Map<string, ScoredBiomarker[]>();
-  for (const s of scored.filter(s => s.concern > 0)) {
-    const cat = getCategory(s.key);
-    if (!cat) continue;
-    let bucket = categoryMap.get(cat);
-    if (!bucket) {
-      bucket = [];
-      categoryMap.set(cat, bucket);
-    }
-    bucket.push(s);
+  const outside = current
+    .filter(b => !used.has(b.key))
+    .map(b => ({ key: b.key, prompt: DISCUSSION_PREP.labInterval(getDisplayName(b.key), b.value, b.unit, b.labRefMin, b.labRefMax) }))
+    .filter((o): o is { key: BiomarkerName; prompt: DiscussionPrepPrompt } => o.prompt !== null);
+
+  const bySystem = new Map<string, typeof outside>();
+  for (const o of outside) {
+    const system = getCategory(o.key) ?? 'other';
+    bySystem.set(system, [...(bySystem.get(system) ?? []), o]);
+  }
+  for (const members of bySystem.values()) {
+    if (!room() || members.length < 2) continue;
+    const premises = members.flatMap(m => m.prompt.authority.premises)
+      .filter((p): p is Extract<DiscussionPremise, { kind: 'patient_lab_interval' }> => p.kind === 'patient_lab_interval');
+    const relate = DISCUSSION_PREP.relate(premises);
+    if (!relate) continue;
+    for (const m of members) used.add(m.key);
+    questions.push(relate);
+  }
+  for (const o of outside) {
+    if (!room()) break;
+    if (used.has(o.key)) continue;
+    used.add(o.key);
+    questions.push(o.prompt);
   }
 
-  for (const [, peers] of categoryMap) {
-    if (peers.length < 2) continue;
-    const primary = peers.sort((a, b) => b.weightedConcern - a.weightedConcern)[0];
-    if (!primary || used.has(primary.key)) continue;
-    used.add(primary.key);
-    const peerNames = peers.map(p => getDisplayName(p.key));
-    const systemName = peerNames.slice(0, 2).join(', ');
-    const remainder = peerNames.length > 2 ? ` and ${peerNames.length - 2} other${peerNames.length - 2 !== 1 ? 's' : ''}` : '';
-    questions.push({
-      text: DOCTOR_QUESTIONS.relate(`${systemName}${remainder}`),
-      relatedBiomarker: primary.key,
-    });
-    if (questions.length >= 5) break;
-  }
-
-  // 3a. Movement toward the band, still outside it (reachable only with favourable authority)
-  const improvingAbnormal = deltas.filter(
-    d =>
-      d.significance !== 'minor' &&
-      d.boundaryCrossing === null &&
-      !used.has(d.key) &&
-      (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low'),
-  );
-  for (const d of improvingAbnormal.slice(0, 1)) {
-    used.add(d.key);
-    questions.push({
-      text: DOCTOR_QUESTIONS.change(d.displayName, d.previousValue, d.currentValue, d.unit),
-      relatedBiomarker: d.key,
-    });
-  }
-
-  // 3b. Strong worsening trends (no boundary crossing)
-  const worseningTrends = deltas.filter(
-    d =>
-      d.significance === 'significant' &&
-      d.boundaryCrossing === null &&
-      !used.has(d.key) &&
-      d.trajectoryStatus !== 'improving_still_high' &&
-      d.trajectoryStatus !== 'improving_still_low',
-  );
-  for (const d of worseningTrends.slice(0, 1)) {
-    used.add(d.key);
-    const pct = d.percentDelta !== null ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)` : '';
-    questions.push({
-      text: DOCTOR_QUESTIONS.explainChange(d.displayName, d.previousValue, d.currentValue, d.unit, pct),
-      relatedBiomarker: d.key,
-    });
-  }
-
-  // 4. Isolated markers outside the band (lowest priority)
-  const outOfRange = scored
-    .filter(s => s.concern === 2)
-    .sort((a, b) => b.weightedConcern - a.weightedConcern);
-
-  for (const s of outOfRange) {
-    if (used.has(s.key)) continue;
-    used.add(s.key);
-    questions.push({
-      text: DOCTOR_QUESTIONS.placement(getDisplayName(s.key), s.value, s.unit, bandLanguage.get(s.key) ?? authorizedLanguage(null)),
-      relatedBiomarker: s.key,
-    });
-    if (questions.length >= 5) break;
-  }
-
-  // 5. Phase 8C supplement — 2-3 questions when there is a primary finding.
-  // "Does this result matter given the rest of my labs look stable?" is gone:
-  // it asserted her labs were stable from Amani's bands and a lab margin.
-  if (primaryFinding && questions.length < 3) {
-    if (questions.length < 2) {
-      questions.push({ text: DOCTOR_QUESTIONS.timing(primaryFinding.displayName), relatedBiomarker: primaryFinding.key });
-    }
-    if (questions.length < 3) {
-      questions.push({ text: DOCTOR_QUESTIONS.context(), relatedBiomarker: primaryFinding.key });
-    }
-  }
-
-  return questions.slice(0, 5);
+  questions.push(DISCUSSION_PREP.context());
+  return questions;
 }
 
 function buildWatchSignals(
@@ -747,7 +676,7 @@ export function buildInsightSummary(
     ? topFindings.filter(f => f.key !== primaryFinding!.key)
     : topFindings;
 
-  const questionsForDoctor = buildDoctorQuestions(scored, deltas, primaryFinding, bandLanguage);
+  const questionsForDoctor = buildDoctorQuestions(current, deltas);
 
   return {
     primaryFinding,

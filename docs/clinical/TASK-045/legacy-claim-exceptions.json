@@ -119,25 +119,11 @@
     "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
-    "file": "src/components/GuidanceCards.tsx",
-    "text": "Practical food, tracking, and discussion topics based on this report",
-    "category": "UNAUTHORIZED_DEBT",
-    "disposition": "deferred",
-    "reason": "Support plan headings over food examples and nutrient discussion topics, selected by band-derived focus areas. A CLINICAL_ACTION_RECOMMENDATION with no authorizing rule; the food and nutrient lists need Clinical Truth Layer and NUTRIENT_GUIDELINES review, not a wording change. Deferred, rendered. This turn removed the result-asserting card summaries and moved the notes into the policy."
-  },
-  {
-    "file": "src/components/GuidanceCards.tsx",
-    "text": "Topics to discuss",
-    "category": "UNAUTHORIZED_DEBT",
-    "disposition": "deferred",
-    "reason": "Support plan headings over food examples and nutrient discussion topics, selected by band-derived focus areas. A CLINICAL_ACTION_RECOMMENDATION with no authorizing rule; the food and nutrient lists need Clinical Truth Layer and NUTRIENT_GUIDELINES review, not a wording change. Deferred, rendered. This turn removed the result-asserting card summaries and moved the notes into the policy."
-  },
-  {
     "file": "src/components/NextBestSteps.tsx",
     "text": "Discuss",
     "category": "UNAUTHORIZED_DEBT",
-    "disposition": "deferred",
-    "reason": "Bucket heading over model-written next steps (generate-interpretation what_you_can_do_now / what_to_do_next). The text it heads is model output, deferred with the server interpretation. This turn removed the band-derived injected sentence 'Discuss whether <marker> should be rechecked and what range your provider wants to target'."
+    "disposition": "unreachable",
+    "reason": "Bucket heading over model-written next steps (generate-interpretation what_you_can_do_now / what_to_do_next). V2-03b Stage 2 (owner R4): ReportView no longer mounts NextBestSteps, so no module reachable from src/main.tsx loads this file. Suppressed, not migrated: model next steps carry food, nutrient, supplement and lifestyle advice with no Clinical Truth rule. Deletion is recommended; the implementer sandbox cannot remove files."
   },
   {
     "file": "src/components/PeriodLogModal.tsx",
@@ -684,34 +670,6 @@
     "category": "NOT_CLINICAL_LANGUAGE",
     "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
-  },
-  {
-    "file": "src/pages/Landing.tsx",
-    "text": "Cycle dates and anything you have noticed — sleep, energy, a new supplement. This is what turns a reference range into an answer.",
-    "category": "UNAUTHORIZED_DEBT",
-    "disposition": "deferred",
-    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
-  },
-  {
-    "file": "src/pages/Landing.tsx",
-    "text": "Ferritin is low",
-    "category": "UNAUTHORIZED_DEBT",
-    "disposition": "deferred",
-    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
-  },
-  {
-    "file": "src/pages/Landing.tsx",
-    "text": "The same hormone can be normal on day 3 and worrying on day 21. Amani reads every result in the context of where you actually are, then explains it in language you can take to your doctor.",
-    "category": "UNAUTHORIZED_DEBT",
-    "disposition": "deferred",
-    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
-  },
-  {
-    "file": "src/pages/Landing.tsx",
-    "text": "and has been falling since October. Everything else sits where it should for day 21.",
-    "category": "UNAUTHORIZED_DEBT",
-    "disposition": "deferred",
-    "reason": "Marketing example modelling clinical judgement about a fictional patient ('Ferritin is low', 'worrying on day 21', 'sits where it should'). Not about the user's own result, but clinical language Amani publishes with no authorizing source. Deferred: needs an owner ruling on marketing copy (REPORT.md open question)."
   },
   {
     "file": "src/pages/NewReport.tsx",

@@ -110,6 +110,13 @@ const STAGE2_PANEL: Marker[] = [
   ['fasting_insulin', 12, '12', 'uIU/mL', 2, 20],
 ];
 const stage2Current = report(0, 'unknown', STAGE2_PANEL, '2026-02-02');
+export const stage2ModelNextSteps = [
+  'Eat more iron-rich foods such as spinach because your ferritin is low.',
+  'Take 2000 IU of vitamin D daily with breakfast.',
+  'Walk for 30 minutes after meals to lower your HbA1c.',
+  'Ask your doctor whether an iron supplement makes sense.',
+  'Retest TSH in 6 weeks.',
+];
 export const stage2CurrentReport: SyntheticReport = {
   ...stage2Current,
   interpretation: {
@@ -120,7 +127,9 @@ export const stage2CurrentReport: SyntheticReport = {
         title: 'Thyroid is the top priority', summary: 'This is abnormal and concerning.',
         why_it_matters: 'You should seek care.', canonical_slug: 'tsh',
       },
-      summary_bullets: [], what_you_can_do_now: [], what_to_do_next: [], pattern_signals: [],
+      summary_bullets: [], pattern_signals: [],
+      // Owner R4: personalized food, supplement, dose and lifestyle advice in every next-step bucket. None may render.
+      what_you_can_do_now: stage2ModelNextSteps.slice(0, 3), what_to_do_next: stage2ModelNextSteps.slice(3),
       disclaimer: 'Synthetic fixture. Not medical advice.',
     },
   },

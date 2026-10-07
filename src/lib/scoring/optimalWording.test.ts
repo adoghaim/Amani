@@ -124,9 +124,9 @@ const IDENTITY_FIELDS = new Set([
   'ComputedDerivedMetric.formulaNote',
 ]);
 const RENDER_SINKS_REVIEWED = [
-  // Questions that claim optimality are dropped whole by claimsOptimal before
-  // render, a filter this scan cannot see; proven in FocusAreas.test.tsx.
-  'src/components/DoctorQuestionsCard.tsx: DoctorQuestion.text',
+  // V2-03b Stage 2 (owner R2): DoctorQuestion.text left this list. The card
+  // renders only policy-issued DISCUSSION_PREP_PROMPT values, whose text is
+  // declared in insightCopy.ts (DoctorQuestionsCard.test.tsx).
   // Rule titles in buildFocusAreas.ts; none says "optimal", held by the count pin above.
   'src/components/FocusAreas.tsx: FocusArea.title',
   // V2-03b: no longer qualified at the sink. buildFocusAreas composes it only
@@ -253,6 +253,10 @@ const CLAIM = new RegExp('\\b(?:' + [
   'risks?', 'risky', 'suggest\\w*', 'recommend\\w*', 'should', 'caution\\w*',
   'discuss\\w*', 'monitor\\w*', 'talk (?:to|with) your (?:doctor|provider)s?', 'seek care',
   '(?:is|are|was|were|remains?|remained) (?:high|low)', '(?:positive|wrong|right) directions?',
+  // V2-03b Stage 2 (owner R2, R3): "worrying on day 21" was visible only
+  // because its sentence also said "normal"; a premise of danger was not
+  // visible. Bare "danger" is a CSS token (theme-danger), so the adjective only.
+  'worr\\w*', 'dangerous\\w*',
 ].join('|') + ')\\b', 'i');
 // Lowercase snake_case is a code value (AmaniStatus 'normal', bucket 'discuss'),
 // the same test the optimal scan above uses. Anything else is potential copy.
@@ -454,7 +458,9 @@ describe('standing rule 2 — policy owns clinical-language sentences', () => {
 
   it('vocabulary: plural and inflected forms are claims, not only the singular', () => {
     for (const text of ['Within Amani bands', 'generally within reference ranges.', 'Pending reviews',
-      'Two concerns', 'Known risks', 'Worth monitoring', 'Discussing this', 'Values were low']) {
+      'Two concerns', 'Known risks', 'Worth monitoring', 'Discussing this', 'Values were low',
+      // Owner R2/R3 concepts, visible on their own rather than only beside another claim word.
+      'worrying on day 21', 'Why is this dangerous?']) {
       expect(clinicalClaimCopy('builder.ts', `const copy = ${JSON.stringify(text)};`), text).toEqual([text]);
     }
   });

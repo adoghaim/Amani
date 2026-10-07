@@ -11,7 +11,6 @@ import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
 import { YourHealthStory } from '../components/YourHealthStory';
 import { FocusAreas } from '../components/FocusAreas';
 import { GuidanceCards } from '../components/GuidanceCards';
-import { NextBestSteps } from '../components/NextBestSteps';
 import { buildCards } from '../lib/cards/buildCards';
 import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
 import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
@@ -1635,15 +1634,13 @@ export function ReportView() {
             <GuidanceCards cards={guidanceCards} />
           )}
 
-          {/* ── B4. Next Best Steps (NEW — merges old "Next Steps" + "What to Do Next" into Track/Discuss/Support/Retest) ─── */}
-          {!isProcessing && interpretation && (
-            <NextBestSteps
-              whatYouCanDoNow={interpretation.what_you_can_do_now}
-              whatToDoNext={interpretation.what_to_do_next}
-              hideSupportBucket={guidanceCards.length > 0}
-              primaryDisplayName={insightSummary?.primaryFinding?.displayName ?? null}
-            />
-          )}
+          {/* ── B4. Next Best Steps: not mounted (V2-03b Stage 2, owner R4).
+              Every item is model-written what_you_can_do_now / what_to_do_next.
+              Its "Support" bucket is food, nutrient, supplement and lifestyle
+              advice tied to her result with no Clinical Truth rule, and the
+              keyword bucketing cannot keep that advice out of the others
+              ("Ask your doctor whether an iron supplement makes sense" files
+              under Discuss). Suppressed whole, not relabelled. ─── */}
 
           {/* ── Flag on: Basic insights, Premium Preview, locked cards ── */}
           {freemiumPanel && !isProcessing && !accessLoading && !generating
@@ -1793,9 +1790,9 @@ export function ReportView() {
             );
           })()}
 
-          {/* ── Questions for Your Doctor (deterministic) ──────── */}
+          {/* ── Discussion preparation (deterministic, DISCUSSION_PREP_PROMPT) ──────── */}
           {insightSummary && !isProcessing && insightSummary.questionsForDoctor.length > 0 && (
-            <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} bandLanguage={bandLanguageByKey(insightSummary.deltaMap.values())} />
+            <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} />
           )}
 
           {/* ── Health Systems (drill-down to underlying biomarkers) ── */}

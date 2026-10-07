@@ -1,6 +1,8 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { egfrHigherIsBetterReport, higherIsBetterReport, stage2CurrentReport, stage2PriorReport } from './synthetic-reports';
+import {
+  egfrHigherIsBetterReport, higherIsBetterReport, stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport,
+} from './synthetic-reports';
 
 /*
   V2-03b Stage 2 in a real browser, against the real ReportView, with
@@ -56,8 +58,8 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
 
   test('the fixture renders every migrated surface', async ({ page }) => {
     await openEverything(page);
-    for (const heading of ['Your trajectory', 'Focus areas', 'Health systems', 'Derived metrics', 'Support plan',
-      'Related markers not on this report', 'Your health story']) {
+    for (const heading of ['Your trajectory', 'Focus areas', 'Health systems', 'Derived metrics', 'About these body systems',
+      'Related markers not on this report', 'Your health story', 'Questions you could bring to a clinician']) {
       await expect(page.getByRole('heading', { name: heading, exact: true }), heading).toBeVisible();
     }
     await expect(page.getByTestId('primary-movement-observation')).toBeVisible();
@@ -106,6 +108,77 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
     expect(offenders).toEqual([]);
     for (const label of await page.locator('[aria-label]').evaluateAll(nodes => nodes.map(n => n.getAttribute('aria-label') ?? ''))) {
       expect(label).not.toMatch(FORBIDDEN);
+    }
+  });
+
+  // Owner R2: preparation, not escalation. Premises are her values and her lab interval only.
+  test('R2: discussion-prep questions are neutral, rest on admissible premises and agree with the page', async ({ page }) => {
+    await openEverything(page);
+    const card = page.getByTestId('prep-questions');
+    await expect(card).toContainText('They are preparation only, not a judgement about your results.');
+    const items = card.locator('[data-language-category]');
+    await expect(items).toHaveCount(4);
+    for (const item of await items.all()) {
+      await expect(item).toHaveAttribute('data-language-category', 'discussion_prep');
+      await expect(item).toHaveAttribute('data-language-cue', 'neutral');
+      expect(await item.getAttribute('data-premises')).toMatch(/^(?:(?:measured_change|patient_lab_interval)(?: |$))*$/);
+      expect(await item.innerText()).not.toMatch(PREP_FORBIDDEN);
+    }
+    // The card itself and everything in it.
+    await expect(page.locator(['[role="alert"]', '[data-language-cue="warning"]', '[data-language-cue="critical"]']
+      .flatMap(s => [`[data-testid="prep-questions"]${s}`, `[data-testid="prep-questions"] ${s}`]).join(', '))).toHaveCount(0);
+    expect(await card.evaluate(el => el.outerHTML)).not.toMatch(/flag-(?:ok|watch|low)/);
+    // Standing rule 5: the same facts, stated the same way elsewhere on the page.
+    await expect(items.nth(0)).toHaveText('My TSH changed from 6 to 9 uIU/mL. What could explain this change, and is it clinically meaningful?');
+    await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 uIU/mL');
+    await expect(items.nth(2)).toContainText("above my lab's reference interval of 4–5.6 %");
+    const hba1c = page.getByRole('article', { name: 'HbA1c result', exact: true });
+    await expect(hba1c.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Above your lab's range");
+    await expect(hba1c).toContainText("Your lab's range:4–5.6 %");
+  });
+
+  // Owner R4: no personalized food, nutrient, supplement or lifestyle recommendation without a Clinical Truth rule.
+  test('R4: model next steps and food or nutrient lists never render; education is labelled and policy-authored', async ({ page }) => {
+    await openEverything(page);
+    for (const step of stage2ModelNextSteps) await expect(page.getByText(step, { exact: false })).toHaveCount(0);
+    expect(nutritionHits(await pageText(page))).toEqual([]);
+    await expect(page.getByText('General information about the systems on this report. It is not advice about your results.')).toBeVisible();
+    const education = page.locator('[data-language-category="educational_content"]');
+    await expect(education).toHaveCount(2);
+    for (const el of await education.all()) await expect(el).toHaveAttribute('data-language-source', 'general_education');
+  });
+});
+
+const PREP_FORBIDDEN = /worse|worsen|getting (?:better|worse)|treat|medication|danger|urgent|emergency|seek|need(?:s)? (?:medical )?care|should|improv|better|optimal|normal|abnormal|concern|elevated|Amani|band/i;
+const NUTRITION_ADVICE = /foods? to focus|topics to discuss|track next|next best steps|iron-rich|eat more|\bsupplement|\bdose\b|\b\d+\s?(?:IU|mg|mcg|µg)\b(?!\/)|daily|per day|sunlight|walk for|exercise|retest/i;
+function nutritionHits(text: string): string[] {
+  return [...text.matchAll(new RegExp(NUTRITION_ADVICE.source, 'gi'))].map(m => text.slice(Math.max(0, m.index - 40), m.index + m[0].length + 40));
+}
+
+// Owner R3: marketing has no clinical-language exemption.
+const MARKETING_FORBIDDEN = new RegExp(`${FORBIDDEN.source}|worr\\w*|sits where it should|\\b(?:is|are) (?:low|high)\\b|what each marker means|worth (?:raising|asking)`, 'i');
+
+test.describe('R3: the landing page says nothing Amani may not say to a real user', () => {
+  test('page-wide prohibition, context not judgement, and specimen statements that agree with their rows', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+    const legal = 'Amani is educational. It does not diagnose, prescribe, or replace your clinician — it helps you walk into the appointment knowing what to ask. Anything that concerns you belongs in front of a licensed provider.';
+    const text = await page.evaluate(legalText => {
+      const clone = document.body.cloneNode(true) as HTMLElement;
+      for (const el of clone.querySelectorAll('p')) if ((el.textContent ?? '').replace(/\s+/g, ' ').trim() === legalText) el.remove();
+      return clone.textContent ?? '';
+    }, legal);
+    expect([...text.matchAll(new RegExp(MARKETING_FORBIDDEN.source, 'gi'))].map(m => text.slice(Math.max(0, m.index - 40), m.index + 40))).toEqual([]);
+    await expect(page.getByText('Hormone results can mean different things at different points in the menstrual cycle. Amani asks for the missing context instead of guessing.')).toBeVisible();
+    // Standing rule 5: the row prints 18 within 15–150 ng/mL, and the statements say exactly that.
+    const ferritin = page.locator('[data-specimen-row="ferritin"]');
+    await expect(ferritin.locator('[data-specimen-value]')).toHaveText('18');
+    await expect(ferritin.locator('[data-specimen-interval]')).toHaveText('15–150 ng/mL');
+    await expect(ferritin.locator('[data-language-cue]')).toHaveAttribute('data-language-cue', 'neutral');
+    const statements = page.getByTestId('specimen-statements');
+    await expect(statements).toHaveText("Your ferritin is within your laboratory's reference interval. Ferritin has dropped from 41 to 18 ng/mL.");
+    for (const row of await page.locator('[data-specimen-row]').all()) {
+      expect(await row.innerHTML()).not.toMatch(/flag-(?:ok|watch|low)/);
     }
   });
 });

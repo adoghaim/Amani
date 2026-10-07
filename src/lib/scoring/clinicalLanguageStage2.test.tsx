@@ -15,6 +15,7 @@ import { InsightFlagsPanel } from '../../components/InsightFlagsPanel';
 import { SafetyWarnings } from '../../components/SafetyWarnings';
 import { SystemSummaryCards } from '../../components/SystemSummaryCards';
 import { CARD_MAP } from '../cards/cardMap';
+import { buildCards } from '../cards/buildCards';
 import { getAllEntries, getEntry } from '../biomarkers/dictionary';
 import { buildInsightSummary } from '../insights/buildInsightSummary';
 import { computeDerivedMetrics, evaluateInsightRules, INSIGHT_RULES } from '../../utils/derivedMetrics';
@@ -23,7 +24,7 @@ import { scoreBiomarker, statusToConcern } from './scoreBiomarker';
 import { authorizeInsightMatches, gateInsightMatches } from './insightGate';
 import {
   AUTHORITY_CATEGORIES, authorizedLanguage, bandPlacement, comparisonBandLabel, CUE_STYLE, derivedMetricObservation, describeComparisonBand,
-  describeMeasuredMovement, evaluateSafetyRules, focusAreaObservation, labIntervalObservation, labIntervalPlacement,
+  describeMeasuredMovement, EDUCATION, evaluateSafetyRules, focusAreaObservation, labIntervalObservation, labIntervalPlacement,
   LANGUAGE_AUTHORITY, patternRuleObservation, PRODUCT_DISCLAIMERS, reportHeadline, SAFETY_RULES, systemSummaryLabel,
   type AuthorizedLanguage, type ClinicalLanguage, type SafetyRule,
 } from './insightCopy';
@@ -43,13 +44,32 @@ const lang = (review_status: 'UNKNOWN' | 'DISPUTED' | 'NEEDS_CONTEXT' | 'SAFE', 
 const LANGUAGES = [lang('UNKNOWN'), lang('DISPUTED'), lang('NEEDS_CONTEXT'), lang('SAFE', true), authorizedLanguage(null)];
 
 describe('the authority model is a type the code enforces, not a column', () => {
-  it('exactly the owner\'s seven categories, each language variant mapped to one, debt not mintable', () => {
+  // Stage-2 rulings R2 and R4 extend the owner's seven minimum categories with
+  // two narrow ones; the exact list and the one-to-one mapping are still pinned.
+  it('the owner\'s seven categories plus DISCUSSION_PREP_PROMPT and EDUCATIONAL_CONTENT, each variant mapped to one, debt not mintable', () => {
     expect([...AUTHORITY_CATEGORIES]).toEqual(['FACTUAL_OBSERVATION', 'COMPARISON_BAND_OBSERVATION', 'REVIEWED_CLINICAL_INTERPRETATION',
-      'OPTIMAL_TARGET_CLAIM', 'SAFETY_CRITICAL_WARNING', 'CLINICAL_ACTION_RECOMMENDATION', 'UNAUTHORIZED_DEBT']);
-    expect(Object.keys(LANGUAGE_AUTHORITY).sort()).toEqual(['clinical_action', 'comparison_band', 'factual_observation',
-      'optimal_target', 'reviewed_interpretation', 'safety_warning']);
+      'OPTIMAL_TARGET_CLAIM', 'SAFETY_CRITICAL_WARNING', 'CLINICAL_ACTION_RECOMMENDATION', 'DISCUSSION_PREP_PROMPT',
+      'EDUCATIONAL_CONTENT', 'UNAUTHORIZED_DEBT']);
+    expect(LANGUAGE_AUTHORITY).toEqual({
+      factual_observation: 'FACTUAL_OBSERVATION', comparison_band: 'COMPARISON_BAND_OBSERVATION',
+      reviewed_interpretation: 'REVIEWED_CLINICAL_INTERPRETATION', optimal_target: 'OPTIMAL_TARGET_CLAIM',
+      safety_warning: 'SAFETY_CRITICAL_WARNING', clinical_action: 'CLINICAL_ACTION_RECOMMENDATION',
+      discussion_prep: 'DISCUSSION_PREP_PROMPT', educational_content: 'EDUCATIONAL_CONTENT',
+    });
     expect(Object.values(LANGUAGE_AUTHORITY)).not.toContain('UNAUTHORIZED_DEBT');
-    expect(new Set(Object.values(LANGUAGE_AUTHORITY)).size).toBe(6);
+    expect(new Set(Object.values(LANGUAGE_AUTHORITY)).size).toBe(8);
+  });
+
+  it('compile-time: discussion prep and education carry no warning cue, no rule source and no personalization', () => {
+    // @ts-expect-error a discussion-prep prompt cannot carry a warning cue
+    const urgent: ClinicalLanguage = { category: 'discussion_prep', text: 't', cue: 'warning', authority: { kind: 'discussion_prep', premises: [], recommendationAuthority: 'none', safetyAuthority: 'none' } };
+    // @ts-expect-error a discussion-prep prompt cannot claim recommendation authority
+    const advice: ClinicalLanguage = { category: 'discussion_prep', text: 't', cue: 'neutral', authority: { kind: 'discussion_prep', premises: [], recommendationAuthority: 'rule', safetyAuthority: 'none' } };
+    // @ts-expect-error an Amani comparison band is not an admissible discussion premise
+    const banded: ClinicalLanguage = { category: 'discussion_prep', text: 't', cue: 'neutral', authority: { kind: 'discussion_prep', premises: [{ kind: 'amani_comparison_band', reviewStatus: 'UNKNOWN', bands: [] }], recommendationAuthority: 'none', safetyAuthority: 'none' } };
+    // @ts-expect-error education cannot be personalized
+    const personal: ClinicalLanguage = { category: 'educational_content', text: 't', cue: 'neutral', authority: { kind: 'general_education', topic: 'iron', personalized: true, recommendationAuthority: 'none' } };
+    expect([urgent, advice, banded, personal]).toHaveLength(4);
   });
 
   it('compile-time: band and factual language cannot carry a safety cue; safety cannot be neutral', () => {
@@ -401,5 +421,44 @@ describe('CLINICAL_ACTION_RECOMMENDATION: only result-independent product discla
     }
     const notes = new Set(Object.values(PRODUCT_DISCLAIMERS));
     for (const card of Object.values(CARD_MAP)) expect(notes.has(card.note)).toBe(true);
+  });
+});
+
+/*
+  Owner R4: personalized food, nutrient, supplement or lifestyle guidance tied
+  to a result needs a Clinical Truth rule. None exists, so the card the band
+  focus areas select may carry only general education.
+*/
+const NUTRITION_ADVICE = /food|\beat\b|diet|supplement|vitamin|selenium|zinc|magnesium|omega|iron-rich|nuts|seeds|fish|olive|avocado|lentil|legume|leafy|\bdose\b|\bmg\b|\bIU\b|daily|sunlight|exercise|should|recommend|increase|focus on/i;
+
+describe('EDUCATIONAL_CONTENT: general education only, never a personalized recommendation', () => {
+  it('every card carries only a title, policy education and a product disclaimer: no food, nutrient or tracking list', () => {
+    const education = new Set<unknown>(Object.values(EDUCATION));
+    for (const card of Object.values(CARD_MAP)) {
+      expect(Object.keys(card).sort()).toEqual(['note', 'summary', 'title']);
+      expect(education.has(card.summary)).toBe(true);
+    }
+  });
+
+  it('education is unpersonalized, recommends nothing, names no number, and is the same text for every report', () => {
+    for (const e of Object.values(EDUCATION)) {
+      expect(e).toMatchObject({ category: 'educational_content', cue: 'neutral',
+        authority: { kind: 'general_education', personalized: false, recommendationAuthority: 'none' } });
+      // No number; digits inside marker names (Free T4, HbA1c) are names, not values.
+      expect(e.text).not.toMatch(/(?<![A-Za-z])\d/);
+      expect(e.text, e.text).not.toMatch(NUTRITION_ADVICE);
+    }
+    const ids = ['thyroid_autoimmunity', 'lipids', 'hormones_cycle_hormones', 'metabolic', 'kidney_hydration', 'nutrients'];
+    const once = buildCards(ids.map(id => ({ id })));
+    const again = buildCards([...ids].reverse().map(id => ({ id })));
+    const byId = new Map(again.map(c => [c.id, c.summary]));
+    for (const card of once) expect(byId.get(card.id) ?? card.summary).toBe(card.summary);
+  });
+
+  it('negative control: the advice vocabulary sees the suppressed card content', () => {
+    for (const old of ['Brazil nuts', 'Foods to focus on', 'Selenium', 'Omega-3', 'fatty fish', 'leafy greens',
+      'You should increase iron-rich foods because your ferritin is low.', 'Take 2000 IU of vitamin D daily.']) {
+      expect(old).toMatch(NUTRITION_ADVICE);
+    }
   });
 });

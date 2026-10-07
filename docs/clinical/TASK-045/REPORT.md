@@ -1,3 +1,111 @@
+# TASK-045 turn 12 — owner rulings R2, R3, R4 (backup implementer, Claude)
+
+## Approach and root cause
+
+Each ruling had the same root: a surface chose *what to say* from an Amani band or a model, and no authority stood behind the choice. Doctor Questions were selected by band concern and band crossings and worded with a band premise. The Support plan was selected by band focus areas and then listed foods, nutrients and tests. The landing specimen asserted "Ferritin is low" in red beside its own printed interval, which 18 ng/mL is *within*. The fix extends the one policy module (`insightCopy.ts`) with two narrow categories, `DISCUSSION_PREP_PROMPT` and `EDUCATIONAL_CONTENT`, makes each surface consume them, and suppresses what has no authority rather than relabelling it. R1's remaining surfaces were not started, except where R2/R4 content sat inside one (InsightsModal questions and next steps, ReportView Next Best Steps).
+
+Start: `1d09853` on `v2/03b-clinical-language-policy`, clean. Read: `OWNER-RULINGS-STAGE2-POLICY.md`, `STAGE-2-R2-R4.md`, turn 9/10 reports (control directory, read-only). The Second Brain was **not** loaded this turn; no vault write.
+
+## What changed
+
+**Authority model** (`insightCopy.ts`). `AUTHORITY_CATEGORIES` gains `DISCUSSION_PREP_PROMPT` and `EDUCATIONAL_CONTENT` (9 total, still pinned exactly). Two `ClinicalLanguage` variants:
+- `discussion_prep`: cue `neutral` only. Authority `{ kind: 'discussion_prep', premises, recommendationAuthority: 'none', safetyAuthority: 'none' }`. Premise kinds are a closed type: `measured_value`, `measured_change`, `patient_lab_interval`, `reviewed_interpretation`, `patient_context`. An Amani comparison band is **not** an admissible premise (compile-time, `@ts-expect-error` test). Prompts are capabilities: a `WeakSet` records issued prompts, and `isIssuedDiscussionPrompt` rejects copies, edits, forgeries and JSON round-trips.
+- `educational_content`: cue `neutral`. Authority `{ kind: 'general_education', topic, personalized: false, recommendationAuthority: 'none' }`. Text is fixed per topic in `EDUCATION`; no constructor is exported.
+- `labIntervalStatement`: "Your ferritin is within your laboratory's reference interval." It reuses `labIntervalObservation`, so it cannot disagree with the card.
+
+**R2 — Doctor Questions** (`buildInsightSummary.ts`, `DoctorQuestionsCard.tsx`). `DOCTOR_QUESTIONS` is replaced by `DISCUSSION_PREP`. Selection now uses only admissible premises: measured changes the deterministic magnitude calls moderate or significant (largest first, max 2), then values outside her lab's printed interval (clustered by system, then alone). Amani band concern, band crossings and the primary finding no longer select or word any question. The removed templates are "outside Amani's comparison band…", "How should I read this alongside…" (peers chosen by band) and "Would you want to measure X again…". The context question assumes nothing and closes every list. So the card appears on **every** report, including one where nothing is outside any interval. Its presence is therefore not a finding. Heading: "Questions you could bring to a clinician". Intro: "…They are preparation only, not a judgement about your results." The card renders only issued prompts, with `data-language-*` and `data-premises` attributes. It has no alert role, no warning cue and no flag colour.
+
+**R3 — marketing.**
+- Landing hero: the owner's sentence replaces "normal on day 3 and worrying on day 21".
+- Specimen (`LandingSpecimen.tsx`, lazily loaded): every row's bar colour is `CUE_STYLE[labIntervalObservation(...).cue]`, so no value inside its printed interval is red or amber. The statements are `labIntervalStatement` and `describeMeasuredMovement` ("Ferritin has dropped from 41 to 18 ng/mL."), rendered through `ClinicalObservation` with claim validation.
+- "Everything else sits where it should for day 21" is removed.
+- Step copy and pricing bullets no longer promise "what each marker means at this point in your cycle", "questions worth raising" or "cycle-aware interpretation".
+- The four pinned Landing debt entries are **removed** from `legacy-claim-exceptions.json`, not re-pinned. The legal disclaimer stays pinned as `legal_disclosure`.
+- Play Store description (`docs/google-play-submission.md`): "QUESTIONS WORTH ASKING… follow-up tests that may be worth raising" now describes neutral questions and related markers. The evidence table is updated to match.
+
+**R4 — personalized nutrition.**
+- Support plan → "About these body systems", intro "General information about the systems on this report. It is not advice about your results."
+- `CardContent` is now `{ title, summary: EducationalContent, note: ProductDisclaimer }`. "Foods to focus on", "Topics to discuss" (Selenium, Vitamin D, Zinc, Omega-3, Magnesium, Iron, B12, Folate…) and "Track next" are deleted, not relabelled.
+- ReportView no longer mounts `NextBestSteps`. Every item there was model-written. The support bucket was food, supplement and lifestyle advice, and keyword bucketing cannot keep that advice out of the other buckets. Negative control 9 shows "Ask your doctor whether an iron supplement makes sense." filed under *Discuss*. The NextBestSteps pin entry moves `deferred` → `unreachable` (verified by reachability).
+- InsightsModal no longer renders the model's `questions_to_ask` (R2) or `next_steps_general` (R4).
+
+**Guard.** The CLAIM vocabulary gains `worr\w*` and `dangerous\w*`. "worrying on day 21" had been visible only because its sentence also said "normal". Bare `danger` was measured and rejected: 6 CSS-token hits (`theme-danger`). There are no new pin entries. `RENDER_SINKS_REVIEWED` loses `DoctorQuestion.text`, because its text is now declared in the policy.
+
+**Bundle.** Importing the policy into Landing pulled the clinical catalog into the eager entry chunk: 61.3 → 160.5 kB (gzip 20.3 → 33.6). Measured by building with the imports stubbed. The specimen is now `React.lazy`, and the final entry chunk is 59.6 kB with a 2.2 kB `LandingSpecimen` chunk.
+
+## Proof matrix (Logic = Vitest; Page = real ReportView / Landing in jsdom; Browser = Playwright, written, **not run**)
+
+| Invariant | Logic | Page (jsdom) | Browser |
+| --- | --- | --- | --- |
+| R2 premises admissible, no band premise, neutral cue, no rec/safety authority | `DoctorQuestionsCard.test.tsx`: whole-catalog sweep (83 analytes × 3 values × 5 priors + all-systems report, 1,246 reports); every template and both producing premise kinds reached | `ReportView.language.test.tsx` "owner R2…": 4 prompts, attributes, `data-premises` ⊂ {measured_change, patient_lab_interval} | `R2: discussion-prep…` |
+| R2 forbidden premises (owner's three, care, treatment, danger, direction-of-health) | sweep + rendered card | every rendered prompt | every rendered prompt |
+| R2 only policy-issued prompts render | forged / copied-reworded / deserialized / hand-written dropped | n/a (no injection path on page; stated) | n/a |
+| R2 presence ≠ escalation | card with only the context question on an all-within, first report; no alert/warning/flag on card **including itself** | card element and descendants; TSH 400 page and synthetic-safety page give identical questions | card element and descendants |
+| Rule 5, R2 | every lab-interval premise: the card's `labIntervalObservation` agrees and the question prints `formatInterval` + unit; every change premise restates its values | TSH 6→9 matches primary movement and trajectory; ferritin 25→20 matches trajectory; HbA1c "above … 4–5.6 %" matches the HbA1c card pill and printed lab range; ferritin (outside Amani band, within lab) gets no placement question | TSH and HbA1c agreement |
+| R3 page-wide prohibition | — | `Landing.language.test.tsx`: page text minus the pinned `legal_disclosure` sentence (selected from the guard's JSON, not by test text) | `R3: the landing page…` |
+| Rule 5, R3 | — | each specimen row: parsed value + printed interval → `labIntervalPlacement` agrees with bar cue and any statement; movement ends at the row's value | ferritin row, cue, statements |
+| R4 no personalized nutrition | `clinicalLanguageStage2.test.tsx`: cards hold only title/summary/note; education unpersonalized, no number, no advice vocabulary | page-wide `NUTRITION_ADVICE` over rendered text with model next steps in the fixture (5 personalized items across all buckets); none render; 2 education elements, each policy-authored | `R4: model next steps…` |
+| R4 InsightsModal | `InsightsModal.test.tsx` | — | — |
+| Rule 5, R4 | not applicable: education restates no result; asserted structurally (no number) | — | — |
+| Safety separation | unchanged suites green | direction 1 now also asserts the prep card is unchanged beside a synthetic critical warning; direction 2 unchanged | unchanged |
+
+## Executed negative controls (each applied, run, restored; tree green after)
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| 1 | change template → "Why is my ${subject} getting worse?" | 7 fail (2 logic, 5 page) |
+| 2 | card renders unissued prompts (`|| true`) | 1 fail, logic only. The page cannot inject a forgery; stated, not hidden |
+| 3 | lab-interval word inverted (above↔below) | 5 fail (2 logic incl. rule 5, 3 page incl. rule 5) |
+| 4 | `role="alert"` on the card container | first run: logic + safety-direction-2 failed, but **both R2 page tests passed**. They only searched descendants. I fixed the assertions (jsdom and browser) to include the card itself, re-ran, and 3 page tests failed |
+| 5 | Landing hero → old "worrying on day 21" sentence | Landing page-wide + hero tests + guard inventory fail |
+| 6 | specimen statement decoupled from its row (12 vs 18) | rule-5 test fails: `'below'` vs `'within'` (re-run after the lazy split together with 5: 4 fail) |
+| 6b | interval changed to 20–150 (data-coupled) | statement and colour followed the data; only the exact-text pin failed. Evidence that agreement is by construction |
+| 7 | specimen bar forced to the critical colour | rule-5 colour assertion fails |
+| 8 | GuidanceCards renders "Foods to focus on: leafy greens" | R4 page test fails |
+| 9 | NextBestSteps re-mounted | R4 page test and reachability classification fail; **the pre-existing page-wide FORBIDDEN check stayed green** with "Take 2000 IU of vitamin D daily" on the page, which is why R4 has its own check |
+
+Browser negative controls: not run. Playwright invocation is not permitted in this sandbox.
+
+## Commands (final tree)
+
+- `npx vitest run`: 71 files, **1480 passed** (baseline at turn start: 68 files, 1460).
+- `npm run typecheck`: passed (app, clinical tooling, E2E). `npm run lint`: 0 errors, the 9 existing warnings. `npm run build`: passed.
+- `npm run clinical:check`: 83 entries; 83 analytes / 198 ranges; movement-policy byte identity verified (generated section untouched). `npm run clinical:test`: 52/52.
+- Not run: Playwright (all browsers), browser negative controls, env canary, Docker harness, `check:functions` (Deno). **SKIPPED for the Lead.**
+
+## Existing tests changed (behaviour changed; each replacement stronger)
+
+- `clinicalLanguageStage2.test.tsx`: the category test pins 9 categories and the full variant→category map, not just counts. A new compile-time test covers prep/education.
+- `FocusAreas.test.tsx`: doctor-question tests moved to `DoctorQuestionsCard.test.tsx`. The old "only a SAFE favourable band lets 'improved' through" path no longer exists. No band language reaches the card, and an unissued question is dropped under any band.
+- `ReportView.language.test.tsx`: surface headings renamed. The fixture's model output now carries personalized next steps.
+- `optimalWording.test.ts`: vocabulary and probe added; one reviewed sink removed.
+
+## Deferred, with reason
+
+- **`tools/preview/fixtures.mjs`** (demo/screenshot data): "Your ferritin is low at 18 ng/mL" (18 is within its own 15–150), "worth investigating", "a normal free T3", "look as expected for day 21". R3 applies. The file is **outside allowed paths** (`tools/clinical/**` only). Lead to widen or fix.
+- **Live Play Console listing**: the doc is updated; the published listing needs an owner action. The doc's "3,446 characters" count is now stale.
+- **Server**: `generate-interpretation` still generates and persists `what_you_can_do_now` / `what_to_do_next` with allow-listed nutrient language. It no longer renders on ReportView. `NUTRIENT_GUIDELINES.md` (root, outside allowed paths) still models "a few minutes of midday sun", a sunlight prescription R4 forbids without a rule. R1 server work.
+- **InsightsModal** summary, `possible_factors` and the amber "increase" icon: R1.
+- **Freemium Basic panel**: forbidden scope.
+- **Biomarker "Why this matters"** definitions mention dietary sources (vitamin D, B12). They are general, unpersonalized definitions shown on her marker card, but not yet `EDUCATIONAL_CONTENT` structurally.
+- `patient_context` and `reviewed_interpretation` premises have no producer: no supplied-context mapping and no reviewed rule.
+- `NextBestSteps.tsx` and `categorizeNextSteps.ts` are now dead in the app. Deletion recommended; this sandbox cannot delete.
+
+## Inferred, not verified
+
+- The pre-existing browser specs pass with the renamed headings. I updated them, but they were not executed.
+- Lazy specimen: no layout shift, because the fallback reserves `15rem`. Not measured in a browser.
+
+## Open questions
+
+1. The owner's preferred sentence, "Your ferritin is below your laboratory's reference interval", is **false** for the specimen as drawn (18 within 15–150). I kept 18 and state "within", changing no number. If the owner wants the "below" example, the demo value must change. That is the owner's call, and I flagged it rather than editing a value.
+2. The Doctor Questions card now appears on every report, with at least the context question. This is deliberate under "preparation, not escalation"; confirm it is wanted.
+3. Is dropping band-crossing questions acceptable? A crossing with minor magnitude and no lab-interval change now produces no question.
+
+No external-library documentation question arose (`React.lazy`/`Suspense` usage matches existing App.tsx code-splitting). No clinical value, threshold, evidence grade or review status changed. No `SAFE`. No frozen migration, freemium, entitlement, confidentiality, Stripe or CI file touched.
+
+---
+
 # TASK-045 turn 10 — band interval consistency
 
 ## Approach and root cause

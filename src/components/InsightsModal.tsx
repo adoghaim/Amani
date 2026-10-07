@@ -1,4 +1,4 @@
-import { X, AlertCircle, TrendingUp, TrendingDown, Minus, Sparkles, ArrowRight, CheckCircle2, Info } from 'lucide-react';
+import { X, AlertCircle, TrendingUp, TrendingDown, Minus, Sparkles, ArrowRight, Info } from 'lucide-react';
 import { ErrorBoundary } from './ErrorBoundary';
 
 interface Insight {
@@ -175,37 +175,14 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
                 </div>
               )}
 
-              {/* Questions to ask */}
-              {insights.questions_to_ask?.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-theme-neutral-400 uppercase tracking-widest mb-3">Questions for your provider</p>
-                  <div className="space-y-2">
-                    {insights.questions_to_ask.map((q, idx) => (
-                      <div key={idx} className="flex items-start gap-3 p-3 rounded-lg bg-theme-neutral-50 hover:bg-theme-neutral-100 transition-colors">
-                        <span className="text-xs font-bold text-theme-primary bg-theme-primary/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          {idx + 1}
-                        </span>
-                        <p className="text-sm text-theme-neutral-700 leading-relaxed">{q}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Next steps */}
-              {insights.next_steps_general?.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-theme-neutral-400 uppercase tracking-widest mb-3">General next steps</p>
-                  <div className="space-y-2">
-                    {insights.next_steps_general.map((step, idx) => (
-                      <div key={idx} className="flex items-start gap-3">
-                        <CheckCircle2 className="w-4 h-4 text-theme-primary flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-theme-neutral-700 leading-relaxed">{step}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/*
+                V2-03b Stage 2. questions_to_ask and next_steps_general are no
+                longer rendered. Model-written doctor questions cannot be held
+                to the discussion-prep premises (owner R2), and model next
+                steps carry food, supplement and lifestyle advice with no
+                Clinical Truth rule (owner R4). The rest of this modal is model
+                prose still deferred to R1.
+              */}
 
               {/* Disclaimer */}
               <div className="flex items-start gap-3 bg-theme-neutral-50 border border-theme-neutral-200 rounded-xl px-4 py-3">

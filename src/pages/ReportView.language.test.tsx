@@ -88,10 +88,20 @@ function seed(currentTsh: number, priorTsh: number) {
   fixture.interpretation = { json_output: {
     headline: 'Your thyroid has worsened and is worth discussing with your doctor urgently.',
     primary_concern: { title: 'Thyroid is the top priority', summary: 'This is abnormal and concerning.', why_it_matters: 'You should seek care.', canonical_slug: 'tsh' },
-    summary_bullets: [], what_you_can_do_now: [], what_to_do_next: [], pattern_signals: [],
+    summary_bullets: [], pattern_signals: [],
+    // Owner R4: personalized food, supplement, dose and lifestyle advice from the model, in every bucket.
+    what_you_can_do_now: MODEL_NEXT_STEPS.slice(0, 3), what_to_do_next: MODEL_NEXT_STEPS.slice(3),
     disclaimer: 'Synthetic fixture. Not medical advice.',
   } };
 }
+
+const MODEL_NEXT_STEPS = [
+  'Eat more iron-rich foods such as spinach because your ferritin is low.',
+  'Take 2000 IU of vitamin D daily with breakfast.',
+  'Walk for 30 minutes after meals to lower your HbA1c.',
+  'Ask your doctor whether an iron supplement makes sense.',
+  'Retest TSH in 6 weeks.',
+];
 
 let root: Root;
 let app: HTMLDivElement;
@@ -157,7 +167,7 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     await renderAndOpenAll();
     const text = app.textContent ?? '';
     for (const surface of ['Your trajectory', 'Focus areas', 'Health systems', 'Pattern-rule matches', 'Derived metrics',
-      'Full lab panel', 'Questions for Your Doctor', 'Your health story', 'Support plan', 'Related markers not on this report']) {
+      'Full lab panel', policy.DISCUSSION_PREP_HEADING, 'Your health story', policy.EDUCATION_HEADING, 'Related markers not on this report']) {
       expect(text, surface).toContain(surface);
     }
     expect(app.querySelectorAll('article[aria-label$=" result"]').length).toBe(5);
@@ -296,5 +306,113 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     // The same words are forbidden to the band channel, yet render here: the
     // restriction on comparison-band language did not neutralize the warning.
     expect(alerts[0]!.textContent).toMatch(FORBIDDEN);
+    // Discussion preparation does not change because a safety warning exists:
+    // urgency is the safety channel's alone, never the question card's.
+    expect(prepQuestions()).toEqual(PREP_FOR_TSH_400);
   }, 30_000);
 });
+
+/* ── Owner rulings R2 and R4 on the real page ──────────────────────────── */
+
+const prepQuestions = () => Array.from(app.querySelectorAll('[data-testid="prep-questions"] [data-language-category]'))
+  .map(el => el.textContent ?? '');
+// Measured change 6 -> 400, HbA1c above its lab interval, then the context question.
+const PREP_FOR_TSH_400 = [
+  'My TSH changed from 6 to 400 uIU/mL. What could explain this change, and is it clinically meaningful?',
+  'My Ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
+  "My HbA1c is 6 %, above my lab's reference interval of 4–5.6 %. What does this mean in the context of my overall labs?",
+  'Is there anything about my routine or history that matters for reading these results?',
+];
+// The owner's forbidden premises and the concepts behind them.
+const PREP_FORBIDDEN = /worse|worsen|getting (?:better|worse)|treat|medication|danger|urgent|emergency|seek|need(?:s)? (?:medical )?care|should|improv|better|optimal|normal|abnormal|concern|elevated|Amani|band/i;
+// Owner R4: personalized food, nutrient, supplement, dose and lifestyle advice.
+const NUTRITION_ADVICE = /foods? to focus|topics to discuss|track next|next best steps|iron-rich|eat more|\bsupplement|\bdose\b|\b\d+\s?(?:IU|mg|mcg|µg)\b(?!\/)|daily|per day|sunlight|walk for|exercise|retest/i;
+
+describe('owner R2 — discussion preparation on the page: admissible premises, agreement, no escalation', () => {
+  it('the card renders policy prompts only, each neutral, each resting on her values or her lab interval', async () => {
+    seed(9, 6);
+    await renderAndOpenAll();
+    const card = app.querySelector('[data-testid="prep-questions"]');
+    expect(card?.textContent).toContain(policy.DISCUSSION_PREP_HEADING);
+    expect(card?.textContent).toContain(policy.DISCUSSION_PREP_INTRO);
+    const items = Array.from(card!.querySelectorAll('[data-language-category]'));
+    expect(items.length).toBe(4);
+    for (const el of items) {
+      expect(el.getAttribute('data-language-category')).toBe('discussion_prep');
+      expect(el.getAttribute('data-language-cue')).toBe('neutral');
+      for (const kind of (el.getAttribute('data-premises') ?? '').split(' ').filter(Boolean)) {
+        expect(['measured_change', 'patient_lab_interval']).toContain(kind);
+      }
+      expect(el.textContent, el.textContent ?? '').not.toMatch(PREP_FORBIDDEN);
+    }
+    // The card itself and everything in it: no alert role, warning cue or danger colour.
+    const escalation = '[role="alert"], [data-language-cue="warning"], [data-language-cue="critical"]';
+    expect([card!, ...Array.from(card!.querySelectorAll('*'))].filter(el => el.matches(escalation))).toEqual([]);
+    expect(card!.outerHTML).not.toMatch(/flag-(?:ok|watch|low)/);
+  }, 30_000);
+
+  it('standing rule 5: each question states its fact exactly as the card, trajectory and lab row state it', async () => {
+    seed(9, 6);
+    await renderAndOpenAll();
+    const [tshChange, ferritinChange, hba1cInterval] = prepQuestions();
+    // TSH 6 -> 9: the primary movement and the trajectory state the same two values.
+    expect(tshChange).toContain('from 6 to 9 uIU/mL');
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')?.textContent).toContain('from 6 to 9 uIU/mL');
+    expect(app.textContent).toContain('TSH has risen from 6 to 9 uIU/mL.');
+    expect(ferritinChange).toContain('from 25 to 20 ng/mL');
+    expect(app.textContent).toContain('Ferritin has dropped from 25 to 20 ng/mL.');
+    // HbA1c: the question's placement and interval are the HbA1c card's own.
+    const hba1c = app.querySelector('article[aria-label="HbA1c result"]');
+    expect(hba1c?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent).toBe("Above your lab's range");
+    expect(hba1cInterval).toContain("above my lab's reference interval");
+    const printed = Array.from(hba1c!.querySelectorAll('dt')).find(dt => dt.textContent === policy.LAB_INTERVAL_TERM)?.nextElementSibling?.textContent;
+    expect(printed).toBe('4–5.6 %');
+    expect(hba1cInterval).toContain(`of ${printed}.`);
+    // Ferritin 20 is outside its Amani band but within her lab interval: no
+    // question may say it is outside anything.
+    expect(prepQuestions().join(' ')).not.toMatch(/Ferritin is|ferritin is .*(?:above|below)/i);
+    expect(app.querySelector('article[aria-label="Ferritin result"] [data-language-source="patient_lab_interval"]')?.textContent)
+      .toBe("Within your lab's range");
+  }, 30_000);
+
+  it('safety separation: a band change of any size leaves the card neutral and adds no urgency', async () => {
+    seed(400, 6);
+    await renderAndOpenAll();
+    expect(prepQuestions()).toEqual(PREP_FOR_TSH_400);
+    expect(app.querySelectorAll('[data-testid="prep-questions"][role="alert"], [data-testid="prep-questions"] [role="alert"]').length).toBe(0);
+  }, 30_000);
+
+  it('negative control: the prohibitions see the owner\'s examples and the old band premise', () => {
+    for (const q of ['Why is my thyroid getting worse?', 'Should I start treatment?', 'Why is this dangerous?',
+      "My TSH is 9 uIU/mL, outside Amani's comparison band, which has not yet completed clinical review."]) {
+      expect(q).toMatch(PREP_FORBIDDEN);
+    }
+  });
+});
+
+describe('owner R4 — no personalized nutrition, supplement or lifestyle recommendation renders', () => {
+  it('model next steps never render; education is labelled, unpersonalized and authored by the policy', async () => {
+    seed(9, 6);
+    await renderAndOpenAll();
+    for (const step of MODEL_NEXT_STEPS) expect(app.textContent).not.toContain(step);
+    expect(forbiddenNutrition(pageText())).toEqual([]);
+    expect(app.textContent).toContain(policy.EDUCATION_INTRO);
+    const education = Array.from(app.querySelectorAll('[data-language-category="educational_content"]'));
+    expect(education.length).toBe(2);
+    const authored = new Set(Object.values(policy.EDUCATION).map(e => e.text));
+    for (const el of education) {
+      expect(el.getAttribute('data-language-source')).toBe('general_education');
+      expect(authored.has(el.textContent ?? '')).toBe(true);
+    }
+  }, 30_000);
+
+  it('negative control: the page check sees each suppressed recommendation if it rendered', () => {
+    for (const text of [...MODEL_NEXT_STEPS, 'Foods to focus on', 'Topics to discuss', 'Track next', 'Next best steps']) {
+      expect(forbiddenNutrition(text), text).not.toEqual([]);
+    }
+  });
+});
+
+function forbiddenNutrition(text: string): string[] {
+  return [...text.matchAll(new RegExp(NUTRITION_ADVICE.source, 'gi'))].map(m => text.slice(Math.max(0, m.index - 40), m.index + m[0].length + 40));
+}

@@ -236,7 +236,38 @@ export type ClinicalLanguage =
     } }
   | { category: 'safety_warning'; text: string; cue: 'warning' | 'critical'; authority: SafetyRuleSource }
   | { category: 'clinical_action'; text: string; cue: 'neutral' | 'warning' | 'critical';
-      authority: ReviewedRuleSource | SafetyRuleSource | ProductDisclaimerSource };
+      authority: ReviewedRuleSource | SafetyRuleSource | ProductDisclaimerSource }
+  | { category: 'discussion_prep'; text: string; cue: 'neutral'; authority: DiscussionPrepSource }
+  | { category: 'educational_content'; text: string; cue: 'neutral'; authority: GeneralEducationSource };
+
+/*
+  Owner R2. A question she may bring to a clinician. Its premises are the only
+  facts it may rest on: measured values, measured changes, her laboratory's
+  printed interval, a reviewed interpretation (none is registered), or context
+  she supplied. An Amani comparison band is not an admissible premise, and the
+  prompt carries no recommendation or safety authority: it is preparation, not
+  escalation, and its cue can only be neutral.
+*/
+export type DiscussionPremise =
+  | { kind: 'measured_value'; subject: string; value: number; unit: string }
+  | { kind: 'measured_change'; subject: string; previous: number; current: number; unit: string }
+  | { kind: 'patient_lab_interval'; subject: string; value: number; unit: string;
+      min: number | null; max: number | null; placement: LabPlacement }
+  | { kind: 'reviewed_interpretation'; rule: ReviewedRuleSource }
+  | { kind: 'patient_context'; field: string };
+type DiscussionPrepSource = {
+  kind: 'discussion_prep'; premises: readonly DiscussionPremise[];
+  recommendationAuthority: 'none'; safetyAuthority: 'none';
+};
+/*
+  Owner R4. General education names no result, so the same text appears for
+  every report that selects its topic. It is never personalized and carries no
+  recommendation authority: a food, nutrient, supplement or lifestyle
+  recommendation tied to her result needs a Clinical Truth rule, and none exists.
+*/
+type GeneralEducationSource = {
+  kind: 'general_education'; topic: string; personalized: false; recommendationAuthority: 'none';
+};
 
 // BEGIN GENERATED MOVEMENT POLICY
 // Dependency-free policy kernel, copied byte-for-byte for Edge packaging.
@@ -368,7 +399,11 @@ export function describeComparisonBand(language: AuthorizedLanguage, placement: 
 */
 export const AUTHORITY_CATEGORIES = [
   'FACTUAL_OBSERVATION', 'COMPARISON_BAND_OBSERVATION', 'REVIEWED_CLINICAL_INTERPRETATION',
-  'OPTIMAL_TARGET_CLAIM', 'SAFETY_CRITICAL_WARNING', 'CLINICAL_ACTION_RECOMMENDATION', 'UNAUTHORIZED_DEBT',
+  'OPTIMAL_TARGET_CLAIM', 'SAFETY_CRITICAL_WARNING', 'CLINICAL_ACTION_RECOMMENDATION',
+  // Owner Stage-2 rulings R2 and R4: narrow categories that grant no clinical
+  // interpretation and no individualized recommendation.
+  'DISCUSSION_PREP_PROMPT', 'EDUCATIONAL_CONTENT',
+  'UNAUTHORIZED_DEBT',
 ] as const;
 export type AuthorityCategory = typeof AUTHORITY_CATEGORIES[number];
 
@@ -382,12 +417,16 @@ export const LANGUAGE_AUTHORITY: {
   optimal_target: 'OPTIMAL_TARGET_CLAIM',
   safety_warning: 'SAFETY_CRITICAL_WARNING',
   clinical_action: 'CLINICAL_ACTION_RECOMMENDATION',
+  discussion_prep: 'DISCUSSION_PREP_PROMPT',
+  educational_content: 'EDUCATIONAL_CONTENT',
 };
 
 export type Cue = ClinicalLanguage['cue'];
 export type FactualLanguage = Extract<ClinicalLanguage, { category: 'factual_observation' }>;
 export type ComparisonBandLanguage = Extract<ClinicalLanguage, { category: 'comparison_band' }>;
 export type SafetyWarning = Extract<ClinicalLanguage, { category: 'safety_warning' }>;
+export type DiscussionPrepPrompt = Extract<ClinicalLanguage, { category: 'discussion_prep' }>;
+export type EducationalContent = Extract<ClinicalLanguage, { category: 'educational_content' }>;
 export type ProductDisclaimer = Extract<ClinicalLanguage, { category: 'clinical_action' }> & {
   authority: ProductDisclaimerSource;
 };
@@ -561,6 +600,19 @@ export function labIntervalObservation(
     cue: placement === 'within' ? 'neutral' : 'attention',
     authority: { kind: 'patient_lab_interval', subject, min: lower, max: upper },
   };
+}
+
+/**
+ * The same placement as a sentence: "Your ferritin is below your laboratory's
+ * reference interval." The authority is stated in the sentence (owner R3).
+ */
+export function labIntervalStatement(
+  subject: string, value: number, min: number | null, max: number | null,
+): FactualLanguage | null {
+  const observation = labIntervalObservation(subject, value, min, max);
+  const placement = labIntervalPlacement(value, min, max);
+  if (!observation || !placement) return null;
+  return { ...observation, text: `Your ${subject} is ${placement} your laboratory's reference interval.` };
 }
 
 /**
@@ -745,30 +797,107 @@ export function relatedMarkersIntro(count: number): string {
   return `${count} related ${count === 1 ? 'marker' : 'markers'} this report did not include`;
 }
 
-/*
-  Questions she may take to her clinician. Each states only measured values,
-  a change between them, or placement against an Amani band with its review
-  state (withheld for DISPUTED), then asks. Removed premises: "improved",
-  "better than the prior result", "is elevated", "the rest of my labs look
-  stable", and the prompts to keep "monitoring" or to "recheck".
+/* ── Discussion preparation (DISCUSSION_PREP_PROMPT, owner R2) ─────────
+  Questions she may bring to a clinician, built only from admissible premises.
+  Each question states its premise in the words the rest of the page uses for
+  the same fact (the measured change; her lab's interval as printed), then asks
+  a neutral question. It never presumes direction of health ("getting worse"),
+  treatment ("should I start"), danger, or a need for care: urgency belongs to
+  the safety channel alone.
+
+  Only prompts this module issued render. A prompt is a capability, like a
+  movement claim: copying one and editing its text, or deserializing one, does
+  not keep the grant.
 */
-export const DOCTOR_QUESTIONS = {
-  changeAlongside: (name: string, from: number, to: number, unit: string, peers: readonly string[]) =>
-    `My ${name} changed from ${from} to ${to} ${unit}. How should I read this alongside ${listOf(peers)}?`,
-  change: (name: string, from: number, to: number, unit: string) =>
-    `My ${name} changed from ${from} to ${to} ${unit}. Is this change clinically meaningful?`,
-  relate: (names: string) => `Could you help me understand how my ${names} results relate to each other?`,
-  explainChange: (name: string, from: number, to: number, unit: string, pct: string) =>
-    `My ${name} changed from ${from} to ${to} ${unit}${pct}. What could explain this change?`,
-  placement: (name: string, value: number, unit: string, language: AuthorizedLanguage) =>
-    language.reviewStatus === 'DISPUTED'
-      ? `My ${name} is ${value} ${unit}. What does this mean in the context of my overall labs?`
-      : language.reviewedWording
-        ? `My ${name} is ${value} ${unit}, outside Amani's reviewed comparison band. What does this mean in the context of my overall labs?`
-        : `My ${name} is ${value} ${unit}, outside Amani's comparison band, which has not yet completed clinical review. What does this mean in the context of my overall labs?`,
-  timing: (name: string) => `Would you want to measure ${name} again, and if so, when?`,
-  context: () => 'Is there anything about my routine or history that matters for reading these results?',
+const issuedPrompts = new WeakSet<DiscussionPrepPrompt>();
+
+function prepPrompt(text: string, premises: readonly DiscussionPremise[]): DiscussionPrepPrompt {
+  const prompt: DiscussionPrepPrompt = Object.freeze({
+    category: 'discussion_prep', text, cue: 'neutral',
+    authority: Object.freeze({
+      kind: 'discussion_prep', premises: Object.freeze([...premises]),
+      recommendationAuthority: 'none', safetyAuthority: 'none',
+    }),
+  } as const);
+  issuedPrompts.add(prompt);
+  return prompt;
+}
+
+/** True only for a prompt this policy issued, unmodified. Everything else must not render. */
+export function isIssuedDiscussionPrompt(value: unknown): value is DiscussionPrepPrompt {
+  return typeof value === 'object' && value !== null && issuedPrompts.has(value as DiscussionPrepPrompt);
+}
+
+export const DISCUSSION_PREP_HEADING = 'Questions you could bring to a clinician';
+export const DISCUSSION_PREP_INTRO =
+  'Optional questions built from the values on this report, to help you prepare for any conversation with your clinician. '
+  + 'They are preparation only, not a judgement about your results.';
+
+const LAB_INTERVAL_WORDS: Record<Exclude<LabPlacement, 'within'>, string> = {
+  below: 'below', above: 'above',
+};
+
+export const DISCUSSION_PREP = {
+  /** A measured change between two of her results. */
+  change: (subject: string, previous: number, current: number, unit: string): DiscussionPrepPrompt => prepPrompt(
+    `My ${subject} changed from ${previous} to ${current} ${unit}. What could explain this change, and is it clinically meaningful?`,
+    [{ kind: 'measured_change', subject, previous, current, unit }],
+  ),
+  /** Her value outside her own laboratory's printed interval, exactly as labIntervalPlacement reads it. */
+  labInterval: (subject: string, value: number, unit: string, min: number | null, max: number | null): DiscussionPrepPrompt | null => {
+    const placement = labIntervalPlacement(value, min, max);
+    const interval = formatInterval(min ?? null, max ?? null);
+    if (!placement || placement === 'within' || !interval) return null;
+    return prepPrompt(
+      `My ${subject} is ${value} ${unit}, ${LAB_INTERVAL_WORDS[placement]} my lab's reference interval of ${interval} ${unit}. `
+        + 'What does this mean in the context of my overall labs?',
+      [{ kind: 'patient_lab_interval', subject, value, unit, min: min ?? null, max: max ?? null, placement }],
+    );
+  },
+  /** Several of her values outside their laboratory intervals in one body system. */
+  relate: (premises: readonly Extract<DiscussionPremise, { kind: 'patient_lab_interval' }>[]): DiscussionPrepPrompt | null => {
+    if (premises.length < 2) return null;
+    const names = premises.length > 3
+      ? [...premises.slice(0, 2).map(p => p.subject), `${premises.length - 2} other results`]
+      : premises.map(p => p.subject);
+    return prepPrompt(`Could you help me understand how my ${listOf(names)} results relate to each other?`, premises);
+  },
+  /** Assumes nothing about her results, so it may appear on any report. */
+  context: (): DiscussionPrepPrompt => prepPrompt(
+    'Is there anything about my routine or history that matters for reading these results?', [],
+  ),
 } as const;
+
+/* ── General education (EDUCATIONAL_CONTENT, owner R4) ─────────────────
+  Selected by topic, never written from her values: the text is fixed per
+  topic and states no result. No food, nutrient, supplement, dose or lifestyle
+  recommendation is education: each needs an approved Clinical Truth rule.
+*/
+function educationalContent(topic: string, text: string): EducationalContent {
+  return Object.freeze({
+    category: 'educational_content', text, cue: 'neutral',
+    authority: Object.freeze({ kind: 'general_education', topic, personalized: false, recommendationAuthority: 'none' }),
+  } as const);
+}
+
+/** The only education the report page shows: how markers in a system are read together. */
+export const EDUCATION = {
+  thyroid_antibodies: educationalContent('thyroid_antibodies',
+    'TPO antibodies are usually read together with TSH, Free T4, Free T3 and any thyroid-related symptoms.'),
+  lipids: educationalContent('lipids',
+    'HDL, LDL, triglycerides, total cholesterol and ApoB are usually read together as one lipid pattern over time.'),
+  cycle_hormones: educationalContent('cycle_hormones',
+    'Hormone values can shift with cycle timing, so cycle day and symptoms matter when reading this area.'),
+  glucose: educationalContent('glucose',
+    'Glucose-related markers are often read together, because one marker alone may not show the full metabolic picture.'),
+  kidney: educationalContent('kidney',
+    'BUN, creatinine and their ratio can be influenced by hydration, protein intake and kidney-related context.'),
+  nutrients: educationalContent('nutrients',
+    'Iron-related and other nutrient markers are often read together as a panel, which gives a fuller picture than any single value.'),
+} as const satisfies Record<string, EducationalContent>;
+
+export const EDUCATION_HEADING = 'About these body systems';
+export const EDUCATION_INTRO = 'General information about the systems on this report. It is not advice about your results.';
 
 /** Watch signals: grouping metadata, not rendered by any routed surface today. */
 export const WATCH_SIGNALS = {
