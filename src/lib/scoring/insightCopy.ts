@@ -3,7 +3,7 @@ import {
   canClaimFavourableDirection, canDescribeAsOptimal, isReviewedRange,
   type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
-import { assessAmaniContext, contextFromReport, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
+import { assessAmaniContext, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
 import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../../types';
 
 /*
@@ -423,10 +423,19 @@ function listOf(items: readonly string[]): string {
  * the existing scoring rule: higher-is-better bands have no upper placement
  * bound. This describes comparison only, never clinical benefit or safety.
  */
+export function bandBounds(band: AmaniBand): { min: number | null; max: number | null } {
+  return { min: band.min, max: band.higherIsBetter ? null : band.max };
+}
+
+/** Printed interval and plotted region share the placement rule, not catalog endpoints. */
+export function bandInterval(band: AmaniBand): string | null {
+  const { min, max } = bandBounds(band);
+  return formatInterval(min, max);
+}
+
 export function bandPlacement(assessment: AmaniAssessment, value: number): Placement {
   if (assessment.kind !== 'scored') return null;
-  const { min, higherIsBetter } = assessment.band;
-  const max = higherIsBetter ? null : assessment.band.max;
+  const { min, max } = bandBounds(assessment.band);
   if (min === null && max === null) return null;
   return (min !== null && value < min) || (max !== null && value > max) ? 'outside' : 'within';
 }

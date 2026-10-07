@@ -1,3 +1,55 @@
+# TASK-045 turn 10 — band interval consistency
+
+## Approach and root cause
+
+Placement already treated `higherIsBetter` bands as unbounded above, while the same card printed and shaded both catalog endpoints. Extend the existing policy with `bandBounds` and `bandInterval`, then make placement, the card row, chart caption and shaded region consume that rule. Preserve catalog values and the independent patient-lab interval. This continuation addresses Amendment 5 only; it does not close the broader clinical-language contract or pending owner rulings.
+
+Starting HEAD: `a041ab3bdb59918a0eb1812c5ba9153c3f796229`, branch `v2/03b-clinical-language-policy`. Contract and TASK-044 synthesis/amendments 2 and 5 were read from the control directory, read-only, because the brief-relative paths are absent.
+
+## Changes and consistency matrix
+
+`bandInterval` formats the effective bounds using the existing `formatInterval`. `bandBounds` is the shared numeric rule behind both that formatter and placement. The chart extends an unbounded region to the viewport edge; viewport numbers are axis limits, not clinical endpoints. No catalog values, clinical thresholds, grades, review dispositions, migrations or forbidden files changed. The existing magnitude annotation retains its multiplier; an absent upper comparison bound cannot produce an above-band magnitude annotation. Lab-derived annotations retain their own bounds.
+
+| Fact / surface | Executed evidence | Limits |
+| --- | --- | --- |
+| HDL one-sided band, 59 / 60 / 90 / 95 | Actual ReportView JSDOM cases require pill, row `≥ 60`, caption, geometric containment, system, headline and empty state to agree | Browser runtime blocked |
+| eGFR one-sided band, 89 / 90 / 200 / 205 | Same actual-page assertions require `≥ 90` and reject `90–200` | Browser runtime blocked |
+| RangeBar region | Require region right edge at 100%; dot containment must equal pill placement, including below and exactly at lower endpoint | CSS layout/pixel rendering not proven in JSDOM |
+| Patient lab interval | Existing independent lab assertions preserved for each case | Synthetic interval only |
+| HDL 95 and eGFR 205 browser fixtures | Added/discovered Playwright cases require both pills, row, caption, region/dot geometry, system, headline, empty state and page-wide prohibition check | Neither case executed past server startup |
+| Other policy surfaces and safety channels | Existing full Vitest regression suite passes | No new global coverage or safety certification claimed; prior deferred work remains |
+
+Existing HDL assertions were extended, not relaxed. The test now enumerates both higher-is-better analytes and checks agreement across all named surfaces. No policy/inventory/network/env guard changed. First full test run found the new diagnostic IDs matched the clinical-copy scanner (6 failures); IDs were renamed to `comparison-region` and `measurement-dot`, with no guard or exception-list change.
+
+## Commands and results
+
+- `npx vitest run src/pages/ReportView.language.test.tsx src/components/BiomarkerCard.test.tsx src/lib/scoring/insightCopy.test.ts` — 49 passed across 3 files.
+- `npm test` — final 1460 passed across 68 files.
+- `npm run typecheck` — passed, including E2E TypeScript.
+- `npm run lint` — passed, 0 errors / 9 existing warnings.
+- `npm run build` — passed.
+- `npm run clinical:check` — passed: 83 entries, 198 ranges, audit and generated movement-policy identity.
+- `npm run clinical:test` — 52 passed, including parse guard and value/frozen-artifact checks.
+- `npx playwright test e2e/reports/clinical-language-policy.spec.ts --project=chromium --grep higher-is-better --workers=1` — blocked before assertions: Vite `listen EPERM` at `127.0.0.1:4173`.
+- `git diff --check` — passed.
+
+## Executed negative controls
+
+Each mutation was applied alone and restored in a Python `finally` block before subsequent work. Command for each: `npx vitest run src/pages/ReportView.language.test.tsx`.
+
+1. Replace card `band ? bandInterval(band) : null` with `band ? formatInterval(band.min, band.max) : null`: **8 failed / 8 passed**, specifically the printed-band assertion for both analytes at all four values.
+2. Replace chart `(optMax === null ? 100 : toPercent(optMax)) - optLeft` with `toPercent(band.max!) - optLeft`: **4 failed / 12 passed**, specifically the region-edge assertion. This probes the independent geometric path even with correct text.
+
+Browser negative controls remain unexecuted because the listener is denied. Lead should apply each mutation above independently, run the targeted Playwright command, and restore. No browser pass or negative-control result is inferred from JSDOM.
+
+## Remaining work / handoff
+
+Lead: run all three browsers and both browser negative controls, the env canary in its required disposable worktree, Docker harness, CI and independent review. These were not run here; this implementer cannot create the required disposable Git worktree. R2/R3/R4 owner follow-up and broader server/global policy work remain outside this focused continuation. No external-library documentation question arose.
+
+Second Brain handoff (no vault write): the local snapshot and lifecycle instructions were read; no pull was attempted under the offline/no-write contract. Verified this session: starting HEAD, changes and command outcomes above. Owner Amendment 5 supplied the interval ruling; no new clinical decision was made. Browser/runtime and release claims stay pending; stale vault branch/release facts were not used as current evidence.
+
+---
+
 # TASK-045 — turn 9: locator and first R1 claim pipeline (PARTIAL)
 
 Approach: the HDL test defect was an ambiguous locator over two correct pills; preserve both assertions by requiring exactly two matches and checking each. The architectural defect is that a source-bearing language object alone does not establish that proposed prose follows its supporting fact. Extend `insightCopy.ts` with deterministic movement claims, finite authorized phrasing and a fail-closed validator, retain the claim through rendering, and generate the dependency-free movement kernel for Edge packaging with byte-identity checks. Stop at this coherent movement boundary; this is not completion of R1 across generated clinical content and is not independent review.

@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { higherIsBetterReport, stage2CurrentReport, stage2PriorReport } from './synthetic-reports';
+import { egfrHigherIsBetterReport, higherIsBetterReport, stage2CurrentReport, stage2PriorReport } from './synthetic-reports';
 
 /*
   V2-03b Stage 2 in a real browser, against the real ReportView, with
@@ -111,16 +111,32 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
 });
 
 
-test.describe('higher-is-better placement agreement', () => {
-  test.use({ authenticated: true, syntheticReports: [[higherIsBetterReport], { scope: 'test' }] });
+for (const { report, name, min, max, unit } of [
+  { report: higherIsBetterReport, name: 'HDL', min: 60, max: 90, unit: 'mg/dL' },
+  { report: egfrHigherIsBetterReport, name: 'eGFR', min: 90, max: 200, unit: 'mL/min/1.73m²' },
+]) test.describe(`${name} higher-is-better placement agreement`, () => {
+  test.use({ authenticated: true, syntheticReports: [[report], { scope: 'test' }] });
 
-  test('HDL 95: every page placement agrees while its lab interval remains independent', async ({ page }) => {
-    await page.goto(`/app/reports/${higherIsBetterReport.report.id}`);
+  test('every page placement agrees while its lab interval remains independent', async ({ page }) => {
+    await page.goto(`/app/reports/${report.report.id}`);
     await expect(page.getByRole('heading', { name: 'Health systems', exact: true })).toBeVisible();
     await clickAll(page, 'button[aria-expanded="false"]:not(article button)');
     await clickAll(page, 'article button[aria-expanded="false"]');
-    const card = page.getByRole('article', { name: 'HDL result', exact: true });
+    const card = page.getByRole('article', { name: `${name} result`, exact: true });
     await expect(card).toBeVisible();
+    await expect(card).toContainText(`Amani context band:≥ ${min} ${unit}`);
+    await expect(card).toContainText(`Amani ≥ ${min}`);
+    await expect(card).not.toContainText(`${min}–${max}`);
+    const geometry = await card.evaluate(element => {
+      const region = element.querySelector<HTMLElement>('[data-testid="comparison-region"]')!;
+      const dot = element.querySelector<HTMLElement>('[data-testid="measurement-dot"]')!;
+      const left = parseFloat(region.style.left);
+      return { left, right: left + parseFloat(region.style.width), position: Number(dot.style.left.match(/([\d.]+)%/)![1]) };
+    });
+    expect(geometry.right).toBeCloseTo(100);
+    expect(geometry.position).toBeGreaterThanOrEqual(geometry.left);
+    expect(geometry.position).toBeLessThanOrEqual(geometry.right);
+
     const bandPills = card.getByText('Within Amani band', { exact: true });
     await expect(bandPills).toHaveCount(2);
     await expect(bandPills.nth(0)).toBeVisible();

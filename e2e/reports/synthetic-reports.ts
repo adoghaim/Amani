@@ -143,3 +143,5 @@ stage2PriorReport.interpretation['id'] = '00000000-0000-4000-b000-000000000099';
 
 // Turn 8: upper-bound direction and independent laboratory interval on an otherwise empty panel.
 export const higherIsBetterReport = report(1, 'unknown', [['hdl_cholesterol', 95, '95', 'mg/dL', 40, 60]]);
+
+export const egfrHigherIsBetterReport = report(1, 'unknown', [['egfr', 205, '205', 'mL/min/1.73m²', 40, 60]]);

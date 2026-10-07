@@ -166,16 +166,32 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     expect(app.querySelectorAll('article [data-language-source="patient_lab_interval"]').length).toBe(5);
   }, 30_000);
 
-  it.each([59, 60, 90, 95])('HDL %s: pill, system, headline and empty states agree page-wide', async value => {
+  it.each([
+    ...[59, 60, 90, 95].map(value => ({ key: 'hdl_cholesterol', name: 'HDL', value, min: 60, max: 90, unit: 'mg/dL' })),
+    ...[89, 90, 200, 205].map(value => ({ key: 'egfr', name: 'eGFR', value, min: 90, max: 200, unit: 'mL/min/1.73m²' })),
+  ])('$name $value: every statement and plotted region agree on placement', async ({ key, name, value, min, max, unit }) => {
     seed(9, 6);
     fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
-    fixture.tables.biomarkers = rows(CURRENT, [['hdl_cholesterol', value, 'mg/dL', 40, 60]]);
+    fixture.tables.biomarkers = rows(CURRENT, [[key, value, unit, 40, 60]]);
     fixture.tables.report_analytes = [];
     await renderAndOpenAll();
-    const outside = value < 60;
-    const card = app.querySelector('article[aria-label="HDL result"]');
+    const outside = value < min;
+    const card = app.querySelector(`article[aria-label="${name} result"]`);
     expect(card).not.toBeNull();
     expect(card?.textContent).toContain(outside ? 'Outside Amani band' : 'Within Amani band');
+    expect(card?.textContent).toContain(`Amani context band:≥ ${min} ${unit}`);
+    expect(card?.textContent).toContain(`Amani ≥ ${min}`);
+    expect(card?.textContent).not.toContain(`${min}–${max}`);
+    const region = card?.querySelector<HTMLElement>('[data-testid="comparison-region"]');
+    const dot = card?.querySelector<HTMLElement>('[data-testid="measurement-dot"]');
+    expect(region).toBeTruthy();
+    expect(dot).toBeTruthy();
+    const left = parseFloat(region!.style.left);
+    const right = left + parseFloat(region!.style.width);
+    const position = Number(dot!.style.left.match(/([\d.]+)%/)![1]);
+    expect(right).toBeCloseTo(100);
+    expect(position >= left && position <= right).toBe(!outside);
+
     expect(card?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent)
       .toBe(value > 60 ? "Above your lab's range" : "Within your lab's range");
     expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)

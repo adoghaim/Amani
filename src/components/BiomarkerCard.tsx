@@ -10,7 +10,7 @@ import { getDisplayName } from '../lib/biomarkers/dictionary';
 import type { BiomarkerName, CyclePhase, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 import {
-  bandTerm, comparisonBandLabel, CUE_STYLE, extremeMagnitudeLabel, LAB_INTERVAL_TERM, labIntervalObservation,
+  bandBounds, bandInterval, bandTerm, comparisonBandLabel, CUE_STYLE, extremeMagnitudeLabel, LAB_INTERVAL_TERM, labIntervalObservation,
   personalHistoryLabel, phaseBandNote, reviewStatusLabel, withheldCopy, withoutOptimalClaims,
   type ComparisonBandLanguage, type FactualLanguage,
 } from '../lib/scoring/insightCopy';
@@ -79,21 +79,23 @@ function RangeBar({
   labMin: number | null;
   labMax: number | null;
 }) {
-  const optMin = band.min;
-  const optMax = band.max;
-  if (optMin === null || optMax === null) return null;
+  const { min: optMin, max: optMax } = bandBounds(band);
+  if (optMin === null && optMax === null) return null;
+  // Finite viewport edges are not comparison-band limits.
+  const scaleMin = optMin ?? optMax! * 0.5;
+  const scaleMax = optMax ?? Math.max(scaleMin * 1.5, value * 1.1);
 
-  const baseHigh = Math.max(labMax ?? optMax * 1.5, optMax);
+  const baseHigh = Math.max(labMax ?? scaleMax * 1.5, scaleMax);
   const high = Math.max(baseHigh, value * 1.1);
-  const baseLow = Math.min(labMin ?? optMin * 0.5, optMin);
+  const baseLow = Math.min(labMin ?? scaleMin * 0.5, scaleMin);
   const low = value < baseLow ? Math.min(baseLow, value * 0.9) : baseLow;
   const span = high - low;
   if (span <= 0) return null;
 
   const toPercent = (v: number) => Math.max(0, Math.min(100, ((v - low) / span) * 100));
 
-  const optLeft = toPercent(optMin);
-  const optWidth = toPercent(optMax) - optLeft;
+  const optLeft = optMin === null ? 0 : toPercent(optMin);
+  const optWidth = (optMax === null ? 100 : toPercent(optMax)) - optLeft;
   const hasLab = labMin !== null || labMax !== null;
   const labLeft = labMin !== null ? toPercent(labMin) : 0;
   const labWidth = labMax !== null ? toPercent(labMax) - labLeft : 100 - labLeft;
@@ -101,8 +103,8 @@ function RangeBar({
 
   const rangeMax = labMax ?? optMax;
   const rangeMin = labMin ?? optMin;
-  const isExtremeHigh = rangeMax > 0 && value > rangeMax * 3;
-  const isExtremeLow = rangeMin > 0 && value < rangeMin / 3;
+  const isExtremeHigh = rangeMax !== null && rangeMax > 0 && value > rangeMax * 3;
+  const isExtremeLow = rangeMin !== null && rangeMin > 0 && value < rangeMin / 3;
   const isExtreme = isExtremeHigh || isExtremeLow;
   // A magnitude marker, not a danger signal (R3): neutral attention styling.
   const extreme = CUE_STYLE.attention;
@@ -118,10 +120,12 @@ function RangeBar({
         )}
         {/* The band region is shaded neutrally: green would mark it as the good zone. */}
         <div
+          data-testid="comparison-region"
           className="absolute h-full rounded-full bg-theme-neutral-200"
           style={{ left: `${optLeft}%`, width: `${optWidth}%` }}
         />
         <div
+          data-testid="measurement-dot"
           className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-theme-accent border-2 border-theme-surface shadow-theme-sm z-10"
           style={{ left: `calc(${valuePos}% - 6px)` }}
         />
@@ -138,7 +142,7 @@ function RangeBar({
         <div className="flex gap-3 text-center items-center">
           <span className="inline-flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-theme-neutral-400" />
-            Amani {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}
+            Amani {bandInterval(band)}
           </span>
           {labMin !== null && labMax !== null && (
             <span className="inline-flex items-center gap-1">
@@ -221,7 +225,7 @@ export function BiomarkerCard({
   const pillLanguage = comparisonBandLabel(assessment, value);
   const pill = CUE_STYLE[pillLanguage.cue];
   const band = assessment.kind === 'scored' ? assessment.band : null;
-  const bandText = band ? formatInterval(band.min, band.max) : null;
+  const bandText = band ? bandInterval(band) : null;
   const withheld = assessment.kind === 'withheld' ? withheldCopy(assessment) : null;
 
   const labMin = labRefMin ?? null;
