@@ -1,5 +1,5 @@
 import { ArrowRightLeft } from 'lucide-react';
-import { ClinicalObservation } from '../components/ClinicalObservation';
+import { ClinicalObservation, ModelProse, ModelProseText } from '../components/ClinicalObservation';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
@@ -23,9 +23,10 @@ import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMet
 import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
-  authorizedLanguage, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  labIntervalObservation, markerBandPlacement, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL, primaryFindingSentence, reportHeadline,
-  systemDisplayLabel, type AuthorizedLanguage,
+  authorizedLanguage, authorizeModelProse, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
+  labIntervalObservation, markerBandPlacement, movementClaimsByKey, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL,
+  primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
+  type AuthorizedLanguage, type AuthorizedModelProse,
 } from '../lib/scoring/insightCopy';
 import { SafetyWarnings } from '../components/SafetyWarnings';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
@@ -141,17 +142,13 @@ const CONFIDENCE_STYLE: Record<string, string> = {
   low:    'text-theme-neutral-500 bg-theme-neutral-100 border-theme-neutral-200',
 };
 
-type PatternConfidenceStyle = { bg: string; text: string; border: string; label: string };
-
-const PATTERN_CONFIDENCE_STYLE: Record<string, PatternConfidenceStyle> = {
-  high:   { bg: 'bg-theme-flag-low-bg',   text: 'text-theme-flag-low',   border: 'border-theme-flag-low-border',   label: 'High confidence' },
-  medium: { bg: 'bg-theme-flag-watch-bg',  text: 'text-theme-flag-watch',  border: 'border-theme-flag-watch-border',  label: 'Medium confidence' },
-  low:    { bg: 'bg-theme-neutral-50',   text: 'text-theme-neutral-600',   border: 'border-theme-neutral-200',   label: 'Low confidence' },
-};
-
-const PATTERN_CONFIDENCE_FALLBACK: PatternConfidenceStyle = {
-  bg: 'bg-theme-neutral-50', text: 'text-theme-neutral-600', border: 'border-theme-neutral-200', label: 'Low confidence',
-};
+/*
+  V2-03b Stage 2, owner R1. The model's pattern signals carried a title naming
+  a pattern, a free-text explanation and a red/amber "confidence" badge, none of
+  it resting on an authorized rule. A signal now renders only the sentences that
+  resolve to the report's own measured-change claims, in neutral ink; the
+  title, the badge and the model's choice of related markers do not render.
+*/
 
 interface OpeningContext {
   primaryIsImproving: boolean;
@@ -975,10 +972,10 @@ export function ReportView() {
       insightSummary,
       insightSummary.watchSignals,
       scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside'),
-      interpretation?.what_you_can_do_now,
+      null,
       primaryCategory,
     );
-  }, [insightSummary, scoredBiomarkers, interpretation, primaryCategory, report?.estimated_cycle_phase]);
+  }, [insightSummary, scoredBiomarkers, primaryCategory, report?.estimated_cycle_phase]);
 
   const guidanceCards = useMemo(() => {
     const primaryFocusId = focusAreas.find((a) => a.isPrimaryAligned)?.id ?? null;
@@ -1038,6 +1035,43 @@ export function ReportView() {
     if (!interpretation?.biomarkers) return new Map<string, NonNullable<AIInterpretation['biomarkers']>[number]>();
     return new Map(interpretation.biomarkers.map(b => [b.name, b]));
   }, [interpretation]);
+
+  /*
+    Owner R1: model prose is a proposal. Each model field below renders only
+    the sentences that resolve to a claim this page issued from the report's
+    own measured changes; everything else is suppressed, not labelled. A
+    marker card may only state its own marker's claim.
+  */
+  const movementClaims = useMemo(() => movementClaimsByKey(insightSummary?.deltaMap ?? []), [insightSummary]);
+  const reportClaims = useMemo(() => [...movementClaims.values()], [movementClaims]);
+  const modelProse = useMemo(() => ({
+    headline: authorizeModelProse('interpretation.headline', interpretation?.headline, reportClaims),
+    summary: authorizeModelProse('interpretation.summary_bullets', interpretation?.summary_bullets, reportClaims),
+    patterns: (interpretation?.pattern_signals ?? []).flatMap(signal => {
+      const prose = [
+        ...authorizeModelProse('interpretation.pattern_signals.title', signal?.title, reportClaims),
+        ...authorizeModelProse('interpretation.pattern_signals.explanation', signal?.explanation, reportClaims),
+      ];
+      return prose.length > 0 ? [prose] : [];
+    }),
+  }), [interpretation, reportClaims]);
+  const markerProse = useMemo(() => {
+    const map = new Map<string, AuthorizedModelProse[]>();
+    for (const b of biomarkers) {
+      const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
+      const claim = movementClaims.get(b.name as BiomarkerName);
+      if (!interp || !claim) continue;
+      const seen = new Set<string>();
+      const prose = [
+        ...authorizeModelProse('interpretation.biomarkers.plain_english_meaning', interp.plain_english_meaning, [claim]),
+        ...authorizeModelProse('interpretation.biomarkers.timing_notes', interp.timing_notes, [claim]),
+        ...authorizeModelProse('interpretation.biomarkers.common_non_alarm_reasons', interp.common_non_alarm_reasons, [claim]),
+        ...authorizeModelProse('interpretation.biomarkers.when_clinicians_follow_up', interp.when_clinicians_follow_up, [claim]),
+      ].filter(p => !seen.has(p.language.text) && !!seen.add(p.language.text));
+      if (prose.length > 0) map.set(b.name, prose);
+    }
+    return map;
+  }, [biomarkers, interpMap, movementClaims]);
 
   const filteredCategories = useMemo(() => {
     if (activeCategory) {
@@ -1525,7 +1559,8 @@ export function ReportView() {
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
                     }
-                    return interpretation?.headline || '';
+                    const modelHeadline = modelProse.headline[0];
+                    return modelHeadline ? <ModelProse prose={modelHeadline} /> : REPORT_TITLE;
                   })()}
                 </h2>
               </div>
@@ -1593,14 +1628,14 @@ export function ReportView() {
                 return null;
               })()}
 
-              {/* Summary bullets: only when no primary_concern */}
-              {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
-                <div className="bg-theme-surface px-6 py-5">
+              {/* Summary bullets: only those that resolve to a measured-change claim (owner R1) */}
+              {modelProse.summary.length > 0 && (
+                <div className="bg-theme-surface px-6 py-5" data-model-surface="summary_bullets">
                   <ul className="space-y-3">
-                    {interpretation.summary_bullets.map((bullet, i) => (
-                      <li key={i} className="flex items-start gap-3">
+                    {modelProse.summary.map(prose => (
+                      <li key={prose.language.text} className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-theme-primary flex-shrink-0 mt-2" />
-                        <p className="text-sm text-theme-text-body leading-relaxed">{bullet}</p>
+                        <p className="text-sm text-theme-text-body leading-relaxed"><ModelProse prose={prose} /></p>
                       </li>
                     ))}
                   </ul>
@@ -1657,7 +1692,7 @@ export function ReportView() {
               See git history for the original implementations. */}
 
           {/* ── E. More Details (Pattern Signals, Flags, Derived) ── */}
-          {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
+          {(modelProse.patterns.length > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
             <div className="rounded-2xl border border-theme-neutral-200 overflow-hidden">
               <button
                 className="flex items-center justify-between w-full px-5 py-4 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
@@ -1675,32 +1710,14 @@ export function ReportView() {
               </button>
               {showMoreDetails && (
                 <div className="border-t border-theme-neutral-100 px-5 py-5 space-y-6">
-                  {(interpretation?.pattern_signals?.length ?? 0) > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern signals</p>
-                      {interpretation!.pattern_signals!.map((signal, i) => {
-                        const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low ?? PATTERN_CONFIDENCE_FALLBACK;
-                        return (
-                          <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                              <p className="text-sm font-semibold text-theme-text">{signal.title}</p>
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${style.bg} ${style.text} ${style.border}`}>
-                                {style.label}
-                              </span>
-                            </div>
-                            <p className={`text-xs leading-relaxed mb-2 ${style.text}`}>{signal.explanation}</p>
-                            {signal.related_biomarkers?.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
-                                {signal.related_biomarkers.map((slug, j) => (
-                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-theme-surface/70 border border-theme-neutral-200 text-theme-muted-text-2">
-                                    {getDisplayName(slug as BiomarkerName)}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                  {modelProse.patterns.length > 0 && (
+                    <div className="space-y-3" data-model-surface="pattern_signals">
+                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Measured changes</p>
+                      {modelProse.patterns.map(prose => (
+                        <div key={prose.map(p => p.language.text).join('|')} className="rounded-xl border border-theme-neutral-200 bg-theme-neutral-50 p-4">
+                          <p className="text-xs leading-relaxed text-theme-neutral-600"><ModelProseText items={prose} /></p>
+                        </div>
+                      ))}
                     </div>
                   )}
                   {insightFlags.length > 0 && <InsightFlagsPanel flags={insightFlags} />}
@@ -1756,7 +1773,7 @@ export function ReportView() {
           {/* ── Cycle context ─────────────────────────────────────── */}
           {!isProcessing && (() => {
             // Phase/day always come from the report; see cycleContextCard.
-            const card = cycleContextCard(report, interpretation?.cycle_context);
+            const card = cycleContextCard(report, interpretation?.cycle_context, reportClaims);
             if (!card) return null;
             return (
               <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-5 py-5">
@@ -1784,7 +1801,9 @@ export function ReportView() {
                   )}
                 </div>
                 {card.explanation && (
-                  <p className="text-xs text-theme-muted-text-2 leading-relaxed">{card.explanation}</p>
+                  <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-model-surface="cycle_context">
+                    <ModelProse prose={card.explanation} />
+                  </p>
                 )}
               </div>
             );
@@ -1868,7 +1887,6 @@ export function ReportView() {
                       {!isCollapsed && (
                         <div className="px-4 pb-4 pt-1 border-t border-theme-neutral-100 space-y-2">
                           {items.map(b => {
-                            const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
                             const personalization = biomarkerPersonalizationMap.get(b.name);
                             return (
                               <BiomarkerCard
@@ -1880,10 +1898,7 @@ export function ReportView() {
                                 labRefMin={b.reference_min}
                                 labRefMax={b.reference_max}
                                 cyclePhase={cyclePhase}
-                                plainEnglishMeaning={interp?.plain_english_meaning}
-                                timingNotes={interp?.timing_notes}
-                                commonNonAlarmReasons={interp?.common_non_alarm_reasons}
-                                whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
+                                modelProse={markerProse.get(b.name)}
                                 baselineStatus={personalization?.baselineStatus}
                                 baselineStaleness={personalization?.baselineStaleness}
                                 baselineValue={personalization?.baselineValue}
@@ -1902,10 +1917,16 @@ export function ReportView() {
           )}
 
           {/* ── H. Disclaimer ───────────────────────────────────── */}
+          {/* The policy's product disclaimer; the model's own disclaimer text never renders (owner R1). */}
           {interpretation && (
             <div className="flex items-start gap-3 px-4 py-4">
               <Info className="w-3.5 h-3.5 text-theme-neutral-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-theme-muted-text-3 leading-relaxed italic">{interpretation.disclaimer}</p>
+              <p className="text-xs text-theme-muted-text-3 leading-relaxed italic"
+                data-language-category={PRODUCT_DISCLAIMERS.report.category}
+                data-language-source={PRODUCT_DISCLAIMERS.report.authority.kind}
+                data-language-cue={PRODUCT_DISCLAIMERS.report.cue}>
+                {PRODUCT_DISCLAIMERS.report.text}
+              </p>
             </div>
           )}
 

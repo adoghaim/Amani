@@ -1,7 +1,8 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
-  egfrHigherIsBetterReport, higherIsBetterReport, stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport,
+  egfrHigherIsBetterReport, ferritinDecreased, higherIsBetterReport, modelCanaries, modelProseCurrentReport,
+  stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport, tshIncreased,
 } from './synthetic-reports';
 
 /*
@@ -146,6 +147,69 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
     const education = page.locator('[data-language-category="educational_content"]');
     await expect(education).toHaveCount(2);
     for (const el of await education.all()) await expect(el).toHaveAttribute('data-language-source', 'general_education');
+  });
+});
+
+/*
+  Owner R1, turn 13. The same pair with model-shaped prose in every model
+  field, none of it carrying a forbidden word, so the page-wide prohibition
+  cannot be the proof. The proof is positive: no canary on the page, every
+  model-derived element is exactly one neutral lab-data claim with an issued
+  phrase, and every text node inside a model surface sits inside a policy
+  element. Logic twin: "owner R1" in src/pages/ReportView.language.test.tsx.
+*/
+test.describe('R1: model prose renders only as the report\'s own measured-change claims', () => {
+  test.use({ authenticated: true, syntheticReports: [[modelProseCurrentReport, stage2PriorReport], { scope: 'test' }] });
+
+  test('no canary renders; each model-derived sentence is a resolvable claim on its own marker', async ({ page }) => {
+    await page.goto(`/app/reports/${modelProseCurrentReport.report.id}`);
+    await expect(page.getByRole('heading', { name: 'Health Systems', exact: true })).toBeVisible();
+    await clickAll(page, 'button[aria-expanded="false"]:not(article button)');
+    await clickAll(page, 'article button[aria-expanded="false"]');
+    await page.getByRole('button', { name: /^Patterns & Insights/ }).click();
+    await expect(page.getByText('Cycle context', { exact: true })).toBeVisible();
+
+    const text = await page.evaluate(() => document.body.textContent ?? '');
+    for (const canary of modelCanaries) expect(text, canary).not.toContain(canary);
+    expect(text).not.toContain('Your thyroid health has worsened');
+
+    const fields = await page.locator('[data-model-field]').evaluateAll(nodes => nodes.map(n => [
+      n.getAttribute('data-model-field'), n.textContent, n.closest('[data-model-surface]')?.getAttribute('data-model-surface') ?? null,
+    ]));
+    expect(fields).toEqual([
+      ['interpretation.summary_bullets', tshIncreased, 'summary_bullets'],
+      ['interpretation.pattern_signals.explanation', ferritinDecreased, 'pattern_signals'],
+      ['interpretation.biomarkers.common_non_alarm_reasons', tshIncreased, 'marker'],
+    ]);
+    for (const field of await page.locator('[data-model-field]').all()) {
+      const claim = field.locator('[data-language-claim="measured_movement"]');
+      await expect(claim).toHaveCount(1);
+      await expect(claim).toHaveAttribute('data-language-category', 'factual_observation');
+      await expect(claim).toHaveAttribute('data-language-source', 'lab_data');
+      await expect(claim).toHaveAttribute('data-language-cue', 'neutral');
+      expect(await claim.innerText()).toBe(await field.innerText());
+    }
+    const tsh = page.getByRole('article', { name: 'TSH result', exact: true });
+    await expect(tsh).toContainText(tshIncreased);
+    await expect(tsh).not.toContainText(ferritinDecreased);
+
+    // Positive provenance: every text node in a model surface is inside a policy element.
+    const unprovenanced = await page.evaluate(() => {
+      const out: string[] = [];
+      for (const surface of Array.from(document.querySelectorAll('[data-model-surface]'))) {
+        const walker = document.createTreeWalker(surface, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const t = (node.textContent ?? '').trim();
+          if (!t || t === 'Measured changes') continue;
+          const owner = node.parentElement?.closest('[data-language-category]');
+          if (!owner || !surface.contains(owner)) out.push(t);
+        }
+      }
+      return out;
+    });
+    expect(unprovenanced).toEqual([]);
+    expect(await page.locator('[data-model-surface="pattern_signals"]').evaluate(el => el.outerHTML)).not.toMatch(/flag-(?:ok|watch|low)|confidence/i);
+    await expect(page.locator('[data-language-source="product_disclaimer"]', { hasText: 'This report is for educational purposes only' })).toHaveCount(1);
   });
 });
 

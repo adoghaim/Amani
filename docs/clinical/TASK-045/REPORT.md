@@ -1,3 +1,132 @@
+# TASK-045 turn 13 — R1 remainder: model surfaces (backup implementer, Claude) — PARTIAL
+
+## Approach and root cause
+
+Every remaining R1 bypass had one root cause. A renderer read a string the model wrote and printed it. The movement kernel already holds the only mechanism the owner asked for: a claim issued from deterministic facts, a finite set of authorized phrases, and a validator. This turn adds no second mechanism. It adds one function to the generated kernel, `resolveModelProposal(claims, proposal)`, which is the existing `validateMovementPhrase` applied over a set of issued claims. Every model field a renderer reads now passes through `authorizeModelProse(field, proposal, claims)` in `insightCopy.ts`. The claims are issued on the page from the report's own measured changes (`compareReports` → `movementClaimsByKey`). A sentence survives only if it is an issued claim's phrase. It then renders through `ClinicalObservation`, which revalidates the sentence at render time, and is marked with the field it came from. Everything else is suppressed, not labelled.
+
+The client render boundary is closed. The server write path is **not** closed; see "Stopped here, and why".
+
+Start: `7262211` on `v2/03b-clinical-language-policy`, clean. Read: `STAGE-2-R1-REMAINDER.md`, `OWNER-RULINGS-STAGE2-POLICY.md`, reviewer-9 and escalation-9 (control directory, read-only). The Second Brain was not loaded; there was no vault write.
+
+## What changed
+
+**Policy** (`insightCopy.ts`):
+- Generated kernel: `resolveModelProposal`. The Edge copy is regenerated, and `clinical:check` verifies byte identity.
+- Outside the kernel:
+  - `MODEL_PROSE_FIELDS`: 15 fields, pinned exactly.
+  - `authorizeModelProse`: string or list input; trims; one result per text.
+  - `movementClaimsByKey`: a change with non-finite values or no significance issues no claim.
+  - `PRODUCT_DISCLAIMERS.report`: the server's default text, now owned by the policy.
+  - `PRODUCT_DISCLAIMERS.comparison`: the modal's existing fixed text.
+  - Non-clinical `REPORT_TITLE` and the comparison headings.
+- `ClinicalObservation.tsx` gains `ModelProse` and `ModelProseText`. Each is a `data-model-field` wrapper around `ClinicalObservation`.
+
+| Surface | Before | Now |
+| --- | --- | --- |
+| Summary bullets (ReportView) | model strings, verbatim | only bullets that resolve to a report claim; `data-model-surface="summary_bullets"` |
+| Headline when Amani scored nothing | model headline | a resolved claim, else "Your lab results". With no claim nothing can resolve, so in practice always the title |
+| Pattern signals | model title, model explanation, red/amber "confidence" badge, model-chosen marker chips | only explanation or title sentences that resolve to a claim, in neutral ink, under "Measured changes". Title, badge and chips are removed. `PATTERN_CONFIDENCE_STYLE` is deleted |
+| Per-marker AI fields (meaning, timing notes, "Common reasons", "When clinicians may follow up") | four raw props on `BiomarkerCard` | the props are **removed**. The card takes `modelProse`, reduced against **that marker's own claim only** |
+| Cycle explanation | model or deterministic-writer sentence | `cycleContextCard(report, ctx, reportClaims)` returns a validated claim or null. Confidence shows only with a rendered explanation |
+| Interpretation disclaimer | model/server string | the policy's `PRODUCT_DISCLAIMERS.report`, with authority attributes |
+| `focusAreas` input | received `what_you_can_do_now` (unused) | receives `null`: no model read |
+| InsightsModal (Tracker) | model summary, per-marker "change", "This may have coincided with" factors, amber arrow on every increase, red-tinted gradient | "Measured changes": the app's own claims from the two reports (moderate or significant only), plus any model sentence that resolves. Factors never resolve. No arrow, no flag colour. Tracker computes claims from `biomarkersByReport` with `compareReports` |
+| Basic panel: `basic_interpretation` | model headline copy, verbatim | resolved claims only |
+| Basic panel: Premium Preview | model or narrative prose, verbatim | a trend preview whose slug **and both values** agree with her own claim renders as that claim. Anything else renders only resolved sentences. Otherwise **no preview card** |
+
+No change was made to Basic projection, `BASIC_KEYS`, `interpretation-visibility.ts`, locked counts, entitlement or Stripe. Only rendering in `FreemiumReportPanel.tsx` changed (Lead ruling A3, wording only).
+
+## Proof (Logic = Vitest; Page = real ReportView/modal/panel in jsdom; Browser = Playwright, written, **not run**)
+
+The Lead named the limitation of the page-wide prohibition. This proof does not rely on it. Fixtures fill every model field with **canaries**: model-shaped prose that contains no forbidden word ("Your thyroid looks well balanced for this time of the month."). They also include three sentences that **are** authorized phrases, one of them on the wrong marker's card. Three properties are asserted instead of vocabulary:
+- no canary anywhere on the page;
+- every `[data-model-field]` holds exactly one neutral lab-data claim element, and its text resolves against claims the test computes independently from the fixture;
+- inside every `[data-model-surface]`, every text node sits inside a policy element (`unprovenancedText`).
+
+| Invariant | Logic | Page | Browser |
+| --- | --- | --- | --- |
+| Rephrase yes, strengthen no (owner TSH example; rewording, addition, wrong direction, wrong value) | `modelProse.test.tsx` | R1 page tests (summary bullet with a canary appended; "worsened") | `R1: …` |
+| Claim scoped to its fact | another marker's sentence needs that marker's claim | TSH card renders TSH's claim and not Ferritin's | same |
+| Forged, copied or deserialized claims grant nothing | `modelProse.test.tsx` | — | — |
+| Coverage per field (rule 4) | `it.each(MODEL_PROSE_FIELDS)`: canaries suppressed, authorized phrase carries claim, no rec/safety authority, neutral cue | 3 surfaces render in the fixture (summary, patterns, marker) plus the cycle case; first report renders none | 3 fields, in order |
+| Policy-only authorship (rule 2), structurally | **type-checker scan** of every file in `src/components` and `src/pages`. A read of a string field declared on a model output type (`AIInterpretation`, `AIPatternSignal`, `AIPrimaryConcern`, `AIKeyFinding`, `AITopFinding`, `Insight`), or a call to `basicInterpretationText`/`previewText`, must sit inside `authorizeModelProse` arguments. One parser exemption: `normalizeInterpretation`. Lookup keys (`name`, `biomarker_slug`) pass only outside JSX. One unreachable file is exempt: `QuickHighlights.tsx`, asserted present and asserted to have hits. A probe covers children, attributes, local consts, `previewText`, key versus text, and both path shapes | — | — |
+| Positive provenance | testkit unit negative controls | `unresolvedModelProse` + `unprovenancedText` on the page | same, in-page |
+| Rule 5 | a trend preview with disagreeing values (10, 8.9 vs 9) renders no card | each model sentence's direction agrees with every movement claim stating the same marker on the page | — |
+| Safety, both ways | — | a synthetic approved TSH rule at 400 renders verbatim. The model repeats the warning's words in bullets, pattern title and explanation; the warning appears **exactly once**; every model-derived element is neutral and outside any alert | not added |
+| Server kernel parity | client and generated server resolve identically; neither accepts the other's claims (capabilities are process-local) | — | — |
+| Browser and logic fixtures agree | Vitest asserts the E2E canary list equals `MODEL_CANARIES` | — | — |
+
+## Executed negative controls (each applied alone, run, restored; final tree green)
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| 1 | `authorizeModelProse` accepts any string with a copied claim (gate fail-open) | **28 fail** across logic (15 per-field), page (4), modal (4), Basic (3), cycle (2). Defence in depth: `ClinicalObservation` revalidation alone kept the canaries off the page |
+| 2 | ReportView re-renders raw `summary_bullets` | 5 fail: structural scan + 4 page tests |
+| 3 | `BiomarkerCard` renders a canary sentence inside its model surface (a literal, so the scan cannot see it) | 5 R1 page tests fail. **The 23 pre-existing page tests, including the page-wide prohibition, stayed green with it on the page** |
+| 4+5 | InsightsModal renders `insights.summary`; Basic panel renders `previewText(...).body` | 8 fail. **The scan reported only the Basic read.** Root files reach the program as relative paths, so `[\\/]src` never matched `InsightsModal.tsx`. Fixed the anchor to `(?:^|[\\/])src`, re-ran with the mutation in place, and the scan reported both. Both path shapes are now pinned in the probe |
+| 7 | ReportView renders `interpretation.disclaimer` beside the policy's | 3 fail: scan + 2 page canary tests. The region-scoped positive check did **not** fail, because the disclaimer sits outside any model surface. The page-wide canary check is what covers non-surface placement |
+| 8 | `ModelProse` prints text without `ClinicalObservation` | 5 fail: page, modal, Basic, cycle |
+| 9 | per-marker prose validated against **all** report claims | 2 fail. Only the scoping assertion catches this: the misplaced sentence still resolves to *a* claim |
+
+Browser negative controls: not run (Playwright is not permitted here). Lead: control 3 or 2 against `R1: model prose renders only…` is the useful one.
+
+## Commands (final tree)
+
+- `npx vitest run`: **72 files, 1520 passed** (baseline 71 / 1480).
+- `npm run typecheck`: pass (app, clinical tooling, E2E).
+- `npm run lint`: 0 errors, the same 9 existing warnings.
+- `npm run build`: pass. Entry chunk 59.67 kB, unchanged.
+- `npm run clinical:generate`: catalog and audit output unchanged; movement kernel regenerated.
+- `npm run clinical:check`: 83 entries, 83/198, policy byte identity.
+- `npm run clinical:test`: 52/52.
+- **SKIPPED for the Lead:** Playwright (all browsers, new R1 case included), browser negative controls, env canary, Docker harness, `check:functions` (no `deno` here; the generated `_shared` file gained one pure function).
+
+## Existing tests changed (behaviour changed; each replacement stronger)
+
+- `cycleContextCard.test.ts`: the deterministic-writer and Full explanations no longer render. Replaced by:
+  - stored prose resolving to no claim never renders, from any source, with or without claims;
+  - a resolving explanation renders as its claim, with exact authority;
+  - strengthening by rewording or addition does not render.
+- `InsightsModal.test.tsx`: it used to assert that the model summary renders. Replaced by:
+  - canaries and causal factors never render;
+  - canonical claims render;
+  - positive provenance;
+  - a no-claim empty state;
+  - in-test negative controls.
+- `FreemiumReportPanel.test.tsx`: it required the model's Basic sentence and preview prose to render, with one Premium Preview. Both are now suppressed and the card count is 0. A new "Basic wording through the policy" block adds:
+  - a trend preview stated as the agreeing claim;
+  - rule-5 disagreement producing no card;
+  - field-marked resolution;
+  - canaries × three content shapes;
+  - a negative control.
+
+  Locked cards, counter and banner assertions are unchanged.
+
+## Stopped here, and why (not covered)
+
+1. **Server write path: deferred, needs a ruling.** `generate-interpretation` still generates and persists model prose. That includes `summary_bullets`, pattern explanations, per-marker fields, `what_you_can_do_now`/`what_to_do_next` and `questions_for_doctor`. The prompt's exemplars ("Iron storage is low…", "Ferritin is low") are unchanged. So are the deterministic fallback narratives ("can be seen in autoimmune thyroid conditions… worth evaluating with your provider"). I did not gate at write because the persisted fields feed `buildBasicProjection`, preview selection and the `locked` counts. Stripping them there changes what Basic shows and counts, which is a visibility decision under the Lead's rule 2. That rule says to stop and report. The gate the server would use is already generated and byte-identical in `_shared`, and nothing on the server imports it yet.
+2. **Shipped native builds still render raw model prose.** The 1.0.3 builds render stored prose directly and cannot be updated, so a client gate does not protect them. Only a server-side gate does, at write or at read (`get-interpretation` is visibility code). Same ruling as point 1.
+3. **Basic trend lines** ("TSH: 6 → 9 uIU/mL · increased · date") are unchanged. They are server-deterministic values with no model text, and they are not routed as claim objects. Routing them needs significance, which the line does not carry, and the line's existing dedupe semantics are pinned by 9 tests.
+4. **Product effect to confirm (owner):** the Basic Premium Preview card now appears only for a trend preview that agrees with her own claims. Pattern and lifestyle previews no longer appear. Locked counts are unchanged.
+5. Model text now renders almost never, because exact phrase match is the only bridge. This is fail-closed by design. Useful model phrasing needs the server to emit **claim selections** (intent + claim reference) rather than prose. That is the Ask Amani shape, and it is not built here.
+6. The cycle card's confidence badge keeps its existing green/amber styling (`CONFIDENCE_STYLE`). It only appears beside a rendered explanation, which is now a neutral claim.
+7. Carried over: `tools/preview/fixtures.mjs` R3 debt (outside allowed paths); live Play listing; dead `NextBestSteps`/`categorizeNextSteps`/`QuickHighlights` deletion; reviewer-9 notes on the prep-question value format and Landing bar geometry, which were not addressed this turn.
+
+## Inferred, not verified
+
+- The browser R1 case passes in all three engines. It is written and typechecked, not executed.
+- Tracker claims: `biomarkersByReport` holds both reports when the modal opens (the page loads every report's biomarkers). This is not exercised by a Tracker page test; the modal logic is tested directly.
+
+## Open questions
+
+1. Server: may model prose be gated **at write**, accepting that preview selection and `locked` counts change? Or should it be gated at read in `get-interpretation`? Either is visibility code.
+2. Confirm point 4 (Premium Preview frequency).
+3. Should the generation contract move to claim selection (point 5) before Ask Amani?
+
+No clinical value, threshold, evidence grade or review status changed. No `SAFE`. No frozen migration, entitlement, projection, `BASIC_KEYS`, Stripe or CI file touched. No external-library documentation question arose.
+
+---
+
 # TASK-045 turn 12 — owner rulings R2, R3, R4 (backup implementer, Claude)
 
 ## Approach and root cause

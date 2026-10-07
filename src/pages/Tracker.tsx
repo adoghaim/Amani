@@ -25,6 +25,8 @@ import { TrackerCalendar } from '../components/TrackerCalendar';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { InsightsModal } from '../components/InsightsModal';
+import { compareReports } from '../lib/scoring/compareReports';
+import { movementClaimsByKey } from '../lib/scoring/insightCopy';
 import { Interventions } from '../components/Interventions';
 import { CompareView } from '../components/CompareView';
 import { LabsTimeline } from '../components/LabsTimeline';
@@ -36,6 +38,8 @@ import {
   SymptomLog,
   FlowIntensity,
   DailySymptom,
+  type BiomarkerName,
+  type CyclePhase,
 } from '../types';
 import {
   computeCyclePrediction,
@@ -90,6 +94,21 @@ export function Tracker() {
   const [insightsData, setInsightsData] = useState<LabInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
+  const [insightsPair, setInsightsPair] = useState<{ current: string; previous: string } | null>(null);
+
+  /*
+    Owner R1: the comparison modal states the measured changes between the two
+    reports, computed here from their own values, and renders model text only
+    where it resolves to one of these claims.
+  */
+  const insightsClaims = useMemo(() => {
+    if (!insightsPair) return [];
+    const snapshot = (id: string) => (biomarkersByReport[id] ?? [])
+      .map(b => ({ key: b.name as BiomarkerName, value: b.value, unit: b.unit }));
+    const phase = reports.find(r => r.id === insightsPair.current)?.estimated_cycle_phase as CyclePhase | null | undefined;
+    const deltas = compareReports(snapshot(insightsPair.previous), snapshot(insightsPair.current), phase ?? null);
+    return [...movementClaimsByKey(deltas.map(d => [d.key, d] as const)).values()];
+  }, [insightsPair, biomarkersByReport, reports]);
 
   useEffect(() => {
     if (user) fetchData();
@@ -379,6 +398,7 @@ export function Tracker() {
 
   const handleGenerateInsights = async (reportId: string, previousReportId: string | null) => {
     if (!user || !previousReportId) return;
+    setInsightsPair({ current: reportId, previous: previousReportId });
     setShowInsightsModal(true);
     setInsightsLoading(true);
     setInsightsError(null);
@@ -665,6 +685,7 @@ export function Tracker() {
         reportDates={insightsData?.report_dates}
         loading={insightsLoading}
         error={insightsError || undefined}
+        claims={insightsClaims}
       />
 
       {clientFreemiumActive() && (

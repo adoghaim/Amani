@@ -4,6 +4,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as policy from '../lib/scoring/insightCopy';
+import { compareReports } from '../lib/scoring/compareReports';
+import { MODEL_CANARIES, unprovenancedText, unresolvedModelProse } from '../lib/scoring/modelProse.testkit';
+import type { BiomarkerName } from '../types';
 
 /*
   V2-03b Stage 2. The real ReportView, rendered in jsdom against synthetic rows
@@ -416,3 +419,158 @@ describe('owner R4 — no personalized nutrition, supplement or lifestyle recomm
 function forbiddenNutrition(text: string): string[] {
   return [...text.matchAll(new RegExp(NUTRITION_ADVICE.source, 'gi'))].map(m => text.slice(Math.max(0, m.index - 40), m.index + m[0].length + 40));
 }
+
+/*
+  Owner R1, turn 13. Every model field the page reads, filled with model-shaped
+  prose that carries no forbidden word (so the page-wide prohibition above
+  cannot see it), plus three sentences that ARE authorized phrases of the
+  report's own measured-change claims, one deliberately on the wrong marker's
+  card. The proof is positive: no canary on the page, every model-derived
+  element resolves to a claim, and nothing inside a model surface is outside a
+  policy element.
+*/
+const C = MODEL_CANARIES;
+const TSH_UP = 'Your TSH increased from your previous result.';
+const FERRITIN_DOWN = 'Your Ferritin decreased from your previous result.';
+function seedModelProse(cycleExplanation: string = C[4]) {
+  seed(9, 6);
+  const current = fixture.tables.lab_reports!.find(r => r['id'] === CURRENT)!;
+  Object.assign(current, { estimated_cycle_phase: 'luteal', estimated_cycle_day: 21 });
+  fixture.interpretation = { json_output: {
+    ...(fixture.interpretation!['json_output'] as Record<string, unknown>),
+    headline: C[0],
+    primary_concern: undefined,
+    summary_bullets: [C[1], TSH_UP, 'Your thyroid health has worsened.', `${TSH_UP} ${C[2]}`],
+    pattern_signals: [
+      { title: C[2], confidence: 'high', explanation: C[3], related_biomarkers: ['tsh'] },
+      { title: C[5], confidence: 'medium', explanation: FERRITIN_DOWN, related_biomarkers: ['ferritin'] },
+    ],
+    cycle_context: { estimated_cycle_day: 3, estimated_cycle_phase: 'menstrual', confidence: 'high', explanation: cycleExplanation },
+    biomarkers: [{
+      name: 'tsh', user_value: '9', unit: 'uIU/mL', reference_range: '0.45-4.5', status_label: 'out_of_range',
+      plain_english_meaning: C[5], timing_notes: C[6],
+      common_non_alarm_reasons: [C[7], TSH_UP],
+      // Another marker's fact on this card: it must not render here.
+      when_clinicians_follow_up: [FERRITIN_DOWN],
+    }],
+    disclaimer: C[0],
+  } };
+}
+/** The report's claims, computed here from the fixture rather than read from the page. */
+function fixtureClaims() {
+  const snapshot = (id: string) => fixture.tables.biomarkers!.filter(b => b['lab_report_id'] === id)
+    .map(b => ({ key: b['name'] as BiomarkerName, value: b['value'] as number, unit: b['unit'] as string }));
+  return [...policy.movementClaimsByKey(compareReports(snapshot(PRIOR), snapshot(CURRENT), 'luteal')
+    .map(d => [d.key, d] as const)).values()];
+}
+const modelFields = () => Array.from(app.querySelectorAll('[data-model-field]'))
+  .map(el => [el.getAttribute('data-model-field'), el.textContent, el.closest('[data-model-surface]')?.getAttribute('data-model-surface')]);
+
+describe('owner R1 — model prose renders only as the report\'s own claims', () => {
+  it('no model sentence reaches the page unless it is an issued claim phrase, on its own marker', async () => {
+    seedModelProse();
+    await renderAndOpenAll();
+    const text = app.textContent ?? '';
+    for (const canary of C) expect(text, canary).not.toContain(canary);
+    expect(text).not.toContain('Your thyroid health has worsened');
+    expect(modelFields()).toEqual([
+      ['interpretation.summary_bullets', TSH_UP, 'summary_bullets'],
+      ['interpretation.pattern_signals.explanation', FERRITIN_DOWN, 'pattern_signals'],
+      ['interpretation.biomarkers.common_non_alarm_reasons', TSH_UP, 'marker'],
+    ]);
+    // Claim scoping: the TSH card states only TSH's change.
+    const tshCard = app.querySelector('article[aria-label="TSH result"]');
+    expect(tshCard?.textContent).toContain(TSH_UP);
+    expect(tshCard?.textContent).not.toContain(FERRITIN_DOWN);
+    // The model's confidence badge, pattern title and red/amber styling are gone with it.
+    expect(app.querySelector('[data-model-surface="pattern_signals"]')?.outerHTML).not.toMatch(/flag-(?:ok|watch|low)|confidence/i);
+  }, 30_000);
+
+  it('positively: every model-derived element resolves to a claim, and every model surface is policy text', async () => {
+    seedModelProse();
+    await renderAndOpenAll();
+    expect(app.querySelectorAll('[data-model-surface]').length).toBe(3);
+    expect(unresolvedModelProse(app, fixtureClaims())).toEqual([]);
+    expect(unprovenancedText(app, ['Measured changes'])).toEqual([]);
+    // The disclaimer is the policy's, not the model's.
+    const disclaimers = Array.from(app.querySelectorAll('[data-language-source="product_disclaimer"]')).map(el => el.textContent);
+    expect(disclaimers).toContain(policy.PRODUCT_DISCLAIMERS.report.text);
+  }, 30_000);
+
+  it('standing rule 5: a model sentence agrees with every other statement of the same change on the page', async () => {
+    seedModelProse();
+    await renderAndOpenAll();
+    for (const [subject, sentence] of [['TSH', TSH_UP], ['Ferritin', FERRITIN_DOWN]] as const) {
+      const rises = /increased/.test(sentence);
+      const statements = Array.from(app.querySelectorAll('[data-language-claim="measured_movement"]'))
+        .map(el => el.textContent ?? '')
+        .filter(t => new RegExp(`^${subject} .*from (\\d+(?:\\.\\d+)?) to (\\d+(?:\\.\\d+)?)`).test(t));
+      expect(statements.length, subject).toBeGreaterThan(0);
+      for (const t of statements) {
+        const [, from, to] = t.match(/from (\d+(?:\.\d+)?) to (\d+(?:\.\d+)?)/)!;
+        expect(Number(to) > Number(from), `${subject}: ${t}`).toBe(rises);
+      }
+    }
+  }, 30_000);
+
+  it('the cycle explanation renders only as a claim; a canary explanation takes the confidence badge with it', async () => {
+    seedModelProse();
+    await renderAndOpenAll();
+    expect(app.textContent).toContain('Cycle context');
+    expect(app.querySelector('[data-model-surface="cycle_context"]')).toBeNull();
+    expect(app.textContent).not.toMatch(/high confidence/i);
+    await act(async () => root.unmount());
+    root = createRoot(app);
+    seedModelProse(TSH_UP);
+    await renderAndOpenAll();
+    expect(app.querySelector('[data-model-surface="cycle_context"] [data-model-field="interpretation.cycle_context.explanation"]')?.textContent).toBe(TSH_UP);
+    expect(unprovenancedText(app, ['Measured changes'])).toEqual([]);
+  }, 30_000);
+
+  it('a first report has no claim, so no model sentence renders at all', async () => {
+    seedModelProse();
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
+    fixture.tables.biomarkers = fixture.tables.biomarkers!.filter(r => r['lab_report_id'] === CURRENT);
+    await renderAndOpenAll();
+    expect(app.querySelectorAll('[data-model-field], [data-model-surface]')).toHaveLength(0);
+    for (const canary of C) expect(app.textContent).not.toContain(canary);
+  }, 30_000);
+
+  it('safety, both ways: the gate never suppresses an approved warning, and model text cannot mint or copy one', async () => {
+    const original = policy.evaluateSafetyRules;
+    const warning = 'Synthetic safety warning: this is urgent, talk to your doctor and seek care today.';
+    const rule: policy.SafetyRule = {
+      ruleId: 'synthetic-tsh-critical', version: '1', analyte: 'tsh',
+      approval: { approvedBy: 'synthetic test fixture', approvedAt: '2026-10-07', evidenceId: 'SYNTHETIC-ONLY' },
+      evaluate: value => value > 100 ? { cue: 'critical', text: warning } : null,
+    };
+    vi.spyOn(policy, 'evaluateSafetyRules').mockImplementation(measured => original(measured, [rule]));
+    seedModelProse();
+    fixture.tables.biomarkers!.find(b => b['lab_report_id'] === CURRENT && b['name'] === 'tsh')!['value'] = 400;
+    // The model repeats the warning's words in every field it has: a copy is not the rule.
+    const output = fixture.interpretation!['json_output'] as Record<string, unknown>;
+    output['summary_bullets'] = [warning, 'Your TSH increased from your previous result.'];
+    output['pattern_signals'] = [{ title: warning, confidence: 'high', explanation: warning, related_biomarkers: ['tsh'] }];
+    await renderAndOpenAll();
+    // Direction 1: the approved warning renders verbatim, critical, as the safety channel's alone.
+    const alerts = app.querySelectorAll('[data-language-category="safety_warning"]');
+    expect(alerts.length).toBe(1);
+    expect(alerts[0]!.textContent).toBe(warning);
+    expect(alerts[0]!.getAttribute('data-safety-rule')).toBe('synthetic-tsh-critical');
+    // Direction 2: the model's copies render nowhere, and its surviving sentence is a neutral fact.
+    expect((app.textContent ?? '').split(warning).length - 1).toBe(1);
+    for (const el of Array.from(app.querySelectorAll('[data-model-field] [data-language-cue]'))) {
+      expect(el.getAttribute('data-language-cue')).toBe('neutral');
+      expect(el.closest('[role="alert"], [data-language-category="safety_warning"]')).toBeNull();
+    }
+    expect(app.querySelectorAll('[data-model-field]').length).toBeGreaterThan(0);
+  }, 30_000);
+
+  it('negative control: the positive checks see raw model text in a surface, and an unresolvable sentence', async () => {
+    seedModelProse();
+    await renderAndOpenAll();
+    app.querySelector('[data-model-surface="summary_bullets"] ul')!.insertAdjacentHTML('beforeend', `<li><p>${C[1]}</p></li>`);
+    expect(unprovenancedText(app, ['Measured changes'])).toEqual([`summary_bullets: ${C[1]}`]);
+    expect(unresolvedModelProse(app, [])).toHaveLength(3);
+  }, 30_000);
+});

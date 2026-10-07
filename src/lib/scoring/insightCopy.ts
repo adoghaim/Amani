@@ -380,7 +380,91 @@ export function describeMeasuredMovement(
   if (!language) throw new Error('Canonical movement phrase failed policy validation');
   return language;
 }
+
+/**
+ * Owner R1, for every model-fed surface: a model proposal renders only as an
+ * authorized phrase of a claim the application issued from its own facts.
+ * Matching none of them is the common case, and then nothing renders.
+ */
+export function resolveModelProposal(claims: readonly MovementClaim[], proposal: unknown): ValidatedMovementLanguage | null {
+  for (const claim of claims) {
+    const validated = validateMovementPhrase(claim, proposal);
+    if (validated) return validated;
+  }
+  return null;
+}
 // END GENERATED MOVEMENT POLICY
+
+/* ── Model-written prose (owner R1) ──────────────────────────────────
+  The interpretation model, the comparison model and any future Ask Amani
+  answer are proposals, never authority. Every field a model writes that can
+  reach a renderer is listed here, and a renderer reads one only through
+  authorizeModelProse. A sentence survives only as an authorized phrase of a
+  claim the application issued from its own measurements, so it carries that
+  claim's category, fact and source, and no recommendation or safety
+  authority. Everything else is suppressed, not labelled: a disclaimer does
+  not authorize a claim, and a model cannot strengthen one by rewording it or
+  by adding to it.
+*/
+export const MODEL_PROSE_FIELDS = [
+  'interpretation.headline',
+  'interpretation.summary_bullets',
+  'interpretation.pattern_signals.title',
+  'interpretation.pattern_signals.explanation',
+  'interpretation.cycle_context.explanation',
+  'interpretation.disclaimer',
+  'interpretation.biomarkers.plain_english_meaning',
+  'interpretation.biomarkers.timing_notes',
+  'interpretation.biomarkers.common_non_alarm_reasons',
+  'interpretation.biomarkers.when_clinicians_follow_up',
+  'insights.summary',
+  'insights.notable_changes.change',
+  'insights.notable_changes.possible_factors',
+  'basic.basic_interpretation',
+  'basic.preview',
+] as const;
+export type ModelProseField = typeof MODEL_PROSE_FIELDS[number];
+
+export interface AuthorizedModelProse {
+  readonly field: ModelProseField;
+  readonly language: ValidatedMovementLanguage;
+}
+
+/** The authorized sentences in a model field (a string or a list of them), each once. */
+export function authorizeModelProse(
+  field: ModelProseField, proposal: unknown, claims: readonly MovementClaim[],
+): AuthorizedModelProse[] {
+  const out: AuthorizedModelProse[] = [];
+  const seen = new Set<string>();
+  for (const item of Array.isArray(proposal) ? proposal : [proposal]) {
+    const language = resolveModelProposal(claims, typeof item === 'string' ? item.trim() : item);
+    if (language && !seen.has(language.text)) {
+      seen.add(language.text);
+      out.push(Object.freeze({ field, language }));
+    }
+  }
+  return out;
+}
+
+/**
+ * One claim per measured change the application computed (compareReports),
+ * keyed as the caller keys its markers. A change that cannot be a claim is left
+ * out, so nothing about it can be authorized.
+ */
+export function movementClaimsByKey<K>(changes: Iterable<readonly [K, MeasuredMovement]>): Map<K, MovementClaim> {
+  const claims = new Map<K, MovementClaim>();
+  for (const [key, change] of changes) {
+    try {
+      claims.set(key, createMovementClaim({
+        displayName: change.displayName, previousValue: change.previousValue,
+        currentValue: change.currentValue, unit: change.unit, significance: change.significance,
+      }));
+    } catch {
+      // Non-finite or unsignified measurements issue no claim.
+    }
+  }
+  return claims;
+}
 
 /** A comparison-band observation is always separate from clinical meaning. */
 export function describeComparisonBand(language: AuthorizedLanguage, placement: Placement = null): Extract<ClinicalLanguage, { category: 'comparison_band' }> {
@@ -685,6 +769,13 @@ export function reportHeadline(scoredCount: number, outside: readonly MarkerBand
 
 export const PRIMARY_FINDING_LABEL = 'Primary finding';
 
+/** The report title when Amani scored nothing and no model headline resolves. Names no result. */
+export const REPORT_TITLE = 'Your lab results';
+
+/* The comparison modal: measured changes between two reports, nothing more. */
+export const COMPARISON_CHANGES_HEADING = 'Measured changes';
+export const COMPARISON_CHANGES_EMPTY = 'No measured change between these two reports is available to show.';
+
 /* ── Trajectory (owner R1: movement stated, never judged) ──────────── */
 
 /** A change of band classification, without naming either bucket. */
@@ -944,6 +1035,9 @@ export const PRODUCT_DISCLAIMERS = {
   guidance: disclaimer('Educational information only. Discuss changes with your provider, especially if you are pregnant, breastfeeding, taking medications, or managing kidney-related concerns.'),
   guidanceCycle: disclaimer('Educational information only. Hormone values are timing-sensitive, so discuss cycle timing and symptoms with your provider.'),
   guidanceKidney: disclaimer('Educational information only. Because kidney-related markers are involved, discuss major diet or supplement changes with your provider first.'),
+  // The interpretation's own disclaimer was model or server text; this is the server's default, owned here.
+  report: disclaimer('This report is for educational purposes only and does not constitute medical advice.'),
+  comparison: disclaimer('This information is for educational purposes only and is not medical advice. Always consult your healthcare provider before making changes to your health routine.'),
 } as const satisfies Record<string, ProductDisclaimer>;
 
 /* ── Safety channel (SAFETY_CRITICAL_WARNING) ──────────────────────────

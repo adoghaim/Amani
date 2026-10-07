@@ -1,9 +1,17 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { YourTrajectoryCard } from '../YourTrajectoryCard';
 import type { BiggestChange, InsightSummary } from '../../lib/insights/buildInsightSummary';
 import { FreemiumReportPanel } from './FreemiumReportPanel';
 import { parseInterpretationAccess, type InterpretationAccessResult } from '../../lib/freemium/interpretationAccess';
+import { FREEMIUM_COPY } from '../../lib/freemium/copy';
+import { MODEL_CANARIES, unprovenancedText, unresolvedModelProse } from '../../lib/scoring/modelProse.testkit';
+import { movementClaimsByKey } from '../../lib/scoring/insightCopy';
+import type { BiomarkerDelta } from '../../lib/scoring/compareReports';
+import type { BiomarkerName } from '../../types';
+
+const COPY_BASIC_HEADING = FREEMIUM_COPY.report.basicHeading;
 
 const noop = () => {};
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ');
@@ -24,11 +32,21 @@ const basic = parseInterpretationAccess({
 });
 
 describe('FreemiumReportPanel per access state', () => {
-  it('basic: Basic interpretation, exactly one Premium Preview, locked cards, upgrade banner, counter', () => {
+  /*
+    Behaviour changed (V2-03b turn 13, owner R1). This test used to require the
+    model's Basic sentence ("Two markers sit outside range.") and the model's
+    preview prose to render verbatim. Neither resolves to a claim, so neither
+    renders, and the preview card is absent rather than labelled. The locked
+    cards, counter and banner are unchanged. The positive cases follow in
+    "Basic wording through the policy".
+  */
+  it('basic: unauthorized Basic text and preview prose do not render; locked cards, upgrade banner, counter do', () => {
     const out = render(basic);
-    expect(out).toContain('Two markers sit outside range.');
-    expect(out.match(/Premium Preview/g)).toHaveLength(1);
-    expect(out).toContain('Iron and energy');
+    expect(out).not.toContain('Two markers sit outside range.');
+    expect(out).not.toContain('Iron and energy');
+    expect(out).not.toContain('Ferritin tracks with fatigue.');
+    expect(out).not.toContain(COPY_BASIC_HEADING);
+    expect(out.match(/Premium Preview/g)).toBeNull();
     expect(out).toContain('3 additional patterns found');
     expect(out).toContain('Cross-report relationship available');
     expect(out).toContain('Unlock Premium');
@@ -144,7 +162,8 @@ describe('Basic abnormal changes', () => {
     expect(out).toContain('Ferritin: 10 → 20 u · increased · 2026-03-01');
     expect(out).toContain('TSH: 10 → 20 u · increased · 2026-03-01');
     expect(out).not.toContain('SERVER_INTERNAL_NARRATIVE');
-    expect(out.match(/Premium Preview/g)).toHaveLength(1);
+    // The fixture's preview is unauthorized prose (see the first test), so no card.
+    expect(out.match(/Premium Preview/g)).toBeNull();
     expect(out).toContain('3 additional patterns found');
     expect(state.locked).toEqual(basic.locked);
   });
@@ -210,5 +229,82 @@ describe('Basic abnormal changes', () => {
     const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={[c]} primaryFinding={null} reportCount={2} />));
     expect(trajectory).toContain('from 10 to 20 u');
     expect(render(withTrends([trend('ferritin')]), { floorSummary: floorWith([c]) })).not.toContain('ferritin:');
+  });
+});
+
+/*
+  V2-03b turn 13, owner R1, wording only. Basic receives the same fields as
+  before (no projection, BASIC_KEYS or entitlement change). What it may say
+  from them: a trend preview whose slug and both values agree with one of her
+  own measured-change claims is stated as that claim; any other model text
+  renders only as an issued claim's phrase. Canaries are model-shaped prose a
+  vocabulary guard cannot see.
+*/
+const delta = (key: string, previousValue: number, currentValue: number) => ({
+  key, displayName: key === 'tsh' ? 'TSH' : key, previousValue, currentValue, unit: 'uIU/mL', significance: 'significant',
+}) as unknown as BiomarkerDelta;
+const floorWithDeltas = (deltas: BiomarkerDelta[]): InsightSummary => ({
+  ...floorWith([]), deltaMap: new Map(deltas.map(d => [d.key as BiomarkerName, d])),
+});
+const FLOOR = floorWithDeltas([delta('tsh', 6, 9)]);
+const CLAIMS = [...movementClaimsByKey(FLOOR.deltaMap).values()];
+const withBasic = (interpretation: Record<string, unknown>, preview: unknown) => parseInterpretationAccess({
+  access: 'basic', interpretation: { headline: 'Your panel', ...interpretation }, preview,
+  locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, plan: 'premium', complimentary: null, stored_depth: 'standard',
+});
+function mount(state: InterpretationAccessResult) {
+  const host = document.createElement('div');
+  host.innerHTML = renderToStaticMarkup(<FreemiumReportPanel state={state} generating={false} plan="premium" complimentaryUsed={null}
+    onRetry={noop} onGenerate={noop} onOpenPaywall={noop} floorSummary={FLOOR} />);
+  return host;
+}
+const CHROME = [FREEMIUM_COPY.report.basicHeading, FREEMIUM_COPY.report.previewLabel];
+const trendPreview = (current: number) => ({ kind: 'trend', content: {
+  biomarker_slug: 'tsh', marker: MODEL_CANARIES[6], previous_value: 6, current_value: current, unit: 'uIU/mL',
+  direction: 'increased', summary: MODEL_CANARIES[4] } });
+
+describe('Basic wording through the policy (owner R1)', () => {
+  it('a trend preview that agrees with her measured change is stated as that claim, never as its stored text', () => {
+    const host = mount(withBasic({}, trendPreview(9)));
+    const card = host.querySelector('[data-model-surface="preview"]');
+    expect(card?.textContent).toContain('TSH increased from 6 to 9 uIU/mL.');
+    expect(card?.querySelectorAll('[data-language-claim="measured_movement"]')).toHaveLength(1);
+    expect(host.textContent).not.toContain(MODEL_CANARIES[4]);
+    expect(host.textContent).not.toContain(MODEL_CANARIES[6]);
+    expect(unprovenancedText(host, CHROME)).toEqual([]);
+  });
+
+  it('standing rule 5: a preview whose values disagree with her own report does not render', () => {
+    for (const current of [10, 8.9]) {
+      const host = mount(withBasic({}, trendPreview(current)));
+      expect(host.querySelector('[data-model-surface="preview"]')).toBeNull();
+      expect(host.textContent).not.toContain('Premium Preview');
+    }
+  });
+
+  it('model text renders only as an authorized phrase, marked with its field; everything else is suppressed', () => {
+    const host = mount(withBasic({ basic_interpretation: 'Your TSH increased from your previous result.' },
+      { kind: 'cross_marker', content: { title: MODEL_CANARIES[5], explanation: 'Your TSH increased from your previous result.' } }));
+    const fields = [...host.querySelectorAll('[data-model-field]')].map(el => el.getAttribute('data-model-field'));
+    expect(fields).toEqual(['basic.basic_interpretation', 'basic.preview']);
+    expect(host.textContent).not.toContain(MODEL_CANARIES[5]);
+    expect(unresolvedModelProse(host, CLAIMS)).toEqual([]);
+    expect(unprovenancedText(host, CHROME)).toEqual([]);
+  });
+
+  it('every canary in every Basic text field is suppressed, and a strengthened phrase is too', () => {
+    for (const text of [...MODEL_CANARIES, 'Your thyroid health has worsened.', 'Your TSH increased from your previous result. See a doctor soon.']) {
+      for (const content of [text, { title: text, explanation: text }, { summary: text }]) {
+        const host = mount(withBasic({ basic_interpretation: text }, { kind: 'cross_marker', content }));
+        expect(host.textContent, text).not.toContain(text);
+        expect(host.querySelectorAll('[data-model-surface]')).toHaveLength(0);
+      }
+    }
+  });
+
+  it('negative control: the provenance assertions see raw Basic text if it is rendered', () => {
+    const host = mount(withBasic({}, trendPreview(9)));
+    host.querySelector('[data-model-surface="preview"] p:last-child')!.append(MODEL_CANARIES[4]);
+    expect(unprovenancedText(host, CHROME)).toEqual([`preview: ${MODEL_CANARIES[4]}`]);
   });
 });

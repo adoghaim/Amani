@@ -7,7 +7,13 @@ import {
   basicInterpretationText,
   previewText,
   type InterpretationAccessResult,
+  type PremiumPreview,
 } from '../../lib/freemium/interpretationAccess';
+import {
+  authorizeModelProse, describeMeasuredMovement, movementClaimsByKey,
+  type AuthorizedModelProse, type MovementClaim, type ValidatedMovementLanguage,
+} from '../../lib/scoring/insightCopy';
+import { ClinicalObservation, ModelProseText } from '../ClinicalObservation';
 import {
   FREEMIUM_COPY,
   LOCKED_CROSS_REPORT_LABEL,
@@ -93,9 +99,14 @@ export function FreemiumReportPanel({
 
   if (state.access === 'full') return counter;
 
-  const basicText = basicInterpretationText(state.interpretation);
+  // Owner R1, wording only: which fields Basic receives is unchanged. Model
+  // prose in them renders only where it resolves to a claim this page issued
+  // from her own measured changes; the rest is suppressed, not relabelled.
+  const claimsByKey = movementClaimsByKey(floorSummary?.deltaMap ?? []);
+  const claims = [...claimsByKey.values()];
+  const basicText = authorizeModelProse('basic.basic_interpretation', basicInterpretationText(state.interpretation), claims);
   const trends = basicTrendLines(state.interpretation, floorSummary);
-  const preview = state.preview ? previewText(state.preview) : null;
+  const preview = state.preview ? authorizedPreview(state.preview, claimsByKey, claims) : null;
   const locked: { key: string; label: string }[] = [
     ...(state.locked.patterns > 0 ? [{ key: 'patterns', label: lockedPatternsLabel(state.locked.patterns) }] : []),
     ...(state.locked.cross_report > 0 ? [{ key: 'cross_report', label: LOCKED_CROSS_REPORT_LABEL }] : []),
@@ -104,10 +115,10 @@ export function FreemiumReportPanel({
 
   return (
     <section className="space-y-4" aria-label={COPY.basicHeading}>
-      {basicText && (
-        <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface p-5">
+      {basicText.length > 0 && (
+        <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface p-5" data-model-surface="basic_interpretation">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-theme-muted-text-3 mb-2">{COPY.basicHeading}</p>
-          <p className="text-sm text-theme-text-body leading-relaxed">{basicText}</p>
+          <p className="text-sm text-theme-text-body leading-relaxed"><ModelProseText items={basicText} /></p>
         </div>
       )}
 
@@ -125,13 +136,14 @@ export function FreemiumReportPanel({
       {counter}
 
       {preview && (
-        <div className="rounded-2xl border border-theme-primary/30 bg-theme-surface p-5">
+        <div className="rounded-2xl border border-theme-primary/30 bg-theme-surface p-5" data-model-surface="preview">
           <p className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-theme-primary mb-2">
             <Sparkles className="w-3 h-3" />
             {COPY.previewLabel}
           </p>
-          {preview.title && <p className="text-sm font-semibold text-theme-text mb-1">{preview.title}</p>}
-          <p className="text-sm text-theme-text-body leading-relaxed">{preview.body}</p>
+          <p className="text-sm text-theme-text-body leading-relaxed">
+            {preview.kind === 'measured' ? <ClinicalObservation language={preview.language} /> : <ModelProseText items={preview.prose} />}
+          </p>
         </div>
       )}
 
@@ -153,6 +165,28 @@ export function FreemiumReportPanel({
       {upgradeBanner(onOpenPaywall)}
     </section>
   );
+}
+
+/**
+ * The Premium Preview, as Amani may state it. A trend preview whose slug and
+ * both values agree with one of her own measured-change claims is stated as
+ * that claim. Any other preview is model or narrative content and keeps only
+ * the sentences that resolve to a claim. Null: nothing may render.
+ */
+function authorizedPreview(
+  preview: PremiumPreview, claimsByKey: ReadonlyMap<unknown, MovementClaim>, claims: readonly MovementClaim[],
+): { kind: 'measured'; language: ValidatedMovementLanguage } | { kind: 'prose'; prose: AuthorizedModelProse[] } | null {
+  const content = preview.content;
+  if (content && typeof content === 'object' && !Array.isArray(content)) {
+    const entry = content as Record<string, unknown>;
+    const claim = typeof entry.biomarker_slug === 'string' ? claimsByKey.get(entry.biomarker_slug) : undefined;
+    if (claim && entry.previous_value === claim.fact.previousValue && entry.current_value === claim.fact.currentValue
+      && (entry.unit ?? '') === claim.fact.unit) {
+      return { kind: 'measured', language: describeMeasuredMovement(claim.fact) };
+    }
+  }
+  const prose = authorizeModelProse('basic.preview', Object.values(previewText(preview) ?? {}), claims);
+  return prose.length > 0 ? { kind: 'prose', prose } : null;
 }
 
 /** Only a rendered trajectory bullet containing the same two values replaces

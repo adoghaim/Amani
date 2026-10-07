@@ -150,6 +150,50 @@ stage2PriorReport.biomarkers.forEach((b, i) => { b['id'] = `00000000-0000-4000-9
 stage2PriorReport.interpretation['lab_report_id'] = stage2PriorReport.report.id;
 stage2PriorReport.interpretation['id'] = '00000000-0000-4000-b000-000000000099';
 
+/*
+  Turn 13 (owner R1). The Stage-2 pair again, with every model field the page
+  reads filled with model-shaped prose that carries no forbidden word, and
+  three sentences that are authorized phrases of the report's own measured
+  changes, one placed on the wrong marker's card. The list must equal
+  MODEL_CANARIES in src/lib/scoring/modelProse.testkit.ts (asserted in Vitest).
+*/
+export const modelCanaries = [
+  'Your thyroid looks well balanced for this time of the month.',
+  'This combination usually reflects how busy life has been lately.',
+  'Many women see this after travel, so it may settle by itself.',
+  'Your iron picture fits a pattern of heavier cycles.',
+  'This panel gives a calm overall picture of your metabolism.',
+  'Your glucose handling looks typical for someone your age.',
+  'The luteal phase explains most of what is visible here.',
+  'A gentle reset of routine often helps with numbers like these.',
+] as const;
+export const tshIncreased = 'Your TSH increased from your previous result.';
+export const ferritinDecreased = 'Your Ferritin decreased from your previous result.';
+const c = modelCanaries;
+export const modelProseCurrentReport: SyntheticReport = {
+  ...stage2CurrentReport,
+  report: { ...stage2CurrentReport.report, estimated_cycle_phase: 'luteal', estimated_cycle_day: 21 },
+  interpretation: {
+    ...stage2CurrentReport.interpretation,
+    json_output: {
+      headline: c[0],
+      summary_bullets: [c[1], tshIncreased, 'Your thyroid health has worsened.', `${tshIncreased} ${c[2]}`],
+      pattern_signals: [
+        { title: c[2], confidence: 'high', explanation: c[3], related_biomarkers: ['tsh'] },
+        { title: c[5], confidence: 'medium', explanation: ferritinDecreased, related_biomarkers: ['ferritin'] },
+      ],
+      cycle_context: { estimated_cycle_day: 3, estimated_cycle_phase: 'menstrual', confidence: 'high', explanation: c[4] },
+      biomarkers: [{
+        name: 'tsh', user_value: '9', unit: 'uIU/mL', reference_range: '0.45-4.5', status_label: 'out_of_range',
+        plain_english_meaning: c[5], timing_notes: c[6], common_non_alarm_reasons: [c[7], tshIncreased],
+        when_clinicians_follow_up: [ferritinDecreased],
+      }],
+      what_you_can_do_now: stage2ModelNextSteps.slice(0, 3), what_to_do_next: stage2ModelNextSteps.slice(3),
+      disclaimer: c[0],
+    },
+  },
+};
+
 // Turn 8: upper-bound direction and independent laboratory interval on an otherwise empty panel.
 export const higherIsBetterReport = report(1, 'unknown', [['hdl_cholesterol', 95, '95', 'mg/dL', 40, 60]]);
 

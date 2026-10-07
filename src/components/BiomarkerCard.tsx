@@ -12,8 +12,9 @@ import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 import {
   bandBounds, bandInterval, bandTerm, comparisonBandLabel, CUE_STYLE, extremeMagnitudeLabel, LAB_INTERVAL_TERM, labIntervalObservation,
   personalHistoryLabel, phaseBandNote, reviewStatusLabel, withheldCopy, withoutOptimalClaims,
-  type ComparisonBandLanguage, type FactualLanguage,
+  type AuthorizedModelProse, type ComparisonBandLanguage, type FactualLanguage,
 } from '../lib/scoring/insightCopy';
+import { ModelProseText } from './ClinicalObservation';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
@@ -25,10 +26,13 @@ interface BiomarkerCardProps {
   labRefMax?: number | null;
   /** As recorded on the report. Never inferred here. */
   cyclePhase?: CyclePhase | string | null;
-  plainEnglishMeaning?: string;
-  timingNotes?: string;
-  commonNonAlarmReasons?: string[];
-  whenCliniciansFollowUp?: string[];
+  /**
+   * Owner R1: the interpretation's per-marker prose, already reduced to the
+   * sentences that resolve to this marker's own measured-change claim. Raw
+   * model fields (meaning, timing notes, "common reasons", "when clinicians
+   * follow up") are not accepted here.
+   */
+  modelProse?: readonly AuthorizedModelProse[];
   historicalValues?: { date: string; value: number }[];
   baselineStatus?: BaselineStatus;
   baselineValue?: number;
@@ -209,10 +213,7 @@ export function BiomarkerCard({
   labRefMin,
   labRefMax,
   cyclePhase,
-  plainEnglishMeaning,
-  timingNotes,
-  commonNonAlarmReasons,
-  whenCliniciansFollowUp,
+  modelProse,
   historicalValues,
   baselineStatus,
   baselineStaleness,
@@ -389,45 +390,15 @@ export function BiomarkerCard({
             );
           })()}
 
-          {plainEnglishMeaning && (
-            <p className="text-sm text-theme-text-body">{plainEnglishMeaning}</p>
-          )}
-
-          {timingNotes && (
-            <p className="text-xs text-theme-muted-text-2 italic border-l-2 border-theme-border pl-2">{timingNotes}</p>
+          {modelProse && modelProse.length > 0 && (
+            <p className="text-sm text-theme-text-body" data-model-surface="marker">
+              <ModelProseText items={modelProse} />
+            </p>
           )}
 
           {band?.phase && (
             <div className="bg-theme-surface-2 border border-theme-border rounded-lg px-3 py-2 text-xs text-theme-text-body">
               {phaseBandNote(band.phase, band)}
-            </div>
-          )}
-
-          {commonNonAlarmReasons && commonNonAlarmReasons.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">Common reasons for this result</h4>
-              <ul className="space-y-1">
-                {commonNonAlarmReasons.map((r, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
-                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
-                    <span>{r}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {whenCliniciansFollowUp && whenCliniciansFollowUp.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">When clinicians may follow up</h4>
-              <ul className="space-y-1">
-                {whenCliniciansFollowUp.map((item, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
-                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
         </div>

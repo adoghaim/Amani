@@ -109,4 +109,17 @@ export function describeMeasuredMovement(
   if (!language) throw new Error('Canonical movement phrase failed policy validation');
   return language;
 }
+
+/**
+ * Owner R1, for every model-fed surface: a model proposal renders only as an
+ * authorized phrase of a claim the application issued from its own facts.
+ * Matching none of them is the common case, and then nothing renders.
+ */
+export function resolveModelProposal(claims: readonly MovementClaim[], proposal: unknown): ValidatedMovementLanguage | null {
+  for (const claim of claims) {
+    const validated = validateMovementPhrase(claim, proposal);
+    if (validated) return validated;
+  }
+  return null;
+}
 // END GENERATED MOVEMENT POLICY
