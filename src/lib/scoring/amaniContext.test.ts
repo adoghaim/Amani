@@ -189,8 +189,9 @@ describe('invariant 3 — UNKNOWN, DISPUTED and NEEDS_CONTEXT never read as unqu
   it('placement is arithmetic on the band, not the status', () => {
     const provenance: RangeProvenance = { evidence_grade: 'unsourced', review_status: 'UNKNOWN', source: null, source_date: null, reviewer: null, reviewed_at: null };
     const band = (min: number | null, max: number | null) => ({ min, max, phase: null, provenance, claims: NO_CLAIM_EVIDENCE, describeAsOptimal: false });
-    // A higher-is-better status calls a value above the band 'optimal'; it is still above the band.
+    // A status alone grants no directional metadata: ordinary bands retain the upper bound.
     expect(comparisonBandLabel({ kind: 'scored', status: 'optimal', band: band(50, 90) }, 120)).toMatchObject({ text: 'Outside Amani band', cue: 'attention' });
+    expect(comparisonBandLabel({ kind: 'scored', status: 'optimal', band: { ...band(50, 90), higherIsBetter: true } }, 120)).toMatchObject({ text: 'Within Amani band', cue: 'neutral' });
     // 'normal' arises inside a one-sided band, so it is within, never "Normal".
     expect(comparisonBandLabel({ kind: 'scored', status: 'normal', band: band(50, null) }, 60)).toMatchObject({ text: 'Within Amani band', cue: 'neutral' });
     expect(comparisonBandLabel({ kind: 'scored', status: 'normal', band: band(null, null) }, 60).text).toBe('No Amani band');

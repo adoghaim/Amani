@@ -107,6 +107,8 @@ export function bandClaims(_key: BiomarkerName, _phase: MenstrualPhase | null): 
 export type WithheldReason = 'cycle_phase_missing' | 'cycle_phase_unsupported' | 'non_cycling_state';
 
 export interface AmaniBand {
+  /** Placement follows the existing scoring direction; this is not claim authority. */
+  higherIsBetter?: boolean;
   min: number | null;
   max: number | null;
   phase: MenstrualPhase | null;
@@ -184,6 +186,7 @@ export function assessAmaniContext(
     kind: 'scored',
     status: classifyAgainstBand(value, values.optimal, values.clinical, entry.higherIsBetter),
     band: {
+      higherIsBetter: entry.higherIsBetter,
       min: values.optimal.min,
       max: values.optimal.max,
       phase,

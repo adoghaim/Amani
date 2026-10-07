@@ -1,6 +1,7 @@
 import type { BiomarkerCategory } from '../../types';
 import { CATEGORY_DISPLAY } from '../../types';
 import { getCategory } from '../biomarkers/dictionary';
+import { markerBandPlacement } from './insightCopy';
 import type { ScoredBiomarker } from './scoreBiomarker';
 
 // not_scored: every marker in the system is unscored (for example, withheld for
@@ -28,6 +29,7 @@ function computeSystemLabel(weightedConcernAvg: number): SystemLabel {
 
 export function groupBySystem(
   scored: ScoredBiomarker[],
+  cyclePhase?: string | null,
 ): SystemGroup[] {
   const grouped = new Map<BiomarkerCategory, ScoredBiomarker[]>();
 
@@ -58,7 +60,7 @@ export function groupBySystem(
     }
 
     const flaggedCount = biomarkers.filter(
-      b => b.concern >= 1,
+      b => markerBandPlacement(b.key, b.value, cyclePhase) === 'outside',
     ).length;
 
     const display = CATEGORY_DISPLAY[cat];

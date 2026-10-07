@@ -576,7 +576,7 @@ export function buildInsightSummary(
     scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
   );
 
-  const systemSummaries = groupBySystem(scored);
+  const systemSummaries = groupBySystem(scored, cyclePhase);
   const bandLanguage = new Map<BiomarkerName, AuthorizedLanguage>();
   for (const b of current) {
     const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase));

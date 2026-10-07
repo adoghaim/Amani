@@ -7,6 +7,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import type { Biomarker, BiomarkerName } from '../../types';
+import { FocusAreas } from '../../components/FocusAreas';
+import { buildFocusAreas } from '../insights/buildFocusAreas';
 import { BiomarkerCard } from '../../components/BiomarkerCard';
 import { DerivedMetricsPanel } from '../../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../../components/InsightFlagsPanel';
@@ -17,9 +19,10 @@ import { getAllEntries, getEntry } from '../biomarkers/dictionary';
 import { buildInsightSummary } from '../insights/buildInsightSummary';
 import { computeDerivedMetrics, evaluateInsightRules, INSIGHT_RULES } from '../../utils/derivedMetrics';
 import { assessAmaniContext, contextFromReport, MENSTRUAL_PHASES } from './amaniContext';
+import { scoreBiomarker, statusToConcern } from './scoreBiomarker';
 import { authorizeInsightMatches, gateInsightMatches } from './insightGate';
 import {
-  AUTHORITY_CATEGORIES, authorizedLanguage, comparisonBandLabel, CUE_STYLE, derivedMetricObservation, describeComparisonBand,
+  AUTHORITY_CATEGORIES, authorizedLanguage, bandPlacement, comparisonBandLabel, CUE_STYLE, derivedMetricObservation, describeComparisonBand,
   describeMeasuredMovement, evaluateSafetyRules, focusAreaObservation, labIntervalObservation, labIntervalPlacement,
   LANGUAGE_AUTHORITY, patternRuleObservation, PRODUCT_DISCLAIMERS, reportHeadline, SAFETY_RULES, systemSummaryLabel,
   type AuthorizedLanguage, type ClinicalLanguage, type SafetyRule,
@@ -172,7 +175,14 @@ describe('the comparison-band pill: placement and review state, never Normal, Bo
     for (const e of getAllEntries()) {
       for (const phase of [null, ...MENSTRUAL_PHASES, 'pregnancy_t2']) {
         for (const value of valuesFor(e.key)) {
-          const pill = comparisonBandLabel(assessAmaniContext(e.key, value, contextFromReport(phase)), value);
+          const assessment = assessAmaniContext(e.key, value, contextFromReport(phase));
+          const pill = comparisonBandLabel(assessment, value);
+          if (assessment.kind === 'scored') {
+            const placement = bandPlacement(assessment, value);
+            expect(placement, `${e.key}/${phase}/${value}`).toBe(assessment.band.min === null && assessment.band.max === null
+              ? null : statusToConcern(assessment.status) > 0 ? 'outside' : 'within');
+            expect(pill.cue).toBe(placement === 'outside' ? 'attention' : 'neutral');
+          }
           expect(['Within Amani band', 'Outside Amani band', 'Context needed', 'No Amani band']).toContain(pill.text);
           expect(pill.category).toBe('comparison_band');
           expect(['neutral', 'attention']).toContain(pill.cue);
@@ -182,6 +192,22 @@ describe('the comparison-band pill: placement and review state, never Normal, Bo
       }
     }
     expect(swept).toBeGreaterThan(5000);
+  });
+
+  it('HDL above its upper bound produces the unmounted FocusAreas empty state, not a flag', () => {
+    const input = { key: 'hdl_cholesterol' as const, value: 95, unit: 'mg/dL', labRefMin: 40, labRefMax: 60 };
+    const summary = buildInsightSummary([input], null);
+    const scored = scoreBiomarker(input.key, input.value, input.unit, input.labRefMin, input.labRefMax);
+    const assessment = assessAmaniContext(input.key, input.value, contextFromReport(null));
+    expect(assessment.kind === 'scored' && assessment.band.higherIsBetter).toBe(true);
+    expect(bandPlacement(assessment, input.value)).toBe('within');
+    expect(scored.concern).toBe(0);
+    expect(summary.systemSummaries[0]?.flaggedCount).toBe(0);
+    const areas = buildFocusAreas(summary, summary.watchSignals, [scored]);
+    expect(areas).toEqual([]);
+    const html = renderToStaticMarkup(<FocusAreas focusAreas={areas} />);
+    expect(html).toContain("No scored marker on this report is outside Amani&#x27;s comparison bands.");
+    expect(html).not.toContain('Outside Amani band');
   });
 
   it('a system label states counts, not attention levels', () => {

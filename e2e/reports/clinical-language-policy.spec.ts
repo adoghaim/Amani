@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { stage2CurrentReport, stage2PriorReport } from './synthetic-reports';
+import { higherIsBetterReport, stage2CurrentReport, stage2PriorReport } from './synthetic-reports';
 
 /*
   V2-03b Stage 2 in a real browser, against the real ReportView, with
@@ -61,6 +61,14 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
       await expect(page.getByRole('heading', { name: heading, exact: true }), heading).toBeVisible();
     }
     await expect(page.getByTestId('primary-movement-observation')).toBeVisible();
+    const movementClaims = page.locator('[data-language-claim="measured_movement"]');
+    expect(await movementClaims.count()).toBeGreaterThan(0);
+    for (const claim of await movementClaims.all()) {
+      await expect(claim).toHaveAttribute('data-language-source', 'lab_data');
+      await expect(claim).toHaveAttribute('data-language-category', 'factual_observation');
+      await expect(claim).toHaveAttribute('data-language-cue', 'neutral');
+      expect(hits(await claim.innerText())).toEqual([]);
+    }
     await expect(page.getByRole('article', { name: / result$/ })).toHaveCount(5);
     await expect(page.locator('article [data-language-source="patient_lab_interval"]')).toHaveCount(5);
   });
@@ -99,5 +107,31 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
     for (const label of await page.locator('[aria-label]').evaluateAll(nodes => nodes.map(n => n.getAttribute('aria-label') ?? ''))) {
       expect(label).not.toMatch(FORBIDDEN);
     }
+  });
+});
+
+
+test.describe('higher-is-better placement agreement', () => {
+  test.use({ authenticated: true, syntheticReports: [[higherIsBetterReport], { scope: 'test' }] });
+
+  test('HDL 95: every page placement agrees while its lab interval remains independent', async ({ page }) => {
+    await page.goto(`/app/reports/${higherIsBetterReport.report.id}`);
+    await expect(page.getByRole('heading', { name: 'Health systems', exact: true })).toBeVisible();
+    await clickAll(page, 'button[aria-expanded="false"]:not(article button)');
+    await clickAll(page, 'article button[aria-expanded="false"]');
+    const card = page.getByRole('article', { name: 'HDL result', exact: true });
+    await expect(card).toBeVisible();
+    const bandPills = card.getByText('Within Amani band', { exact: true });
+    await expect(bandPills).toHaveCount(2);
+    await expect(bandPills.nth(0)).toBeVisible();
+    await expect(bandPills.nth(1)).toBeVisible();
+    await expect(card.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Above your lab's range");
+    await expect(page.locator('h2 [data-language-category="comparison_band"]')).toContainText("All scored values are within Amani's context bands");
+    await expect(page.getByText('Scored markers within Amani bands', { exact: true })).toBeVisible();
+    await expect(page.getByText("No scored marker on this report is outside Amani's comparison bands.", { exact: true })).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Focus areas', exact: true })).toHaveCount(0);
+    await expect(page.getByText('Outside Amani band', { exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-language-category="comparison_band"][data-language-cue="attention"], [data-language-cue="warning"], [data-language-cue="critical"]')).toHaveCount(0);
+    expect(hits(await pageText(page))).toEqual([]);
   });
 });

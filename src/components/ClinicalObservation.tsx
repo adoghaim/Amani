@@ -1,9 +1,17 @@
-import type { ClinicalLanguage } from '../lib/scoring/insightCopy';
+import { validateMovementPhrase, type MovementClaim, type ClinicalLanguage } from '../lib/scoring/insightCopy';
 
 /** A neutral observation renderer cannot accept a clinical or safety claim. */
 export function ClinicalObservation({ language }: {
   language: Extract<ClinicalLanguage, { category: 'factual_observation' | 'comparison_band' }>;
 }) {
-  return <span data-language-category={language.category} data-language-source={language.authority.kind}
+  // Movement claims must still validate at the render boundary. Copying a
+  // language object and strengthening its sentence cannot retain its grant.
+  const movement = 'claim' in language;
+  if ('claim' in language) {
+    const validated = validateMovementPhrase(language.claim as MovementClaim, language.text);
+    if (!validated) return null;
+    language = validated;
+  }
+  return <span data-language-claim={movement ? 'measured_movement' : undefined} data-language-category={language.category} data-language-source={language.authority.kind}
     data-language-cue={language.cue}>{language.text}</span>;
 }

@@ -1,3 +1,140 @@
+# TASK-045 — turn 9: locator and first R1 claim pipeline (PARTIAL)
+
+Approach: the HDL test defect was an ambiguous locator over two correct pills; preserve both assertions by requiring exactly two matches and checking each. The architectural defect is that a source-bearing language object alone does not establish that proposed prose follows its supporting fact. Extend `insightCopy.ts` with deterministic movement claims, finite authorized phrasing and a fail-closed validator, retain the claim through rendering, and generate the dependency-free movement kernel for Edge packaging with byte-identity checks. Stop at this coherent movement boundary; this is not completion of R1 across generated clinical content and is not independent review.
+
+## Scope and evidence
+
+Turn-start HEAD: `0ed4896330439ca40e84925860a1ff2c8ccb2434`; original task base: `1284d128a44e17b8833ff42fa79515d828a28084`; branch: `v2/03b-clinical-language-policy`. The tree already contained the uncommitted turn-8 changes in 11 files. Those remain. This continuation changes the locator, policy, observation renderer, scripts and report, and adds a claim test, generator, generator tests and generated Edge module. No commit, Git metadata write, control-directory write, deployment or network request.
+
+Read the contract, TASK-044 synthesis and amendments 2/5 from the read-only control task directories (their brief-relative paths do not exist here). The Lead's A2 and A3 rulings answer the prior packaging and Basic-boundary questions: generate the shared policy; wording-only Basic changes are authorized without changing projections or entitlements. No Basic file is changed in this continuation.
+
+## Implemented
+
+- A1: require two `Within Amani band` elements, then visibility of each. Headline, system, empty-state, independent lab interval and page-wide forbidden-concept assertions remain. Inspected the other spec assertions; no other identical pill locator is present. Runtime uniqueness elsewhere remains for the Lead's browser run.
+- `createMovementClaim` snapshots and freezes deterministic measurements/significance and their lab-data authority; the structured claim explicitly has no recommendation or safety authority. These are explicit source dispositions, not a boolean grant of clinical meaning.
+- `validateMovementPhrase` accepts only phrases derived from that issued claim. The owner example `Your TSH increased from your previous result.` is permitted for 6→9; thyroid worsening, incorrect direction/value, appended advice, reassurance, non-string proposals and copied/deserialized grants are suppressed. Unknown paraphrases also fail closed. This deliberately supports a finite phrase set, not arbitrary natural-language entailment.
+- `describeMeasuredMovement` now follows fact → claim → policy phrase → validator. Existing deterministic movement wording is preserved. Its validated output carries the claim, including significance evidence; canonical output remains available independently of optional model phrasing.
+- `ClinicalObservation` revalidates claim-bearing movement at render time. Invalid proposals render nothing, and presentation/source metadata is taken from the validated result rather than caller edits. Other existing factual/comparison variants remain on their existing path: this is not a global runtime provenance gate.
+- The movement kernel is defined once inside marked, dependency-free sections of `insightCopy.ts`. The generated `_shared/clinical-movement-policy.generated.ts` is exactly those bytes. `clinical:generate`, `clinical:check`, `clinical:test` and `clinical:test:ci` include generation/drift testing without removing any existing check. This is partial A2 packaging: other policy categories are not yet packaged for Edge, and the interpretation handler does not import this module yet.
+- Claims are process-local capabilities. JSON does not grant authority: future server integration must reconstruct them from persisted deterministic facts. The issuer is for application code, never a tool callable by a model or an authority parser for model output. Serialization/claim-ID resolution for server responses remains unfinished.
+
+## Per-surface matrix and limits
+
+| Surface | Verified locally | Remaining / deferred reason |
+| --- | --- | --- |
+| HDL summary and expanded pills, headline, system, story empty state, lab interval | Existing actual-page Vitest coverage passes; browser locator now counts and checks both pills | Browser startup denied; Lead's prior browser finding is attributed, not claimed as this implementer's run |
+| Deterministic movement consumers of `describeMeasuredMovement` | Claim/validator tests plus actual report, trajectory and focus suites pass; observation renderer verifies claim-bearing output | Some consumers use `.text` inside legacy compositions and do not retain the full claim to their final renderer; broad transport migration remains |
+| Optional movement phrasing | 6→9 permitted paraphrase and rejected harmful/advisory/forged proposals tested through policy and real `ClinicalObservation` | No production model call is connected to this API; no browser proof of live optional-model proposals |
+| Browser mounted movement | Spec requires at least one claim-bearing rendered node and checks factual category, lab authority, neutral cue and forbidden concepts; existing fixture demands actual primary/trajectory surfaces | Browser assertions and browser negative control unexecuted due listener denial |
+| Shared Edge policy | Byte identity, drift negative control, no imports and client/server semantic parity pass | Movement only; full policy packaging and generate/get-interpretation wiring remain |
+| Summary bullets, pattern signals, next steps, per-marker model fields, cycle explanations, InsightsModal, model disclaimer | Concept search repeated; known ReportView direct model paths remain (summary_bullets, pattern_signals explanations, cycle explanation, disclaimer) | Not migrated in this bounded continuation; existing model bypasses remain defects, not accepted debt |
+| Basic interpretation | Existing regression suites pass, projection unchanged | A3 wording-only permission recorded; pipeline integration still needed without changing BASIC_KEYS or fields |
+| Comparison bands, reviewed interpretations, optimal targets, clinical actions | Existing six-category model unchanged | Claim-backed validation for these categories is not implemented by the new movement validator |
+| Safety | Existing synthetic separation tests pass; no safety producer, rule or threshold changed | Production registry remains empty; preservation of a genuine deployed alert is not newly proven, and synthetic tests cannot establish clinical approval |
+| Discussion preparation, marketing examples, personalized nutrition | No changes | Owner Stage-2 C/D/E remain unfinished |
+
+Concept discovery repeated with `rg -l -i 'optimal|normal|abnormal|healthy|unhealthy|improved|worsened|better|worse|concerning|reassuring|worth discussing|talk to your doctor|should|recommend|caution|\bhigh\b|\blow\b' src/lib src/components src/pages src/utils supabase/functions/generate-interpretation -g '!*.test.*' -g '!*.generated.*'`. This inventory is not a completeness proof. Historical per-surface inventory below continues to apply where not superseded here.
+
+## Commands and outcomes
+
+- `npx vitest run src/lib/scoring/movementClaims.test.tsx src/lib/scoring/clinicalLanguagePolicy.test.tsx src/lib/scoring/clinicalLanguageStage2.test.tsx src/pages/ReportView.language.test.tsx` — 59 passed, four files.
+- `npm test` — 1456 passed, 68 files (final restored tree).
+- `npm run typecheck` — passed, including generated module imported by tests and E2E TypeScript. A renderer reassignment initially invalidated alias-based narrowing; a direct property guard corrected it before the final checks.
+- `npm run lint` — passed, zero errors, nine existing warnings.
+- `npm run build` — passed; existing Browserslist warning.
+- `npm run clinical:check && npm run clinical:test` — drift/audit pass, 83 analytes / 198 ranges unchanged; 52 tests passed, including SQL parse guard, frozen artifacts, value identity and new policy byte identity.
+- `node tools/clinical/language-policy.mjs` — generated the shared movement kernel.
+- `npx playwright test e2e/reports/clinical-language-policy.spec.ts --project=chromium --workers=1` — blocked before all test bodies by `listen EPERM 127.0.0.1:4173`, both restored and mutated versions.
+- `git diff --check` — passed.
+
+No clinical values, thresholds, evidence grades or SAFE dispositions changed. No frozen migration or forbidden freemium/entitlement/confidentiality path changed. Existing tests were not relaxed: the ambiguous locator is replaced by exact multiplicity plus per-element visibility, and the page test gains claim assertions.
+
+## Executed negative controls
+
+Mutations applied individually using Python and restored from original bytes in `finally` before final checks:
+
+1. In `validateMovementPhrase`, remove `|| !phrases?.includes(proposal)` from the rejection condition. `npx vitest run src/lib/scoring/movementClaims.test.tsx` fails **11 tests**, five pass: unsupported meaning/provenance is detected by assertions.
+2. In `ClinicalObservation`, replace `if (!validated) return null;` with `if (!validated) return <span>{language.text}</span>;`. `npx vitest run src/lib/scoring/movementClaims.test.tsx -t 'the actual renderer'` fails **one test**, 15 skipped. This proves the actual render boundary detects fail-open behavior independently of producer output.
+3. Generator test changes the generated bytes by a newline, and removes/duplicates boundary markers: each throws as required. `npm run clinical:test` includes these controls.
+4. Append `Your thyroid health has worsened.` in the observation renderer, run the exact Playwright command above: startup denied. This is NOT a successful browser negative control. The Lead must execute the restored spec and this control in a browser-capable environment.
+
+## Remaining work and handoff
+
+R1 is PARTIAL: expand structured facts and approved-rule resolution beyond measured movement, map or suppress every model sentence, connect server generation and reads, and preserve provenance through serialization and every renderer. Package additional dependency-free policy sections by generation, never hand-copy. Complete A3 language-only Basic migration, then remaining C/D/E, dual browser proofs and safety evidence. No further documentation question is needed for this slice; the two prior questions are answered by the Lead, not still blockers.
+
+Env canary not run: it requires a disposable worktree, contrary to this implementer's stay-in-worktree/no-Git-write contract, plus a listener denied here. All-three-browser suites, Docker harness, hosted CI, Deno edge-function checks and independent review remain for the Lead. The generated module is typechecked via app test import and exercised in Vitest, not proven in Deno deployment.
+
+Second Brain handoff only: read local Load Project Context / Update Second Brain, Amani state/decisions/Bugs & QA and skill index. Snapshot last verified 2026-09-22; no sync or vault write under task restrictions. Confirmed this session: branch/HEAD via Git, implemented files and commands above. No pending Brain item resolved or production state inferred. Owner rulings A2/A3 are recorded here as task authority; no new clinical decision made.
+
+---
+
+# TASK-045 — turn 8: placement contradiction (PARTIAL)
+
+Approach: the pill used literal bounds while aggregate wording used concern, whose unchanged higher-is-better rule ignores the upper bound. Carry that existing direction metadata into `AmaniBand`, define placement in `insightCopy.ts`, and route the report's placement selections and system counts through it. Exercise HDL 95 against its independent lab interval 40–60 on the actual page, probe both boundaries, and negative-control the policy and metadata. Stop after addendum A's implementation and local evidence; B–E remain unfinished. This is implementation evidence, not independent review or release certification.
+
+This section supersedes turn 7's claim that HDL above the upper bound should be described as outside, and its §9 treatment of that contradiction as deferred debt. The contradiction was a policy defect. The historical report is retained below as history, not current acceptance evidence.
+
+## Scope and verified changes
+
+Started clean at `0ed4896330439ca40e84925860a1ff2c8ccb2434`, branch `v2/03b-clinical-language-policy`. Original task base remains `1284d128a44e17b8833ff42fa79515d828a28084`. Read the full owner Stage 2 rulings, contract, TASK-044 synthesis and amendments 2/5 from the read-only control task directories; no control files changed.
+
+- `AmaniBand.higherIsBetter` carries catalog metadata. It is comparison direction, not a boolean grant of clinical-language authority. No catalog values, bounds, clinical classification, concern calculation, evidence grade or review status changed.
+- `bandPlacement` is the placement definition. Its upper bound is unbounded when the existing metadata says higher-is-better. `markerBandPlacement` is a context-preserving adapter to that definition.
+- Card pills already consume `bandPlacement`. System flagged counts, report headline selection, report category counts, flagged slugs and the report's focus-area inputs now consume it too. System aggregation receives the report cycle phase. The headline enumerates all outside markers rather than relying on the ranked findings subset. Internal concern/ranking rules remain unchanged; catalog tests independently compare their outside/not-outside result with placement.
+- HDL-only page fixtures cover 59, 60, 90 and 95, always with laboratory interval 40–60. HDL 95 is within Amani's comparison placement and above the laboratory interval. Its lab attention cue remains; Amani's comparison cue is neutral. Browser fixture contains HDL 95 with that same interval.
+- The catalog sweep retains all prior wording/cue assertions and adds comparison with the unchanged concern rule for every sampled analyte/phase/value. No-bound assessments explicitly require null placement. The prior synthetic ordinary-band assertion remains and a metadata-bearing case is added; neither a raw `optimal` status nor a label grants direction metadata.
+
+## Per-surface proof and limits
+
+| Surface / dimension | Local evidence | Browser evidence |
+| --- | --- | --- |
+| HDL pill; lower bound, upper bound, above max | Actual ReportView at 59/60/90/95; literal placement assertions; no Amani attention for within placement | Added HDL 95 test; execution blocked before test body |
+| Lipids system label | Same page asserts the outside count or within statement; separate summary assertion for HDL 95 | HDL 95 system label required visible; unexecuted |
+| Report headline | Same page asserts within/outside agreement; first-report fixture avoids trajectory overriding the headline | HDL 95 headline required; unexecuted |
+| Health-story empty state | Same page requires exactly one empty statement when within, zero when outside | Same assertions written; unexecuted |
+| Focus Areas empty state | ReportView does NOT mount empty FocusAreas. Page asserts it absent. Separate real component render uses HDL 95's empty `buildFocusAreas` result and checks its empty statement | No mounted empty FocusAreas proof claimed; browser asserts absent |
+| Lab interval independence | Same page explicitly requires Above for 90/95 and Within for 59/60 | HDL 95 requires Above; unexecuted |
+| Catalog / cycle phases / one-sided bounds / unavailable context | Existing >5,000-case sweep strengthened to check placement against unchanged classification, retaining all wording and cue checks | No exhaustive browser catalog sweep |
+| Safety | Existing synthetic safety-preservation and band-non-escalation tests run in full suite; production safety code unchanged | No new direction-1 browser proof |
+
+No new clinician authority, recommendation authority or safety authority is inferred from HDL direction. No SAFE promotion. No external software documentation question arose for A.
+
+## Commands and negative controls
+
+- `npx vitest run src/lib/scoring/amaniContext.test.ts src/lib/scoring/clinicalLanguageStage2.test.tsx src/pages/ReportView.language.test.tsx`: 57 passed across three files with mutations restored.
+- `npm test`: 1440 passed across 67 files.
+- `npm run typecheck`: passed, including E2E TypeScript; the added component test initially needed a strict-null-safe array access, corrected before the final pass.
+- `npm run lint`: passed, zero errors and nine existing warnings.
+- `npm run build`: passed; existing Browserslist age warning.
+- `npm run clinical:check`: passed; 83 catalog entries, 83 analytes / 198 audit ranges unchanged.
+- `npm run clinical:test`: 50 passed, including SQL parse guard, frozen artifacts and value identity checks.
+- `npx playwright test e2e/reports/clinical-language-policy.spec.ts --project=chromium --grep higher-is-better --workers=1`: blocked before test execution, `listen EPERM 127.0.0.1:4173`.
+- `git diff --check`: passed. Diff paths are confined to allowed app code/tests, E2E and this report; no forbidden paths changed.
+
+Negative controls were applied individually and restored byte-for-byte in Python `finally` blocks:
+
+1. Replace `const max = higherIsBetter ? null : assessment.band.max;` with `const max = assessment.band.max;` in the policy. Run `npx vitest run src/lib/scoring/clinicalLanguageStage2.test.tsx src/pages/ReportView.language.test.tsx`: **3 failed / 29 passed**. The catalog comparison, HDL component test and HDL 95 real page test all detect it.
+2. Delete only `higherIsBetter: entry.higherIsBetter,` from assessment construction. Run that same command: **3 failed / 29 passed**, proving metadata transport is required.
+3. With control 1 applied, run the exact Playwright command above: blocked by the same listener error. This is NOT a demonstrated browser negative control. Lead must run it and restore the mutation.
+
+Initial test construction failed on the exact HDL accessible name, a no-bound catalog marker, the assumption that both empty components mount, and an overly broad ban on factual lab attention. These were fixture/assertion corrections: production retains the independent lab cue. An early full-suite run observed those two lab-cue assertion failures (1437 passed / 2 failed); the final checks use the corrected assertion scoped to Amani comparison cues and retain page-wide forbidden-language checks.
+
+## Still unfinished — do not accept Stage 2 as complete
+
+B / owner R1 is not implemented in this turn. Summary bullets, pattern signals, next steps, per-marker AI fields, cycle explanations, InsightsModal, Basic interpretation and server interpretation still need the deterministic facts → structured claims → policy → optional bounded phrasing → validator pipeline. Unmapped model text must be suppressed, not labelled. Encode the owner's TSH factual-change versus thyroid-worsening example. Existing model bypasses remain defects; no green suite establishes their safety.
+
+C / owner R2 remains: add `DISCUSSION_PREP_PROMPT`, carry factual/authorized premises, and prove that preparation does not imply care escalation. D / owner R3 remains: marketing examples must obey the same authority policy. E / owner R4 remains: suppress unsupported personalized nutrition; preserve only clearly labelled general education, with no model-invented protocols. The addendum specifically names Basic interpretation, while the original forbidden paths prohibit freemium changes: Lead should make the permitted language-only boundary explicit before that migration. No entitlement, visibility or confidentiality file was edited here.
+
+Ordered continuation: Lead verifies A's browser case and controls, independently reviews; implement B as one coherent pipeline; then C, D, E. Server shared-policy deployment packaging remains an unresolved documentation question from turn 7, not answered by inference here. Env canary requires a disposable worktree, incompatible with this implementer's stay-in-worktree/no-Git-write contract; not run. All-three-browser suites, Docker harness, hosted CI, edge-function checks and independent review not run in this continuation. Nothing deployed, committed, pushed or merged.
+
+## Second Brain handoff — no vault changes
+
+Read Load Project Context / Update Second Brain plus the local Amani snapshot, decisions and Bugs & QA. Snapshot last verified 2026-09-22; no network sync under the task's prohibition. Confirmed this session: start SHA/branch via Git; policy change and executed test outcomes above. No pending Brain item resolved, no release-state fact inferred, and no new clinical decision made. The owner provided the direction-metadata ruling. Pending: browser controls, independent review, B–E and remaining release gates. Current production/store state was not verified.
+
+---
+
+## Historical turn-7 report (superseded by turn 8 where stated)
+
 # TASK-045 — turn 7 / Stage 2: classify by authority, then migrate (PARTIAL)
 
 Approach: make the owner's seven authority categories a type in the one policy module (`src/lib/scoring/insightCopy.ts`), give every pinned literal a classification the guard verifies structurally, then migrate rendered surfaces so each user-visible clinical statement is produced by the policy with its authority attached. Where no authority exists the language is replaced by a factual or comparison-band observation, or the producer is proven unreachable. No clinical value, threshold, evidence grade or review status changed; no band is `SAFE`.

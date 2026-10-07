@@ -15,7 +15,7 @@ import { NextBestSteps } from '../components/NextBestSteps';
 import { buildCards } from '../lib/cards/buildCards';
 import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
 import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
-import { computeAmaniStatus, scoreBiomarker, statusToConcern } from '../lib/scoring/scoreBiomarker';
+import { scoreBiomarker } from '../lib/scoring/scoreBiomarker';
 import { SystemSummaryCards } from '../components/SystemSummaryCards';
 import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
@@ -25,7 +25,7 @@ import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insi
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
   authorizedLanguage, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  labIntervalObservation, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL, primaryFindingSentence, reportHeadline,
+  labIntervalObservation, markerBandPlacement, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL, primaryFindingSentence, reportHeadline,
   systemDisplayLabel, type AuthorizedLanguage,
 } from '../lib/scoring/insightCopy';
 import { SafetyWarnings } from '../components/SafetyWarnings';
@@ -961,8 +961,8 @@ export function ReportView() {
   }, [insightSummary]);
 
   const flaggedSlugs = useMemo<BiomarkerName[]>(
-    () => scoredBiomarkers.filter(s => s.concern > 0).map(s => s.key),
-    [scoredBiomarkers],
+    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside').map(s => s.key),
+    [scoredBiomarkers, report?.estimated_cycle_phase],
   );
 
   const flaggedCategories = useMemo<BiomarkerCategory[]>(
@@ -975,11 +975,11 @@ export function ReportView() {
     return buildFocusAreas(
       insightSummary,
       insightSummary.watchSignals,
-      scoredBiomarkers,
+      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside'),
       interpretation?.what_you_can_do_now,
       primaryCategory,
     );
-  }, [insightSummary, scoredBiomarkers, interpretation, primaryCategory]);
+  }, [insightSummary, scoredBiomarkers, interpretation, primaryCategory, report?.estimated_cycle_phase]);
 
   const guidanceCards = useMemo(() => {
     const primaryFocusId = focusAreas.find((a) => a.isPrimaryAligned)?.id ?? null;
@@ -1520,8 +1520,9 @@ export function ReportView() {
                       // is not authority for clinical meaning ("because the LLM
                       // generated it" is inadmissible), and it could read "all within
                       // range" while a card says otherwise (Phase 8B, kept).
-                      const allFindings = insightSummary.primaryFinding ? [insightSummary.primaryFinding, ...insightSummary.topFindings] : insightSummary.topFindings;
-                      const outside = allFindings.map(f => ({ name: f.displayName, language: markerBandLanguage.get(f.key) ?? authorizedLanguage(null) }));
+                      const outside = scoredBiomarkers
+                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
+                        .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
                     }
@@ -1832,7 +1833,7 @@ export function ReportView() {
                 {filteredCategories.map(({ category, items }) => {
                   // Counted live, not from the persisted upload-time flag: a flag stored
                   // before V2-03 may have come from a fallback band Amani now withholds.
-                  const flaggedCount = items.filter(b => statusToConcern(computeAmaniStatus(b.name as BiomarkerName, b.value, cyclePhase)) > 0).length;
+                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase) === 'outside').length;
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {

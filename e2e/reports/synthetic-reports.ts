@@ -140,3 +140,6 @@ stage2PriorReport.report.id = '00000000-0000-4000-a000-000000000099';
 stage2PriorReport.biomarkers.forEach((b, i) => { b['id'] = `00000000-0000-4000-9000-00000000099${i + 1}`; b['lab_report_id'] = stage2PriorReport.report.id; });
 stage2PriorReport.interpretation['lab_report_id'] = stage2PriorReport.report.id;
 stage2PriorReport.interpretation['id'] = '00000000-0000-4000-b000-000000000099';
+
+// Turn 8: upper-bound direction and independent laboratory interval on an otherwise empty panel.
+export const higherIsBetterReport = report(1, 'unknown', [['hdl_cholesterol', 95, '95', 'mg/dL', 40, 60]]);

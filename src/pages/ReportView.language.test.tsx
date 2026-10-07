@@ -166,6 +166,32 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     expect(app.querySelectorAll('article [data-language-source="patient_lab_interval"]').length).toBe(5);
   }, 30_000);
 
+  it.each([59, 60, 90, 95])('HDL %s: pill, system, headline and empty states agree page-wide', async value => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
+    fixture.tables.biomarkers = rows(CURRENT, [['hdl_cholesterol', value, 'mg/dL', 40, 60]]);
+    fixture.tables.report_analytes = [];
+    await renderAndOpenAll();
+    const outside = value < 60;
+    const card = app.querySelector('article[aria-label="HDL result"]');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toContain(outside ? 'Outside Amani band' : 'Within Amani band');
+    expect(card?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent)
+      .toBe(value > 60 ? "Above your lab's range" : "Within your lab's range");
+    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
+      .toContain(outside ? "outside Amani's current comparison band" : "All scored values are within Amani's context bands");
+    expect(app.textContent).toContain(outside ? '1 outside Amani band' : 'Scored markers within Amani bands');
+    const empty = "No scored marker on this report is outside Amani's comparison bands.";
+    expect((app.textContent ?? '').split(empty).length - 1).toBe(outside ? 0 : 1);
+    // ReportView intentionally does not mount FocusAreas when empty.
+    if (!outside) expect(app.textContent).not.toContain('Focus areas');
+    if (!outside) {
+      expect(app.textContent).not.toContain('Outside Amani band');
+      expect(app.querySelectorAll('[data-language-category="comparison_band"][data-language-cue="attention"]').length).toBe(0);
+    }
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
   it('a first report renders the deterministic primary finding and headline, page-wide clean', async () => {
     seed(9, 6);
     fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
