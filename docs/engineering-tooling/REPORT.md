@@ -1,13 +1,12 @@
 # TASK-043 implementation evidence
 
-Approach (turn 7): the runtime-loaded vendor Context7 rule omits Amani's full
-PHI and clinical-evidence prohibitions and gives documentation lookup precedence
-that conflicts with the owner directive. Add a separate project-owned companion
-rule that explicitly overrides vendor instructions on conflict, preserves the
-vendor files, and carries the complete boundaries, installed-version precedence,
-index mismatch and offline handoff. Correct stale authentication status using
-the Lead's verified turn-7 evidence and document the re-setup check. No product,
-Playwright, quarantine, env-isolation or CI changes are part of this turn.
+Approach (turn 8): the separate E2E workflow runs smoke tests but omits the
+owner-required hosted environment-isolation canary. Add one named step running
+`npm run test:e2e:isolation` immediately before smoke, leaving every existing
+workflow step unchanged. Record the Lead's hosted results and distinguish the
+absence of uploaded diagnostics from inspection of artifact contents. Earlier
+turn evidence below is historical; the turn-8 section supersedes its outstanding
+hosted smoke and local isolation gates.
 
 ## 1. Exact branch and head
 
@@ -552,3 +551,70 @@ this documentation-only correction; earlier outstanding gates remain unchanged.
   no-memory-write contract. Its older project snapshot does not override this
   task checkout or establish current remote/deployment state. No vault pending
   item was changed or silently resolved.
+
+## Turn-8 hosted canary step and diagnostics evidence
+
+Turn-start HEAD: `7c0cc85d2dbd836ebf7fe20c9fc53cedfbd3cd33`; branch unchanged.
+Only `.github/workflows/e2e.yml` and this report changed. The workflow adds
+`Verify E2E environment isolation`, running `npm run test:e2e:isolation`
+immediately before smoke. All existing steps, including failure-diagnostics
+upload, remain byte-for-byte unchanged; `ci.yml` is unchanged.
+
+The supplied turn-8 Lead directive reports PR #91 ran both workflows successfully
+on `ubuntu-latest`: E2E `30 passed (1.5m)` across Chromium, WebKit and Firefox;
+release CI passed separately. Node 20, `npm ci`, and lockfile-matched browser
+revisions chromium-1234, webkit-2336 and firefox-1538 were verified by the Lead.
+The Lead also reports the environment-isolation canary passes locally. The prior
+hosted workflow omitted that canary; its hosted execution remains pending the
+Lead's commit, push and rerun. These are attributed results, not implementer
+hosted executions; no hosted run URL or full command output was supplied.
+
+The hosted run passed with no failures, so no diagnostics artifact was produced
+at all — there is nothing to inspect and nothing was uploaded. Artifact contents
+were not examined and are not certified clean. Two structural controls reduce
+risk: the E2E server loads no developer `.env` (proven by the Lead's local canary),
+and the request guard aborts every unmatched request. Allowed backend responses
+are synthetic, so unmatched credential-bearing backend responses cannot reach a
+trace. These controls are not an artifact-content audit or a general guarantee
+that every future trace is free of credentials or PHI.
+
+Local turn-8 execution:
+
+| Exact command | Observed output/result |
+| --- | --- |
+| `npm run test:e2e:isolation` | Exit 1; 0 passed, 1 failed; `Server bind denied: EPERM`; server exited before readiness, so no served-module assertions ran |
+| `npm test` | Exit 0; 51 files passed, 1211 tests passed |
+| `git diff --check` | Exit 0; no output |
+| `git diff --stat` | Only `.github/workflows/e2e.yml` and this report |
+
+The following static check was executed with `node` via stdin (exit 0):
+
+```sh
+node <<'NODE'
+const fs = require('node:fs');
+const cp = require('node:child_process');
+const assert = require('node:assert/strict');
+const yaml = require('js-yaml');
+const path = '.github/workflows/e2e.yml';
+const current = fs.readFileSync(path, 'utf8');
+const original = cp.execFileSync('git', ['show', `HEAD:${path}`], {encoding:'utf8'});
+const addition = '      - name: Verify E2E environment isolation\n        run: npm run test:e2e:isolation\n';
+assert.equal(current.replace(addition, ''), original);
+const steps = yaml.load(current).jobs.smoke.steps;
+const index = steps.findIndex(step => step.run === 'npm run test:e2e:isolation');
+assert.ok(index >= 0);
+assert.equal(steps[index + 1].run, 'npm run test:e2e');
+assert.equal(fs.readFileSync('.github/workflows/ci.yml','utf8'), cp.execFileSync('git',['show','HEAD:.github/workflows/ci.yml'],{encoding:'utf8'}));
+for (const path of ['.env','.env.local','.env.e2e','.env.e2e.local']) assert.equal(fs.existsSync(path), false);
+console.log('PASS: YAML parsed; only canary step added immediately before smoke; ci.yml unchanged; canary env files cleaned up');
+NODE
+```
+
+Output: `PASS: YAML parsed; only canary step added immediately before smoke; ci.yml unchanged; canary env files cleaned up`.
+
+The three original brief files remain absent from this worktree; the supplied
+turn-8 directive governs this focused change. No product, fixture, canary,
+Playwright config, quarantine, vendor Context7 file or project memory changed.
+No network, Context7, production, commit, push or merge operation was attempted.
+Implementation is complete and uncommitted; hosted canary execution and
+independent review remain with the Lead. No self-review or certification claimed.

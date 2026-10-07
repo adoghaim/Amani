@@ -27,6 +27,8 @@ jobs:
         run: npm ci
       - name: Install matching browsers and OS dependencies
         run: npx --no-install playwright install --with-deps chromium webkit firefox
+      - name: Verify E2E environment isolation
+        run: npm run test:e2e:isolation
       - name: Run isolated synthetic smoke tests
         run: npm run test:e2e
       - name: Preserve failure diagnostics
