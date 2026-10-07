@@ -1,15 +1,13 @@
 # TASK-043 implementation evidence
 
-Approach (turn 6): installed Vite 5.4.8 falls back to the project root for
-`envDir: false`; `mergeConfig` accepted the invalid option and E2E files were
-outside the normal typecheck. Replace it with the absolute committed empty
-`e2e/no-env/` directory, preserving the existing server launcher. Type the
-override with `satisfies UserConfig`, check E2E/config files through the existing
-`npm run typecheck`, and add a served-module canary with exclusive temporary env
-files and cleanup. Correct the prior false isolation claims explicitly. The
-redirect-race quarantine and runtime code remain unchanged. The canary cannot
-reach assertions here because this sandbox denies loopback binding; this is
-PARTIAL pending Lead execution, not a certification of isolation.
+Approach (turn 7): the runtime-loaded vendor Context7 rule omits Amani's full
+PHI and clinical-evidence prohibitions and gives documentation lookup precedence
+that conflicts with the owner directive. Add a separate project-owned companion
+rule that explicitly overrides vendor instructions on conflict, preserves the
+vendor files, and carries the complete boundaries, installed-version precedence,
+index mismatch and offline handoff. Correct stale authentication status using
+the Lead's verified turn-7 evidence and document the re-setup check. No product,
+Playwright, quarantine, env-isolation or CI changes are part of this turn.
 
 ## 1. Exact branch and head
 
@@ -293,11 +291,23 @@ CLI reproduction is demonstrated by the Lead. README supplies the local exercise
 ## 10. Context7 installation/configuration
 
 `npm ls -g ctx7 --depth=0` → `ctx7@0.5.13`.
-No `ctx7` command was called by this offline implementer. The Lead's
-`PROVISIONED.md` reports unauthenticated use, incomplete OAuth/device flow,
-`whoami` returning `Not logged in`, and missing `find-docs` skill.
-Authentication and Skills installation remain owner/Lead actions; do not mark
-the full directive's Context7 acceptance complete until those are verified.
+Authentication is **complete and verified by the Lead**, superseding the earlier
+`PROVISIONED.md` authentication status. The owner approved the device flow while
+the Lead held `ctx7 login` open. Lead-reported commands and results:
+
+| Command | Lead-reported result |
+| --- | --- |
+| `ctx7 login` | Owner-approved device flow completed |
+| `ctx7 whoami` | `Logged in` |
+| `ctx7 setup --cli --claude --project --yes` | Installed `.claude/skills/find-docs/SKILL.md` and `.claude/rules/context7.md`, committed at `3e22bf9` |
+
+The API key lives at `~/.config/context7/credentials.json`, outside the repo.
+The Lead programmatically verified without printing it that the key appears in
+neither committed vendor file; the credential-shaped example is only the
+placeholder `export CONTEXT7_API_KEY=your_key`. The implementer did not read the
+credential file or run any `ctx7` command. The new companion rule
+`.claude/rules/context7-amani.md` supplies project boundaries without editing
+vendor-owned files. Authentication and Skills setup are no longer pending.
 
 ## 11. Documentation lookups
 
@@ -311,11 +321,14 @@ These are Lead-reported evidence read from `PROVISIONED.md`, not commands rerun 
 
 `npm ls @supabase/supabase-js react vite typescript --depth=0` verifies locally:
 2.105.3, 18.3.1, 5.4.8, 5.6.3 respectively. The Lead reports indexed Supabase
-2.58.0 and newer default Vite docs. Version-aware retrieval was demonstrated;
+2.58.0 and newest indexed Vite 8.x against installed Vite 5.4.8. Version-aware retrieval was demonstrated;
 exact installed-version parity was not. The fixture storage key was checked
 against installed `SupabaseClient.ts`, and session behaviour against app source.
-No external-documentation question blocks this implementation; external owner
-setup remains pending.
+The Lead additionally verified authenticated library resolution, docs retrieval
+and version-pinned retrieval in turn 7. Exact authenticated lookup invocations
+and output were not supplied; the table above preserves earlier attributed
+lookup evidence, not a local rerun. No external-documentation question blocks
+this implementation; owner authentication and vendor setup are complete.
 
 ## 12. Privacy controls
 
@@ -365,16 +378,16 @@ insufficient. After the product fix, the executable measurement command is
 The frozen 1.0.6 product remains untouched in this tooling task.
 
 Hosted CI on Node 20 is unverified. Required-check promotion still needs the
-README rollout and independent review. Context7 authentication is outstanding
-with the owner; Skills setup is also unverified. No pending gate is waived.
+README rollout and independent review. Context7 authentication and Skills setup
+are complete and verified by the Lead in turn 7; unrelated pending gates remain.
 
 ## 15. Not tested
 
 The final quarantined configuration in a real browser, headed/UI/report viewers,
 implementer inspection of Lead artifacts, hosted GitHub Actions and Node 20/Linux
 execution, live auth, RLS, backend integration, payments, native/device QA,
-clinical evaluations, migration verification, and Context7 login/Skills remain
-unverified here. Post-fixture browser suites, screenshots, retry trace and CLI
+clinical evaluations and migration verification remain unverified here.
+Context7 login/Skills were verified by the Lead, not rerun by the implementer. Post-fixture browser suites, screenshots, retry trace and CLI
 reproduction were demonstrated by the Lead; synthetic coverage does not imply
 live-backend coverage.
 
@@ -402,8 +415,8 @@ about live remote main or deployment was inferred. This report is the handoff fo
 recording verified tooling changes. Existing `[Pending]` items remain unresolved.
 
 Next actions: Lead runs the 30-case gate across all browsers outside this
-sandbox, obtains independent review, runs hosted CI on Node 20, completes owner
-Context7 setup, and commits the checked tree. No review or certification is
+sandbox, obtains independent review, runs hosted CI on Node 20, and commits the
+checked tree. Owner Context7 setup is complete per the turn-7 Lead evidence. No review or certification is
 claimed. Turn-5 status is PARTIAL only because the required exit-0 browser run
 cannot be demonstrated here: server binding fails with EPERM.
 
@@ -497,3 +510,45 @@ node --input-type=module -e "import {existsSync} from 'node:fs'; import assert f
 ```
 
 Output: `PASS: no root env files remain`. Tree left uncommitted.
+
+## Turn-7 companion rule and authentication correction
+
+Turn-start HEAD: `3e22bf97b5bf506f47a05ef75f92deed2d207c32`; branch unchanged.
+Added `.claude/rules/context7-amani.md`; modified only this report and its sibling
+README. Vendor rule/skill, Playwright configuration, all E2E files, workflows,
+packages and product files remain untouched. No Context7 command, network lookup,
+credential read, commit or production operation was performed.
+
+The three original brief files were found and read in the control task folder
+in turn 7; no control file was written. Their earlier authentication status is
+superseded by the supplied turn-7 directive. This report provides the handoff;
+no Second Brain material was modified and no pending runtime gate was resolved.
+
+| Exact command (turn 7) | Observed output/result |
+| --- | --- |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | 6 passed (345ms) |
+| `npm test` | 51 test files passed; 1211 tests passed; duration 2.29s |
+| `npm run lint && npm run typecheck && npm run build` | Exit 0; lint 0 errors/9 existing warnings; typecheck passed; build completed in 3.02s |
+| `git diff --check` | Exit 0; no output |
+| `git diff --exit-code HEAD -- .claude/rules/context7.md .claude/skills/find-docs/SKILL.md playwright.config.ts e2e .github/workflows package.json package-lock.json src supabase clinical tools/clinical` | Exit 0; no output; protected surfaces unchanged |
+| `git diff --stat` | Only README.md and REPORT.md under docs/engineering-tooling (tracked changes) |
+| `git status --short` | Those two modified documents plus new .claude/rules/context7-amani.md; no other changes |
+
+Turn-7 scope is complete; no independent review or certification is claimed.
+Browser smoke, env-isolation runtime execution and hosted CI were not rerun for
+this documentation-only correction; earlier outstanding gates remain unchanged.
+
+### Second Brain handoff — Amani, 2026-10-06
+
+- Verified this session: the companion rule and two documentation updates are
+  the only working-tree changes, with the commands and results above as evidence.
+- Owner-directed decision: keep Amani boundaries in a separate companion rule
+  that overrides vendor instructions on conflict and survives vendor re-setup.
+- Lead-reported evidence: authentication and vendor setup are complete, as
+  attributed in item 10; no credential was read or transmitted by the implementer.
+- Still unverified: previously outstanding browser/isolation and hosted CI gates;
+  independent review remains the Lead's next step before committing this tree.
+- Local vault context was read without pulling or writing under the offline,
+  no-memory-write contract. Its older project snapshot does not override this
+  task checkout or establish current remote/deployment state. No vault pending
+  item was changed or silently resolved.

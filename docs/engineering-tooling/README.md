@@ -201,17 +201,32 @@ Repository code, installed package versions, official vendor behaviour, existing
 contracts and tests outrank Context7. Verify the actual installed package version
 before relying on version-specific documentation.
 
-The Lead provisioned global `ctx7` 0.5.13 and reported successful unauthenticated
-Supabase and version-pinned Vite lookups. Authentication did not complete, and
-the `find-docs` skill is not installed. A network-enabled owner session must
-finish `ctx7 login` and `ctx7 setup --cli --claude --project`, then verify status.
-Do not put credentials in the repository or conversation. CLI/Skills are preferred;
-MCP is not mandatory. Offline implementers receive generic findings from the
-Lead/reviewer and record unanswered external-documentation questions in REPORT.md.
+The Lead provisioned global `ctx7` 0.5.13. Authentication is now complete and
+verified by the Lead (turn 7): `ctx7 whoami` reports `Logged in`. The owner
+approved the device flow held open by the Lead. The official
+`ctx7 setup --cli --claude --project --yes` installed the vendor rule and
+`find-docs` skill, committed at `3e22bf9`. Credentials live at
+`~/.config/context7/credentials.json`, outside the repository; the Lead verified
+that the key is absent from both committed vendor files. Do not copy credentials
+into the repository or conversation. Authenticated library resolution, docs
+retrieval and version-pinned retrieval were verified by the Lead.
 
-The reported index mismatch matters: installed Supabase JS is 2.105.3 while the
-indexed version was 2.58.0; installed Vite is 5.4.8 while the demonstrated pinned
-lookup was 5.4.21. Neither is exact-version proof for installed behaviour.
+The project-owned [Amani companion rule](../../.claude/rules/context7-amani.md)
+sits alongside the vendor rule and overrides it on conflict. **Re-setup warning:**
+re-running `ctx7 setup` overwrites the vendor files. After any re-run, confirm
+that the companion rule still exists and the vendor rule has not reintroduced a
+conflicting instruction; resolve any conflict under the companion's precedence.
+Do not edit vendor files to persist Amani guardrails.
+
+CLI/Skills are preferred; MCP is not mandatory. The Codex implementer sandbox
+has no network, so `ctx7` is unusable there. Context7 is a Lead/reviewer tool;
+whoever has network performs the lookup and hands the finding to the implementer
+in the brief. Record unanswered external-documentation questions in REPORT.md.
+
+The Lead-reported index is both behind and ahead of us: `supabase-js` is indexed
+at v2.58.0 against installed 2.105.3, and newest Vite is 8.x against installed
+5.4.8. The earlier pinned Vite 5.4.21 lookup is also not exact-version proof for
+installed behaviour. Verify the actual installed package version first.
 
 Context7 must NEVER receive patient names, user identifiers, emails, report
 contents, biomarker values tied to a user, symptoms, health history,
