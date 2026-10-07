@@ -97,3 +97,38 @@ vault's `80 Skills/Load Project Context.md`; at the end, prepare an update per i
 - **Merges, deploys and releases require explicit owner approval.**
 
 Everything else in this file remains authoritative for repository-specific guidance.
+
+
+## Engineering tooling: Playwright and Context7
+
+Use Context7 when implementing or reviewing external library/API behaviour where current or version-specific documentation materially affects correctness. Repository code, installed package versions, official vendor behaviour, existing contracts and tests outrank Context7. Verify the actual installed package version before relying on version-specific documentation.
+
+Context7 must NEVER receive patient names, user identifiers, emails, report contents, biomarker values tied to a user, symptoms, health history, interpretations, tokens, secrets, credentials, private application data, or screenshots containing PHI. This includes access tokens, API secrets, database credentials and production credentials. Queries are generic technical questions only.
+
+GOOD: "Supabase JS vX: how does `auth.getUser()` behave server-side?"
+GOOD: "Current Vite documentation for environment variable exposure."
+BAD: "Here is patient Jane Doe's report payload. Why does this Supabase insert fail?"
+BAD: "Here is our production service-role token."
+
+Context7 may NEVER be used as a source for biomarker reference ranges, Amani context bands, medical evidence, clinical guidance, pregnancy guidance, medication guidance, supplement guidance, critical-value thresholds, or regulatory/legal authority. The Amani Clinical Truth Layer has its own evidence/provenance process. Context7 belongs only to the SOFTWARE ENGINEERING knowledge path.
+
+Crew order: external software question → inspect installed version + repository code → Context7 / official current documentation → implementation → unit/static tests → Playwright browser verification → independent review → CI. Offline implementers receive documentation findings from the network-enabled Lead/reviewer; they do not attempt Context7 calls.
+
+Code looking correct is not product proven correct. Committed deterministic Playwright tests are the browser-level release evidence; agent browser interaction and CLI screenshots/traces are diagnostic only. Playwright does not replace unit tests, integration tests, migration verification, RLS/security tests, clinical evals, adversarial review, native iOS QA, native Android QA, or TestFlight/device testing.
+
+Use the local Playwright CLI for reproduction and Playwright Test for deterministic QA. MCP is optional, not the default; enable it only for a demonstrated persistent browser-interaction need. Use synthetic fixtures only. See [tooling commands, isolation, CI rollout and Context7 provisioning](docs/engineering-tooling/README.md).
+
+
+### Turn-6 env-isolation correction
+
+The original tooling claim that `envDir: false` prevented developer `.env`
+loading was wrong: Vite 5.4.8 falls back to the project root. The Lead proved
+this with synthetic `VITE_APP_URL` and `VITE_FREEMIUM_ACTIVE` values in served
+modules. E2E now redirects env-file lookup to the absolute `e2e/no-env/` path;
+keep that committed directory empty except for `.gitkeep`. The wrapper also
+clears inherited `VITE_*` values. The override is checked as Vite `UserConfig`
+and `npm run typecheck` now includes all E2E TypeScript and `playwright.config.ts`.
+Run `npm run test:e2e:isolation` alone in a disposable worktree without root env
+files to verify served modules and cleanup. Turn-6 execution was blocked by
+sandbox `listen EPERM`; runtime isolation must not be claimed as proven until
+the Lead runs that canary successfully. See the linked tooling report for evidence.

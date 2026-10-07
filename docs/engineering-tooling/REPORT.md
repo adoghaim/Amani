@@ -1,0 +1,620 @@
+# TASK-043 implementation evidence
+
+Approach (turn 8): the separate E2E workflow runs smoke tests but omits the
+owner-required hosted environment-isolation canary. Add one named step running
+`npm run test:e2e:isolation` immediately before smoke, leaving every existing
+workflow step unchanged. Record the Lead's hosted results and distinguish the
+absence of uploaded diagnostics from inspection of artifact contents. Earlier
+turn evidence below is historical; the turn-8 section supersedes its outstanding
+hosted smoke and local isolation gates.
+
+## 1. Exact branch and head
+
+`git branch --show-current` → `chore/engineering-tooling-playwright-context7`.
+Original task base: `2fd9433bbcbed73a1e137505d2542ee58a16d9e0`.
+Turn-6 `git rev-parse HEAD` → `0900c6990b114bf33c3479168eee602035e1db78`.
+The tree was clean at turn-6 start; earlier turn results below are historical.
+No commit, push, merge or rebase attempted. The Lead owns the commit after the
+required independent check; the directive's committed-config gate remains there.
+
+## 2. Packages and versions
+
+`node --version` → `v24.15.0`; `npm --version` → `11.12.1`.
+
+`npm install -D @playwright/test@1.62.1 --save-exact --offline` initially failed
+with `ENOTCACHED`; `npm cache ls '@playwright/test'` nevertheless listed metadata
+and the 1.62.1 tarball. The shared cache is outside writable roots. Copying only
+cached Playwright entries with npm's bundled `cacache.get`/`cacache.put` to a
+writable temporary cache allowed this exact command to succeed:
+
+```sh
+npm install -D @playwright/test@1.62.1 --save-exact --offline --ignore-scripts --cache /private/tmp/task-043-npm-cache
+```
+
+Output: `up to date, audited 514 packages in 376ms`, `found 0 vulnerabilities`.
+This is npm's offline output, not a claim of a fresh online security audit.
+Lifecycle scripts were disabled to avoid Husky attempting to write `.git`.
+No network install or browser download was attempted.
+
+`npm ls @playwright/test playwright playwright-core jsdom` → Test 1.62.1,
+Playwright 1.62.1 deduped, core 1.62.1, jsdom 26.1.0 unchanged.
+Installed `@playwright/test/package.json` declares Node `>=20`.
+
+## 3. Files changed
+
+Modified: `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `package.json`, `package-lock.json`.
+
+Added: `playwright.config.ts`, `.github/workflows/e2e.yml`, `e2e/server.mjs`,
+`e2e/vite.config.ts`, `e2e/fixtures.ts`, `e2e/smoke.spec.ts`,
+`e2e/diagnostics/artifact-probe.spec.ts`, `e2e/network-guard.ts`,
+`e2e/network-guard.spec.ts`, `e2e/network-guard.config.ts`, this report and its sibling `README.md`.
+
+Added one README each in `e2e/auth/`, `reports/`, `extraction/`, `interpretation/`,
+`freemium/`, `security/`, `subscriptions/`, `timeline/`, `doctor-mode/`, `ask-amani/`.
+These are plans, not implemented product features or coverage claims.
+The report is under `docs/` because a root `REPORT.md` is outside allowed paths.
+
+## 4. Configuration
+
+Chromium, WebKit and Firefox desktop projects. Headless by default; headed/UI
+scripts supported. CI: two workers, one retry, forbid focused-only tests.
+30-second tests; 10-second assertion/action timeout; 20-second navigation;
+60-second web-server startup. `trace: 'on-first-retry'`,
+`screenshot: 'only-on-failure'`. HTML/list reporters; ignored diagnostic outputs.
+
+The wrapper invokes the existing `npm run dev` script with an E2E config extending
+the original Vite config, fixed loopback host/port, and strict port binding.
+No existing server reuse. The wrapper clears inherited `VITE_*` values. Turn 6
+sets `envDir` to the absolute committed `e2e/no-env/` directory (only `.gitkeep`).
+The previous assertion that `envDir: false` disabled `.env` loading was wrong:
+Vite 5.4.8 falls back to the project root. The Lead's synthetic `.env` canary
+appeared in served tier/pricing modules. `satisfies UserConfig` now rejects
+that unsupported option before `mergeConfig`, and `npm run typecheck` includes
+all E2E TypeScript plus the root Playwright config. The new served-module canary
+remains blocked here by `listen EPERM`; no passing isolation result is claimed.
+The backend hostname is `.invalid`; all test responses are synthetic.
+
+## 5. Tests created
+
+Five smoke scenarios: landing loads; sign-in controls load; `/app/reports`
+redirects unauthenticated users to the expected login redirect URL; synthetic
+session restoration redirects away from login and survives reload; the protected
+reports page renders its empty state. No login request, report mutation, medical
+interpretation, subscription change, or real account is used.
+
+One intentionally failing diagnostic probe is selected only with
+`E2E_ARTIFACT_PROBE=1`. It is excluded from normal smoke and CI selection.
+It now declares one retry at suite scope, so local execution captures a retry
+trace even without a CLI retry override.
+
+Six guard regression cases are also selected in normal E2E/CI runs. They use
+socket doubles, not a browser: exact local origin connects; localhost alias,
+wrong port, wrong protocol, deceptive hostname, and synthetic Supabase realtime
+origin close without connecting and cause the same assertion used by fixture
+teardown to throw. Diagnostics include origin/path and omit query values.
+
+## 6. Exact execution results
+
+The following table records turn-1 commands; turn-2 results follow separately.
+
+| Exact command | Observed result |
+| --- | --- |
+| `npm run test:e2e -- --list` | PASS: `Total: 15 tests in 1 file` (5 × 3 projects) |
+| `npm run test:e2e -- --project=chromium` | BLOCKED: server `listen EPERM ... 127.0.0.1:4173`; no smoke assertions ran |
+| `npm run test:e2e -- --project=webkit` | BLOCKED: same server error; no smoke assertions ran |
+| `npm run test:e2e -- --project=firefox` | BLOCKED: same server error; no smoke assertions ran |
+| `E2E_ARTIFACT_PROBE=1 npm run test:e2e -- --project=chromium --retries=1` | BLOCKED: same server error; failure screenshot and trace NOT demonstrated |
+| `npm test` | PASS: 51 files, 1,211 tests; zero failures |
+| `npm run lint` | PASS: zero errors, nine existing warnings in untouched source files |
+| `npm run typecheck` | PASS: exit 0 |
+| `npm run build` | PASS: 2,042 modules, `built in 2.93s`; existing outdated Browserslist notice |
+| `node --check e2e/server.mjs` | PASS: exit 0 |
+| `git diff --check` | PASS: exit 0, no output |
+
+The E2E/config files are outside the app tsconfig, so they were checked separately:
+
+```sh
+./node_modules/.bin/tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --skipLibCheck --types node playwright.config.ts e2e/fixtures.ts e2e/smoke.spec.ts e2e/diagnostics/artifact-probe.spec.ts e2e/vite.config.ts
+```
+
+Result: exit 0, no diagnostics. An initial lint failure on Playwright's callback
+parameter named `use` was fixed by renaming it `provide`; no lint rule was disabled.
+
+### Turn-2 execution (current uncommitted tree on the same HEAD)
+
+| Exact command | Observed output/result |
+| --- | --- |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | `6 passed (338ms)`; browser-free guard regressions |
+| `npm test` | `Test Files 51 passed (51)`; `Tests 1211 passed (1211)` |
+| `npm run lint && npm run typecheck && npm run build` | Exit 0; lint 0 errors/9 existing warnings; typecheck no diagnostics; build 2042 modules, `built in 3.13s` |
+| `npm run test:e2e -- --list` | `Total: 33 tests in 2 files` (5 browser smoke + 6 guard cases per project) |
+| `E2E_ARTIFACT_PROBE=1 npm run test:e2e -- --list` | `Total: 3 tests in 1 file`; only diagnostic probe selected |
+| `git diff --check` | Exit 0, no output |
+| `git diff --numstat -- src supabase clinical tools/clinical .github/workflows/ci.yml` | No output |
+
+```sh
+./node_modules/.bin/tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --skipLibCheck --types node playwright.config.ts e2e/fixtures.ts e2e/network-guard.ts e2e/network-guard.spec.ts e2e/network-guard.config.ts e2e/smoke.spec.ts e2e/diagnostics/artifact-probe.spec.ts e2e/vite.config.ts
+```
+
+Output: none, exit 0. This includes all new guard code and both Playwright configs.
+Installed Playwright 1.62.1 `WebSocketRoute` type documentation confirms that
+`connectToServer()` forwards traffic by default and `close()` returns a promise;
+no external documentation lookup was needed or attempted.
+
+Re-ran a Node assertion script parsing workflow YAML with installed `js-yaml`,
+checking Node 20, comparing original scripts/runtime dependencies and `ci.yml`
+to `git show HEAD:...`, and checking the exact Test pin. Output:
+`PASS: workflow YAML, Node 20, original scripts/dependencies, exact Test pin, ci.yml byte equality`.
+No browser execution, port binding, Context7 call or installation was attempted
+in this turn, per the Lead's instructions. The six guard tests use doubles;
+they are regression evidence for the policy, not browser integration evidence.
+
+### Turn-3 execution (same HEAD, completed fixture in uncommitted tree)
+
+| Exact command | Observed output/result |
+| --- | --- |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | `6 passed (318ms)` |
+| `npm run test:e2e -- --project=chromium --project=webkit --project=firefox` | Exit 1 before tests: `[WebServer] Error: listen EPERM: operation not permitted 127.0.0.1:4173`; no post-change browser result |
+| `npm test` | `Test Files 51 passed (51)`; `Tests 1211 passed (1211)`; duration 2.56s |
+| `npm run lint` | Exit 0; zero errors, nine existing warnings |
+| `npm run typecheck` | Exit 0; no diagnostics |
+| `npm run build` | Exit 0; `built in 2.92s` |
+| `git diff --check` | Exit 0; no output |
+| `git diff --numstat -- src supabase clinical tools/clinical .github/workflows/ci.yml` | No output |
+
+The same explicit `tsc` command above was rerun with the turn-3 fixture: exit 0,
+no diagnostics. The Node YAML/package/CI comparison script was rerun and printed
+`PASS: workflow YAML, Node 20, original scripts/dependencies, exact Test pin, ci.yml byte equality`.
+`git diff --stat` lists only the five tracked tooling/instruction/package files;
+`git ls-files --others --exclude-standard` also enumerates the untracked E2E,
+workflow, configuration and docs additions listed in item 3. No forbidden path
+appears. Only `e2e/fixtures.ts` and this report were edited during turn 3.
+
+### Turn-4 local execution (HEAD 2fd9433bbcbed73a1e137505d2542ee58a16d9e0)
+
+| Exact command | Observed result |
+| --- | --- |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | 6 passed (297ms) |
+| `npm run test:e2e -- --list` | 33 tests in 2 files across all three projects |
+| `npm test` | 51 files passed; 1211 tests passed; duration 2.08s |
+| `npm run lint` | Exit 0; 0 errors, 9 existing warnings |
+| `npm run typecheck` | Exit 0, no diagnostics |
+| `npm run build` | Exit 0; built in 3.52s; existing Browserslist notice |
+| `git diff --check` | Exit 0, no output |
+| `git diff --numstat -- src supabase clinical tools/clinical .github/workflows/ci.yml` | No output |
+
+The full explicit E2E `tsc` command in item 6 was rerun: exit 0, no diagnostics.
+The Node YAML/package comparison script printed `PASS: workflow YAML, original
+scripts/dependencies, exact Test pin, ci.yml byte equality`. No browser run was
+attempted again in this restricted sandbox; the Lead's real-browser evidence is
+below. No Context7 call, installation, product investigation, or commit occurred.
+
+## 7. Browsers evaluated
+
+The Lead's turn-3 directive reports the following results on the turn-2 tree,
+against the same frozen HEAD, before the turn-3 fixture additions:
+
+| Browser | Lead-executed result |
+| --- | --- |
+| Chromium | 10 passed, 1 failed |
+| WebKit (`webkit-2336`) | 10 passed, 1 failed; launches cleanly |
+| Firefox (`firefox-1538`) | 10 passed, 1 failed; launches cleanly |
+
+Each total includes six guard tests and five browser smoke tests. The identical
+failure is `restores the fixture session and retains it across reload`: expected
+`/app/reports`, observed `/app`. The guard also aborted 30 synthetic-host calls
+including repeated `/auth/v1/user` and the three dashboard tables. No real
+backend was contacted. Exact original browser command lines were not supplied
+in the Lead addendum; these counts are attributed evidence, not locally rerun
+passing results. Reproduction commands for the Lead after this change:
+
+```sh
+npm run test:e2e -- --project=chromium
+npm run test:e2e -- --project=webkit
+npm run test:e2e -- --project=firefox
+```
+
+The Lead also **demonstrated failure screenshots and a retry trace**: the
+`E2E_ARTIFACT_PROBE=1 … --retries=1` run produced a real `trace.zip` and two
+screenshots. The directive supplied that abbreviated command rather than its
+full invocation. The repository's executable equivalent is:
+
+```sh
+E2E_ARTIFACT_PROBE=1 npm run test:e2e -- --project=chromium --retries=1
+rg --files --hidden --no-ignore test-results | rg '(trace\.zip|test-failed-.*\.png)$'
+```
+
+These artifact gates are demonstrated by the Lead, no longer outstanding.
+The implementer has not independently inspected the artifact contents. No
+browser downloads were attempted by the implementer. Turn-3 local execution
+still fails at server startup with `listen EPERM` before any browser assertion.
+
+### Superseding Lead evidence (turn 5)
+
+The Lead corrects the earlier unbalanced experiment with these measurements:
+
+| Browser | Lead-reported evidence |
+| --- | --- |
+| Chromium | Failed 3 of 3 in one sitting, then later passed 11/11 |
+| WebKit | Passed 11/11, then failed 2 of 5 runs of the single test |
+| Firefox | Failed once in a suite run, then passed 5 of 5 |
+
+This is a flaky application race whose losing browser varies between runs,
+not a deterministic Chromium-only defect. These counts are attributed to the
+Lead; exact measurement commands were not supplied and were not rerun locally.
+The prior turn-4 diagnosis and expected-failure annotation are superseded.
+
+## 8. CI changes
+
+Only new `.github/workflows/e2e.yml`: PRs to main/manual dispatch; Node 20;
+`npm ci`; matching browser/OS dependency install; isolated smoke run; failure
+artifacts retained seven days. No secrets, production database or deployment step.
+The existing `ci.yml` is byte-identical to HEAD. Required-check rollout is described
+in the README; branch protection was not changed.
+
+Executed a Node assertion script using installed `js-yaml` to parse the workflow,
+assert PR target, Node 20, install/smoke commands and artifact failure condition,
+compare every original package script and runtime dependency to HEAD, assert
+exact Test version, and byte-compare `ci.yml` to HEAD. Output:
+`PASS: YAML structure, Node 20, deterministic install, smoke command, failure artifact step; original scripts/dependencies and ci.yml unchanged; test version exact.`
+
+Reproducible syntax check:
+
+```sh
+node -e "require('js-yaml').load(require('fs').readFileSync('.github/workflows/e2e.yml','utf8')); console.log('YAML parsed')"
+git diff --exit-code HEAD -- .github/workflows/ci.yml
+```
+
+Hosted CI, Linux browser dependencies and actual Node-20 execution remain untested.
+Parsing and static inspection are not CI execution evidence.
+
+## 9. Playwright CLI validation
+
+`./node_modules/.bin/playwright --version` → `Version 1.62.1`.
+`./node_modules/.bin/playwright cli --help` → agent commands including open, goto,
+snapshot, click, screenshot, tracing-start/stop, close. The installed package
+already provides this CLI; no extra package or initializer was run.
+
+```sh
+./node_modules/.bin/playwright screenshot --browser chromium --wait-for-selector h1 'data:text/html,<h1>Synthetic browser probe</h1>' test-results/cli-probe.png
+```
+
+Turn-1 implementer result: exit 1, Chromium macOS Mach-port permission failure;
+no local screenshot generated. Superseding Lead evidence in the turn-3 directive:
+`playwright screenshot` against a synthetic `data:` URL produced a **10,699-byte
+PNG**, and `open`, `codegen`, `screenshot`, `pdf`, `cli`, and `test` were available.
+The Lead did not supply the full screenshot invocation; the command above is
+the documented reproduction, not a claim that its exact arguments were used.
+CLI reproduction is demonstrated by the Lead. README supplies the local exercise.
+
+## 10. Context7 installation/configuration
+
+`npm ls -g ctx7 --depth=0` → `ctx7@0.5.13`.
+Authentication is **complete and verified by the Lead**, superseding the earlier
+`PROVISIONED.md` authentication status. The owner approved the device flow while
+the Lead held `ctx7 login` open. Lead-reported commands and results:
+
+| Command | Lead-reported result |
+| --- | --- |
+| `ctx7 login` | Owner-approved device flow completed |
+| `ctx7 whoami` | `Logged in` |
+| `ctx7 setup --cli --claude --project --yes` | Installed `.claude/skills/find-docs/SKILL.md` and `.claude/rules/context7.md`, committed at `3e22bf9` |
+
+The API key lives at `~/.config/context7/credentials.json`, outside the repo.
+The Lead programmatically verified without printing it that the key appears in
+neither committed vendor file; the credential-shaped example is only the
+placeholder `export CONTEXT7_API_KEY=your_key`. The implementer did not read the
+credential file or run any `ctx7` command. The new companion rule
+`.claude/rules/context7-amani.md` supplies project boundaries without editing
+vendor-owned files. Authentication and Skills setup are no longer pending.
+
+## 11. Documentation lookups
+
+These are Lead-reported evidence read from `PROVISIONED.md`, not commands rerun here:
+
+| Lead's command | Reported result |
+| --- | --- |
+| `ctx7 library supabase-js` | `/supabase/supabase-js` |
+| `ctx7 docs /supabase/supabase-js "how does auth getUser behave server side"` | TSDoc: `getUser()` makes a server request; `getSession()` is not sufficient server-side authorization evidence |
+| `ctx7 docs /vitejs/vite/v5.4.21 "which environment variables are exposed to client bundles"` | `VITE_` exposure rule, source URL pinned to v5.4.21 |
+
+`npm ls @supabase/supabase-js react vite typescript --depth=0` verifies locally:
+2.105.3, 18.3.1, 5.4.8, 5.6.3 respectively. The Lead reports indexed Supabase
+2.58.0 and newest indexed Vite 8.x against installed Vite 5.4.8. Version-aware retrieval was demonstrated;
+exact installed-version parity was not. The fixture storage key was checked
+against installed `SupabaseClient.ts`, and session behaviour against app source.
+The Lead additionally verified authenticated library resolution, docs retrieval
+and version-pinned retrieval in turn 7. Exact authenticated lookup invocations
+and output were not supplied; the table above preserves earlier attributed
+lookup evidence, not a local rerun. No external-documentation question blocks
+this implementation; owner authentication and vendor setup are complete.
+
+## 12. Privacy controls
+
+Synthetic UUID/profile/session only; reserved `.invalid` email/backend; no lab
+values, symptoms or report contents. No real auth state on disk. Test network
+guard blocks unexpected HTTP calls and all WebSockets except the exact
+`ws://127.0.0.1:4173` origin; service workers are blocked. Offending sockets are
+closed and fail fixture teardown, with only origin/path retained.
+Correction: the earlier sentence “The server loads no `.env`” was false.
+The Lead proved root `.env` values reached served modules under `envDir: false`,
+so those values could affect behaviour or enter artifacts despite blocked egress.
+The fixed config directs env-file lookup to the committed empty `e2e/no-env/`
+directory; the wrapper clears inherited `VITE_*` variables and refuses server
+reuse. Served-module proof is pending the Lead's canary run outside this sandbox. Trace/PNG paths are ignored and
+CI retention limited. Both instruction files explicitly include the complete
+Context7 privacy prohibition, good/bad examples, and clinical-evidence prohibition.
+
+## 13. External transmissions
+
+No intentional external-service request by the implementer: no Context7 calls,
+web lookup, network install, browser download, git network operation, production
+request, deployment or migration. Implementer browser launch failed before page navigation in turn 1. The Lead
+reports browser execution in turn 2 and confirms nothing reached production.
+Lead's earlier generic documentation requests are separately attributed above.
+
+## 14. Unresolved risks and conflicts
+
+**Flaky application redirect race across browsers, mechanism unproven:** see
+the Lead's corrected per-browser measurements in item 7. The Lead recorded
+`specs/BACKLOG-1.0.7.md` item 11 in the control repository. Both hypotheses remain
+unproven: `src/App.tsx:64` reads `window.location.search` outside React Router
+awareness, or `src/features/onboarding/OnboardingFlow.tsx:57` calls
+`navigate('/app')` and wins a race.
+
+Turn 5 removes `test.fail()` and explicitly quarantines the test with
+`@quarantine`. `npm run test:e2e` and the unchanged new CI workflow select the
+remaining 10 cases in each of Chromium, WebKit and Firefox. Run the strict test
+on demand with `E2E_QUARANTINE=1 npm run test:e2e`. Neither reports-route assertion
+is weakened, and no skip or browser-specific expected failure remains.
+Quarantine is what keeps this known race out of release CI under the owner's
+non-flakiness constraint; it is not a product fix or proof of hosted CI stability.
+
+**Re-entry bar:** replace the `window.location.search` read with a router-aware
+source AND obtain at least 10 green runs per browser. A single green run is
+insufficient. After the product fix, the executable measurement command is
+`E2E_QUARANTINE=1 npm run test:e2e -- --repeat-each=10 --retries=0`.
+The frozen 1.0.6 product remains untouched in this tooling task.
+
+Hosted CI on Node 20 is unverified. Required-check promotion still needs the
+README rollout and independent review. Context7 authentication and Skills setup
+are complete and verified by the Lead in turn 7; unrelated pending gates remain.
+
+## 15. Not tested
+
+The final quarantined configuration in a real browser, headed/UI/report viewers,
+implementer inspection of Lead artifacts, hosted GitHub Actions and Node 20/Linux
+execution, live auth, RLS, backend integration, payments, native/device QA,
+clinical evaluations and migration verification remain unverified here.
+Context7 login/Skills were verified by the Lead, not rerun by the implementer. Post-fixture browser suites, screenshots, retry trace and CLI
+reproduction were demonstrated by the Lead; synthetic coverage does not imply
+live-backend coverage.
+
+## 16. MCP recommendation
+
+**Not now.** The Lead's CLI reproduction already demonstrates sufficient
+diagnostic capability, while Playwright Test supplies deterministic release
+evidence. This sandbox cannot drive a browser, and MCP would add a persistent
+integration surface with no demonstrated gain. Reconsider only if repeated
+interactive debugging needs a persistent browser session that the CLI cannot
+practically support, in an environment permitted to drive it. No MCP
+configuration was added.
+
+## 17. Scope confirmation and handoff
+
+`git diff --numstat -- src supabase clinical tools/clinical .github/workflows/ci.yml`
+→ no output. No product/runtime, clinical, Freemium confidentiality, subscription
+or production behaviour was edited. The sole `freemium` addition is the expressly
+requested future-suite README under `e2e/`. No production command was run.
+
+Second Brain was read locally, not synced or written; offline/no-external-write
+instructions override its pull/write procedure. Its last recorded 1.0.5/main
+snapshot is older than the verified task checkout at 1.0.6/base 2fd9433; no claim
+about live remote main or deployment was inferred. This report is the handoff for
+recording verified tooling changes. Existing `[Pending]` items remain unresolved.
+
+Next actions: Lead runs the 30-case gate across all browsers outside this
+sandbox, obtains independent review, runs hosted CI on Node 20, and commits the
+checked tree. Owner Context7 setup is complete per the turn-7 Lead evidence. No review or certification is
+claimed. Turn-5 status is PARTIAL only because the required exit-0 browser run
+cannot be demonstrated here: server binding fails with EPERM.
+
+## Turn-4 source availability
+
+`INSPECTION.md`, `PROVISIONED.md`, and `OWNER-DIRECTIVE.md` are absent from this
+worktree in turn 4 (`cat` returned `No such file or directory`). The existing
+17-item report preserves prior-turn evidence; the supplied final Lead directive
+is the authority for this turn. No control-directory or Second Brain write was
+attempted. Only `e2e/smoke.spec.ts` and this report were edited in turn 4.
+
+## Turn-5 execution evidence
+
+Only `e2e/smoke.spec.ts`, `playwright.config.ts`, this report and the sibling
+README were edited in this turn. These are pre-existing uncommitted additions
+from earlier turns. The three source brief files remain absent locally; the
+supplied turn-5 directive governs this correction. No Context7, network install,
+commit, control-directory write, or product change was attempted.
+
+| Exact command | Observed output/result |
+| --- | --- |
+| `npm run test:e2e` | Exit 1 before tests: `listen EPERM: operation not permitted 127.0.0.1:4173`; cannot confirm required exit 0 in this sandbox |
+| `npm run test:e2e -- --list` | `Total: 30 tests in 2 files`; 10 per browser, no quarantined case |
+| `E2E_QUARANTINE=1 npm run test:e2e -- --list` | `Total: 3 tests in 1 file`; only quarantined case across all three projects |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | `6 passed (323ms)` |
+| `npm test` | `Test Files 51 passed (51)`; `Tests 1211 passed (1211)` |
+| `npm run lint && npm run typecheck && npm run build` | Exit 0; lint 0 errors/9 existing warnings; typecheck no diagnostics; build `built in 2.97s` |
+| `./node_modules/.bin/tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --skipLibCheck --types node playwright.config.ts e2e/fixtures.ts e2e/smoke.spec.ts` | Exit 0, no diagnostics |
+| `git diff --check` | Exit 0, no output |
+| `git diff --numstat -- src supabase clinical tools/clinical .github/workflows/ci.yml` | No output |
+| `git diff --stat` | Only the five previously modified tracked tooling/instruction/package files; this turn's four files remain untracked additions |
+
+The separate CI workflow still invokes `npm run test:e2e` with no quarantine
+opt-in. Existing `ci.yml` behaviour is unchanged. Lead verification of the
+30-case gate is outstanding; discovery is not browser execution evidence.
+
+
+## Turn-6 execution evidence and remaining gate
+
+The three source brief files are still absent locally. The supplied turn-6
+addendum is the authority. No Context7 call or Second Brain change was made.
+Changed this turn: `e2e/vite.config.ts`, `e2e/server.mjs`, `package.json`, both
+instruction files, this report and its README. Added `e2e/no-env/.gitkeep`,
+`e2e/tsconfig.json`, and `e2e/env-isolation.test.mjs`. No dependency changed.
+The dedicated tsconfig lives under an allowed path; the existing app typecheck
+still runs first. No smoke, quarantine or workflow file changed.
+
+| Exact command | Observed output/result |
+| --- | --- |
+| `npm run test:e2e:isolation` | Exit 1; 0 passed, 1 failed; `Server bind denied: EPERM`, `E2E server exited before readiness (code 1)`; no module assertions reached |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | 6 passed (347ms) |
+| `npm run test:e2e` | Exit 1 before browser tests; `listen EPERM: operation not permitted 127.0.0.1:4173` |
+| `npm test` | 51 files passed; 1211 tests passed |
+| `npm run typecheck` | Exit 0; app and E2E/config checks both ran |
+| `npm run lint` | Exit 0; zero errors, nine existing source warnings |
+| `npm run build` | Exit 0; 2042 modules, built in 3.12s; existing Browserslist notice |
+| `npm run test:e2e -- --list` | 30 tests in 2 files |
+| `E2E_QUARANTINE=1 npm run test:e2e -- --list` | 3 tests in 1 file |
+| `node --check e2e/env-isolation.test.mjs` | Exit 0 |
+
+A temporary negative typecheck replaced the envDir expression with `false`,
+ran `npm run typecheck`, and restored the file in Python `finally`. The check
+failed with `e2e/vite.config.ts(8,3): error TS2322: Type 'boolean' is not
+assignable to type 'string'` (plus the then-unused import warning). The restored
+configuration passed `npm run typecheck`. This proves the type hole is closed,
+not that served-module isolation passed.
+
+Lead reproduction: run `npm run test:e2e:isolation` alone in a disposable
+worktree with no root env files or existing server. It refuses overwrites,
+creates all four Vite env filenames with synthetic sentinel values, starts the
+actual wrapper, fetches the two affected app modules, checks sentinel absence
+and synthetic backend presence, then stops the server and removes its files.
+The test also injects inherited canaries to exercise the wrapper's scrub.
+No arbitrary sleeps are used; timers bound startup, requests and shutdown only.
+Do not run builds or app servers concurrently while the canary files exist.
+Then run `npm run test:e2e` for Chromium, WebKit and Firefox. Those runtime gates
+remain outstanding; no independent review or certification is claimed.
+
+Final scope checks: `git diff --check` exited 0 with no output;
+`git diff --numstat -- src supabase clinical tools/clinical .github/workflows/ci.yml`
+produced no output. `git diff --stat` showed only seven modified allowed files;
+`git status --short` additionally listed the three new E2E paths above.
+A Node assertion byte-compared both workflows, `playwright.config.ts` and
+`e2e/smoke.spec.ts` to turn-start HEAD and printed
+`PASS: both workflows, Playwright config and quarantine smoke file are byte-identical to turn-start HEAD`.
+The same check confirmed unchanged dependencies and original scripts except
+the explicitly extended typecheck. Cleanup was rechecked with:
+
+```sh
+node --input-type=module -e "import {existsSync} from 'node:fs'; import assert from 'node:assert/strict'; for (const p of ['.env','.env.local','.env.e2e','.env.e2e.local']) assert.equal(existsSync(p),false); console.log('PASS: no root env files remain')"
+```
+
+Output: `PASS: no root env files remain`. Tree left uncommitted.
+
+## Turn-7 companion rule and authentication correction
+
+Turn-start HEAD: `3e22bf97b5bf506f47a05ef75f92deed2d207c32`; branch unchanged.
+Added `.claude/rules/context7-amani.md`; modified only this report and its sibling
+README. Vendor rule/skill, Playwright configuration, all E2E files, workflows,
+packages and product files remain untouched. No Context7 command, network lookup,
+credential read, commit or production operation was performed.
+
+The three original brief files were found and read in the control task folder
+in turn 7; no control file was written. Their earlier authentication status is
+superseded by the supplied turn-7 directive. This report provides the handoff;
+no Second Brain material was modified and no pending runtime gate was resolved.
+
+| Exact command (turn 7) | Observed output/result |
+| --- | --- |
+| `npm run test:e2e -- --config=e2e/network-guard.config.ts` | 6 passed (345ms) |
+| `npm test` | 51 test files passed; 1211 tests passed; duration 2.29s |
+| `npm run lint && npm run typecheck && npm run build` | Exit 0; lint 0 errors/9 existing warnings; typecheck passed; build completed in 3.02s |
+| `git diff --check` | Exit 0; no output |
+| `git diff --exit-code HEAD -- .claude/rules/context7.md .claude/skills/find-docs/SKILL.md playwright.config.ts e2e .github/workflows package.json package-lock.json src supabase clinical tools/clinical` | Exit 0; no output; protected surfaces unchanged |
+| `git diff --stat` | Only README.md and REPORT.md under docs/engineering-tooling (tracked changes) |
+| `git status --short` | Those two modified documents plus new .claude/rules/context7-amani.md; no other changes |
+
+Turn-7 scope is complete; no independent review or certification is claimed.
+Browser smoke, env-isolation runtime execution and hosted CI were not rerun for
+this documentation-only correction; earlier outstanding gates remain unchanged.
+
+### Second Brain handoff — Amani, 2026-10-06
+
+- Verified this session: the companion rule and two documentation updates are
+  the only working-tree changes, with the commands and results above as evidence.
+- Owner-directed decision: keep Amani boundaries in a separate companion rule
+  that overrides vendor instructions on conflict and survives vendor re-setup.
+- Lead-reported evidence: authentication and vendor setup are complete, as
+  attributed in item 10; no credential was read or transmitted by the implementer.
+- Still unverified: previously outstanding browser/isolation and hosted CI gates;
+  independent review remains the Lead's next step before committing this tree.
+- Local vault context was read without pulling or writing under the offline,
+  no-memory-write contract. Its older project snapshot does not override this
+  task checkout or establish current remote/deployment state. No vault pending
+  item was changed or silently resolved.
+
+## Turn-8 hosted canary step and diagnostics evidence
+
+Turn-start HEAD: `7c0cc85d2dbd836ebf7fe20c9fc53cedfbd3cd33`; branch unchanged.
+Only `.github/workflows/e2e.yml` and this report changed. The workflow adds
+`Verify E2E environment isolation`, running `npm run test:e2e:isolation`
+immediately before smoke. All existing steps, including failure-diagnostics
+upload, remain byte-for-byte unchanged; `ci.yml` is unchanged.
+
+The supplied turn-8 Lead directive reports PR #91 ran both workflows successfully
+on `ubuntu-latest`: E2E `30 passed (1.5m)` across Chromium, WebKit and Firefox;
+release CI passed separately. Node 20, `npm ci`, and lockfile-matched browser
+revisions chromium-1234, webkit-2336 and firefox-1538 were verified by the Lead.
+The Lead also reports the environment-isolation canary passes locally. The prior
+hosted workflow omitted that canary; its hosted execution remains pending the
+Lead's commit, push and rerun. These are attributed results, not implementer
+hosted executions; no hosted run URL or full command output was supplied.
+
+The hosted run passed with no failures, so no diagnostics artifact was produced
+at all — there is nothing to inspect and nothing was uploaded. Artifact contents
+were not examined and are not certified clean. Two structural controls reduce
+risk: the E2E server loads no developer `.env` (proven by the Lead's local canary),
+and the request guard aborts every unmatched request. Allowed backend responses
+are synthetic, so unmatched credential-bearing backend responses cannot reach a
+trace. These controls are not an artifact-content audit or a general guarantee
+that every future trace is free of credentials or PHI.
+
+Local turn-8 execution:
+
+| Exact command | Observed output/result |
+| --- | --- |
+| `npm run test:e2e:isolation` | Exit 1; 0 passed, 1 failed; `Server bind denied: EPERM`; server exited before readiness, so no served-module assertions ran |
+| `npm test` | Exit 0; 51 files passed, 1211 tests passed |
+| `git diff --check` | Exit 0; no output |
+| `git diff --stat` | Only `.github/workflows/e2e.yml` and this report |
+
+The following static check was executed with `node` via stdin (exit 0):
+
+```sh
+node <<'NODE'
+const fs = require('node:fs');
+const cp = require('node:child_process');
+const assert = require('node:assert/strict');
+const yaml = require('js-yaml');
+const path = '.github/workflows/e2e.yml';
+const current = fs.readFileSync(path, 'utf8');
+const original = cp.execFileSync('git', ['show', `HEAD:${path}`], {encoding:'utf8'});
+const addition = '      - name: Verify E2E environment isolation\n        run: npm run test:e2e:isolation\n';
+assert.equal(current.replace(addition, ''), original);
+const steps = yaml.load(current).jobs.smoke.steps;
+const index = steps.findIndex(step => step.run === 'npm run test:e2e:isolation');
+assert.ok(index >= 0);
+assert.equal(steps[index + 1].run, 'npm run test:e2e');
+assert.equal(fs.readFileSync('.github/workflows/ci.yml','utf8'), cp.execFileSync('git',['show','HEAD:.github/workflows/ci.yml'],{encoding:'utf8'}));
+for (const path of ['.env','.env.local','.env.e2e','.env.e2e.local']) assert.equal(fs.existsSync(path), false);
+console.log('PASS: YAML parsed; only canary step added immediately before smoke; ci.yml unchanged; canary env files cleaned up');
+NODE
+```
+
+Output: `PASS: YAML parsed; only canary step added immediately before smoke; ci.yml unchanged; canary env files cleaned up`.
+
+The three original brief files remain absent from this worktree; the supplied
+turn-8 directive governs this focused change. No product, fixture, canary,
+Playwright config, quarantine, vendor Context7 file or project memory changed.
+No network, Context7, production, commit, push or merge operation was attempted.
+Implementation is complete and uncommitted; hosted canary execution and
+independent review remain with the Lead. No self-review or certification claimed.
