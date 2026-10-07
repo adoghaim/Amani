@@ -55,3 +55,23 @@ update at the end via `80 Skills/Update Second Brain.md`.
 - **Consequential actions require explicit owner approval.**
 
 `CLAUDE.md` carries the same pointer alongside the repository-specific guidance.
+
+
+## Engineering tooling: Playwright and Context7
+
+Use Context7 when implementing or reviewing external library/API behaviour where current or version-specific documentation materially affects correctness. Repository code, installed package versions, official vendor behaviour, existing contracts and tests outrank Context7. Verify the actual installed package version before relying on version-specific documentation.
+
+Context7 must NEVER receive patient names, user identifiers, emails, report contents, biomarker values tied to a user, symptoms, health history, interpretations, tokens, secrets, credentials, private application data, or screenshots containing PHI. This includes access tokens, API secrets, database credentials and production credentials. Queries are generic technical questions only.
+
+GOOD: "Supabase JS vX: how does `auth.getUser()` behave server-side?"
+GOOD: "Current Vite documentation for environment variable exposure."
+BAD: "Here is patient Jane Doe's report payload. Why does this Supabase insert fail?"
+BAD: "Here is our production service-role token."
+
+Context7 may NEVER be used as a source for biomarker reference ranges, Amani context bands, medical evidence, clinical guidance, pregnancy guidance, medication guidance, supplement guidance, critical-value thresholds, or regulatory/legal authority. The Amani Clinical Truth Layer has its own evidence/provenance process. Context7 belongs only to the SOFTWARE ENGINEERING knowledge path.
+
+Crew order: external software question → inspect installed version + repository code → Context7 / official current documentation → implementation → unit/static tests → Playwright browser verification → independent review → CI. Offline implementers receive documentation findings from the network-enabled Lead/reviewer; they do not attempt Context7 calls.
+
+Code looking correct is not product proven correct. Committed deterministic Playwright tests are the browser-level release evidence; agent browser interaction and CLI screenshots/traces are diagnostic only. Playwright does not replace unit tests, integration tests, migration verification, RLS/security tests, clinical evals, adversarial review, native iOS QA, native Android QA, or TestFlight/device testing.
+
+Use the local Playwright CLI for reproduction and Playwright Test for deterministic QA. MCP is optional, not the default; enable it only for a demonstrated persistent browser-interaction need. Use synthetic fixtures only. See [tooling commands, isolation, CI rollout and Context7 provisioning](docs/engineering-tooling/README.md).

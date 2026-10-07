@@ -74,3 +74,9 @@ preview-shots/
 
 # Build artifacts for manual install/distribution. Large binaries, never versioned.
 artifacts/
+
+# Playwright diagnostics and local synthetic session state
+/playwright-report/
+/test-results/
+/blob-report/
+/e2e/.auth/
