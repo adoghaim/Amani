@@ -1,6 +1,8 @@
 import type { AmaniStatus, BiomarkerName } from '../../types';
 import { getEntry, type ClinicalRange, type OptimalRange } from '../biomarkers/dictionary';
-import { canDescribeAsOptimal, type RangeProvenance } from '../biomarkers/provenance';
+import {
+  canDescribeAsOptimal, isReviewedRange, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance,
+} from '../biomarkers/provenance';
 import { ANALYTE_CONTEXT, type AnalyteContext, type ContextModifier } from '../biomarkers/rangeContext.generated';
 
 /*
@@ -102,6 +104,15 @@ export function bandProvenance(key: BiomarkerName, phase: MenstrualPhase | null)
   return band?.provenance ?? UNREVIEWED;
 }
 
+/**
+ * Claim-specific evidence for a band (amendment 4, R2). The catalog has no
+ * field recording it for any band, so this is NO_CLAIM_EVIDENCE for every
+ * analyte and phase; it is never inferred from review status.
+ */
+export function bandClaims(_key: BiomarkerName, _phase: MenstrualPhase | null): ClaimEvidence {
+  return NO_CLAIM_EVIDENCE;
+}
+
 export type WithheldReason = 'cycle_phase_missing' | 'cycle_phase_unsupported' | 'non_cycling_state';
 
 export interface AmaniBand {
@@ -109,7 +120,9 @@ export interface AmaniBand {
   max: number | null;
   phase: MenstrualPhase | null;
   provenance: RangeProvenance;
-  /** canDescribeAsOptimal(provenance): the ONLY gate for an Optimal label. */
+  /** Evidence for specific claims, separate from review (amendment 4, R2). */
+  claims: ClaimEvidence;
+  /** canDescribeAsOptimal(provenance, claims): the ONLY gate for an Optimal label. */
   describeAsOptimal: boolean;
 }
 
@@ -175,6 +188,7 @@ export function assessAmaniContext(
 
   const values = phase ? entry.phaseRanges![phase]! : { optimal: entry.optimal, clinical: entry.clinical };
   const provenance = bandProvenance(key, phase);
+  const claims = bandClaims(key, phase);
   return {
     kind: 'scored',
     status: classifyAgainstBand(value, values.optimal, values.clinical, entry.higherIsBetter),
@@ -183,7 +197,8 @@ export function assessAmaniContext(
       max: values.optimal.max,
       phase,
       provenance,
-      describeAsOptimal: canDescribeAsOptimal(provenance),
+      claims,
+      describeAsOptimal: canDescribeAsOptimal(provenance, claims),
     },
   };
 }
@@ -201,7 +216,7 @@ export function formatInterval(min: number | null, max: number | null): string |
 
 /** Short, user-facing review state carried beside every Amani band. */
 export function reviewStatusLabel(band: AmaniBand): string {
-  if (band.describeAsOptimal) return 'Reviewed range';
+  if (isReviewedRange(band.provenance)) return 'Reviewed range';
   switch (band.provenance.review_status) {
     case 'DISPUTED': return 'Disputed range, under review';
     case 'NEEDS_CONTEXT': return 'Needs more context, under review';

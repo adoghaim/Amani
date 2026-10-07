@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { YourTrajectoryCard, selectTrajectoryBullets } from './YourTrajectoryCard';
 import { buildInsightSummary, type BiggestChange } from '../lib/insights/buildInsightSummary';
-import { BOUNDARY_BUCKET_LABEL, boundaryBucketLabel, compareReports } from '../lib/scoring/compareReports';
+import { BOUNDARY_BUCKET_LABEL, bandLanguageByKey, boundaryBucketLabel, compareReports } from '../lib/scoring/compareReports';
+import type { AuthorizedLanguage } from '../lib/scoring/insightCopy';
+
+// Synthetic: a SAFE band WITH directional evidence. No catalog band has this.
+const AUTHORIZED: AuthorizedLanguage = { reviewStatus: 'SAFE', reviewedWording: true, optimal: false, favourableDirection: true };
 
 const change = (key: BiggestChange['key'], trajectoryStatus: BiggestChange['trajectoryStatus'],
   significance: BiggestChange['significance']): BiggestChange => ({
@@ -39,7 +43,10 @@ describe('B2 — a boundary crossing never prints "optimal" for an unreviewed ba
 
   it('the bucket for optimal and normal statuses is "within_band", never "optimal"', () => {
     const [delta] = compareReports([tsh(2.7)], [tsh(2.0)], null);
-    expect(delta?.boundaryCrossing).toEqual({ from: 'borderline', to: 'within_band', direction: 'improved' });
+    // Amendment 4 R1: was direction 'improved'. The destination band is UNKNOWN,
+    // so the crossing is 'changed' and carries that review status.
+    expect(delta?.boundaryCrossing).toEqual({ from: 'borderline', to: 'within_band', direction: 'changed', toReviewStatus: 'UNKNOWN' });
+    expect(delta?.trajectoryStatus).toBe('changed_into_band');
     expect(Object.keys(BOUNDARY_BUCKET_LABEL).sort()).toEqual(['borderline', 'out_of_range', 'within_band']);
     for (const label of Object.values(BOUNDARY_BUCKET_LABEL)) expect(label).not.toMatch(/optimal/i);
     expect(boundaryBucketLabel('optimal')).toBeNull();
@@ -47,10 +54,16 @@ describe('B2 — a boundary crossing never prints "optimal" for an unreviewed ba
 
   it('the real compare -> summary -> card chain renders neutral wording', () => {
     const summary = buildInsightSummary([tsh(2.0)], [tsh(2.7, '2025-12-01')], null, '2025-12-01');
-    const html = renderToStaticMarkup(<YourTrajectoryCard changes={summary.biggestChanges} primaryFinding={summary.primaryFinding} reportCount={1} />);
-    const text = html.replace(/<[^>]+>/g, ' ');
-    expect(text).toContain('TSH improved from borderline to within the Amani band.');
+    const html = renderToStaticMarkup(<YourTrajectoryCard changes={summary.biggestChanges} primaryFinding={summary.primaryFinding}
+      reportCount={1} bandLanguage={bandLanguageByKey(summary.deltaMap.values())} />);
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'");
+    // Amendment 4 R1: was "TSH improved from borderline to within the Amani band."
+    // Now the owner's neutral wording, plus the band's review state.
+    expect(text).toContain("TSH changed from its previous range classification. Amani's comparison band for this result has not yet completed clinical review.");
     expect(text).not.toMatch(/optimal/i);
+    expect(text).not.toMatch(/improv/i);
+    expect(html).not.toContain('text-theme-flag-ok');
+    expect(html).toContain('data-bullet-kind="changed"');
     // The summary's own fact line carries the bucket too; it must not say optimal either.
     expect(summary.biggestChanges.map(c => c.fact).join(' ')).not.toMatch(/optimal/i);
   });
@@ -69,8 +82,12 @@ describe('B2 — a boundary crossing never prints "optimal" for an unreviewed ba
 
   it('a bucket it does not recognise is never echoed', () => {
     const c = { ...change('tsh', 'normalized', 'significant'), boundaryCrossing: { from: 'out_of_range', to: 'optimal', direction: 'improved' } };
-    const [bullet] = selectTrajectoryBullets([c], null);
+    // Amendment 4 R1: the bucket-echo guard only matters where favourable
+    // wording is authorized, so it is now exercised with synthetic authority.
+    const [bullet] = selectTrajectoryBullets([c], null, new Map([['tsh', AUTHORIZED]]));
     expect(bullet?.text).toBe('tsh has moved toward the Amani band.');
+    const [neutral] = selectTrajectoryBullets([c], null);
+    expect(neutral?.text).not.toMatch(/optimal|improv/i);
   });
 });
 

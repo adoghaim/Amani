@@ -79,3 +79,7 @@ export const patternFollicularReport = report(4, 'follicular', PATTERN_PANEL);
 // (borderline against the unreviewed Amani band) then 2.0 (within it).
 export const trajectoryPriorReport = report(5, 'unknown', [['tsh', 2.7, '2.7', 'uIU/mL', 0.45, 4.5]], '2025-12-01');
 export const trajectoryCurrentReport = report(6, 'unknown', [['tsh', 2, '2.0', 'uIU/mL', 0.45, 4.5]]);
+
+// Amendment 4 (R2). Vitamin D 40 ng/mL trips the unchanged vitamin D rule,
+// whose frozen title is "Vitamin D Below Optimal", against a NEEDS_CONTEXT band.
+export const vitaminDReport = report(7, 'unknown', [['vitamin_d_25_oh', 40, '40', 'ng/mL', 30, 100]]);

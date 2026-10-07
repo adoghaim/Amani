@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { BiomarkerName } from '../../types';
 import { getAllEntries, getEntry } from '../biomarkers/dictionary';
-import { canDescribeAsOptimal, type RangeProvenance } from '../biomarkers/provenance';
+import { canDescribeAsOptimal, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance } from '../biomarkers/provenance';
 import { ANALYTE_CONTEXT } from '../biomarkers/rangeContext.generated';
 import {
   MENSTRUAL_PHASES,
@@ -129,7 +129,9 @@ describe('invariant 2 — the Amani band carries its review status', () => {
         expect(a.kind).toBe('scored');
         if (a.kind !== 'scored') continue;
         expect(a.band.provenance.review_status).toBe(statusOf(e.key, phase));
-        expect(a.band.describeAsOptimal).toBe(canDescribeAsOptimal(a.band.provenance));
+        expect(a.band.claims).toEqual(NO_CLAIM_EVIDENCE);
+        expect(a.band.describeAsOptimal).toBe(canDescribeAsOptimal(a.band.provenance, a.band.claims));
+        expect(a.band.describeAsOptimal).toBe(false);
         seen.add(a.band.provenance.review_status);
       }
     }
@@ -140,7 +142,7 @@ describe('invariant 2 — the Amani band carries its review status', () => {
   });
 
   it('labels each review state for the user', () => {
-    const band = (review_status: RangeProvenance['review_status']) => ({ min: 1, max: 2, phase: null, describeAsOptimal: false,
+    const band = (review_status: RangeProvenance['review_status']) => ({ min: 1, max: 2, phase: null, describeAsOptimal: false, claims: NO_CLAIM_EVIDENCE,
       provenance: { evidence_grade: 'unsourced' as const, review_status, source: null, source_date: null, reviewer: null, reviewed_at: null } });
     expect(reviewStatusLabel(band('UNKNOWN'))).toBe('Not yet reviewed');
     expect(reviewStatusLabel(band('DISPUTED'))).toBe('Disputed range, under review');
@@ -163,9 +165,12 @@ describe('invariant 3 — UNKNOWN, DISPUTED and NEEDS_CONTEXT never read as unqu
   it('the only path to "Optimal" is canDescribeAsOptimal on the applied band', () => {
     const reviewed: RangeProvenance = { evidence_grade: 'A', review_status: 'SAFE', source: 'synthetic fixture',
       source_date: '2000-01-01', reviewer: 'synthetic reviewer', reviewed_at: '2000-01-01' };
-    const scored = (provenance: RangeProvenance): AmaniAssessment => ({ kind: 'scored', status: 'optimal',
-      band: { min: 1, max: 2, phase: null, provenance, describeAsOptimal: canDescribeAsOptimal(provenance) } });
+    const optimalTarget: ClaimEvidence = { ...NO_CLAIM_EVIDENCE, optimal_target: true };
+    const scored = (provenance: RangeProvenance, claims: ClaimEvidence = optimalTarget): AmaniAssessment => ({ kind: 'scored', status: 'optimal',
+      band: { min: 1, max: 2, phase: null, provenance, claims, describeAsOptimal: canDescribeAsOptimal(provenance, claims) } });
     expect(amaniPillLabel(scored(reviewed))).toBe('Optimal');
+    // Amendment 4 R2: SAFE without optimal-target evidence does not say "Optimal".
+    expect(amaniPillLabel(scored(reviewed, NO_CLAIM_EVIDENCE))).toBe('Within Amani band');
     for (const review_status of ['UNKNOWN', 'DISPUTED', 'NEEDS_CONTEXT'] as const) {
       expect(amaniPillLabel(scored({ ...reviewed, review_status }))).toBe('Within Amani band');
     }

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { evaluateInsightRules, INSIGHT_RULES } from '../../utils/derivedMetrics';
 import { assessAmaniContext, contextFromReport, requiresCycleContext } from './amaniContext';
-import { gateInsightMatches } from './insightGate';
+import { ANALYTE_FREE_RULES, gateInsightMatches, ruleDependency } from './insightGate';
 import type { Biomarker, BiomarkerName } from '../../types';
 
 // Synthetic values only; no patient data. V2-03 amendment 2 (B1).
@@ -67,9 +67,36 @@ describe('B1 — no pattern is asserted from an input Amani withholds', () => {
     }
   });
 
-  it('a rule that declares no analytes is ungated', () => {
-    const match = { rule_id: 'undeclared', biomarkers_involved: [] as string[] };
-    expect(gateInsightMatches([match], panel({ lh: 30 }), contextFromReport(null))).toEqual([match]);
+  // Amendment 4 R3: replaces "a rule that declares no analytes is ungated".
+  // That pass-through is the silent bypass the owner ruled out; the gate now
+  // suppresses whenever the dependency cannot be established.
+  it('fails safe: a match whose dependency cannot be established is suppressed', () => {
+    const ctx = contextFromReport('luteal');
+    const values = panel({ hemoglobin_a1c: 6 });
+    const a1c = INSIGHT_RULES.find(r => r.rule_id === 'low_hba1c_pattern')!;
+    const real = { rule_id: a1c.rule_id, biomarkers_involved: [...a1c.biomarkers_involved] };
+    expect(gateInsightMatches([real], values, ctx)).toEqual([real]);
+    const cases = [
+      { rule_id: 'undeclared', biomarkers_involved: [] as string[] },        // unknown rule, empty list
+      { rule_id: 'undeclared', biomarkers_involved: ['hemoglobin_a1c'] },     // unknown rule
+      { ...real, biomarkers_involved: [] },                                   // declaration dropped
+      { ...real, biomarkers_involved: ['hemoglobin_a1c', 'lh'] },             // disagrees with its rule
+      { ...real, biomarkers_involved: undefined as unknown as string[] },     // missing
+    ];
+    for (const match of cases) {
+      expect(ruleDependency(match).kind, JSON.stringify(match)).toBe('unestablished');
+      expect(gateInsightMatches([match], values, ctx), JSON.stringify(match)).toEqual([]);
+    }
+  });
+
+  it('an empty declaration is allowed only when the rule is explicitly analyte-free', () => {
+    const declared = new Map([['free', [] as string[]], ['reads', ['tsh']]]);
+    expect(ruleDependency({ rule_id: 'free', biomarkers_involved: [] }, declared, new Set())).toEqual({ kind: 'unestablished' });
+    expect(ruleDependency({ rule_id: 'free', biomarkers_involved: [] }, declared, new Set(['free']))).toEqual({ kind: 'analyte_free' });
+    // Marked analyte-free while declaring analytes is a contradiction, not a pass.
+    expect(ruleDependency({ rule_id: 'reads', biomarkers_involved: ['tsh'] }, declared, new Set(['reads']))).toEqual({ kind: 'unestablished' });
+    expect(ruleDependency({ rule_id: 'reads', biomarkers_involved: ['tsh'] }, declared, new Set())).toEqual({ kind: 'analytes', analytes: ['tsh'] });
+    expect(ANALYTE_FREE_RULES.size).toBe(0);
   });
 
   it('every declared rule declares analytes, so none is silently ungated', () => {
@@ -100,10 +127,12 @@ describe('B1 — no pattern is asserted from an input Amani withholds', () => {
     expect(evaluate(everything, null).gated).not.toContain('possible_pcos_pattern');
   });
 
-  it('ReportView renders only gated insight flags', () => {
+  it('ReportView renders only gated, authorized insight flags', () => {
     const source = readFileSync('src/pages/ReportView.tsx', 'utf8');
     expect(source.match(/evaluateInsightRules\(/g)).toHaveLength(1);
     expect(source).toMatch(/gateInsightMatches\(\s*evaluateInsightRules\(biomarkers, report\?\.estimated_cycle_phase\),\s*biomarkers,\s*contextFromReport\(report\?\.estimated_cycle_phase\),?\s*\)/);
+    // Amendment 4 R2: the gated matches are then rendered through the authorized-language function.
+    expect(source).toMatch(/authorizeInsightMatches\(\s*gateInsightMatches\(\s*evaluateInsightRules\([^)]*\),[^)]*\),\s*\),\s*biomarkers,\s*contextFromReport\(report\?\.estimated_cycle_phase\),?\s*\)/);
     expect(source).toMatch(/<InsightFlagsPanel flags=\{insightFlags\} \/>/);
   });
 });

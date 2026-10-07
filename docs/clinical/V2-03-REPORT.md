@@ -213,7 +213,9 @@ unreviewed band:
    PCOS copy "outside the optimal range"). Amendment 2 forbids changing rule thresholds or
    clinical wording, so B1 gates **which cards render**, not what they say. When a card is
    legitimately shown (e.g. spec 8, with a recorded phase), its frozen copy can still say
-   "optimal". Pinned by count.
+   "optimal". Pinned by count. **Closed at the render path in turn 6 (§11, R2).** The
+   definitions are unchanged and still say "optimal". The page renders them only through
+   `authorizeInsightMatches`.
 4. **Derived-metric thresholds** (`DerivedMetricsPanel`) are not catalog ranges and carry no
    review state; relabelled "Amani band" in turn 2, still unreviewed.
 
@@ -226,20 +228,17 @@ unreviewed band:
   attribute values, or filters, which is why `DoctorQuestion.text` is a reviewed entry.
   Identity fields (display names, units, ids, dates, range labels, crossing direction) are
   exempt by a reviewed list, not by proof.
-- **Spec 6's page-wide `/optimal/i` holds only while "Patterns & Insights" is collapsed.** If a
-  user opens that panel on the luteal fixture, the frozen luteal-insufficiency description
-  ("optimal: 5–25 ng/mL") is a legitimately shown card. §7 item 3 still applies to it.
+- *Closed in turn 6.* Spec 6's page-wide `/optimal/i` used to hold only while "Patterns &
+  Insights" was collapsed. Spec 6 now opens the panel and expands the luteal-insufficiency
+  card before it asserts.
 
 - **B1 gate scope.** A rule is dropped only when a declared analyte is **present** on the
   report and withheld. A declared analyte absent from the report is not an input, so it does
-  not gate (proven: PCOS from total testosterone + SHBG alone still renders unphased). Every
-  current rule declares analytes; a rule with none would be ungated (tested), and a test
-  fails if any rule ships with an empty `biomarkers_involved`. The gate trusts each rule's
-  declared list: if a rule's `check` read an analyte it did not declare, the gate could not
-  see it. Today the declared lists match the `check` bodies by inspection, not by test.
-- **"Improved" is still a direction judgement** against an unreviewed band ("TSH improved
-  from borderline to within the Amani band", with a green check). Only the word "optimal" was
-  ruled out; whether "improved" also needs qualification is an owner question.
+  not gate (proven: PCOS from total testosterone + SHBG alone still renders unphased).
+  *Superseded in turn 6 (§11, R3).* A rule with no declared analytes is no longer ungated.
+  The declared lists are now proven against the `check` bodies by test, not by inspection.
+- *Superseded in turn 6 (§11, R1).* "Improved" was a direction judgement against an
+  unreviewed band. The owner ruled it out, and it can no longer render.
 - **Persisted `biomarkers.flagged`** on pre-V2-03 rows may have come from the fallback band.
   The category count now computes live; the in-category sort order still uses the stored flag.
 - **Partially scored systems** say "N markers · K scored by Amani"; their label reflects only
@@ -373,3 +372,151 @@ through a local const, and lets the qualified form through.
 
 No SQL, migration, catalog, `src/lib/insights/**`, `src/utils/derivedMetrics.ts` or `supabase/**`
 file changed, so the Docker harness was not re-run. It is SKIPPED by policy in any case.
+
+## 11. Amendment 4 (turn 6): owner closeout rulings R1, R2, R3
+
+No clinical value, threshold, rule body or evidence grade changed, and no band is `SAFE`.
+`src/lib/insights/**`, `src/utils/derivedMetrics.ts`, `supabase/**` and
+`src/components/freemium/**` are byte-unchanged. The 160-vs-171 question is closed by the
+owner and was not revisited.
+
+### R1. Movement into an unapproved band is not "improved"
+
+The review state is now carried through the trajectory path. In `compareReports`, every delta
+carries `bandLanguage`, the authorized language of the band it was judged against.
+- `detectBoundaryCrossing(prev, curr, language)` returns `'improved'` only when that language
+  authorizes a favourable direction. Any other move toward the band returns `'changed'`. The
+  crossing also carries `toReviewStatus`.
+- `computeTrajectoryStatus(..., language)` returns `normalized` or `improving_still_*` only
+  under the same authorization. Otherwise it returns `changed_into_band` or
+  `changed_still_*`. Those keep the old ranking slot, because ranking is not a claim.
+- Worsening is unchanged.
+
+Because the gate sits at the data layer, every downstream "improved" path is now
+unreachable for real data. That covers the ReportView headline, the Top Priority 1a branch,
+the focus-area phrase "is moving in the right direction", top-finding trend colour and the
+builder's facts.
+
+`YourTrajectoryCard` takes the band language per analyte, which ReportView builds with
+`bandLanguageByKey`. A missing entry means nothing is established, so the card stays neutral.
+For an unauthorized band the card shows a `changed` bullet:
+- neutral icon, no green check;
+- the owner's wording, for example "TSH changed from its previous range classification.";
+- the band's review statement.
+
+The favourable path (`SAFE` plus directional evidence) still exists. Synthetic language
+proves it can be reached, and a sweep over the catalog proves it cannot be reached with real
+data (no catalog band carries directional evidence). The lab-range placement ("Within your
+lab's range") is still stated, and spec 9 asserts it next to the absence of "improved".
+
+**Found by the new browser proof.** Spec 9's page-wide `/improv/i` failed on its first run:
+`DoctorQuestionsCard` rendered "My TSH improved from borderline to within band. Is this change
+clinically meaningful?". That is builder copy from `src/lib/insights` reaching the page. The
+card now drops any question whose claims its marker's band does not authorize, and the
+ReportView call passes it the band language.
+
+### R2. One authorized-language function, and the trap
+
+`src/lib/scoring/insightCopy.ts` now owns this through `authorizedLanguage(band)`. It feeds
+`unauthorizedClaims`, `authorizeText`, `authorizeTitle`, `reviewPhrase`, `reviewStatement`
+and `combineLanguage` (most restrictive status wins). What each review state allows:
+
+| Status | Allowed |
+|---|---|
+| `SAFE` | Reviewed wording. |
+| `NEEDS_CONTEXT` | "More context needed". |
+| `DISPUTED` | "Interpretation unavailable pending clinical review". |
+| `UNKNOWN`, or not established | Neutral comparison only, such as "Your result falls outside Amani's current comparison band. This band has not yet completed clinical review." |
+
+**The trap.** `SAFE` does not authorize "optimal". `provenance.ts` adds a `ClaimEvidence` type
+(`optimal_target`, `favourable_direction`), kept separate from review:
+- `canDescribeAsOptimal(range, claims)` now needs both a reviewed range and optimal-target
+  evidence.
+- The new `canClaimFavourableDirection` needs a reviewed range and directional evidence.
+- The catalog records no claim evidence, so `bandClaims()` returns `NO_CLAIM_EVIDENCE`
+  (frozen) for every band. Nothing infers it.
+
+`reviewStatusLabel` now keys "Reviewed range" on `isReviewedRange`, not on the optimal
+authorization.
+
+**Applied at the in-scope render path.** ReportView renders
+`authorizeInsightMatches(gateInsightMatches(...))`. Each card is checked against the bands of
+its declared inputs present on the report:
+- A title carrying an unauthorized claim becomes "<subject> needs review", for example
+  "Vitamin D needs review".
+- In the description, each sentence carrying an unauthorized claim is replaced once by the
+  band's statement.
+
+Rule matching, severity and analytes are unchanged, and a test proves it.
+`withoutOptimalClaims` keeps its narrower contract (optimal only) because the FocusAreas test
+pins every non-optimal builder string verbatim. V2-03b can move those call sites to
+`authorizeText` once each has a band.
+
+### R3. The declaration is safety metadata, proven both ways
+
+`src/lib/scoring/insightRuleDependencies.test.ts` proves the declarations two ways.
+- **Static.** A TypeScript-AST pass over every `check` body in `derivedMetrics.ts`. Each use of
+  the metrics parameter must be `m['<literal>']`. Anything else fails the proof: a computed
+  key, `m.x`, passing `m` on, spreading or destructuring it, or a write. Reads must equal the
+  declaration exactly. A self-test shows it catches all of these cases.
+- **Dynamic.** Each real `check` runs against a recording Proxy, over 18 + 32 per declared analyte synthetic
+  panels (up to 178) × 5 phases, with decoy analytes no rule declares. Reads must be a subset of the
+  declaration, and their union must equal it. Enumerating the panel fails. A self-test shows
+  it catches an undeclared read and an enumeration.
+
+The rules needed no edit, so there is nothing to propose for `derivedMetrics.ts`.
+
+**Analyte-free rules** are declared by id in `ANALYTE_FREE_RULES`, which is explicitly empty
+today. The proof requires that every empty declaration is listed there, and that every
+listed rule reads nothing.
+
+**Fail-safe.** `gateInsightMatches` takes each dependency from the rule definition by
+`rule_id`, through `ruleDependency`. It suppresses in each of these cases:
+- an unknown rule;
+- a match whose `biomarkers_involved` is missing or disagrees with its rule;
+- an empty declaration that is not in `ANALYTE_FREE_RULES`;
+- a rule that is listed as analyte-free but still declares analytes;
+- a present input the catalog cannot assess (`unavailable`).
+
+The old test "a rule that declares no analytes is ungated" asserted the bypass the owner
+ruled out. It is replaced by the fail-safe tests, which are stronger: five ways a dependency
+can fail to be established.
+
+### Dual proof and negative controls
+
+Each control was reverted, run, then restored. A grep for the marker gave 0 afterwards, and
+`git status` showed `src/utils` clean.
+
+| Ruling | What was reverted | Unit result | Browser result |
+|---|---|---|---|
+| R1 | Gate removed in `compareReports` (direction always `'improved'`, `favourable = true`) and in the card | `npx vitest run src/lib/scoring/trajectoryLanguage.test.tsx src/components/YourTrajectoryCard.test.tsx src/components/FocusAreas.test.tsx`: 17 failed | `npm run test:e2e -- e2e/reports/context-suppression.spec.ts --project=chromium --reporter=line --grep "9\."`: failed; the snapshot showed "TSH improved from borderline to within the Amani band." |
+| R2 | `authorizeText` and `authorizeTitle` made pass-through | `npx vitest run src/lib/scoring/insightCopy.test.ts`: 6 failed | `... --grep "6\.\|8\.\|10\."`: all three failed; the snapshots showed "Vitamin D Below Optimal", "(optimal: 5–25 ng/mL)" and "outside the optimal range" |
+| R2 trap | `canDescribeAsOptimal` = reviewed alone | `npx vitest run src/lib/biomarkers/provenance.test.ts src/lib/scoring/insightCopy.test.ts src/lib/scoring/amaniContext.test.ts`: 3 failed | Not browser-visible: no band is `SAFE`, so there is nothing for a browser to render |
+| R3 fail-safe | Gate allows an unestablished dependency | `npx vitest run src/lib/scoring/insightGate.test.ts`: 1 failed | Not browser-visible: no real rule has an unestablished dependency |
+| R3 declaration | `'lh', 'fsh'` temporarily dropped from the PCOS declaration in `derivedMetrics.ts` | `npx vitest run src/lib/scoring/insightRuleDependencies.test.ts`: static and dynamic proofs both failed | `... --grep "7\."`: failed; "Possible PCOS-Related Pattern" count was 1 (the bypass made visible) |
+
+### Verified in turn 6, in this worktree
+
+- `npm test`: 62 files, 1399 tests.
+- `npm run typecheck`: 0 errors. `npm run lint`: 0 errors, 9 pre-existing warnings.
+- `npm run build`: success.
+- `npm run clinical:check`: 83 entries; 83 analytes / 198 ranges. `npm run clinical:test`: 50/50.
+- `npm run test:e2e`: 60/60 (20 cases × chromium, webkit, firefox). `--repeat-each=3`:
+  180/180.
+- `npm run test:e2e:isolation`: passes.
+
+Changed tests: B2's crossing expectation (`'improved'` became `'changed'`, plus
+`toReviewStatus`), its card sentence, and the unknown-bucket test. That test now uses
+synthetic authority and adds a neutral-path assertion. Spec 9's sentence changed too. Each
+replacement asserts more: no `/improv/i`, no green class, and a `changed` bullet kind. The
+provenance test's "SAFE alone ⇒ optimal" assertion is inverted by ruling R2 and extended.
+`FreemiumReportPanel.test.tsx` passes untouched.
+
+### Still not covered (unchanged by this turn)
+
+- Server AI interpretation (§7 item 1) and the `src/lib/insights/**` definitions remain
+  deferred to V2-03b.
+- Worsening wording ("has risen … and remains outside the Amani band", the amber icon, the
+  "has worsened" headline) is unchanged. R1 rules on favourable direction. Whether
+  unfavourable direction against an unreviewed band also needs neutral wording is an owner
+  question.

@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
   lutealPhaseReport, missingPhaseReport, patternFollicularReport, patternMissingPhaseReport,
-  trajectoryCurrentReport, trajectoryPriorReport,
+  trajectoryCurrentReport, trajectoryPriorReport, vitaminDReport,
 } from './synthetic-reports';
 
 // V2-03 release invariants in a real browser, against the real ReportView,
@@ -23,6 +23,19 @@ async function expandSystem(page: Page, label: string, initiallyExpanded: boolea
 }
 
 const card = (page: Page, name: string) => page.getByRole('article', { name: `${name} result` });
+
+// V2-03 amendment 2 (B1). The PCOS and luteal-insufficiency rules are
+// unchanged; the page drops any pattern built from an input it withholds.
+async function openInsightFlags(page: Page) {
+  await page.getByRole('button', { name: /^Patterns & Insights/ }).click();
+  await expect(page.getByRole('heading', { name: 'Clinical insight flags' })).toBeVisible();
+}
+
+// Amendment 4 (R2): a flag card is a button carrying its title; expanding it
+// shows the description, which is where the frozen copy said "optimal".
+async function expandFlag(page: Page, title: string) {
+  await page.getByRole('button', { name: new RegExp(`^${title}`) }).click();
+}
 
 test.describe('cycle phase missing from the report', () => {
   test.use({ authenticated: true, syntheticReports: [missingPhaseReport] });
@@ -120,15 +133,15 @@ test.describe('cycle phase recorded on the report', () => {
     await expect(focus.getByText(/^One or more of these markers is borderline or outside its Amani band\./)).toBeVisible();
     // Any casing, any position, anywhere on the page.
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
+    // Amendment 4 (R2). The luteal-insufficiency card is legitimately shown
+    // here, and its frozen copy said "(optimal: 5–25 ng/mL)" about a DISPUTED
+    // band. With the panel open and the card expanded, it must not.
+    await openInsightFlags(page);
+    await expandFlag(page, 'Possible Luteal Phase Insufficiency');
+    await expect(page.getByText(/^Interpretation unavailable pending clinical review\. /)).toBeVisible();
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
 });
-
-// V2-03 amendment 2 (B1). The PCOS and luteal-insufficiency rules are
-// unchanged; the page drops any pattern built from an input it withholds.
-async function openInsightFlags(page: Page) {
-  await page.getByRole('button', { name: /^Patterns & Insights/ }).click();
-  await expect(page.getByRole('heading', { name: 'Clinical insight flags' })).toBeVisible();
-}
 
 test.describe('pattern cards from withheld inputs', () => {
   test.use({ authenticated: true, syntheticReports: [patternMissingPhaseReport] });
@@ -152,6 +165,27 @@ test.describe('pattern cards once context is recorded', () => {
     await openInsightFlags(page);
     await expect(page.getByText('Possible PCOS-Related Pattern', { exact: true })).toBeVisible();
     await expect(page.getByText('Elevated HbA1c', { exact: true })).toBeVisible();
+    // Amendment 4 (R2). The card speaks, but only within what its bands
+    // authorize: its frozen "outside the optimal range" sentence is replaced.
+    await expandFlag(page, 'Possible PCOS-Related Pattern');
+    await expect(page.getByText(/Elevated testosterone or DHEA-S with low SHBG/)).toBeVisible();
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
+  });
+});
+
+// Amendment 4 (R2). The vitamin D rule's frozen title is "Vitamin D Below
+// Optimal"; its band is NEEDS_CONTEXT.
+test.describe('an insight flag against a NEEDS_CONTEXT band', () => {
+  test.use({ authenticated: true, syntheticReports: [vitaminDReport] });
+
+  test('10. "Vitamin D Below Optimal" never renders; the card says it needs review', async ({ page }) => {
+    await openReport(page, vitaminDReport.report.id);
+    await openInsightFlags(page);
+    await expect(page.getByText('Vitamin D needs review', { exact: true })).toBeVisible();
+    await expect(page.getByText('Vitamin D Below Optimal', { exact: true })).toHaveCount(0);
+    await expandFlag(page, 'Vitamin D needs review');
+    await expect(page.getByText(/^More context needed\. Amani's comparison band for this result has not yet completed clinical review\. /)).toBeVisible();
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
 });
 
@@ -160,16 +194,28 @@ test.describe('trajectory across two reports', () => {
   // Wrapped: Playwright reads a bare two-element array as a [value, options] tuple.
   test.use({ authenticated: true, syntheticReports: [[trajectoryCurrentReport, trajectoryPriorReport], { scope: 'test' }] });
 
-  test('9. a crossing into an unreviewed band never reads "optimal"', async ({ page }) => {
+  test('9. a crossing into an unreviewed band never reads "optimal" or "improved", and gets no green check', async ({ page }) => {
     await openReport(page, trajectoryCurrentReport.report.id);
     // The innermost element holding both the card heading and its bullet list.
     const trajectory = page.locator('div')
       .filter({ has: page.getByRole('heading', { name: 'Your trajectory', exact: true }) })
       .filter({ has: page.getByRole('list') })
       .last();
-    await expect(trajectory.getByText(/^TSH improved from borderline to /)).toBeVisible();
+    // Amendment 4 (R1): this read "TSH improved from borderline to within the
+    // Amani band." with a green check. The TSH band is UNKNOWN.
+    await expect(trajectory.getByText(
+      "TSH changed from its previous range classification. Amani's comparison band for this result has not yet completed clinical review.",
+      { exact: true },
+    )).toBeVisible();
+    await expect(trajectory.locator('[data-bullet-kind="changed"]')).toHaveCount(1);
+    await expect(trajectory.locator('[data-bullet-kind="improved"]')).toHaveCount(0);
+    await expect(trajectory.locator('[class*="flag-ok"]')).toHaveCount(0);
+    // Factual placement in her own lab's range is still stated.
+    await expandSystem(page, 'Thyroid', false);
+    await card(page, 'TSH').getByRole('button').click();
+    await expect(card(page, 'TSH').getByText("Within your lab's range", { exact: true })).toBeVisible();
     // Any casing, any position, anywhere on the page.
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
-    await expect(trajectory.getByText('TSH improved from borderline to within the Amani band.', { exact: true })).toBeVisible();
+    await expect(page.getByText(/improv|right direction/i)).toHaveCount(0);
   });
 });

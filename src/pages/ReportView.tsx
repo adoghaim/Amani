@@ -19,7 +19,8 @@ import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
-import { gateInsightMatches } from '../lib/scoring/insightGate';
+import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
+import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import { primaryFindingSentence } from '../lib/scoring/insightCopy';
 import { contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
@@ -768,9 +769,14 @@ export function ReportView() {
   const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
   // V2-03: no pattern card may be built from an input Amani withholds for
   // this report's context (e.g. a PCOS pattern from an unphased LH:FSH ratio).
+  // Amendment 4 (R2): a card that survives says only what its bands authorize.
   const insightFlags = useMemo(
-    () => gateInsightMatches(
-      evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+    () => authorizeInsightMatches(
+      gateInsightMatches(
+        evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+        biomarkers,
+        contextFromReport(report?.estimated_cycle_phase),
+      ),
       biomarkers,
       contextFromReport(report?.estimated_cycle_phase),
     ),
@@ -1808,6 +1814,7 @@ export function ReportView() {
               changes={insightSummary.biggestChanges}
               primaryFinding={insightSummary.primaryFinding}
               reportCount={historicalReportCount}
+              bandLanguage={bandLanguageByKey(insightSummary.deltaMap.values())}
             />
           )}
 
@@ -1980,7 +1987,7 @@ export function ReportView() {
 
           {/* ── Questions for Your Doctor (deterministic) ──────── */}
           {insightSummary && !isProcessing && insightSummary.questionsForDoctor.length > 0 && (
-            <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} />
+            <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} bandLanguage={bandLanguageByKey(insightSummary.deltaMap.values())} />
           )}
 
           {/* ── Health Systems (drill-down to underlying biomarkers) ── */}
