@@ -34,6 +34,8 @@ export interface BandAuthority {
 export type Placement = 'within' | 'outside' | null;
 
 export interface AuthorizedLanguage {
+  /** Transitional legacy permissions above are not clinical-rule authority. */
+  bands?: readonly BandAuthority[];
   /** Null when the band's review state could not be established. */
   reviewStatus: ReviewStatus | null;
   /** SAFE with complete provenance: reviewed, evaluative wording is allowed. */
@@ -59,6 +61,7 @@ export function claimsFavourableDirection(text: string): boolean {
 export function authorizedLanguage(band: BandAuthority | null | undefined): AuthorizedLanguage {
   if (!band) return { reviewStatus: null, reviewedWording: false, optimal: false, favourableDirection: false };
   return {
+    bands: [band],
     reviewStatus: band.provenance.review_status,
     reviewedWording: isReviewedRange(band.provenance),
     optimal: canDescribeAsOptimal(band.provenance, band.claims),
@@ -80,6 +83,7 @@ export function combineLanguage(languages: readonly AuthorizedLanguage[]): Autho
     (a, b) => RESTRICTION[a.reviewStatus ?? 'none'] - RESTRICTION[b.reviewStatus ?? 'none'],
   )[0]!;
   return {
+    bands: languages.flatMap(l => l.bands ?? []),
     reviewStatus: strictest.reviewStatus,
     reviewedWording: languages.every(l => l.reviewedWording),
     optimal: languages.every(l => l.optimal),
@@ -175,4 +179,86 @@ export function primaryFindingSentence(
  * state is known; authorizeText is the review-aware form. */
 export function withoutOptimalClaims(text: string, replacement = ''): string {
   return replaceSentences(text, s => OPTIMAL.test(s), replacement);
+}
+
+/**
+ * V2-03b: language carries its source, category and presentation semantics.
+ * A range review is not a clinical rule, an optimal-target grant, or a safety
+ * rule. The legacy permission object is retained while callers migrate; it
+ * cannot mint any of the clinical categories below.
+ *
+ * Clinical rule variants are a transport contract, not an approval mechanism.
+ * No clinical grant is registered or issued here yet. A future producer must
+ * resolve the rule and its claim-specific evidence through an approved registry,
+ * never accept a rule ID supplied by an LLM or infer approval from band status.
+ */
+type ReviewedRuleSource = {
+  kind: 'reviewed_amani_rule'; ruleId: string; evidenceId: string;
+  reviewer: string; reviewedAt: string;
+};
+type SafetyRuleSource = {
+  kind: 'deterministic_safety_rule'; ruleId: string; version: string;
+};
+export type ClinicalLanguage =
+  | { category: 'factual_observation'; text: string; cue: 'neutral'; authority:
+      | { kind: 'lab_data'; subject: string; previous: number | null; current: number; unit: string }
+      | { kind: 'patient_lab_interval'; subject: string; min: number | null; max: number | null } }
+  | { category: 'comparison_band'; text: string; cue: 'neutral'; authority: {
+      kind: 'amani_comparison_band'; reviewStatus: ReviewStatus | null; bands: readonly BandAuthority[];
+    } }
+  | { category: 'reviewed_interpretation'; text: string; cue: 'neutral'; authority: ReviewedRuleSource }
+  | { category: 'optimal_target'; text: string; cue: 'neutral'; authority: {
+      kind: 'optimal_target_evidence'; rule: ReviewedRuleSource; targetEvidenceId: string;
+    } }
+  | { category: 'safety_warning'; text: string; cue: 'warning' | 'critical'; authority: SafetyRuleSource }
+  | { category: 'clinical_action'; text: string; cue: 'neutral' | 'warning' | 'critical';
+      authority: ReviewedRuleSource | SafetyRuleSource };
+
+export interface MeasuredMovement {
+  displayName: string;
+  previousValue: number | null;
+  currentValue: number;
+  unit: string;
+  /** Comes from the existing deterministic magnitude calculation. */
+  significance: 'minor' | 'moderate' | 'significant';
+}
+
+/** No status or band placement can authorize harm, benefit, or care advice. */
+export function describeMeasuredMovement(
+  movement: MeasuredMovement,
+  format: 'values' | 'direction' | 'magnitude' = 'values',
+): Extract<ClinicalLanguage, { category: 'factual_observation' }> {
+  const { displayName, previousValue, currentValue, unit, significance } = movement;
+  let text: string;
+  if (previousValue === null) {
+    text = `${displayName} was measured at ${currentValue} ${unit}.`;
+  } else if (format === 'magnitude') {
+    text = significance === 'minor'
+      ? `${displayName} has not changed significantly.`
+      : currentValue === previousValue ? `${displayName} has the same measured value as before.`
+      : `${displayName} has changed since your prior report.`;
+  } else if (format === 'direction' && currentValue !== previousValue) {
+    const has = /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/i.test(displayName) ? 'have' : 'has';
+    text = `${displayName} ${has} ${currentValue > previousValue ? 'risen' : 'dropped'} from ${previousValue} to ${currentValue} ${unit}.`;
+  } else if (significance === 'minor') {
+    text = `${displayName} has not changed significantly: ${previousValue} to ${currentValue} ${unit}.`;
+  } else {
+    // Equality remains factual even if an upstream significance is inconsistent.
+    const verb = currentValue > previousValue ? 'increased' : currentValue < previousValue ? 'decreased' : 'remained';
+    text = currentValue === previousValue
+      ? `${displayName} ${verb} at ${currentValue} ${unit}.`
+      : `${displayName} ${verb} from ${previousValue} to ${currentValue} ${unit}.`;
+  }
+  return {
+    category: 'factual_observation', text, cue: 'neutral',
+    authority: { kind: 'lab_data', subject: displayName, previous: previousValue, current: currentValue, unit },
+  };
+}
+
+/** A comparison-band observation is always separate from clinical meaning. */
+export function describeComparisonBand(language: AuthorizedLanguage, placement: Placement = null): Extract<ClinicalLanguage, { category: 'comparison_band' }> {
+  return {
+    category: 'comparison_band', text: reviewStatement(language, placement), cue: 'neutral',
+    authority: { kind: 'amani_comparison_band', reviewStatus: language.reviewStatus, bands: language.bands ?? [] },
+  };
 }

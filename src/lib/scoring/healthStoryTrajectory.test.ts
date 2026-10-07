@@ -71,6 +71,9 @@ describe('amendment 5 — the health story states only what is true', () => {
               expect(trajectory, where).not.toBe('improving');
               expect(claimsFavourableDirection(text), where).toBe(false);
             }
+            // A band direction cannot authorize an adverse clinical judgement either.
+            expect(trajectory, where).not.toBe('worsening');
+            expect(text, where).not.toMatch(/wrong direction|worsen|worth discussing/i);
             expect(trajectory, where).not.toBe('no_prior_data');
             if (trajectory === 'changed') {
               expect(text, where).toContain('has changed since your prior report.');

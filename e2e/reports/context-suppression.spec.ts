@@ -239,3 +239,41 @@ test.describe('health story for an out-of-band marker that moved', () => {
     await expect(story).not.toContainText(/improv|right direction/i);
   });
 });
+
+// V2-03b: both reports are out of band, so headline, primary observation,
+// trajectory and health-story theme all render. No server safety fixture here.
+for (const [label, previous, current, sentence] of [
+  ['away', 6, 9, 'TSH increased from 6 to 9 uIU/mL.'],
+  ['minor', 6, 6.1, 'TSH has not changed significantly: 6 to 6.1 uIU/mL.'],
+] as const) {
+  const prior = { ...movedPriorReport, biomarkers: movedPriorReport.biomarkers.map(b => ({ ...b, value: previous, raw_value_text: String(previous) })) };
+  const latest = { ...movedCurrentReport, biomarkers: movedCurrentReport.biomarkers.map(b => ({ ...b, value: current, raw_value_text: String(current) })) };
+  test.describe(`V2-03b ${label} movement`, () => {
+    test.use({ authenticated: true, syntheticReports: [[latest, prior], { scope: 'test' }] });
+    test('observation surfaces preserve movement without clinical meaning', async ({ page }) => {
+      await openReport(page, latest.report.id);
+      const primary = page.getByTestId('primary-movement-observation');
+      await expect(primary).toBeVisible();
+      await expect(primary).toContainText(sentence);
+      await expect(primary.locator('[data-language-source="lab_data"]')).toHaveCount(1);
+      await expect(primary.locator('[data-language-source="amani_comparison_band"]')).toHaveCount(1);
+      const trajectory = page.locator('div').filter({ has: page.getByRole('heading', { name: 'Your trajectory', exact: true }) })
+        .filter({ has: page.getByRole('list') }).last();
+      await expect(trajectory).toBeVisible();
+      await expect(trajectory).toContainText(label === 'away'
+        ? 'TSH has risen from 6 to 9 uIU/mL.' : 'TSH has not changed significantly.');
+      for (const surface of [primary, trajectory]) {
+        await expect(surface).not.toContainText(/worsen|deteriorat|improv|better|worse|healthy|wrong direction|worth discussing|talk to your doctor|seek care|optimal|reassur/i);
+        await expect(surface.locator('[class*="flag-watch"], [class*="flag-ok"], [class*="flag-low"]')).toHaveCount(0);
+        for (const label of await surface.locator('[aria-label]').evaluateAll(nodes => nodes.map(n => n.getAttribute('aria-label') ?? ''))) {
+          expect(label).not.toMatch(/danger|worsen|improv|better|worse/i);
+        }
+      }
+      const story = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) })
+        .locator('p').filter({ hasText: /^This report is mainly about/ });
+      await expect(story).toHaveCount(1);
+      await expect(story).not.toContainText(/unchanged|wrong direction|worsen|improv/i);
+      await expect(page.getByRole('heading', { name: sentence, exact: true })).toBeVisible();
+    });
+  });
+}

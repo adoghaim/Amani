@@ -3,6 +3,8 @@ import type { BiggestChange, TopFinding } from '../lib/insights/buildInsightSumm
 import type { BiomarkerName } from '../types';
 import { boundaryBucketLabel } from '../lib/scoring/compareReports';
 import { authorizedLanguage, reviewStatement, type AuthorizedLanguage } from '../lib/scoring/insightCopy';
+import { describeMeasuredMovement, describeComparisonBand, type ClinicalLanguage } from '../lib/scoring/insightCopy';
+import { ClinicalObservation } from './ClinicalObservation';
 
 // 'changed' is a movement toward a band that does not authorize a favourable
 // direction (V2-03 amendment 4, R1): neutral words, neutral icon.
@@ -12,6 +14,7 @@ interface TrajectoryBullet {
   kind: BulletKind;
   text: string;
   isPrimary: boolean;
+  observations?: Extract<ClinicalLanguage, { category: 'factual_observation' | 'comparison_band' }>[];
   /** Present only when this exact bullet renders both numeric values. */
   values?: { previous: number; current: number; unit: string };
 }
@@ -36,7 +39,7 @@ function formatPriorDate(date: string): string {
 }
 
 function bulletForChange(change: BiggestChange, isPrimary: boolean, language: AuthorizedLanguage): TrajectoryBullet | null {
-  const { displayName, trajectoryStatus, boundaryCrossing, trendDirection, previousValue, currentValue, unit, isFirstRecorded, priorReportDate, priorIsOlderThanImmediatePrior } = change;
+  const { displayName, trajectoryStatus, boundaryCrossing, previousValue, currentValue, unit, isFirstRecorded, priorReportDate, priorIsOlderThanImmediatePrior } = change;
   const c = conjugate(displayName);
   const sinceClause = priorIsOlderThanImmediatePrior && priorReportDate
     ? ` since ${formatPriorDate(priorReportDate)}`
@@ -74,14 +77,16 @@ function bulletForChange(change: BiggestChange, isPrimary: boolean, language: Au
     return { kind: 'improved', isPrimary, values, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside the Amani band.` };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
-    const verb = trendDirection === 'up' ? 'risen' : trendDirection === 'down' ? 'dropped' : 'shifted';
-    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside the Amani band.` };
+    const observations = [describeMeasuredMovement(change, 'direction'), describeComparisonBand(language, 'outside')];
+    return { kind: 'worsened', isPrimary, observations, values: { previous: previousValue, current: currentValue, unit }, text: observations.map(o => o.text).join(' ') };
   }
   if (trajectoryStatus === 'newly_abnormal') {
-    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside the Amani band at ${currentValue} ${unit}.` };
+    const observations = [describeMeasuredMovement(change, 'magnitude'), describeComparisonBand(language, 'outside')];
+    return { kind: 'worsened', isPrimary, observations, text: observations.map(o => o.text).join(' ') };
   }
   if (trajectoryStatus === 'stable_abnormal') {
-    return { kind: 'stable_elevated', isPrimary, text: `${displayName} ${c.remains} outside the Amani band and ${c.is} being tracked over time.` };
+    const observations = [describeMeasuredMovement(change, 'magnitude'), describeComparisonBand(language, 'outside')];
+    return { kind: 'stable_elevated', isPrimary, observations, text: observations.map(o => o.text).join(' ') };
   }
   return null;
 }
@@ -169,11 +174,13 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount, bandL
       <ul className="px-5 py-4 space-y-2.5">
         {top.map((b, i) => (
           <li key={i} className="flex items-start gap-3">
-            <span className="flex-shrink-0 mt-0.5" data-bullet-kind={b.kind}>
-              <BulletIcon kind={b.kind} />
+            <span className="flex-shrink-0 mt-0.5" data-bullet-kind={b.observations ? 'changed' : b.kind}>
+              <BulletIcon kind={b.observations ? 'changed' : b.kind} />
             </span>
             <p className={`text-sm leading-relaxed ${b.isPrimary ? 'font-semibold text-theme-text' : 'text-theme-text-body'}`}>
-              {b.text}
+              {b.observations ? b.observations.map((language, index) => <span key={index}>
+                {index > 0 ? ' ' : ''}<ClinicalObservation language={language} />
+              </span>) : b.text}
             </p>
           </li>
         ))}

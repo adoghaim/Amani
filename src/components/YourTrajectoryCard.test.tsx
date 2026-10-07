@@ -96,7 +96,10 @@ describe('YourTrajectoryCard ordering is unchanged from base', () => {
     const expected = baseOrder(changes);
     expect(expected).toEqual(['ferritin', 'vitamin_d_25_oh', 'fasting_glucose', 'ldl_cholesterol']);
     const html = renderToStaticMarkup(<YourTrajectoryCard changes={changes} primaryFinding={null} reportCount={2} />);
-    const rendered = [...html.matchAll(/<p[^>]*>([a-z0-9_]+) (?:has|have) /g)].map(m => m[1]);
+    // Policy observations may be nested spans; inspect the actual visible text.
+    const visible = html.replace(/<[^>]+>/g, ' ');
+    const rendered = [...visible.matchAll(/([a-z0-9_]+) (?:has|have) (?:risen|dropped) /g)].map(m => m[1]);
+    expect(html).not.toMatch(/text-theme-flag-(?:watch|ok)/);
     expect(rendered).toEqual(expected);
     expect(selectTrajectoryBullets(changes, null).map(b => b.key)).toEqual(expected);
   });

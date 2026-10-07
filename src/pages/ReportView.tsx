@@ -1,3 +1,5 @@
+import { ArrowRightLeft } from 'lucide-react';
+import { ClinicalObservation } from '../components/ClinicalObservation';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
@@ -21,7 +23,7 @@ import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
 import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
-import { authorizedLanguage, primaryFindingSentence } from '../lib/scoring/insightCopy';
+import { authorizedLanguage, primaryFindingSentence, describeMeasuredMovement, describeComparisonBand } from '../lib/scoring/insightCopy';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
 import { contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
@@ -1555,18 +1557,11 @@ export function ReportView() {
                         return main;
                       }
 
-                      // Force trajectory headline override if primary is worsening
-                      if (isWorsening && ctx.primaryWorseningChange) {
-                        const ch = ctx.primaryWorseningChange;
-                        const dateClause = ch.priorReportDate
-                          ? `since ${formatPriorReportDate(ch.priorReportDate)}`
-                          : 'since your last report';
-                        return `${topName} ${dirLabel} and has worsened ${dateClause} — worth discussing with your provider.`;
-                      }
-
-                      // Force trajectory headline override if primary is stable abnormal
-                      if (isStableAbnormal && ctx.primaryStableChange) {
-                        return `${topName} ${dirLabel} and has not changed significantly from the prior report.`;
+                      // A comparison trajectory authorizes observations, never advice.
+                      const observedChange = isWorsening ? ctx.primaryWorseningChange
+                        : isStableAbnormal ? ctx.primaryStableChange : null;
+                      if (observedChange) {
+                        return <ClinicalObservation language={describeMeasuredMovement(observedChange)} />;
                       }
 
                       // Deterministic safety net (Phase 8B): when labs are clinically
@@ -1652,78 +1647,23 @@ export function ReportView() {
                   );
                 }
 
-                // 1b. Deterministic Override — Worsening
-                if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
-                  const aiWhyItMatters = aiTitleMatchesPrimary ? interpretation?.primary_concern?.why_it_matters : undefined;
-                  const pf = insightSummary.primaryFinding;
-                  const conj = conjugate(pf.displayName);
-                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
-                  const closer = ctxPhrase
-                    ? `Worth attention with your provider, alongside ${ctxPhrase}.`
-                    : 'Worth attention with your provider.';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} shifted in the wrong direction since your prior report. ${closer}`;
+                // Comparison movement and magnitude keep a neutral attention cue.
+                // AI prose is not independent authority for advice in this channel.
+                const observedChange = isWorsening ? ctx.primaryWorseningChange
+                  : isStableAbnormal ? ctx.primaryStableChange : null;
+                if (observedChange && insightSummary?.primaryFinding) {
                   return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                    <div data-testid="primary-movement-observation" className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-flag-watch/15">
-                          <AlertTriangle className="w-5 h-5 text-theme-flag-watch" />
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-surface">
+                          <ArrowRightLeft aria-hidden="true" className="w-5 h-5 text-theme-muted-text-2" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-theme-flag-watch">
-                            {topPriorityLabel}
+                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">{insightSummary.primaryFinding.displayName}</p>
+                          <p className="text-sm text-theme-text-body leading-relaxed">
+                            <ClinicalObservation language={describeMeasuredMovement(observedChange)} />{' '}
+                            <ClinicalObservation language={describeComparisonBand(primaryBandLanguage, 'outside')} />
                           </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
-                          </p>
-                          {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-flag-watch-border/60 pl-3">
-                              {aiWhyItMatters}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-theme-flag-watch leading-relaxed border-l-2 border-theme-flag-watch-border/60 pl-3">
-                              {subnote}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // 1c. Deterministic Override — Stable Abnormal
-                if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
-                  const aiWhyItMatters = aiTitleMatchesPrimary ? interpretation?.primary_concern?.why_it_matters : undefined;
-                  const pf = insightSummary.primaryFinding;
-                  const conj = conjugate(pf.displayName);
-                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
-                  const closer = ctxPhrase
-                    ? `Continued tracking with ${ctxPhrase} will clarify the pattern.`
-                    : 'Continued tracking at your next panel will clarify the pattern.';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} not changed significantly. ${closer}`;
-                  return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            {topPriorityLabel}
-                          </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
-                          </p>
-                          {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
-                              {aiWhyItMatters}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
-                              {subnote}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </div>
