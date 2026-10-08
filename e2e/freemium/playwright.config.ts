@@ -5,6 +5,8 @@ import base from '../../playwright.config';
 // Separate opt-in suite: preserves default browser tests and env-isolation canary.
 export default defineConfig({
   ...base,
+  outputDir: fileURLToPath(new URL('../../test-results', import.meta.url)),
+  reporter: [['list'], ['html', { open: 'never', outputFolder: fileURLToPath(new URL('../../playwright-report', import.meta.url)) }]],
   testDir: '.',
   testMatch: '**/claim-projection.spec.ts',
   webServer: {

@@ -569,3 +569,33 @@ describe('object-shaped safety authority regression', () => {
     expect(JSON.stringify(basic)).not.toContain(CANARY);
   });
 });
+
+
+describe('served AI Basic safety containers: every SAFETY_KEYS dimension', () => {
+  const keys = ['safety_notes', 'abnormal_flags', 'flags', 'warnings', 'critical_findings', 'what_to_do_next'] as const;
+  it('enumerates the complete safety-key contract', () => {
+    expect(keys).toEqual(SAFETY_KEYS);
+  });
+  it.each(keys)('%s: served shape for backed and unbacked lone objects', async key => {
+    for (const [slug, expected] of [
+      ['ferritin', { biomarker_slug: 'ferritin', critical: true }],
+      ['tsh', { biomarker_slug: 'tsh' }],
+    ] as const) {
+      const payload = { ...model, [key]: { biomarker_slug: slug, critical: true, explanation: CANARY } };
+      const { basic } = generate(payload);
+      const read = await readInterpretation({
+        ownsReport: async () => true,
+        resolveEntitlement: async () => ({ allowed: true, plan: 'free' }),
+        readSelected: async () => ({ json_output: basic, stored_depth: 'deep', has_claim: false, tier: 'free', interpretation_source: 'ai' }),
+        countClaims: async () => 0,
+      }, true);
+      expect(read.body.access).toBe('basic');
+      expect(read.body.interpretation).toHaveProperty(key, key === 'what_to_do_next' ? [] : [expected]);
+      expect(JSON.stringify(read.body.interpretation)).not.toContain(CANARY);
+      // Pre-authority projection retains a lone object and its unbacked flag.
+      // Narrative next steps are already discarded by the confidentiality floor.
+      expect(buildBasicProjection(payload, [], { source: 'ai' })[key])
+        .toEqual(key === 'what_to_do_next' ? [] : { biomarker_slug: slug, critical: true });
+    }
+  });
+});

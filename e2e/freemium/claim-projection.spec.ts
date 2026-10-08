@@ -16,12 +16,20 @@ const prior = reportWithFacts(stage2PriorReport, fixture.previous);
 for (const disagree of [false, true]) {
   test.describe(disagree ? 'negative control: report disagrees' : 'issued server projection', () => {
     const issued = projectedPreviewFixture(disagree ? 10 : 9);
+    // Deliberately contaminate the *served* preview after server projection.
+    // Its measured facts still agree; only the client render gate can strip this prose.
+    if (!issued.response.preview) throw new Error('Expected an issued preview');
+    issued.response.preview.content = {
+      ...issued.response.preview.content as Record<string, unknown>,
+      summary: projectionCanary, explanation: projectionCanary,
+    };
     test.use({
       authenticated: true,
       syntheticReports: [[current, prior], { scope: 'test' }],
       syntheticBasicResponse: { reportId: current.report.id, body: issued.response },
     });
     test('the real ReportView gates the server preview against its measured facts', async ({ page }) => {
+      expect(issued.response.preview?.content).toMatchObject({ summary: projectionCanary, explanation: projectionCanary });
       expect(issued.response.preview?.claim).toHaveProperty('policy_version');
       expect(issued.response.locked).toEqual({ patterns: 0, cross_report: 1, lifestyle: 0 });
       expect(issued.response.locked).not.toHaveProperty('claim_policy_version');

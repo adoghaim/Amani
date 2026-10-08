@@ -532,3 +532,102 @@ pre-existing untracked Playwright `.last-run.json` was preserved at
 `/tmp/task046-turn7-preexisting-last-run.json` and removed from the deliverable
 tree. No control or Second Brain material was written. All changes remain
 uncommitted; nothing was pushed, merged or deployed.
+
+
+## Turn 8 — non-vacuous fixture, complete safety containers, artifact location
+
+Approach: the old browser canary occupied model fields removed before an AI
+Basic response, so it could not detect a client render-gate regression. Add the
+canary to the served preview's summary and explanation after projection, keeping
+its agreeing measured facts and requiring the card and measured sentence to
+render. Pin every safety-key container at the Basic read boundary and resolve
+Playwright output paths to the already-ignored repository-root directories.
+No production implementation or policy change is needed.
+
+### Observed implementation and verification
+
+- The browser fixture now passes canary prose through the response's selected
+  preview. This is deliberate post-projection contamination to exercise client
+  defense, not a claim that the server emitted model prose. The disagreeing
+  case still tests suppression without backfill; the agreeing case is the
+  render-gate canary. Static reasoning predicts the mutation below makes its
+  body assertion fail; **browser execution has not established that result**.
+- All six dimensions are explicitly enumerated and compared to `SAFETY_KEYS`:
+  `safety_notes`, `abnormal_flags`, `flags`, `warnings`, `critical_findings`,
+  `what_to_do_next`. Each probes backed and unbacked lone objects through
+  `readInterpretation` with AI source and Basic access. The first five become
+  arrays; backed flags survive and unbacked flags disappear. Next-step content
+  is removed outright (served as `[]`, not an absent key). The pre-authority
+  projection is a control retaining the lone object/flag for the first five;
+  next steps were already removed by the confidentiality floor.
+- Freemium config now uses absolute root `test-results` and `playwright-report`
+  paths. The pre-existing nested `.last-run.json` was preserved outside the
+  worktree at `/tmp/task046-turn8-preexisting-test-results/`. No nested output
+  directory remains. No ignore rule or CI file changed.
+- `npx vitest run supabase/functions/_shared/claim-authority.test.ts src/components/freemium/FreemiumReportPanel.test.tsx`:
+  118 passed (85 server, 33 component), including after mutation restoration.
+- `npm test`: 1,607 passed across 73 files.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed; 0 errors, 9 existing warnings.
+- `npm run clinical:check`: passed; catalog, audit and generated policy byte
+  identity unchanged.
+- `npm run build`: passed.
+
+### Render-bypass mutation and limits of its evidence
+
+Temporary mutation in `src/components/freemium/FreemiumReportPanel.tsx`: append
+this JSX directly after the existing measured/prose conditional inside the
+preview paragraph (after the `ModelProseText` conditional, around line 145):
+
+```tsx
+{String((state.preview?.content as Record<string, unknown>)?.summary ?? '')}
+```
+
+This bypasses authorization for the stored summary while leaving the authorized
+measured sentence in place, so the browser's earlier positive assertions should
+still pass before the body-canary assertion catches it. No `insightCopy.ts` or
+policy module was edited. The temporary production edit was restored byte for
+byte and is not part of this deliverable.
+
+Observed with mutation: `npx vitest run src/components/freemium/FreemiumReportPanel.test.tsx`
+returned **3 failed, 30 passed**. The agreeing-trend test failed specifically at
+`expect(host.textContent).not.toContain(MODEL_CANARIES[4])`; rendered output
+included “This panel gives a calm overall picture of your metabolism.” The
+provenance-injection test and real-projection provenance test also failed.
+This proves the component control detects the bypass, **not the browser control**.
+
+Both browser attempts stopped before tests at `listen EPERM: operation not
+permitted 127.0.0.1:4173`:
+
+```sh
+# Restored implementation / all three configured browsers:
+npx playwright test --config e2e/freemium/playwright.config.ts --workers=1
+# While the above mutation was present:
+npx playwright test --config e2e/freemium/playwright.config.ts --project chromium --grep 'issued server projection' --workers=1
+```
+
+**Unproven / required Lead follow-up:** run baseline and mutation in a runtime
+that permits listening, verify that the mutated agreeing-preview browser test
+fails at `not.toContainText(projectionCanary)`, restore, and rerun baseline.
+The fixture is repaired, but the requested browser negative-control failure is
+not established here; turn-8 completion is PARTIAL. Do not count startup EPERM
+as a clinical-control failure. Docker, Deno, root browser suite and env canary
+were not rerun this turn and remain Lead gates. No external documentation
+question arose; this change uses existing repository behavior.
+
+### Declared debt and handoff
+
+The new claim-authority safety stripping protects bodies with a validated
+claim-era set (including new V2-03c generations). The unchanged `projectBasic`
+legacy branch does not apply that stripping: pre-V2-03c stored rows still rely
+on render-time gating and are not rewritten. The Lead is taking this legacy
+protection gap to the owner as a backlog item; it is not fixed by this turn.
+The freemium browser suite is **opt-in and not wired into CI**; it is release
+evidence only when run by hand. CI is outside this task's allowed changes.
+
+Second Brain handoff (2026-10-08): verified facts and command results are above;
+no product decision changed and no Pending item was resolved by inference.
+Read local context without syncing because network and writes outside this
+worktree are forbidden; historical vault release claims were not reverified.
+No vault or control-directory material was edited. Nothing committed, pushed,
+merged or deployed. Independent review and certification remain with the Lead.
