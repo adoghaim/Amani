@@ -285,7 +285,9 @@ describe('findings confidentiality (one shared SQL fixture)', () => {
   it('covers generation, stored Basic reads, both SQL reads and both floor overloads', () => {
     const generator = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
     expect(generator).toContain('buildBasicProjection(interpretationJson, undefined, { source: shaped.source })');
-    expect(generator).toContain('shaped.tier === "plus" ? interpretationJson : basicProjection');
+    // V2-03c: active generation projects from the claim set; Basic is served through the read gate.
+    expect(generator).toContain('projectBasic(interpretationJson, { source: shaped.source })');
+    expect(generator).toContain('shaped.tier === "plus" ? interpretationJson : servedBasic(basicProjection)');
     const reader = readFileSync(new URL('./interpretation-read.ts', import.meta.url), 'utf8');
     expect(reader).toContain('sanitizeBasicProjection(row.json_output, provenance.source)');
     expect(cycleMigration.match(/ELSE public.interpretation_sanitize_basic\(i.json_output_basic,i.interpretation_source\)/g)).toHaveLength(2);

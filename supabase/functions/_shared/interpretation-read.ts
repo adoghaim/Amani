@@ -1,7 +1,8 @@
 import type { EntitlementResult } from "./entitlement.ts";
 import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
 import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
-import { sanitizeBasicProjection, buildBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
+import { sanitizeBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
+import { projectBasic, servedBasic, visibleClaimProjection } from "./claim-authority.ts";
 import type { LockedCounts } from "./preview-selector.ts";
 
 export interface InterpretationReadActions {
@@ -66,7 +67,8 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     const full = premium || row.has_claim;
     const provenance = { source: row.interpretation_source ?? null };
     if (full && row.stored_depth !== "deep") {
-      const basic = buildBasicProjection(row.json_output, undefined, provenance);
+      // V2-03c: preview and counts only from a validated claim set (legacy: none).
+      const basic = servedBasic(projectBasic(row.json_output, provenance));
       // A deterministic body IS the medical floor: serve it whole, still asking
       // for the deep generation this reader is entitled to.
       const interpretation = isDeterministicSource(provenance.source) ? row.json_output : basic;
@@ -75,11 +77,14 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     }
     const violations = findFloorViolations(row.json_output);
     if (violations.length) console.error("[get-interpretation] MEDICAL FLOOR VIOLATION — serving stored payload", violations);
-    // Basic arrives precompiled; rebuilding it would discard its chosen preview.
-    const projection = full ? buildBasicProjection(row.json_output, undefined, provenance) : row.json_output;
+    // Basic arrives precompiled and is not rebuilt. Its preview and counts are
+    // served only if compiled under a known claim policy (V2-03c); a legacy
+    // row's were chosen from unvalidated model content and are withheld.
+    const projection = full ? projectBasic(row.json_output, provenance) : row.json_output;
+    const visible = visibleClaimProjection(projection);
     return { status: 200, body: { ...common, access: full ? "full" : "basic",
-      interpretation: full ? row.json_output : sanitizeBasicProjection(row.json_output, provenance.source), preview: projection.preview ?? null,
-      locked: (projection.locked ?? empty.locked) as LockedCounts } };
+      interpretation: full ? row.json_output : { ...sanitizeBasicProjection(row.json_output, provenance.source), ...visible },
+      preview: visible.preview, locked: visible.locked } };
   } catch {
     return failure(503, "entitlement_unavailable", true);
   }

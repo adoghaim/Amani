@@ -19,7 +19,7 @@ import {
   type IntroductoryAccessActions,
 } from "../_shared/introductory-access.ts";
 import { deriveBloodDrawIdentity, hashDrawKey } from "../_shared/blood-draw-identity.ts";
-import { addFindingMetadata } from "../_shared/finding-metadata.ts";
+import { projectBasic, servedBasic, visibleClaimProjection, withClaimAuthority } from "../_shared/claim-authority.ts";
 import { buildTrendEvidence, formatTrendEvidencePrompt, type TrendEvidence } from "../_shared/trend-evidence.ts";
 import { generationSample, recordGenerationCosts, type GenerationSample, type GenerationCostContext } from "../_shared/generation-cost.ts";
 import { resolveTier } from "../_shared/tier.ts";
@@ -1616,15 +1616,21 @@ Deno.serve(async (req: Request) => {
       deterministicInterpretation,
     });
 
-    // trend_evidence is additive and attached to either payload; the catalog
-    // derives kind:'trend' from it. A deterministic source keeps its narrative
-    // in Basic (MEDICAL_FLOOR.deterministicInterpretation).
+    // V2-03c: the model's output is a proposal. Claims are issued only from the
+    // server's trend_evidence and reference-range classifier; server-owned keys
+    // are always the server's; Basic preview and counts come from the claim set.
+    // A deterministic source keeps its narrative in Basic
+    // (MEDICAL_FLOOR.deterministicInterpretation). Inactive requests unchanged.
     const interpretationJson = active
-      ? addFindingMetadata(trendEvidence.length > 0
-          ? { ...shaped.payload, trend_evidence: trendEvidence } : shaped.payload,
-        { observedAt: report?.report_date })
+      ? withClaimAuthority(shaped.payload, {
+          source: shaped.source, trendEvidence,
+          statuses: analytes.map(a => ({ biomarker_slug: slug(a), marker: a.raw_name,
+            value: Number(a.value_numeric), unit: a.unit, status: classifyAnalyte(a) })),
+        })
       : shaped.payload;
-    const basicProjection = buildBasicProjection(interpretationJson, undefined, { source: shaped.source });
+    const basicProjection = active
+      ? projectBasic(interpretationJson, { source: shaped.source })
+      : buildBasicProjection(interpretationJson, undefined, { source: shaped.source });
 
     /*
       The medical floor is checked on whatever is about to be persisted, at every
@@ -1681,12 +1687,12 @@ Deno.serve(async (req: Request) => {
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
     console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
 
+    // The same gate get-interpretation applies, so both responses agree.
     return new Response(JSON.stringify(active ? {
       success: true, source,
       access: shaped.tier === "plus" ? "full" : "basic",
-      interpretation: shaped.tier === "plus" ? interpretationJson : basicProjection,
-      preview: basicProjection.preview,
-      locked: basicProjection.locked,
+      interpretation: shaped.tier === "plus" ? interpretationJson : servedBasic(basicProjection),
+      ...visibleClaimProjection(basicProjection),
     } : { success: true, source }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

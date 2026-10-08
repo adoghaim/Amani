@@ -147,7 +147,7 @@ describe('explicit server dark gate', () => {
       stored_depth: 'standard', has_claim, tier: 'free' }) }), true);
     expect(result.body.access).toBe(has_claim ? 'generation_needed' : 'basic');
   });
-  it('sanitizes old stored Basic cycle prose without rebuilding preview/counts or touching Full', async () => {
+  it('sanitizes old stored Basic cycle prose without rebuilding it or touching Full', async () => {
     const payload = { ...full, cycle_context: { estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
       confidence: 'high', explanation: 'PRIVATE CROSS-MARKER NARRATIVE', other: 'PRIVATE LIFESTYLE' },
       preview: { content: 'chosen preview' }, locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
@@ -156,8 +156,11 @@ describe('explicit server dark gate', () => {
         stored_depth: 'deep', has_claim, tier: 'free' }) }), flag);
       if (flag && !has_claim) {
         expect(JSON.stringify(result.body)).not.toContain('PRIVATE');
-        expect(result.body.preview).toEqual(payload.preview);
-        expect(result.body.locked).toEqual(payload.locked);
+        // V2-03c: a legacy (unversioned) preview and counts were chosen from
+        // unvalidated model content; they are withheld, the row is not rewritten.
+        expect(result.body.preview).toBeNull();
+        expect(result.body.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+        expect(payload.preview).toEqual({ content: 'chosen preview' });
         expect(result.body.interpretation?.cycle_context).toEqual({ estimated_cycle_day: 21,
           estimated_cycle_phase: 'luteal', confidence: 'high', explanation: '' });
       } else expect(result.body.interpretation).toBe(payload);
@@ -188,8 +191,11 @@ it.each(['ai', null, undefined, 'fallback', 'deterministic'])('sanitizes stored 
     const result = await readWithFlag(actions({ readSelected: async () => ({ json_output: payload,
       stored_depth: 'deep', has_claim, tier: 'free', interpretation_source }) }), flag);
     if (flag && !has_claim) {
-      expect(result.body.preview).toEqual(payload.preview);
-      expect(result.body.locked).toEqual(payload.locked);
+      // V2-03c: legacy preview/counts withheld at every source; the body agrees.
+      expect(result.body.preview).toBeNull();
+      expect(result.body.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+      expect(result.body.interpretation?.preview).toBeNull();
+      expect(JSON.stringify(result.body)).not.toContain('selected preview');
       expect(result.body.interpretation?.cycle_context).toEqual({ estimated_cycle_day: null,
         estimated_cycle_phase: 'unknown', confidence: null, explanation: '' });
       if (interpretation_source === 'fallback' || interpretation_source === 'deterministic') {
