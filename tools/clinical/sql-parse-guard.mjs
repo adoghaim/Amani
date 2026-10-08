@@ -84,6 +84,42 @@ export function findArithmeticAfterJsonPath(sql) {
   return findings;
 }
 
+// System-catalog columns of type "char" (not text). `text || "char"` has no
+// unique operator, so a bare one in a concatenation fails only at execution
+// (TASK-046 turn-3 claim-policy-gate.snapshot.sql:7 `c.relkind` defect).
+// Cast it: `c.relkind::text`.
+export const CHAR_CATALOG_COLUMNS = [
+  'relkind', 'relpersistence', 'relreplident', 'prokind', 'provolatile', 'proparallel',
+  'typtype', 'typcategory', 'typalign', 'typstorage', 'typdelim', 'attalign', 'attstorage',
+  'attidentity', 'attgenerated', 'attcompression', 'contype', 'confupdtype', 'confdeltype',
+  'confmatchtype', 'tgenabled', 'polcmd', 'defaclobjtype', 'deptype', 'ev_type', 'ev_enabled',
+  'castcontext', 'castmethod', 'oprkind', 'aggkind', 'amtype', 'amoppurpose', 'partstrat',
+  'collprovider', 'datlocprovider', 'evtenabled', 'privtype', 'srsubstate',
+];
+
+// Returns [{ line, text }] for each bare "char" catalog column used as an
+// operand of `||`. A column followed by `::` is cast and passes.
+export function findCharColumnConcat(sql) {
+  const masked = maskSql(sql);
+  const col = `(?<![\\w."])(?:[A-Za-z_]\\w*\\.)?(?:${CHAR_CATALOG_COLUMNS.join('|')})(?![\\w"])`;
+  const findings = [];
+  const re = new RegExp(`\\|\\|\\s*${col}(?!\\s*::)|${col}\\s*\\|\\|`, 'gi');
+  for (const m of masked.matchAll(re)) {
+    const start = sql.lastIndexOf('\n', m.index) + 1;
+    findings.push({ line: lineOf(sql, m.index), text: sql.slice(start, sql.indexOf('\n', m.index)).trim() });
+  }
+  return findings;
+}
+
+// The family: an operand whose type PostgreSQL must infer, feeding an
+// overloaded operator. Each rule is one shape of it; findings carry the rule.
+export function findInferredTypeOperands(sql) {
+  return [
+    ...findArithmeticAfterJsonPath(sql).map(f => ({ ...f, rule: 'arithmetic operator binds inside a JSON path step' })),
+    ...findCharColumnConcat(sql).map(f => ({ ...f, rule: '"char" catalog column concatenated without ::text' })),
+  ].sort((a, b) => a.line - b.line);
+}
+
 // Every DO body as a plpgsql function definition. CREATE FUNCTION runs
 // plpgsql_validator, which parses the body and its embedded SQL without
 // executing it or resolving tables, so a syntax error fails here by file name.
@@ -103,7 +139,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } else {
     const bad = clinicalSqlFiles().flatMap(f => findBareCaseInIf(readFileSync(f, 'utf8')).map(x => `${f}:${x.line}: ${x.text}`));
     if (bad.length) { console.error(`unparenthesized CASE in IF condition:\n${bad.join('\n')}`); process.exit(1); }
-    const loose = harnessSqlFiles().flatMap(f => findArithmeticAfterJsonPath(readFileSync(f, 'utf8')).map(x => `${f}:${x.line}: ${x.text}`));
-    if (loose.length) { console.error(`arithmetic operator binds inside a JSON path step:\n${loose.join('\n')}`); process.exit(1); }
+    const loose = harnessSqlFiles().flatMap(f => findInferredTypeOperands(readFileSync(f, 'utf8')).map(x => `${f}:${x.line}: ${x.rule}: ${x.text}`));
+    if (loose.length) { console.error(`operand type left to inference at an overloaded operator:\n${loose.join('\n')}`); process.exit(1); }
   }
 }

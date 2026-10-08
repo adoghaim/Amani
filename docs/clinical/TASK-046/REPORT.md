@@ -289,6 +289,73 @@ would fail no earlier and would not run in my sandbox, so I did not add it.
 placeholder, now committed in `d9f913a`) is still present. The sandbox denies
 `rm`. **Delete it in the Lead commit.**
 
+## Turn 4 — the `"char"` concatenation defect, and a guard for the family
+
+**Fix.** `claim-policy-gate.snapshot.sql:7` concatenated `pg_class.relkind`, whose
+type is `"char"`, not `text`. `text || "char"` has no unique operator. It is now
+`c.relkind::text`. The Lead ran every new SQL file against PostgreSQL 17 and
+reports this was the only remaining operator-ambiguity error. I did not re-run
+that (no database here). The migration, gate function, 16-case fixture, Vitest
+cases and R3 controls are unchanged.
+
+**The family, not the instance.** Both defects are one class: PostgreSQL has to
+infer an operand's type, and that operand feeds an overloaded operator.
+`sql-parse-guard.mjs` now runs `findInferredTypeOperands`, which applies one rule
+per known shape and labels each finding with its rule:
+1. `findArithmeticAfterJsonPath` (turn 3, unchanged): an arithmetic operator
+   directly after a JSON path step.
+2. `findCharColumnConcat` (new): a bare `"char"` system-catalog column as an
+   operand of `||`, on either side, unless it is followed by `::`. The column
+   list (`CHAR_CATALOG_COLUMNS`) includes `relkind`, `relpersistence`,
+   `relreplident`, `prokind`, `provolatile`, `proparallel`, `typtype`,
+   `typcategory`, the `att*` storage/identity columns, `contype`, `tgenabled`,
+   `polcmd`, `deptype` and others.
+
+The CLI scans the same widened set as turn 3 (every `__verification__/*.sql` and
+every migration ≥ 20261008).
+
+*Negative controls:*
+- The guard flags the real snapshot from `a9e082b` at exactly line 7.
+- The turn-3 one-shape rule alone returns nothing on that file. That proves the
+  widening is what catches it.
+- Unit controls cover these as passing, not flagged: cast columns, comparisons,
+  `IN` lists, look-alike names (`my_relkind`, `relkind_note`), quoted
+  identifiers, comments and string literals.
+- The frozen migration's `'public.' || name` is not flagged.
+- Every current harness file is clean.
+
+**What the guard still cannot see.** It matches a syntactic pattern, not types.
+It misses:
+- `"char"` values that reach `||` under another name: a view or CTE column
+  alias, a `SELECT … INTO` variable, a function returning `"char"`, or a
+  catalog column added after this list. It also misses a quoted-identifier
+  qualifier such as `"c".relkind`.
+- Other non-text types in `||`: `name` mixed with a non-text operand, arrays
+  against an unknown literal, `jsonb || unknown` when the literal is not
+  JSON-shaped.
+- Bare literals feeding other overloaded operators (`?`, `@>`, `-` on jsonb,
+  `+` on dates/intervals), and unknown-typed `NULL` or parameters in
+  `CASE`/`COALESCE` branches.
+- Any ambiguity that depends on user-table column types. That needs parse
+  analysis against the real schema.
+
+Only executing the files against Postgres catches all of these. The harness
+already does that, and it fails with the file and line.
+
+**`EXPLAIN` (declined, reasoning kept).** `EXPLAIN` needs the same running
+Postgres with the schema loaded. In this harness, that is the container where
+the file already executes and fails with its line number. It would fail no
+earlier and cannot run in my sandbox, so a static, database-free rule is the
+only check that moves failure earlier.
+
+**SKIPPED (for the Lead):**
+- Docker harness
+- `check:functions`
+- browser suites
+
+**Stray:** `supabase/functions/_shared/tmp-print.test.ts` (committed in `d9f913a`)
+is still present. See the turn 3 note.
+
 ## Questions for the Lead / owner
 
 - **Deterministic safety trend lines in Basic.** `flagged_trends` now needs a

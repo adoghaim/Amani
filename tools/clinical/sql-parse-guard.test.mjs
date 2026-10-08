@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { clinicalSqlFiles, compileStatements, findArithmeticAfterJsonPath, findBareCaseInIf, harnessSqlFiles, maskSql }
+import { clinicalSqlFiles, compileStatements, findArithmeticAfterJsonPath, findBareCaseInIf, findCharColumnConcat,
+  findInferredTypeOperands, harnessSqlFiles, maskSql }
   from './sql-parse-guard.mjs';
 
 test('no clinical SQL file has an unparenthesized CASE in an IF condition', () => {
@@ -60,13 +61,32 @@ test('the guard flags the real turn-2 claim-policy-gate prelude (d9f913a) at its
   if (old.status !== 0) { t.skip('commit d9f913a not in this checkout (shallow clone)'); return; }
   assert.deepEqual(findArithmeticAfterJsonPath(old.stdout).map(f => f.line), [103]);
 });
-test('the JSON path check covers every harness SQL file and the claim gate migration', () => {
+test('the inferred-operand family check covers every harness SQL file and the claim gate migration', () => {
   const files = harnessSqlFiles();
   for (const name of ['supabase/migrations/20261008000000_claim_policy_basic_gate.sql',
     'supabase/migrations/__verification__/claim-policy-gate.prelude.sql',
     'supabase/migrations/__verification__/prelude.sql',
     'supabase/migrations/__verification__/clinical-catalog.verify.sql']) assert.ok(files.includes(name), name);
-  for (const file of files) assert.deepEqual(findArithmeticAfterJsonPath(readFileSync(file, 'utf8')), [], file);
+  for (const file of files) assert.deepEqual(findInferredTypeOperands(readFileSync(file, 'utf8')), [], file);
+});
+test('a bare "char" catalog column in || is flagged; cast, compared and quoted uses are not', () => {
+  for (const sql of ["SELECT 'r:'||c.relkind||'|';", "SELECT 'k:' || prokind;", "SELECT c.relpersistence || 'x';",
+    "SELECT 'a'||\n  t.typtype;", "SELECT x || RELKIND;"]) assert.equal(findCharColumnConcat(sql).length, 1, sql);
+  for (const sql of ["SELECT 'r:'||c.relkind::text||'|';", "SELECT 'k:' || prokind :: text;", "SELECT c.relkind = 'r';",
+    "SELECT c.relkind IN ('r','v') AND 'a'||'b' = x;", "SELECT 'a' || my_relkind;", "SELECT 'a' || c.relkind_note;",
+    "SELECT 'x'; -- 'a'||c.relkind", "SELECT 'a||relkind';", "SELECT 'public.' || name;", "SELECT 'a' || \"relkind\";"])
+    assert.deepEqual(findCharColumnConcat(sql), [], sql);
+});
+test('the family check reports both shapes with their rule', () => {
+  const found = findInferredTypeOperands("SELECT 'r:'||c.relkind;\nSELECT j->'a' - 'b';");
+  assert.deepEqual(found.map(f => [f.line, f.rule]), [
+    [1, '"char" catalog column concatenated without ::text'], [2, 'arithmetic operator binds inside a JSON path step']]);
+});
+test('the guard flags the real turn-3 claim-policy-gate snapshot (a9e082b) at its defective line', (t) => {
+  const old = spawnSync('git', ['show', 'a9e082b:supabase/migrations/__verification__/claim-policy-gate.snapshot.sql'], { encoding: 'utf8' });
+  if (old.status !== 0) { t.skip('commit a9e082b not in this checkout (shallow clone)'); return; }
+  assert.deepEqual(findInferredTypeOperands(old.stdout).map(f => f.line), [7]);
+  assert.deepEqual(findArithmeticAfterJsonPath(old.stdout), [], 'the turn-3 one-shape rule alone missed it');
 });
 test('the static guard passes on the working tree', () => {
   const run = spawnSync(process.execPath, ['tools/clinical/sql-parse-guard.mjs'], { encoding: 'utf8' });
