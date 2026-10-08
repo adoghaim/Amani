@@ -14,6 +14,16 @@ export const clinicalSqlFiles = () => [
   ...readdirSync('tools/clinical').filter(f => f.endsWith('.sql.txt')).sort().map(f => `tools/clinical/${f}`),
 ];
 
+// Every harness SQL file and every migration after the frozen pair, for checks
+// that are static and safe to widen (the plpgsql compile list stays as above).
+export const harnessSqlFiles = () => [...new Set([
+  ...clinicalSqlFiles(),
+  ...readdirSync('supabase/migrations').filter(f => /^\d{14}_.*\.sql$/.test(f) && f >= '20261008000000').sort()
+    .map(f => `supabase/migrations/${f}`),
+  ...readdirSync('supabase/migrations/__verification__').filter(f => f.endsWith('.sql')).sort()
+    .map(f => `supabase/migrations/__verification__/${f}`),
+])];
+
 // Blank out comments and single-quoted literals (keeping offsets and newlines),
 // so keywords inside dynamic SQL strings or the JSON payload are not scanned.
 export function maskSql(sql) {
@@ -59,6 +69,21 @@ export function findBareCaseInIf(sql) {
   return findings;
 }
 
+// Returns [{ line, text }] for each JSON path step directly followed by an
+// arithmetic operator. `+ - * / %` bind tighter than `->`/`->>`/`#>`, so
+// `j->'a' - 'b'` parses as `j -> ('a' - 'b')`: `unknown - unknown` fails only at
+// execution (TASK-046 turn-2 claim-policy-gate.prelude.sql:103 defect).
+// Parenthesize the path: `(j->'a') - 'b'::text`.
+export function findArithmeticAfterJsonPath(sql) {
+  const masked = maskSql(sql);
+  const findings = [];
+  for (const m of masked.matchAll(/(?:->>?|#>>?)\s*(?:[A-Za-z_][\w.]*|\d+)?\s*[-+*/%](?![->#])/g)) {
+    const start = sql.lastIndexOf('\n', m.index) + 1;
+    findings.push({ line: lineOf(sql, m.index), text: sql.slice(start, sql.indexOf('\n', m.index)).trim() });
+  }
+  return findings;
+}
+
 // Every DO body as a plpgsql function definition. CREATE FUNCTION runs
 // plpgsql_validator, which parses the body and its embedded SQL without
 // executing it or resolving tables, so a syntax error fails here by file name.
@@ -78,5 +103,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } else {
     const bad = clinicalSqlFiles().flatMap(f => findBareCaseInIf(readFileSync(f, 'utf8')).map(x => `${f}:${x.line}: ${x.text}`));
     if (bad.length) { console.error(`unparenthesized CASE in IF condition:\n${bad.join('\n')}`); process.exit(1); }
+    const loose = harnessSqlFiles().flatMap(f => findArithmeticAfterJsonPath(readFileSync(f, 'utf8')).map(x => `${f}:${x.line}: ${x.text}`));
+    if (loose.length) { console.error(`arithmetic operator binds inside a JSON path step:\n${loose.join('\n')}`); process.exit(1); }
   }
 }

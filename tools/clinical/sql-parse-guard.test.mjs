@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { clinicalSqlFiles, compileStatements, findBareCaseInIf, maskSql } from './sql-parse-guard.mjs';
+import { clinicalSqlFiles, compileStatements, findArithmeticAfterJsonPath, findBareCaseInIf, harnessSqlFiles, maskSql }
+  from './sql-parse-guard.mjs';
 
 test('no clinical SQL file has an unparenthesized CASE in an IF condition', () => {
   const files = clinicalSqlFiles();
@@ -46,6 +47,26 @@ test('compile step wraps every DO body in the clinical SQL for plpgsql validatio
     'supabase/migrations/__verification__/clinical-catalog.verify.sql']) assert.ok(all.stdout.includes(`parse-check ${file} DO#1`), file);
   const names = all.stdout.match(/pg_temp\.task041_parse_\d+_\d+/g) ?? [];
   assert.equal(new Set(names).size, names.length);
+});
+test('arithmetic after a JSON path step is flagged; parenthesized paths, chains and comparisons are not', () => {
+  for (const sql of ["SELECT e.c->'claim_preview' - 'claim';", "SELECT j->>'n' + 1;", "SELECT j->k * 2;",
+    "SELECT j#>'{a,b}' - 'c';", "SELECT j->'a'\n  - 'b';"]) assert.equal(findArithmeticAfterJsonPath(sql).length, 1, sql);
+  for (const sql of ["SELECT (e.c->'claim_preview') - 'claim'::text;", "SELECT j->'a'->>'b';", "SELECT j->'a'#>'{b}';",
+    "SELECT j->>'a' = 'x' AND j->'b' || '{}'::jsonb;", "SELECT (j->>'n')::numeric - 1;", "SELECT j - 'a' - 'b';",
+    "SELECT j->'a'; -- j->'a' - 'b'", "SELECT 'j->a - b';"]) assert.deepEqual(findArithmeticAfterJsonPath(sql), [], sql);
+});
+test('the guard flags the real turn-2 claim-policy-gate prelude (d9f913a) at its defective line', (t) => {
+  const old = spawnSync('git', ['show', 'd9f913a:supabase/migrations/__verification__/claim-policy-gate.prelude.sql'], { encoding: 'utf8' });
+  if (old.status !== 0) { t.skip('commit d9f913a not in this checkout (shallow clone)'); return; }
+  assert.deepEqual(findArithmeticAfterJsonPath(old.stdout).map(f => f.line), [103]);
+});
+test('the JSON path check covers every harness SQL file and the claim gate migration', () => {
+  const files = harnessSqlFiles();
+  for (const name of ['supabase/migrations/20261008000000_claim_policy_basic_gate.sql',
+    'supabase/migrations/__verification__/claim-policy-gate.prelude.sql',
+    'supabase/migrations/__verification__/prelude.sql',
+    'supabase/migrations/__verification__/clinical-catalog.verify.sql']) assert.ok(files.includes(name), name);
+  for (const file of files) assert.deepEqual(findArithmeticAfterJsonPath(readFileSync(file, 'utf8')), [], file);
 });
 test('the static guard passes on the working tree', () => {
   const run = spawnSync(process.execPath, ['tools/clinical/sql-parse-guard.mjs'], { encoding: 'utf8' });

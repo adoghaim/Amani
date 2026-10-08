@@ -25,7 +25,7 @@ WHERE b.json_output IS DISTINCT FROM a.json_output;
 SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM claim_gate_diff WHERE NOT switch_on), 'switch OFF reads are byte-identical');
 SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM claim_gate_diff WHERE before_body ? 'locked_secret' OR after_body ? 'locked_secret'),
   'Full reads are byte-identical; no changed body is a Full body');
-SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM claim_gate_diff WHERE (after_body - 'preview' - 'locked') IS DISTINCT FROM (before_body - 'preview' - 'locked')),
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM claim_gate_diff WHERE (after_body - 'preview'::text - 'locked'::text) IS DISTINCT FROM (before_body - 'preview'::text - 'locked'::text)),
   'outside preview/locked every Basic key and value is unchanged (no new key, no new content)');
 SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM claim_gate_diff
   WHERE NOT (after_body->'preview'='null'::jsonb OR after_body->'preview'=before_body->'preview')),

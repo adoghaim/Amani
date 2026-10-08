@@ -100,7 +100,7 @@ SELECT e.n::int AS n, e.c->>'name' AS name, e.c->>'source' AS source,
   (f.fixture->'floor')
     || CASE WHEN e.c ? 'locked' THEN jsonb_build_object('locked',e.c->'locked') ELSE '{}'::jsonb END
     || CASE WHEN e.c ? 'preview' THEN jsonb_build_object('preview',e.c->'preview')
-         WHEN e.c ? 'claim_preview' THEN jsonb_build_object('preview',(f.fixture->'claim_preview') || (e.c->'claim_preview' - 'claim')
+         WHEN e.c ? 'claim_preview' THEN jsonb_build_object('preview',(f.fixture->'claim_preview') || ((e.c->'claim_preview') - 'claim'::text)
            || jsonb_build_object('claim',(f.fixture->'claim_preview'->'claim') || COALESCE(e.c->'claim_preview'->'claim','{}'::jsonb)))
          ELSE '{}'::jsonb END AS basic,
   e.c AS spec

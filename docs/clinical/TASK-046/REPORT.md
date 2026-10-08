@@ -240,6 +240,55 @@ including all 7 legacy fixture cases. Restored byte-identical.
 print script. The sandbox denied `rm`, so it is now an `it.todo` placeholder.
 **Delete before commit.**
 
+## Turn 3 — the Case 11 prelude defect
+
+**Root cause: precedence, not only literal typing.** In
+`claim-policy-gate.prelude.sql:103`, `e.c->'claim_preview' - 'claim'` parsed as
+`e.c -> ('claim_preview' - 'claim')`. PostgreSQL binds `+ - * / %` tighter than
+any other operator, `->` included. That leaves `unknown - unknown`, which the
+Lead's error shows. A cast on the right-hand side alone would not have fixed it:
+`'claim_preview' - 'claim'::text` is still wrong. The fix parenthesizes the path
+and casts the literal: `((e.c->'claim_preview') - 'claim'::text)`.
+
+**Sweep.** I swept every new SQL file and the migration for this precedence
+shape and for bare literals in `-`, `?`, `||` and comparisons. No other instance
+is a defect:
+- `?` takes only `jsonb ? text`.
+- `||` operands are typed (`jsonb_build_object`, `'{}'::jsonb`).
+- Comparisons bind looser than `->`.
+
+`claim-policy-gate.compare.sql:28` (`body - 'preview' - 'locked'`) already
+resolves to `jsonb - text`, because Postgres prefers the string category for an
+unknown literal. I cast it to `::text` anyway so it does not depend on that
+rule. The migration, gate function, fixture JSON, Vitest cases and R3 controls
+are untouched.
+
+**Failing faster.** I added a static check to `tools/clinical/sql-parse-guard.mjs`
+(`findArithmeticAfterJsonPath`). It runs with no database, so it runs in my
+sandbox and in `clinical:test` / `clinical-catalog.run.sh`. It flags any
+`->`, `->>`, `#>` or `#>>` path step followed directly by an arithmetic operator,
+outside comments and strings. It scans a wider set than the plpgsql compile list,
+which is unchanged: every `__verification__/*.sql` file and every migration dated
+≥ 20261008.
+
+*Negative control:* it flags the real defective prelude from `d9f913a` at
+exactly line 103, and nothing else. It is clean across every current harness
+file.
+
+**What it cannot catch:** true operator-type ambiguity in a plain statement,
+where the operand types are right but more than one operator candidate fits.
+That needs parse analysis against the real catalog and tables. No database-free
+check can do that. The Lead suggested `EXPLAIN`-ing the prelude, but that needs a
+running Postgres with the schema loaded. In this harness, that is the same
+container where the prelude executes and fails at its file and line anyway. It
+would fail no earlier and would not run in my sandbox, so I did not add it.
+
+**SKIPPED:** Docker harness (Case 11 still unexecuted by me) and `check:functions`.
+
+**Stray file:** `supabase/functions/_shared/tmp-print.test.ts` (an `it.todo`
+placeholder, now committed in `d9f913a`) is still present. The sandbox denies
+`rm`. **Delete it in the Lead commit.**
+
 ## Questions for the Lead / owner
 
 - **Deterministic safety trend lines in Basic.** `flagged_trends` now needs a
