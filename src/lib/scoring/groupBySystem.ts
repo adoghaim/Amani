@@ -1,6 +1,7 @@
 import type { BiomarkerCategory } from '../../types';
 import { CATEGORY_DISPLAY } from '../../types';
 import { getCategory } from '../biomarkers/dictionary';
+import { markerBandPlacement } from './insightCopy';
 import type { ScoredBiomarker } from './scoreBiomarker';
 
 // not_scored: every marker in the system is unscored (for example, withheld for
@@ -28,6 +29,7 @@ function computeSystemLabel(weightedConcernAvg: number): SystemLabel {
 
 export function groupBySystem(
   scored: ScoredBiomarker[],
+  cyclePhase?: string | null,
 ): SystemGroup[] {
   const grouped = new Map<BiomarkerCategory, ScoredBiomarker[]>();
 
@@ -58,7 +60,7 @@ export function groupBySystem(
     }
 
     const flaggedCount = biomarkers.filter(
-      b => b.concern >= 1,
+      b => markerBandPlacement(b.key, b.value, cyclePhase) === 'outside',
     ).length;
 
     const display = CATEGORY_DISPLAY[cat];
@@ -79,39 +81,6 @@ export function groupBySystem(
   return result;
 }
 
-export const SYSTEM_LABEL_CONFIG: Record<SystemLabel, {
-  label: string;
-  bg: string;
-  text: string;
-  border: string;
-  dot: string;
-}> = {
-  optimal: {
-    label: 'Within Amani bands',
-    bg: 'bg-theme-flag-ok-bg',
-    text: 'text-theme-flag-ok',
-    border: 'border-theme-flag-ok-border',
-    dot: 'bg-theme-flag-ok',
-  },
-  mild_attention: {
-    label: 'Mild Attention',
-    bg: 'bg-theme-flag-watch-bg',
-    text: 'text-theme-flag-watch',
-    border: 'border-theme-flag-watch-border',
-    dot: 'bg-theme-flag-watch',
-  },
-  attention: {
-    label: 'Needs Attention',
-    bg: 'bg-theme-flag-low-bg',
-    text: 'text-theme-flag-low',
-    border: 'border-theme-flag-low-border',
-    dot: 'bg-theme-flag-low',
-  },
-  not_scored: {
-    label: 'Not scored',
-    bg: 'bg-theme-neutral-100',
-    text: 'text-theme-neutral-600',
-    border: 'border-theme-neutral-200',
-    dot: 'bg-theme-neutral-400',
-  },
-};
+// V2-03b: the label a system card shows is band language, authored by
+// insightCopy.systemSummaryLabel from counts. "Mild Attention" and "Needs
+// Attention" judged the weighted average against no reviewed rule.

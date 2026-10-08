@@ -1,0 +1,961 @@
+[
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} ${…} shifted outside the Amani band — worth tracking at your next draw.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} both remain outside the Amani band but have improved since the prior report.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} has improved while ${…} has moved in the opposite direction.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} has moved into a better range since your last report.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} have both improved since your last report.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "${…} remains outside the Amani band but has improved since the prior report.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Improved",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Improved",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Improving, still elevated",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Improving, still low",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Moved out of range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Moving further above the Amani band${…}",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Moving further below the Amani band${…}",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Still below the Amani band, but moving in the right direction${…}",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Still elevated, but moving toward the Amani band${…}",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Worsening, still elevated",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/BiggestChangesCard.tsx",
+    "text": "Worsening, still low",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/NextBestSteps.tsx",
+    "text": "Discuss",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Bucket heading over model-written next steps (generate-interpretation what_you_can_do_now / what_to_do_next). V2-03b Stage 2 (owner R4): ReportView no longer mounts NextBestSteps, so no module reachable from src/main.tsx loads this file. Suppressed, not migrated: model next steps carry food, nutrient, supplement and lifestyle advice with no Clinical Truth rule. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PeriodLogModal.tsx",
+    "text": "font-normal",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "${…} ${…} ${…} at ${…} ${…} and ${…} ${…} from ${…} ${…} since ${…}. This trend is worth discussing with your provider.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "${…} ${…} ${…} at ${…} ${…}, but ${…} improved from ${…} ${…} since ${…}${…}. This is a meaningful move in the right direction, even though the level remains above range. Continue tracking this over time.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "${…} ${…} ${…} at ${…} ${…}, which stands out as the most abnormal result in this report.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "(a ${…}% improvement)",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Far above range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Far below range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Improved into range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Improving, still ${…}",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Range:",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "Worsening, still ${…}",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "outside the Amani band",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "significantly elevated",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "text-xs text-theme-flag-low font-normal ml-1",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/PrimaryInsightCard.tsx",
+    "text": "text-xs text-theme-flag-low font-normal ml-1",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "Discuss",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "Monitor",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "Needs Attention",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "Reassuring",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "font-normal text-xs text-theme-muted-text-2 ml-1",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "worth reviewing",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/QuickHighlights.tsx",
+    "text": "worth reviewing",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "Needs review (",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "Reference range (raw)",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "Review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "need review.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/components/ReviewBiomarkers.tsx",
+    "text": "text-theme-neutral-500 font-normal ml-1",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/SubscriptionStatus.tsx",
+    "text": "font-normal",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/SymptomLogModal.tsx",
+    "text": "font-normal",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Borderline",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Borderline",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Far above range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Far below range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Outside Range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "Within Amani band",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/TopFindingsCard.tsx",
+    "text": "font-normal text-xs text-theme-muted-text-2 ml-1",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} are both outside the Amani band and are the two findings most worth discussing with your provider.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} is near the edge of the Amani band, though ${…} ${…} improved. The overall trend is positive.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} is outside the Amani band and is the top priority. ${…} is borderline — worth monitoring, but not urgent on its own.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} is the standout finding in this report. The rest of the panel is within range, which provides helpful context for tracking over time.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "${…} remains the primary area to keep an eye on, while ${…} has shown improvement since your last report. The picture is mixed but moving in a constructive direction.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "All measured values are within Amani's context bands, which are still under review. This is a useful baseline to track over time.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "Your panel looks solid overall, with ${…} showing improvement since your last draw. The trend is moving in a positive direction.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatThisMeansCard.tsx",
+    "text": "text-[15px] text-theme-text leading-[1.7] font-normal",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/components/WhatToDoNextCard.tsx",
+    "text": "Discuss with your provider",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/WhatToWatchCard.tsx",
+    "text": "Range shift",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/components/YourPatternsCard.tsx",
+    "text": "Improving trend",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/features/onboarding/steps/PersonalContextStep.tsx",
+    "text": "Age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/features/onboarding/steps/PersonalContextStep.tsx",
+    "text": "Select age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/features/onboarding/steps/WelcomeStep.tsx",
+    "text": "Amani helps you understand your lab results in plain language, track changes over time, and prepare better questions for your doctor.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Non-clinical lexical match: onboarding product description uses better for question preparation, not clinical improvement in a result."
+  },
+  {
+    "file": "src/features/settings/PersonalContextCard.tsx",
+    "text": "Age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/features/settings/PersonalContextCard.tsx",
+    "text": "Select age range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
+    "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "${…} analyte${…} with usable values. More markers improve insight depth.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Report-confidence badge wording about extraction quality and data coverage (parser confidence, number of usable values); asserts nothing about a result."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Extraction confidence is high across most analytes.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Report-confidence badge wording about extraction quality and data coverage (parser confidence, number of usable values); asserts nothing about a result."
+  },
+  {
+    "file": "src/lib/insights/buildInsightSummary.ts",
+    "text": "Extraction confidence is low. This panel may benefit from re-upload or manual review.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Report-confidence badge wording about extraction quality and data coverage (parser confidence, number of usable values); asserts nothing about a result."
+  },
+  {
+    "file": "src/lib/insights/buildPersonalInsights.ts",
+    "text": "You've been logging ${…} and your ${…} is outside the optimal range — these may be worth reviewing together with your provider.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/insights/buildPersonalInsights.ts",
+    "text": "Your ${…} has been ${…} across your recent reports while remaining outside the optimal range. Worth bringing to your provider's attention.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/insights/buildPersonalInsights.ts",
+    "text": "Your ${…} is ${…} across your recent reports — a positive direction, though it remains outside the optimal range. Continue tracking.",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/insights/categorizeNextSteps.ts",
+    "text": "review with",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "input_matching_token",
+    "reason": "Matching token used to classify parsed lab text or model-written steps; never rendered as copy."
+  },
+  {
+    "file": "src/lib/insights/categorizeNextSteps.ts",
+    "text": "topics to discuss",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "input_matching_token",
+    "reason": "Matching token used to classify parsed lab text or model-written steps; never rendered as copy."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Borderline High",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Borderline Low",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Context needed",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "No Range",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Normal",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Optimal",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Outside Amani band",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/lib/scoring/statusPill.ts",
+    "text": "Within Amani band",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "unreachable",
+    "reason": "Suppressed, not migrated: no module reachable from src/main.tsx imports this file (static or dynamic), proven by the reachability check in this suite, which fails if any import makes it reachable. Deletion is recommended; the implementer sandbox cannot remove files."
+  },
+  {
+    "file": "src/pages/Contact.tsx",
+    "text": ", which are awaiting legal review.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Contact.tsx",
+    "text": "Draft — pending review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Contact.tsx",
+    "text": "This inbox is not monitored around the clock and we are not clinicians. If you are having a medical emergency, call your local emergency number or go to an emergency department. For questions about your own results, speak to the provider who ordered them — Amani is educational only and does not diagnose conditions or give medical advice.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/DeleteAccount.tsx",
+    "text": "All extracted biomarker values, reference ranges and flags",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "Below range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "Biomarker card — in range, watch, below range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "Elevated, for content that outranks its neighbours.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "Flat by default — no elevation claim.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Non-clinical lexical match in the static design gallery: \"elevation\" is visual shadow depth, not a result. Pinned exactly."
+  },
+  {
+    "file": "src/pages/DesignGallery.tsx",
+    "text": "In range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "design_sample",
+    "reason": "Static design-gallery sample, not a patient-result assessment. Deferred with the design-gallery inventory; pinned exactly."
+  },
+  {
+    "file": "src/pages/Landing.tsx",
+    "text": "Amani is educational. It does not diagnose, prescribe, or replace your clinician — it helps you walk into the appointment knowing what to ask. Anything that concerns you belongs in front of a licensed provider.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "High",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Non-clinical lexical match: extraction-confidence tier (share of parsed items needing review), not a result level. Pinned exactly."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "Low",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Non-clinical lexical match: extraction-confidence tier (share of parsed items needing review), not a result level. Pinned exactly."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "Needs review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "Review what Amani found — edit, remove, or add anything before saving.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "Review your report",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "We extracted your report details automatically — review anything below before saving",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "We extracted your report details automatically — review anything below before saving.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "may need review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "text-theme-neutral-400 font-normal text-sm",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/pages/NewReport.tsx",
+    "text": "text-theme-neutral-400 font-normal text-sm",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Flagged for review — excluded from AI highlights (${…})",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Needs review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Parsed Value / Unit / Range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Per-analyte extraction details: value, unit, reference range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Ref range (raw)",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Reference range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Reference range (raw)",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Review:",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/ParserDebugger.tsx",
+    "text": "Stage 3 — Parsed Value / Unit / Range",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "extraction_ui",
+    "reason": "Extraction review or raw lab-field UI, not clinical review authority. Pinned exactly to prevent unexamined wording changes."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": ". It is protected by this policy, by the security measures described below, and by whatever consumer privacy law applies where you live. If you would rather your lab results stayed only inside your provider&rsquo;s patient portal, that is a completely reasonable choice, and you should not upload them here.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "A preferred name, age range, sex at birth, reproductive status (including whether you are pregnant, trying to conceive, postpartum, or using birth control), health goals, symptoms you want kept in mind, supplements or medications you are taking, and any known conditions you tell us about. Also your typical cycle length and period length.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "Amani provides educational information. It does not diagnose conditions and does not provide medical advice. Always consult a licensed healthcare provider about your health concerns.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "Draft — pending legal review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "Sentry — error monitoring",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "The PDF or photo you upload, the name of the lab and the date of the report, and every biomarker we extract from it — the test name, value, unit, and reference range. Alongside each report we store the cycle context you give it: your last period start date, average cycle length, the cycle day and phase we estimate from those, and the symptoms and context you attach to that specific report.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "This is the part you should read closely. To produce an interpretation we send OpenAI the biomarker names, values, units, and reference ranges from your report, the cycle context attached to that report, and a short profile block containing your preferred first name, age range, sex at birth, reproductive status, health goals, and the symptoms you asked us to keep in mind.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "This policy accurately describes what Amani does with your data today, but it has not yet been reviewed by a lawyer. We are publishing it in draft so you can see exactly how your health information is handled before you share any. If anything here is unclear or looks wrong to you, please",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "We do not sell your data, run ads, or use advertising or analytics trackers. We do use an error-monitoring service, configured so that it cannot record what is on your screen.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "We do not sell your personal information. We do not share it with advertisers or data brokers. We do not use it to build profiles for anyone else. The app contains no advertising SDKs and no product-analytics SDKs — the only third-party code in it that reports anything back about your session is the error monitoring and the in-app purchase processing described below.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "We do not send OpenAI your email address or your password. The supplements and conditions you entered during onboarding are also not sent &mdash; those are a separate profile field from anything you log in the Tracker. OpenAI states that data submitted through its API is not used to train its models and is retained only for a limited period for abuse monitoring; we rely on that commitment but we do not control it.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Privacy.tsx",
+    "text": "We use your data to run the product you signed up for: extracting biomarkers from the reports you upload, scoring them against reference ranges and where you are in your cycle, generating educational explanations, tracking changes across reports, managing your account and subscription, and keeping the service secure.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "ml-2 text-sm font-normal text-theme-primary",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/pages/ReportView.tsx",
+    "text": "text-theme-neutral-500 font-normal ml-1 text-xs",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "css_token",
+    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
+  },
+  {
+    "file": "src/pages/SuccessPage.tsx",
+    "text": "Your payment went through, but activation is taking longer than usual. Nothing is lost — it normally completes on its own within a few minutes.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "non_clinical_wording",
+    "reason": "Non-clinical lexical match: purchase-activation timing (\"normally completes\"), not a result assessment. File is in forbidden subscription scope; pinned exactly, not edited."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "Amani is not monitored and cannot help you.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "Amani reads your report automatically, and automatic reading of a scanned document is imperfect. A value can be misread, a unit can be misinterpreted, a reference range can be picked up from the wrong row, and a test can be missed entirely. The explanations are generated by an AI model and can be wrong or incomplete even when the extraction was correct.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "Draft — pending legal review",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "These terms describe how Amani actually works and what we are promising, but they have not yet been reviewed by a lawyer. The sections on liability and disputes in particular are placeholders. We are publishing them in draft rather than leaving the link dead.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/pages/Terms.tsx",
+    "text": "You upload a lab report as a PDF or a photo. Amani extracts the biomarkers from it, scores them against reference ranges and against where you are in your menstrual cycle, and generates a plain-language explanation along with questions worth asking your doctor. It tracks how your results change over time and lets you log periods and symptoms alongside them.",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "legal_disclosure",
+    "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
+  },
+  {
+    "file": "src/types/index.ts",
+    "text": "Nutrients & Deficiency",
+    "category": "UNAUTHORIZED_DEBT",
+    "disposition": "deferred",
+    "reason": "Category label 'Nutrients & Deficiency' names a condition. src/types is outside this task's allowed paths, so the literal stays and is deferred. It no longer renders on the report page, which uses insightCopy.systemDisplayLabel ('Nutrients'); SystemGroup.label still carries it unrendered."
+  },
+  {
+    "file": "src/utils/parser/valueExtraction.ts",
+    "text": "Borderline",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "input_matching_token",
+    "reason": "Matching token used to classify parsed lab text or model-written steps; never rendered as copy."
+  }
+]

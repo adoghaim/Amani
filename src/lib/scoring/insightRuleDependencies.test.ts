@@ -16,7 +16,8 @@ import { ANALYTE_FREE_RULES, ruleDependency } from './insightGate';
   2. Dynamic. Each real check runs against a Proxy that records every key it
      touches, over many synthetic panels and phases; enumeration fails the proof.
 
-  derivedMetrics.ts is not edited: no threshold, wording or logic changes.
+  V2-03b Stage 2 changed each check's return from prose to a boolean match;
+  no threshold or condition changed, and both proofs run over the new bodies.
 */
 
 const SOURCE = 'src/utils/derivedMetrics.ts';
@@ -157,7 +158,7 @@ describe('R3 — static proof over the rule bodies', () => {
 
 // ── Dynamic proof ──────────────────────────────────────────────────────────
 
-type Check = (m: Record<string, number>, cyclePhase?: string) => string | null;
+type Check = (m: Record<string, number>, cyclePhase?: string) => boolean | string | null;
 
 function recordReads(check: Check, values: Record<string, number>, phase?: string) {
   const reads = new Set<string>();

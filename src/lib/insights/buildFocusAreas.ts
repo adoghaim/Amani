@@ -1,12 +1,25 @@
 import type { BiomarkerName, BiomarkerCategory } from '../../types';
 import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
+import {
+  authorizedLanguage, combineLanguage, describeComparisonBand, describeMeasuredMovement, focusAreaObservation,
+  type AuthorizedLanguage,
+} from '../scoring/insightCopy';
 import type { ScoredBiomarker } from '../scoring/scoreBiomarker';
 import type { InsightSummary, WatchSignal, BiggestChange } from './buildInsightSummary';
 
+/*
+  V2-03b Stage 2. A focus area groups markers outside Amani's bands. Its
+  sentence is the policy's: the markers' placement with their bands' review
+  state, plus measured movement where there is a prior report. The rule and
+  category sentences that used to stand here ("Thyroid antibodies are
+  elevated, suggesting an autoimmune component", "helps frame cardiovascular
+  risk", "outside their reference range" for an Amani band) are gone, as is
+  the per-marker "is borderline-high". A chip marks a marker outside its band.
+*/
 export interface FocusAreaMarker {
   slug: string;
   displayName: string;
-  status: 'monitor' | 'attention' | 'reassuring';
+  status: 'outside';
 }
 
 export interface FocusArea {
@@ -26,31 +39,20 @@ const IMPORTANCE_RANK: Record<'critical' | 'important' | 'supporting', number> =
 const CATEGORY_DEFAULT_TITLE: Record<BiomarkerCategory, string> = {
   hormones: 'Cycle hormones',
   thyroid: 'Thyroid function',
-  metabolic: 'Metabolic balance',
-  lipids: 'Cardiovascular support',
+  metabolic: 'Metabolic markers',
+  lipids: 'Lipids',
   liver: 'Liver function',
   kidney: 'Kidney function',
-  inflammation: 'Systemic inflammation',
-  nutrients: 'Nutrient sufficiency',
+  inflammation: 'Inflammation markers',
+  nutrients: 'Nutrients',
   blood: 'Blood and hematology',
 };
 
-const CATEGORY_DEFAULT_WHY: Record<BiomarkerCategory, string> = {
-  hormones: 'Multiple reproductive-hormone markers are outside their reference range. Tracking them together gives the clearest picture over time.',
-  thyroid: 'Multiple thyroid markers are outside their reference range. Tracking these together gives the clearest picture over time.',
-  metabolic: 'Multiple metabolic markers are outside their reference range. Tracking these together can highlight blood-sugar trends.',
-  lipids: 'One or more lipid markers are outside their reference range. Tracking these together helps frame cardiovascular risk over time.',
-  liver: 'One or more liver markers are outside their reference range. Tracking these together gives the clearest picture over time.',
-  kidney: 'One or more kidney markers are outside their reference range. Tracking these together helps clarify whether the pattern is consistent.',
-  inflammation: 'Inflammation markers are outside their reference range. Tracking these together helps reveal whether the pattern persists.',
-  nutrients: 'One or more nutrient markers are outside their reference range. Tracking these together helps clarify nutrient status over time.',
-  blood: 'One or more hematology markers are outside their reference range. Tracking these together gives the clearest picture over time.',
-};
-
+// Grouping only: the id selects a Support plan card (buildCards.ts). A title
+// names the markers, never a condition ("Thyroid autoimmunity").
 interface PatternRule {
   id: string;
   title: string;
-  whyItMatters: string;
   matches: (markers: ScoredBiomarker[]) => boolean;
 }
 
@@ -58,16 +60,14 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
   thyroid: [
     {
       id: 'autoimmunity',
-      title: 'Thyroid autoimmunity',
-      whyItMatters: 'Thyroid antibodies are elevated, suggesting an autoimmune component worth tracking alongside thyroid function markers.',
+      title: 'Thyroid antibodies',
       matches: (m) => m.some(s => (s.key === 'tpo_antibodies' || s.key === 'tg_antibodies') && s.concern > 0),
     },
   ],
   kidney: [
     {
       id: 'hydration',
-      title: 'Kidney / hydration context',
-      whyItMatters: 'Markers tied to hydration and kidney filtration are outside the optimal range. A single reading may reflect hydration status rather than kidney function on its own.',
+      title: 'Kidney and hydration markers',
       matches: (m) => m.some(s => s.key === 'bun_creatinine_ratio' && s.concern > 0)
         || m.some(s => s.key === 'bun' && s.concern > 0),
     },
@@ -75,8 +75,7 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
   metabolic: [
     {
       id: 'blood_sugar',
-      title: 'Blood sugar regulation',
-      whyItMatters: 'Glucose-related markers are outside the optimal range. Tracking these together gives a fuller picture of insulin sensitivity over time.',
+      title: 'Blood sugar markers',
       matches: (m) => m.some(s =>
         (s.key === 'fasting_glucose' || s.key === 'hemoglobin_a1c' || s.key === 'fasting_insulin' || s.key === 'c_peptide')
         && s.concern > 0,
@@ -86,8 +85,7 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
   hormones: [
     {
       id: 'androgens',
-      title: 'Androgen balance',
-      whyItMatters: 'Androgen-related markers are outside the optimal range. Tracking them together gives a clearer picture than any single value.',
+      title: 'Androgens',
       matches: (m) => m.some(s =>
         (s.key === 'total_testosterone' || s.key === 'free_testosterone' || s.key === 'dheas' || s.key === 'shbg')
         && s.concern > 0,
@@ -96,7 +94,6 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
     {
       id: 'cycle_hormones',
       title: 'Cycle hormones',
-      whyItMatters: 'Reproductive-hormone markers are outside the optimal range. Cycle phase context matters when interpreting these values.',
       matches: (m) => m.some(s =>
         (s.key === 'estradiol' || s.key === 'progesterone' || s.key === 'fsh' || s.key === 'lh' || s.key === 'amh' || s.key === 'prolactin')
         && s.concern > 0,
@@ -106,8 +103,7 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
   nutrients: [
     {
       id: 'iron_status',
-      title: 'Iron status',
-      whyItMatters: 'Iron-related markers are outside the optimal range. These move together and are best interpreted as a panel.',
+      title: 'Iron markers',
       matches: (m) => m.some(s =>
         (s.key === 'ferritin' || s.key === 'serum_iron' || s.key === 'iron_saturation' || s.key === 'tibc' || s.key === 'uibc')
         && s.concern > 0,
@@ -117,68 +113,20 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
   inflammation: [
     {
       id: 'systemic',
-      title: 'Systemic inflammation',
-      whyItMatters: 'Inflammation markers are elevated. A single reading can reflect short-term factors; tracking over time helps reveal the pattern.',
+      title: 'Inflammation markers',
       matches: (m) => m.some(s => (s.key === 'hs_crp' || s.key === 'esr') && s.concern > 0),
     },
   ],
 };
 
-function statusFor(s: ScoredBiomarker): FocusAreaMarker['status'] {
-  if (s.concern === 2) return 'attention';
-  if (s.concern === 1) return 'monitor';
-  return 'reassuring';
-}
-
-function statusPhrase(s: ScoredBiomarker): string | null {
-  switch (s.amaniStatus) {
-    case 'borderline_high':
-      return 'is borderline-high';
-    case 'borderline_low':
-      return 'is borderline-low';
-    case 'out_of_range_high':
-      return 'is elevated';
-    case 'out_of_range_low':
-      return 'is low';
-    default:
-      return null;
-  }
-}
-
 function trajectoryPhrase(change: BiggestChange | null | undefined): string {
-  if (!change) return '';
-  const dir = change.boundaryCrossing?.direction;
-  if (dir === 'improved') return 'is moving in the right direction';
-  if (dir === 'worsened') return 'has shifted in the wrong direction';
-
-  switch (change.trajectoryStatus) {
-    case 'improving_still_high':
-    case 'improving_still_low':
-    case 'normalized':
-      return 'is moving in the right direction';
-    case 'worsening_still_high':
-    case 'worsening_still_low':
-    case 'newly_abnormal':
-      return 'has shifted in the wrong direction';
-    case 'stable_abnormal':
-    case 'stable_normal':
-      return 'has not changed significantly';
-    default:
-      return '';
-  }
+  // A first-recorded entry has no prior value (its previousValue is a 0
+  // placeholder): stating any movement for it would be false.
+  if (!change || change.isFirstRecorded) return '';
+  // Raw band statuses and crossings carry no clinical direction authority.
+  // Magnitude comes from the existing deterministic change calculation (R4).
+  return describeMeasuredMovement(change, 'magnitude').text;
 }
-
-const CATEGORY_CLOSER: Record<BiomarkerCategory, (primary: string) => string> = {
-  lipids: () => 'so the full lipid pattern is more useful than judging it alone.',
-  thyroid: () => 'but this marker is still outside range.',
-  kidney: () => 'so hydration and protein context matter when reading this pattern.',
-  metabolic: () => 'so the full glucose pattern is worth tracking over time.',
-  liver: () => 'so tracking these liver markers together is more informative than judging one alone.',
-  hormones: () => 'Timing, symptoms, and cycle phase matter when interpreting this result.',
-  inflammation: () => 'so tracking inflammation markers together is more useful than a single value.',
-  nutrients: () => 'so nutrient status is best read across the full panel.',
-  blood: () => 'so tracking these hematology markers together is more useful than a single value.',
-};
 
 function findChangeFor(
   marker: ScoredBiomarker,
@@ -188,47 +136,30 @@ function findChangeFor(
   return biggestChanges.find(c => c.key === marker.key) ?? null;
 }
 
-function buildValueFreeWhy(
+function languageFor(summary: Pick<InsightSummary, 'deltaMap' | 'bandLanguage'>, key: BiomarkerName): AuthorizedLanguage {
+  return summary.bandLanguage?.get(key) ?? summary.deltaMap.get(key)?.bandLanguage ?? authorizedLanguage(null);
+}
+
+function buildWhy(
   topMarkers: ScoredBiomarker[],
   category: BiomarkerCategory,
-  biggestChanges: BiggestChange[] | undefined,
-): string | null {
+  summary: Pick<InsightSummary, 'biggestChanges' | 'deltaMap' | 'bandLanguage'>,
+): string {
   const flagged = topMarkers.filter(m => m.concern > 0);
-  const primary = flagged[0];
-  if (!primary) return null;
+  const primary = flagged[0]!;
+  const trajectory = trajectoryPhrase(findChangeFor(primary, summary.biggestChanges));
 
-  const phrase = statusPhrase(primary);
-  if (!phrase) return null;
-
-  const primaryName = getDisplayName(primary.key);
-  const change = findChangeFor(primary, biggestChanges);
-  const trajectory = trajectoryPhrase(change);
-  const closer = CATEGORY_CLOSER[category](primaryName);
-
-  // Special composition for thyroid: lead with the primary signal, follow with
-  // an explicit trend sentence that pairs with an out-of-range qualifier closer.
-  if (category === 'thyroid') {
-    if (trajectory) {
-      const trendClause = trajectory.startsWith('is ')
-        ? trajectory.slice(3) // "is moving in the right direction" -> "moving in the right direction"
-        : trajectory.startsWith('has ')
-          ? trajectory // "has shifted in the wrong direction" / "has not changed significantly"
-          : trajectory;
-      return `${primaryName} remains the main thyroid signal. The trend ${trendClause === trajectory ? trajectory : `is ${trendClause}`}, ${closer}`;
-    }
-    return `${primaryName} ${phrase} and remains the main thyroid signal, ${closer}`;
+  // Movement and band placement have separate policy authorities. In particular,
+  // DISPUTED must withhold placement and no trajectory establishes persistence.
+  if (category === 'thyroid' && trajectory) {
+    const band = describeComparisonBand(languageFor(summary, primary.key), 'outside');
+    return `${trajectory} ${band.text}`;
   }
-
-  // Hormones: closer is its own sentence (cycle context).
-  if (category === 'hormones') {
-    const hormoneContext = primary.key === 'progesterone' || primary.key === 'estradiol' || primary.key === 'lh' || primary.key === 'fsh'
-      ? `${primaryName} ${phrase} for the recorded cycle context.`
-      : `${primaryName} ${phrase}.`;
-    return `${hormoneContext} ${closer}`;
-  }
-
-  // Default lead: "<Marker> is <state>, <closer>"
-  return `${primaryName} ${phrase}, ${closer}`;
+  const placement = focusAreaObservation(
+    flagged.map(m => getDisplayName(m.key)),
+    combineLanguage(flagged.map(m => languageFor(summary, m.key))),
+  );
+  return trajectory ? `${trajectory} ${placement}` : placement;
 }
 
 function findMatchingWatchSignal(
@@ -292,7 +223,7 @@ function bucketByCategory(flagged: ScoredBiomarker[]): SystemBucket[] {
 function buildOneArea(
   bucket: SystemBucket,
   watchSignals: WatchSignal[],
-  biggestChanges: BiggestChange[] | undefined,
+  summary: Pick<InsightSummary, 'biggestChanges' | 'deltaMap' | 'bandLanguage'>,
 ): FocusArea {
   const { category, markers } = bucket;
 
@@ -305,10 +236,11 @@ function buildOneArea(
   });
 
   const topMarkers = ranked.slice(0, 4);
+  // Every bucketed marker is flagged, so every chip is a marker outside its band.
   const relatedMarkers: FocusAreaMarker[] = topMarkers.map(s => ({
     slug: s.key,
     displayName: getDisplayName(s.key),
-    status: statusFor(s),
+    status: 'outside',
   }));
 
   const rules = PATTERN_RULES[category] ?? [];
@@ -325,9 +257,7 @@ function buildOneArea(
     topMarkers.map(m => m.key),
   );
 
-  const whyItMatters = matchedRule?.whyItMatters
-    ?? buildValueFreeWhy(topMarkers, category, biggestChanges)
-    ?? CATEGORY_DEFAULT_WHY[category];
+  const whyItMatters = buildWhy(topMarkers, category, summary);
 
   return { id, title, whyItMatters, relatedMarkers, isPrimaryAligned: false };
 }
@@ -348,7 +278,7 @@ export function buildFocusAreas(
   if (buckets.length === 0) return [];
 
   const top = buckets.slice(0, 3);
-  const focusAreas = top.map(b => buildOneArea(b, watchSignals, insightSummary.biggestChanges));
+  const focusAreas = top.map(b => buildOneArea(b, watchSignals, insightSummary));
 
   const annotated = focusAreas.map(fa => ({
     ...fa,

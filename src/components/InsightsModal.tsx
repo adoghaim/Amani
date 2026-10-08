@@ -1,5 +1,10 @@
-import { X, AlertCircle, TrendingUp, TrendingDown, Minus, Sparkles, ArrowRight, CheckCircle2, Info } from 'lucide-react';
+import { X, AlertCircle, Sparkles, Info } from 'lucide-react';
 import { ErrorBoundary } from './ErrorBoundary';
+import { ClinicalObservation, ModelProse } from './ClinicalObservation';
+import {
+  authorizeModelProse, COMPARISON_CHANGES_EMPTY, COMPARISON_CHANGES_HEADING, describeMeasuredMovement, PRODUCT_DISCLAIMERS,
+  type MovementClaim,
+} from '../lib/scoring/insightCopy';
 
 interface Insight {
   summary: string;
@@ -23,6 +28,11 @@ interface InsightsModalProps {
   };
   loading?: boolean;
   error?: string;
+  /**
+   * Claims issued from the two reports' own values (compareReports). The
+   * model's text renders only where it resolves to one of these (owner R1).
+   */
+  claims?: readonly MovementClaim[];
 }
 
 function formatDate(dateString: string): string {
@@ -31,19 +41,46 @@ function formatDate(dateString: string): string {
   });
 }
 
-function ChangeIcon({ text }: { text?: string | null }) {
-  // Defence in depth. The server now guarantees a non-empty string here
-  // (_shared/lab-insights-output.ts), which is what protects the shipped native
-  // builds that cannot be updated. This guard covers anything already cached on
-  // a device from before that fix.
-  const lower = (text ?? '').toLowerCase();
-  if (lower.includes('increased') || lower.includes('rose') || lower.includes('higher') || lower.includes('went up')) {
-    return <TrendingUp className="w-4 h-4 text-theme-flag-watch" />;
-  }
-  if (lower.includes('decreased') || lower.includes('fell') || lower.includes('lower') || lower.includes('went down') || lower.includes('dropped')) {
-    return <TrendingDown className="w-4 h-4 text-theme-info" />;
-  }
-  return <Minus className="w-4 h-4 text-theme-neutral-400" />;
+/*
+  V2-03b Stage 2, owner R1. The modal used to render the comparison model's
+  summary, its per-marker "change" sentences, the factors it said a change
+  "may have coincided with", and an amber arrow for every increase. None of it
+  rested on authority. It now lists the measured changes the app computed from
+  the two reports, and adds a model sentence only where that sentence is an
+  authorized phrase of one of those claims. Causal factors resolve to no
+  claim, so they never render.
+*/
+function ComparisonChanges({ insights, claims }: { insights: Insight; claims: readonly MovementClaim[] }) {
+  const measured = claims
+    .filter(c => c.fact.significance !== 'minor' && c.fact.previousValue !== c.fact.currentValue)
+    .map(c => describeMeasuredMovement(c.fact));
+  const shown = new Set(measured.map(m => m.text));
+  const changes = Array.isArray(insights.notable_changes) ? insights.notable_changes : [];
+  const proposed = [
+    ...authorizeModelProse('insights.summary', insights.summary, claims),
+    ...changes.flatMap(change => [
+      ...authorizeModelProse('insights.notable_changes.change', change?.change, claims),
+      ...authorizeModelProse('insights.notable_changes.possible_factors', change?.possible_factors, claims),
+    ]),
+  ].filter(p => !shown.has(p.language.text) && !!shown.add(p.language.text));
+
+  return (
+    <div data-model-surface="comparison" className="rounded-xl border border-theme-border-subtle bg-theme-background-tint p-5">
+      <p className="text-sm font-semibold text-theme-text mb-3 uppercase tracking-wide">{COMPARISON_CHANGES_HEADING}</p>
+      {measured.length + proposed.length === 0 ? (
+        <p className="text-sm text-theme-neutral-600 leading-relaxed">{COMPARISON_CHANGES_EMPTY}</p>
+      ) : (
+        <ul className="space-y-2">
+          {measured.map(language => (
+            <li key={language.text} className="text-sm text-theme-neutral-700 leading-relaxed"><ClinicalObservation language={language} /></li>
+          ))}
+          {proposed.map(prose => (
+            <li key={prose.language.text} className="text-sm text-theme-neutral-700 leading-relaxed"><ModelProse prose={prose} /></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -74,7 +111,7 @@ function InsightsRenderError() {
   );
 }
 
-export function InsightsModal({ isOpen, onClose, insights, reportDates, loading, error }: InsightsModalProps) {
+export function InsightsModal({ isOpen, onClose, insights, reportDates, loading, error, claims = [] }: InsightsModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -134,84 +171,24 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
             <ErrorBoundary fallback={<InsightsRenderError />}>
             <div className="space-y-6">
 
-              {/* Summary */}
-              <div className="rounded-xl bg-gradient-to-br from-theme-background-tint to-theme-flag-low border border-theme-border-subtle p-5">
-                <p className="text-sm font-semibold text-theme-text mb-2 uppercase tracking-wide">What changed</p>
-                <p className="text-theme-neutral-700 leading-relaxed text-sm">{insights.summary}</p>
-              </div>
+              <ComparisonChanges insights={insights} claims={claims} />
 
-              {/* Notable changes */}
-              {insights.notable_changes?.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-theme-neutral-400 uppercase tracking-widest mb-3">Notable biomarker changes</p>
-                  <div className="space-y-3">
-                    {insights.notable_changes.map((change, idx) => (
-                      <div key={idx} className="rounded-xl border border-theme-neutral-100 bg-theme-surface shadow-sm overflow-hidden">
-                        <div className="flex items-center gap-3 px-4 py-3 border-b border-theme-neutral-50">
-                          <ChangeIcon text={change.change} />
-                          <span className="font-semibold text-theme-neutral-900 text-sm">{change.biomarker}</span>
-                        </div>
-                        <div className="px-4 py-3">
-                          <p className="text-sm text-theme-neutral-600 leading-relaxed mb-3">{change.change}</p>
-                          {change.possible_factors?.length > 0 && (
-                            <div>
-                              <p className="text-xs font-semibold text-theme-neutral-500 uppercase tracking-wide mb-2">
-                                This may have coincided with
-                              </p>
-                              <ul className="space-y-1.5">
-                                {change.possible_factors.map((factor, fidx) => (
-                                  <li key={fidx} className="flex items-start gap-2">
-                                    <ArrowRight className="w-3 h-3 text-theme-primary mt-1 flex-shrink-0" />
-                                    <span className="text-xs text-theme-neutral-600 leading-relaxed">{factor}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Questions to ask */}
-              {insights.questions_to_ask?.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-theme-neutral-400 uppercase tracking-widest mb-3">Questions for your provider</p>
-                  <div className="space-y-2">
-                    {insights.questions_to_ask.map((q, idx) => (
-                      <div key={idx} className="flex items-start gap-3 p-3 rounded-lg bg-theme-neutral-50 hover:bg-theme-neutral-100 transition-colors">
-                        <span className="text-xs font-bold text-theme-primary bg-theme-primary/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          {idx + 1}
-                        </span>
-                        <p className="text-sm text-theme-neutral-700 leading-relaxed">{q}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Next steps */}
-              {insights.next_steps_general?.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-theme-neutral-400 uppercase tracking-widest mb-3">General next steps</p>
-                  <div className="space-y-2">
-                    {insights.next_steps_general.map((step, idx) => (
-                      <div key={idx} className="flex items-start gap-3">
-                        <CheckCircle2 className="w-4 h-4 text-theme-primary flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-theme-neutral-700 leading-relaxed">{step}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/*
+                V2-03b Stage 2. questions_to_ask and next_steps_general are no
+                longer rendered. Model-written doctor questions cannot be held
+                to the discussion-prep premises (owner R2), and model next
+                steps carry food, supplement and lifestyle advice with no
+                Clinical Truth rule (owner R4).
+              */}
 
               {/* Disclaimer */}
               <div className="flex items-start gap-3 bg-theme-neutral-50 border border-theme-neutral-200 rounded-xl px-4 py-3">
                 <Info className="w-4 h-4 text-theme-neutral-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-theme-neutral-500 leading-relaxed italic">
-                  This information is for educational purposes only and is not medical advice. Always consult your healthcare provider before making changes to your health routine.
+                <p className="text-xs text-theme-neutral-500 leading-relaxed italic"
+                  data-language-category={PRODUCT_DISCLAIMERS.comparison.category}
+                  data-language-source={PRODUCT_DISCLAIMERS.comparison.authority.kind}
+                  data-language-cue={PRODUCT_DISCLAIMERS.comparison.cue}>
+                  {PRODUCT_DISCLAIMERS.comparison.text}
                 </p>
               </div>
             </div>

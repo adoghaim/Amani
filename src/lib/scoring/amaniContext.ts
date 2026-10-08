@@ -1,7 +1,7 @@
 import type { AmaniStatus, BiomarkerName } from '../../types';
 import { getEntry, type ClinicalRange, type OptimalRange } from '../biomarkers/dictionary';
 import {
-  canDescribeAsOptimal, isReviewedRange, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance,
+  canDescribeAsOptimal, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
 import { ANALYTE_CONTEXT, type AnalyteContext, type ContextModifier } from '../biomarkers/rangeContext.generated';
 
@@ -49,15 +49,6 @@ const STATE_MODIFIERS: Record<NonCyclingState, readonly ContextModifier[]> = {
   hormone_therapy: ['cycle', 'life_stage'],
   perimenopause: ['cycle', 'life_stage'],
   menopause: ['cycle', 'life_stage'],
-};
-
-const STATE_LABEL: Record<NonCyclingState, string> = {
-  pregnancy: 'pregnancy',
-  postpartum: 'the postpartum period',
-  hormonal_contraception: 'hormonal contraception',
-  hormone_therapy: 'hormone therapy',
-  perimenopause: 'perimenopause',
-  menopause: 'menopause',
 };
 
 /**
@@ -116,6 +107,8 @@ export function bandClaims(_key: BiomarkerName, _phase: MenstrualPhase | null): 
 export type WithheldReason = 'cycle_phase_missing' | 'cycle_phase_unsupported' | 'non_cycling_state';
 
 export interface AmaniBand {
+  /** Placement follows the existing scoring direction; this is not claim authority. */
+  higherIsBetter?: boolean;
   min: number | null;
   max: number | null;
   phase: MenstrualPhase | null;
@@ -193,6 +186,7 @@ export function assessAmaniContext(
     kind: 'scored',
     status: classifyAgainstBand(value, values.optimal, values.clinical, entry.higherIsBetter),
     band: {
+      higherIsBetter: entry.higherIsBetter,
       min: values.optimal.min,
       max: values.optimal.max,
       phase,
@@ -214,33 +208,6 @@ export function formatInterval(min: number | null, max: number | null): string |
   return null;
 }
 
-/** Short, user-facing review state carried beside every Amani band. */
-export function reviewStatusLabel(band: AmaniBand): string {
-  if (isReviewedRange(band.provenance)) return 'Reviewed range';
-  switch (band.provenance.review_status) {
-    case 'DISPUTED': return 'Disputed range, under review';
-    case 'NEEDS_CONTEXT': return 'Needs more context, under review';
-    default: return 'Not yet reviewed';
-  }
-}
-
-/** Copy for a withheld score. Never implies that a score exists. */
-export function withheldCopy(assessment: Extract<AmaniAssessment, { kind: 'withheld' }>): { title: string; body: string } {
-  const title = 'Amani context score unavailable';
-  if (assessment.reason === 'non_cycling_state' && assessment.state) {
-    return {
-      title,
-      body: `This marker can read differently during ${STATE_LABEL[assessment.state]}, and Amani has no reviewed context for it yet, so it does not score this result. Your result and your lab's range are shown as reported.`,
-    };
-  }
-  if (assessment.reason === 'cycle_phase_unsupported') {
-    return {
-      title,
-      body: 'This marker changes meaning across the menstrual cycle, and Amani has no context band for the recorded phase. Your result and your lab\'s range are shown as reported.',
-    };
-  }
-  return {
-    title,
-    body: 'This marker changes meaning across the menstrual cycle. Add or confirm your cycle phase for a more specific interpretation.',
-  };
-}
+// V2-03b: the review-state label and withheld copy are band language, so the
+// policy authors them. Re-exported here for existing callers.
+export { reviewStatusLabel, withheldCopy } from './insightCopy';

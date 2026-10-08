@@ -3,7 +3,8 @@ import { INSIGHT_RULES } from '../../utils/derivedMetrics';
 import { getDisplayName } from '../biomarkers/dictionary';
 import { assessAmaniContext, type PhysiologicalContext } from './amaniContext';
 import {
-  authorizedLanguage, authorizeText, authorizeTitle, combineLanguage, type AuthorizedLanguage, type Placement,
+  authorizedLanguage, combineLanguage, patternRuleObservation,
+  type AuthorizedLanguage, type ComparisonBandLanguage, type MeasuredValue, type Placement,
 } from './insightCopy';
 
 /*
@@ -87,11 +88,6 @@ export function gateInsightMatches<T extends GatedInsightMatch>(
   });
 }
 
-export interface AuthorizableInsightMatch extends GatedInsightMatch {
-  title: string;
-  description: string;
-}
-
 /**
  * The language a rule card may use (amendment 4, R2): the bands of its
  * declared inputs present on the report, combined most-restrictively. No
@@ -101,7 +97,7 @@ export function insightLanguage(
   match: GatedInsightMatch,
   values: ReadonlyMap<string, number>,
   context: PhysiologicalContext,
-): { language: AuthorizedLanguage; placement: Placement; subject: string } {
+): { language: AuthorizedLanguage; placement: Placement; subject: string; keys: string[] } {
   const dependency = ruleDependency(match);
   const keys = dependency.kind === 'analytes' ? dependency.analytes.filter(k => values.has(k)) : [];
   const languages: AuthorizedLanguage[] = [];
@@ -116,22 +112,33 @@ export function insightLanguage(
   // A placement is stated only for a single input; a pattern spans several.
   const placement = placements.length === 1 ? placements[0]! : null;
   const subject = keys.length > 0 ? keys.map(k => getDisplayName(k as BiomarkerName)).join(' and ') : 'This pattern';
-  return { language, placement, subject };
+  return { language, placement, subject, keys };
 }
 
-/** Rule cards rendered within what their bands authorize. Thresholds and matching are untouched. */
-export function authorizeInsightMatches<T extends AuthorizableInsightMatch>(
+export interface AuthorizedInsightMatch extends GatedInsightMatch {
+  title: ComparisonBandLanguage;
+  description: ComparisonBandLanguage;
+  badge: ComparisonBandLanguage;
+}
+
+/**
+ * V2-03b Stage 2 (owner R2). A rule card is worded by the policy alone: the
+ * measured inputs, that an unreviewed rule matched, and the bands' review
+ * state. No rule here has clinical authority, so no card names a condition or
+ * gives advice. Thresholds, matching and the gate above are untouched.
+ */
+export function authorizeInsightMatches<T extends GatedInsightMatch>(
   matches: readonly T[],
-  biomarkers: readonly { name: string; value: number }[],
+  biomarkers: readonly { name: string; value: number; unit?: string | null }[],
   context: PhysiologicalContext,
-): T[] {
+): (T & AuthorizedInsightMatch)[] {
   const values = new Map(biomarkers.map(b => [b.name, b.value] as const));
+  const units = new Map(biomarkers.map(b => [b.name, b.unit ?? ''] as const));
   return matches.map(m => {
-    const { language, placement, subject } = insightLanguage(m, values, context);
-    return {
-      ...m,
-      title: authorizeTitle(m.title, subject, language),
-      description: authorizeText(m.description, language, placement),
-    };
+    const { language, subject, keys } = insightLanguage(m, values, context);
+    const measured: MeasuredValue[] = keys.map(k => ({
+      name: getDisplayName(k as BiomarkerName), value: values.get(k)!, unit: units.get(k) ?? '',
+    }));
+    return { ...m, ...patternRuleObservation(subject, measured, language) };
   });
 }

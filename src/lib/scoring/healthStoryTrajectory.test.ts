@@ -71,6 +71,9 @@ describe('amendment 5 — the health story states only what is true', () => {
               expect(trajectory, where).not.toBe('improving');
               expect(claimsFavourableDirection(text), where).toBe(false);
             }
+            // A band direction cannot authorize an adverse clinical judgement either.
+            expect(trajectory, where).not.toBe('worsening');
+            expect(text, where).not.toMatch(/wrong direction|worsen|worth discussing/i);
             expect(trajectory, where).not.toBe('no_prior_data');
             if (trajectory === 'changed') {
               expect(text, where).toContain('has changed since your prior report.');
@@ -94,10 +97,21 @@ describe('amendment 5 — the health story states only what is true', () => {
     }
   });
 
-  it('favourable wording survives only under authorized language', () => {
+  /*
+    V2-03b Stage 2 replaces "favourable wording survives only under authorized
+    language". The trajectory still distinguishes 'improving' under authorized
+    language, but the story never words it as judgement or follow-up advice:
+    "moving in the right direction but still needs follow-up" carried both, and
+    the authorization it relied on is a boolean, not a traceable reviewed rule.
+  */
+  it('even under authorized language the story states the movement, never its direction or advice', () => {
     expect(primaryTrajectory(change('improving_still_high', undefined, 9, 6), AUTHORIZED)).toBe('improving');
     expect(primaryTrajectory(change(null, 'improved', 9, 6), AUTHORIZED)).toBe('improving');
-    expect(storyText(change('improving_still_high', undefined, 9, 6), AUTHORIZED).text).toMatch(/right direction/);
+    for (const language of LANGUAGES) {
+      const { text } = storyText(change('improving_still_high', undefined, 9, 6), language);
+      expect(text, String(language.reviewStatus)).toContain('which has changed since your prior report.');
+      expect(text, String(language.reviewStatus)).not.toMatch(/right direction|wrong direction|improv|follow-up|worse/i);
+    }
   });
 
   it('"unchanged" only when the value did not move; "no prior data" only without a prior', () => {

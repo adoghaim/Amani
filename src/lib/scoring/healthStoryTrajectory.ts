@@ -22,7 +22,8 @@ export function primaryTrajectory(
 
   switch (change.boundaryCrossing?.direction) {
     case undefined: break;
-    case 'worsened': return 'worsening';
+    // A raw comparison direction carries no independent clinical authority.
+    case 'worsened': return 'changed';
     case 'improved': return towardBand;
     // 'changed', and any direction this code does not know, describes a movement.
     default: return 'changed';
@@ -37,7 +38,7 @@ export function primaryTrajectory(
     case 'worsening_still_high':
     case 'worsening_still_low':
     case 'newly_abnormal':
-      return 'worsening';
+      return 'changed';
     case 'changed_into_band':
     case 'changed_still_high':
     case 'changed_still_low':
