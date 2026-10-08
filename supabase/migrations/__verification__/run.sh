@@ -369,6 +369,11 @@ psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE claim_gate_fresh TEMPLATE amani
 # Fixture rows and the pre-gate baseline of everything the view serves.
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.prelude.sql
 psql_f -v ON_ERROR_STOP=1 -v target=claim_gate_before -q -f /tmp/claim-policy-gate.capture.sql
+# The service RPC's served body for every row and both premium values, pre-gate.
+# Created before the catalog baseline so the snapshots below are unaffected.
+psql_f -v ON_ERROR_STOP=1 -q -c "CREATE TABLE claim_gate_rpc_before AS
+  SELECT i.id, p.premium, (SELECT jsonb_agg(to_jsonb(s)) FROM read_interpretation_for_server(r.user_id,i.lab_report_id,p.premium) s) AS served
+  FROM interpretations_private i JOIN lab_reports r ON r.id=i.lab_report_id CROSS JOIN (VALUES (false),(true)) p(premium);"
 gate_snap0=$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)
 # Forward, then replay: applying twice must be a no-op.
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$GATE"
@@ -390,7 +395,21 @@ psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.verify.sql
 psql_f -v ON_ERROR_STOP=1 -v target=claim_gate_after -q -f /tmp/claim-policy-gate.capture.sql
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.compare.sql
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
-psql_f -v ON_ERROR_STOP=1 -q -f /tmp/read-source-verify.sql
+# The gate leaves the service RPC byte-identical (the catalog diff above) and
+# serving exactly what it served before, for every row, reader and premium value.
+# read-source-verify.sql is NOT re-run here: it pins the 20260926000004 era, where
+# the RPC returned json_output_basic verbatim. 20260927000001 (Case 10) redefined
+# the RPC to serve interpretation_sanitize_basic(...), which overwrites an AI row's
+# stored disclaimer ('Educational' in that fixture), so its row-052 assertion fails
+# after Case 10 with or without this gate; proven after the rollback below.
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+  IF (SELECT count(*) FROM claim_gate_rpc_before) <> 2*(SELECT count(*) FROM interpretations_private)
+    OR EXISTS (SELECT 1 FROM claim_gate_rpc_before b JOIN interpretations_private i USING(id)
+      JOIN lab_reports r ON r.id=i.lab_report_id
+      WHERE b.served IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(s))
+        FROM read_interpretation_for_server(r.user_id,i.lab_report_id,b.premium) s))
+    THEN RAISE EXCEPTION 'FAIL: $GATE changed what read_interpretation_for_server serves'; END IF; END \$\$;"
+echo "PASS: read_interpretation_for_server serves every row identically before and after $GATE."
 # Negative control: the pre-gate fixture that pinned the legacy pass-through
 # (interpretation-visibility.verify.sql) now fails, and at exactly that assertion.
 if gate_out=$(psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql 2>&1); then
@@ -407,6 +426,15 @@ if [ "$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)" !
   echo "FAIL: claim-policy-gate rollback did not restore the catalog exactly"; exit 1
 fi
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql
+# Attribution control: with the gate rolled back (post-20260927000001, no gate),
+# the 20260926000004-era read-source verify fails at exactly its row-052
+# assertion, so that failure belongs to Case 10's sanitizer, not to $GATE.
+if rs_out=$(psql_f -v ON_ERROR_STOP=1 -q -f /tmp/read-source-verify.sql 2>&1); then
+  echo "FAIL: read-source verify passed after 20260927000001; the attribution above is stale"; exit 1
+fi
+if ! grep -q 'FAIL: unclaimed Free read: Basic projection only + ai source' <<<"$rs_out"; then
+  echo "FAIL: read-source verify failed for an unexpected reason without $GATE: $rs_out"; exit 1
+fi
 # Re-forward after rollback reproduces the forward exactly.
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$GATE"
 if [ "$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)" != "$gate_snap1" ]; then
