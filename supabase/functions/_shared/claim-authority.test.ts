@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  CLAIM_POLICY_VERSION, auditModelProposals, buildAuthorizedBasicProjection, issueClaimSet, projectBasic,
+  CLAIM_POLICY_VERSION, KNOWN_CLAIM_POLICY_VERSIONS, auditModelProposals, buildAuthorizedBasicProjection, issueClaimSet, projectBasic,
   servedBasic, storedClaimSet, visibleClaimProjection, withClaimAuthority,
   type ClaimSet, type MeasuredStatus,
 } from './claim-authority';
 import { createMovementClaim } from './clinical-movement-policy.generated';
 import { addFindingMetadata } from './finding-metadata';
-import { BASIC_KEYS, SAFETY_KEYS, buildBasicProjection } from './interpretation-visibility';
+import { BASIC_KEYS, SAFETY_KEYS, buildBasicProjection, sanitizeBasicProjection } from './interpretation-visibility';
 import { readInterpretation, type InterpretationReadActions } from './interpretation-read';
 import { contentFingerprint } from './preview-selector';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, type InterpretationPayload } from './response-shaping';
@@ -381,6 +381,158 @@ describe('9. legacy rows stay safe through version distinction, not rewriting', 
     const unversioned = { ...full, clinical_claims: { ...(full.clinical_claims as ClaimSet), policy_version: undefined } };
     expect(visibleClaimProjection(projectBasic(unversioned, { source: 'ai' })).preview).toBeNull();
     expect(visibleClaimProjection(projectBasic(full, { source: 'ai' })).preview).not.toBeNull();
+  });
+});
+
+/** Every Basic item a reader can see: array entries plus the preview. */
+const visibleItems = (basic: InterpretationPayload) =>
+  [...FLOOR_FINDING_KEYS, ...SAFETY_KEYS, 'safety_findings', 'flagged_trends']
+    .reduce((n, key) => n + (Array.isArray(basic[key]) ? (basic[key] as unknown[]).length : 0), 0) + (basic.preview ? 1 : 0);
+
+describe('owner R3: visibility is monotonic downward; counts are truthful, not monotonic', () => {
+  it('R3.1 an out-of-range marker the model did not flag gets no unauthorized replacement line', () => {
+    // ferritin is out of range by the classifier; the model never mentions it.
+    const silent = { ...model, key_findings: [{ biomarker_slug: 'tsh', title: CANARY, status: 'attention', explanation: CANARY }] };
+    const { full, basic } = generate(silent);
+    const set = storedClaimSet(full)!;
+    expect(set.claims.map(c => c.claim_id)).toContain('safety:ferritin');
+    const old = legacy(silent);
+    expect(expansionViolations(basic, old, full, set)).toEqual([]);
+    for (const key of [...FLOOR_FINDING_KEYS, ...SAFETY_KEYS, 'safety_findings', 'flagged_trends']) {
+      expect(JSON.stringify(basic[key] ?? [])).not.toContain('ferritin');
+    }
+    expect(JSON.stringify(basic.preview)).not.toContain('ferritin');
+    expect(visibleItems(basic)).toBeLessThanOrEqual(visibleItems(old));
+  });
+  it('R3.1 negative control: a classifier-backed replacement line is caught as an expansion', () => {
+    const silent = { ...model, key_findings: [{ biomarker_slug: 'tsh', title: CANARY, status: 'attention', explanation: CANARY }] };
+    const { full, basic } = generate(silent);
+    const replacement = { ...basic, key_findings: [...basic.key_findings as unknown[], { biomarker_slug: 'ferritin', status: 'out_of_range', value: 9 }] };
+    expect(expansionViolations(replacement, legacy(silent), full, storedClaimSet(full)!)).toContain('key_findings entry not in legacy Basic');
+  });
+  it('R3.2 an in-range marker the model falsely flagged loses free-floor treatment', () => {
+    const { full, basic } = generate(model);
+    expect(storedClaimSet(full)!.claims.map(c => c.claim_id)).not.toContain('safety:tsh');
+    expect(basic.key_findings).toContainEqual({ biomarker_slug: 'tsh' });
+    for (const key of ['safety_findings', 'flagged_trends']) expect(JSON.stringify(basic[key] ?? [])).not.toContain('tsh');
+    // Its trend is an ordinary authorized claim now: withheld and counted, not floor.
+    expect(visibleClaimProjection(basic).locked.cross_report).toBe(1);
+  });
+  it('R3.2 negative control: the legacy writer gave the same marker floor treatment', () => {
+    const old = legacy(model);
+    expect(old.key_findings).toContainEqual(expect.objectContaining({ biomarker_slug: 'tsh', status: 'attention' }));
+    expect(JSON.stringify(old.flagged_trends)).toContain('tsh');
+  });
+  // Two in-range trends; the model falsely flags tsh. The preview is the same
+  // fact in both writers, so the only thing that moves is the count.
+  const twoTrends = evidence.filter(e => e.biomarker_slug !== 'ferritin');
+  const inRange = statuses.filter(s => s.biomarker_slug !== 'ferritin');
+  const flagsTsh = { ...floor, key_findings: [{ biomarker_slug: 'tsh', title: 't', status: 'attention', explanation: CANARY }] };
+  it('R3.3 the locked count rises while the visible Basic set stays equal or smaller', () => {
+    const { full, basic } = generate(flagsTsh, 'ai', twoTrends, inRange);
+    const old = legacy(flagsTsh, 'ai', twoTrends);
+    expect(total(visibleClaimProjection(basic).locked)).toBeGreaterThan(total(old.locked));
+    expect((basic.preview as { content: unknown }).content).toEqual((old.preview as { content: unknown }).content);
+    expect(expansionViolations(basic, old, full, storedClaimSet(full)!)).toEqual([]);
+    expect(visibleItems(basic)).toBeLessThan(visibleItems(old));
+  });
+  it('R3.3 negative control: revealing the newly counted claim is caught', () => {
+    const { full, basic } = generate(flagsTsh, 'ai', twoTrends, inRange);
+    const old = legacy(flagsTsh, 'ai', twoTrends);
+    const tsh = twoTrends.find(e => e.biomarker_slug === 'tsh')!;
+    const revealed = { ...basic, flagged_trends: [{ biomarker_slug: 'tsh', previous_value: tsh.previous_value, current_value: tsh.current_value, unit: tsh.unit, delta: 999 }] };
+    expect(expansionViolations(revealed, old, full, storedClaimSet(full)!)).toContain('flagged_trends entry not in legacy Basic');
+    expect(visibleItems(revealed)).toBeGreaterThan(visibleItems(basic));
+  });
+  it('R3.4 a rising count cannot cause an additional preview, at generation or read', async () => {
+    for (const [, mutate] of mutations) {
+      const payload = mutate(model);
+      const { basic } = generate(payload);
+      const old = legacy(payload);
+      if (total(visibleClaimProjection(basic).locked) > total(old.locked)) {
+        expect(basic.preview === null || contentFingerprint((basic.preview as { content: unknown }).content)
+          === contentFingerprint((generate({ ...floor, key_findings: [] }).basic.preview as { content: unknown }).content)).toBe(true);
+      }
+    }
+    // Stored: authorized locked claims with an empty slot stay an empty slot.
+    const { basic } = generate(model);
+    const stored = { ...basic, preview: null, locked: { patterns: 0, cross_report: 2, lifestyle: 0, claim_policy_version: CLAIM_POLICY_VERSION } };
+    const read = await readInterpretation({ ownsReport: async () => true, resolveEntitlement: async () => ({ allowed: true, plan: 'free' }),
+      readSelected: async () => ({ json_output: stored, stored_depth: 'deep', has_claim: false, tier: 'free', interpretation_source: 'ai' }),
+      countClaims: async () => 0 }, true);
+    expect(read.body).toMatchObject({ preview: null, locked: { patterns: 0, cross_report: 2, lifestyle: 0 } });
+  });
+  it('R3.4 negative control: preview-eligible authorized content existed for that empty slot', () => {
+    const { full } = generate(model);
+    expect(claimCatalogEligible(full)).toBeGreaterThan(0);
+  });
+});
+
+const claimCatalogEligible = (full: InterpretationPayload) =>
+  ((full.findings ?? []) as { kind?: string; visibility_hint?: string }[]).filter(f => f.kind === 'trend' && f.visibility_hint === 'premium').length;
+
+/* ── 20261008000000: the compatibility view applies the same read gate ──── */
+const root = new URL('../../../', import.meta.url);
+const gateMigration = readFileSync(new URL('supabase/migrations/20261008000000_claim_policy_basic_gate.sql', root), 'utf8');
+const gatePrelude = readFileSync(new URL('supabase/migrations/__verification__/claim-policy-gate.prelude.sql', root), 'utf8');
+const gateRollback = readFileSync(new URL('supabase/migrations/__verification__/claim-policy-gate.rollback.sql', root), 'utf8');
+const basicCycleMigration = readFileSync(new URL('supabase/migrations/20260927000001_basic_cycle_context.sql', root), 'utf8');
+type GateCase = { name: string; source: string; preview?: unknown; claim_preview?: Record<string, unknown> & { claim?: Record<string, unknown> };
+  locked?: unknown; expected_preview: 'stored' | null; expected_locked: Record<string, number> };
+const gateFixture: { floor: InterpretationPayload; claim_preview: Record<string, unknown> & { claim: Record<string, unknown> }; cases: GateCase[] } =
+  JSON.parse(gatePrelude.match(/\$claim_gate_cases\$([\s\S]*?)\$claim_gate_cases\$/)![1]);
+/** The same construction as claim-policy-gate.prelude.sql. */
+const gateBasic = (c: GateCase): InterpretationPayload => {
+  const basic: InterpretationPayload = { ...gateFixture.floor };
+  if ('locked' in c) basic.locked = c.locked;
+  if ('preview' in c) basic.preview = c.preview;
+  else if (c.claim_preview) {
+    const { claim, ...rest } = c.claim_preview;
+    basic.preview = { ...gateFixture.claim_preview, ...rest, claim: { ...gateFixture.claim_preview.claim, ...(claim ?? {}) } };
+  }
+  return basic;
+};
+
+describe('20261008000000: SQL and TS serve the same Basic for one shared fixture', () => {
+  it('the fixture claim preview is a real claim-era preview, not a hand-written lookalike', () => {
+    const { basic } = generate(model);
+    expect(gateFixture.claim_preview).toEqual(basic.preview);
+    expect(gateBasic(gateFixture.cases[3]).locked).toEqual(basic.locked);
+  });
+  it.each(gateFixture.cases.map(c => [c.name, c] as const))('%s', async (_, c) => {
+    const basic = gateBasic(c);
+    const expected = { preview: c.expected_preview === 'stored' ? basic.preview : null, locked: c.expected_locked };
+    expect(visibleClaimProjection(basic)).toEqual(expected);
+    // The edge-function Basic read: what the SQL view must equal row for row.
+    const read = await readInterpretation({ ownsReport: async () => true, resolveEntitlement: async () => ({ allowed: true, plan: 'free' }),
+      readSelected: async () => ({ json_output: basic, stored_depth: 'deep', has_claim: false, tier: 'free', interpretation_source: c.source }),
+      countClaims: async () => 0 }, true);
+    expect(read.body.interpretation).toEqual({ ...sanitizeBasicProjection(basic, c.source), ...expected });
+  });
+  it('known policy versions in SQL are exactly KNOWN_CLAIM_POLICY_VERSIONS (drift fails here)', () => {
+    const list = `= ANY(ARRAY[${KNOWN_CLAIM_POLICY_VERSIONS.map(v => `'${v}'`).join(',')}])`;
+    expect(gateMigration.split(list)).toHaveLength(3);
+    expect(gateMigration.match(/ANY\(ARRAY\[/g)).toHaveLength(2);
+  });
+  it('gates only the client view, rewrites no row, and leaves the service RPC to the TS gate', () => {
+    expect(gateMigration).toContain('ELSE public.interpretation_claim_gate(public.interpretation_sanitize_basic(i.json_output_basic,i.interpretation_source)) END');
+    expect(gateMigration).toContain('THEN i.json_output\n');
+    expect(gateMigration).not.toMatch(/\bUPDATE\s+public\./);
+    expect(gateMigration).not.toMatch(/FUNCTION public\.read_interpretation_for_server/);
+    expect(gateMigration).not.toMatch(/GRANT[^;]*interpretation_claim_gate[^;]*authenticated/);
+  });
+  it('the rollback restores the 20260927000001 view function byte for byte', () => {
+    const body = (sql: string) => sql.match(/CREATE OR REPLACE FUNCTION public\.read_compatible_interpretations\(\)[\s\S]*?\n\$\$;\n/)![0];
+    expect(body(gateRollback)).toBe(body(basicCycleMigration));
+    expect(body(gateMigration)).not.toBe(body(basicCycleMigration));
+  });
+  it('the harness runs the case: refusal, forward, replay, rollback, fresh chain and the baseline compare', () => {
+    const harness = readFileSync(new URL('supabase/migrations/__verification__/run.sh', root), 'utf8');
+    expect(harness).toContain('GATE=20261008000000_claim_policy_basic_gate.sql');
+    expect(harness.match(/-f "\/tmp\/\$GATE"/g)!.length).toBeGreaterThanOrEqual(6);
+    for (const step of ['claim-policy-gate.rollback.sql', 'claim-policy-gate.compare.sql', 'claim_gate_fresh', 'target=claim_gate_before']) {
+      expect(harness).toContain(step);
+    }
   });
 });
 

@@ -1,9 +1,13 @@
 # TASK-046 — V2-03c server clinical-claim authority + projection safety
 
-Implementer turn 1 (backup implementer: Claude). Status: **PARTIAL**. The Basic
-projection path (preview, locked counts, safety signals, legacy reads) is done
-and proven. Two surfaces are not done; see "Not done" below. Nothing has been
-deployed, migrated or merged.
+Implementer turns 1–2 (backup implementer: Claude). Status: **PARTIAL**.
+- The Basic projection path is done and proven in Vitest: preview, locked
+  counts, safety signals and legacy reads.
+- Turn 2 adds the compatibility-view gate migration and its harness case. It
+  awaits the Lead's Docker run.
+- The paid full body is still not done; see "Not done".
+
+Nothing has been deployed, migrated or merged.
 
 ## What changed
 
@@ -125,7 +129,7 @@ Commands run: `npm test` (73 files, 1566 tests, all pass) · `npm run typecheck`
 
 - **Deno type-check (`npm run check:functions`): SKIPPED.** It needs `npx --yes deno@2`
   (network). The new module uses only `.ts` relative imports and no Node or Deno APIs.
-- **Docker SQL harness: SKIPPED** (no Docker). No SQL changed. The SQL
+- **Docker SQL harness: SKIPPED** (no Docker). Turn 1 changed no SQL (turn 2 does; see below). The SQL
   `interpretation_floor` / `interpretation_sanitize_basic` are untouched. They
   still preserve the stored preview/locked, which now carry the version marker.
 - **Browser and E2E suites: not run** (the sandbox cannot listen on a port; see the
@@ -144,19 +148,97 @@ Commands run: `npm test` (73 files, 1566 tests, all pass) · `npm run typecheck`
    met for Basic preview and counts, not yet for the full body. Doing it means
    replacing the client's full-body rendering with claim rendering. That is a
    client and server change of its own.
-2. **SQL compatibility view.** `read_compatible_interpretations()` (used by
-   `ReportView` via `.from('interpretations')`) returns
-   `interpretation_sanitize_basic(json_output_basic)`. For legacy Basic rows this
-   includes the stored model-prose `preview` and inflated `locked`. They are not
-   rendered from that path (the client reads preview/locked only from
-   `get-interpretation`), but they are reachable data. The fix is a new migration
-   (≥ 20261008000000) that nulls `preview` and zeroes `locked` when
-   `locked->>'claim_policy_version'` is not a known version, with harness
-   verification. I did not write SQL I could not run.
+2. ~~SQL compatibility view.~~ Authored in turn 2 (below). It is **not proven
+   until the Lead runs the Docker harness.**
 3. **Basic `headline` is still model prose**, bounded and render-gated (existing
    floor behaviour, `MODEL_PROSE_FIELDS`). It is not a claim.
 4. **`lab-insights`** (sibling model function) was not brought under claim
    authority. It is premium-gated and render-gated.
+
+## Turn 2 — the compatibility-view gate (owner R1–R4, Lead finding A)
+
+**Finding A, confirmed.** `read_compatible_interpretations()` sits behind
+`GRANT SELECT ON public.interpretations TO authenticated`. It served a legacy
+row's stored `preview` and inflated `locked` with no version check, so any
+authenticated client could bypass `visibleClaimProjection` with a direct query.
+
+**Fix: `supabase/migrations/20261008000000_claim_policy_basic_gate.sql` (new).**
+- `interpretation_claim_gate(jsonb)` mirrors `visibleClaimProjection`/`servedBasic`:
+  - with a known `locked.claim_policy_version`, the preview is served only if it
+    is claim-shaped, and each count is kept only if it is a positive integer;
+  - otherwise the row is served with `preview: null` and zero counts.
+- The view's Basic branch becomes `gate(sanitize_basic(...))`. The Full branch,
+  the switch-OFF branch, ownership, columns and grants are unchanged.
+- The gate is not a client API: it is revoked from `PUBLIC`, `anon` and `authenticated`.
+- No row is rewritten.
+- `read_interpretation_for_server` is deliberately left alone. It is service-role
+  only, and its one caller already applies the TS gate. Applying the gate twice
+  would zero a claim-era row's counts; the harness asserts this.
+- Frozen migrations are untouched.
+
+**Harness: run.sh Case 11.** The new files are `claim-policy-gate.{prelude,capture,compare,verify,rollback,snapshot}.sql`. Case 11 proves the owner's R4 list:
+- **Forward + verify:** 16 shared fixture cases served exactly as expected,
+  through the view and through a direct RPC call as `authenticated`.
+  - *Negative control:* 14 of the 16 differ from what the pre-gate view served.
+- **Replay/idempotence:** applying the migration twice leaves the catalog snapshot identical.
+- **Coexistence:**
+  - the catalog diff (every public function, relation, ACL and policy) is
+    exactly `interpretation_claim_gate(jsonb)` and `read_compatible_interpretations()`;
+  - stored rows are byte-identical;
+  - the deterministic and read-source verifies still pass.
+- **Negative control on the old fixture:** after the forward,
+  `interpretation-visibility.verify.sql` must fail, and at exactly the assertion
+  that pinned the pass-through.
+- **Rollback (run twice):** the catalog snapshot equals the pre-forward one, and
+  the old fixture passes again. Re-forwarding reproduces the first forward's
+  snapshot.
+- **Fresh chain:** run on a clone of the chain with no interpretation rows
+  (forward twice, then rows written after the gate). An out-of-order apply
+  refuses and leaves nothing behind.
+- **No widening:** checked over every row, every reader and no reader, switch ON
+  and OFF, against a baseline captured before the forward:
+  - same rows;
+  - Full and switch-OFF reads byte-identical;
+  - outside `preview`/`locked`, every key and value unchanged;
+  - a served preview is null or exactly the stored one;
+  - no count exceeds the stored count.
+
+**TS parity (VERIFIED here).** `claim-authority.test.ts` reads the same fixture
+from the prelude and checks:
+- `visibleClaimProjection` and the `get-interpretation` Basic body equal the SQL expectations;
+- the fixture's claim preview is byte-equal to a real `projectBasic` preview;
+- the SQL known-version list equals `KNOWN_CLAIM_POLICY_VERSIONS`, so drift fails;
+- the rollback restores the 20260927000001 function body byte for byte.
+
+*Mutation control:* making the TS gate pass legacy rows through fails 9 tests,
+including all 7 legacy fixture cases. Restored byte-identical.
+
+**Owner R3, four cases, each negative-controlled (VERIFIED, Vitest):**
+1. Out-of-range ferritin that the model did not flag: no Basic line and no
+   preview mentions ferritin, although a safety claim exists. *Control:* a
+   classifier-backed replacement line is caught as an expansion.
+2. In-range TSH that the model falsely flagged: no status, not in
+   `safety_findings` or `flagged_trends`, and counted as locked. *Control:*
+   legacy gave it floor treatment.
+3. The count rises from legacy (0 → 1) with the same preview fact and strictly
+   fewer visible items. *Control:* revealing the newly counted claim is caught.
+4. A rising count never adds a preview, across all 8 mutations and at read time
+   (stored `preview: null` with 2 locked serves no preview). *Control:*
+   preview-eligible authorized content existed for that slot.
+
+**SKIPPED / not proven by me:**
+- **The Docker harness.** No Docker. Nothing in Case 11 has executed; every SQL
+  claim above is the harness's *intent* until the Lead runs it.
+- **`check:functions`.** It needs network. No edge-function source changed this turn.
+- **Browser suites.** No client change.
+- **Coexistence with the clinical-catalog migrations (20261006/20261007)** is
+  inferred, not executed. The harness runs them in separate databases. This
+  migration references no clinical object, and the snapshot diff shows it
+  touches only the two functions.
+
+**Stray file:** `supabase/functions/_shared/tmp-print.test.ts` was a throwaway
+print script. The sandbox denied `rm`, so it is now an `it.todo` placeholder.
+**Delete before commit.**
 
 ## Questions for the Lead / owner
 

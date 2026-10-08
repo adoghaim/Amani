@@ -348,5 +348,82 @@ psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql
 
+# Case 11 (TASK-046, V2-03c): the compatibility view serves a Basic preview and
+# locked counts only under a known claim policy. Forward, verify, replay,
+# coexistence, rollback, fresh chain, and no widening against a captured baseline.
+GATE=20261008000000_claim_policy_basic_gate.sql
+docker cp "$HERE/../$GATE" "$CONTAINER:/tmp/$GATE" >/dev/null
+for file in claim-policy-gate.prelude.sql claim-policy-gate.capture.sql claim-policy-gate.compare.sql \
+  claim-policy-gate.verify.sql claim-policy-gate.rollback.sql claim-policy-gate.snapshot.sql; do
+  docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
+done
+# Out of order: refuses before the 20260927000001 read boundaries, leaves nothing.
+if docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -q -f "/tmp/$GATE" >/dev/null 2>&1; then
+  echo "FAIL: $GATE applied before the cutover"; exit 1
+fi
+docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+  IF to_regprocedure('public.interpretation_claim_gate(jsonb)') IS NOT NULL
+    THEN RAISE EXCEPTION 'out-of-order claim gate left a function behind'; END IF; END \$\$;"
+# Fresh chain: the current V2 chain with no interpretation rows, cloned now (pre-gate).
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE claim_gate_fresh TEMPLATE amani;'
+# Fixture rows and the pre-gate baseline of everything the view serves.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.prelude.sql
+psql_f -v ON_ERROR_STOP=1 -v target=claim_gate_before -q -f /tmp/claim-policy-gate.capture.sql
+gate_snap0=$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)
+# Forward, then replay: applying twice must be a no-op.
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$GATE"
+gate_snap1=$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$GATE"
+if [ "$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)" != "$gate_snap1" ]; then
+  echo "FAIL: $GATE replay changed the catalog"; exit 1
+fi
+# Coexistence: exactly two catalog objects differ, with identical ACLs elsewhere.
+gate_changed=$(diff <(printf '%s\n' "$gate_snap0") <(printf '%s\n' "$gate_snap1") \
+  | sed -n 's/^[<>] \([^|]*\)|.*/\1/p' | sort -u | tr '\n' ' ' || true)
+if [ "$gate_changed" != 'function:interpretation_claim_gate(jsonb) function:read_compatible_interpretations() ' ]; then
+  echo "FAIL: $GATE changed unexpected catalog objects: $gate_changed"; exit 1
+fi
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+  IF EXISTS (SELECT 1 FROM claim_gate_rows_at_rest b FULL JOIN interpretations_private i USING(id)
+    WHERE b.row_data IS DISTINCT FROM to_jsonb(i)) THEN RAISE EXCEPTION '$GATE changed stored rows'; END IF; END \$\$;"
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.verify.sql
+psql_f -v ON_ERROR_STOP=1 -v target=claim_gate_after -q -f /tmp/claim-policy-gate.capture.sql
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.compare.sql
+psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/read-source-verify.sql
+# Negative control: the pre-gate fixture that pinned the legacy pass-through
+# (interpretation-visibility.verify.sql) now fails, and at exactly that assertion.
+if gate_out=$(psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql 2>&1); then
+  echo "FAIL: legacy preview/count pass-through still served after $GATE"; exit 1
+fi
+if ! grep -q 'FAIL: compat Basic strips legacy cycle, findings and follow-up prose, keeps flags/values/preview/counts' <<<"$gate_out"; then
+  echo "FAIL: visibility verify failed for an unexpected reason after $GATE: $gate_out"; exit 1
+fi
+# Rollback, twice: the catalog returns exactly to the pre-forward state and the
+# pre-gate expectations hold again; no stored row changed.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.rollback.sql
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.rollback.sql
+if [ "$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)" != "$gate_snap0" ]; then
+  echo "FAIL: claim-policy-gate rollback did not restore the catalog exactly"; exit 1
+fi
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql
+# Re-forward after rollback reproduces the forward exactly.
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$GATE"
+if [ "$(psql_f -v ON_ERROR_STOP=1 -tA -f /tmp/claim-policy-gate.snapshot.sql)" != "$gate_snap1" ]; then
+  echo "FAIL: $GATE re-forward after rollback differs from the first forward"; exit 1
+fi
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/claim-policy-gate.verify.sql
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+  IF EXISTS (SELECT 1 FROM claim_gate_rows_at_rest b FULL JOIN interpretations_private i USING(id)
+    WHERE b.row_data IS DISTINCT FROM to_jsonb(i)) THEN RAISE EXCEPTION 'claim gate cycle changed stored rows'; END IF; END \$\$;"
+# Fresh chain: no rows when applied; rows written afterwards are gated.
+psql_gate_fresh() { docker exec -i "$CONTAINER" psql -U postgres -d claim_gate_fresh -v ON_ERROR_STOP=1 "$@"; }
+psql_gate_fresh -q -c 'DELETE FROM interpretations_private;'
+psql_gate_fresh -q -f "/tmp/$GATE"
+psql_gate_fresh -q -f "/tmp/$GATE"
+psql_gate_fresh -q -f /tmp/claim-policy-gate.prelude.sql
+psql_gate_fresh -q -f /tmp/claim-policy-gate.verify.sql
+echo "PASS: $GATE forward, verify, replay, coexistence, rollback, fresh chain and no widening."
+
 # TASK-041: isolated reference catalog, no user-data fixture.
 source "$HERE/clinical-catalog.run.sh"
