@@ -560,8 +560,7 @@ describe('object-shaped safety authority regression', () => {
     expect(buildBasicProjection(payload, [], { source }).critical_findings)
       .toEqual({ biomarker_slug: 'tsh', critical: true });
     const projected = buildAuthorizedBasicProjection(payload, set, { source }).critical_findings;
-    const entries = Array.isArray(projected) ? projected : [projected];
-    expect(entries).toEqual([{ biomarker_slug: 'tsh' }]);
+    expect(projected).toEqual([{ biomarker_slug: 'tsh' }]);
   });
   it('preserves a backed object alert independently of rejected model prose', () => {
     const payload = { ...model, critical_findings: { biomarker_slug: 'ferritin', critical: true } };

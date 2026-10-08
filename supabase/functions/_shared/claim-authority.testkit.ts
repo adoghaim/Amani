@@ -1,6 +1,6 @@
 /** Synthetic facts only. Shared by component and browser projection proofs. */
-import { projectBasic, servedBasic, visibleClaimProjection, withClaimAuthority } from './claim-authority';
-import { buildTrendEvidence } from './trend-evidence';
+import { projectBasic, servedBasic, visibleClaimProjection, withClaimAuthority } from './claim-authority.ts';
+import { buildTrendEvidence } from './trend-evidence.ts';
 
 export const projectionCanary = 'Your markers are telling a gentle story about how your energy is settling';
 export function projectedPreviewFixture(currentTsh = 9) {

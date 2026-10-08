@@ -473,3 +473,62 @@ Basic headline prose and `lab-insights` remain declared out-of-scope debt. No
 clinical values, thresholds, evidence grades, SAFE promotion, BASIC_KEYS, tier,
 entitlement, Stripe, frozen migrations or policy kernel changed. Changes are
 uncommitted for Lead review; nothing was pushed, deployed or merged.
+
+## Turn 7 — Deno fixture imports and consistency follow-up
+
+Root cause and approach: the shared testkit used extensionless imports although
+Deno checks it as a non-test module. Use explicit `.ts` specifiers, retaining
+that check. Pin the intentional array contract in both object-shaped safety
+regressions and document the browser suites' shared-port sequencing constraint.
+No production projection implementation changes are needed this turn.
+
+### Changes and observable contract
+
+- `claim-authority.testkit.ts` now imports `claim-authority.ts` and
+  `trend-evidence.ts`. App and E2E typechecks pass with these specifiers; there
+  is no reproduced extension-related cross-compilation failure. The prior
+  compiler-workaround description is not a reason to omit extensions.
+- The unbacked object cases now assert the array directly, agreeing with the
+  backed object case. For AI/unknown sources, a surviving lone safety object
+  intentionally becomes a one-element array in the authorized Basic projection.
+  This is an observable container change introduced in turn 6, not merely a
+  test normalization. `servedBasic` spreads the body and
+  `parseInterpretationAccess` preserves it, so API consumers can observe it.
+  Static SQL inspection shows `interpretation_sanitize_basic` delegates
+  `critical_findings` to `interpretation_basic_safety_value`, whose array branch
+  retains array shape; array aggregation elsewhere does not restore the lone
+  object. No direct `critical_findings` reference was found under `src/`.
+  This consumer/SQL analysis is static evidence, not a new SQL runtime proof.
+- `e2e/freemium/README.md` now describes the implemented suite and requires
+  sequential execution with the root suite and isolation canary on port 4173.
+  The wrapper and its post-purge `--freemium` ordering are unchanged.
+- The Lead's accepted negative control at `5e01c14` failed all three regression
+  assertions, not two. The earlier turn-6 command matched only two test names.
+  That negative control and the Lead's 6/6 browser result are inherited evidence;
+  they were not repeated here.
+
+### Verification observed this turn
+
+- `npx vitest run supabase/functions/_shared/claim-authority.test.ts`: 78 passed.
+- `npm test`: 1,600 passed across 73 files; no todo.
+- `npm run typecheck`: passed, including app, clinical tooling and E2E.
+- `npm run lint`: passed, 0 errors and 9 existing warnings.
+- `npm run clinical:check`: passed, including generated policy byte identity.
+- `npm run build`: passed.
+- `npm run check:functions`: could not reach Deno checking. No `deno` executable
+  is on PATH; the npm script's `npx --yes deno@2` failed with `ENOTFOUND` for
+  registry.npmjs.org in this offline sandbox. The Lead must rerun this gate.
+
+No browser, env canary or Docker harness execution is claimed this turn. No
+migration, verification SQL, entitlement, clinical value, policy kernel or
+production projection file changed. Paid full-body projection, bounded Basic
+headline prose and `lab-insights` remain out-of-scope debt. No external software
+documentation question arose. Independent review and final gates belong to the
+Lead; this is implementation evidence, not certification.
+
+The three required control documents were located and read under
+`/Users/adelldoghaimat/Desktop/amani-agent-control/tasks/` without edits. A
+pre-existing untracked Playwright `.last-run.json` was preserved at
+`/tmp/task046-turn7-preexisting-last-run.json` and removed from the deliverable
+tree. No control or Second Brain material was written. All changes remain
+uncommitted; nothing was pushed, merged or deployed.

@@ -1,5 +1,11 @@
-# freemium
+# Freemium claim projection browser proofs
 
-Planned scenarios: Basic versus paid visibility and confidentiality regression scenarios. Documentation placeholder only; this task changes no Freemium logic or fixture entitlement policy.
+Run the opt-in suite with:
 
-This is a future-suite placeholder, not implemented coverage. Confirm functionality in the target commit before adding tests. Use synthetic data only; no production credentials, PHI, destructive production requests, or arbitrary sleeps. Extend the smoke-only test selection deliberately when adding a suite. See [engineering tooling](../../docs/engineering-tooling/README.md).
+```sh
+npx playwright test --config e2e/freemium/playwright.config.ts
+```
+
+Run this suite, the root Playwright suite, and the env-isolation canary sequentially. The browser configurations share `127.0.0.1:4173`, disable `reuseExistingServer`, and use `--strictPort`; concurrent runs collide and the second server fails instead of selecting another port.
+
+The two synthetic scenarios exercise the authorized Basic preview and suppression when report facts disagree with the issued claim. Both check locked availability and reject the unprovenanced prose canary. The isolated server sets `--freemium` after clearing inherited `VITE_*` variables. See [engineering tooling](../../docs/engineering-tooling/README.md).
