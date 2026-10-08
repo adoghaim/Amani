@@ -14,11 +14,12 @@ const user = {
   created_at: '2026-01-01T00:00:00.000Z',
 };
 
-export const test = base.extend<{ authenticated: boolean; syntheticReports: SyntheticReport[]; networkGuard: void }>({
+export const test = base.extend<{ authenticated: boolean; syntheticReports: SyntheticReport[]; syntheticBasicResponse: { reportId: string; body: unknown } | null; networkGuard: void }>({
   authenticated: [false, { option: true }],
   // Opt-in synthetic report rows (V2-03). Empty by default, so every existing
   // test keeps the exact allowlist it had.
   syntheticReports: [[], { option: true }],
+  syntheticBasicResponse: [null, { option: true }],
   storageState: async ({ authenticated }, provide) => {
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
     // Unsigned, deliberately invalid outside this fixture. No real credential.
@@ -43,7 +44,7 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
       }] : [],
     });
   },
-  networkGuard: [async ({ context, authenticated, syntheticReports }, provide) => {
+  networkGuard: [async ({ context, authenticated, syntheticReports, syntheticBasicResponse }, provide) => {
     const unexpected: string[] = [];
     await context.route('**/*', async route => {
       const request = route.request();
@@ -51,6 +52,19 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
       if (url.origin === origin && request.method() === 'GET') {
         await route.continue();
         return;
+      }
+      // Opt-in projection proof: exact synthetic endpoint, method and report only.
+      if (authenticated && syntheticBasicResponse && url.origin === apiOrigin) {
+        if (request.method() === 'POST' && url.pathname === '/functions/v1/get-interpretation'
+          && request.postDataJSON()?.reportId === syntheticBasicResponse.reportId) {
+          await route.fulfill({ json: syntheticBasicResponse.body });
+          return;
+        }
+        if (request.method() === 'HEAD' && url.pathname === '/rest/v1/introductory_deep_access_claims'
+          && url.searchParams.get('user_id') === `eq.${userId}` && url.searchParams.get('select') === '*') {
+          await route.fulfill({ status: 200, headers: { 'content-range': '0-2/3' } });
+          return;
+        }
       }
       if (authenticated && url.origin === apiOrigin && request.method() === 'GET') {
         // Persistent handler: getUser() runs again as layouts mount and reload.

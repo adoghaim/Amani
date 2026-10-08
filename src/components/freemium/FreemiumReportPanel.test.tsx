@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { YourTrajectoryCard } from '../YourTrajectoryCard';
 import type { BiggestChange, InsightSummary } from '../../lib/insights/buildInsightSummary';
@@ -10,6 +10,17 @@ import { MODEL_CANARIES, unprovenancedText, unresolvedModelProse } from '../../l
 import { movementClaimsByKey } from '../../lib/scoring/insightCopy';
 import type { BiomarkerDelta } from '../../lib/scoring/compareReports';
 import type { BiomarkerName } from '../../types';
+
+// Load the real server module at runtime: its Deno/ES2023 compilation contract
+// differs from the app's ES2020 + noUncheckedIndexedAccess contract.
+const { projectedPreviewFixture, projectionCanary } = await vi.importActual<{
+  projectionCanary: string;
+  projectedPreviewFixture: (currentTsh?: number) => {
+    basic: Record<string, unknown>;
+    visible: { preview: unknown; locked: unknown };
+    response: { interpretation: Record<string, unknown>; preview: unknown; locked: unknown };
+  };
+}>('../../../supabase/functions/_shared/claim-authority.testkit');
 
 const COPY_BASIC_HEADING = FREEMIUM_COPY.report.basicHeading;
 
@@ -306,5 +317,36 @@ describe('Basic wording through the policy (owner R1)', () => {
     const host = mount(withBasic({}, trendPreview(9)));
     host.querySelector('[data-model-surface="preview"] p:last-child')!.append(MODEL_CANARIES[4]);
     expect(unprovenancedText(host, CHROME)).toEqual([`preview: ${MODEL_CANARIES[4]}`]);
+  });
+});
+
+
+describe('real server projection to rendered Basic panel', () => {
+  it('renders the issued fact and authorized locked availability from the served response', () => {
+    const { basic, visible, response } = projectedPreviewFixture();
+    expect(visible.preview).toHaveProperty('claim.policy_version', 'v2-03c.1');
+    expect(basic.locked).toHaveProperty('claim_policy_version', 'v2-03c.1');
+    expect(response.locked).toEqual({ patterns: 0, cross_report: 1, lifestyle: 0 });
+    expect(response.interpretation.locked).toEqual(response.locked);
+    expect(response.interpretation.preview).toEqual(response.preview);
+    expect(response.locked).not.toHaveProperty('claim_policy_version');
+    const state = parseInterpretationAccess(response);
+    expect(state.locked).toEqual(visible.locked);
+    const host = mount(state);
+    const card = host.querySelector('[data-model-surface="preview"]');
+    expect(card?.textContent).toContain('TSH increased from 6 to 9 uIU/mL.');
+    expect(card?.querySelector('[data-language-claim="measured_movement"]')).not.toBeNull();
+    expect(host.textContent).toContain('Cross-report relationship available');
+    expect(host.textContent).not.toContain('additional pattern');
+    expect(host.textContent).not.toContain(projectionCanary);
+    expect(unprovenancedText(host, CHROME)).toEqual([]);
+  });
+  it('negative control: a real issued preview disagreeing with the report cannot render or backfill', () => {
+    const { response } = projectedPreviewFixture(10);
+    expect(response.preview).toHaveProperty('content.current_value', 10);
+    const host = mount(parseInterpretationAccess(response));
+    expect(host.querySelector('[data-model-surface="preview"]')).toBeNull();
+    expect(host.textContent).not.toContain('Ferritin increased');
+    expect(host.textContent).not.toContain(projectionCanary);
   });
 });

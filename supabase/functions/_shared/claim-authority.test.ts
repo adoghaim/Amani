@@ -550,3 +550,23 @@ describe('Basic body confidentiality under the claim era', () => {
     expect(full).toEqual(original);
   });
 });
+
+
+describe('object-shaped safety authority regression', () => {
+  it.each(['ai', 'unknown'])('strips an unbacked single-object critical flag for %s', source => {
+    const payload = { ...floor, critical_findings: { biomarker_slug: 'tsh', critical: true } };
+    const set = issueClaimSet({ trendEvidence: [], statuses: [] });
+    // Exact SQL-fixture shape: the old floor deliberately preserves this flag.
+    expect(buildBasicProjection(payload, [], { source }).critical_findings)
+      .toEqual({ biomarker_slug: 'tsh', critical: true });
+    const projected = buildAuthorizedBasicProjection(payload, set, { source }).critical_findings;
+    const entries = Array.isArray(projected) ? projected : [projected];
+    expect(entries).toEqual([{ biomarker_slug: 'tsh' }]);
+  });
+  it('preserves a backed object alert independently of rejected model prose', () => {
+    const payload = { ...model, critical_findings: { biomarker_slug: 'ferritin', critical: true } };
+    const { basic } = generate(payload);
+    expect(basic.critical_findings).toEqual([{ biomarker_slug: 'ferritin', critical: true }]);
+    expect(JSON.stringify(basic)).not.toContain(CANARY);
+  });
+});

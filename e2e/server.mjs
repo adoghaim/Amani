@@ -6,6 +6,9 @@ import { spawn } from 'node:child_process';
 for (const name of Object.keys(process.env)) {
   if (name.startsWith('VITE_')) delete process.env[name];
 }
+// Explicit isolated Freemium suite; never inherit this flag from a developer env.
+if (process.argv.includes('--freemium')) process.env.VITE_FREEMIUM_ACTIVE = 'true';
+
 process.env.VITE_SUPABASE_URL = 'https://amani-e2e.invalid';
 process.env.VITE_SUPABASE_ANON_KEY = 'synthetic-anon-key-not-a-credential';
 

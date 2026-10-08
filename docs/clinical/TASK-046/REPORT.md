@@ -376,3 +376,100 @@ is still present. See the turn 3 note.
   authorized trend and is counted. That is honest under the ruling, but it is a
   case where a count goes up.
 - **Context7 question (Lead):** none needed. No external library behaviour is relied on.
+
+## Turn 6 — object safety shape and server-to-render agreement
+
+Approach: the authority strip handled arrays only, while `basicSafetyValue`
+returns a lone object for object-shaped `SAFETY_KEYS`. Normalize that object to
+one entry before applying the existing authority check. The rendered preview
+coverage also stopped at hand-built client data; use a shared synthetic fixture
+that calls `withClaimAuthority` (and therefore `issueClaimSet`), `projectBasic`,
+`visibleClaimProjection` and `servedBasic`, then parse and render the actual
+response. Preserve the architecture, policy kernel, entitlement boundary and SQL.
+
+### Locally observed
+
+- The exact `{ biomarker_slug: 'tsh', critical: true }` object now loses the
+  unbacked flag for AI and unknown sources. A classifier-backed ferritin object
+  keeps its alert even when ordinary model proposals are rejected.
+- Negative-control command against **unchanged production code at 9bf6674**:
+  `npx vitest run supabase/functions/_shared/claim-authority.test.ts -t 'strips an unbacked single-object'`
+  failed both cases (2 failed, 76 skipped). The assertion normalizes either
+  output shape before comparison: it fails because `critical: true` survives,
+  not merely because an object becomes an array. With the fix, the focused
+  server/component command passes 111 tests.
+- Component coverage feeds the real served response into
+  `parseInterpretationAccess` and `FreemiumReportPanel`. It checks the issued
+  preview's claim key, the stored version marker and its removal from served
+  locked counts, agreement between nested and top-level projections, the
+  policy-attributed TSH 6 → 9 phrase, authorized locked availability, and the
+  absence of rejected model canary/pattern count. Its negative control issues
+  an actual TSH 6 → 10 claim while the report says 6 → 9; no preview or
+  replacement ferritin preview renders. This is component rendering evidence,
+  **not a browser run**.
+- Deleted `supabase/functions/_shared/tmp-print.test.ts`; no todo remains.
+- Typecheck passes. The component test loads the actual server fixture through
+  `vi.importActual`, with a narrow structural test interface, because directly
+  importing it pulls the server's ES2023 modules into the app's ES2020 stricter
+  compiler contract. No production compiler settings or server modules were
+  changed to accommodate the test.
+- Lint passes with 0 errors and 9 existing warnings. Build and `clinical:check`
+  pass, including generated movement-policy byte identity and catalog/audit
+  drift checks. Full Vitest: 1,600 tests passed, 73 files, no todo.
+- SQL parse guard and language-policy guard tests: 14 passed.
+
+### Browser proof authored; execution remains with the Lead
+
+The real surface is reachable without a network or live Supabase. Added an
+isolated opt-in configuration and two Playwright cases:
+
+`npx playwright test --config e2e/freemium/playwright.config.ts`
+
+It starts the same isolated Vite wrapper with explicit `--freemium`, after the
+wrapper clears inherited `VITE_*` variables. Default server behavior, empty env
+directory, default suites and production flags are unchanged. The network
+fixture opts into exactly one synthetic `get-interpretation` POST/report and a
+synthetic usage-count HEAD read; unmatched traffic remains rejected. The
+response comes from the same server fixture as the component test. The report
+and prior report contain the matching invented measurements and printed
+intervals. Both browser cases wait for the locked availability and independent
+trajectory fact before checking the preview, avoiding a vacuous assertion while
+history is still loading. The positive case requires the attributed preview;
+the disagreement case requires its absence. Both reject the prose canary and
+inflated pattern availability.
+
+**Not observed here:** browser execution in Chromium/WebKit/Firefox, runtime env
+isolation canary, Docker harness, and `check:functions`. The browser tests are
+statically typechecked but their routes, assertions and runtime rendering remain
+unproven until the Lead runs them. Existing SQL/harness results supplied by the
+Lead are inherited evidence, not rerun evidence. No migration or verification
+SQL file changed, and no fixture change there was needed.
+
+### Declared latent divergences — documentation only this turn
+
+- **Version semantics:** `visibleClaimProjection` accepts every member of
+  `KNOWN_CLAIM_POLICY_VERSIONS`, but `storedClaimSet` re-issues under current
+  `CLAIM_POLICY_VERSION` and fingerprints the result. A body from an earlier
+  known version therefore cannot validate. With one version this is harmless
+  and fail-closed. Once a second known version exists, Full readers of older
+  rows silently lose preview and counts while Basic readers retain them. A
+  possible small unification is a version-indexed validator/re-issuer used by
+  both paths, preserving the original supported policy's rules and fingerprint;
+  do not merely relabel old claims as current. Size/safety depend on the next
+  version's differences. No version behavior was changed this turn.
+- **Extreme-integer counts:** TS `Number.isInteger` and SQL arbitrary-precision
+  `numeric`/`trunc` can diverge above `Number.MAX_SAFE_INTEGER`. This remains
+  unreachable while only service-role `save_interpretation` writes `locked`
+  from bounded claim catalogs. Allowing another writer or unbounded counts is
+  the condition that makes it live. Neither numeric semantics nor SQL changed.
+
+### Scope and documentation availability
+
+The supplied inlined contract and turn-6 addendum were used as authority.
+`CONTRACT.md` and the two named TASK-045 control documents are absent from this
+worktree/sibling path; no control directory or Second Brain material was written.
+No external documentation question arose. Paid full-body projection, bounded
+Basic headline prose and `lab-insights` remain declared out-of-scope debt. No
+clinical values, thresholds, evidence grades, SAFE promotion, BASIC_KEYS, tier,
+entitlement, Stripe, frozen migrations or policy kernel changed. Changes are
+uncommitted for Lead review; nothing was pushed, deployed or merged.

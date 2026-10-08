@@ -321,8 +321,11 @@ export function buildAuthorizedBasicProjection(
   const safety = safetySlugs(set);
   if (!isDeterministicSource(provenance.source)) {
     for (const key of [...FLOOR_FINDING_KEYS, ...SAFETY_KEYS, "safety_findings"]) {
-      if (Array.isArray(basic[key])) {
-        basic[key] = (basic[key] as unknown[]).flatMap(entry => withoutUnauthorizedSafety(entry, safety) ?? []);
+      const value = basic[key];
+      // basicSafetyValue also accepts a lone object; it needs the same authority check.
+      const entries = Array.isArray(value) ? value : isRecord(value) ? [value] : null;
+      if (entries) {
+        basic[key] = entries.flatMap(entry => withoutUnauthorizedSafety(entry, safety) ?? []);
       }
     }
     basic.safety_findings = (basic.safety_findings as unknown[]).filter(entry =>
