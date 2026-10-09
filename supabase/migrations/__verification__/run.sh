@@ -453,5 +453,8 @@ psql_gate_fresh -q -f /tmp/claim-policy-gate.prelude.sql
 psql_gate_fresh -q -f /tmp/claim-policy-gate.verify.sql
 echo "PASS: $GATE forward, verify, replay, coexistence, rollback, fresh chain and no widening."
 
+# TASK-047: read-time legacy authority; all SQL and parity gates are mandatory.
+source "$HERE/legacy-quarantine.run.sh"
+
 # TASK-041: isolated reference catalog, no user-data fixture.
 source "$HERE/clinical-catalog.run.sh"
