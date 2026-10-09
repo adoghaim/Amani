@@ -30,6 +30,17 @@ psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE quarantine_fresh;'
 psql_qfresh() { docker exec -i "$CONTAINER" psql -U postgres -d quarantine_fresh -v ON_ERROR_STOP=1 "$@"; }
 docker exec "$CONTAINER" pg_dump -U postgres -d amani --schema-only --clean --if-exists \
   | psql_qfresh -q
+# Schema-only replay omits the singleton INSERT from the prepare migration.
+# Prove the missing-row cause under the actual harness role, then restore only
+# this configuration seed in the disposable fresh database (no historical JSON).
+psql_qfresh -q -c "DO \$\$ DECLARE n bigint; BEGIN
+  SELECT count(*) INTO n FROM public.interpretation_visibility_config;
+  RAISE NOTICE 'fresh config before seed: session=%, role=%, rows=%',session_user,current_user,n;
+  IF current_user <> 'postgres' OR n <> 0 THEN
+    RAISE EXCEPTION 'unexpected fresh setup: role=%, rows=%',current_user,n;
+  END IF;
+  INSERT INTO public.interpretation_visibility_config(singleton,enabled) VALUES(true,false);
+END \$\$;"
 psql_qfresh -q -f "/tmp/$QUARANTINE" -f "/tmp/$QUARANTINE" -f /tmp/legacy-quarantine.prelude.sql \
   -f /tmp/legacy-quarantine.verify.sql -f /tmp/legacy-quarantine.storage.sql
 

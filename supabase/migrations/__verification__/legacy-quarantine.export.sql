@@ -1,7 +1,14 @@
 \set ON_ERROR_STOP 1
 BEGIN;
 CREATE TEMP TABLE quarantine_parity(result jsonb);
-UPDATE interpretation_visibility_config SET enabled=true WHERE singleton;
+DO $$ DECLARE affected bigint; observed boolean; BEGIN
+  UPDATE interpretation_visibility_config SET enabled=true WHERE singleton;
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  SELECT enabled INTO observed FROM interpretation_visibility_config WHERE singleton;
+  IF affected <> 1 OR observed IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'FAIL export switch setup: role=%, rows=%, observed=%',current_user,affected,observed;
+  END IF;
+END $$;
 DO $$ DECLARE r record; f jsonb; b jsonb; v jsonb; current boolean; BEGIN
   FOR r IN SELECT * FROM quarantine_rows WHERE mode='basic' ORDER BY n LOOP
     PERFORM set_config('request.jwt.claim.sub',r.user_id::text,true);

@@ -18,9 +18,17 @@ DO $$ DECLARE r record; BEGIN
 END $$;
 -- Run reachable view and direct compatibility RPC as the actual authenticated
 -- role, for Basic, paid and claimed owners, switch ON and OFF. No rendering used.
-DO $$ DECLARE r record; sw boolean; got jsonb; direct jsonb; expected jsonb; total bigint; BEGIN
+DO $$ DECLARE affected bigint; observed boolean; r record; sw boolean; got jsonb; direct jsonb; expected jsonb; total bigint; BEGIN
   FOREACH sw IN ARRAY ARRAY[true,false] LOOP
     UPDATE interpretation_visibility_config SET enabled=sw WHERE singleton;
+    GET DIAGNOSTICS affected = ROW_COUNT;
+    SELECT enabled INTO observed FROM public.interpretation_visibility_config WHERE singleton;
+    RAISE NOTICE 'switch probe: session=%, role=%, rows=%, requested=%, observed=%',
+      session_user,current_user,affected,sw,observed;
+    IF affected <> 1 OR observed IS DISTINCT FROM sw THEN
+      RAISE EXCEPTION 'FAIL switch setup: session=%, role=%, rows=%, requested=%, observed=%',
+        session_user,current_user,affected,sw,observed;
+    END IF;
     FOR r IN SELECT * FROM quarantine_rows LOOP
       PERFORM set_config('request.jwt.claim.sub',r.user_id::text,true);
       EXECUTE 'SET LOCAL ROLE authenticated';
@@ -28,6 +36,16 @@ DO $$ DECLARE r record; sw boolean; got jsonb; direct jsonb; expected jsonb; tot
       SELECT json_output INTO direct FROM read_compatible_interpretations() WHERE lab_report_id=r.report_id;
       SELECT count(*) INTO total FROM interpretations;
       EXECUTE 'RESET ROLE';
+      -- OFF controls compare actual customer reads directly with the stored Full
+      -- or neutral legacy oracle, independently of the entitlement CASE below.
+      IF NOT sw AND r.spec->>'name'='current-authorized' AND
+        (got IS DISTINCT FROM r.spec->'full' OR direct IS DISTINCT FROM r.spec->'full') THEN
+        RAISE EXCEPTION 'FAIL OFF-current: Full changed / %',r.mode;
+      END IF;
+      IF NOT sw AND r.spec->'expected'->>'trust'='legacy' AND
+        (got IS DISTINCT FROM r.spec->'expected'->'full' OR direct IS DISTINCT FROM r.spec->'expected'->'full') THEN
+        RAISE EXCEPTION 'FAIL OFF-legacy: quarantine bypass / % / %',r.spec->>'name',r.mode;
+      END IF;
       expected := r.spec->'expected'->(CASE WHEN NOT sw OR r.mode<>'basic' THEN 'full' ELSE 'view_basic' END);
       IF total<>1 OR got IS DISTINCT FROM expected OR direct IS DISTINCT FROM expected THEN
         RAISE EXCEPTION 'FAIL M9/M10 view: % / % / switch %',r.spec->>'name',r.mode,sw; END IF;
