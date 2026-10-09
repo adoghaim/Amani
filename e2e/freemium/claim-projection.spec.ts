@@ -4,6 +4,24 @@ import { modelProseCurrentReport, modelCanaries } from '../reports/synthetic-rep
 import type { InterpretationPayload } from '../../supabase/functions/_shared/response-shaping';
 import { stage2CurrentReport, stage2PriorReport, type SyntheticReport } from '../reports/synthetic-reports';
 import { projectedPreviewFixture, projectionCanary } from '../../supabase/functions/_shared/claim-authority.testkit';
+import { contaminatedMovement, legitimateMovement } from './client-prose-input';
+
+test('M10 client phrase authorization: valid claim with contaminated prose', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/e2e/freemium/client-prose-fixture.html');
+  // All readiness/positive controls precede the clinical assertion and remain
+  // identical under M10-phrase-membership (see turn-7-client-proof.md).
+  await expect(page.getByRole('heading', { name: 'Client prose authorization fixture', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Measured observation' })
+    .locator('[data-language-claim="measured_movement"]')).toHaveText(legitimateMovement);
+  const summary = page.getByRole('region', { name: 'Model summary' });
+  await expect(summary).toBeVisible();
+  await expect(summary.getByText(legitimateMovement, { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+  await expect(page.locator('body'), 'M10 canary: contaminated model prose must not reach the DOM')
+    .not.toContainText(contaminatedMovement);
+});
 
 const fixture = projectedPreviewFixture();
 function reportWithFacts(base: SyntheticReport, facts: typeof fixture.current | typeof fixture.previous): SyntheticReport {
