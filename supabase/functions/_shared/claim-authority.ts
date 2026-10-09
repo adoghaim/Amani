@@ -353,12 +353,38 @@ export function buildAuthorizedBasicProjection(
 
 /**
  * Basic for any stored full body. A validated claim set selects preview and
- * counts; anything else is legacy and gets the unchanged floor with neither.
+ * counts; untrusted legacy receives only the neutral policy defaults.
  */
 export function projectBasic(full: InterpretationPayload, provenance: { source?: string | null } = {}): InterpretationPayload {
   const set = storedClaimSet(full);
   if (set) return buildAuthorizedBasicProjection(full, set, provenance);
-  return { ...buildBasicProjection(full, undefined, provenance), preview: null, locked: { ...EMPTY_LOCKED } };
+  return isDeterministicSource(provenance.source)
+    ? { ...buildBasicProjection(full, undefined, provenance), preview: null, locked: { ...EMPTY_LOCKED } }
+    : legacyCustomerFloor();
+}
+
+/** No historical model field is evidence, including typed values and reassurance.
+ * Reuse policy-owned defaults; never select a replacement from legacy content. */
+export function legacyCustomerFloor(): InterpretationPayload {
+  return { ...buildBasicProjection({}, []), preview: null, locked: { ...EMPTY_LOCKED } };
+}
+
+/** Temporary selected-Basic contract: the existing RPC supplies no Full set.
+ * SQL must validate Full authority before selecting Basic in the next turn.
+ * If a Full set IS present, it must validate; a conflicting count marker cannot
+ * override it. This marker is accepted only on database-selected Basic bodies. */
+export function hasCurrentReadAuthority(body: InterpretationPayload, full: boolean): boolean {
+  if (full || Object.hasOwn(body, "clinical_claims")) return storedClaimSet(body) !== null;
+  const locked = body.locked;
+  return isRecord(locked) && typeof locked.claim_policy_version === "string"
+    && KNOWN_CLAIM_POLICY_VERSIONS.includes(locked.claim_policy_version);
+}
+
+/** Single extraction point for customer read authority. This is deliberately
+ * NOT an opaque raw wrapper or serializer boundary (scheduled separately). */
+export function quarantineCustomerRead(body: InterpretationPayload, full: boolean, source?: string | null): InterpretationPayload {
+  return isDeterministicSource(source) || hasCurrentReadAuthority(body, full)
+    ? body : legacyCustomerFloor();
 }
 
 const count = (value: unknown) => typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;

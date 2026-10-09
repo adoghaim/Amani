@@ -6,7 +6,6 @@ import { basicCycleContext, basicFindingArray, basicHeadline, basicSafetyValue, 
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
-import { buildTrendEvidence } from './trend-evidence';
 
 const full = { headline: 'headline', cycle_context: {}, questions_for_doctor: ['doctor'], disclaimer: 'disclaimer',
   key_findings: [{ status: 'attention', title: 'visible abnormal' }],
@@ -289,7 +288,7 @@ describe('findings confidentiality (one shared SQL fixture)', () => {
     expect(generator).toContain('projectBasic(interpretationJson, { source: shaped.source })');
     expect(generator).toContain('shaped.tier === "plus" ? interpretationJson : servedBasic(basicProjection)');
     const reader = readFileSync(new URL('./interpretation-read.ts', import.meta.url), 'utf8');
-    expect(reader).toContain('sanitizeBasicProjection(row.json_output, provenance.source)');
+    expect(reader).toContain('sanitizeBasicProjection(customer, provenance.source)');
     expect(cycleMigration.match(/ELSE public.interpretation_sanitize_basic\(i.json_output_basic,i.interpretation_source\)/g)).toHaveLength(2);
     // One floor body: the one-argument floor is the NULL (fail-closed) source.
     expect(cycleMigration).toContain('RETURN public.interpretation_floor(p_full, NULL::text);');

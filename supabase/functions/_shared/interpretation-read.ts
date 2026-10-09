@@ -2,7 +2,7 @@ import type { EntitlementResult } from "./entitlement.ts";
 import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
 import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
 import { sanitizeBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
-import { projectBasic, servedBasic, visibleClaimProjection } from "./claim-authority.ts";
+import { projectBasic, servedBasic, visibleClaimProjection, quarantineCustomerRead } from "./claim-authority.ts";
 import type { LockedCounts } from "./preview-selector.ts";
 
 export interface InterpretationReadActions {
@@ -48,7 +48,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
       const row = await actions.readSelected(true);
       return { status: 200, body: { ...empty, plan,
         access: row ? "full" : "generation_needed",
-        interpretation: row?.json_output ?? null, stored_depth: row?.stored_depth ?? null } };
+        interpretation: row ? quarantineCustomerRead(row.json_output, true, row.interpretation_source) : null, stored_depth: row?.stored_depth ?? null } };
     }
     const entitlement = await actions.resolveEntitlement();
     if (!entitlement.allowed) return entitlement.reason === "error"
@@ -66,24 +66,25 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     if (!row) return { status: 200, body: { ...empty, ...common, access: "generation_needed" } };
     const full = premium || row.has_claim;
     const provenance = { source: row.interpretation_source ?? null };
+    const customer = quarantineCustomerRead(row.json_output, full, provenance.source);
     if (full && row.stored_depth !== "deep") {
       // V2-03c: preview and counts only from a validated claim set (legacy: none).
-      const basic = servedBasic(projectBasic(row.json_output, provenance));
+      const basic = servedBasic(projectBasic(customer, provenance));
       // A deterministic body IS the medical floor: serve it whole, still asking
       // for the deep generation this reader is entitled to.
-      const interpretation = isDeterministicSource(provenance.source) ? row.json_output : basic;
+      const interpretation = isDeterministicSource(provenance.source) ? customer : basic;
       return { status: 200, body: { ...common, access: "generation_needed", interpretation,
         preview: basic.preview, locked: basic.locked as LockedCounts } };
     }
-    const violations = findFloorViolations(row.json_output);
+    const violations = findFloorViolations(customer);
     if (violations.length) console.error("[get-interpretation] MEDICAL FLOOR VIOLATION — serving stored payload", violations);
     // Basic arrives precompiled and is not rebuilt. Its preview and counts are
     // served only if compiled under a known claim policy (V2-03c); a legacy
     // row's were chosen from unvalidated model content and are withheld.
-    const projection = full ? projectBasic(row.json_output, provenance) : row.json_output;
+    const projection = full ? projectBasic(customer, provenance) : customer;
     const visible = visibleClaimProjection(projection);
     return { status: 200, body: { ...common, access: full ? "full" : "basic",
-      interpretation: full ? row.json_output : { ...sanitizeBasicProjection(row.json_output, provenance.source), ...visible },
+      interpretation: full ? customer : { ...sanitizeBasicProjection(customer, provenance.source), ...visible },
       preview: visible.preview, locked: visible.locked } };
   } catch {
     return failure(503, "entitlement_unavailable", true);

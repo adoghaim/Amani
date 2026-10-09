@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { readInterpretation as readWithFlag, type InterpretationReadActions } from './interpretation-read';
 import { resolveEntitlement } from './entitlement';
+import { legacyCustomerFloor } from './claim-authority';
 import { buildBasicProjection } from './interpretation-visibility';
 const readInterpretation = (actions: InterpretationReadActions) => readWithFlag(actions, true);
 const full = { headline: 'h', cycle_context: {}, questions_for_doctor: [], disclaimer: 'd', key_findings: [], private: 'full body' };
@@ -18,7 +19,7 @@ describe('authoritative interpretation reads', () => {
     expect(basic.body.complimentary).toEqual({ used: 3, total: 3, remaining: 0 });
     const premium = await readInterpretation(actions({ resolveEntitlement: async () => ({ allowed: true, plan: 'premium', reason: 'active_subscription', source: 'active_subscription' }) }));
     expect(premium.body.access).toBe('full');
-    expect(premium.body.interpretation).toEqual(full);
+    expect(premium.body.interpretation).toEqual(legacyCustomerFloor());
     expect(premium.body.complimentary).toEqual({ used: 3, total: 3, remaining: 0 });
     expect((await readInterpretation(actions())).body).toEqual(basic.body);
   });
@@ -63,7 +64,7 @@ describe('authoritative interpretation reads', () => {
   });
 });
 
-it.each([false, true])('serves floor-violating stored Full without an infrastructure denial (claim=%s)', async has_claim => {
+it.each([false, true])('quarantines floor-violating legacy Full without an infrastructure denial (claim=%s)', async has_claim => {
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   try {
     const payload = { headline: 'Existing full narrative', private: 'paid content' };
@@ -71,8 +72,8 @@ it.each([false, true])('serves floor-violating stored Full without an infrastruc
       resolveEntitlement: async () => ({ allowed: true, plan: has_claim ? 'free' : 'premium' }),
       readSelected: async () => ({ json_output: payload, stored_depth: 'deep', has_claim, tier: 'plus' }),
     }));
-    expect(result).toMatchObject({ status: 200, body: { access: 'full', interpretation: payload, stored_depth: 'deep' } });
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('MEDICAL FLOOR VIOLATION'), expect.any(Array));
+    expect(result).toMatchObject({ status: 200, body: { access: 'full', interpretation: legacyCustomerFloor(), stored_depth: 'deep' } });
+    expect(log).not.toHaveBeenCalled();
   } finally { log.mockRestore(); }
 });
 
@@ -92,16 +93,16 @@ describe('Full readers of non-deep rows (read RPC returns interpretation_source)
       expect(result.body.interpretation).toEqual(deterministic);
     }
   });
-  it.each(['ai', null, undefined])('source %s standard row keeps the narrative-free Basic (unchanged)', async source => {
+  it.each(['ai', null, undefined])('source %s standard row receives the neutral legacy shell', async source => {
     const result = await readInterpretation(actions({ resolveEntitlement: premium, readSelected: row(false, source) }));
     expect(result.body.access).toBe('generation_needed');
-    expect(result.body.interpretation).toEqual(buildBasicProjection(deterministic));
+    expect(result.body.interpretation).toEqual(legacyCustomerFloor());
     expect(JSON.stringify(result.body.interpretation)).not.toMatch(/DETERMINISTIC_(OVERALL|PATTERN)/);
   });
 });
 
 describe('explicit server dark gate', () => {
-  it.each([false, true])('OFF serves owned stored Full independent of claim=%s, depth, or legacy eligibility', async has_claim => {
+  it.each([false, true])('OFF quarantines owned legacy Full independent of claim=%s, depth, or legacy eligibility', async has_claim => {
     const entitlements = [
       { allowed: false as const, reason: 'trial_expired' as const },
       { allowed: false as const, reason: 'no_subscription' as const },
@@ -117,7 +118,7 @@ describe('explicit server dark gate', () => {
       const countClaims = vi.fn();
       const result = await readWithFlag(actions({ resolveEntitlement: async () => entitlement, readSelected, countClaims }), false);
       expect(result).toEqual({ status: 200, body: {
-        access: 'full', interpretation: full, stored_depth, preview: null,
+        access: 'full', interpretation: legacyCustomerFloor(), stored_depth, preview: null,
         locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, complimentary: null,
         plan: ['active_subscription', 'active_iap', 'complimentary'].includes(entitlement.reason)
           ? 'premium' : entitlement.reason === 'error' ? null : 'free',
@@ -134,7 +135,7 @@ describe('explicit server dark gate', () => {
   });
   it('OFF plan resolution failure cannot block an owned Full read', async () => {
     const result = await readWithFlag(actions({ resolveEntitlement: async () => { throw new Error('offline'); } }), false);
-    expect(result).toMatchObject({ status: 200, body: { access: 'full', interpretation: full, plan: null, complimentary: null } });
+    expect(result).toMatchObject({ status: 200, body: { access: 'full', interpretation: legacyCustomerFloor(), plan: null, complimentary: null } });
   });
   it.each([false, true])('OFF preserves ownership and database errors (owns=%s)', async owns => {
     const read = vi.fn(async () => { throw new Error('offline'); });
@@ -147,7 +148,7 @@ describe('explicit server dark gate', () => {
       stored_depth: 'standard', has_claim, tier: 'free' }) }), true);
     expect(result.body.access).toBe(has_claim ? 'generation_needed' : 'basic');
   });
-  it('sanitizes old stored Basic cycle prose without rebuilding it or touching Full', async () => {
+  it('quarantines legacy cycle values on Basic and Full without changing storage', async () => {
     const payload = { ...full, cycle_context: { estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
       confidence: 'high', explanation: 'PRIVATE CROSS-MARKER NARRATIVE', other: 'PRIVATE LIFESTYLE' },
       preview: { content: 'chosen preview' }, locked: { patterns: 2, cross_report: 1, lifestyle: 3 } };
@@ -161,9 +162,8 @@ describe('explicit server dark gate', () => {
         expect(result.body.preview).toBeNull();
         expect(result.body.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
         expect(payload.preview).toEqual({ content: 'chosen preview' });
-        expect(result.body.interpretation?.cycle_context).toEqual({ estimated_cycle_day: 21,
-          estimated_cycle_phase: 'luteal', confidence: 'high', explanation: '' });
-      } else expect(result.body.interpretation).toBe(payload);
+        expect(result.body.interpretation?.cycle_context).toEqual(legacyCustomerFloor().cycle_context);
+      } else expect(result.body.interpretation).toEqual(legacyCustomerFloor());
     }
   });
 });
@@ -178,7 +178,7 @@ it('endpoint threads the exact environment gate through entitlement and read pol
   expect(policy).not.toContain('Deno.env');
 });
 
-it.each(['ai', null, undefined, 'fallback', 'deterministic'])('sanitizes stored findings at Basic reads with source %s; Full remains identical', async interpretation_source => {
+it.each(['ai', null, undefined, 'fallback', 'deterministic'])('quarantines legacy findings at customer reads with source %s; deterministic Full remains identical', async interpretation_source => {
   const finding = { biomarker_slug: 'ferritin', status: 'attention', abnormal: true, value: 9,
     title: 'PRIVATE CROSS-MARKER NARRATIVE', explanation: 'PRIVATE CROSS-MARKER NARRATIVE' };
   const payload = { ...full, key_findings: [finding], top_findings: [finding], summary_bullets: ['PRIVATE CROSS-MARKER NARRATIVE'],
@@ -205,13 +205,13 @@ it.each(['ai', null, undefined, 'fallback', 'deterministic'])('sanitizes stored 
         expect(result.body.interpretation?.safety_findings).toEqual(payload.safety_findings);
       } else {
         expect(result.body.interpretation?.what_to_do_next).toEqual([]);
-        expect(result.body.interpretation?.safety_findings).toEqual([{ abnormal: true, biomarker_slug: 'ferritin' }]);
+        expect(result.body.interpretation?.safety_findings).toEqual([]);
         expect(JSON.stringify(result.body)).not.toContain('PRIVATE CROSS-MARKER NARRATIVE');
-        expect(result.body.interpretation?.key_findings).toEqual([{ biomarker_slug: 'ferritin', status: 'attention', abnormal: true, value: 9 }]);
+        expect(result.body.interpretation?.key_findings).toEqual([]);
         expect(result.body.interpretation?.top_findings).toEqual(result.body.interpretation?.key_findings);
         expect(result.body.interpretation?.summary_bullets).toEqual([]);
       }
-    } else expect(result.body.interpretation).toBe(payload);
+    } else expect(result.body.interpretation).toEqual(interpretation_source === 'fallback' || interpretation_source === 'deterministic' ? payload : legacyCustomerFloor());
   }
   expect(payload).toEqual(original);
 });

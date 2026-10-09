@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   CLAIM_POLICY_VERSION, KNOWN_CLAIM_POLICY_VERSIONS, auditModelProposals, buildAuthorizedBasicProjection, issueClaimSet, projectBasic,
-  servedBasic, storedClaimSet, visibleClaimProjection, withClaimAuthority,
+  legacyCustomerFloor, hasCurrentReadAuthority, servedBasic, storedClaimSet, visibleClaimProjection, withClaimAuthority,
   type ClaimSet, type MeasuredStatus,
 } from './claim-authority';
 import { createMovementClaim } from './clinical-movement-policy.generated';
@@ -366,13 +366,13 @@ describe('8. one policy, generated and byte-identity checked', () => {
 });
 
 describe('9. legacy rows stay safe through version distinction, not rewriting', () => {
-  it('a legacy full body (no claim set) projects the unchanged floor with no preview or counts', () => {
+  it('a legacy full body (no claim set) projects neutral defaults with no preview or counts', () => {
     const stored = addFindingMetadata({ ...model, trend_evidence: evidence });
     const original = structuredClone(stored);
     const basic = projectBasic(stored, { source: 'ai' });
     expect(stored).toEqual(original);
     const { preview, locked, ...floorOnly } = basic;
-    const { preview: _p, locked: _l, ...legacyFloor } = buildBasicProjection(stored, undefined, { source: 'ai' });
+    const { preview: _p, locked: _l, ...legacyFloor } = legacyCustomerFloor();
     expect(floorOnly).toEqual(legacyFloor);
     expect({ preview, locked }).toEqual({ preview: null, locked: { patterns: 0, cross_report: 0, lifestyle: 0 } });
   });
@@ -493,7 +493,7 @@ const gateBasic = (c: GateCase): InterpretationPayload => {
   return basic;
 };
 
-describe('20261008000000: SQL and TS serve the same Basic for one shared fixture', () => {
+describe('20261008000000 historical gate fixture (legacy SQL parity pending TASK-047 turn 3)', () => {
   it('the fixture claim preview is a real claim-era preview, not a hand-written lookalike', () => {
     const { basic } = generate(model);
     expect(gateFixture.claim_preview).toEqual(basic.preview);
@@ -507,7 +507,8 @@ describe('20261008000000: SQL and TS serve the same Basic for one shared fixture
     const read = await readInterpretation({ ownsReport: async () => true, resolveEntitlement: async () => ({ allowed: true, plan: 'free' }),
       readSelected: async () => ({ json_output: basic, stored_depth: 'deep', has_claim: false, tier: 'free', interpretation_source: c.source }),
       countClaims: async () => 0 }, true);
-    expect(read.body.interpretation).toEqual({ ...sanitizeBasicProjection(basic, c.source), ...expected });
+    const trusted = c.source === 'fallback' || c.source === 'deterministic' || hasCurrentReadAuthority(basic, false);
+    expect(read.body.interpretation).toEqual(trusted ? { ...sanitizeBasicProjection(basic, c.source), ...expected } : legacyCustomerFloor());
   });
   it('known policy versions in SQL are exactly KNOWN_CLAIM_POLICY_VERSIONS (drift fails here)', () => {
     const list = `= ANY(ARRAY[${KNOWN_CLAIM_POLICY_VERSIONS.map(v => `'${v}'`).join(',')}])`;
@@ -597,5 +598,39 @@ describe('served AI Basic safety containers: every SAFETY_KEYS dimension', () =>
       expect(buildBasicProjection(payload, [], { source: 'ai' })[key])
         .toEqual(key === 'what_to_do_next' ? [] : { biomarker_slug: slug, critical: true });
     }
+  });
+});
+
+describe('TASK-047 current-policy response identity (M7)', () => {
+  it.each(['ai', 'unknown', 'fallback', 'deterministic'])('%s: preserves current bodies, previews, counts and safety across customer routes', async source => {
+    const { full, basic } = generate({ ...model, critical_findings: { biomarker_slug: 'ferritin', critical: true } }, source);
+    const expectedBasic = { ...sanitizeBasicProjection(basic, source), ...visibleClaimProjection(basic) };
+    expect(basic.preview).not.toBeNull();
+    expect(total(visibleClaimProjection(basic).locked)).toBeGreaterThan(0);
+    expect(basic.critical_findings).toEqual(source === 'ai' || source === 'unknown'
+      ? [{ biomarker_slug: 'ferritin', critical: true }] : { biomarker_slug: 'ferritin', critical: true });
+    for (const enabled of [false, true]) for (const premium of [false, true]) for (const claimed of [false, true])
+      for (const depth of ['deep', 'standard', 'unknown']) {
+        const selected = !enabled || premium || claimed ? full : basic;
+        const before = JSON.stringify(selected);
+        const result = await readInterpretation({
+          ownsReport: async () => true,
+          resolveEntitlement: async () => ({ allowed: true, plan: premium ? 'premium' : 'free' }),
+          readSelected: async () => ({ json_output: selected, stored_depth: depth, has_claim: claimed, tier: 'free', interpretation_source: source }),
+          countClaims: async () => 0,
+        }, enabled);
+        const expected = !enabled ? full : premium || claimed
+          ? depth === 'deep' || source === 'fallback' || source === 'deterministic' ? full : servedBasic(basic)
+          : expectedBasic;
+        expect(JSON.stringify(result.body.interpretation)).toBe(JSON.stringify(expected));
+        expect(result.body.preview).toEqual(enabled ? basic.preview : null);
+        expect(result.body.locked).toEqual(enabled ? visibleClaimProjection(basic).locked : { patterns: 0, cross_report: 0, lifestyle: 0 });
+        if (enabled && !(premium || claimed)) {
+          // A second visibleClaimProjection on the served body loses these counts.
+          expect(result.body.interpretation?.locked).toEqual(result.body.locked);
+          expect(result.body.interpretation?.preview).toEqual(result.body.preview);
+        }
+        expect(JSON.stringify(selected)).toBe(before);
+      }
   });
 });
