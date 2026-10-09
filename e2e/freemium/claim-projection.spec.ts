@@ -1,4 +1,7 @@
 import { test, expect } from '../fixtures';
+import { quarantineCustomerRead } from '../../supabase/functions/_shared/claim-authority';
+import { modelProseCurrentReport, modelCanaries } from '../reports/synthetic-reports';
+import type { InterpretationPayload } from '../../supabase/functions/_shared/response-shaping';
 import { stage2CurrentReport, stage2PriorReport, type SyntheticReport } from '../reports/synthetic-reports';
 import { projectedPreviewFixture, projectionCanary } from '../../supabase/functions/_shared/claim-authority.testkit';
 
@@ -47,6 +50,54 @@ for (const disagree of [false, true]) {
       }
       await expect(page.locator('body')).not.toContainText(projectionCanary);
       await expect(page.getByText(/additional patterns? found/)).toHaveCount(0);
+    });
+  });
+}
+
+// TASK-047 M10: separate server and client controls. The bypass fixture is
+// fulfilled verbatim by the network guard; it never calls the quarantine.
+const rawLegacy: InterpretationPayload = {
+  ...modelProseCurrentReport.interpretation.json_output as InterpretationPayload,
+  critical_findings: { critical: true, status: 'out_of_range', title: 'Copper paper boats' },
+};
+for (const bypass of [false, true]) {
+  test.describe(`M10 ${bypass ? 'client alone with raw server fixture' : 'server quarantine then client'}`, () => {
+    const body = {
+      access: 'full', interpretation: bypass ? rawLegacy : quarantineCustomerRead(rawLegacy, true, 'ai'),
+      preview: null, locked: { patterns: 0, cross_report: 0, lifestyle: 0 },
+      plan: 'premium', complimentary: null, stored_depth: 'deep',
+    };
+    const report = { ...modelProseCurrentReport,
+      interpretation: { ...modelProseCurrentReport.interpretation, json_output: body.interpretation } };
+    test.use({ authenticated: true, syntheticReports: [[report, stage2PriorReport], { scope: 'test' }],
+      syntheticBasicResponse: { reportId: report.report.id, body } });
+    test('unauthorized prose and lone-object safety never render', async ({ page }) => {
+      // This assertion proves the server layer without relying on the browser gate.
+      for (const canary of [...modelCanaries, 'Copper paper boats']) {
+        if (bypass) expect(JSON.stringify(body.interpretation)).toContain(canary);
+        else expect(JSON.stringify(body.interpretation)).not.toContain(canary);
+      }
+      const response = page.waitForResponse(r => r.url().endsWith('/functions/v1/get-interpretation'));
+      await page.goto(`/app/reports/${report.report.id}`);
+      expect(await (await response).json()).toEqual(body);
+      await expect(page.getByRole('heading', { name: 'Health Systems', exact: true })).toBeVisible();
+      await expect(page.getByTestId('primary-movement-observation')).toBeVisible();
+      for (let i = 0; i < 40; i++) {
+        const closed = page.locator('button[aria-expanded="false"]').first();
+        if (await closed.count() === 0) break;
+        await closed.click();
+      }
+      await page.getByRole('button', { name: /^Patterns & Insights/ }).click();
+      for (const canary of [...modelCanaries, 'Copper paper boats']) {
+        await expect(page.locator('body')).not.toContainText(canary);
+      }
+      await expect(page.locator('[data-language-category="safety_warning"], [data-language-cue="critical"], [role="alert"]')).toHaveCount(0);
+      if (bypass) {
+        // Positive control: admissible measured movement survives the client gate.
+        await expect(page.locator('[data-model-field="interpretation.summary_bullets"]')).toContainText('TSH increased');
+      } else {
+        await expect(page.locator('[data-model-field]')).toHaveCount(0);
+      }
     });
   });
 }

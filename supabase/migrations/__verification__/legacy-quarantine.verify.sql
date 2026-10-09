@@ -8,8 +8,39 @@ GRANT SELECT ON quarantine_rows TO authenticated,service_role;
 -- Helpers are not customer-callable, and the service reader stays service-only.
 SELECT pg_temp.assert(NOT has_function_privilege('authenticated','interpretation_has_current_claims(jsonb)','EXECUTE')
   AND NOT has_function_privilege('anon','read_compatible_interpretations()','EXECUTE')
+  AND NOT has_function_privilege('anon','read_interpretation_for_server(uuid,uuid,boolean)','EXECUTE')
   AND NOT has_function_privilege('authenticated','read_interpretation_for_server(uuid,uuid,boolean)','EXECUTE')
   AND has_function_privilege('service_role','read_interpretation_for_server(uuid,uuid,boolean)','EXECUTE'), 'reader ACLs');
+-- M8a mutation: GRANT SELECT on the private table, or EXECUTE on any
+-- listed helper, to either customer role. Inherited/PUBLIC grants count too.
+SELECT pg_temp.assert(NOT EXISTS (
+  SELECT 1 FROM (VALUES ('anon'),('authenticated')) roles(name)
+  WHERE has_table_privilege(roles.name,'public.interpretations_private','SELECT')
+    OR EXISTS (SELECT 1 FROM (VALUES
+      ('public.interpretation_claim_nonempty(jsonb)'),
+      ('public.interpretation_claim_finite(jsonb)'),
+      ('public.interpretation_claim_canonical(jsonb)'),
+      ('public.interpretation_has_current_claims(jsonb)'),
+      ('public.interpretation_read_quarantine(jsonb,jsonb,text)')
+    ) helpers(signature) WHERE has_function_privilege(roles.name,helpers.signature,'EXECUTE'))
+), 'M8a: no customer raw-table or quarantine-helper access');
+-- Extract the corpus's raw prose canaries without changing its expectations.
+-- M8b mutation: remove only one SQL reader's quarantine wrapper.
+CREATE FUNCTION pg_temp.assert_no_raw_canaries(spec jsonb, body jsonb, path text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE canary text; found integer := 0;
+BEGIN
+  IF spec->'expected'->>'trust' <> 'legacy' THEN RETURN; END IF;
+  FOR canary IN SELECT DISTINCT m[1] FROM regexp_matches(
+    jsonb_build_array(spec->'full',spec->'basic')::text,
+    '"([^"\\]*paper boats[^"\\]*)"','g') m LOOP
+    found := found + 1;
+    IF body IS NULL OR strpos(body::text,canary)>0 THEN
+      RAISE EXCEPTION 'FAIL M8b: % / % / %',path,spec->>'name',canary;
+    END IF;
+  END LOOP;
+  IF found=0 THEN RAISE EXCEPTION 'FAIL M8b: missing raw canary / %',spec->>'name'; END IF;
+END $$;
 DO $$ DECLARE r record; BEGIN
   FOR r IN SELECT * FROM quarantine_cases LOOP
     IF interpretation_has_current_claims(r.spec->'full') IS DISTINCT FROM (r.spec->'expected'->>'current')::boolean THEN
@@ -36,6 +67,8 @@ DO $$ DECLARE affected bigint; observed boolean; r record; sw boolean; got jsonb
       SELECT json_output INTO direct FROM read_compatible_interpretations() WHERE lab_report_id=r.report_id;
       SELECT count(*) INTO total FROM interpretations;
       EXECUTE 'RESET ROLE';
+      PERFORM pg_temp.assert_no_raw_canaries(r.spec,got,'view');
+      PERFORM pg_temp.assert_no_raw_canaries(r.spec,direct,'compatibility RPC');
       -- OFF controls compare actual customer reads directly with the stored Full
       -- or neutral legacy oracle, independently of the entitlement CASE below.
       IF NOT sw AND r.spec->>'name'='current-authorized' AND
@@ -64,6 +97,7 @@ DO $$ DECLARE r record; p boolean; got jsonb; expected jsonb; total bigint; BEGI
       SELECT json_output INTO got FROM read_interpretation_for_server(r.user_id,r.report_id,p);
       SELECT count(*) INTO total FROM read_interpretation_for_server('ffffffff-ffff-4fff-8fff-ffffffffffff',r.report_id,p);
       EXECUTE 'RESET ROLE';
+      PERFORM pg_temp.assert_no_raw_canaries(r.spec,got,'service RPC');
       expected := r.spec->'expected'->(CASE WHEN p OR r.mode='claimed' THEN 'full' ELSE 'rpc_basic' END);
       IF got IS DISTINCT FROM expected OR total<>0 THEN
         RAISE EXCEPTION 'FAIL M9/M10 RPC: % / % / premium %',r.spec->>'name',r.mode,p; END IF;

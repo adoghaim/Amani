@@ -96,7 +96,7 @@ psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE OR REPLACE FUNCTION public.interpretatio
 if psql_f -v ON_ERROR_STOP=1 -q -f /tmp/legacy-quarantine.verify.sql >"$q_mutation_log" 2>&1; then
   echo 'FAIL: M10 SQL-only quarantine bypass survived' >&2; exit 1
 fi
-grep -q 'FAIL M9/M10 view' "$q_mutation_log"
+grep -q 'FAIL M8b: view' "$q_mutation_log"
 psql_f -v ON_ERROR_STOP=1 -v target=quarantine_mutated -q -f /tmp/legacy-quarantine.capture.sql
 psql_f -v ON_ERROR_STOP=1 -q -c 'TRUNCATE quarantine_after; INSERT INTO quarantine_after SELECT * FROM quarantine_mutated; DROP TABLE quarantine_mutated;'
 if psql_f -v ON_ERROR_STOP=1 -q -f /tmp/legacy-quarantine.compare.sql >"$q_mutation_log" 2>&1; then
