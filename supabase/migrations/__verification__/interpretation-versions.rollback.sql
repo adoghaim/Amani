@@ -18,5 +18,7 @@ ALTER TABLE public.interpretations_private DROP CONSTRAINT interpretation_histor
 -- Exact pre-forward function definition captured by the harness; its ACL is
 -- unchanged by migration. Baseline cutover explicitly granted ALL to service.
 DO $$ DECLARE definition text; BEGIN SELECT d.definition INTO STRICT definition FROM task048_delete_definition d; EXECUTE definition; END $$;
+-- CREATE OR REPLACE keeps comments; no prior migration commented this function.
+COMMENT ON FUNCTION public.delete_interpretations(uuid[]) IS NULL;
 GRANT ALL ON public.interpretations_private TO service_role;
 COMMIT;

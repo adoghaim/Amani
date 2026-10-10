@@ -141,5 +141,8 @@ SELECT pg_temp.vassert((SELECT count(*) FROM task048_served_before)>0 AND NOT EX
   UNION ALL (SELECT * FROM task048_served_after EXCEPT ALL SELECT * FROM task048_served_before)),
   'H048-VERSION-NOT-SERVED-NO-ENTITLEMENT');
 \ir interpretation-versions.storage.sql
+-- The erasure RPC's name understates it; its catalog comment must not.
+SELECT pg_temp.vassert(strpos(obj_description('public.delete_interpretations(uuid[])'::regprocedure,'pg_proc'),
+  'ERASES WHOLE REPORTS')=1,'H048-ERASURE-RPC-COMMENT');
 -- All mechanics above are rolled back; lifecycle/deletion assertions are separate.
 ROLLBACK;

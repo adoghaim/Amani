@@ -152,6 +152,17 @@ FOR EACH ROW EXECUTE FUNCTION public.guard_interpretation_append_only();
 CREATE TRIGGER guard_history_protection_truncate BEFORE TRUNCATE ON public.interpretation_history_protection
 FOR EACH STATEMENT EXECUTE FUNCTION public.guard_interpretation_append_only();
 
+-- ALWAYS: session_replication_role=replica (the data-fix trigger-bypass idiom and
+-- the logical-apply mode) must not switch the guards off. They fire in every mode.
+-- The recorder stays ORIGIN on purpose: under logical apply it would duplicate the
+-- replicated protection row. Trade-off: turn-5 note in docs/clinical/TASK-048/.
+ALTER TABLE public.interpretations_private ENABLE ALWAYS TRIGGER zz_guard_interpretation_history;
+ALTER TABLE public.interpretations_private ENABLE ALWAYS TRIGGER guard_interpretation_history_truncate;
+ALTER TABLE public.interpretation_versions ENABLE ALWAYS TRIGGER guard_versions_mutation;
+ALTER TABLE public.interpretation_versions ENABLE ALWAYS TRIGGER guard_versions_truncate;
+ALTER TABLE public.interpretation_history_protection ENABLE ALWAYS TRIGGER guard_history_protection_mutation;
+ALTER TABLE public.interpretation_history_protection ENABLE ALWAYS TRIGGER guard_history_protection_truncate;
+
 -- The only production caller is delete-user-data's per-report cleanup. Erase
 -- the report graph atomically instead of leaving a replaceable historical hole.
 -- Its subsequent per-report/user deletes remain idempotent. Service-only scope
@@ -163,6 +174,8 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.delete_interpretations(uuid[]) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.delete_interpretations(uuid[]) TO service_role;
+COMMENT ON FUNCTION public.delete_interpretations(uuid[])
+  IS 'ERASES WHOLE REPORTS, not interpretations: deletes the lab_reports rows and cascades to raw lab results, interpretations and versions. Account/report erasure only. Never call to clear an interpretation for regeneration. Name retained only for the existing delete-user-data caller; rename planned (TASK-048 turn-5 note).';
 
 -- Internal storage primitive, NOT an endpoint. Intentionally no service EXECUTE
 -- grant until the later server-pipeline/eligibility migration installs a trusted

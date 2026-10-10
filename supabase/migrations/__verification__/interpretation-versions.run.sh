@@ -4,7 +4,7 @@
 # mutation map. Every mutation runs inside a transaction that is never committed.
 VERSION_MIGRATION=20261010000000_interpretation_version_foundation.sql
 docker cp "$HERE/../$VERSION_MIGRATION" "$CONTAINER:/tmp/$VERSION_MIGRATION" >/dev/null
-for file in interpretation-versions.{helpers,capture,storage,verify,overwrite,newrow,fresh,erasure,failure,rollback,concurrency,snapshot}.sql; do
+for file in interpretation-versions.{helpers,capture,storage,verify,overwrite,newrow,fresh,erasure,failure,rollback,concurrency,snapshot,replica,authority}.sql; do
   docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
 done
 v048_log=$(mktemp)
@@ -71,6 +71,7 @@ v048_fresh -q -c "DO \$\$ BEGIN IF EXISTS(SELECT 1 FROM public.interpretation_hi
 v048_fresh -q -f /tmp/legacy-quarantine.prelude.sql -f /tmp/interpretation-versions.fresh.sql \
   -f /tmp/interpretation-versions.newrow.sql
 v048_fresh -q -c 'BEGIN' -f /tmp/interpretation-versions.overwrite.sql -c 'ROLLBACK'
+v048_fresh -q -f /tmp/interpretation-versions.replica.sql
 v048_fresh -q -f /tmp/legacy-quarantine.storage.sql -f /tmp/legacy-quarantine.verify.sql
 # Rows inserted after the migration stay protected when the classifier accepts all.
 v048_fresh -q -c 'BEGIN' -c "$V048_CLASSIFIER_TRUE" -f /tmp/interpretation-versions.overwrite.sql -c 'ROLLBACK'
@@ -122,6 +123,7 @@ echo 'PASS H048-COEXISTENCE: only the expected catalog objects changed.'
 
 # 4. Properties on the upgraded database.
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.verify.sql \
+  -f /tmp/interpretation-versions.replica.sql -f /tmp/interpretation-versions.authority.sql \
   -f /tmp/interpretation-versions.newrow.sql -f /tmp/interpretation-versions.erasure.sql \
   -f /tmp/interpretation-versions.failure.sql -f /tmp/interpretation-versions.storage.sql \
   -f /tmp/legacy-quarantine.verify.sql -f /tmp/legacy-quarantine.storage.sql
@@ -131,7 +133,7 @@ psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN IF EXISTS(
   UNION ALL (SELECT * FROM task048_reads_after EXCEPT ALL SELECT * FROM task048_reads_before))
   THEN RAISE EXCEPTION 'FAIL H048-READ-PARITY'; END IF; END \$\$;
   DROP TABLE task048_reads_after;"
-echo 'PASS H048-PROPERTIES: overwrite rejected in both states, storage, erasure, failure atomicity, reads and bytes unchanged.'
+echo 'PASS H048-PROPERTIES: overwrite rejected in both states and in replica mode, storage, erasure, failure atomicity, reads and bytes unchanged.'
 
 # 5. Killing mutations, one per major invariant. Each must turn its probe red.
 v048_kill GUARD interpretation-versions.overwrite.sql 'FAIL H048-OVERWRITE-DIRECT flag=false.*observed SUCCESS' \
@@ -214,6 +216,31 @@ DO $$ DECLARE d text:=pg_get_functiondef('public.append_interpretation_version_i
 END $$;
 SQL
 v048_kill AUTHORITY interpretation-versions.verify.sql 'FAIL H048-INVALID-AUTHORITY: expected 22023, observed SUCCESS' "$V048_M_AUTHORITY"
+# Each authority layer alone refuses legacy/empty bodies; only removing both lets one in.
+v048_kill AUTHORITY-BOTH interpretation-versions.authority.sql 'FAIL H048-AUTHORITY-LAYER empty: expected 22023 or 23514, observed SUCCESS' "$V048_M_AUTHORITY"
+v048_sql V048_M_AUTHORITY_FUNCTION <<'SQL'
+DO $$ DECLARE d text:=pg_get_functiondef('public.append_interpretation_version_internal(uuid,uuid,uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)'::regprocedure); BEGIN
+  IF strpos(d,'NOT public.interpretation_has_current_claims(p_full)')=0 THEN RAISE EXCEPTION 'mutation anchor missing'; END IF;
+  EXECUTE replace(d,'NOT public.interpretation_has_current_claims(p_full)','false');
+END $$;
+SQL
+v048_survive AUTHORITY-CHECK-ONLY interpretation-versions.authority.sql "$V048_M_AUTHORITY_FUNCTION"
+v048_survive AUTHORITY-FUNCTION-ONLY interpretation-versions.authority.sql \
+  'ALTER TABLE public.interpretation_versions DROP CONSTRAINT interpretation_version_current_claims;'
+
+# session_replication_role=replica skips ORIGIN triggers. Each mutation reverts a
+# guard group to ordinary ENABLE (the pre-turn-5 state); the replica probe must then
+# observe the destructive write SUCCEED. With ALWAYS, the unmutated probe passes.
+v048_kill REPLICA-GUARD interpretation-versions.replica.sql 'FAIL H048-REPLICA-OVERWRITE: expected 55000, observed SUCCESS' \
+  'ALTER TABLE public.interpretations_private ENABLE TRIGGER zz_guard_interpretation_history;'
+v048_kill REPLICA-TRUNCATE interpretation-versions.replica.sql 'FAIL H048-REPLICA-TRUNCATE: expected 55000, observed SUCCESS' \
+  'ALTER TABLE public.interpretations_private ENABLE TRIGGER guard_interpretation_history_truncate;
+   ALTER TABLE public.interpretation_versions ENABLE TRIGGER guard_versions_truncate;
+   ALTER TABLE public.interpretation_history_protection ENABLE TRIGGER guard_history_protection_truncate;'
+v048_kill REPLICA-VERSIONS interpretation-versions.replica.sql 'FAIL H048-REPLICA-VERSION-UPDATE: expected 55000, observed SUCCESS' \
+  'ALTER TABLE public.interpretation_versions ENABLE TRIGGER guard_versions_mutation;'
+v048_kill REPLICA-PROTECTION interpretation-versions.replica.sql 'FAIL H048-REPLICA-PROTECTION-DELETE: expected 55000, observed SUCCESS' \
+  'ALTER TABLE public.interpretation_history_protection ENABLE TRIGGER guard_history_protection_mutation;'
 
 v048_sql V048_M_CONSUMPTION <<'SQL'
 DO $$ DECLARE d text:=pg_get_functiondef('public.append_interpretation_version_internal(uuid,uuid,uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)'::regprocedure); BEGIN
@@ -284,6 +311,9 @@ v048_expect_log 'refuse destructive rollback: interpretation versions exist' 'H0
 # 7. Pre-use rollback rehearsal and re-forward: exact catalog, bytes and reads.
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.rollback.sql -f /tmp/interpretation-versions.storage.sql
 test "$(v048_snap)" = "$v048_snap0" || { echo 'FAIL H048-ROLLBACK catalog differs from pre-forward' >&2; exit 1; }
+# The snapshot omits comments; the erasure RPC comment must not outlive rollback.
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN IF obj_description('public.delete_interpretations(uuid[])'::regprocedure,'pg_proc') IS NOT NULL
+  THEN RAISE EXCEPTION 'FAIL H048-ROLLBACK-COMMENT'; END IF; END \$\$;"
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/legacy-quarantine.verify.sql
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$VERSION_MIGRATION" -f /tmp/interpretation-versions.storage.sql
 test "$(v048_snap)" = "$v048_snap1" || { echo 'FAIL H048-REFORWARD catalog differs from first forward' >&2; exit 1; }
