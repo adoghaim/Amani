@@ -1,22 +1,40 @@
 -- TASK-048 foundation only: no serving cutover, entitlement or generation.
--- One-shot migration; replay deliberately rejects atomically at CREATE TABLE.
+-- Design and rationale: docs/clinical/TASK-048/turn-4-persistence-foundation.md
+-- One-shot migration: replay is rejected atomically by the guard below, never
+-- masked by IF NOT EXISTS. No historical row is written, stamped or reserialized.
 BEGIN;
+DO $$ BEGIN
+  IF to_regclass('public.interpretation_versions') IS NOT NULL
+    OR to_regclass('public.interpretation_history_protection') IS NOT NULL THEN
+    RAISE EXCEPTION 'TASK-048 version foundation is already applied; this migration is one-shot';
+  END IF;
+  IF to_regclass('public.interpretations_private') IS NULL
+    OR to_regprocedure('public.interpretation_has_current_claims(jsonb)') IS NULL
+    OR to_regprocedure('public.interpretation_read_quarantine(jsonb,jsonb,text)') IS NULL THEN
+    RAISE EXCEPTION 'Apply the visibility chain through 20261009000000 before the version foundation';
+  END IF;
+END $$;
+-- No writer may slip a row between the protection snapshot and the guard.
 LOCK TABLE public.interpretations_private IN ACCESS EXCLUSIVE MODE;
 
--- Durable protection is independent of future changes to the trust classifier.
--- Contains identities only, never a copy/rewrite of historical health payloads.
+-- Composite target so protection, versions and pointers bind to one report.
+ALTER TABLE public.interpretations_private ADD CONSTRAINT interpretation_history_report_key UNIQUE(id,lab_report_id);
+
+-- Durable protection is independent of future changes to the trust classifier:
+-- rows classified legacy now (and at every later insert/update, by trigger) stay
+-- protected even if the classifier later accepts them. Identities only, never a
+-- copy of a historical health payload.
 CREATE TABLE public.interpretation_history_protection (
   interpretation_id uuid PRIMARY KEY,
-  lab_report_id uuid NOT NULL REFERENCES public.lab_reports(id) ON DELETE CASCADE,
-  UNIQUE (interpretation_id, lab_report_id)
+  lab_report_id uuid NOT NULL,
+  CONSTRAINT interpretation_history_protection_source_fk FOREIGN KEY(interpretation_id,lab_report_id)
+    REFERENCES public.interpretations_private(id,lab_report_id) ON DELETE CASCADE
 );
 INSERT INTO public.interpretation_history_protection(interpretation_id,lab_report_id)
 SELECT id,lab_report_id FROM public.interpretations_private
 WHERE interpretation_source IS DISTINCT FROM 'deterministic'
   AND interpretation_source IS DISTINCT FROM 'fallback'
   AND NOT public.interpretation_has_current_claims(json_output);
-
-ALTER TABLE public.interpretations_private ADD CONSTRAINT interpretation_history_report_key UNIQUE(id,lab_report_id);
 
 CREATE TABLE public.interpretation_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,15 +58,20 @@ CREATE TABLE public.interpretation_versions (
   CONSTRAINT interpretation_version_parent_fk FOREIGN KEY(parent_version_id,lab_report_id)
     REFERENCES public.interpretation_versions(id,lab_report_id),
   CHECK(parent_version_id IS DISTINCT FROM id),
-  CHECK(public.interpretation_has_current_claims(json_output))
+  -- Structural claim authority only; NOT certification of V2-03b/03c processing.
+  CONSTRAINT interpretation_version_current_claims CHECK(public.interpretation_has_current_claims(json_output))
 );
+-- Explicit selection, never MAX(generated_at): one pointer per report, to a
+-- version of that same report.
 CREATE TABLE public.interpretation_current_versions (
   lab_report_id uuid PRIMARY KEY REFERENCES public.lab_reports(id) ON DELETE CASCADE,
   version_id uuid NOT NULL,
   selected_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  FOREIGN KEY(version_id,lab_report_id) REFERENCES public.interpretation_versions(id,lab_report_id) ON DELETE CASCADE
+  CONSTRAINT interpretation_current_version_fk FOREIGN KEY(version_id,lab_report_id)
+    REFERENCES public.interpretation_versions(id,lab_report_id) ON DELETE CASCADE
 );
 
+-- Supabase default privileges grant ALL on new public tables to the API roles.
 ALTER TABLE public.interpretation_history_protection ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.interpretation_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.interpretation_current_versions ENABLE ROW LEVEL SECURITY;
@@ -58,6 +81,8 @@ GRANT SELECT ON public.interpretation_history_protection,public.interpretation_v
 CREATE POLICY history_service_read ON public.interpretation_history_protection FOR SELECT TO service_role USING(true);
 CREATE POLICY versions_service_read ON public.interpretation_versions FOR SELECT TO service_role USING(true);
 CREATE POLICY selection_service_read ON public.interpretation_current_versions FOR SELECT TO service_role USING(true);
+-- No service code deletes, truncates, references or triggers on this table
+-- directly; erasure goes through delete_interpretations or report deletion.
 REVOKE DELETE,TRUNCATE,TRIGGER,REFERENCES ON public.interpretations_private FROM service_role;
 
 CREATE FUNCTION public.guard_interpretation_history() RETURNS trigger
@@ -75,6 +100,8 @@ BEGIN
     END IF;
     RETURN OLD;
   END IF;
+  -- Protection is the UNION of the durable record, the live classifier and
+  -- being the anchor of any version: a classifier change can add, never remove.
   IF (EXISTS(SELECT 1 FROM public.interpretation_history_protection WHERE interpretation_id=OLD.id)
       OR (OLD.interpretation_source IS DISTINCT FROM 'deterministic'
         AND OLD.interpretation_source IS DISTINCT FROM 'fallback'
@@ -85,13 +112,15 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
--- Run AFTER other BEFORE triggers, so their implicit projection changes cannot
--- evade the all-column check. This trigger itself does not modify NEW.
+-- BEFORE triggers fire in name order: zz_ runs after prepare_interpretation_projection
+-- (the only other one), so a projection rewrite of NEW cannot evade the all-column
+-- comparison. This trigger itself does not modify NEW.
 CREATE TRIGGER zz_guard_interpretation_history BEFORE UPDATE OR DELETE ON public.interpretations_private
 FOR EACH ROW EXECUTE FUNCTION public.guard_interpretation_history();
 CREATE TRIGGER guard_interpretation_history_truncate BEFORE TRUNCATE ON public.interpretations_private
 FOR EACH STATEMENT EXECUTE FUNCTION public.guard_interpretation_history();
 
+-- Rows written after this migration are recorded the moment they are stored.
 CREATE FUNCTION public.remember_interpretation_history() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
 BEGIN
@@ -144,6 +173,8 @@ CREATE FUNCTION public.append_interpretation_version_internal(
 ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
 DECLARE existing public.interpretation_versions%ROWTYPE; selected uuid; result uuid;
 BEGIN
+  -- The report row lock serializes appends per report; request uniqueness is the
+  -- second barrier if this lock is ever removed.
   PERFORM 1 FROM public.lab_reports WHERE id=p_report_id AND user_id=p_user_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'report does not belong to user' USING ERRCODE='23503'; END IF;
   PERFORM 1 FROM public.interpretations_private WHERE id=p_history_id AND lab_report_id=p_report_id FOR UPDATE;
