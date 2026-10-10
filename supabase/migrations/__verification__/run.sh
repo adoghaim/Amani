@@ -458,3 +458,6 @@ source "$HERE/legacy-quarantine.run.sh"
 
 # TASK-041: isolated reference catalog, no user-data fixture.
 source "$HERE/clinical-catalog.run.sh"
+
+# TASK-048: non-destructive persistence foundation; no reader cutover.
+source "$HERE/interpretation-versions.run.sh"
