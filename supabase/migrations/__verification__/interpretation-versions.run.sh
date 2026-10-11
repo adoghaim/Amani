@@ -318,5 +318,132 @@ psql_f -v ON_ERROR_STOP=1 -q -f /tmp/legacy-quarantine.verify.sql
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$VERSION_MIGRATION" -f /tmp/interpretation-versions.storage.sql
 test "$(v048_snap)" = "$v048_snap1" || { echo 'FAIL H048-REFORWARD catalog differs from first forward' >&2; exit 1; }
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.verify.sql
-rm -f "$v048_log" "$v048_log.a" "$v048_log.b"
 echo 'PASS H048: out-of-order refusal, fresh chain, upgrade, one-shot replay, coexistence, bytes, overwrite rejected in both states, storage, erasure, mutations, concurrency, pre-use rollback and re-forward.'
+
+# 8. Turn 6: claim-only remediation eligibility and the trusted append wrapper.
+# See docs/clinical/TASK-048/turn-6-remediation-server.md for the control map.
+REMEDIATION_MIGRATION=20261011000000_legacy_remediation_eligibility.sql
+docker cp "$HERE/../$REMEDIATION_MIGRATION" "$CONTAINER:/tmp/$REMEDIATION_MIGRATION" >/dev/null
+for file in interpretation-versions.{remediation,remediation-rollback}.sql; do
+  docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
+done
+v048r_count="SELECT (SELECT count(*) FROM public.interpretation_versions)||'/'||(SELECT count(*) FROM public.interpretation_current_versions)"
+for db in flagged_before quarantine_out_of_order; do
+  if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$REMEDIATION_MIGRATION" >"$v048_log" 2>&1; then
+    echo "FAIL H048R-OUT-OF-ORDER: applied on $db" >&2; exit 1
+  fi
+  v048_expect_log 'Apply the version foundation 20261010000000' "H048R-OUT-OF-ORDER $db"
+  docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+    IF to_regprocedure('public.evaluate_legacy_remediation(uuid,uuid)') IS NOT NULL
+      THEN RAISE EXCEPTION 'FAIL H048R-OUT-OF-ORDER: partial wrapper survived in $db'; END IF; END \$\$;"
+done
+echo 'PASS H048R-OUT-OF-ORDER: refused atomically without the version foundation.'
+
+# Fresh chain: the wrapper writes no version; then every property in both states.
+v048r_before=$(v048_fresh -tA -c "$v048r_count")
+v048_fresh -q -f "/tmp/$REMEDIATION_MIGRATION"
+test "$(v048_fresh -tA -c "$v048r_count")" = "$v048r_before" || { echo 'FAIL H048R-NO-BACKFILL fresh' >&2; exit 1; }
+v048_fresh -q -f /tmp/interpretation-versions.remediation.sql
+echo 'PASS H048R-FRESH: no backfill; eligibility, wrapper and erasure properties hold on the fresh chain.'
+
+# Upgrade: forward, no backfill, one-shot replay, exact coexistence.
+v048r_snap0=$(v048_snap)
+v048r_before=$(psql_f -tA -c "$v048r_count")
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$REMEDIATION_MIGRATION" -f /tmp/interpretation-versions.storage.sql
+test "$(psql_f -tA -c "$v048r_count")" = "$v048r_before" || { echo 'FAIL H048R-NO-BACKFILL upgrade' >&2; exit 1; }
+v048r_snap1=$(v048_snap)
+if psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$REMEDIATION_MIGRATION" >"$v048_log" 2>&1; then
+  echo 'FAIL H048R-REPLAY: expected one-shot rejection' >&2; exit 1
+fi
+v048_expect_log 'TASK-048 remediation wrapper is already applied; this migration is one-shot' 'H048R-REPLAY'
+test "$(v048_snap)" = "$v048r_snap1" || { echo 'FAIL H048R-REPLAY changed the catalog' >&2; exit 1; }
+v048r_changed=$(diff <(printf '%s\n' "$v048r_snap0") <(printf '%s\n' "$v048r_snap1") \
+  | sed -n 's/^[<>] \([^|]*\)|.*/\1/p' | LC_ALL=C sort -u || true)
+v048r_expected=$(printf '%s\n' \
+  'function:append_remediation_version(uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)' \
+  'function:evaluate_legacy_remediation(uuid,uuid)' | LC_ALL=C sort -u)
+if [ "$v048r_changed" != "$v048r_expected" ]; then
+  echo 'FAIL H048R-COEXISTENCE: unexpected catalog changes:' >&2
+  diff <(printf '%s\n' "$v048r_expected") <(printf '%s\n' "$v048r_changed") >&2 || true
+  exit 1
+fi
+echo 'PASS H048R-COEXISTENCE: only the evaluator and the wrapper were added.'
+
+# Properties on the upgraded database; the foundation's proofs must still hold.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.remediation.sql \
+  -f /tmp/interpretation-versions.verify.sql -f /tmp/interpretation-versions.storage.sql \
+  -f /tmp/legacy-quarantine.verify.sql
+echo 'PASS H048R-PROPERTIES: claim-only eligibility, commit-time recheck, no consumption, idempotence, history frozen, erasure, endpoint boundary.'
+
+# Killing mutations. Each rewrites one anchor of the installed function body (or
+# one grant) inside an uncommitted transaction; the named probe must turn red.
+v048r_patch() {
+  printf "DO \$m\$ DECLARE d text:=pg_get_functiondef('%s'::regprocedure); BEGIN
+  IF strpos(d,\$a\$%s\$a\$)=0 THEN RAISE EXCEPTION 'mutation anchor missing'; END IF;
+  EXECUTE replace(d,\$a\$%s\$a\$,\$b\$%s\$b\$); END \$m\$;" "$1" "$2" "$2" "$3"
+}
+V048R_EV='public.evaluate_legacy_remediation(uuid,uuid)'
+V048R_WR='public.append_remediation_version(uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)'
+V048R_T=interpretation-versions.remediation.sql
+V048R_GATE='IF h IS NOT NULL AND matched IS NOT NULL THEN'
+V048R_ACTIVE=$'EXISTS(SELECT 1 FROM public.stripe_customers sc JOIN public.stripe_subscriptions ss ON ss.customer_id=sc.customer_id WHERE sc.user_id=p_user_id AND ss.status=\'active\')'
+V048R_RET='RETURN QUERY SELECT v.id'
+
+# Eligibility must not widen: any claim, a subscription, depth or tier.
+v048_kill R-ANY-CLAIM "$V048R_T" 'FAIL H048R-ELIGIBILITY-ORACLE.*expected not available' \
+  "$(v048r_patch "$V048R_EV" 'WHERE c.user_id=p_user_id AND (c.report_id=r.id OR c.blood_draw_id=draw)' 'WHERE true')"
+v048_kill R-SUBSCRIPTION-WIDENS "$V048R_T" 'FAIL H048R-ELIGIBILITY-ORACLE.*mode=premium: expected not available' \
+  "$(v048r_patch "$V048R_EV" "$V048R_GATE" "IF h IS NOT NULL AND (matched IS NOT NULL OR $V048R_ACTIVE) THEN")"
+v048_kill R-DEPTH-WIDENS "$V048R_T" 'FAIL H048R-ELIGIBILITY-ORACLE.*expected not available' \
+  "$(v048r_patch "$V048R_EV" "$V048R_GATE" $'IF h IS NOT NULL AND (matched IS NOT NULL OR (SELECT i.stored_depth=\'deep\' FROM public.interpretations_private i WHERE i.id=h)) THEN')"
+v048_kill R-TIER-WIDENS "$V048R_T" 'FAIL H048R-NO-CLAIM-PLUS-DEEP' \
+  "$(v048r_patch "$V048R_EV" "$V048R_GATE" $'IF h IS NOT NULL AND (matched IS NOT NULL OR (SELECT i.tier=\'plus\' FROM public.interpretations_private i WHERE i.id=h)) THEN')"
+# A durable claim needs no subscription.
+v048_kill R-REQUIRE-SUBSCRIPTION "$V048R_T" 'FAIL H048R-ELIGIBILITY-ORACLE.*expected eligible' \
+  "$(v048r_patch "$V048R_EV" "$V048R_GATE" "IF h IS NOT NULL AND matched IS NOT NULL AND $V048R_ACTIVE THEN")"
+v048_kill R-OWNERSHIP "$V048R_T" 'FAIL H048R-NOT-AVAILABLE-SHAPE foreign-draw' \
+  "$(v048r_patch "$V048R_EV" 'WHERE lr.id=p_report_id AND lr.user_id=p_user_id;' 'WHERE lr.id=p_report_id;')"
+v048_kill R-LEGACY-PREDICATE "$V048R_T" 'FAIL H048R-ELIGIBILITY-ORACLE.*mode=claimed: expected not available' \
+  "$(v048r_patch "$V048R_EV" 'AND (EXISTS(SELECT 1 FROM public.interpretation_history_protection p WHERE p.interpretation_id=i.id)' 'AND (true')"
+v048_kill R-DRAW-PREFIX "$V048R_T" 'FAIL H048R-DRAW-CONTENT-HASH' \
+  "$(v048r_patch "$V048R_EV" $'\'sha256:\'||lower(r.content_hash)' $'\'sha:\'||lower(r.content_hash)')"
+v048_kill R-UNHASHED-FILE "$V048R_T" 'FAIL H048R-DRAW-UNHASHED-FILE' \
+  "$(v048r_patch "$V048R_EV" $'WHEN r.file_url IS NULL OR r.file_url=\'\' THEN' 'WHEN true THEN')"
+# The wrapper's own commit-time check is load-bearing, not the edge pre-check.
+v048_kill R-WRAPPER-RECHECK "$V048R_T" 'FAIL H048R-WRAPPER-INELIGIBLE .*expected P0490, observed SUCCESS' \
+  "$(v048r_patch "$V048R_WR" 'FROM public.evaluate_legacy_remediation(p_user_id,p_report_id);' \
+    'FROM (SELECT true AS eligible,i.id AS history_id,(SELECT c.id FROM public.introductory_deep_access_claims c WHERE c.user_id=p_user_id AND c.report_id=p_report_id) AS claim_id FROM public.interpretations_private i WHERE i.lab_report_id=p_report_id) x;')"
+v048_kill R-RETRY-PARENT "$V048R_T" 'FAIL H048R-IDEMPOTENT-RETRY: 22023' \
+  "$(v048r_patch "$V048R_WR" 'WHERE v.lab_report_id=p_report_id AND v.request_id=p_request_id;' 'WHERE false;')"
+v048_kill R-EXPECTED-CURRENT "$V048R_T" 'FAIL H048R-SECOND-REMEDIATION: 40001' \
+  "$(v048r_patch "$V048R_WR" 'SELECT s.version_id INTO expected FROM public.interpretation_current_versions s WHERE s.lab_report_id=p_report_id;' 'expected:=NULL;')"
+# Writing the pointer in the wrapper as well as in the primitive rewinds it on retry.
+v048_kill R-POINTER-REWIND "$V048R_T" 'FAIL H048R-RETRY-NO-REWIND' \
+  "$(v048r_patch "$V048R_WR" "$V048R_RET" "INSERT INTO public.interpretation_current_versions(lab_report_id,version_id) VALUES(p_report_id,result) ON CONFLICT(lab_report_id) DO UPDATE SET version_id=EXCLUDED.version_id; $V048R_RET")"
+# Consumes nothing.
+v048_kill R-REGEN-COUNT "$V048R_T" 'FAIL H048R-NO-REGENERATION-COUNT' \
+  "$(v048r_patch "$V048R_WR" "$V048R_RET" "UPDATE public.lab_reports SET regeneration_count=regeneration_count+1 WHERE id=p_report_id; $V048R_RET")"
+v048_kill R-CLAIM-CONSUME "$V048R_T" 'FAIL H048R-NO-CLAIM-CHANGE' \
+  "$(v048r_patch "$V048R_WR" "$V048R_RET" $'INSERT INTO public.introductory_deep_access_claims(user_id,report_id,blood_draw_id,evidence_tier) VALUES(p_user_id,NULL,md5(p_request_id::text)||md5(p_report_id::text),\'accession\'); '"$V048R_RET")"
+v048_kill R-DEPTH "$V048R_T" 'FAIL H048R-DEPTH-STANDARD: expected 22023, observed SUCCESS' \
+  "$(v048r_patch "$V048R_WR" $'OR p_depth IS DISTINCT FROM \'deep\' ' '')"
+v048_kill R-AUTHORITY "$V048R_T" 'FAIL H048R-INVALID-AUTHORITY empty: expected 22023 or 23514, observed SUCCESS' "$V048_M_AUTHORITY"
+# Endpoint boundary.
+v048_kill R-GRANT-AUTHENTICATED "$V048R_T" 'FAIL H048R-RPC-BOUNDARY authenticated public.append_remediation_version' \
+  "GRANT EXECUTE ON FUNCTION $V048R_WR TO authenticated;"
+v048_kill R-GRANT-ANON "$V048R_T" 'FAIL H048R-RPC-BOUNDARY anon public.evaluate_legacy_remediation' \
+  "GRANT EXECUTE ON FUNCTION $V048R_EV TO anon;"
+v048_kill R-INTERNAL-GRANT "$V048R_T" 'FAIL H048R-INTERNAL-DORMANT' \
+  'GRANT EXECUTE ON FUNCTION public.append_interpretation_version_internal(uuid,uuid,uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb) TO service_role;'
+test "$(v048_snap)" = "$v048r_snap1" || { echo 'FAIL H048R-MUTATIONS leaked into the catalog' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.storage.sql -f "/tmp/$V048R_T"
+echo 'PASS H048R-MUTATIONS: every killing mutation turned its probe red; catalog and bytes unchanged afterwards.'
+
+# Pre-use rollback rehearsal and re-forward: exact catalog both ways.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.remediation-rollback.sql -f /tmp/interpretation-versions.storage.sql
+test "$(v048_snap)" = "$v048r_snap0" || { echo 'FAIL H048R-ROLLBACK catalog differs from pre-forward' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$REMEDIATION_MIGRATION"
+test "$(v048_snap)" = "$v048r_snap1" || { echo 'FAIL H048R-REFORWARD catalog differs from first forward' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$V048R_T" -f /tmp/interpretation-versions.storage.sql
+rm -f "$v048_log" "$v048_log.a" "$v048_log.b"
+echo 'PASS H048R: out-of-order refusal, fresh chain, no backfill, one-shot replay, coexistence, claim-only eligibility, wrapper, mutations, pre-use rollback and re-forward.'
