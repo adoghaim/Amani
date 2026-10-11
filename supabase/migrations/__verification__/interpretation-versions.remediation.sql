@@ -3,7 +3,7 @@
 -- wrapper (20261011000000). Everything is rolled back. Each flag state runs as a
 -- round that undoes itself, so both rounds start from identical data.
 -- Draw-hash literals were produced by the production hashDrawKey/
--- deriveBloodDrawIdentity (pinned in _shared/tmp-hash-oracle.test.ts), not by SQL.
+-- deriveBloodDrawIdentity (pinned in _shared/remediation-draw-parity.test.ts), not by SQL.
 BEGIN;
 \ir interpretation-versions.helpers.sql
 -- Exact stored serialization of a whole table, or a marker when absent here.

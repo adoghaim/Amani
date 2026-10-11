@@ -1283,7 +1283,13 @@ function sanitizeReportContext(raw: unknown): LabReportData["context"] {
 // Ordinary generation and claim-only legacy remediation (TASK-048) run these
 // identical stages. Only entitlement and the commit differ, in the handler.
 
-type ServiceClient = ReturnType<typeof createClient>;
+// The same `createClient(url, key)` call the handler makes, so the shared stages
+// see its client and row types. `ReturnType<typeof createClient>` would erase
+// the schema generics and type every row as `never`. Type-only; never called.
+function serviceClientShape(url: string, key: string) {
+  return createClient(url, key);
+}
+type ServiceClient = ReturnType<typeof serviceClientShape>;
 
 interface GenerationContext {
   report: LabReportData | null;

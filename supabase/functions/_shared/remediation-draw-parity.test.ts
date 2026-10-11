@@ -7,8 +7,6 @@ import { deriveBloodDrawIdentity, hashDrawKey } from './blood-draw-identity';
  * server-owned content_hash. These literals are what the production TypeScript
  * produces, and `interpretation-versions.remediation.sql` uses the same literals
  * as its claim fixtures, so a drift on either side turns one of them red.
- * (Lead: this file was created under a temporary name the sandbox could not
- * remove; rename to remediation-draw-parity.test.ts.)
  */
 
 const keyHash = async (reportId: string, contentHash: string | null) =>

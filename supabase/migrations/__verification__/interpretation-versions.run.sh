@@ -445,5 +445,92 @@ test "$(v048_snap)" = "$v048r_snap0" || { echo 'FAIL H048R-ROLLBACK catalog diff
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$REMEDIATION_MIGRATION"
 test "$(v048_snap)" = "$v048r_snap1" || { echo 'FAIL H048R-REFORWARD catalog differs from first forward' >&2; exit 1; }
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$V048R_T" -f /tmp/interpretation-versions.storage.sql
-rm -f "$v048_log" "$v048_log.a" "$v048_log.b"
 echo 'PASS H048R: out-of-order refusal, fresh chain, no backfill, one-shot replay, coexistence, claim-only eligibility, wrapper, mutations, pre-use rollback and re-forward.'
+
+# 9. Turn 7: erase_reports, the account-erasure RPC delete-user-data now awaits
+# alone. See docs/clinical/TASK-048/turn-7-erasure.md. A deadlock needs two
+# connections; this single-connection harness pins the lock order statically and
+# the caller's ordering is proven in _shared/delete-user-data.erasure.test.ts.
+ERASE_MIGRATION=20261011000001_erase_reports.sql
+docker cp "$HERE/../$ERASE_MIGRATION" "$CONTAINER:/tmp/$ERASE_MIGRATION" >/dev/null
+for file in interpretation-versions.{erase-reports,erase-reports-rollback}.sql; do
+  docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
+done
+v048e_comment="SELECT obj_description('public.delete_interpretations(uuid[])'::regprocedure,'pg_proc')"
+# Out of order: no foundation (flagged_before) and foundation without the wrapper
+# (task048_concurrency) both refuse and leave nothing.
+for db in flagged_before task048_concurrency; do
+  if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASE_MIGRATION" >"$v048_log" 2>&1; then
+    echo "FAIL H048E-OUT-OF-ORDER: applied on $db" >&2; exit 1
+  fi
+  v048_expect_log 'Apply the remediation wrapper 20261011000000 before erase_reports' "H048E-OUT-OF-ORDER $db"
+  docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
+    IF to_regprocedure('public.erase_reports(uuid[])') IS NOT NULL
+      THEN RAISE EXCEPTION 'FAIL H048E-OUT-OF-ORDER: partial erase_reports survived in $db'; END IF; END \$\$;"
+done
+echo 'PASS H048E-OUT-OF-ORDER: refused atomically without the remediation wrapper.'
+
+# Fresh chain: writes nothing; then the properties.
+v048e_before=$(v048_fresh -tA -c "$v048r_count")
+v048_fresh -q -f "/tmp/$ERASE_MIGRATION"
+test "$(v048_fresh -tA -c "$v048r_count")" = "$v048e_before" || { echo 'FAIL H048E-NO-BACKFILL fresh' >&2; exit 1; }
+v048_fresh -q -f /tmp/interpretation-versions.erase-reports.sql -f /tmp/interpretation-versions.remediation.sql
+echo 'PASS H048E-FRESH: no write; whole-graph erasure, no refund and boundary hold on the fresh chain.'
+
+# Upgrade: forward, no write, one-shot replay, exact coexistence.
+v048e_comment0=$(psql_f -tA -c "$v048e_comment")
+v048e_snap0=$(v048_snap)
+v048e_before=$(psql_f -tA -c "$v048r_count")
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASE_MIGRATION" -f /tmp/interpretation-versions.storage.sql
+test "$(psql_f -tA -c "$v048r_count")" = "$v048e_before" || { echo 'FAIL H048E-NO-BACKFILL upgrade' >&2; exit 1; }
+v048e_snap1=$(v048_snap)
+if psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASE_MIGRATION" >"$v048_log" 2>&1; then
+  echo 'FAIL H048E-REPLAY: expected one-shot rejection' >&2; exit 1
+fi
+v048_expect_log 'TASK-048 erase_reports is already applied; this migration is one-shot' 'H048E-REPLAY'
+test "$(v048_snap)" = "$v048e_snap1" || { echo 'FAIL H048E-REPLAY changed the catalog' >&2; exit 1; }
+v048e_changed=$(diff <(printf '%s\n' "$v048e_snap0") <(printf '%s\n' "$v048e_snap1") \
+  | sed -n 's/^[<>] \([^|]*\)|.*/\1/p' | LC_ALL=C sort -u || true)
+if [ "$v048e_changed" != 'function:erase_reports(uuid[])' ]; then
+  echo "FAIL H048E-COEXISTENCE: unexpected catalog changes: $v048e_changed" >&2; exit 1
+fi
+# The snapshot omits comments; the only other change is delete_interpretations' comment.
+test "$(psql_f -tA -c "$v048e_comment")" != "$v048e_comment0" || { echo 'FAIL H048E-COMMENT unchanged' >&2; exit 1; }
+echo 'PASS H048E-COEXISTENCE: only erase_reports was added; delete_interpretations is unchanged but for its comment.'
+
+# Properties on the upgraded database; the foundation's and turn 6's still hold.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.erase-reports.sql \
+  -f /tmp/interpretation-versions.erasure.sql -f /tmp/interpretation-versions.remediation.sql \
+  -f /tmp/interpretation-versions.verify.sql -f /tmp/interpretation-versions.storage.sql \
+  -f /tmp/legacy-quarantine.verify.sql
+echo 'PASS H048E-PROPERTIES: whole-graph erasure in both states, no refund, no orphans, others unchanged, old name still erases, service only.'
+
+V048E_FN='public.erase_reports(uuid[])'
+V048E_T=interpretation-versions.erase-reports.sql
+V048E_DELETE='DELETE FROM public.lab_reports WHERE id=ANY(p_report_ids);'
+v048_kill E-PARTIAL "$V048E_T" 'FAIL H048E-GRAPH-GONE sw=false' \
+  "$(v048r_patch "$V048E_FN" "$V048E_DELETE" 'DELETE FROM public.lab_reports WHERE id=p_report_ids[1];')"
+v048_kill E-REFUND "$V048E_T" 'FAIL H048E-NO-REFUND' \
+  "$(v048r_patch "$V048E_FN" "$V048E_DELETE" "DELETE FROM public.introductory_deep_access_claims WHERE report_id=ANY(p_report_ids); $V048E_DELETE")"
+v048_kill E-LOCK-ORDER "$V048E_T" 'FAIL H048E-LOCK-ORDER' \
+  "$(v048r_patch "$V048E_FN" 'ORDER BY id FOR UPDATE;' 'FOR UPDATE;')"
+v048_kill E-GRANT-AUTHENTICATED "$V048E_T" 'FAIL H048E-RPC-BOUNDARY authenticated public.erase_reports' \
+  "GRANT EXECUTE ON FUNCTION $V048E_FN TO authenticated;"
+v048_kill E-GRANT-ANON "$V048E_T" 'FAIL H048E-RPC-BOUNDARY anon public.erase_reports' \
+  "GRANT EXECUTE ON FUNCTION $V048E_FN TO anon;"
+v048_kill E-OLD-NAME-GRANT "$V048E_T" 'FAIL H048E-RPC-BOUNDARY authenticated public.delete_interpretations' \
+  'GRANT EXECUTE ON FUNCTION public.delete_interpretations(uuid[]) TO authenticated;'
+test "$(v048_snap)" = "$v048e_snap1" || { echo 'FAIL H048E-MUTATIONS leaked into the catalog' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.storage.sql -f "/tmp/$V048E_T"
+echo 'PASS H048E-MUTATIONS: every killing mutation turned its probe red; catalog and bytes unchanged afterwards.'
+
+# Pre-use rollback rehearsal and re-forward: exact catalog and comment both ways.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.erase-reports-rollback.sql -f /tmp/interpretation-versions.storage.sql
+test "$(v048_snap)" = "$v048e_snap0" || { echo 'FAIL H048E-ROLLBACK catalog differs from pre-forward' >&2; exit 1; }
+test "$(psql_f -tA -c "$v048e_comment")" = "$v048e_comment0" || { echo 'FAIL H048E-ROLLBACK-COMMENT' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.erasure.sql -f /tmp/interpretation-versions.verify.sql
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASE_MIGRATION"
+test "$(v048_snap)" = "$v048e_snap1" || { echo 'FAIL H048E-REFORWARD catalog differs from first forward' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$V048E_T" -f /tmp/interpretation-versions.storage.sql
+rm -f "$v048_log" "$v048_log.a" "$v048_log.b"
+echo 'PASS H048E: out-of-order refusal, fresh chain, no write, one-shot replay, coexistence, whole-graph erasure, no refund, boundary, mutations, pre-use rollback and re-forward.'

@@ -141,8 +141,8 @@ Deno.serve(async (req: Request) => {
       },
 
       async deleteDataTables(userId) {
-        // Two phases: rows keyed on lab_report_id first (so lab_reports can
-        // then be swept), then rows keyed on user_id directly.
+        // Two phases: the user's report graphs first, then rows keyed on
+        // user_id directly.
         const { data: reportIds, error: reportsListError } = await supabase
           .from("lab_reports")
           .select("id")
@@ -150,15 +150,13 @@ Deno.serve(async (req: Request) => {
         if (reportsListError) throw new Error(`Reading lab_reports failed: ${reportsListError.message}`);
         const ids = ((reportIds ?? []) as Array<{ id: string }>).map((r) => r.id);
 
+        // One awaited call erases every report graph: the lab_reports rows in id
+        // lock order, cascading to biomarkers, report_items, report_analytes,
+        // interpretations and versions. Nothing else touches that graph while it
+        // runs; the old concurrent child deletes are what deadlocked against it.
         if (ids.length > 0) {
-          const perReport = await Promise.all([
-            supabase.rpc("delete_interpretations", { p_report_ids: ids }),
-            supabase.from("biomarkers").delete().in("lab_report_id", ids),
-            supabase.from("report_items").delete().in("lab_report_id", ids),
-            supabase.from("report_analytes").delete().in("lab_report_id", ids),
-          ]);
-          const failedChild = perReport.find((r) => r.error);
-          if (failedChild?.error) throw new Error(`Report-child cleanup failed: ${failedChild.error.message}`);
+          const { error: eraseError } = await supabase.rpc("erase_reports", { p_report_ids: ids });
+          if (eraseError) throw new Error(`Report erasure failed: ${eraseError.message}`);
         }
 
         // Tables keyed on user_id. Do these serially so a specific failure
