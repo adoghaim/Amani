@@ -42,9 +42,19 @@ For any packet that adds or changes `supabase/migrations/`:
 
 **Post-deploy checklist (owner or delegated lead):**
 - [ ] `verify-privileges.sql` shows only intended grants (anon none; authenticated as designed).
-- [ ] `verify-triggers-enable-always.sql` returns zero rows in its "problems" query.
+- [ ] `verify-triggers-enable-always.sql` returns zero rows whose `status` starts with `FAIL` (see the runbook below).
 - [ ] Function probe: `OPTIONS /functions/v1/<name>` answers 200/204 for each deployed function.
 - [ ] Ledger `deployed.supabase` updated with date and who ran it.
+
+**Runbook: safety-trigger mode check (V2-03e-10). Run after every `supabase db push`, every restore (PITR, dump/reload, `pg_restore`) and every manual data fix.**
+
+1. Run `factory/sql/verify-triggers-enable-always.sql` read-only against the target database. Use the SQL editor or `psql` as the owner. Use no `--linked` CLI command and no service key in a script. It is one `SELECT` that writes nothing.
+2. Expected result: each of the 12 safety triggers it lists shows `actual_mode = A` and `status = ok`. Non-safety rows may show `ok`, `ok: non-safety trigger absent` or `note: ...`.
+3. **Stop condition:** if any row's `status` starts with `FAIL` (`safety trigger not ENABLE ALWAYS`, `safety trigger missing`, or `unclassified trigger`), stop the rollout. Do not run further migrations or deploy functions, and do not reopen writes after a restore. Report the rows to the owner. The fix is a reviewed forward migration (`ALTER TABLE public.<t> ENABLE ALWAYS TRIGGER <name>;`, or classifying a new trigger in the query and the harness). Never fix it ad hoc in production. An unclassified trigger means a migration added a trigger that nobody classified, so classify it in both the query and `supabase/migrations/__verification__/trigger-enable-always.run.sh` before continuing.
+4. Restores: run the restore as `postgres`. `protect_report_content_hash` only exempts `postgres` and `service_role`, so a replica-mode data load run as another role that writes `content_hash` fails loudly with `42501`. Never use `ALTER TABLE ... DISABLE TRIGGER` to get past a safety trigger. That command disables even `ENABLE ALWAYS` triggers. Run step 1 again after any restore.
+5. Attach the query output to the ledger entry for the deploy or restore.
+
+The harness enforces the same list. Case 14 (`trigger-enable-always.run.sh`) fails when any listed safety trigger is not `A`, when one is missing, or when a trigger is unclassified. It also proves that a forbidden overwrite is still rejected under `session_replication_role = replica`.
 
 ## G4 — Clinical authority
 
