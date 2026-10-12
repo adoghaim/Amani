@@ -101,7 +101,8 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       tryOpenAI: async () => generated, addFindingMetadata: noCall, buildBasicProjection,
       findFloorViolations, commitGeneratedInterpretation: noCall, recordGenerationCosts: noCall,
       isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers, ...sink.pipeline,
-      ...versionWrite, hasAnchor: async () => false, findRequestVersion: noCall, appendVersion: noCall,
+      ...versionWrite, readAnchor: async () => null, findRequestVersion: noCall, appendVersion: noCall,
+      commitLedgerVersion: noCall,
     });
     const response = await handler(new Request('https://example.invalid', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: '{}' }));
     expect(response.status).toBe(200);

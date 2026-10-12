@@ -109,22 +109,30 @@ DO $$ DECLARE a record; b record; v1 uuid; v2 uuid; retry uuid; request1 uuid:=g
     AND (SELECT generated_at FROM interpretation_versions WHERE id=v1)<(SELECT generated_at FROM interpretation_versions WHERE id=v2),
     'H048-EXPLICIT-SELECTION');
 END $$;
--- Scope boundary, both directions. A current-policy row without versions keeps
--- today's ordinary writer (Premium regeneration is not weakened); once it anchors
--- a version it is frozen like legacy history.
+-- Scope boundary, both directions. Before the turn-11 ledger cutover
+-- (20261011000003) a current-policy row without versions kept the in-place
+-- writer; from it on every anchor body is frozen and regeneration only appends.
+-- Once a row anchors a version it is frozen like legacy history in either state.
 DO $$ DECLARE c record; full_body jsonb; basic jsonb; v uuid; BEGIN
   SELECT q.*,i.id INTO STRICT c FROM quarantine_rows q JOIN interpretations_private i ON i.lab_report_id=q.report_id
     WHERE q.spec->>'name'='current-authorized' AND q.mode='premium';
   SELECT spec->'full',spec->'basic' INTO STRICT full_body,basic FROM quarantine_cases WHERE spec->>'name'='current-authorized';
   PERFORM pg_temp.vassert(NOT EXISTS(SELECT 1 FROM interpretation_history_protection WHERE interpretation_id=c.id),'H048-CURRENT-UNPROTECTED');
-  BEGIN
+  IF to_regprocedure('public.commit_deep_access_version(uuid,uuid,text,text,uuid,jsonb,jsonb,boolean,jsonb)') IS NULL THEN
+    BEGIN
+      EXECUTE 'SET LOCAL ROLE service_role';
+      PERFORM save_interpretation(c.user_id,c.report_id,full_body||'{"headline":"H048 current regeneration"}',basic,'deep','ai','plus');
+      RAISE EXCEPTION USING ERRCODE='P0481',MESSAGE='H048 undo current-row control';
+    EXCEPTION
+      WHEN SQLSTATE 'P0481' THEN RAISE NOTICE 'PASS H048-CURRENT-ROW-STILL-WRITABLE';
+      WHEN OTHERS THEN RAISE EXCEPTION 'FAIL H048-CURRENT-ROW-STILL-WRITABLE: % %',SQLSTATE,SQLERRM;
+    END;
+  ELSE
     EXECUTE 'SET LOCAL ROLE service_role';
-    PERFORM save_interpretation(c.user_id,c.report_id,full_body||'{"headline":"H048 current regeneration"}',basic,'deep','ai','plus');
-    RAISE EXCEPTION USING ERRCODE='P0481',MESSAGE='H048 undo current-row control';
-  EXCEPTION
-    WHEN SQLSTATE 'P0481' THEN RAISE NOTICE 'PASS H048-CURRENT-ROW-STILL-WRITABLE';
-    WHEN OTHERS THEN RAISE EXCEPTION 'FAIL H048-CURRENT-ROW-STILL-WRITABLE: % %',SQLSTATE,SQLERRM;
-  END;
+    PERFORM pg_temp.denied(format('SELECT public.save_interpretation(%L,%L,%L::jsonb,%L::jsonb,%L,%L,%L)',
+      c.user_id,c.report_id,full_body||'{"headline":"H048 current regeneration"}',basic,'deep','ai','plus'),'55000','H048-CURRENT-ROW-FROZEN');
+    EXECUTE 'RESET ROLE';
+  END IF;
   v:=append_interpretation_version_internal(c.user_id,c.report_id,c.id,gen_random_uuid(),NULL,full_body,basic,'deep','1.0','{}');
   PERFORM pg_temp.denied(format('UPDATE public.interpretations_private SET disclaimer_version=%L WHERE id=%L','H048',c.id),'55000','H048-ANCHOR-FROZEN');
   EXECUTE 'SET LOCAL ROLE service_role';

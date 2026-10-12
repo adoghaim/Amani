@@ -664,3 +664,149 @@ psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$V048V_T" -f /tmp/interpretation-versions.
 psql_f -v ON_ERROR_STOP=1 -q -c 'DROP TABLE task048_reads_pre_cutover;'
 rm -f "$v048_log" "$v048v_result"
 echo 'PASS H048V: out-of-order refusal, fresh chain, no write, one-shot replay, coexistence, read parity, selected-version reads, live TS parity, mutations, rollback and re-forward.'
+
+# 11. Turn 11: the Free-ledger regeneration appends a version (credit and
+# version in one transaction) and the history guard refuses any anchor-body
+# rewrite on every row. See docs/clinical/TASK-048/turn-11-ledger-cutover.md.
+LEDGER_MIGRATION=20261011000003_interpretation_version_ledger.sql
+docker cp "$HERE/../$LEDGER_MIGRATION" "$CONTAINER:/tmp/$LEDGER_MIGRATION" >/dev/null
+for file in interpretation-versions.{ledger,ledger-parity,ledger-rollback}.sql; do
+  docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
+done
+v048_log=$(mktemp)
+v048l_count="SELECT (SELECT count(*) FROM public.interpretation_versions)||'/'||(SELECT count(*) FROM public.interpretation_current_versions)
+  ||'/'||(SELECT count(*) FROM public.introductory_deep_access_claims)||'/'||(SELECT count(*) FROM public.interpretations_private)"
+v048l_defs="SELECT COALESCE(md5(pg_get_functiondef(to_regprocedure('public.guard_interpretation_history()'))),'-')
+  ||'/'||COALESCE(md5(pg_get_functiondef(to_regprocedure('public.commit_deep_access(uuid,uuid,text,text,jsonb,text,text,boolean)'))),'-')
+  ||'/'||(to_regprocedure('public.commit_deep_access_version(uuid,uuid,text,text,uuid,jsonb,jsonb,boolean,jsonb)') IS NULL)
+  ||'/'||(to_regprocedure('public.settle_introductory_claim(uuid,uuid,text,text,boolean)') IS NULL)"
+v048l_comments="SELECT string_agg(p||'='||COALESCE(obj_description(p::regprocedure,'pg_proc'),'<null>'),E'\n' ORDER BY p) FROM unnest(ARRAY[
+  'public.guard_interpretation_history()','public.commit_deep_access(uuid,uuid,text,text,jsonb,text,text,boolean)',
+  'public.commit_deep_access_v2(uuid,uuid,text,text,jsonb,text,text,boolean,jsonb)',
+  'public.save_interpretation(uuid,uuid,jsonb,jsonb,text,text,text,text)',
+  'public.append_interpretation_version_internal(uuid,uuid,uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)']) p"
+v048l_parity() { psql_f -v ON_ERROR_STOP=1 -qtA -f /tmp/interpretation-versions.ledger-parity.sql; }
+
+# Out of order: no foundation (flagged_before) and foundation without the writer
+# or the reader cutover (task048_concurrency) both refuse and change nothing.
+for db in flagged_before task048_concurrency; do
+  v048l_before=$(docker exec -i "$CONTAINER" psql -U postgres -d "$db" -tA -c "$v048l_defs")
+  if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$LEDGER_MIGRATION" >"$v048_log" 2>&1; then
+    echo "FAIL H048L-OUT-OF-ORDER: applied on $db" >&2; exit 1
+  fi
+  v048_expect_log 'Apply the reader cutover 20261011000002 before the ledger version cutover' "H048L-OUT-OF-ORDER $db"
+  test "$(docker exec -i "$CONTAINER" psql -U postgres -d "$db" -tA -c "$v048l_defs")" = "$v048l_before" \
+    || { echo "FAIL H048L-OUT-OF-ORDER: partial ledger cutover survived in $db" >&2; exit 1; }
+done
+echo 'PASS H048L-OUT-OF-ORDER: refused atomically without the reader cutover.'
+
+# Fresh chain: writes nothing; then the properties and the earlier proofs.
+v048l_before=$(v048_fresh -tA -c "$v048l_count")
+v048_fresh -q -f "/tmp/$LEDGER_MIGRATION"
+test "$(v048_fresh -tA -c "$v048l_count")" = "$v048l_before" || { echo 'FAIL H048L-NO-BACKFILL fresh' >&2; exit 1; }
+v048_fresh -q -f /tmp/interpretation-versions.ledger.sql -f /tmp/interpretation-versions.writer.sql \
+  -f /tmp/interpretation-versions.erase-reports.sql -f /tmp/interpretation-versions.read.sql \
+  -f /tmp/interpretation-versions.newrow.sql -f /tmp/interpretation-versions.replica.sql
+v048_fresh -q -c 'BEGIN' -f /tmp/interpretation-versions.overwrite.sql -c 'ROLLBACK'
+v048_fresh -qtA -f /tmp/interpretation-versions.ledger-parity.sql >/dev/null
+v048_fresh -q -f /tmp/legacy-quarantine.storage.sql -f /tmp/legacy-quarantine.verify.sql
+echo 'PASS H048L-FRESH: no write; ledger version commit, every-anchor guard, parity and earlier proofs hold on the fresh chain.'
+
+# Upgrade: parity baseline, forward, no write, one-shot replay, coexistence.
+v048l_parity0=$(v048l_parity)
+test -n "$v048l_parity0" || { echo 'FAIL H048L-PARITY baseline empty' >&2; exit 1; }
+v048l_comments0=$(psql_f -tA -c "$v048l_comments")
+v048l_snap0=$(v048_snap)
+v048l_before=$(psql_f -tA -c "$v048l_count")
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$LEDGER_MIGRATION" -f /tmp/interpretation-versions.storage.sql
+test "$(psql_f -tA -c "$v048l_count")" = "$v048l_before" || { echo 'FAIL H048L-NO-BACKFILL upgrade' >&2; exit 1; }
+v048l_snap1=$(v048_snap)
+v048l_comments1=$(psql_f -tA -c "$v048l_comments")
+if psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$LEDGER_MIGRATION" >"$v048_log" 2>&1; then
+  echo 'FAIL H048L-REPLAY: expected one-shot rejection' >&2; exit 1
+fi
+v048_expect_log 'TASK-048 ledger version cutover is already applied; this migration is one-shot' 'H048L-REPLAY'
+test "$(v048_snap)" = "$v048l_snap1" || { echo 'FAIL H048L-REPLAY changed the catalog' >&2; exit 1; }
+v048l_changed=$(diff <(printf '%s\n' "$v048l_snap0") <(printf '%s\n' "$v048l_snap1") \
+  | sed -n 's/^[<>] \([^|]*\)|.*/\1/p' | LC_ALL=C sort -u || true)
+v048l_expected=$(printf '%s\n' \
+  'function:commit_deep_access(uuid,uuid,text,text,jsonb,text,text,boolean)' \
+  'function:commit_deep_access_version(uuid,uuid,text,text,uuid,jsonb,jsonb,boolean,jsonb)' \
+  'function:guard_interpretation_history()' \
+  'function:settle_introductory_claim(uuid,uuid,text,text,boolean)' | LC_ALL=C sort -u)
+if [ "$v048l_changed" != "$v048l_expected" ]; then
+  echo 'FAIL H048L-COEXISTENCE: unexpected catalog changes:' >&2
+  diff <(printf '%s\n' "$v048l_expected") <(printf '%s\n' "$v048l_changed") >&2 || true
+  exit 1
+fi
+# The snapshot omits comments; the stale primitive comment must be gone.
+test "$v048l_comments1" != "$v048l_comments0" || { echo 'FAIL H048L-COMMENTS unchanged' >&2; exit 1; }
+case "$v048l_comments1" in *'claim-only remediation'*) echo 'FAIL H048L-COMMENTS stale primitive comment' >&2; exit 1 ;; esac
+echo 'PASS H048L-COEXISTENCE: only the guard body, commit_deep_access body and the two new functions changed; triggers untouched.'
+# The extracted claim rules behave exactly as the original body did.
+test "$(v048l_parity)" = "$v048l_parity0" || { echo 'FAIL H048L-PARITY: commit_deep_access outcomes changed across the forward' >&2; exit 1; }
+echo 'PASS H048L-PARITY: commit_deep_access outcomes and writes identical before and after the extraction.'
+
+# Properties on the upgraded database; every earlier proof still holds.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.ledger.sql \
+  -f /tmp/interpretation-versions.verify.sql -f /tmp/interpretation-versions.replica.sql \
+  -f /tmp/interpretation-versions.newrow.sql -f /tmp/interpretation-versions.writer.sql \
+  -f /tmp/interpretation-versions.read.sql -f /tmp/interpretation-versions.erase-reports.sql \
+  -f /tmp/interpretation-versions.erasure.sql -f /tmp/interpretation-versions.storage.sql \
+  -f /tmp/legacy-quarantine.verify.sql
+echo 'PASS H048L-PROPERTIES: anchored writers refused with claims rolled back, ledger version commit atomic and idempotent, limit persists nothing, guard ALWAYS, both states.'
+
+# Killing mutations, uncommitted.
+V048L_RPC='public.commit_deep_access_version(uuid,uuid,text,text,uuid,jsonb,jsonb,boolean,jsonb)'
+V048L_SETTLE='public.settle_introductory_claim(uuid,uuid,text,text,boolean)'
+V048L_GUARD='public.guard_interpretation_history()'
+V048L_CDA='public.commit_deep_access(uuid,uuid,text,text,jsonb,text,text,boolean)'
+V048L_T=interpretation-versions.ledger.sql
+V048L_P=interpretation-versions.ledger-parity.sql
+V048L_APPEND="SELECT * INTO STRICT w FROM public.append_interpretation_version(p_user_id,p_report_id,p_request_id,p_full,p_basic,'deep','1.0',p_provenance);"
+V048L_NOVERSION='SELECT NULL::uuid AS version_id,NULL::uuid AS history_id,NULL::timestamptz AS version_generated_at INTO STRICT w;'
+# The RPC regressed to the in-place writer: the guard itself refuses it.
+v048_kill L-RPC-SAVE "$V048L_T" 'FAIL H048L-INVALID-BODY-NO-CLAIM: expected 22023 or 23514, observed 55000' \
+  "$(v048r_patch "$V048L_RPC" "$V048L_APPEND" "PERFORM public.save_interpretation(p_user_id,p_report_id,p_full,p_basic,'deep','ai','plus'); $V048L_NOVERSION")"
+# The guard exemption widened to the body: the un-versioned anchor is overwritable again.
+v048_kill L-GUARD-JSON "$V048L_T" 'FAIL H048L-SAVE-OVERWRITE-CURRENT: expected 55000, observed SUCCESS' \
+  "$(v048r_patch "$V048L_GUARD" 'OR NEW.json_output IS DISTINCT FROM OLD.json_output' '')"
+# A credit consumed without a version.
+v048_kill L-SKIP-APPEND "$V048L_T" 'FAIL H048L-INVALID-BODY-NO-CLAIM: expected 22023 or 23514, observed SUCCESS' \
+  "$(v048r_patch "$V048L_RPC" "$V048L_APPEND" "$V048L_NOVERSION")"
+# The RPC ignores the ledger's limit.
+v048_kill L-LIMIT-IGNORED "$V048L_T" 'FAIL H048L-LIMIT outcome' \
+  "$(v048r_patch "$V048L_RPC" "IF settled='limit_reached' THEN" 'IF false THEN')"
+# The shared claim rules: limit, idempotency, and commit_deep_access's no-write on limit.
+v048_kill L-SETTLE-LIMIT "$V048L_P" 'FAIL H048L-PARITY limit: expected limit_reached' \
+  "$(v048r_patch "$V048L_SETTLE" '>=3 THEN' '>=4 THEN')"
+v048_kill L-SETTLE-IDEMPOTENCY "$V048L_P" 'FAIL H048L-PARITY already-by-draw' \
+  "$(v048r_patch "$V048L_SETTLE" 'blood_draw_id=p_blood_draw_id OR ' '')"
+v048_kill L-CDA-LIMIT-WRITE "$V048L_P" 'FAIL H048L-PARITY limit-no-write' \
+  "$(v048r_patch "$V048L_CDA" "IF outcome = 'limit_reached' THEN" 'IF false THEN')"
+# Endpoint boundary and trigger enablement.
+v048_kill L-GRANT-AUTHENTICATED "$V048L_T" 'FAIL H048L-RPC-BOUNDARY authenticated' \
+  "GRANT EXECUTE ON FUNCTION $V048L_RPC TO authenticated;"
+v048_kill L-GRANT-ANON "$V048L_T" 'FAIL H048L-RPC-BOUNDARY anon' \
+  "GRANT EXECUTE ON FUNCTION $V048L_RPC TO anon;"
+v048_kill L-INTERNAL-GRANT "$V048L_T" 'FAIL H048L-INTERNAL-DORMANT service_role' \
+  "GRANT EXECUTE ON FUNCTION $V048L_SETTLE TO service_role;"
+v048_kill L-GUARD-ORIGIN "$V048L_T" 'FAIL H048L-GUARD-ALWAYS' \
+  'ALTER TABLE public.interpretations_private ENABLE TRIGGER zz_guard_interpretation_history;'
+test "$(v048_snap)" = "$v048l_snap1" || { echo 'FAIL H048L-MUTATIONS leaked into the catalog' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.storage.sql -f "/tmp/$V048L_T"
+echo 'PASS H048L-MUTATIONS: every killing mutation turned its probe red; catalog and bytes unchanged afterwards.'
+
+# Pre-use rollback rehearsal and re-forward: exact catalog, comments and
+# commit_deep_access behaviour both ways.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.ledger-rollback.sql -f /tmp/interpretation-versions.storage.sql
+test "$(v048_snap)" = "$v048l_snap0" || { echo 'FAIL H048L-ROLLBACK catalog differs from pre-forward' >&2; exit 1; }
+test "$(psql_f -tA -c "$v048l_comments")" = "$v048l_comments0" || { echo 'FAIL H048L-ROLLBACK-COMMENTS' >&2; exit 1; }
+test "$(v048l_parity)" = "$v048l_parity0" || { echo 'FAIL H048L-ROLLBACK-PARITY' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.verify.sql -f /tmp/interpretation-versions.writer.sql
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$LEDGER_MIGRATION"
+test "$(v048_snap)" = "$v048l_snap1" || { echo 'FAIL H048L-REFORWARD catalog differs from first forward' >&2; exit 1; }
+test "$(psql_f -tA -c "$v048l_comments")" = "$v048l_comments1" || { echo 'FAIL H048L-REFORWARD-COMMENTS' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$V048L_T" -f /tmp/interpretation-versions.verify.sql -f /tmp/interpretation-versions.storage.sql
+rm -f "$v048_log"
+echo 'PASS H048L: out-of-order refusal, fresh chain, no write, one-shot replay, coexistence, parity, ledger version commit, every-anchor guard, mutations, pre-use rollback and re-forward.'

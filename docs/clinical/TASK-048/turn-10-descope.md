@@ -6,6 +6,14 @@ versioning / historical-integrity foundation plus the V2 cutover: every regenera
 report that already holds an interpretation appends a version; nothing overwrites it.
 Turns 6–8 docs are kept as history; this note supersedes their remediation parts.
 
+> **Correction (turn 11).** As shipped at `c6c4ed2` that headline was false for one
+> segment: an activated Free regeneration whose ledger committed (`committed` or
+> `already_claimed`) still upserted an un-versioned current-policy anchor in place through
+> `commit_deep_access_v2` (§5, first seam). Turn 11 closes it at both layers — the Free
+> ledger appends through `commit_deep_access_version`, and the history guard refuses any
+> anchor-body rewrite on every row. With `20261011000003` applied the headline holds. See
+> `turn-11-ledger-cutover.md`.
+
 ## 1. Removed
 
 | Piece | Status |
@@ -50,6 +58,9 @@ different output → `22023`. New request → new version, parent = previous poi
 - Anchor and no `request_id` → `400 {error:"request_id_required"}` before any model spend.
 - Anchor and a committed version for `request_id` → served from the store; no model call,
   no write but the report status.
+- (Turn 11: an activated Free request whose ledger settles a claim on an anchored report no
+  longer reaches `commit_deep_access_v2`; it persists through `commit_deep_access_version`,
+  claim and version in one transaction. See `turn-11-ledger-cutover.md`.)
 - Anchor, request reaching the save branch (`!savedByLedger`), in **both** flag states and
   for both entitlement outcomes: the activated pipeline runs regardless of the switch (a
   version must pass V2-03c claim authority); only a deep AI body with no floor violation is
@@ -76,14 +87,16 @@ it, a new tap mints a new one. `ParserDebugger` (dev-only) sends a fresh id.
 
 ## 5. Documented seams (not solved here)
 
-- **Ledger in-place upsert.** `commit_deep_access_v2` (frozen `20260925000001`) still upserts
-  the anchor row in place for an activated Free request whose ledger commits (`committed` or
-  `already_claimed`). If the anchor is legacy or already anchors a version, the guard refuses
-  it (`55000` → `409`); otherwise it overwrites a current-policy row with no versions. A
-  V2-04-era follow-up if every write after the first should be a version.
-- **First-generation race.** Two concurrent first generations both see no anchor; the second
-  `save_interpretation` overwrites the first's current-policy row (no versions exist yet, so
-  nothing historical is lost). Unchanged from before.
+- **Ledger in-place upsert — CLOSED in turn 11.** At `c6c4ed2`, `commit_deep_access_v2` still
+  upserted the anchor row in place for an activated Free request whose ledger committed
+  (`committed` or `already_claimed`); the guard refused it only for a legacy or versioned
+  anchor, so an un-versioned current-policy anchor was overwritten silently. This was a
+  defect, not a seam (reviewer-10 Sonnet). Turn 11 routes that request through
+  `commit_deep_access_version` and makes the guard refuse any anchor-body rewrite
+  (`turn-11-ledger-cutover.md`).
+- **First-generation race — now refused.** Two concurrent first generations both see no
+  anchor; from turn 11 the loser's upsert is refused by the guard (`55000` → `409`) and its
+  transaction (claim included) rolls back, instead of overwriting the winner's row.
 - **Flag-off failure status.** On a refused regeneration the flag-off client still marks the
   report `error` (existing behaviour); the interpretation on screen stays rendered.
 

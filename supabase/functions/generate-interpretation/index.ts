@@ -1518,17 +1518,59 @@ async function produceInterpretation(input: {
 // ─── Version store (TASK-048) ────────────────────────────────────────────────
 // A report that already holds its anchor interpretation is never overwritten in
 // place: its regeneration appends a version through the trusted writer, which
-// decides nothing about entitlement and consumes nothing. Wiring only.
+// decides nothing about entitlement and consumes nothing, or — for a Free
+// request the introductory ledger settles — through commit_deep_access_version,
+// which settles the claim and appends in one transaction. Wiring only.
 
-/** Whether the report already holds its anchor interpretation. Through the
- * owner-bound service reader (one row per owned report), never the raw table. */
-async function hasAnchor(supabase: ServiceClient, userId: string, reportId: string): Promise<boolean> {
+/** The report's anchor interpretation, if it holds one, and whether an
+ * introductory claim covers it. Through the owner-bound service reader (one row
+ * per owned report, the same claim derivation every reader uses), never the raw table. */
+async function readAnchor(supabase: ServiceClient, userId: string, reportId: string): Promise<{ claimCovered: boolean } | null> {
   const { data, error } = await supabase.rpc("read_interpretation_for_server", {
     p_user_id: userId, p_report_id: reportId, p_premium: false,
   });
   if (error) throw new Error(`Anchor read failed: ${error.message}`);
   if (!Array.isArray(data)) throw new Error("Unexpected anchor read shape");
-  return data.length > 0;
+  if (data.length === 0) return null;
+  return { claimCovered: (data[0] as { has_claim?: unknown }).has_claim === true };
+}
+
+type LedgerOutcome = "committed" | "already_claimed" | "limit_reached";
+
+/** Settles the introductory claim and appends the version in one transaction.
+ * `limit_reached` persisted nothing. A request id reused with different output
+ * is a concurrent twin that committed first (and settled the claim): serve it. */
+async function commitLedgerVersion(supabase: ServiceClient, input: {
+  userId: string; reportId: string; requestId: string; bloodDrawId: string; evidenceTier: string;
+  consumeCredit: boolean; full: Record<string, unknown>; basic: Record<string, unknown>;
+}): Promise<{ outcome: LedgerOutcome; appended: { version: StoredVersion; created: boolean } | null }> {
+  const { data, error } = await supabase.rpc("commit_deep_access_version", {
+    p_user_id: input.userId, p_report_id: input.reportId, p_blood_draw_id: input.bloodDrawId,
+    p_evidence_tier: input.evidenceTier, p_request_id: input.requestId, p_full: input.full, p_basic: input.basic,
+    p_consume_credit: input.consumeCredit, p_provenance: regenerationProvenance(),
+  });
+  if (isHistoryProtected(error)) throw new ProtectedHistoryError();
+  if (error) {
+    if (error.code === REQUEST_REUSED_SQLSTATE) {
+      const twin = await findRequestVersion(supabase, input.reportId, input.requestId);
+      if (twin) return { outcome: "already_claimed", appended: { version: twin, created: false } };
+    }
+    throw new Error(`commit_deep_access_version failed: ${error.message}`);
+  }
+  if (!Array.isArray(data) || data.length !== 1) throw new Error("Unexpected ledger version shape");
+  const row = data[0] as { outcome: string; version_id: string | null; history_id: string | null; version_generated_at: string | null };
+  if (row.outcome === "limit_reached") return { outcome: "limit_reached", appended: null };
+  if ((row.outcome !== "committed" && row.outcome !== "already_claimed") || !row.version_id || !row.history_id || !row.version_generated_at) {
+    throw new Error("Unexpected ledger version outcome");
+  }
+  return {
+    outcome: row.outcome,
+    appended: {
+      version: { versionId: row.version_id, historicalInterpretationId: row.history_id,
+        generatedAt: row.version_generated_at, full: input.full, basic: input.basic },
+      created: true,
+    },
+  };
 }
 
 /** The version already committed for this request, if any. */
@@ -1647,7 +1689,8 @@ Deno.serve(async (req: Request) => {
     // TASK-048: once the report holds its anchor interpretation, a regeneration
     // appends a version instead of overwriting it, keyed by the client's per-tap
     // request_id so a retried regeneration appends nothing twice.
-    const appendsVersion = await hasAnchor(supabase, user.id, reportId);
+    const anchor = await readAnchor(supabase, user.id, reportId);
+    const appendsVersion = anchor !== null;
     if (appendsVersion && requestId === null) {
       return new Response(JSON.stringify({ error: REQUEST_ID_REQUIRED }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1688,14 +1731,16 @@ Deno.serve(async (req: Request) => {
 
     // A retry of a committed regeneration is answered from the version store
     // without model spend, claim decision or any write but the report status.
+    // Access is the readers' rule: Plus, or an introductory claim on this report.
     if (appendsVersion) {
       const committed = await findRequestVersion(supabase, reportId, requestId!);
       if (committed) {
         await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
+        const full = tierDecision.tier === "plus" || anchor?.claimCovered === true;
         return new Response(JSON.stringify(active ? {
           success: true, source: "ai", reused: true,
-          access: tierDecision.tier === "plus" ? "full" : "basic",
-          interpretation: tierDecision.tier === "plus" ? committed.full : servedBasic(committed.basic),
+          access: full ? "full" : "basic",
+          interpretation: full ? committed.full : servedBasic(committed.basic),
           ...visibleClaimProjection(committed.basic), ...versionIdentity(committed),
         } : { success: true, source: "ai", reused: true, ...versionIdentity(committed) }), {
           status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1722,6 +1767,9 @@ Deno.serve(async (req: Request) => {
     // Keep the legacy generation predicate unchanged when the flag is off.
     let accessDecision: DeepAccessDecision | null = null;
     let claimRequest: Omit<CommitRequest, "interpretation"> | null = null;
+    // TASK-048 turn 11: what the ledger persisted for an anchored report.
+    let ledgerVersion: { version: StoredVersion; created: boolean } | null = null;
+    let ledgerLimitReached = false;
     const introActions: IntroductoryAccessActions = {
       async findClaim(userId, bloodDrawId) {
         const { data, error } = await supabase
@@ -1744,6 +1792,22 @@ Deno.serve(async (req: Request) => {
         return count;
       },
       async commitDeepAccess(input) {
+        // An anchored report never persists through commit_deep_access_v2 /
+        // save_interpretation: the claim settles with an appended version.
+        if (appendsVersion) {
+          const settled = await commitLedgerVersion(supabase, {
+            userId: input.userId, reportId: input.reportId, requestId: requestId!,
+            bloodDrawId: input.bloodDrawId, evidenceTier: input.evidenceTier, consumeCredit: input.consumeCredit,
+            full: input.interpretation as Record<string, unknown>, basic: basicProjection,
+          });
+          ledgerVersion = settled.appended;
+          ledgerLimitReached = settled.outcome === "limit_reached";
+          if (costContext && settled.outcome === "committed" && input.consumeCredit) {
+            costContext.claimConsumed = true;
+            costContext.interpretationTier = "plus";
+          }
+          return settled.outcome;
+        }
         const { data, error } = await supabase.rpc("commit_deep_access_v2", {
           p_user_id: input.userId,
           p_report_id: input.reportId,
@@ -1820,17 +1884,55 @@ Deno.serve(async (req: Request) => {
 
     const source = shaped.source;
 
+    // TASK-048: an anchored report persists only a deep current-policy AI body,
+    // whatever the entitlement outcome. Checked before the ledger, so a refused
+    // regeneration consumes no claim. Nothing persisted: the selected
+    // interpretation stands, never a fallback.
+    if (appendsVersion && !isVersionable({ source, depth: shaped.depth, floorViolations })) {
+      console.warn("[generate-interpretation] Regeneration not versioned:", JSON.stringify({ source, depth: shaped.depth }));
+      const refused = regenerationFailedResponse(generateDeep);
+      return new Response(JSON.stringify(refused.body), {
+        status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let savedByLedger = false;
     if (active && tierDecision.tier === "free") {
-      const committed = await commitGeneratedInterpretation(introActions, {
-        freemiumActive: true,
-        tier: tierDecision.tier,
-        decision: accessDecision,
-        completion: { parseConfident: analytes.length > 0, interpretationGenerated: aiInterpretation !== null },
-        request: claimRequest ? { ...claimRequest, interpretation: interpretationJson } : null,
-      });
+      let committed: Awaited<ReturnType<typeof commitGeneratedInterpretation>>;
+      try {
+        committed = await commitGeneratedInterpretation(introActions, {
+          freemiumActive: true,
+          tier: tierDecision.tier,
+          decision: accessDecision,
+          completion: { parseConfident: analytes.length > 0, interpretationGenerated: aiInterpretation !== null },
+          request: claimRequest ? { ...claimRequest, interpretation: interpretationJson } : null,
+        });
+      } catch (err) {
+        if (!appendsVersion || err instanceof ProtectedHistoryError) throw err;
+        // The transaction rolled back whole (no claim, no version); the
+        // previously selected interpretation is intact, so the report is not in error.
+        console.error("[generate-interpretation] Ledger version commit error:", errorMessage(err));
+        return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       savedByLedger = committed.committed;
       shaped.tier = committed.tier;
+    }
+
+    // TASK-048 turn 11: the ledger settled an anchored report's claim together
+    // with its version, or refused at the limit and persisted nothing. A refused
+    // claim is not appended as a Free version: no write, the selection stands.
+    // A retry is decided afresh (an exhausted decision, then post-limit rules).
+    if (appendsVersion && ledgerLimitReached) {
+      console.warn("[generate-interpretation] Regeneration not versioned: introductory limit reached at commit");
+      const refused = regenerationFailedResponse(true);
+      return new Response(JSON.stringify(refused.body), {
+        status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (appendsVersion && savedByLedger && !ledgerVersion) {
+      throw new Error("Ledger committed an anchored report without a version");
     }
 
     if (costContext) costContext.interpretationTier = shaped.tier;
@@ -1838,17 +1940,10 @@ Deno.serve(async (req: Request) => {
     // A race loser saves the already-generated payload with Free metadata.
     // Post-limit always-generation uses this same upsert without consuming a claim.
     // TASK-048: when the report already holds its anchor, the same outcomes
-    // append a version instead; only a deep current-policy AI body qualifies.
-    let appended: { version: StoredVersion; created: boolean } | null = null;
+    // append a version instead (the ledger's own version when it settled one);
+    // save_interpretation is reached only by a report with no anchor.
+    let appended: { version: StoredVersion; created: boolean } | null = savedByLedger ? ledgerVersion : null;
     if (!savedByLedger && appendsVersion) {
-      if (!isVersionable({ source, depth: shaped.depth, floorViolations })) {
-        // Nothing persisted: the selected interpretation stands, never a fallback.
-        console.warn("[generate-interpretation] Regeneration not versioned:", JSON.stringify({ source, depth: shaped.depth }));
-        const refused = regenerationFailedResponse(generateDeep);
-        return new Response(JSON.stringify(refused.body), {
-          status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       try {
         appended = await appendVersion(supabase, {
           userId: user.id, reportId, requestId: requestId!, full: interpretationJson, basic: basicProjection,
@@ -1871,7 +1966,8 @@ Deno.serve(async (req: Request) => {
       });
 
       if (isHistoryProtected(upsertError)) {
-        // TASK-048: a protected legacy row refused the in-place overwrite.
+        // TASK-048: the guard refused an in-place overwrite (a report that
+        // gained its anchor after the anchor read: the first-generation race).
         // Nothing was written; the report is intact, so its status is too.
         console.warn("[generate-interpretation] Ordinary regeneration refused: historical interpretation is protected");
         return new Response(JSON.stringify(legacyHistoryProtectedResponse.body), {
