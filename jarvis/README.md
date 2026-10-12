@@ -21,6 +21,8 @@ own login — no Anthropic API key.
 
 **Day-1 minimum `.env`:** `GITHUB_REPO` (plus `gh auth login`) and the three PostHog values `POSTHOG_HOST`, `POSTHOG_PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY`. Stripe, RevenueCat, Netlify, the app stores and all social/ad accounts can be added later; any service whose variables are blank is skipped with a note in the report.
 
+**Second Brain:** defaults to `~/Desktop/Second-Brain` (override with `SECOND_BRAIN_PATH`). `setup.sh` clones `adoghaim/Second-Brain` there if your GitHub account has access; otherwise Jarvis runs without it. Jarvis only reads the vault.
+
 **New accounts:** `jarvis/SETUP_ACCOUNTS.md` walks through creating each social and ad account for Amani and obtaining every key, with links to the official docs.
 
 **Approvals:** the daily run is read-only. Posts, experiments and ad changes are written as proposals to `jarvis/approvals/pending/`. Nothing executes until you mark a proposal approved and run `bash jarvis/execute-approved.sh` yourself, and any marketing copy is re-checked by the clinical-language checker first.

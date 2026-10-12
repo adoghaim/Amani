@@ -28,6 +28,7 @@ log() { printf '[jarvis %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 if [ ! -f .env ]; then echo "jarvis/.env missing. Run ./setup.sh first." >&2; exit 1; fi
 set -a; # shellcheck disable=SC1091
 . ./.env
+: "${SECOND_BRAIN_PATH:=$HOME/Desktop/Second-Brain}"; export SECOND_BRAIN_PATH
 set +a
 
 # Jarvis must run on the owner's Claude subscription login, never on an API key.

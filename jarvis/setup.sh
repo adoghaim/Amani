@@ -59,6 +59,14 @@ fi
 echo "== 3. .env"
 if [ ! -f .env ]; then cp .env.example .env; chmod 600 .env; ok "Created jarvis/.env from .env.example (chmod 600). Fill it in, then re-run ./setup.sh"; else ok ".env exists"; chmod 600 .env || true; fi
 set -a; . ./.env; set +a
+: "${SECOND_BRAIN_PATH:=$HOME/Desktop/Second-Brain}"; export SECOND_BRAIN_PATH
+if [ ! -d "$SECOND_BRAIN_PATH" ]; then
+  if GIT_TERMINAL_PROMPT=0 git clone -q https://github.com/adoghaim/Second-Brain.git "$SECOND_BRAIN_PATH" 2>/dev/null; then
+    echo "  Cloned Second Brain into $SECOND_BRAIN_PATH"
+  else
+    echo "  Second Brain not cloned (no access to adoghaim/Second-Brain yet). Jarvis will run without it."
+  fi
+fi
 
 REQUIRED=(GITHUB_REPO POSTHOG_HOST POSTHOG_PROJECT_ID POSTHOG_PERSONAL_API_KEY REPORT_TIME OWNER_APPROVAL_REQUIRED)
 RECOMMENDED=(STRIPE_RESTRICTED_KEY REVENUECAT_API_V2_KEY REVENUECAT_PROJECT_ID NETLIFY_AUTH_TOKEN NETLIFY_SITE_ID SUPABASE_READONLY_DB_URL REPORT_DELIVERY)
