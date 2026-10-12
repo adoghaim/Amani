@@ -132,7 +132,7 @@ BEGIN
   PERFORM pg_temp.denied(format('SELECT public.save_interpretation(%L,%L,%L::jsonb,%L::jsonb,%L,%L,%L)',
     w1,wb,f,b,'deep','ai','plus'),'55000','H048W-OVERWRITE-LEGACY-ANCHOR');
   PERFORM pg_temp.denied(format('SELECT public.save_interpretation(%L,%L,%L::jsonb,%L::jsonb,%L,%L,%L)',
-    w1,wa,f,b,'deep','ai','plus'),'55000','H048W-OVERWRITE-VERSIONED-ANCHOR');
+    w1,wa,f||'{"headline":"H048W overwrite attempt"}',b,'deep','ai','plus'),'55000','H048W-OVERWRITE-VERSIONED-ANCHOR');
   EXECUTE 'RESET ROLE';
   PERFORM pg_temp.vassert(pg_temp.whistory()=history0,'H048W-HISTORY-BYTES-LEGACY');
 
