@@ -1,0 +1,19 @@
+# Secrets and local state — never commit
+.env
+.env.*
+!.env.example
+*.p8
+*service-account*.json
+*credentials*.json
+secrets/
+
+# Generated output (contains business metrics)
+reports/
+logs/
+
+# Approvals contain drafts + metrics; kept local by default (see approvals/README.md to opt in)
+approvals/pending/*
+approvals/approved/*
+approvals/rejected/*
+approvals/executed/*
+!approvals/*/.gitkeep

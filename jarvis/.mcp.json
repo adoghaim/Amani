@@ -1,0 +1,41 @@
+{
+  "mcpServers": {
+    "posthog": {
+      "type": "http",
+      "url": "https://mcp.posthog.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${POSTHOG_PERSONAL_API_KEY}",
+        "x-posthog-project-id": "${POSTHOG_PROJECT_ID}",
+        "x-posthog-read-only": "true"
+      }
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/readonly",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_MCP_PAT}"
+      }
+    },
+    "stripe": {
+      "type": "http",
+      "url": "https://mcp.stripe.com",
+      "headers": {
+        "Authorization": "Bearer ${STRIPE_RESTRICTED_KEY}"
+      }
+    },
+    "revenuecat": {
+      "type": "http",
+      "url": "https://mcp.revenuecat.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${REVENUECAT_API_V2_KEY}"
+      }
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=${SUPABASE_PROJECT_REF}&read_only=true&features=database,docs",
+      "headers": {
+        "Authorization": "Bearer ${SUPABASE_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

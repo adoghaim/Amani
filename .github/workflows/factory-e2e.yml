@@ -1,0 +1,149 @@
+# DRAFT — proposed by the factory planning pass. Review before committing.
+# Complements the existing .github/workflows/ci.yml (lint/typecheck/test/build,
+# edge function typecheck, migration harness). It does not replace it.
+#
+# TO-VERIFY before enabling:
+#  - Other files in .github/ (we only saw ci.yml) and branch protection settings.
+#  - Whether a Playwright config / e2e folder already exists (see factory/e2e/README.md).
+#  - A NON-PRODUCTION Supabase project for e2e; secrets E2E_SUPABASE_URL, E2E_SUPABASE_ANON_KEY.
+#  - Android: JDK 21 and SDK 36 per native-grade.md; Gradle wrapper executable bit (fixed in #38).
+#  - iOS: Xcode scheme/workspace names (assumed App / ios/App/App.xcodeproj). macOS minutes cost
+#    more than Linux, so iOS runs only on label `factory:ios` or manual dispatch.
+name: Factory e2e
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      run_ios:
+        description: Run the iOS simulator build (macOS runner, higher cost)
+        type: boolean
+        default: false
+      run_android_emulator:
+        description: Run the Android emulator smoke test
+        type: boolean
+        default: false
+
+concurrency:
+  group: factory-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Build-time Vite vars point at the e2e project, never production.
+  VITE_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+  VITE_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+
+jobs:
+  web-e2e:
+    name: Web e2e (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Guard - refuse to run without e2e backend
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ]; then echo "E2E_SUPABASE_URL secret not set"; exit 1; fi
+      - name: Install browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Run e2e
+        run: npx playwright test --project=${{ matrix.browser }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: playwright-report/
+          retention-days: 14
+
+  android-build:
+    name: Android build (assembleDebug)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - name: Build web bundle and sync Capacitor
+        run: npm run cap:sync
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  android-emulator:
+    name: Android emulator smoke (optional)
+    needs: android-build
+    if: github.event_name == 'workflow_dispatch' && inputs.run_android_emulator || contains(github.event.pull_request.labels.*.name, 'factory:android-emulator')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-debug-apk
+          path: apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          script: |
+            adb install -r apk/*.apk
+            adb shell monkey -p com.amani.health -c android.intent.category.LAUNCHER 1
+            sleep 15
+            adb shell pidof com.amani.health
+            adb exec-out screencap -p > launch.png
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-evidence
+          path: launch.png
+
+  ios-build:
+    name: iOS simulator build (opt-in, macOS cost)
+    if: github.event_name == 'workflow_dispatch' && inputs.run_ios || contains(github.event.pull_request.labels.*.name, 'factory:ios')
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run cap:sync
+      - name: Build for simulator, signing disabled
+        # TO-VERIFY project/scheme names. SPM-based Capacitor 8 project assumed (no Pods).
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 50
