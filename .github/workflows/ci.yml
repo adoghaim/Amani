@@ -64,9 +64,23 @@ jobs:
   migrations:
     name: Migration behaviour (Postgres)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The full V2 harness (clinical catalog, quarantine, versioning sections) takes
+    # ~45 minutes on a developer machine; 10 minutes timed out before it could
+    # even start those sections.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+      # The harness runs the live SQL->TypeScript parity checks through Vitest
+      # (legacy-quarantine.run.sh, interpretation-versions.run.sh). Without the
+      # workspace dependencies it exits silently at `test -x node_modules/.bin/vitest`
+      # right after the pre-V2 sections, which is why this job reported failure on
+      # every V2 branch run while reporting success on main (which lacked those
+      # sections). A configured gate is not evidence that the gate executed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
 
       # `introductory_deep_access_claims` is a money-related, concurrency-
       # sensitive table: it decides who gets a paid AI interpretation for free.
