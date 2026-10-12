@@ -32,6 +32,7 @@ import { transformSync } from 'esbuild';
 import { resolveTier } from './tier';
 import { buildBasicProjection } from './interpretation-visibility';
 import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation } from './response-shaping';
+import { decideDeepGeneration } from './regeneration-availability';
 import { generationSample } from './generation-cost';
 import * as versionWrite from './interpretation-version-write';
 
@@ -97,7 +98,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
         ? ({ allowed: true, plan: 'free' }) : ({ allowed: true, reason: 'trial' }), freemiumActive: () => activeFlag,
       generationVisibilityMode, entitlementUnavailable, resolveTier,
       sanitizeReportContext: () => undefined, buildPrimaryContext: () => null,
-      shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation, shapeInterpretation,
+      shouldGenerateDeepInterpretation, decideDeepGeneration, shouldRequestDeepInterpretation, shapeInterpretation,
       tryOpenAI: async () => generated, addFindingMetadata: noCall, buildBasicProjection,
       findFloorViolations, commitGeneratedInterpretation: noCall, recordGenerationCosts: noCall,
       isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers, ...sink.pipeline,

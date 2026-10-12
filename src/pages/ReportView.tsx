@@ -51,6 +51,7 @@ import {
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { createRegenerationRequests } from '../lib/regenerationRequest';
+import { REGENERATION_COPY, regenerationFailureOf, type RegenerationNoticeKind } from '../lib/regenerationFailure';
 import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
@@ -67,7 +68,6 @@ import {
   generateFailureKind,
 } from '../lib/freemium/reportAccess';
 import { AccessErrorNotice, FreemiumReportPanel } from '../components/freemium/FreemiumReportPanel';
-import { FREEMIUM_COPY } from '../lib/freemium/copy';
 import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
 
 /*
@@ -387,7 +387,10 @@ export function ReportView() {
   const [generating, setGenerating] = useState(false);
   // The server refused to generate for this viewer (402): offer Premium, don't retry.
   const [generatePremiumRequired, setGeneratePremiumRequired] = useState(false);
-  const [regenerateFailed, setRegenerateFailed] = useState(false);
+  // PK-PL-A: what the last failed regenerate (or fuller-analysis) request meant,
+  // shown as a calm notice above the analysis it left intact. `retry` offers the
+  // keyed retry; without it the action on the page is the way to try again.
+  const [regenerateFailure, setRegenerateFailure] = useState<{ kind: RegenerationNoticeKind; retry: boolean } | null>(null);
   const regenerationRequests = useRef(createRegenerationRequests()).current;
   const [paywallOpen, setPaywallOpen] = useState(false);
   const accessStateRef = useRef<InterpretationAccessResult | null>(null);
@@ -1117,34 +1120,53 @@ export function ReportView() {
     const requestId = regenerationRequests.next(retry === true);
     setRegenerating(true);
     setError('');
-    setRegenerateFailed(false);
+    setRegenerateFailure(null);
     const priorStatus = report.status;
+    const analysisOnScreen = interpretation !== null;
     writeInterpRateLimit(reportId, null);
     setRateLimitNotice(null);
     /*
-      Flag on, a failed regenerate leaves the stored body exactly as it was
-      (the server upserts only on success), so put back the status and the
-      retry spent optimistically, and say what happened: 402 → Premium in
-      place, 429 → the daily-limit notice, anything else → a retryable error.
-      No get-interpretation read — there is nothing new to read.
+      PK-PL-A (Adell's pre-launch ruling), both flag states. A failed regenerate
+      wrote nothing: the server appends a version only on success, keyed by
+      request_id, so the retry below can never append twice. So it spends no
+      attempt and never brands the report "error" — put back the status and the
+      attempt spent optimistically, then say what happened: 402 → Premium (the
+      paywall flag on; pricing or billing flag off), 429 → the daily-limit
+      notice, anything else → a calm notice whose wording and retry follow the
+      server's answer (lib/regenerationFailure.ts).
+
+      Flag off with no analysis on screen the first analysis itself failed, and
+      the report has none: it stays marked failed for the existing retry card,
+      as before — its attempt is still put back.
     */
-    const failFreemium = async (err: unknown) => {
+    const fail = async (err: unknown) => {
+      const redirect = freemium ? null : await handle402(err);
+      const limitMessage = await rateLimitMessage(err);
+      const kind = limitMessage ? 'rate_limited' : await regenerationFailureOf(err);
+      const noAnalysis = !freemium && !analysisOnScreen && (kind === 'retryable' || kind === 'unavailable');
       await supabase.from('lab_reports').update({
-        status: priorStatus,
+        status: noAnalysis ? 'error' : priorStatus,
         regeneration_count: report.regeneration_count,
       }).eq('id', reportId);
-      const kind = generateFailureKind(httpStatus(err));
-      const limitMessage = kind === 'rate_limited' ? await rateLimitMessage(err) : null;
-      if (kind === 'premium_required') {
-        setPaywallOpen(true);
-      } else if (limitMessage) {
+      if (redirect) { navigate(redirect, { replace: true }); return; }
+      // Re-read first: a stored analysis clears any old daily-limit notice, and
+      // this one is new.
+      await fetchReport();
+      if (limitMessage) {
         writeInterpRateLimit(reportId, limitMessage);
         setRateLimitNotice(limitMessage);
-      } else {
-        setRegenerateFailed(true);
+      } else if (kind === 'premium_required' && freemium) {
+        setPaywallOpen(true);
+      } else if (!noAnalysis) {
+        const notice: RegenerationNoticeKind = kind === 'already_saved' || kind === 'unavailable' ? kind
+          : kind === 'premium_required' ? 'unavailable' : 'retryable';
+        setRegenerateFailure({ kind: notice, retry: notice === 'retryable' });
       }
-      await fetchReport();
+      // The answer changed what is true for this report (the analysis another
+      // request saved, or the server's availability): read it again.
+      if (freemium && (kind === 'already_saved' || kind === 'unavailable')) refreshAccess();
     };
+    let failure: { error: unknown } | null = null;
     try {
       /*
         Deliberately NOT deleting the existing interpretation first. Once the
@@ -1167,39 +1189,18 @@ export function ReportView() {
           request_id: requestId,
         },
       });
-      if (!interpError && fnData?.success) regenerationRequests.settle();
-      if (freemium && (interpError || !fnData?.success)) {
-        await failFreemium(interpError);
-        return;
+      if (interpError || !fnData?.success) {
+        failure = { error: interpError };
+      } else {
+        regenerationRequests.settle();
+        await fetchReport();
+        if (freemium) refreshAccess();
       }
-      if (interpError) {
-        const redirect = await handle402(interpError);
-        if (redirect) { navigate(redirect, { replace: true }); return; }
-        const limitMessage = await rateLimitMessage(interpError);
-        if (limitMessage) {
-          // The request never reached the model, so put back the status and the
-          // retry we spent optimistically above and tell her why instead.
-          await supabase.from('lab_reports').update({
-            status: priorStatus,
-            regeneration_count: report.regeneration_count,
-          }).eq('id', reportId);
-          writeInterpRateLimit(reportId, limitMessage);
-          setRateLimitNotice(limitMessage);
-        } else {
-          await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-        }
-      } else if (!fnData?.success) {
-        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-      }
-      await fetchReport();
-      if (freemium) refreshAccess();
     } catch (err) {
-      if (freemium) {
-        await failFreemium(err);
-        return;
-      }
-      await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-      await fetchReport();
+      failure = { error: err };
+    }
+    try {
+      if (failure) await fail(failure.error);
     } finally {
       setRegenerating(false);
     }
@@ -1213,18 +1214,32 @@ export function ReportView() {
     once. Never opens a paywall: a report that is not ready yet is not an
     upsell moment. A 402 shows the Premium entry point in place of the
     generate action instead of retrying into the same refusal.
+
+    PK-PL-A: when a body is already stored (the fuller-analysis offer), the
+    report holds its interpretation, so the server appends a version keyed by
+    request_id and refuses an unkeyed request (400 request_id_required) — which
+    used to leave this offer silently doing nothing. It is keyed like a
+    regenerate tap, still without spending a regeneration attempt, and a failure
+    says calmly that the stored analysis is unchanged.
   */
   const handleGenerate = async () => {
     if (generating) return;
     setGenerating(true);
     setGeneratePremiumRequired(false);
+    setRegenerateFailure(null);
     writeInterpRateLimit(reportId, null);
     setRateLimitNotice(null);
+    const storedBody = accessState?.access === 'generation_needed' && accessState.interpretation !== null;
+    const requestId = storedBody ? regenerationRequests.next(false) : null;
     let refresh = true;
     try {
-      const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
-        body: { reportId, primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null },
+      const { data, error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+        body: {
+          reportId, primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
+          ...(requestId ? { request_id: requestId } : {}),
+        },
       });
+      if (requestId && !invokeErr && data?.success) regenerationRequests.settle();
       if (invokeErr && generateFailureKind(httpStatus(invokeErr)) === 'premium_required') {
         refresh = false;
         setGeneratePremiumRequired(true);
@@ -1235,10 +1250,15 @@ export function ReportView() {
           refresh = false;
           writeInterpRateLimit(reportId, limitMessage);
           setRateLimitNotice(limitMessage);
+        } else if (storedBody) {
+          const kind = await regenerationFailureOf(invokeErr);
+          // The offer itself stays on the page as the way to try again.
+          setRegenerateFailure({ kind: kind === 'already_saved' || kind === 'unavailable' ? kind : 'retryable', retry: false });
         }
       }
     } catch {
       // Fall through to a fresh read, which renders whatever is true now.
+      if (storedBody) setRegenerateFailure({ kind: 'retryable', retry: false });
     } finally {
       setGenerating(false);
       if (refresh) refreshAccess();
@@ -1453,17 +1473,18 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── Flag on: a failed refresh/regenerate never hides the body on screen ── */}
+          {/* ── Flag on: a failed refresh never hides the body on screen ── */}
           {freemium && accessInlineError && !isProcessing && (
             <AccessErrorNotice state={accessInlineError} onRetry={refreshAccess} inline />
           )}
-          {freemium && regenerateFailed && !isProcessing && (
+          {/* ── Both flag states (PK-PL-A): a failed regenerate is a calm notice above the intact analysis ── */}
+          {regenerateFailure && !isProcessing && (
             <AccessErrorNotice
               state={null}
               inline
-              title={FREEMIUM_COPY.report.regenerateErrorTitle}
-              body={FREEMIUM_COPY.report.regenerateErrorBody}
-              onRetry={() => { void handleRegenerate(true); }}
+              title={REGENERATION_COPY[regenerateFailure.kind].title}
+              body={REGENERATION_COPY[regenerateFailure.kind].body}
+              onRetry={regenerateFailure.retry && canRegenerate ? () => { void handleRegenerate(true); } : undefined}
             />
           )}
 

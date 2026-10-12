@@ -125,3 +125,23 @@ it('a stale rejection does not invalidate the newer active key', async () => {
   await Promise.resolve();
   expect(fetch).toHaveBeenCalledTimes(3);
 });
+
+describe('PK-PL-A: regenerate is hidden when the server says it cannot succeed', () => {
+  const stored = (regeneration?: unknown, stored_depth = 'standard', access = 'basic') =>
+    parseInterpretationAccess({ access, interpretation: { headline: 'H' }, stored_depth, regeneration });
+
+  it('the server\'s "no" hides it, whatever is stored', () => {
+    const no = { available: false, reason: 'introductory_access_exhausted' };
+    for (const access of ['basic', 'full', 'generation_needed']) {
+      for (const depth of ['standard', 'unknown', 'deep']) expect(freemiumCanRegenerate(stored(no, depth, access), 0)).toBe(false);
+    }
+  });
+
+  it('the server\'s "yes" (or no answer) leaves the stored-state rule and the cap as they were', () => {
+    for (const regeneration of [{ available: true, reason: null }, undefined]) {
+      expect(freemiumCanRegenerate(stored(regeneration), 0)).toBe(true);
+      expect(freemiumCanRegenerate(stored(regeneration, 'deep'), 0)).toBe(false);
+      expect(freemiumCanRegenerate(stored(regeneration), 3)).toBe(false);
+    }
+  });
+});

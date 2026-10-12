@@ -10,6 +10,7 @@ import { buildTrendEvidence } from './trend-evidence';
 import { resolveTier } from './tier';
 import { entitlementUnavailable, generationVisibilityMode } from './entitlement-response';
 import { commitGeneratedInterpretation, decideIntroductoryAccess } from './introductory-access';
+import { decideDeepGeneration } from './regeneration-availability';
 import { deriveBloodDrawIdentity, hashDrawKey } from './blood-draw-identity';
 import * as versionWrite from './interpretation-version-write';
 
@@ -172,7 +173,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
         : { allowed: true, plan: 'premium', reason: 'active_subscription', source: 'active_subscription' },
     freemiumActive: () => flagOn, generationVisibilityMode, entitlementUnavailable, resolveTier,
     // The real ledger flow: never stubbed out of the version path.
-    shouldGenerateDeepInterpretation, decideIntroductoryAccess, commitGeneratedInterpretation,
+    shouldGenerateDeepInterpretation, decideDeepGeneration, decideIntroductoryAccess, commitGeneratedInterpretation,
     deriveBloodDrawIdentity, hashDrawKey, recordGenerationCosts,
     isRateLimitExceeded: () => false, errorMessage: String, servedBasic, visibleClaimProjection,
     ...versionWrite, ...(sink.p as object), ...(sink.v as object),

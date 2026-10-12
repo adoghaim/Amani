@@ -230,11 +230,12 @@ function upgradeBanner(onOpenPaywall: () => void) {
  * A retryable error. As the whole panel it stands in for a body that could not
  * be read; `inline` is the non-blocking form ReportView shows above a body the
  * user is already reading (a failed refresh or regenerate), which stays put.
- * Never a paywall, never "Free".
+ * Never a paywall, never "Free". Without `onRetry` it is a notice only: the
+ * server said trying again cannot help (PK-PL-A).
  */
 export function AccessErrorNotice({ state, onRetry, inline = false, title, body }: {
   state: InterpretationAccessResult | null;
-  onRetry: () => void;
+  onRetry?: () => void;
   inline?: boolean;
   title?: string;
   body?: string;
@@ -254,7 +255,7 @@ export function AccessErrorNotice({ state, onRetry, inline = false, title, body 
           </p>
         </div>
       </div>
-      {!rateLimited && (
+      {!rateLimited && onRetry && (
         <Button variant="secondary" size="sm" onClick={onRetry}>
           <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
           {COPY.retry}
