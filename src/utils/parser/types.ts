@@ -11,6 +11,33 @@ export interface RangeResult {
   raw: string;
 }
 
+/** One interval printed in a marker's own block, with the words printed before it. */
+export interface LabelledRange extends RangeResult {
+  /** For example "Follicular Phase" or "Reference Range"; null when nothing labels it. */
+  label: string | null;
+}
+
+/**
+ * A marker's block printed several distinct intervals, or a single one tied to
+ * a cycle phase, menopause or pregnancy. None was bound to the marker: the
+ * row needs review, and the user confirms which interval applies.
+ */
+export interface AmbiguousReference {
+  candidates: LabelledRange[];
+  /** The interval text as printed, line by line, joined with "; ". */
+  printed: string;
+}
+
+/** The result of binding printed intervals to one marker (see bindReferenceRange). */
+export interface RangeBinding {
+  /** Set only when exactly one interval applies to the marker. */
+  range?: RangeResult;
+  /** Set instead of `range` when the block printed more than one candidate. */
+  ambiguous?: AmbiguousReference;
+  /** Every interval printed in the marker's own block (empty when none). */
+  candidates: LabelledRange[];
+}
+
 export interface ExtractedBiomarker {
   name: string;
   value: number;
@@ -27,6 +54,8 @@ export interface ExtractedBiomarker {
   reference_max?: number;
   reference_comparator?: ComparatorRange;
   reference_text_raw?: string;
+  /** Present only when no single printed interval could be bound (see AmbiguousReference). */
+  reference_ambiguity?: AmbiguousReference;
   confidence: 'high' | 'medium' | 'low';
   rawText?: string;
   debugInfo?: ParserDebugInfo;
@@ -50,7 +79,15 @@ export interface ReportItem {
   source_snippet: string | null;
   parse_error?: string | null;
   parse_status?: ParseStatus;
-  
+  /**
+   * Present only when the marker's block printed several intervals, or one
+   * tied to a cycle phase, menopause or pregnancy. The normalized reference
+   * fields then stay null, raw_reference_range carries the printed text, and
+   * needs_review is set so the user confirms in the review step. Client-side
+   * only: it is not persisted.
+   */
+  reference_candidates?: LabelledRange[];
+
   // Phase 4A Telemetry & Tracing
   source_format?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
   parser_version?: string | null;
@@ -117,6 +154,8 @@ export interface ParsedResult {
   value_text?: string;
   unit: string | null;
   referenceResult?: RangeResult;
+  /** Set instead of a bound referenceResult when the block printed several intervals. */
+  referenceAmbiguity?: AmbiguousReference;
 }
 
 export type LabSource = 'quest' | 'labcorp' | 'hone' | 'unknown';

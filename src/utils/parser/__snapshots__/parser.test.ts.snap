@@ -266,18 +266,15 @@ exports[`parser pipeline (regression snapshots) > Hone fixture: detects source a
     "review_status": "pending",
     "reviewed_by_user": false,
     "source_format": "text",
-    "source_snippet": "ember ID: HM-00481
-
-Estradiol
+    "source_snippet": "Estradiol
 Your Result: 145 pg/mL
 Optimal Range: 30-400
 
-Progesterone
-Your Result",
+",
     "unit": "pg/mL",
     "unit_normalized": "pg/mL",
     "unit_original": "pg/mL",
-    "value_numeric": 481,
+    "value_numeric": 145,
     "value_text": null,
   },
   {
@@ -289,27 +286,24 @@ Your Result",
     "is_core_biomarker": true,
     "needs_review": false,
     "normalization_status": "mapped",
-    "normalized_reference_max": 400,
-    "normalized_reference_min": 30,
+    "normalized_reference_max": 24,
+    "normalized_reference_min": 1.8,
     "parse_error": null,
     "parse_status": "mapped",
     "parser_version": "v1_text_layered",
     "raw_biomarker_name": "progesterone",
     "raw_name": "progesterone",
-    "raw_reference_range": "30-400",
+    "raw_reference_range": "1.8-24",
     "reference_operator": null,
     "reference_operator_value": null,
     "review_status": "pending",
     "reviewed_by_user": false,
     "source_format": "text",
-    "source_snippet": "imal Range: 30-400
-
-Progesterone
+    "source_snippet": "Progesterone
 Your Result: 8.2 ng/mL
 Optimal Range: 1.8-24
 
-Free T3
-Your Result: ",
+",
     "unit": "ng/mL",
     "unit_normalized": "ng/mL",
     "unit_original": "ng/mL",
@@ -325,61 +319,56 @@ Your Result: ",
     "is_core_biomarker": true,
     "needs_review": false,
     "normalization_status": "mapped",
-    "normalized_reference_max": 24,
-    "normalized_reference_min": 1.8,
+    "normalized_reference_max": 4.4,
+    "normalized_reference_min": 2,
     "parse_error": null,
     "parse_status": "mapped",
     "parser_version": "v1_text_layered",
     "raw_biomarker_name": "free_t3",
     "raw_name": "free_t3",
-    "raw_reference_range": "1.8-24",
+    "raw_reference_range": "2.0-4.4",
     "reference_operator": null,
     "reference_operator_value": null,
     "review_status": "pending",
     "reviewed_by_user": false,
     "source_format": "text",
-    "source_snippet": "imal Range: 1.8-24
-
-Free T3
+    "source_snippet": "Free T3
 Your Result: 3.1 pg/mL
 Optimal Range: 2.0-4.4
 ",
     "unit": "pg/mL",
     "unit_normalized": "pg/mL",
     "unit_original": "pg/mL",
-    "value_numeric": 3,
+    "value_numeric": 3.1,
     "value_text": null,
   },
   {
     "canonical_biomarker_name": "alt",
     "canonical_slug": "alt",
     "category": "liver",
-    "confidence_score": "high",
+    "confidence_score": "low",
     "excluded_reason": null,
     "is_core_biomarker": true,
-    "needs_review": false,
+    "needs_review": true,
     "normalization_status": "mapped",
-    "normalized_reference_max": 400,
-    "normalized_reference_min": 30,
+    "normalized_reference_max": null,
+    "normalized_reference_min": null,
     "parse_error": null,
-    "parse_status": "mapped",
+    "parse_status": "needs_review",
     "parser_version": "v1_text_layered",
     "raw_biomarker_name": "alt",
     "raw_name": "alt",
-    "raw_reference_range": "30-400",
+    "raw_reference_range": null,
     "reference_operator": null,
     "reference_operator_value": null,
     "review_status": "pending",
     "reviewed_by_user": false,
     "source_format": "text",
-    "source_snippet": "
-Hone Health
+    "source_snippet": "alth
 honehealth.com
 Member ID: HM-00481
 
-Estradiol
-Your Result: 145 pg/mL
-Optimal Range: 30-",
+",
     "unit": "U/L",
     "unit_normalized": "U/L",
     "unit_original": "U/L",
