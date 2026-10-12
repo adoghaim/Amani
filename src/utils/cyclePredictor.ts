@@ -33,8 +33,27 @@ export function diffDays(a: Date, b: Date): number {
   return Math.round((toDateOnly(a).getTime() - toDateOnly(b).getTime()) / msPerDay);
 }
 
-function inferCycleLength(sortedLogs: PeriodLog[]): number {
-  if (sortedLogs.length < 2) return DEFAULT_CYCLE_LENGTH;
+/** Start-to-start intervals outside these bounds are not counted as a cycle. */
+export const MIN_INFERRED_CYCLE_LENGTH = 15;
+export const MAX_INFERRED_CYCLE_LENGTH = 60;
+
+/**
+ * The average cycle length in the user's logged period starts, by the rule this
+ * predictor has always used: the rounded mean of the start-to-start intervals
+ * between consecutive starts, counting only intervals within the bounds above.
+ *
+ * Null when the logs do not establish a length (fewer than two starts, or no
+ * interval within the bounds). It never falls back to 28: a caller that must
+ * tell a known length from an unknown one (PK-FIX-06) gets null, not a default.
+ */
+export function averageCycleLengthFromLogs(periodLogs: readonly Pick<PeriodLog, 'start_date'>[]): number | null {
+  return averageOfSortedStarts([...periodLogs].sort(
+    (a, b) => keyToDate(a.start_date).getTime() - keyToDate(b.start_date).getTime()
+  ));
+}
+
+function averageOfSortedStarts(sortedLogs: readonly Pick<PeriodLog, 'start_date'>[]): number | null {
+  if (sortedLogs.length < 2) return null;
   const lengths: number[] = [];
   for (let i = 0; i < sortedLogs.length - 1; i++) {
     const cur = sortedLogs[i];
@@ -43,12 +62,16 @@ function inferCycleLength(sortedLogs: PeriodLog[]): number {
     const a = keyToDate(cur.start_date);
     const b = keyToDate(nxt.start_date);
     const diff = diffDays(b, a);
-    if (diff >= 15 && diff <= 60) {
+    if (diff >= MIN_INFERRED_CYCLE_LENGTH && diff <= MAX_INFERRED_CYCLE_LENGTH) {
       lengths.push(diff);
     }
   }
-  if (lengths.length === 0) return DEFAULT_CYCLE_LENGTH;
+  if (lengths.length === 0) return null;
   return Math.round(lengths.reduce((s, v) => s + v, 0) / lengths.length);
+}
+
+function inferCycleLength(sortedLogs: PeriodLog[]): number {
+  return averageOfSortedStarts(sortedLogs) ?? DEFAULT_CYCLE_LENGTH;
 }
 
 function inferPeriodLength(sortedLogs: PeriodLog[], fallback: number): number {

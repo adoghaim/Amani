@@ -1794,12 +1794,14 @@ export function ReportView() {
                   )}
                 </div>
                 <div className="flex gap-4 mb-3">
-                  <div>
-                    <p className="text-xs text-theme-muted-text-3">Phase</p>
-                    <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
-                      {card.phase.replace(/_/g, ' ')}
-                    </p>
-                  </div>
+                  {card.phase && (
+                    <div>
+                      <p className="text-xs text-theme-muted-text-3">Phase</p>
+                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                        {card.phase.replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                  )}
                   {card.day && (
                     <div>
                       <p className="text-xs text-theme-muted-text-3">Cycle day</p>
@@ -1807,6 +1809,12 @@ export function ReportView() {
                     </div>
                   )}
                 </div>
+                {/* PK-FIX-06: a cycle day without an estimated phase says why, neutrally. */}
+                {card.phaseNote && (
+                  <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-cycle-phase-note>
+                    {card.phaseNote}
+                  </p>
+                )}
                 {card.explanation && (
                   <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-model-surface="cycle_context">
                     <ModelProse prose={card.explanation} />

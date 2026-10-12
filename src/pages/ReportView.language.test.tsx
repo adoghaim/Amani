@@ -574,3 +574,57 @@ describe('owner R1 — model prose renders only as the report\'s own claims', ()
     expect(unresolvedModelProse(app, [])).toHaveLength(3);
   }, 30_000);
 });
+
+/*
+  PK-FIX-06. A report that records a cycle day but no phase used to hide the
+  day (a draw on day 36+, or a cycle length no approved method covers). The real
+  page now shows the day and a neutral note, and nothing else changes: no phase
+  label, no model text, and page-wide policy language holds. Synthetic rows.
+*/
+describe('PK-FIX-06 — the cycle day renders without a phase, in neutral language', () => {
+  const LENGTH_NOTE = 'Phase not estimated for this cycle length; share the cycle day with your clinician.';
+  function seedCycle(facts: Record<string, unknown>) {
+    seed(9, 6);
+    // The model claims a phase and a confident day; neither may reach the card.
+    fixture.interpretation = { json_output: {
+      ...(fixture.interpretation!['json_output'] as Record<string, unknown>),
+      cycle_context: { estimated_cycle_day: 3, estimated_cycle_phase: 'luteal', confidence: 'high', explanation: C[4] },
+    } };
+    Object.assign(fixture.tables.lab_reports!.find(r => r['id'] === CURRENT)!, facts);
+  }
+  const cycleCard = () => Array.from(app.querySelectorAll('h3'))
+    .find(h => h.textContent === 'Cycle context')?.parentElement?.parentElement ?? null;
+
+  it.each([
+    ['day 36+ on a 28-day cycle', { estimated_cycle_day: 36, average_cycle_length: 28, last_period_start_date: '2025-11-28' }, '36', LENGTH_NOTE],
+    ['day 21 of a 35-day cycle', { estimated_cycle_day: 21, average_cycle_length: 35, last_period_start_date: '2025-12-13' }, '21', LENGTH_NOTE],
+    ['a 24-day cycle', { estimated_cycle_day: 10, average_cycle_length: 24, last_period_start_date: '2025-12-24' }, '10', LENGTH_NOTE],
+    ['an unknown cycle length', { estimated_cycle_day: 21, average_cycle_length: null, last_period_start_date: '2025-12-13' }, '21',
+      'Phase not estimated because your typical cycle length is not known; share the cycle day with your clinician.'],
+  ])('%s: the card shows the cycle day and the note, and no phase', async (_name, facts, day, note) => {
+    seedCycle({ estimated_cycle_phase: 'unknown', ...facts });
+    await renderAndOpenAll();
+    const card = cycleCard();
+    expect(card).not.toBeNull();
+    expect(Array.from(card!.querySelectorAll('p')).map(p => p.textContent)).toEqual(['Cycle day', day, note]);
+    expect(card!.querySelector('[data-cycle-phase-note]')?.textContent).toBe(note);
+    expect(card!.querySelector('[data-model-surface], [data-model-field]')).toBeNull();
+    // No phase anywhere on the page: no header pill, no phase-specific band.
+    expect(app.textContent).not.toMatch(/luteal|follicular|ovulatory|menstrual phase/i);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('missing last-period date (no cycle day): no cycle card', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: null, average_cycle_length: 35, last_period_start_date: null });
+    await renderAndOpenAll();
+    expect(cycleCard()).toBeNull();
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+  }, 30_000);
+
+  it('a known 28-day phase still renders as before, with no note', async () => {
+    seedCycle({ estimated_cycle_phase: 'luteal', estimated_cycle_day: 21, average_cycle_length: 28, last_period_start_date: '2025-12-13' });
+    await renderAndOpenAll();
+    expect(Array.from(cycleCard()!.querySelectorAll('p')).map(p => p.textContent)).toEqual(['Phase', 'luteal', 'Cycle day', '21']);
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+  }, 30_000);
+});

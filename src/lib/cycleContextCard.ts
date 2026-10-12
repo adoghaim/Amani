@@ -1,10 +1,14 @@
 import { authorizeModelProse, type AuthorizedModelProse, type MovementClaim } from './scoring/insightCopy';
+import { phaseNotEstimatedCopy, storedPhaseNotEstimatedReason } from './drawCycleContext';
 
 export interface CycleContextCard {
-  phase: string;
+  /** Null when the report records a cycle day but no phase (PK-FIX-06). */
+  phase: string | null;
   day: number | null;
   confidence: 'low' | 'medium' | 'high' | null;
   explanation: AuthorizedModelProse | null;
+  /** Present only on a card without a phase: the neutral line that says why. */
+  phaseNote?: string;
 }
 
 /**
@@ -18,19 +22,34 @@ export interface CycleContextCard {
  * and the stored confidence qualifies only an explanation that renders, so a
  * confidence badge never appears on its own or from a client-side default.
  *
- * Returns null when there is no phase, or when phase is the only fact (it would
- * duplicate the header pill).
+ * PK-FIX-06: a report with a cycle day but no phase (any cycle length the
+ * phase method does not cover, or a draw on day 36+) still shows its cycle day,
+ * with a neutral note in place of the phase. That card carries report facts
+ * only: no explanation and no confidence.
+ *
+ * Returns null when there is neither a phase nor a cycle day, or when phase is
+ * the only fact (it would duplicate the header pill).
  */
 export function cycleContextCard(
-  report: { estimated_cycle_phase?: string | null; estimated_cycle_day?: number | null },
+  report: {
+    estimated_cycle_phase?: string | null;
+    estimated_cycle_day?: number | null;
+    average_cycle_length?: number | null;
+  },
   cycleContext: unknown,
   claims: readonly MovementClaim[] = [],
 ): CycleContextCard | null {
   const phase = report.estimated_cycle_phase && report.estimated_cycle_phase !== 'unknown'
     ? report.estimated_cycle_phase : null;
-  if (!phase) return null;
   const rawDay = report.estimated_cycle_day;
   const day = typeof rawDay === 'number' && Number.isSafeInteger(rawDay) && rawDay > 0 ? rawDay : null;
+  if (!phase) {
+    if (!day) return null;
+    return {
+      phase: null, day, confidence: null, explanation: null,
+      phaseNote: phaseNotEstimatedCopy(storedPhaseNotEstimatedReason(report)),
+    };
+  }
   const context = cycleContext && typeof cycleContext === 'object' && !Array.isArray(cycleContext)
     ? cycleContext as Record<string, unknown> : {};
   const explanation = typeof context.explanation === 'string'

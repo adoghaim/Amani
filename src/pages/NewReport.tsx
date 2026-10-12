@@ -19,6 +19,9 @@ import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
+import {
+  cycleContextAtDraw, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
+} from '../lib/drawCycleContext';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { detectLabSource } from '../utils/detectLabSource';
@@ -141,7 +144,11 @@ export function NewReport() {
   const [file, setFile] = useState<File | null>(null);
   const [reportDate, setReportDate] = useState(todayIso);
   const [lastPeriodDate, setLastPeriodDate] = useState('');
-  const cycleLength = '28';
+  // PK-FIX-06: optional typical cycle length. Empty means unknown; it is never
+  // silently 28. Auto-filled from the tracker's logged periods when they
+  // establish an average, and the user can change or clear it.
+  const [cycleLengthInput, setCycleLengthInput] = useState('');
+  const [cycleLengthAutoFilled, setCycleLengthAutoFilled] = useState(false);
   const birthControl = 'unsure' as const;
   const pregnant = 'unsure' as const;
   const postpartum = 'unsure' as const;
@@ -165,6 +172,7 @@ export function NewReport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const userEditedReportItemsRef = useRef(false);
   const userEditedPeriodRef = useRef(false);
+  const userEditedCycleLengthRef = useRef(false);
   const extractionRunRef = useRef(0);
   // Cycle metadata extracted from the PDF/OCR itself. When non-null, it wins
   // over the calculated fallback derived from reportDate + lastPeriodDate.
@@ -254,6 +262,33 @@ export function NewReport() {
     };
     fetchMostRecentPeriodStart();
   }, [reportDate, user]);
+
+  // PK-FIX-06: pre-fill the typical cycle length only when the tracker's logged
+  // periods establish one (cyclePredictor's averaging rule). Otherwise the field
+  // stays empty and the length stays unknown.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const prefillCycleLength = async () => {
+      try {
+        const { data: logs } = await supabase
+          .from('period_logs')
+          .select('start_date')
+          .eq('user_id', user.id);
+        if (cancelled || userEditedCycleLengthRef.current) return;
+        // V2-04-C: pass the profile's typical cycle length as `profile` here.
+        const known = knownCycleLength({ periodLogs: (logs ?? []) as { start_date: string }[] });
+        if (known) {
+          setCycleLengthInput(String(known.days));
+          setCycleLengthAutoFilled(true);
+        }
+      } catch (err) {
+        console.warn('[NewReport] Failed to fetch period logs for cycle length:', err);
+      }
+    };
+    void prefillCycleLength();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -497,23 +532,8 @@ export function NewReport() {
     setStep(3);
   };
 
-  const calculateCycleInfo = () => {
-    if (!reportDate || !lastPeriodDate) {
-      return { cycleDay: null, cyclePhase: 'unknown' as const };
-    }
-    const reportDateObj = new Date(reportDate);
-    const lastPeriodDateObj = new Date(lastPeriodDate);
-    const daysDiff = Math.floor(
-      (reportDateObj.getTime() - lastPeriodDateObj.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    const cycleDay = daysDiff + 1;
-    let cyclePhase: 'menstrual' | 'follicular' | 'ovulatory' | 'luteal' | 'unknown' = 'unknown';
-    if (cycleDay >= 1 && cycleDay <= 5) cyclePhase = 'menstrual';
-    else if (cycleDay >= 6 && cycleDay <= 12) cyclePhase = 'follicular';
-    else if (cycleDay >= 13 && cycleDay <= 16) cyclePhase = 'ovulatory';
-    else if (cycleDay >= 17 && cycleDay <= 35) cyclePhase = 'luteal';
-    return { cycleDay, cyclePhase };
-  };
+  // A typed value that is not a whole number of days within the bounds.
+  const cycleLengthInvalid = cycleLengthInput.trim() !== '' && parseCycleLengthDays(cycleLengthInput) === null;
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
@@ -552,12 +572,18 @@ export function NewReport() {
       }
 
       setSubmitStep('creating');
-      const calculatedCycleInfo = calculateCycleInfo();
+      // PK-FIX-06: the cycle day for any cycle length; a phase only where an
+      // approved method covers the known typical length (see drawCycleContext).
+      const drawCycle = cycleContextAtDraw({
+        drawDate: reportDate,
+        lastPeriodStart: lastPeriodDate,
+        cycleLengthDays: cycleLengthInput,
+      });
       const parsedCycle = parsedCycleRef.current;
       // Parser-extracted cycle metadata wins per-field; fall back to the
       // calculated value when the PDF/OCR didn't expose explicit cycle context.
-      const cycleDay = parsedCycle?.cycleDay ?? calculatedCycleInfo.cycleDay;
-      const cyclePhase = parsedCycle?.cyclePhase ?? calculatedCycleInfo.cyclePhase;
+      const cycleDay = parsedCycle?.cycleDay ?? drawCycle.cycleDay;
+      const cyclePhase = parsedCycle?.cyclePhase ?? drawCycle.phase;
       const context: LabReportContext = {
         birth_control: birthControl,
         pregnant,
@@ -573,7 +599,8 @@ export function NewReport() {
           report_date: reportDate,
           file_url: fileUrl,
           last_period_start_date: lastPeriodDate || null,
-          average_cycle_length: parseInt(cycleLength) || 28,
+          // The known typical length, or null. Never a silent 28.
+          average_cycle_length: drawCycle.cycleLengthDays,
           estimated_cycle_day: cycleDay,
           estimated_cycle_phase: cyclePhase,
           context,
@@ -1334,6 +1361,39 @@ export function NewReport() {
                   {!lastPeriodDate && !fetchingPeriod && (
                     <p className="mt-1 text-xs text-theme-neutral-400">Add your last period start date for more accurate insights</p>
                   )}
+
+                  {/* PK-FIX-06: typical cycle length (optional; empty = unknown) */}
+                  <div className="flex items-center justify-between mt-4 mb-1.5">
+                    <label htmlFor="typical-cycle-length" className="text-sm font-medium text-theme-neutral-700">
+                      Typical cycle length
+                    </label>
+                    {cycleLengthAutoFilled && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-theme-flag-ok bg-theme-flag-ok-bg px-2 py-0.5 rounded-full border border-theme-flag-ok-border">
+                        <CheckCircle className="w-3 h-3" /> Auto-filled from your tracker
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    id="typical-cycle-length"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cycleLengthInput}
+                    onChange={e => {
+                      setCycleLengthInput(e.target.value);
+                      setCycleLengthAutoFilled(false);
+                      userEditedCycleLengthRef.current = true;
+                    }}
+                    aria-invalid={cycleLengthInvalid || undefined}
+                    aria-describedby="typical-cycle-length-hint"
+                    className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-neutral-900"
+                  />
+                  <p
+                    id="typical-cycle-length-hint"
+                    className={`mt-1 text-xs ${cycleLengthInvalid ? 'text-theme-flag-low' : 'text-theme-neutral-400'}`}
+                  >
+                    {cycleLengthInvalid ? CYCLE_LENGTH_INPUT_ERROR : CYCLE_LENGTH_INPUT_HINT}
+                  </p>
                 </div>
 
                 {/* Divider */}
@@ -1373,7 +1433,7 @@ export function NewReport() {
                 <Button variant="secondary" onClick={() => setStep(1)}>
                   <ArrowLeft className="w-5 h-5 mr-2" />Back
                 </Button>
-                <Button onClick={handleProceedToStep3} disabled={extracting}>
+                <Button onClick={handleProceedToStep3} disabled={extracting || cycleLengthInvalid}>
                   {extracting ? (
                     <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Reading...</>
                   ) : (
