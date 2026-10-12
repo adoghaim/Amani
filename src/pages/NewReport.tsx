@@ -1211,6 +1211,7 @@ export function NewReport() {
                 </label>
                 <input
                   type="date"
+                  data-testid="report-date"
                   value={reportDate}
                   onChange={e => setReportDate(e.target.value)}
                   className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-neutral-900"

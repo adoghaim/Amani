@@ -27,7 +27,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
-    "test:e2e:isolation": "node --test e2e/env-isolation.test.mjs"
+    "test:e2e:isolation": "node --test e2e/env-isolation.test.mjs",
+    "test:e2e:journey": "playwright test -c e2e/journey/playwright.config.ts"
   },
   "dependencies": {
     "@capacitor/android": "8.5.1",
