@@ -1,0 +1,47 @@
+name: Migration order
+
+# D6 (engineering review, 2026-10-12): a migration a PR adds must be newer
+# than main's newest migration. Supabase applies versions in order and records
+# each one, so an older version is applied out of order, or collides with one
+# already recorded, on any database that has main's chain. The rule and how to
+# renumber: factory/gates.md.
+#
+# The check compares the PR's merge commit with main as it is now, so a branch
+# that main has overtaken fails here until it is renumbered. Re-run the job
+# (or update the branch) when main gains a migration after it last ran.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-order-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-order:
+    name: Migration order (D6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The factory CI tools test themselves wherever they run; this job runs
+      # on every PR into main, so a change to tools/ci is tested before merge.
+      - name: Test the CI tools
+        run: node --test tools/ci/migration-order.test.mjs tools/ci/integration-preview.test.mjs
+
+      - name: Added migrations are newer than main's newest
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node tools/ci/migration-order.mjs --base "origin/$BASE_REF" --head HEAD
