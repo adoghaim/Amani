@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
@@ -279,8 +279,13 @@ export function Settings() {
                 </div>
                 <div>
                   <h2 className="text-lg text-theme-neutral-900">Reminder preferences</h2>
+                  {/*
+                    Nothing delivers a reminder today: no notification plugin,
+                    no scheduled sender, and nothing reads the reminders table.
+                    Say so rather than describe a delivery channel.
+                  */}
                   <p className="text-xs text-theme-muted-text">
-                    In-app notifications. Mobile push support coming soon.
+                    Reminders aren&rsquo;t sent yet.
                   </p>
                 </div>
               </div>
@@ -344,8 +349,8 @@ export function Settings() {
                   <div className="flex items-start gap-2">
                     <BellOff className="w-4 h-4 text-theme-muted-text mt-0.5 shrink-0" />
                     <p className="text-xs text-theme-muted-text leading-relaxed">
-                      Reminders currently appear as in-app notifications. Native mobile push
-                      notifications are planned and will use these same preferences when available.
+                      Nothing is sent to you yet, in the app or on your phone. We&rsquo;ll use
+                      these preferences when notifications launch.
                     </p>
                   </div>
                 </div>
@@ -358,18 +363,37 @@ export function Settings() {
               <div className="w-10 h-10 bg-theme-flag-ok-bg rounded-full flex items-center justify-center flex-shrink-0">
                 <ShieldCheck className="w-5 h-5 text-theme-flag-ok" />
               </div>
+              {/*
+                Every statement here must also be true in src/pages/Privacy.tsx,
+                and never promise more than it does. Lab data goes to OpenAI to be
+                read and explained, and other companies run parts of the service,
+                so "no third party can view your data" was false.
+                Settings.test.tsx pins this card against Privacy.tsx.
+              */}
               <div>
                 <h2 className="text-lg text-theme-neutral-900 mb-1">
                   Data Privacy & Security
                 </h2>
                 <p className="text-sm text-theme-neutral-600 leading-relaxed">
-                  Your data is protected with account-based access controls and encryption in
-                  transit. Only you can access your lab results and health information — no other
-                  user or third party can view your data.
+                  Your health records are linked to your account. Database access rules stop
+                  other Amani users from seeing them, and data is encrypted in transit.
+                </p>
+                <p className="mt-2 text-sm text-theme-neutral-600 leading-relaxed">
+                  Some companies handle your data so Amani can work. To read and explain your
+                  labs, we send OpenAI your lab values, context you&rsquo;ve added such as cycle
+                  details and your profile, and sometimes images or text from the report itself.
+                  Supabase hosts your data, Netlify serves the website, Stripe, Apple, Google and
+                  RevenueCat handle payments, and Sentry receives error reports.
+                </p>
+                <p className="mt-2 text-sm text-theme-neutral-600 leading-relaxed">
+                  We don&rsquo;t sell your data, run ads, or use advertising or analytics
+                  trackers.
                 </p>
                 <div className="mt-3 flex items-center gap-2 text-xs text-theme-flag-ok font-medium">
                   <Lock className="w-3.5 h-3.5" />
-                  <span>All data is scoped to your account and encrypted in transit</span>
+                  <Link to="/privacy" className="underline hover:text-theme-text">
+                    See exactly what each company receives in the Privacy Policy
+                  </Link>
                 </div>
               </div>
             </div>
