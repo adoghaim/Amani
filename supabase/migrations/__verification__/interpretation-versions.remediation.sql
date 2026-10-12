@@ -1,3 +1,0 @@
--- TOMBSTONE — TASK-048 turn 10 removed the remediation harness (replaced by
--- interpretation-versions.writer.sql). Not referenced by any runner. The
--- implementer sandbox cannot delete files; the Lead must `git rm` this file.
