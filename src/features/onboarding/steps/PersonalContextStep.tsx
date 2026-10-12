@@ -1,5 +1,11 @@
+import { useId } from 'react';
 import { Button } from '../../../components/Button';
-import { AGE_RANGES, SEX_OPTIONS, PREGNANCY_OPTIONS } from '../contextOptions';
+import {
+  AGE_RANGES,
+  SEX_OPTIONS,
+  PREGNANCY_OPTIONS,
+  isUnder18AgeRange,
+} from '../contextOptions';
 import { ChipInput, SelectField } from '../contextInputs';
 
 export interface PersonalContextValue {
@@ -31,6 +37,14 @@ export function PersonalContextStep({
   ) => {
     onChange({ ...value, [key]: next });
   };
+
+  /*
+    Amani is for adults 18 and over (Terms). The picker no longer offers an
+    under-18 age, but if one reaches this step anyway (a value stored by an
+    earlier build), setup stops here rather than saving it.
+  */
+  const ageBlocked = isUnder18AgeRange(value.age_range);
+  const ageMessageId = useId();
 
   return (
     <div className="flex flex-col">
@@ -64,6 +78,22 @@ export function PersonalContextStep({
             onChange={(v) => update('age_range', v)}
           />
         </div>
+
+        {ageBlocked && (
+          <div
+            id={ageMessageId}
+            role="alert"
+            className="px-4 py-3 rounded-xl bg-theme-surface-2 border border-theme-border"
+          >
+            <p className="text-sm font-medium text-theme-text">
+              Amani is for adults 18 and over
+            </p>
+            <p className="mt-1 text-sm text-theme-muted-text leading-relaxed">
+              Thank you for your interest. Amani is built for adults, so we can&rsquo;t
+              continue setting up an account for anyone under 18.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <SelectField
@@ -118,7 +148,11 @@ export function PersonalContextStep({
           variant="primary"
           size="lg"
           className="flex-1"
-          onClick={onNext}
+          onClick={() => {
+            if (!ageBlocked) onNext();
+          }}
+          disabled={ageBlocked}
+          aria-describedby={ageBlocked ? ageMessageId : undefined}
         >
           Continue
         </Button>
