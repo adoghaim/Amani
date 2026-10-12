@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
 import { errorMessage } from './errors.ts';
+import { fetchWithBackoff as realFetchWithBackoff } from './fetchWithBackoff.ts';
 import { deleteUserAccount, StoreSubscriptionAcknowledgementRequiredError } from './account-deletion.ts';
 import {
   ANDROID_PUBLISHER_API,
@@ -18,7 +19,8 @@ import {
  * fake Supabase client and a fake fetchWithBackoff, while the deletion policy and the
  * store teardown are the real modules. Database operations and outbound requests go
  * into one log, so ordering across the two is visible, and the HTTP status is the
- * one the client actually receives.
+ * one the client actually receives. The timeout tests at the end hand it the real
+ * fetchWithBackoff instead, over a stubbed network and a fake clock.
  */
 
 const source = readFileSync(new URL('../delete-user-data/index.ts', import.meta.url), 'utf8');
@@ -31,6 +33,10 @@ const TOKEN = 'synthetic-purchase-token.AO-J1Oz-test';
 
 type Row = Record<string, unknown>;
 type Responder = (url: string, init: RequestInit) => Response;
+/** A reply on the stubbed network: an answer, or no answer until the attempt is aborted. */
+type Reply = Response | 'hang';
+/** Answers one attempt; `attempt` counts from 0 per destination (see `label`). */
+type Network = (url: string, attempt: number) => Reply;
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const status = (code: number) => new Response(null, { status: code });
@@ -76,7 +82,22 @@ function stores(overrides: Partial<Record<string, Responder>> = {}): Responder {
   };
 }
 
-function runHandler(world: { env?: Record<string, string>; iapRows?: Row[]; respond?: Responder }) {
+/** `stores()` on the stubbed network, with per-destination overrides that may hang. */
+function storesNetwork(overrides: Partial<Record<string, (attempt: number) => Reply>> = {}): Network {
+  const answer = stores();
+  return (url, attempt) => {
+    const override = overrides[label(url)];
+    return override ? override(attempt) : answer(url, {});
+  };
+}
+
+function runHandler(world: {
+  env?: Record<string, string>;
+  iapRows?: Row[];
+  respond?: Responder;
+  /** When set, the handler gets the real fetchWithBackoff, and this answers each attempt. */
+  network?: Network;
+}) {
   const env: Record<string, string> = {
     SUPABASE_URL: 'https://project.invalid',
     SUPABASE_ANON_KEY: 'anon',
@@ -86,7 +107,8 @@ function runHandler(world: { env?: Record<string, string>; iapRows?: Row[]; resp
   const iapRows = world.iapRows ?? [];
   const respond = world.respond ?? stores();
   const log: string[] = [];
-  const requests: Array<{ url: string; init: RequestInit }> = [];
+  // `options` is what the handler asked fetchWithBackoff for (fake helper only).
+  const requests: Array<{ url: string; init: RequestInit; options?: unknown }> = [];
 
   const from = (table: string) => {
     let op = `select:${table}`;
@@ -154,11 +176,30 @@ function runHandler(world: { env?: Record<string, string>; iapRows?: Row[]; resp
     key === 'anon'
       ? { auth: { getUser: async () => ({ data: { user: { id: USER } }, error: null }) } }
       : database;
-  const fetchWithBackoff = async (url: string, init: RequestInit) => {
+  const fakeFetchWithBackoff = async (url: string, init: RequestInit, options?: unknown) => {
     log.push(`http:${label(url)}`);
-    requests.push({ url, init });
+    requests.push({ url, init, options });
     return respond(url, init);
   };
+  if (world.network) {
+    // Every attempt the real helper makes is logged, so retries show up as repeats.
+    const answer = world.network;
+    const attempts = new Map<string, number>();
+    vi.stubGlobal('fetch', (input: string | URL, init: RequestInit = {}) => {
+      const url = String(input);
+      const attempt = attempts.get(label(url)) ?? 0;
+      attempts.set(label(url), attempt + 1);
+      log.push(`http:${label(url)}`);
+      requests.push({ url, init });
+      const reply = answer(url, attempt);
+      if (reply !== 'hang') return Promise.resolve(reply);
+      const signal = init.signal as AbortSignal;
+      return new Promise<Response>((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    });
+  }
+  const fetchWithBackoff = world.network ? realFetchWithBackoff : fakeFetchWithBackoff;
   class Stripe {
     constructor() {
       throw new Error('Stripe is not configured in these tests');
@@ -358,5 +399,158 @@ describe('delete-user-data handler — store teardown, executed from source', ()
 
     await expect(call(true)).resolves.toEqual({ status: 200, body: { success: true } });
     expect(outbound(log)).toEqual(['http:revenuecat']);
+  });
+});
+
+describe('delete-user-data handler — what reaches fetchWithBackoff (engineering review D9/D10)', () => {
+  it('every store request asks for 10 s per attempt and 3 tries, the RevenueCat DELETE and the Play cancel included', async () => {
+    const { call, requests } = runHandler({ env: bothEnabled(), iapRows: [playRow()] });
+
+    await expect(call(true)).resolves.toEqual({ status: 200, body: { success: true } });
+
+    expect(requests.map((r) => label(r.url))).toEqual([
+      'google:token',
+      'google:order',
+      'google:state',
+      'google:cancel',
+      'revenuecat',
+    ]);
+    for (const request of requests) {
+      expect(request.options).toEqual({ attemptTimeoutMs: 10_000, tries: 3, initialDelayMs: 250 });
+    }
+  });
+
+  it('the Play cancel asks Google to stop payments (DEVELOPER_REQUESTED_STOP_PAYMENTS)', async () => {
+    const { call, requests } = runHandler({ env: bothEnabled(), iapRows: [playRow()] });
+
+    await expect(call(true)).resolves.toEqual({ status: 200, body: { success: true } });
+
+    const cancel = requests.find((r) => label(r.url) === 'google:cancel')!;
+    expect(cancel.url).toBe(
+      `${ANDROID_PUBLISHER_API}/com.amani.health/purchases/subscriptionsv2/tokens/${TOKEN}:cancel`,
+    );
+    expect(cancel.init.method).toBe('POST');
+    expect(new Headers(cancel.init.headers).get('content-type')).toBe('application/json');
+    expect(JSON.parse(cancel.init.body as string)).toEqual({
+      cancellationContext: { cancellationType: 'DEVELOPER_REQUESTED_STOP_PAYMENTS' },
+    });
+  });
+});
+
+/**
+ * Runs the fake clock until `promise` settles. Every step is also a real
+ * macrotask, so work no timer drives (Web Crypto signing) finishes too.
+ */
+async function settle<T>(promise: Promise<T>): Promise<T> {
+  let settled = false;
+  promise.then(
+    () => {
+      settled = true;
+    },
+    () => {
+      settled = true;
+    },
+  );
+  for (let step = 0; !settled && step < 2_000; step++) await vi.advanceTimersByTimeAsync(500);
+  if (!settled) throw new Error('still pending after 1,000 s of fake time');
+  return promise;
+}
+
+describe('delete-user-data handler — timeouts through the real fetchWithBackoff (engineering review D8)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('a RevenueCat DELETE that times out on every attempt answers 500 with retry, and the auth identity stays', async () => {
+    const { call, log } = runHandler({
+      env: { [REVENUECAT_SECRET_ENV]: RC_KEY },
+      network: storesNetwork({ revenuecat: () => 'hang' }),
+    });
+
+    await expect(settle(call(false))).resolves.toEqual({
+      status: 500,
+      body: {
+        error:
+          'RevenueCat customer deletion failed: the request did not complete. ' +
+          'Account deletion is incomplete; please try again later.',
+        retry: true,
+      },
+    });
+    expect(outbound(log)).toEqual(['http:revenuecat', 'http:revenuecat', 'http:revenuecat']);
+    expect(log).not.toContain('auth:deleteUser');
+  });
+
+  it('a Play cancel that times out on every attempt answers 500, and nothing is deleted', async () => {
+    const { call, log } = runHandler({
+      env: bothEnabled(),
+      iapRows: [playRow()],
+      network: storesNetwork({ 'google:cancel': () => 'hang' }),
+    });
+
+    await expect(settle(call(true))).resolves.toEqual({
+      status: 500,
+      body: {
+        error:
+          'Google Play cancellation failed: the request did not complete. ' +
+          'Account deletion is incomplete; please try again later.',
+        retry: true,
+      },
+    });
+    expect(outbound(log)).toEqual([
+      'http:google:token',
+      'http:google:order',
+      'http:google:state',
+      'http:google:cancel',
+      'http:google:cancel',
+      'http:google:cancel',
+    ]);
+    expect(log).not.toContain('storage:list');
+    expect(log.some((e) => e.startsWith('delete:'))).toBe(false);
+    expect(log).not.toContain('auth:deleteUser');
+  });
+
+  it('a RevenueCat DELETE that timed out once and then finds the customer gone completes the deletion', async () => {
+    const { call, log } = runHandler({
+      env: { [REVENUECAT_SECRET_ENV]: RC_KEY },
+      network: storesNetwork({ revenuecat: (attempt) => (attempt === 0 ? 'hang' : status(404)) }),
+    });
+
+    await expect(settle(call(false))).resolves.toEqual({ status: 200, body: { success: true } });
+    expect(outbound(log)).toEqual(['http:revenuecat', 'http:revenuecat']);
+    expect(log.at(-1)).toBe('auth:deleteUser');
+  });
+
+  it('a RevenueCat 404 is answered once, not retried, and the deletion completes', async () => {
+    const { call, log } = runHandler({
+      env: { [REVENUECAT_SECRET_ENV]: RC_KEY },
+      network: storesNetwork({ revenuecat: () => status(404) }),
+    });
+
+    await expect(settle(call(false))).resolves.toEqual({ status: 200, body: { success: true } });
+    expect(outbound(log)).toEqual(['http:revenuecat']);
+    expect(log.at(-1)).toBe('auth:deleteUser');
+  });
+
+  it('with the Play secret unset, no request reaches Google; the acknowledged Play subscription is left to the user', async () => {
+    const { call, log } = runHandler({
+      env: { [REVENUECAT_SECRET_ENV]: RC_KEY },
+      iapRows: [playRow()],
+      network: storesNetwork(),
+    });
+
+    await expect(settle(call(true))).resolves.toEqual({ status: 200, body: { success: true } });
+    expect(outbound(log)).toEqual(['http:revenuecat']);
+  });
+
+  it('with neither store secret set, nothing reaches the network at all', async () => {
+    const { call, log } = runHandler({ iapRows: [playRow()], network: storesNetwork() });
+
+    await expect(settle(call(true))).resolves.toEqual({ status: 200, body: { success: true } });
+    expect(outbound(log)).toEqual([]);
+    expect(log.at(-1)).toBe('auth:deleteUser');
   });
 });

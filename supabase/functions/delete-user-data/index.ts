@@ -55,13 +55,13 @@ Deno.serve(async (req: Request) => {
     const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY");
     const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-11-20.acacia" }) : null;
 
-    // Play cancellation and RevenueCat customer deletion. Every request and
-    // its failure policy live in ../_shared/store-teardown.ts; each step is off
-    // while its secret is unset.
+    // Play cancellation and RevenueCat customer deletion. Every request, its
+    // timeout and retry policy (STORE_REQUEST_POLICY) and its failure policy
+    // live in ../_shared/store-teardown.ts; each step is off while its secret
+    // is unset.
     const storeTeardown = createStoreTeardownActions({
       env: (name) => Deno.env.get(name),
-      http: (url, init) =>
-        fetchWithBackoff(url, init, { tries: 3, initialDelayMs: 250, attemptTimeoutMs: 10_000 }),
+      http: fetchWithBackoff,
       now: () => Date.now(),
       log: (level, message) => console[level](`[delete-user-data] ${message}`),
     });

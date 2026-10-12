@@ -21,22 +21,41 @@
  * Pure in the sense `iap-verification.ts` is: no Deno, no Supabase, no network
  * or clock it was not handed. Requests go through the injected `HttpPort` (the
  * handler wires `fetchWithBackoff`) and secrets through the `EnvPort`, so
- * Vitest drives every branch with fakes. The one platform API used directly is
- * Web Crypto, which Deno and Node both ship, to sign the service-account
- * assertion.
+ * Vitest drives every branch with fakes. Each request carries its own timeout
+ * and retry policy, `STORE_REQUEST_POLICY`, so the policy is decided and tested
+ * here rather than in the handler. The one platform API used directly is Web
+ * Crypto, which Deno and Node both ship, to sign the service-account assertion.
  *
  * Failure policy: anything that is not a clear "done" or "already gone" throws
  * `StoreTeardownError`, so the handler answers non-2xx and the account is never
- * reported deleted. A secret that is set but unusable throws too: a broken
- * credential must not quietly pass for a disabled feature.
+ * reported deleted. That includes a request whose every attempt timed out. A
+ * secret that is set but unusable throws too: a broken credential must not
+ * quietly pass for a disabled feature.
  */
 
 import type { AccountDeletionActions, PlaySubscriptionToCancel } from "./account-deletion.ts";
 
 // ─── Ports ────────────────────────────────────────────────────────────────
 
+/**
+ * The options each store request hands to `fetchWithBackoff`. The field names
+ * are that helper's own, so the handler wires it as the `HttpPort` unchanged.
+ */
+export interface StoreRequestPolicy {
+  /** Each attempt is aborted after this long. */
+  attemptTimeoutMs: number;
+  /** Attempts in all, the first included. 429, 5xx, no answer and a timeout are retried. */
+  tries: number;
+  /** Wait before the second attempt; it doubles before each one after that. */
+  initialDelayMs: number;
+}
+
 /** The one network primitive. The handler wires `fetchWithBackoff`. */
-export type HttpPort = (url: string, init: RequestInit) => Promise<Response>;
+export type HttpPort = (
+  url: string,
+  init: RequestInit,
+  policy: Readonly<StoreRequestPolicy>,
+) => Promise<Response>;
 
 /** Reads a server secret by name. The handler wires `Deno.env.get`. */
 export type EnvPort = (name: string) => string | undefined;
@@ -70,6 +89,27 @@ export const ANDROID_PUBLISHER_API =
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 export const ANDROID_PUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher";
+
+/**
+ * Every store request is a business call, so each attempt gets 10 s. Every one
+ * is also safe to repeat, so each gets 3 tries (engineering review D10):
+ *
+ *   - the token exchange only mints a short-lived access token, and both Play
+ *     lookups only read;
+ *   - a repeated RevenueCat DELETE answers 404, which is already-deleted success;
+ *   - a repeated Play cancel can neither charge nor refund. If Google refuses
+ *     one whose first attempt already landed, the step fails non-2xx, and the
+ *     user's retry finds the subscription CANCELED and skips it.
+ *
+ * When the last attempt times out, `fetchWithBackoff` rejects, `send` turns that
+ * into a `StoreTeardownError`, and the deletion answers non-2xx (D8). A timeout
+ * is never read as success.
+ */
+export const STORE_REQUEST_POLICY: Readonly<StoreRequestPolicy> = Object.freeze({
+  attemptTimeoutMs: 10_000,
+  tries: 3,
+  initialDelayMs: 250,
+});
 
 /**
  * Google's two cancellation types differ in the one way that matters here:
@@ -112,13 +152,14 @@ function isPresent(value: unknown): value is string {
 }
 
 /**
- * Sends one request. A request that never got an answer becomes a
+ * Sends one request under `STORE_REQUEST_POLICY`. A request that never got an
+ * answer (no connection, or every attempt timed out) becomes a
  * `StoreTeardownError` naming the step only: the request itself carries a
  * credential, so neither it nor its URL goes into the message.
  */
 async function send(http: HttpPort, step: string, url: string, init: RequestInit): Promise<Response> {
   try {
-    return await http(url, init);
+    return await http(url, init, STORE_REQUEST_POLICY);
   } catch (cause) {
     throw new StoreTeardownError(`${step} failed: the request did not complete.`, { cause });
   }

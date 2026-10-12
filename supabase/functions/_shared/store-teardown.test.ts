@@ -1,5 +1,6 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { fetchWithBackoff } from './fetchWithBackoff.ts';
 import {
   ANDROID_PACKAGE_NAME,
   ANDROID_PUBLISHER_API,
@@ -9,6 +10,7 @@ import {
   PLAY_SERVICE_ACCOUNT_ENV,
   REVENUECAT_SECRET_ENV,
   REVENUECAT_SUBSCRIBERS_API,
+  STORE_REQUEST_POLICY,
   StoreTeardownError,
   cancelPlaySubscriptions,
   createStoreTeardownActions,
@@ -17,6 +19,7 @@ import {
   parsePlayServiceAccount,
   signServiceAccountAssertion,
   type HttpPort,
+  type StoreRequestPolicy,
 } from './store-teardown.ts';
 
 // Synthetic values only. None of these is, or resembles, a real credential.
@@ -37,7 +40,9 @@ interface Call {
 
 function fakeHttp(respond: (call: Call) => Response | Promise<Response>) {
   const calls: Call[] = [];
-  const http: HttpPort = async (url, init) => {
+  // What each request asked fetchWithBackoff for, in the same order as `calls`.
+  const policies: Array<Readonly<StoreRequestPolicy>> = [];
+  const http: HttpPort = async (url, init, policy) => {
     const call: Call = {
       method: init.method ?? 'GET',
       url,
@@ -45,9 +50,10 @@ function fakeHttp(respond: (call: Call) => Response | Promise<Response>) {
       body: typeof init.body === 'string' ? init.body : null,
     };
     calls.push(call);
+    policies.push(policy);
     return respond(call);
   };
-  return { http, calls };
+  return { http, calls, policies };
 }
 
 const json = (body: unknown, status = 200) =>
@@ -558,5 +564,250 @@ describe('createStoreTeardownActions', () => {
     ]);
     const logged = JSON.stringify(log.mock.calls);
     for (const secret of [USER, RC_KEY, ACCESS, TOKEN, ORDER]) expect(logged).not.toContain(secret);
+  });
+});
+
+// ─── Timeouts and retries (engineering review D8/D10) ─────────────────────
+
+/** What the review fixed for every store request: a business call that is safe to repeat. */
+const D10_POLICY = { attemptTimeoutMs: 10_000, tries: 3, initialDelayMs: 250 };
+const STOP_PAYMENTS = { cancellationContext: { cancellationType: 'DEVELOPER_REQUESTED_STOP_PAYMENTS' } };
+
+describe('request policy (engineering review D10)', () => {
+  it('is 10 s per attempt and 3 tries, and cannot be changed at run time', () => {
+    expect(STORE_REQUEST_POLICY).toEqual(D10_POLICY);
+    expect(Object.isFrozen(STORE_REQUEST_POLICY)).toBe(true);
+  });
+
+  it('the RevenueCat DELETE asks fetchWithBackoff for it', async () => {
+    const { http, calls, policies } = fakeHttp(() => json({ app_user_id: USER, deleted: true }));
+    await deleteRevenueCatSubscriber(http, RC_KEY, USER);
+    expect(calls.map((c) => c.method)).toEqual(['DELETE']);
+    expect(policies).toEqual([D10_POLICY]);
+  });
+
+  it('every Google request asks fetchWithBackoff for it, the cancel included', async () => {
+    const { http, calls, policies } = google();
+    await cancelPlaySubscriptions(deps(http), serviceAccountJson, play());
+    expect(calls.map(stepOf)).toEqual(['token', 'order', 'state', 'cancel']);
+    expect(policies).toEqual([D10_POLICY, D10_POLICY, D10_POLICY, D10_POLICY]);
+  });
+});
+
+interface Attempt {
+  url: string;
+  method: string;
+  body: string | null;
+  signal: AbortSignal;
+  /** Fake-clock time the attempt went out. */
+  at: number;
+}
+
+/**
+ * The network under the real fetchWithBackoff. `answer` replies to each
+ * attempt, or 'hang' leaves it unanswered until fetchWithBackoff's own timer
+ * aborts it.
+ */
+function network(answer: (attempt: Attempt, index: number) => Response | 'hang') {
+  const attempts: Attempt[] = [];
+  vi.stubGlobal('fetch', (input: string | URL, init: RequestInit = {}) => {
+    const attempt: Attempt = {
+      url: String(input),
+      method: init.method ?? 'GET',
+      body: typeof init.body === 'string' ? init.body : null,
+      signal: init.signal as AbortSignal,
+      at: Date.now(),
+    };
+    attempts.push(attempt);
+    const reply = answer(attempt, attempts.length - 1);
+    if (reply !== 'hang') return Promise.resolve(reply);
+    return new Promise<Response>((_, reject) => {
+      attempt.signal.addEventListener('abort', () => reject(attempt.signal.reason), { once: true });
+    });
+  });
+  return attempts;
+}
+
+const stepOfAttempt = (attempt: Attempt) =>
+  stepOf({ method: attempt.method, url: attempt.url, headers: {}, body: attempt.body });
+const isCancel = (attempt: Attempt) => stepOfAttempt(attempt) === 'cancel';
+
+/** Google answering every step in time, unless a step is told to hang or answer otherwise. */
+function googleNetwork(overrides: Partial<Record<Step, () => Response | 'hang'>> = {}) {
+  return network((attempt) => {
+    const step = stepOfAttempt(attempt);
+    const override = overrides[step];
+    if (override) return override();
+    switch (step) {
+      case 'token':
+        return json({ access_token: ACCESS });
+      case 'order':
+        return json({ purchaseToken: TOKEN });
+      case 'state':
+        return json({ subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE' });
+      case 'cancel':
+        // Google's reference: "If successful, the response body is empty."
+        return status(200);
+    }
+  });
+}
+
+/**
+ * Runs the fake clock until `promise` settles. Every step is also a real
+ * macrotask, so work no timer drives (Web Crypto signing) finishes too.
+ */
+async function settle<T>(promise: Promise<T>): Promise<{ value?: T; error?: unknown }> {
+  let outcome: { value?: T; error?: unknown } | undefined;
+  promise.then(
+    (value) => {
+      outcome = { value };
+    },
+    (error: unknown) => {
+      outcome = { error };
+    },
+  );
+  for (let step = 0; !outcome && step < 2_000; step++) await vi.advanceTimersByTimeAsync(500);
+  if (!outcome) throw new Error('still pending after 1,000 s of fake time');
+  return outcome;
+}
+
+const realHttp = { http: fetchWithBackoff, now: () => NOW };
+
+describe('through the real fetchWithBackoff: timeouts and retries (engineering review D8/D10)', () => {
+  let t0: number;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    t0 = Date.now();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('RevenueCat: each attempt gets the full 10 s before it is aborted', async () => {
+    const attempts = network(() => 'hang');
+    const result = deleteRevenueCatSubscriber(fetchWithBackoff, RC_KEY, USER).catch((error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]!.signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(attempts[0]!.signal.aborted).toBe(true);
+
+    await vi.runAllTimersAsync();
+    expect(await result).toBeInstanceOf(StoreTeardownError);
+  });
+
+  it('RevenueCat: every attempt times out, so after 3 attempts the step fails; it never reports "deleted"', async () => {
+    const attempts = network(() => 'hang');
+
+    const { value, error } = await settle(deleteRevenueCatSubscriber(fetchWithBackoff, RC_KEY, USER));
+
+    expect(value).toBeUndefined();
+    // Aborted at 10 s each, with 250 ms and then 500 ms of backoff in between.
+    expect(attempts.map((a) => a.at - t0)).toEqual([0, 10_250, 20_750]);
+    expect(attempts.every((a) => a.method === 'DELETE' && a.signal.aborted)).toBe(true);
+    expect(error).toBeInstanceOf(StoreTeardownError);
+    expect((error as Error).message).toBe(
+      'RevenueCat customer deletion failed: the request did not complete. ' +
+        'Account deletion is incomplete; please try again later.',
+    );
+    expect(((error as Error).cause as Error).name).toBe('AbortError');
+  });
+
+  it('RevenueCat: a retry that finds the customer gone (the timed-out DELETE had landed) is already-deleted success', async () => {
+    const attempts = network((_attempt, index) => (index === 0 ? 'hang' : status(404)));
+
+    const { value, error } = await settle(deleteRevenueCatSubscriber(fetchWithBackoff, RC_KEY, USER));
+
+    expect(error).toBeUndefined();
+    expect(value).toBe('already_gone');
+    expect(attempts.map((a) => a.at - t0)).toEqual([0, 10_250]);
+  });
+
+  it('RevenueCat: a 404 is answered once, not retried, and is already-deleted success', async () => {
+    const attempts = network(() => json({ code: 7259, message: 'Subscriber not found' }, 404));
+
+    const { value } = await settle(deleteRevenueCatSubscriber(fetchWithBackoff, RC_KEY, USER));
+
+    expect(value).toBe('already_gone');
+    expect(attempts).toHaveLength(1);
+  });
+
+  it('RevenueCat: a 5xx is retried, and a third 5xx still fails the step', async () => {
+    const attempts = network(() => status(503));
+
+    const { error } = await settle(deleteRevenueCatSubscriber(fetchWithBackoff, RC_KEY, USER));
+
+    expect(attempts).toHaveLength(3);
+    expect(error).toBeInstanceOf(StoreTeardownError);
+    expect((error as Error).message).toBe(
+      'RevenueCat customer deletion failed (HTTP 503). Account deletion is incomplete; please try again later.',
+    );
+  });
+
+  it('Play: the cancel times out on every attempt; all 3 ask Google to stop payments, then the step fails', async () => {
+    const attempts = googleNetwork({ cancel: () => 'hang' });
+
+    const { value, error } = await settle(cancelPlaySubscriptions(realHttp, serviceAccountJson, play()));
+
+    expect(value).toBeUndefined();
+    const cancels = attempts.filter(isCancel);
+    expect(cancels.map((a) => a.at - cancels[0]!.at)).toEqual([0, 10_250, 20_750]);
+    for (const cancel of cancels) {
+      expect(cancel.method).toBe('POST');
+      expect(cancel.url).toBe(`${PLAY_APP}/purchases/subscriptionsv2/tokens/${TOKEN}:cancel`);
+      expect(JSON.parse(cancel.body!)).toEqual(STOP_PAYMENTS);
+      expect(cancel.signal.aborted).toBe(true);
+    }
+    expect(error).toBeInstanceOf(StoreTeardownError);
+    expect((error as Error).message).toBe(
+      'Google Play cancellation failed: the request did not complete. ' +
+        'Account deletion is incomplete; please try again later.',
+    );
+  });
+
+  it.each<Step>(['token', 'order', 'state'])(
+    'Play: a %s request that times out on every attempt fails the step, and no cancel is sent',
+    async (step) => {
+      const attempts = googleNetwork({ [step]: () => 'hang' });
+
+      const { error } = await settle(cancelPlaySubscriptions(realHttp, serviceAccountJson, play()));
+
+      expect(error).toBeInstanceOf(StoreTeardownError);
+      expect(attempts.filter((a) => stepOfAttempt(a) === step)).toHaveLength(3);
+      expect(attempts.some(isCancel)).toBe(false);
+    },
+  );
+
+  it('Play: a cancel answered 503 is retried with the same stop-payments body, and an accepted retry completes it', async () => {
+    let cancels = 0;
+    const attempts = googleNetwork({ cancel: () => (++cancels === 1 ? status(503) : status(200)) });
+
+    const { value } = await settle(cancelPlaySubscriptions(realHttp, serviceAccountJson, play()));
+
+    expect(value).toEqual({ kind: 'processed', results: ['cancelled'] });
+    const sent = attempts.filter(isCancel);
+    expect(sent).toHaveLength(2);
+    for (const cancel of sent) expect(JSON.parse(cancel.body!)).toEqual(STOP_PAYMENTS);
+  });
+
+  it('Play: a 404 from the cancel is answered once, not retried, and is success', async () => {
+    const attempts = googleNetwork({ cancel: () => status(404) });
+
+    const { value } = await settle(cancelPlaySubscriptions(realHttp, serviceAccountJson, play()));
+
+    expect(value).toEqual({ kind: 'processed', results: ['not_found'] });
+    expect(attempts.filter(isCancel)).toHaveLength(1);
+  });
+
+  it('Play: with its secret unset, nothing reaches the network', async () => {
+    const attempts = googleNetwork();
+
+    const { value } = await settle(cancelPlaySubscriptions(realHttp, undefined, play()));
+
+    expect(value).toEqual({ kind: 'disabled', uncancelled: 1 });
+    expect(attempts).toHaveLength(0);
   });
 });
