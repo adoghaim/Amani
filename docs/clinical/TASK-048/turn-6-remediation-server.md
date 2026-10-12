@@ -4,13 +4,13 @@ Base `558bea0`. The foundation is unchanged and every existing migration is froz
 
 ## Corrections to the directive (with evidence)
 
-1. **The wrapper must not set the pointer itself.** `append_interpretation_version_internal` already moves `interpretation_current_versions` in the same statement as the append (`20261010000000:222-223`). It deliberately leaves the pointer alone when a completed request is retried (`:204-205`, `H048-RETRY-NO-REWIND`). If the wrapper also wrote the pointer, an old retry would rewind the selection. Mutation `R-POINTER-REWIND` adds exactly that write and must turn `H048R-RETRY-NO-REWIND` red. So the wrapper "sets the pointer" only by calling the primitive.
+1. **The wrapper must not set the pointer itself.** `append_interpretation_version_internal` already moves `interpretation_current_versions` in the same statement as the append (`20261012000004:222-223`). It deliberately leaves the pointer alone when a completed request is retried (`:204-205`, `H048-RETRY-NO-REWIND`). If the wrapper also wrote the pointer, an old retry would rewind the selection. Mutation `R-POINTER-REWIND` adds exactly that write and must turn `H048R-RETRY-NO-REWIND` red. So the wrapper "sets the pointer" only by calling the primitive.
 2. **"Resolve `p_expected_current` server-side" from the current pointer alone breaks idempotent retry.** Take a retry that arrives after the first append. The pointer is then the new version, but the stored row's parent is `NULL`, so the primitive raises `22023 request identity reused with different output`. The wrapper therefore uses the existing row's `parent_version_id` when `(report, request_id)` is already committed, and the current pointer otherwise. Mutation `R-RETRY-PARENT` removes the lookup and must fail `H048R-IDEMPOTENT-RETRY: 22023`.
 3. **Owner controls "1, 2, 3, 4, 5, 8, 9, 10, 15, 16, 17" are not in my addendum.** The directive says `OWNER-RULING.md` and `CONTRACT.md` are inlined, but they are not. I could not map those numbers. Below, every control is mapped instead to the acceptance criteria, to the turn-2 §6 mutation table and to the directive's explicit list. **The Lead must reconcile the owner's numbering.**
 
-## Deliverable A: `20261011000000_legacy_remediation_eligibility.sql`
+## Deliverable A: `20261012000005_legacy_remediation_eligibility.sql`
 
-One-shot, like the foundation. Replaying it raises `TASK-048 remediation wrapper is already applied`. Applying it without the foundation raises `Apply the version foundation 20261010000000 …`. It writes no rows.
+One-shot, like the foundation. Replaying it raises `TASK-048 remediation wrapper is already applied`. Applying it without the foundation raises `Apply the version foundation 20261012000004 …`. It writes no rows.
 
 ### `evaluate_legacy_remediation(p_user_id, p_report_id) → (eligible, history_id, claim_id)`
 

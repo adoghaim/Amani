@@ -1,4 +1,4 @@
--- Rollback for 20261008000000 (operator script; never applied by the ledger).
+-- Rollback for 20261012000002 (operator script; never applied by the ledger).
 -- Restores the 20260927000001 read boundary byte for byte and drops the gate.
 -- Re-runnable. run.sh proves the catalog after rollback equals the catalog
 -- before the forward, and that the pre-gate fixture expectations hold again.

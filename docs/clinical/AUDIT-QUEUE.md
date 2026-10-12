@@ -854,6 +854,6 @@ question is prepared in `docs/clinical/BACKLOG-1.0.7-HANDOFF.md` for the Lead's 
 
 ### CF-10 — V2-03 prerequisite — repository audit status is not database status
 
-The frozen V2-01 migration `20261006000000` emits UNKNOWN for all 198 shipping ranges. Exactly 43 differ from the catalog: 35 DISPUTED and eight NEEDS_CONTEXT. A regression test compares every retained range field and bounds the divergence to those exact IDs and review_status alone; the audit-only fields are deliberately omitted. Candidate rows are excluded from the frozen SQL entirely.
+The frozen V2-01 migration `20261012000000` emits UNKNOWN for all 198 shipping ranges. Exactly 43 differ from the catalog: 35 DISPUTED and eight NEEDS_CONTEXT. A regression test compares every retained range field and bounds the divergence to those exact IDs and review_status alone; the audit-only fields are deliberately omitted. Candidate rows are excluded from the frozen SQL entirely.
 
 **V2-03 must introduce a new authorized migration to carry current review status into the database. Until it ships, the database is not a source of audit truth and nothing may read audit status from it.** The frozen migration must not be edited. Open question: what new migration and consumer gate will persist current dispositions and candidate provenance without rewriting shipping history? Required artifact: separately authorized persistence design, new migration, and integration tests proving status parity before any database audit-status consumer is enabled.

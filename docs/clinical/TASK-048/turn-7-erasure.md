@@ -1,5 +1,16 @@
 # TASK-048 turn 7: turn 6 made provable; account-erasure deadlock closed
 
+> **Superseded for account deletion by PK-03e-K (2026-10-12, owner decision).**
+> Production applied `20261011000000_delete_user_data_ordered.sql` (PK-03e-E,
+> PR #92) before any V2 migration, so the V2 migrations were renumbered to
+> `20261012000000`..`20261012000008` (the version numbers below were rewritten
+> to match). `delete-user-data` no longer calls `erase_reports`; it makes one
+> call to `public.delete_user_data`, which `20261012000100_delete_user_data_v2.sql`
+> redefines to erase the V2 interpretation graph through the `lab_reports`
+> cascade (the guards' sanctioned path), proven by harness Case 13.
+> `erase_reports` and `delete_interpretations` are left as defined here, unused
+> by account deletion; a later migration can retire them.
+
 Base `45267a1`. Nothing in `src/**`, `get-interpretation/**`, readers, frozen
 migrations, tiers, pricing, Stripe or CI changed. No copy.
 
@@ -94,9 +105,9 @@ is persisted and the response is 503.
 
 Those are concurrent writers on one graph, taking locks in opposite orders.
 
-### Migration `20261011000001_erase_reports.sql`
+### Migration `20261012000006_erase_reports.sql`
 
-- It is one-shot and requires `20261011000000`.
+- It is one-shot and requires `20261012000005`.
 - `erase_reports(uuid[])` is service-only, `SECURITY DEFINER`, with
   `search_path=pg_catalog,public`.
 - It locks the rows in deterministic order (`ORDER BY id FOR UPDATE`) and then

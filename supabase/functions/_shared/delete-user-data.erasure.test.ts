@@ -6,21 +6,19 @@ import { transformSync } from 'esbuild';
  * Executes delete-user-data's real `deleteDataTables` from source (the
  * entitlement-response.test.ts technique) against a recording fake. Every
  * query records when it starts executing and when it settles, and the RPC
- * settles only on a later macrotask, so any overlap with the report-graph
- * erasure is visible. The SQL side (erase_reports deletes the whole graph, no
- * refund, service only) is proven in
- * supabase/migrations/__verification__/interpretation-versions.erase-reports.sql. A real deadlock
- * needs two connections and is not reproducible in a fake; this pins the shape
- * that removed it: one awaited erase_reports, nothing concurrent on the graph.
+ * settles only on a later macrotask, so any overlap would be visible.
+ *
+ * PK-03e-K (owner decision): on V2 the handler erases through ONE call to
+ * public.delete_user_data (PK-03e-E / PR #92, redefined for V2's guarded
+ * interpretation graph by 20261012000100), not through erase_reports plus a
+ * per-table sweep. The SQL side (lock order, cascade through the V2 graph,
+ * overlapping deletions, post-condition) is proven by harness Case 13 in
+ * supabase/migrations/__verification__/run.sh; the retry policy by
+ * account-deletion.test.ts. A real deadlock needs two connections and is not
+ * reproducible in a fake; this pins the shape that removed it.
  */
 
 const source = readFileSync(new URL('../delete-user-data/index.ts', import.meta.url), 'utf8');
-// Every delete the function may issue after erasure: the unchanged user-keyed
-// sweep (lab_reports included, by user_id) and the profile row.
-const USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introductory_deep_access_claims',
-  'complimentary_entitlements', 'lab_reports', 'period_logs', 'symptom_logs', 'notification_preferences',
-  'reminders', 'audit_events', 'rate_limits', 'iap_beta_testers', 'users'];
-
 function slice(startMarker: string, endMarker: string) {
   const start = source.indexOf(startMarker);
   const end = source.indexOf(endMarker, start);
@@ -51,7 +49,7 @@ function deleteDataTablesFrom(methodSource: string) {
 
 type Event = { at: number; kind: 'start' | 'end'; op: string };
 
-function recordingSupabase(reportIds: string[], opts: { eraseError?: string } = {}) {
+function recordingSupabase(reportIds: string[], opts: { eraseError?: string; eraseCode?: string } = {}) {
   const events: Event[] = [];
   let clock = 0;
   const run = (op: string, result: () => unknown, deferred: boolean) => {
@@ -74,60 +72,51 @@ function recordingSupabase(reportIds: string[], opts: { eraseError?: string } = 
         .then(done, fail);
     return query;
   };
-  const rpc = (name: string) => run(`rpc:${name}`,
-    () => ({ data: null, error: name === 'erase_reports' && opts.eraseError ? { message: opts.eraseError } : null }), true);
-  return { client: { from, rpc }, events };
+  const rpcArgs: unknown[] = [];
+  const rpc = (name: string, args?: unknown) => {
+    rpcArgs.push(args);
+    return run(`rpc:${name}`, () => ({ data: null,
+      error: name === 'delete_user_data' && opts.eraseError ? { message: opts.eraseError, code: opts.eraseCode } : null }), true);
+  };
+  return { client: { from, rpc }, events, rpcArgs };
 }
 
 const started = (events: Event[]) => events.filter(e => e.kind === 'start').map(e => e.op);
 const endOf = (events: Event[], op: string) => events.find(e => e.kind === 'end' && e.op === op)!.at;
 
-describe('delete-user-data report-graph erasure (executed from source)', () => {
+describe('delete-user-data account erasure (executed from source)', () => {
   const method = slice('async deleteDataTables(userId) {', 'async deleteAuthUser(');
   const deleteDataTables = deleteDataTablesFrom(method);
 
-  it('awaits erase_reports for every report before any other delete starts', async () => {
+  it('erases through exactly one awaited delete_user_data call and nothing else', async () => {
     const fake = recordingSupabase(['r2', 'r1']);
     await deleteDataTables(fake.client)('u');
-    const ops = started(fake.events);
-    expect(ops[0]).toBe('select:lab_reports');
-    expect(ops[1]).toBe('rpc:erase_reports');
-    const erased = endOf(fake.events, 'rpc:erase_reports');
-    const writesAfterList = fake.events.filter(e => e.kind === 'start' && e.op !== 'select:lab_reports');
-    for (const e of writesAfterList.slice(1)) expect(e.at).toBeGreaterThan(erased);
-    // The rest of the function is unchanged: user-keyed sweeps, profile last.
-    expect(ops.at(-1)).toBe('delete:users');
-    expect(ops).toContain('delete:lab_reports');
+    expect(started(fake.events)).toEqual(['rpc:delete_user_data']);
+    expect(fake.rpcArgs).toEqual([{ p_user_id: 'u' }]);
   });
 
-  it('touches the report graph only through erase_reports, never delete_interpretations', async () => {
+  it('never touches the report graph through erase_reports, delete_interpretations or a per-table sweep', async () => {
     const fake = recordingSupabase(['r1']);
     await deleteDataTables(fake.client)('u');
     const ops = started(fake.events);
-    expect(ops.filter(op => op.startsWith('rpc:'))).toEqual(['rpc:erase_reports']);
-    // No per-report child delete (biomarkers, report_items, report_analytes) remains.
-    expect(ops.filter(op => op.startsWith('delete:'))).toEqual(USER_KEYED.map(t => `delete:${t}`));
+    expect(ops.filter(op => op.startsWith('delete:') || op.startsWith('select:'))).toEqual([]);
+    expect(source).not.toContain('erase_reports');
     expect(source).not.toContain('delete_interpretations');
+    expect(method).not.toMatch(/\.from\(/);
     expect(method).not.toMatch(/Promise\.all(Settled)?\s*\(/);
   });
 
-  it('the user-keyed lab_reports sweep runs only after the erase has settled', async () => {
-    const fake = recordingSupabase(['r1']);
-    await deleteDataTables(fake.client)('u');
-    const sweep = fake.events.find(e => e.kind === 'start' && e.op === 'delete:lab_reports')!.at;
-    expect(sweep).toBeGreaterThan(endOf(fake.events, 'rpc:erase_reports'));
-  });
-
-  it('a user with no reports makes no erasure call', async () => {
+  it('a user with no reports is still erased by the same single call', async () => {
     const fake = recordingSupabase([]);
     await deleteDataTables(fake.client)('u');
-    expect(started(fake.events).filter(op => op.startsWith('rpc:'))).toEqual([]);
+    expect(started(fake.events)).toEqual(['rpc:delete_user_data']);
   });
 
-  it('a failed erasure stops deletion before any user-keyed table is touched', async () => {
-    const fake = recordingSupabase(['r1'], { eraseError: 'boom' });
-    await expect(deleteDataTables(fake.client)('u')).rejects.toThrow('Report erasure failed: boom');
-    expect(started(fake.events)).toEqual(['select:lab_reports', 'rpc:erase_reports']);
+  it('a failed erasure throws and keeps the SQLSTATE, so the shared module can retry 40P01', async () => {
+    const fake = recordingSupabase(['r1'], { eraseError: 'deadlock detected', eraseCode: '40P01' });
+    await expect(deleteDataTables(fake.client)('u')).rejects.toMatchObject({
+      message: 'Erasing user data failed: deadlock detected', code: '40P01' });
+    expect(started(fake.events)).toEqual(['rpc:delete_user_data']);
   });
 
   it('negative control: the recorder sees the old shape start child deletes before the RPC settles', async () => {

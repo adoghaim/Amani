@@ -86,7 +86,7 @@ test('review table is readable by service_role only: no client role has a grant 
 });
 
 test('new migration is dated after the frozen one and covered by the SQL parse guard', () => {
-  assert.ok(reviewMigrationArtifact.split('/').at(-1).slice(0, 14) >= '20261007000000');
+  assert.ok(reviewMigrationArtifact.split('/').at(-1).slice(0, 14) >= '20261012000001');
   const files = clinicalSqlFiles();
   for (const name of [reviewMigrationArtifact, reviewRollbackArtifact, reviewVerifyArtifact,
     'tools/clinical/review-status.sql.txt', 'tools/clinical/review-status.rollback.sql.txt']) assert.ok(files.includes(name), name);

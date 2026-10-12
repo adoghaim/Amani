@@ -13,9 +13,9 @@ The repair closes it at both layers: the application never persists an anchored 
 through `commit_deep_access_v2` / `save_interpretation`, and the database refuses the
 overwrite even if it tried.
 
-## 1. Database — `20261011000003_interpretation_version_ledger.sql`
+## 1. Database — `20261012000008_interpretation_version_ledger.sql`
 
-One-shot; refuses unless the reader cutover `20261011000002` is installed (its prerequisites
+One-shot; refuses unless the reader cutover `20261012000007` is installed (its prerequisites
 imply the foundation and the writer). Writes no row. Edits nothing frozen except through
 `CREATE OR REPLACE` / `COMMENT ON`.
 
@@ -78,7 +78,7 @@ Production: forward-only. Revoke service `EXECUTE` on `commit_deep_access_versio
 anchored Free regeneration then fails closed with nothing written). Never relax the guard in
 production. Disposable pre-use rehearsal: `__verification__/interpretation-versions.ledger-
 rollback.sql`, **generated mechanically** from the original definitions (`20260925000001`
-as retargeted by the `20260926000001` cutover, and `20261010000000`) so every restored body
+as retargeted by the `20260926000001` cutover, and `20261012000004`) so every restored body
 is byte-identical; the harness proves catalog, comments and `commit_deep_access` behaviour
 return exactly, then re-forwards.
 
@@ -140,7 +140,7 @@ a failed model is appended (red). The pre-existing cutover / request-id controls
 Files: `interpretation-versions.ledger.sql` (properties, both flag states as self-undoing
 rounds), `.ledger-parity.sql` (commit_deep_access parity, self-checking and printed),
 `.ledger-rollback.sql` (generated rehearsal). `interpretation-versions.verify.sql` is now
-state-aware: before `20261011000003` it still proves the un-versioned current row writable
+state-aware: before `20261012000008` it still proves the un-versioned current row writable
 (`H048-CURRENT-ROW-STILL-WRITABLE`); after it, frozen (`H048-CURRENT-ROW-FROZEN`, `55000`).
 
 Sequence: out-of-order refusal on `flagged_before` and `task048_concurrency` (definitions

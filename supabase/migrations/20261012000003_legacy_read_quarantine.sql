@@ -8,7 +8,7 @@ DO $$ BEGIN
     OR to_regprocedure('public.interpretation_claim_gate(jsonb)') IS NULL
     OR to_regprocedure('public.interpretation_floor(jsonb,text)') IS NULL
     OR to_regprocedure('public.read_interpretation_for_server(uuid,uuid,boolean)') IS NULL THEN
-    RAISE EXCEPTION 'Apply the visibility chain through 20261008000000 before legacy quarantine';
+    RAISE EXCEPTION 'Apply the visibility chain through 20261012000002 before legacy quarantine';
   END IF;
 END $$;
 

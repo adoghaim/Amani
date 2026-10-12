@@ -43,7 +43,7 @@ been run by this implementer. Turn-4 command results are recorded below separate
   specimen remains the V2-01 null projection. This is a range-field parity test,
   not a claim that all analyte audit metadata is persisted.
 - **V2-03 prerequisite: a new authorized migration must carry current review
-  status into the database. `20261006000000` is frozen. Until that new migration
+  status into the database. `20261012000000` is frozen. Until that new migration
   ships, the database is not a source of audit truth and nothing may read audit
   status from it.** CF-10 repeats this gate and asks for the migration and consumer
   integration tests. Candidate persistence likewise needs a new design/migration.

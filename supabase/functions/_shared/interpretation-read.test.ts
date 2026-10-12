@@ -218,7 +218,7 @@ it.each(['ai', null, undefined, 'fallback', 'deterministic'])('quarantines legac
   expect(payload).toEqual(original);
 });
 
-describe('TASK-048 turn 8: the explicitly selected version (20261011000002)', () => {
+describe('TASK-048 turn 8: the explicitly selected version (20261012000007)', () => {
   type Case = { name: string; source: string | null; full: InterpretationPayload; basic: InterpretationPayload };
   const corpus: Case[] = JSON.parse(readFileSync(new URL('../../migrations/__verification__/legacy-quarantine.corpus.json', import.meta.url), 'utf8'));
   const current = corpus.find(c => c.name === 'current-authorized')!;

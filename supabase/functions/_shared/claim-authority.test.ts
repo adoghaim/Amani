@@ -471,9 +471,9 @@ describe('owner R3: visibility is monotonic downward; counts are truthful, not m
 const claimCatalogEligible = (full: InterpretationPayload) =>
   ((full.findings ?? []) as { kind?: string; visibility_hint?: string }[]).filter(f => f.kind === 'trend' && f.visibility_hint === 'premium').length;
 
-/* ── 20261008000000: the compatibility view applies the same read gate ──── */
+/* ── 20261012000002: the compatibility view applies the same read gate ──── */
 const root = new URL('../../../', import.meta.url);
-const gateMigration = readFileSync(new URL('supabase/migrations/20261008000000_claim_policy_basic_gate.sql', root), 'utf8');
+const gateMigration = readFileSync(new URL('supabase/migrations/20261012000002_claim_policy_basic_gate.sql', root), 'utf8');
 const gatePrelude = readFileSync(new URL('supabase/migrations/__verification__/claim-policy-gate.prelude.sql', root), 'utf8');
 const gateRollback = readFileSync(new URL('supabase/migrations/__verification__/claim-policy-gate.rollback.sql', root), 'utf8');
 const basicCycleMigration = readFileSync(new URL('supabase/migrations/20260927000001_basic_cycle_context.sql', root), 'utf8');
@@ -493,7 +493,7 @@ const gateBasic = (c: GateCase): InterpretationPayload => {
   return basic;
 };
 
-describe('20261008000000 historical gate fixture (legacy SQL parity pending TASK-047 turn 3)', () => {
+describe('20261012000002 historical gate fixture (legacy SQL parity pending TASK-047 turn 3)', () => {
   it('the fixture claim preview is a real claim-era preview, not a hand-written lookalike', () => {
     const { basic } = generate(model);
     expect(gateFixture.claim_preview).toEqual(basic.preview);
@@ -529,7 +529,7 @@ describe('20261008000000 historical gate fixture (legacy SQL parity pending TASK
   });
   it('the harness runs the case: refusal, forward, replay, rollback, fresh chain and the baseline compare', () => {
     const harness = readFileSync(new URL('supabase/migrations/__verification__/run.sh', root), 'utf8');
-    expect(harness).toContain('GATE=20261008000000_claim_policy_basic_gate.sql');
+    expect(harness).toContain('GATE=20261012000002_claim_policy_basic_gate.sql');
     expect(harness.match(/-f "\/tmp\/\$GATE"/g)!.length).toBeGreaterThanOrEqual(6);
     for (const step of ['claim-policy-gate.rollback.sql', 'claim-policy-gate.compare.sql', 'claim_gate_fresh', 'target=claim_gate_before']) {
       expect(harness).toContain(step);

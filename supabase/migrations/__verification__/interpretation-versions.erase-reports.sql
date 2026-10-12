@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- TASK-048 turn 7: erase_reports (20261011000001). Everything is rolled back.
+-- TASK-048 turn 7: erase_reports (20261012000006). Everything is rolled back.
 -- Each flag state runs as a round that undoes itself. A deadlock needs two
 -- connections and is not reproducible here; the id lock order is pinned
 -- statically below and the caller's ordering in

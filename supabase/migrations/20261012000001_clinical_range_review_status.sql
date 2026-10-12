@@ -22,7 +22,7 @@ BEGIN
   -- Mode-independent: whichever V2-01 mode ran (production, chain or absent),
   -- it must be the exact applied seed with no intervening catalog writes.
   IF to_regclass('clinical_archive.task041_state') IS NULL THEN
-    RAISE EXCEPTION 'TASK-044 requires the applied V2-01 clinical catalog (20261006000000)';
+    RAISE EXCEPTION 'TASK-044 requires the applied V2-01 clinical catalog (20261012000000)';
   END IF;
   SELECT * INTO STRICT base FROM clinical_archive.task041_state;
   IF base.seed_hash <> 'c3edbe6871ab49dbbfa04db1fa277a0d712425bccb9b1d44f9b5738e440dde00' OR base.status <> 'applied' THEN

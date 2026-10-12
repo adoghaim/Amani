@@ -12,14 +12,14 @@ DO $$ BEGIN
     OR to_regprocedure('public.append_interpretation_version(uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)') IS NULL
     OR to_regprocedure('public.interpretation_read_quarantine(jsonb,jsonb,text)') IS NULL
     OR to_regprocedure('public.read_interpretation_for_server(uuid,uuid,boolean)') IS NULL THEN
-    RAISE EXCEPTION 'Apply the version foundation 20261010000000 and the version writer 20261011000000 before the reader cutover';
+    RAISE EXCEPTION 'Apply the version foundation 20261012000004 and the version writer 20261012000005 before the reader cutover';
   END IF;
   IF strpos(pg_get_function_result('public.read_interpretation_for_server(uuid,uuid,boolean)'::regprocedure),'selected_version_id')>0 THEN
     RAISE EXCEPTION 'TASK-048 reader cutover is already applied; this migration is one-shot';
   END IF;
 END $$;
 
--- Same columns as 20261009000000, so the interpretations view keeps depending on
+-- Same columns as 20261012000003, so the interpretations view keeps depending on
 -- it. One row per owned report. Body, source, generated_at and disclaimer come
 -- from the selected version when the pointer names a version of this report
 -- anchored on this row; otherwise from the row, exactly as before. Owner Ruling 2:

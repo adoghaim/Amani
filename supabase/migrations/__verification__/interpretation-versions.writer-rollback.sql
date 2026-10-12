@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- Disposable pre-use rehearsal of 20261011000000 only. Removes the writer and
+-- Disposable pre-use rehearsal of 20261012000005 only. Removes the writer and
 -- nothing else: versions, history, the protection ledger and every guard stay.
 -- Production rollback is forward-only: revoke service EXECUTE on the writer
 -- (regeneration then fails closed with nothing written); never remove versions or history.

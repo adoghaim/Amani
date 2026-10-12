@@ -46,7 +46,7 @@ Proposed resolution is to preserve existing user erasure semantics through a nar
 
 ## 3. Current-selection and read contract
 
-The latest readers are `20261009000000_legacy_read_quarantine.sql:136-170`; the edge applies another authority boundary in `_shared/interpretation-read.ts`. Preserve their ownership checks and the quarantine sequence.
+The latest readers are `20261012000003_legacy_read_quarantine.sql:136-170`; the edge applies another authority boundary in `_shared/interpretation-read.ts`. Preserve their ownership checks and the quarantine sequence.
 
 1. Bind the authenticated user to the report before selecting any source/version. A foreign user's report returns no data or eligibility evidence.
 2. Resolve the explicit current selection and take **all** body/source/depth/provenance/identity/time fields from that one version. A missing, foreign, corrupt or no-longer-authorized selection cannot supply clinical prose.

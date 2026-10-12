@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP 1
 -- TASK-048 turn 11 parity control: commit_deep_access's outcomes and writes for
--- reports WITHOUT an anchor, before and after 20261011000003 moved its claim
+-- reports WITHOUT an anchor, before and after 20261012000008 moved its claim
 -- rules into settle_introductory_claim. Self-checking (each expectation is
 -- asserted) and printing: run.sh compares the printed lines across the forward,
 -- so the extracted rules must behave exactly as the original body did.

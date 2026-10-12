@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP 1
 -- No confidentiality or entitlement widening, over EVERY row the read surface
 -- returns (all users, no user, switch ON and OFF), not only the fixture rows:
--- claim_gate_before was captured before 20261008000000, claim_gate_after after.
+-- claim_gate_before was captured before 20261012000002, claim_gate_after after.
 BEGIN;
 CREATE FUNCTION pg_temp.assert(ok boolean, label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
@@ -48,4 +48,4 @@ SELECT pg_temp.assert((SELECT count(*)>0 FROM claim_gate_diff WHERE lab_report_i
   'pre-existing legacy row with a TS-selected preview is gated too');
 COMMIT;
 DROP TABLE claim_gate_after;
-\echo 'PASS: 20261008000000 only reduces what the compatibility view serves, across every row and reader.'
+\echo 'PASS: 20261012000002 only reduces what the compatibility view serves, across every row and reader.'

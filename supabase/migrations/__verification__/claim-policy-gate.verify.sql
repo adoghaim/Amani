@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- TASK-046 (V2-03c): exact expectations for 20261008000000 on the shared
+-- TASK-046 (V2-03c): exact expectations for 20261012000002 on the shared
 -- fixture rows (claim-policy-gate.prelude.sql), through the reachable client
 -- surface. Everything rolls back.
 BEGIN;

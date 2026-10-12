@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- TASK-048 turn 8 (20261011000002): both customer readers serve the explicitly
+-- TASK-048 turn 8 (20261012000007): both customer readers serve the explicitly
 -- selected version. Everything is rolled back. Each flag state runs as a round
 -- that undoes itself. Control map: docs/clinical/TASK-048/turn-8-reader-cutover.md.
 -- Every read goes through EXECUTE, so no cached plan outlives the classifier swap

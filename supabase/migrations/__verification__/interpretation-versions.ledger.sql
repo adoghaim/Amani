@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- TASK-048 turn 11 (20261011000003): the Free-ledger version commit and the
+-- TASK-048 turn 11 (20261012000008): the Free-ledger version commit and the
 -- every-anchor history guard. Everything is rolled back; each flag state runs as
 -- a self-undoing round so both start from identical data.
 -- Control map: docs/clinical/TASK-048/turn-11-ledger-cutover.md.

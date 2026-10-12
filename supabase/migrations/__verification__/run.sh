@@ -278,6 +278,9 @@ docker cp "$HERE/flagged-trends.prelude.sql" "$CONTAINER:/tmp/flagged-prelude.sq
 docker cp "$HERE/flagged-trends.verify.sql" "$CONTAINER:/tmp/flagged-verify.sql" >/dev/null
 # Use a separate database cloned at the prepare stage: the migration commits.
 psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE flagged_before TEMPLATE amani;'
+# PK-03e-E: account erasure must also work before the cutover, which is where
+# production is today. Snapshot this state for Case 11.
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE deletion_before TEMPLATE amani;'
 docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -v rel=interpretations -q \
   -f /tmp/flagged-prelude.sql -f /tmp/flagged.sql -f /tmp/flagged.sql -f /tmp/flagged-verify.sql -f /tmp/deterministic-verify.sql
 
@@ -348,10 +351,34 @@ psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql
 
-# Case 11 (TASK-046, V2-03c): the compatibility view serves a Basic preview and
+# Case 11 (PK-03e-E): account erasure, on both sides of the cutover:
+# `deletion_before` (pre-cutover, as production is today) and a clone of the
+# fully migrated `amani`. The real lab_reports, interpretations table,
+# claims (with their immutability trigger), generation costs and
+# commit_deep_access are what gets raced. Reproduces the deadlock of the old
+# multi-request deletion, then proves delete_user_data serialises with a second
+# deletion, regenerate and the cost insert, and leaves no user-owned row.
+echo "==> account erasure: ordered, atomic, deadlock-free"
+ERASURE=20261011000000_delete_user_data_ordered.sql
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE deletion_after TEMPLATE amani;'
+docker cp "$HERE/account-deletion.prelude.sql" "$CONTAINER:/tmp/deletion-prelude.sql" >/dev/null
+docker cp "$HERE/account-deletion.verify.sql" "$CONTAINER:/tmp/deletion-verify.sql" >/dev/null
+docker cp "$HERE/../$ERASURE" "$CONTAINER:/tmp/$ERASURE" >/dev/null
+for db in deletion_before deletion_after; do
+  echo "--- $db"
+  for file in /tmp/deletion-prelude.sql "/tmp/$ERASURE" "/tmp/$ERASURE" /tmp/deletion-verify.sql; do
+    docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "$file"
+  done
+done
+# Production order: 20261011000000 is live, and every V2 migration below
+# (20261012000000..08) is applied on top of it. Apply it to `amani` too so the
+# V2 chain, and Case 13, run against the function production already has.
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASURE"
+
+# Case 12 (TASK-046, V2-03c; "Case 11" on the V2 branch before PK-03e-K): the compatibility view serves a Basic preview and
 # locked counts only under a known claim policy. Forward, verify, replay,
 # coexistence, rollback, fresh chain, and no widening against a captured baseline.
-GATE=20261008000000_claim_policy_basic_gate.sql
+GATE=20261012000002_claim_policy_basic_gate.sql
 docker cp "$HERE/../$GATE" "$CONTAINER:/tmp/$GATE" >/dev/null
 for file in claim-policy-gate.prelude.sql claim-policy-gate.capture.sql claim-policy-gate.compare.sql \
   claim-policy-gate.verify.sql claim-policy-gate.rollback.sql claim-policy-gate.snapshot.sql; do
@@ -462,3 +489,58 @@ source "$HERE/clinical-catalog.run.sh"
 # TASK-048: non-destructive persistence foundation, the ordinary version writer
 # (§8, turn 10), erasure and (§10) the reader cutover to the selected version.
 source "$HERE/interpretation-versions.run.sh"
+
+# Case 13 (PK-03e-K): account erasure on the full V2 schema. Production order:
+# 20261011000000 (live) -> V2 20261012000000..08 -> 20261012000100. Proves that
+# the live body is refused by the V2 history guards (so V2 cannot ship without
+# this), that 20261012000100 refuses out of order and replays as a no-op, and
+# then runs Case 11's whole suite plus the V2 graph cases on a clone of the
+# fully migrated chain.
+echo "==> account erasure on the full V2 schema (PK-03e-K)"
+ERASURE_V2=20261012000100_delete_user_data_v2.sql
+docker cp "$HERE/../$ERASURE_V2" "$CONTAINER:/tmp/$ERASURE_V2" >/dev/null
+docker cp "$HERE/account-deletion.v2.seed.sql" "$CONTAINER:/tmp/deletion-v2-seed.sql" >/dev/null
+docker cp "$HERE/account-deletion.v2.verify.sql" "$CONTAINER:/tmp/deletion-v2-verify.sql" >/dev/null
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE deletion_v2 TEMPLATE amani;'
+psql_del_v2() { docker exec -i "$CONTAINER" psql -U postgres -d deletion_v2 -v ON_ERROR_STOP=1 "$@"; }
+psql_del_after() { docker exec -i "$CONTAINER" psql -U postgres -d deletion_after -v ON_ERROR_STOP=1 "$@"; }
+del_fn_sig="SELECT md5(pg_get_functiondef(p.oid)||coalesce(array_to_string(p.proacl,','),'')) FROM pg_proc p WHERE p.oid='public.delete_user_data(uuid)'::regprocedure"
+del_v2_log=$(mktemp)
+# Out of order: on the pre-V2 chain it refuses and leaves the live body as is.
+del_body=$(psql_del_after -tA -c "$del_fn_sig")
+if psql_del_after -q -f "/tmp/$ERASURE_V2" >"$del_v2_log" 2>&1; then
+  echo "FAIL: $ERASURE_V2 applied before the V2 version foundation"; exit 1
+fi
+grep -q 'Apply the V2 version foundation 20261012000004 before 20261012000100' "$del_v2_log" \
+  || { echo "FAIL: $ERASURE_V2 refused for an unexpected reason"; cat "$del_v2_log"; exit 1; }
+test "$(psql_del_after -tA -c "$del_fn_sig")" = "$del_body" \
+  || { echo "FAIL: refused $ERASURE_V2 changed delete_user_data"; exit 1; }
+echo "PASS: $ERASURE_V2 refuses before the V2 foundation and leaves the live function untouched."
+psql_del_v2 -q -f /tmp/deletion-prelude.sql -f /tmp/deletion-v2-seed.sql
+# Negative control: the live 20261011000000 body, under the V2 guards, cannot
+# erase a user who has an interpretation. Never committed.
+if psql_del_v2 -q -c 'BEGIN' \
+    -c "SELECT v2_seed_user('7e0000ff-0000-4000-8000-0000000000ff', 1, 1)" \
+    -c "SELECT delete_user_data('7e0000ff-0000-4000-8000-0000000000ff')" -c 'ROLLBACK' >"$del_v2_log" 2>&1; then
+  echo "FAIL: the live delete_user_data erased a V2 user; the negative control is stale"; exit 1
+fi
+grep -q 'delete the report graph, not its interpretation' "$del_v2_log" \
+  || { echo "FAIL: live delete_user_data failed on V2 for an unexpected reason"; cat "$del_v2_log"; exit 1; }
+echo "PASS: the live delete_user_data is refused by the V2 history guard (55000), so $ERASURE_V2 is required."
+# Forward, then replay: the second apply must leave the function as the first did.
+psql_del_v2 -q -f "/tmp/$ERASURE_V2"
+del_v2_def=$(psql_del_v2 -tA -c "$del_fn_sig")
+test "$del_v2_def" != "$del_body" || { echo "FAIL: $ERASURE_V2 did not replace delete_user_data"; exit 1; }
+psql_del_v2 -q -f "/tmp/$ERASURE_V2"
+test "$(psql_del_v2 -tA -c "$del_fn_sig")" = "$del_v2_def" \
+  || { echo "FAIL: $ERASURE_V2 replay changed delete_user_data"; exit 1; }
+# Case 11's full suite (deadlock reproduction, overlapping deletions,
+# regenerate and cost races, catalog sweep, contract), now on the V2 schema.
+psql_del_v2 -q -f /tmp/deletion-verify.sql
+# The V2 graph: versioned users, overlapping deletions, version-writer and
+# ledger races, live post-condition, bystander bytes.
+psql_del_v2 -q -f /tmp/deletion-v2-verify.sql
+# Complete the main chain too, so anything added after this case sees production's order.
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASURE_V2"
+rm -f "$del_v2_log"
+echo "PASS: delete_user_data on V2: out-of-order refusal, live-body negative control, replay, Case 11 suite and V2 graph cases."

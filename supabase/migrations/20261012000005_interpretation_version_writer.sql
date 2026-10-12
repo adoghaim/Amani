@@ -11,7 +11,7 @@ DO $$ BEGIN
   END IF;
   IF to_regprocedure('public.append_interpretation_version_internal(uuid,uuid,uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)') IS NULL
     OR to_regclass('public.interpretation_history_protection') IS NULL THEN
-    RAISE EXCEPTION 'Apply the version foundation 20261010000000 before the version writer';
+    RAISE EXCEPTION 'Apply the version foundation 20261012000004 before the version writer';
   END IF;
 END $$;
 

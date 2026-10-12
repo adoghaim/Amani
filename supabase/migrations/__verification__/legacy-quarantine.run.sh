@@ -1,6 +1,6 @@
 # Sourced by run.sh after the V2-03c gate, before unrelated clinical cases.
 # No optional dependencies: missing Docker, Vitest, corpus or exports is fatal.
-QUARANTINE=20261009000000_legacy_read_quarantine.sql
+QUARANTINE=20261012000003_legacy_read_quarantine.sql
 TASK047_ROOT="$(cd "$HERE/../../.." && pwd)"
 test -x "$TASK047_ROOT/node_modules/.bin/vitest"
 test -s "$HERE/legacy-quarantine.corpus.json"

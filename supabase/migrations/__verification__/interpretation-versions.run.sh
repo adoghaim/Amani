@@ -2,7 +2,7 @@
 # TASK-048 persistence foundation by execution; see
 # docs/clinical/TASK-048/turn-4-persistence-foundation.md for the invariant and
 # mutation map. Every mutation runs inside a transaction that is never committed.
-VERSION_MIGRATION=20261010000000_interpretation_version_foundation.sql
+VERSION_MIGRATION=20261012000004_interpretation_version_foundation.sql
 docker cp "$HERE/../$VERSION_MIGRATION" "$CONTAINER:/tmp/$VERSION_MIGRATION" >/dev/null
 for file in interpretation-versions.{helpers,capture,storage,verify,overwrite,newrow,fresh,erasure,failure,rollback,concurrency,snapshot,replica,authority}.sql; do
   docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
@@ -46,7 +46,7 @@ for db in flagged_before quarantine_out_of_order; do
   if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$VERSION_MIGRATION" >"$v048_log" 2>&1; then
     echo "FAIL H048-OUT-OF-ORDER: applied on $db" >&2; exit 1
   fi
-  v048_expect_log 'Apply the visibility chain through 20261009000000' "H048-OUT-OF-ORDER $db"
+  v048_expect_log 'Apply the visibility chain through 20261012000003' "H048-OUT-OF-ORDER $db"
   docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
     IF to_regclass('public.interpretation_versions') IS NOT NULL OR to_regclass('public.interpretation_history_protection') IS NOT NULL
       OR to_regprocedure('public.guard_interpretation_history()') IS NOT NULL
@@ -323,7 +323,7 @@ echo 'PASS H048: out-of-order refusal, fresh chain, upgrade, one-shot replay, co
 # 8. Turn 10: the ordinary version writer (Owner Ruling 5; the turn-6 claim-only
 # remediation evaluator and wrapper are removed). See
 # docs/clinical/TASK-048/turn-10-descope.md for the control map.
-WRITER_MIGRATION=20261011000000_interpretation_version_writer.sql
+WRITER_MIGRATION=20261012000005_interpretation_version_writer.sql
 docker cp "$HERE/../$WRITER_MIGRATION" "$CONTAINER:/tmp/$WRITER_MIGRATION" >/dev/null
 for file in interpretation-versions.{writer,writer-rollback}.sql; do
   docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
@@ -333,7 +333,7 @@ for db in flagged_before quarantine_out_of_order; do
   if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$WRITER_MIGRATION" >"$v048_log" 2>&1; then
     echo "FAIL H048W-OUT-OF-ORDER: applied on $db" >&2; exit 1
   fi
-  v048_expect_log 'Apply the version foundation 20261010000000 before the version writer' "H048W-OUT-OF-ORDER $db"
+  v048_expect_log 'Apply the version foundation 20261012000004 before the version writer' "H048W-OUT-OF-ORDER $db"
   docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
     IF to_regprocedure('public.append_interpretation_version(uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)') IS NOT NULL
       THEN RAISE EXCEPTION 'FAIL H048W-OUT-OF-ORDER: partial writer survived in $db'; END IF; END \$\$;"
@@ -428,7 +428,7 @@ echo 'PASS H048W: out-of-order refusal, fresh chain, no backfill, one-shot repla
 # alone. See docs/clinical/TASK-048/turn-7-erasure.md. A deadlock needs two
 # connections; this single-connection harness pins the lock order statically and
 # the caller's ordering is proven in _shared/delete-user-data.erasure.test.ts.
-ERASE_MIGRATION=20261011000001_erase_reports.sql
+ERASE_MIGRATION=20261012000006_erase_reports.sql
 docker cp "$HERE/../$ERASE_MIGRATION" "$CONTAINER:/tmp/$ERASE_MIGRATION" >/dev/null
 for file in interpretation-versions.{erase-reports,erase-reports-rollback}.sql; do
   docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
@@ -440,7 +440,7 @@ for db in flagged_before task048_concurrency; do
   if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASE_MIGRATION" >"$v048_log" 2>&1; then
     echo "FAIL H048E-OUT-OF-ORDER: applied on $db" >&2; exit 1
   fi
-  v048_expect_log 'Apply the version writer 20261011000000 before erase_reports' "H048E-OUT-OF-ORDER $db"
+  v048_expect_log 'Apply the version writer 20261012000005 before erase_reports' "H048E-OUT-OF-ORDER $db"
   docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
     IF to_regprocedure('public.erase_reports(uuid[])') IS NOT NULL
       THEN RAISE EXCEPTION 'FAIL H048E-OUT-OF-ORDER: partial erase_reports survived in $db'; END IF; END \$\$;"
@@ -514,7 +514,7 @@ echo 'PASS H048E: out-of-order refusal, fresh chain, no write, one-shot replay, 
 
 # 10. Turn 8: reader cutover. Both readers serve the explicitly selected version.
 # See docs/clinical/TASK-048/turn-8-reader-cutover.md for the control map.
-READ_MIGRATION=20261011000002_interpretation_version_readers.sql
+READ_MIGRATION=20261012000007_interpretation_version_readers.sql
 docker cp "$HERE/../$READ_MIGRATION" "$CONTAINER:/tmp/$READ_MIGRATION" >/dev/null
 for file in interpretation-versions.{read,read-fixture,read-export,read-rollback}.sql; do
   docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
@@ -668,7 +668,7 @@ echo 'PASS H048V: out-of-order refusal, fresh chain, no write, one-shot replay, 
 # 11. Turn 11: the Free-ledger regeneration appends a version (credit and
 # version in one transaction) and the history guard refuses any anchor-body
 # rewrite on every row. See docs/clinical/TASK-048/turn-11-ledger-cutover.md.
-LEDGER_MIGRATION=20261011000003_interpretation_version_ledger.sql
+LEDGER_MIGRATION=20261012000008_interpretation_version_ledger.sql
 docker cp "$HERE/../$LEDGER_MIGRATION" "$CONTAINER:/tmp/$LEDGER_MIGRATION" >/dev/null
 for file in interpretation-versions.{ledger,ledger-parity,ledger-rollback}.sql; do
   docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
@@ -694,7 +694,7 @@ for db in flagged_before task048_concurrency; do
   if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$LEDGER_MIGRATION" >"$v048_log" 2>&1; then
     echo "FAIL H048L-OUT-OF-ORDER: applied on $db" >&2; exit 1
   fi
-  v048_expect_log 'Apply the reader cutover 20261011000002 before the ledger version cutover' "H048L-OUT-OF-ORDER $db"
+  v048_expect_log 'Apply the reader cutover 20261012000007 before the ledger version cutover' "H048L-OUT-OF-ORDER $db"
   test "$(docker exec -i "$CONTAINER" psql -U postgres -d "$db" -tA -c "$v048l_defs")" = "$v048l_before" \
     || { echo "FAIL H048L-OUT-OF-ORDER: partial ledger cutover survived in $db" >&2; exit 1; }
 done

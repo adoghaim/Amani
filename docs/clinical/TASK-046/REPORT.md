@@ -162,7 +162,7 @@ Commands run: `npm test` (73 files, 1566 tests, all pass) · `npm run typecheck`
 row's stored `preview` and inflated `locked` with no version check, so any
 authenticated client could bypass `visibleClaimProjection` with a direct query.
 
-**Fix: `supabase/migrations/20261008000000_claim_policy_basic_gate.sql` (new).**
+**Fix: `supabase/migrations/20261012000002_claim_policy_basic_gate.sql` (new).**
 - `interpretation_claim_gate(jsonb)` mirrors `visibleClaimProjection`/`servedBasic`:
   - with a known `locked.claim_policy_version`, the preview is served only if it
     is claim-shaped, and each count is kept only if it is a positive integer;

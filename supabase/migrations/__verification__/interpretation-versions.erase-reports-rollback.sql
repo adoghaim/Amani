@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- Disposable pre-use rehearsal of 20261011000001 only: drops erase_reports and
+-- Disposable pre-use rehearsal of 20261012000006 only: drops erase_reports and
 -- restores the foundation's delete_interpretations comment verbatim. Never in
 -- production once delete-user-data calls erase_reports: account deletion would
 -- then fail. Production rollback is to redeploy the previous function first.

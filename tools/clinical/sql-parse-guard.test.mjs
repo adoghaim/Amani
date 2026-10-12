@@ -43,7 +43,7 @@ test('compile step wraps every DO body in the clinical SQL for plpgsql validatio
   assert.equal(all.status, 0, all.stderr);
   assert.match(all.stdout, /^\\set ON_ERROR_STOP on\nSET check_function_bodies = on;\nBEGIN;\n/);
   assert.match(all.stdout, /ROLLBACK;\n$/);
-  for (const file of ['supabase/migrations/20261006000000_clinical_catalog.sql',
+  for (const file of ['supabase/migrations/20261012000000_clinical_catalog.sql',
     'supabase/migrations/__verification__/clinical-catalog.rollback.sql',
     'supabase/migrations/__verification__/clinical-catalog.verify.sql']) assert.ok(all.stdout.includes(`parse-check ${file} DO#1`), file);
   const names = all.stdout.match(/pg_temp\.task041_parse_\d+_\d+/g) ?? [];
@@ -63,7 +63,7 @@ test('the guard flags the real turn-2 claim-policy-gate prelude (d9f913a) at its
 });
 test('the inferred-operand family check covers every harness SQL file and the claim gate migration', () => {
   const files = harnessSqlFiles();
-  for (const name of ['supabase/migrations/20261008000000_claim_policy_basic_gate.sql',
+  for (const name of ['supabase/migrations/20261012000002_claim_policy_basic_gate.sql',
     'supabase/migrations/__verification__/claim-policy-gate.prelude.sql',
     'supabase/migrations/__verification__/prelude.sql',
     'supabase/migrations/__verification__/clinical-catalog.verify.sql']) assert.ok(files.includes(name), name);

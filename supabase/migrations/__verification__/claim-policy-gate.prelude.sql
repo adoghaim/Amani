@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- TASK-046 (V2-03c) fixture rows for 20261008000000, committed so the read
+-- TASK-046 (V2-03c) fixture rows for 20261012000002, committed so the read
 -- surface can be captured before and after the migration. One row per case,
 -- each with its own owner. The JSON is shared verbatim with
 -- claim-authority.test.ts, which asserts the TypeScript read gate

@@ -30,7 +30,7 @@ clinical_expect_mode() {
 clinical_review_cycle() {
   local db="$1" mode="$2" out
   review_psql() { docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 "$@"; }
-  docker cp "$HERE/../20261007000000_clinical_range_review_status.sql" "$CONTAINER:/tmp/review-forward.sql" >/dev/null
+  docker cp "$HERE/../20261012000001_clinical_range_review_status.sql" "$CONTAINER:/tmp/review-forward.sql" >/dev/null
   docker cp "$HERE/clinical-catalog.review-rollback.sql" "$CONTAINER:/tmp/review-rollback.sql" >/dev/null
   docker cp "$HERE/clinical-catalog.review-verify.sql" "$CONTAINER:/tmp/review-verify.sql" >/dev/null
   clinical_expect_mode "$db" "$mode" || return 1
@@ -83,7 +83,7 @@ clinical_case() {
   for file in clinical-catalog.prelude.sql clinical-catalog.seed.sql clinical-catalog.verify.sql clinical-catalog.rollback.sql clinical-catalog.snapshot.sql clinical-catalog.fingerprint.sql; do
     docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
   done
-  docker cp "$HERE/../20261006000000_clinical_catalog.sql" "$CONTAINER:/tmp/clinical-forward.sql" >/dev/null
+  docker cp "$HERE/../20261012000000_clinical_catalog.sql" "$CONTAINER:/tmp/clinical-forward.sql" >/dev/null
   clinical_psql -q -f /tmp/clinical-catalog.prelude.sql -f /tmp/clinical-catalog.seed.sql
   if [ "$missing_synonyms" = yes ]; then
     # The 11 production-only synonyms are all TPO variants, identified exactly

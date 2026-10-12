@@ -73,18 +73,22 @@ Deno.serve(async (req: Request) => {
 
       async getStripeCustomerId(userId) {
         // Prefer stripe_customers (current); fall back to users.stripe_customer_id (legacy).
-        const { data: linked } = await supabase
+        // A read error must not look like "no customer": that would skip the
+        // Stripe cancellation and keep billing an account that no longer exists.
+        const { data: linked, error: linkedError } = await supabase
           .from("stripe_customers")
           .select("customer_id")
           .eq("user_id", userId)
           .maybeSingle();
+        if (linkedError) throw new Error(`Reading stripe_customers failed: ${linkedError.message}`);
         if (linked?.customer_id) return linked.customer_id as string;
 
-        const { data: legacy } = await supabase
+        const { data: legacy, error: legacyError } = await supabase
           .from("users")
           .select("stripe_customer_id")
           .eq("id", userId)
           .maybeSingle();
+        if (legacyError) throw new Error(`Reading users.stripe_customer_id failed: ${legacyError.message}`);
         return (legacy?.stripe_customer_id as string | null) ?? null;
       },
 
@@ -114,20 +118,6 @@ Deno.serve(async (req: Request) => {
         }
       },
 
-      async deleteLocalStripeRecords(userId, customerId) {
-        // Hard-delete both current and legacy links so a subsequent orphan
-        // webhook cannot re-associate to this user. Rows may already be gone
-        // on retry — .delete() on zero matches is a no-op, not an error.
-        const results = await Promise.all([
-          supabase.from("stripe_subscriptions").delete().eq("customer_id", customerId),
-          supabase.from("stripe_orders").delete().eq("customer_id", customerId),
-          supabase.from("stripe_customers").delete().eq("user_id", userId),
-          supabase.from("users").update({ stripe_customer_id: null, stripe_subscription_id: null }).eq("id", userId),
-        ]);
-        const failed = results.find((r) => r.error);
-        if (failed?.error) throw new Error(`Local Stripe record cleanup failed: ${failed.error.message}`);
-      },
-
       async deleteStorageFiles(userId) {
         // List every object under the user's prefix rather than trusting the
         // file_url column — catches orphaned uploads that never made it into
@@ -141,88 +131,28 @@ Deno.serve(async (req: Request) => {
       },
 
       async deleteDataTables(userId) {
-        // Two phases: the user's report graphs first, then rows keyed on
-        // user_id directly.
-        const { data: reportIds, error: reportsListError } = await supabase
-          .from("lab_reports")
-          .select("id")
-          .eq("user_id", userId);
-        if (reportsListError) throw new Error(`Reading lab_reports failed: ${reportsListError.message}`);
-        const ids = ((reportIds ?? []) as Array<{ id: string }>).map((r) => r.id);
-
-        // One awaited call erases every report graph: the lab_reports rows in id
-        // lock order, cascading to biomarkers, report_items, report_analytes,
-        // interpretations and versions. Nothing else touches that graph while it
-        // runs; the old concurrent child deletes are what deadlocked against it.
-        if (ids.length > 0) {
-          const { error: eraseError } = await supabase.rpc("erase_reports", { p_report_ids: ids });
-          if (eraseError) throw new Error(`Report erasure failed: ${eraseError.message}`);
-        }
-
-        // Tables keyed on user_id. Do these serially so a specific failure
-        // surfaces cleanly in the thrown message rather than getting lost in
-        // a Promise.all rejection.
-        const tables: string[] = [
-          "interventions",
-          "cycle_events",
-          "parser_debug",
-          // Introductory Deep Access ledger. Also reachable via the CASCADE on
-          // users.id, but swept explicitly so erasure does not depend on the
-          // order the auth identity happens to go in.
-          "introductory_deep_access_claims",
-          // Complimentary grant. Also reachable via the CASCADE on users.id,
-          // but swept explicitly so erasure does not depend on FK ordering.
-          "complimentary_entitlements",
-          "lab_reports",
-          "period_logs",
-          "symptom_logs",
-          "notification_preferences",
-          "reminders",
-          "audit_events",
-          "rate_limits",
-          // Sandbox-IAP beta allowlist. See the note below on why this one is
-          // swept explicitly while `iap_subscriptions` is not.
-          "iap_beta_testers",
-        ];
-        for (const table of tables) {
-          const { error } = await supabase.from(table).delete().eq("user_id", userId);
-          if (error) throw new Error(`Deleting ${table} failed: ${error.message}`);
-        }
-
         /*
-          `iap_subscriptions` is deliberately absent from the list above.
+          One RPC, one transaction, one lock order — see
+          supabase/migrations/20261011000000_delete_user_data_ordered.sql.
 
-          Every table listed there also has ON DELETE CASCADE on auth.users;
-          they are deleted explicitly anyway so that a user's *health data* is
-          gone even if the final auth deletion fails. That reasoning does not
-          transfer to entitlement rows: deleting them early and then failing at
-          deleteAuthUser would leave a live account with its subscription record
-          erased — a paying customer locked out of what they bought, by the
-          cleanup meant to help them.
+          This used to be ~20 separate requests (a Promise.all over the report
+          children, then a serial sweep), and two overlapping deletions of a
+          user with several reports deadlocked on the child rows. The SQL
+          function also drops the local Stripe rows, and raises rather than
+          returning while any row survives.
 
-          So it rides the cascade instead (see
-          20260821000000_add_iap_subscriptions.sql:26 — user_id REFERENCES
-          auth.users(id) ON DELETE CASCADE), which fires at the one moment the
-          account genuinely ceases to exist.
-
-          `iap_beta_testers` IS in the list above, and the difference is what
-          the row would cost if deletion then failed halfway. An erased
-          `iap_subscriptions` row locks a paying customer out of something they
-          bought. An erased beta row costs a tester the sandbox exception and
-          nothing else — they still have their trial and any real purchase — and
-          it is one service-role insert to restore. Meanwhile leaving it behind
-          is the worse outcome of the two: a live pass for an account that no
-          longer exists, which is exactly the "beta pass that outlives the beta"
-          the table's own comment warns about. It also cascades on
-          auth.users, so the explicit delete is belt-and-braces rather than the
-          only mechanism.
+          `iap_subscriptions` is deliberately not erased there: it rides the
+          auth.users ON DELETE CASCADE (20260821000000_add_iap_subscriptions.sql),
+          so a deletion that fails at deleteAuthUser never leaves a live
+          account with its store subscription record erased — a paying
+          customer locked out of what they bought.
         */
-
-        // The user's profile row itself. Kept last so the above cleanups can
-        // still reference the id if any FK were to require it (none currently
-        // do, but the ordering is intentional).
-        const { error: profileError } = await supabase.from("users").delete().eq("id", userId);
-        if (profileError) throw new Error(`Deleting users row failed: ${profileError.message}`);
+        const { error } = await supabase.rpc("delete_user_data", { p_user_id: userId });
+        if (error) {
+          // Keep the SQLSTATE: the shared module retries deadlock / lock-timeout
+          // failures, which roll back the whole erasure, and nothing else.
+          throw Object.assign(new Error(`Erasing user data failed: ${error.message}`), { code: error.code });
+        }
       },
 
       async deleteAuthUser(userId) {

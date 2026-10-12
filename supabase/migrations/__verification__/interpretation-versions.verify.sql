@@ -110,7 +110,7 @@ DO $$ DECLARE a record; b record; v1 uuid; v2 uuid; retry uuid; request1 uuid:=g
     'H048-EXPLICIT-SELECTION');
 END $$;
 -- Scope boundary, both directions. Before the turn-11 ledger cutover
--- (20261011000003) a current-policy row without versions kept the in-place
+-- (20261012000008) a current-policy row without versions kept the in-place
 -- writer; from it on every anchor body is frozen and regeneration only appends.
 -- Once a row anchors a version it is frozen like legacy history in either state.
 DO $$ DECLARE c record; full_body jsonb; basic jsonb; v uuid; BEGIN
@@ -142,7 +142,7 @@ DO $$ DECLARE c record; full_body jsonb; basic jsonb; v uuid; BEGIN
 END $$;
 -- Existence of versions changes nothing served, to any reader, in either state,
 -- and grants nothing: has_claim is part of the captured RPC rows.
--- After the turn-8 reader cutover (20261011000002) a report holding a pointer is
+-- After the turn-8 reader cutover (20261012000007) a report holding a pointer is
 -- served its selected version: that body change is the cutover itself, proved in
 -- interpretation-versions.read.sql. Here such reports are excluded from the
 -- byte comparison, and must still keep their claim coverage. Before the cutover

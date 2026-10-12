@@ -34,7 +34,7 @@ DO $$ BEGIN
     OR to_regprocedure('public.interpretation_sanitize_basic(jsonb,text)') IS NULL
     OR to_regprocedure('public.interpretation_reader_is_full(uuid,text)') IS NULL
     OR to_regprocedure('public.read_compatible_interpretations()') IS NULL THEN
-    RAISE EXCEPTION 'Apply the visibility cutover and 20260927000001 before 20261008000000';
+    RAISE EXCEPTION 'Apply the visibility cutover and 20260927000001 before 20261012000002';
   END IF;
 END $$;
 

@@ -6,7 +6,7 @@ Task original branch base: `b69f4b4893fce2d2f6f71a1c20561a162450f30e`. This turn
 
 ## Exposure and boundaries
 
-The exposure settled in turns 1–2 is not reclassified as merely abnormal flags. Both abnormal assertions and unsupported reassurance, arbitrary headline/question/flagged-trend prose, and selected Basic markers are untrusted without authority. The inspected SQL evidence is `20261008000000_claim_policy_basic_gate.sql`'s `read_compatible_interpretations` CASE (Full/OFF bypass) and `20260927000001_basic_cycle_context.sql`'s `read_interpretation_for_server` CASE (Basic selection before Full validation). Those frozen migrations are unchanged. No production database was queried, and no production affected-row count is claimed.
+The exposure settled in turns 1–2 is not reclassified as merely abnormal flags. Both abnormal assertions and unsupported reassurance, arbitrary headline/question/flagged-trend prose, and selected Basic markers are untrusted without authority. The inspected SQL evidence is `20261012000002_claim_policy_basic_gate.sql`'s `read_compatible_interpretations` CASE (Full/OFF bypass) and `20260927000001_basic_cycle_context.sql`'s `read_interpretation_for_server` CASE (Basic selection before Full validation). Those frozen migrations are unchanged. No production database was queried, and no production affected-row count is claimed.
 
 | Path | Raw legacy permitted? | Claim authority / entitlement | Renderability and boundary |
 |---|---|---|---|
@@ -20,7 +20,7 @@ No frontend query changes, entitlement changes, Basic keys, policy copy, clinica
 
 ## Implementation
 
-`20261009000000_legacy_read_quarantine.sql` adds five private helpers and replaces only the two existing reader definitions. Existing return signatures, ownership predicates, SECURITY DEFINER search paths and reader grants remain. Helpers revoke PUBLIC/anon/authenticated execution and grant service-role execution.
+`20261012000003_legacy_read_quarantine.sql` adds five private helpers and replaces only the two existing reader definitions. Existing return signatures, ownership predicates, SECURITY DEFINER search paths and reader grants remain. Helpers revoke PUBLIC/anon/authenticated execution and grant service-role execution.
 
 The Full validator mirrors `storedClaimSet`: known policy, array shape, ordered/slug-deduplicated rederived trend claims, complete fact/authority equality, safety reissuance, and fail-closed rejection of invalid entries and extra claim fields. It deliberately mirrors current validation (including delta nonzero, rather than inventing a new clinical consistency rule). JS trim whitespace and binary64 numeric fingerprint semantics are handled explicitly. The corpus includes a raw JSON integer above the exact JS integer range whose fact and authority normalize to the same JS number; removing numeric canonicalization must reject that otherwise-valid set and fail parity.
 

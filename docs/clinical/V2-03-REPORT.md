@@ -7,7 +7,7 @@ not executed), and names what only the Lead can run.
 
 ## 1. What changed, in one paragraph
 
-A new migration, `20261007000000_clinical_range_review_status.sql`, generated from the
+A new migration, `20261012000001_clinical_range_review_status.sql`, generated from the
 catalog, persists the TASK-042 dispositions (35 DISPUTED, 8 NEEDS_CONTEXT, 155 UNKNOWN) in a
 new table `clinical_range_reviews`, without touching the frozen V2-01 migration or its rows.
 On the client, a single assessment (`src/lib/scoring/amaniContext.ts`) now decides whether an
@@ -150,7 +150,7 @@ reverted fix and seen to fail (§9).
   projections, filters and orderings ReportView sends, and only from opted-in fixtures. The
   quarantined race test is still excluded.
 - `npm run test:e2e:isolation` — env canary passes.
-- `git status`: `supabase/migrations/20261006000000_clinical_catalog.sql` unmodified.
+- `git status`: `supabase/migrations/20261012000000_clinical_catalog.sql` unmodified.
 
 ## 5. Existing tests changed because behaviour legitimately changed
 

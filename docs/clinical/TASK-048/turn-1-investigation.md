@@ -57,14 +57,14 @@ ReportView.handleRegenerate                          src/pages/ReportView.tsx:11
       └─ finally: interpretation_generation_costs INSERT (active only)  :1726-1732
  ← flag on: refreshAccess() → get-interpretation      ReportView.tsx:1188
      get-interpretation/index.ts → readInterpretation (interpretation-read.ts:22-92)
-       → RPC read_interpretation_for_server(user, report, premium)   20261009000000:154-165
-           interpretation_read_quarantine(full, selected, source)    20261009000000:126-130
+       → RPC read_interpretation_for_server(user, report, premium)   20261012000003:154-165
+           interpretation_read_quarantine(full, selected, source)    20261012000003:126-130
        → quarantineCustomerRead (TS, second layer)                  claim-authority.ts:385-388
  ← flag off: SELECT from view `interpretations`
-       → read_compatible_interpretations() (also quarantined)       20261009000000:136-150
+       → read_compatible_interpretations() (also quarantined)       20261012000003:136-150
 ```
 
-There are exactly two customer readers of interpretation storage: `read_interpretation_for_server` and `read_compatible_interpretations`, which backs the `interpretations` view. They have been redefined repeatedly; the definitions that matter are the latest ones in `20261009000000`. The only client reads of the view are `ReportView.tsx:454,505,545,642`.
+There are exactly two customer readers of interpretation storage: `read_interpretation_for_server` and `read_compatible_interpretations`, which backs the `interpretations` view. They have been redefined repeatedly; the definitions that matter are the latest ones in `20261012000003`. The only client reads of the view are `ReportView.tsx:454,505,545,642`.
 
 ## 2. The ten questions
 
@@ -83,7 +83,7 @@ The client relies on this behaviour on purpose: *"`generate-interpretation` upse
 
 | Attribute | What happens on regeneration | Evidence |
 |---|---|---|
-| Claim-policy version | Overwritten. When `active`, the new body carries `clinical_claims.policy_version = "v2-03c.1"`, and Basic carries `locked.claim_policy_version`. The row that held the legacy body **becomes** a current-policy row under the same `id`. **When `active` is false, no claim set is written, so the regenerated AI row is itself quarantined on read.** | `index.ts:1624-1630`; `claim-authority.ts:30,349`; `20261009000000:71-73,126-130` |
+| Claim-policy version | Overwritten. When `active`, the new body carries `clinical_claims.policy_version = "v2-03c.1"`, and Basic carries `locked.claim_policy_version`. The row that held the legacy body **becomes** a current-policy row under the same `id`. **When `active` is false, no claim set is written, so the regenerated AI row is itself quarantined on read.** | `index.ts:1624-1630`; `claim-authority.ts:30,349`; `20261012000003:71-73,126-130` |
 | Provenance (`interpretation_source`, `tier`, `stored_depth`, `projection_version`, `disclaimer_version`) | All overwritten. On the Free ledger path a refused or failed commit writes `tier='free'`, **including on a report that holds a claim** whose model call failed (`committed=false → tier 'free'`). | `20260926000000:166-170`; `introductory-access.ts:316-317`; `index.ts:1661,1673` |
 | `blood_draw_id` | `COALESCE(new, old)`: set when the Free path derived one, otherwise preserved. | `20260926000000:169` |
 | Regeneration count | `lab_reports.regeneration_count` is incremented **by the client** before the invoke. The flag-on client restores it on any failure. The flag-off client restores it only on 429. **The server never reads or writes it.** | `ReportView.tsx:1154-1157, 1126-1130, 1175-1178`; `20260501000000:24` |
@@ -132,7 +132,7 @@ It never checks whether an interpretation already exists, never looks at `regene
 
 ### Q8. Can an expired or inactive subscriber regenerate a report that already carries durable paid/claimed entitlement?
 - **Claimed report (introductory claim):** yes at $0, **only** when FREEMIUM_ACTIVE and the switch are both ON. Even then the result goes through the destructive overwrite. With the switch OFF or flag off it gets 402.
-- **Subscription-era report, no claim:** no. The outcome is 402 (flag off or switch OFF), a **new introductory claim charged**, or a Free-tier deep row that reads as Basic. Under the current read contract such a report carries **no** report-level entitlement after the subscription lapses (`interpretation-read.ts:67`; `20261009000000:158-163`). See section 8, hold H1.
+- **Subscription-era report, no claim:** no. The outcome is 402 (flag off or switch OFF), a **new introductory claim charged**, or a Free-tier deep row that reads as Basic. Under the current read contract such a report carries **no** report-level entitlement after the subscription lapses (`interpretation-read.ts:67`; `20261012000003:158-163`). See section 8, hold H1.
 
 ### Q9. Can a free legacy report accidentally qualify?
 Yes, through any of these predicates if the implementation reaches for them:
@@ -140,7 +140,7 @@ Yes, through any of these predicates if the implementation reaches for them:
 2. **`stored_depth === 'deep'` alone.** Post-limit Free generation persists `tier='free', stored_depth='deep'` (`response-shaping.ts:84-90` with `index.ts:1554-1558,1673`). A legacy free row can therefore be deep.
 3. **`tier IN ('plus', NULL)`.** That set includes trial and complimentary rows (correction 3). Using it widens eligibility unless the owner rules that it should (H1).
 4. **Any client-supplied flag.** A `remediation: true` body field must never be trusted. The server re-derives eligibility inside the write transaction.
-5. **Blood-draw matching.** A claim also covers a re-upload with the same `blood_draw_id` (`20261009000000:162-163`; `index.ts:1486`). That is the **existing** entitlement contract, so it does not widen eligibility. Legacy rows from before `20260926000000` have `blood_draw_id = NULL` and match only by `report_id`.
+5. **Blood-draw matching.** A claim also covers a re-upload with the same `blood_draw_id` (`20261012000003:162-163`; `index.ts:1486`). That is the **existing** entitlement contract, so it does not widen eligibility. Legacy rows from before `20260926000000` have `blood_draw_id = NULL` and match only by `report_id`.
 
 ### Q10. What happens on generation failure or retry?
 - **Model fails** (HTTP, schema, nutrient policy, or sanitize returning `null`): `tryOpenAI` returns `null`, and the **deterministic fallback is persisted** through the same overwrite with `source='fallback', stored_depth='standard'`, returning 200 (`index.ts:1602-1617`). The legacy prose is destroyed even on "failure". The deterministic body passes quarantine as trusted floor (`claim-authority.ts:386`), the row reads as `generation_needed` for a Full viewer, and the "Generate full" CTA reappears. On the Free ledger path the row is additionally relabelled `tier='free'` (Q4).
@@ -148,7 +148,7 @@ Yes, through any of these predicates if the implementation reaches for them:
 - **Rejected before work** (401/402/403/404/429/503): nothing is written to the interpretation. A 429 does not write `status='error'` (`:1707-1712`). The other throws do.
 - **Flag-on client:** `failFreemium` restores `status` and `regeneration_count`. A 402 **opens the paywall**, which would be wrong for a paid customer. A 429 shows the daily-limit notice. Anything else shows `regenerateErrorTitle/Body`, whose body reads *"Your current analysis is unchanged"* (`ReportView.tsx:1126-1142`; `copy.ts:83-85`). On a quarantined report that copy is misleading, because no analysis is displayed.
 - **Flag-off client:** errors write `status='error'`; the count is restored only on 429 (`:1168-1186,1194`). The poll timeout compare-and-sets `error` (`:464-484`).
-- **Old prose is never re-served on failure today,** and only because both readers quarantine it (`20261009000000:126-130,141,157`; `interpretation-read.ts:51,69`). Any new selection logic must keep that property (proof 8).
+- **Old prose is never re-served on failure today,** and only because both readers quarantine it (`20261012000003:126-130,141,157`; `interpretation-read.ts:51,69`). Any new selection logic must keep that property (proof 8).
 - **No automatic regeneration of legacy rows exists today.** Flag on, the auto-generate effect fires only when `generation_needed` **and** `interpretation === null` (`ReportView.tsx:613-619`). The quarantined floor is non-null, so it does not fire. Flag off, the effect requires `interpretation === null` (`:492`). Upload-time generation runs from `NewReport.tsx:753` for new reports only. No SQL migration calls a model.
 
 ## 3–6. Summary of persistence, entitlement, counters and failure

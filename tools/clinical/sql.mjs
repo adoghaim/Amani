@@ -3,13 +3,13 @@ import { createHash } from 'node:crypto';
 import { validateCatalog } from './validate.mjs';
 import { projectEntries } from './project.mjs';
 
-export const migrationArtifact = 'supabase/migrations/20261006000000_clinical_catalog.sql';
+export const migrationArtifact = 'supabase/migrations/20261012000000_clinical_catalog.sql';
 export const rollbackArtifact = 'supabase/migrations/__verification__/clinical-catalog.rollback.sql';
 export function stableJson(value) {
   return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
     ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : item);
 }
-// V2-01 migration 20261006000000 is frozen by the Lead. Its 198 shipping
+// V2-01 migration 20261012000000 is frozen by the Lead. Its 198 shipping
 // rows must retain UNKNOWN even where the repository audit disagrees (43 rows).
 // V2-03 needs a NEW migration before any consumer may read audit status from DB.
 export const FROZEN_V2_01_REVIEW_STATUS = 'UNKNOWN';
@@ -43,7 +43,7 @@ export function sqlPayload(catalog) {
 // one. It never edits clinical_ranges (whose CHECK forbids DISPUTED shipping
 // rows and whose V2-01 replay/rollback refuse any write); it records the
 // TASK-042 internal dispositions in clinical_range_reviews, keyed by identity.
-export const reviewMigrationArtifact = 'supabase/migrations/20261007000000_clinical_range_review_status.sql';
+export const reviewMigrationArtifact = 'supabase/migrations/20261012000001_clinical_range_review_status.sql';
 export const reviewRollbackArtifact = 'supabase/migrations/__verification__/clinical-catalog.review-rollback.sql';
 export const reviewVerifyArtifact = 'supabase/migrations/__verification__/clinical-catalog.review-verify.sql';
 export function reviewPayload(catalog) {

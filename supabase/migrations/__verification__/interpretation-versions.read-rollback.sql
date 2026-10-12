@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP 1
--- Rehearsal of 20261011000002 only: restores both readers to their
--- 20261009000000 definitions and ACLs, byte for byte. Non-destructive at any
+-- Rehearsal of 20261012000007 only: restores both readers to their
+-- 20261012000003 definitions and ACLs, byte for byte. Non-destructive at any
 -- time: versions, pointers and protection are retained, remediated reports fall
 -- back to the quarantined historical row (design §5 operational rollback). The
 -- edge reader treats absent identity columns as no selection, so this rollback

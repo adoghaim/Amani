@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP 1
--- TASK-048 turn 10: the ordinary version writer (20261011000000). Everything is
+-- TASK-048 turn 10: the ordinary version writer (20261012000005). Everything is
 -- rolled back. Each flag state runs as a round that undoes itself, so both
 -- rounds start from identical data. Control map: docs/clinical/TASK-048/turn-10-descope.md.
 BEGIN;

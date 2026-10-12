@@ -6,7 +6,7 @@ Base `8ed9ada`. Implements design §3 (`turn-2-persistence-design.md`) for both 
 
 ## 1. What changed
 
-`supabase/migrations/20261011000002_interpretation_version_readers.sql` (one-shot; refuses unless the version foundation **and** the remediation wrapper are present; refuses replay):
+`supabase/migrations/20261012000007_interpretation_version_readers.sql` (one-shot; refuses unless the version foundation **and** the remediation wrapper are present; refuses replay):
 
 - **`read_interpretation_for_server`**: a `LATERAL` selection yields exactly one row per owned report. When `interpretation_current_versions` names a version of this report anchored on this historical row, that branch wins (`ORDER BY precedence LIMIT 1`). Otherwise the row wins. Every body, source and depth field comes from the winner: `json_output`, `json_output_basic`, `interpretation_source`, `stored_depth`. The quarantine sequence is unchanged and applies to the version body too: `interpretation_read_quarantine(sel.json_output, CASE premium/covered → full ELSE interpretation_sanitize_basic(sel.json_output_basic, sel.interpretation_source), sel.interpretation_source)`. Three identity columns are new: `historical_interpretation_id`, `selected_version_id` and `selected_generated_at`. When a version is selected all three are the version's; otherwise all three are NULL. `claim.covered`, `tier`, ownership binding and ACL are unchanged.
 - **`read_compatible_interpretations`** (backs the `interpretations` view, which is the flag-off client path) uses the same selection. Body, `generated_at`, `disclaimer_version` and `interpretation_source` come from the selected version. `id` and `tier` stay the historical row's (see §2). Columns, ownership, the `reader_is_full` decision, the claim gate and the ACL are unchanged.
@@ -89,7 +89,7 @@ The fresh chain and out-of-order cases (`flagged_before`; `task048_concurrency`,
 
 **Equivalent mutant, declared.** Dropping `AND v.historical_interpretation_id=i.id` from the pointer join cannot be killed. There is one historical row per report (`ON CONFLICT (lab_report_id)`), and the composite FK binds the version to the report, so the join condition is redundant today. It is kept as defence in depth.
 
-**Rollback.** `read-rollback.sql` restores both 20261009000000 definitions verbatim; the bodies were compared by eye against that migration. It is non-destructive at any time: versions, pointers and protection are retained, and remediated reports fall back to quarantined history (design §5). Because the edge treats absent identity as no selection, rollback needs no function redeploy first.
+**Rollback.** `read-rollback.sql` restores both 20261012000003 definitions verbatim; the bodies were compared by eye against that migration. It is non-destructive at any time: versions, pointers and protection are retained, and remediated reports fall back to quarantined history (design §5). Because the edge treats absent identity as no selection, rollback needs no function redeploy first.
 
 ## 5. Not done / held
 

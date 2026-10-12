@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   deleteUserAccount,
+  isRetryableDeletionError,
   selectBillingStoreSubscriptions,
   StoreSubscriptionAcknowledgementRequiredError,
   type AccountDeletionActions,
+  type DeletionRetryPolicy,
   type StoreSubscriptionRecord,
 } from './account-deletion.ts';
 
@@ -38,7 +40,6 @@ function makeActions(overrides: Partial<AccountDeletionActions> = {}): {
     }),
     cancelStripeSubscriptions: vi.fn(track('cancelStripeSubscriptions')),
     deleteStripeCustomer: vi.fn(track('deleteStripeCustomer')),
-    deleteLocalStripeRecords: vi.fn(track('deleteLocalStripeRecords')),
     deleteStorageFiles: vi.fn(track('deleteStorageFiles')),
     deleteDataTables: vi.fn(track('deleteDataTables')),
     deleteAuthUser: vi.fn(track('deleteAuthUser')),
@@ -59,7 +60,6 @@ describe('deleteUserAccount', () => {
       'getStripeCustomerId',
       'cancelStripeSubscriptions',
       'deleteStripeCustomer',
-      'deleteLocalStripeRecords',
       'deleteStorageFiles',
       'deleteDataTables',
       'deleteAuthUser',
@@ -85,7 +85,6 @@ describe('deleteUserAccount', () => {
     ]);
     expect(actions.cancelStripeSubscriptions).not.toHaveBeenCalled();
     expect(actions.deleteStripeCustomer).not.toHaveBeenCalled();
-    expect(actions.deleteLocalStripeRecords).not.toHaveBeenCalled();
   });
 
   it('aborts and does NOT delete auth if Stripe cancellation fails', async () => {
@@ -128,8 +127,8 @@ describe('deleteUserAccount', () => {
 
   it('runs cleanly on retry after a partial deletion (idempotent)', async () => {
     // Simulate the "everything except auth already ran successfully" retry case:
-    // customer_id is now null (local Stripe records already deleted), storage +
-    // tables have no rows (deletes no-op), auth finally succeeds this time.
+    // customer_id is now null (delete_user_data already dropped the local Stripe
+    // rows), storage + tables have no rows (deletes no-op), auth finally succeeds.
     const { actions, calls } = makeActions({
       getStripeCustomerId: vi.fn(async () => {
         calls.push('getStripeCustomerId');
@@ -147,6 +146,76 @@ describe('deleteUserAccount', () => {
       'deleteAuthUser',
     ]);
     expect(actions.deleteAuthUser).toHaveBeenCalledOnce();
+  });
+});
+
+const sqlError = (code: string) => Object.assign(new Error(`sqlstate ${code}`), { code });
+
+describe('deleteUserAccount — atomic erasure retries', () => {
+  const instantRetry = (): DeletionRetryPolicy & { slept: number[] } => {
+    const slept: number[] = [];
+    return { attempts: 3, baseDelayMs: 250, sleep: async (ms) => { slept.push(ms); }, slept };
+  };
+
+  it.each(['40P01', '55P03', '40001'])(
+    'retries the erasure after %s, which rolls the whole transaction back',
+    async (code) => {
+      let tries = 0;
+      const { actions, calls } = makeActions({
+        deleteDataTables: vi.fn(async () => {
+          calls.push('deleteDataTables');
+          if (++tries === 1) throw sqlError(code);
+        }),
+      });
+      const retry = instantRetry();
+
+      await deleteUserAccount(actions, 'user-r1', {}, retry);
+
+      expect(actions.deleteDataTables).toHaveBeenCalledTimes(2);
+      expect(retry.slept).toEqual([250]);
+      // Stripe and storage are not repeated, and auth still goes last, once.
+      expect(calls.filter((c) => c === 'cancelStripeSubscriptions')).toHaveLength(1);
+      expect(calls.at(-1)).toBe('deleteAuthUser');
+      expect(actions.deleteAuthUser).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('gives up after the last attempt and never deletes auth', async () => {
+    const { actions } = makeActions({
+      deleteDataTables: vi.fn(async () => {
+        throw sqlError('40P01');
+      }),
+    });
+    const retry = instantRetry();
+
+    await expect(deleteUserAccount(actions, 'user-r2', {}, retry)).rejects.toMatchObject({ code: '40P01' });
+    expect(actions.deleteDataTables).toHaveBeenCalledTimes(3);
+    expect(retry.slept).toEqual([250, 500]);
+    expect(actions.deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a real failure such as rows surviving the erasure', async () => {
+    // P0001 is delete_user_data refusing to commit while a row remains.
+    const { actions } = makeActions({
+      deleteDataTables: vi.fn(async () => {
+        throw sqlError('P0001');
+      }),
+    });
+    const retry = instantRetry();
+
+    await expect(deleteUserAccount(actions, 'user-r3', {}, retry)).rejects.toMatchObject({ code: 'P0001' });
+    expect(actions.deleteDataTables).toHaveBeenCalledOnce();
+    expect(retry.slept).toEqual([]);
+    expect(actions.deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('classifies only rollback-and-retry SQLSTATEs as retryable', () => {
+    expect(isRetryableDeletionError(sqlError('40P01'))).toBe(true);
+    expect(isRetryableDeletionError(sqlError('55P03'))).toBe(true);
+    expect(isRetryableDeletionError(sqlError('40001'))).toBe(true);
+    expect(isRetryableDeletionError(sqlError('23503'))).toBe(false);
+    expect(isRetryableDeletionError(new Error('no code'))).toBe(false);
+    expect(isRetryableDeletionError(null)).toBe(false);
   });
 });
 

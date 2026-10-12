@@ -11,7 +11,7 @@ DO $$ BEGIN
   IF to_regprocedure('public.append_interpretation_version(uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)') IS NULL
     OR to_regprocedure('public.delete_interpretations(uuid[])') IS NULL
     OR to_regclass('public.interpretation_history_protection') IS NULL THEN
-    RAISE EXCEPTION 'Apply the version writer 20261011000000 before erase_reports';
+    RAISE EXCEPTION 'Apply the version writer 20261012000005 before erase_reports';
   END IF;
 END $$;
 

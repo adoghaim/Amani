@@ -6,7 +6,7 @@ accepted foundation is otherwise unchanged.
 
 ## What changed
 
-`supabase/migrations/20261010000000_interpretation_version_foundation.sql`
+`supabase/migrations/20261012000004_interpretation_version_foundation.sql`
 
 - `ENABLE ALWAYS` on the six guard triggers:
   `zz_guard_interpretation_history`, `guard_interpretation_history_truncate`,

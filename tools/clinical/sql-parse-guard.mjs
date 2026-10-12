@@ -7,8 +7,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export const clinicalSqlFiles = () => [
-  'supabase/migrations/20261006000000_clinical_catalog.sql',
-  'supabase/migrations/20261007000000_clinical_range_review_status.sql',
+  'supabase/migrations/20261012000000_clinical_catalog.sql',
+  'supabase/migrations/20261012000001_clinical_range_review_status.sql',
   ...readdirSync('supabase/migrations/__verification__').filter(f => /^clinical-catalog\..*\.sql$/.test(f))
     .sort().map(f => `supabase/migrations/__verification__/${f}`),
   ...readdirSync('tools/clinical').filter(f => f.endsWith('.sql.txt')).sort().map(f => `tools/clinical/${f}`),
@@ -18,7 +18,7 @@ export const clinicalSqlFiles = () => [
 // that are static and safe to widen (the plpgsql compile list stays as above).
 export const harnessSqlFiles = () => [...new Set([
   ...clinicalSqlFiles(),
-  ...readdirSync('supabase/migrations').filter(f => /^\d{14}_.*\.sql$/.test(f) && f >= '20261008000000').sort()
+  ...readdirSync('supabase/migrations').filter(f => /^\d{14}_.*\.sql$/.test(f) && f >= '20261012000002').sort()
     .map(f => `supabase/migrations/${f}`),
   ...readdirSync('supabase/migrations/__verification__').filter(f => f.endsWith('.sql')).sort()
     .map(f => `supabase/migrations/__verification__/${f}`),

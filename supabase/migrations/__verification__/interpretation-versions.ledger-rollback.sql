@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP 1
--- Disposable pre-use rehearsal of 20261011000003 only. GENERATED from the
+-- Disposable pre-use rehearsal of 20261012000008 only. GENERATED from the
 -- original definitions (20260925000001 as retargeted by the 20260926000001
--- cutover, and 20261010000000), so every restored body is byte-identical:
+-- cutover, and 20261012000004), so every restored body is byte-identical:
 -- the harness compares the catalog snapshot and the comments with pre-forward.
 -- Production rollback is forward-only: revoke service EXECUTE on
 -- commit_deep_access_version (an anchored Free regeneration then fails closed

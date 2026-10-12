@@ -11,7 +11,7 @@ DO $$ BEGIN
   IF to_regclass('public.interpretations_private') IS NULL
     OR to_regprocedure('public.interpretation_has_current_claims(jsonb)') IS NULL
     OR to_regprocedure('public.interpretation_read_quarantine(jsonb,jsonb,text)') IS NULL THEN
-    RAISE EXCEPTION 'Apply the visibility chain through 20261009000000 before the version foundation';
+    RAISE EXCEPTION 'Apply the visibility chain through 20261012000003 before the version foundation';
   END IF;
 END $$;
 -- No writer may slip a row between the protection snapshot and the guard.

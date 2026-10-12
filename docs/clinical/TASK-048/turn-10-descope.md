@@ -11,14 +11,14 @@ Turns 6–8 docs are kept as history; this note supersedes their remediation par
 > `already_claimed`) still upserted an un-versioned current-policy anchor in place through
 > `commit_deep_access_v2` (§5, first seam). Turn 11 closes it at both layers — the Free
 > ledger appends through `commit_deep_access_version`, and the history guard refuses any
-> anchor-body rewrite on every row. With `20261011000003` applied the headline holds. See
+> anchor-body rewrite on every row. With `20261012000008` applied the headline holds. See
 > `turn-11-ledger-cutover.md`.
 
 ## 1. Removed
 
 | Piece | Status |
 |---|---|
-| `20261011000000_legacy_remediation_eligibility.sql` (`evaluate_legacy_remediation`, `append_remediation_version`) | replaced by `20261011000000_interpretation_version_writer.sql`; the claim-only evaluator is gone |
+| `20261012000005_legacy_remediation_eligibility.sql` (`evaluate_legacy_remediation`, `append_remediation_version`) | replaced by `20261012000005_interpretation_version_writer.sql`; the claim-only evaluator is gone |
 | `_shared/legacy-remediation.ts`, `.test.ts`, `.handler.test.ts`, `remediation-draw-parity.test.ts` | removed; the `55000` → `409 legacy_history_protected` mapping moved to `_shared/interpretation-version-write.ts` |
 | `mode: "legacy_remediation"`, `legacyRemediationResponse`, remediation cost tagging | removed from `generate-interpretation` |
 | Harness §8 `interpretation-versions.remediation.sql`, `-rollback.sql`, the 20 `R-*` mutations | replaced by `interpretation-versions.writer.sql` / `.writer-rollback.sql` and the `W-*` mutations |
@@ -28,8 +28,8 @@ Turns 6–8 docs are kept as history; this note supersedes their remediation par
 The implementer sandbox cannot delete files; the seven removed paths are left as inert
 tombstones for the Lead to `git rm` (see the turn report).
 
-Prerequisite guards of `20261011000001_erase_reports.sql` and
-`20261011000002_interpretation_version_readers.sql` now name the writer instead of the
+Prerequisite guards of `20261012000006_erase_reports.sql` and
+`20261012000007_interpretation_version_readers.sql` now name the writer instead of the
 remediation wrapper; neither function body changed except Ruling 2 (§4).
 
 ## 2. The writer contract — `append_interpretation_version`

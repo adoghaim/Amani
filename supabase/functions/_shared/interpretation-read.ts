@@ -15,7 +15,7 @@ export interface InterpretationReadActions {
     json_output: InterpretationPayload; stored_depth: string; has_claim: boolean; tier: string;
     /** Absent from a pre-20260926000004 RPC; treated as non-deterministic. */
     interpretation_source?: string | null;
-    /** TASK-048 (20261011000002): set only when the RPC served the selected
+    /** TASK-048 (20261012000007): set only when the RPC served the selected
      * version; absent from older RPCs and NULL for the historical row. */
     historical_interpretation_id?: string | null;
     selected_version_id?: string | null;
