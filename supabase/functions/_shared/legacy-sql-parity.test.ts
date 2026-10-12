@@ -94,10 +94,25 @@ if (process.env.TASK048_READ_RESULTS !== undefined) {
   const cases: ReadCase[] = JSON.parse(readFileSync(process.env.TASK048_READ_RESULTS, 'utf8'));
   describe('TASK-048 LIVE version readers versus real TypeScript functions', () => {
     it('contains every version case exactly once', () => {
-      expect(cases.map(c => c.name).sort()).toEqual(['current-no-versions', 'never-remediated', 'selected-covered',
-        'selected-covered-rewound', 'selected-uncovered', 'selected-uncovered-rewound', 'version-without-pointer']);
-      expect(cases.filter(c => c.selected !== null).map(c => c.name).sort()).toEqual(['selected-covered',
-        'selected-covered-rewound', 'selected-uncovered', 'selected-uncovered-rewound']);
+      expect(cases.map(c => c.name).sort()).toEqual(['current-no-versions', 'current-regenerated', 'never-remediated',
+        'selected-covered', 'selected-covered-rewound', 'selected-uncovered', 'selected-uncovered-rewound',
+        'version-without-pointer']);
+      expect(cases.filter(c => c.selected !== null).map(c => c.name).sort()).toEqual(['current-regenerated',
+        'selected-covered', 'selected-covered-rewound', 'selected-uncovered', 'selected-uncovered-rewound']);
+    });
+    // PK-03e-H: regenerate-then-read on a current-policy report. The SQL readers
+    // must leave the anchor and serve the appended version, Full to Premium and
+    // the version's own Basic to the uncovered Free reader.
+    it('current-regenerated serves the appended version, never the anchor', () => {
+      const before = cases.find(c => c.name === 'current-no-versions')!;
+      const after = cases.find(c => c.name === 'current-regenerated')!;
+      expect(after.history).toEqual(before.history);
+      expect(after.selected?.id).not.toBe(after.history.id);
+      expect(after.rpc_full.json_output).toEqual({ ...before.rpc_full.json_output, h048v_version: 'D1' });
+      expect(after.rpc_basic.has_claim).toBe(false);
+      expect(JSON.stringify(after.rpc_basic.json_output)).toContain('H048V D1 basic');
+      expect(after.view_off.id).toBe(after.selected?.id);
+      expect(before.rpc_full.selected_version_id).toBeNull();
     });
     it.each(cases)('version parity: $name', async c => {
       // Selected version when there is one; otherwise the historical row, as before.
