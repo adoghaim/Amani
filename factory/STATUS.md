@@ -8,7 +8,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | PK-03e-B Remediation entitlement rules: $0, no counter, no active sub | V2-03e | B | in-progress | PK-03e-A | - |
 | PK-03e-C Remediation customer UI: state, CTA, failure/retry | V2-03e | B | in-progress | PK-03e-A | - |
 | PK-03e-D Remediation three-browser + native proof | V2-03e | C | in-progress | PK-03e-B, PK-03e-C | - |
-| PK-03e-E Account deletion deadlock fix | V2-03e | A | todo | - | - |
+| PK-03e-E Account deletion deadlock fix | V2-03e | A | review | - | [#92](https://github.com/adoghaim/Amani/pull/92) |
 | PK-03e-F Trigger ENABLE ALWAYS verification | V2-03e | A | todo | - | - |
 | PK-04-A Female context schema, RLS, grants | V2-04 | A | todo | PK-03e-E, PK-03e-F | - |
 | PK-04-B Female context API + validation | V2-04 | B | todo | PK-04-A | - |
@@ -42,6 +42,8 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | PK-S2-04 Doctor Mode | S2 | B | todo | PK-06-E, PK-S2-05 | - |
 
 **In progress:** PK-03e-A, PK-03e-B, PK-03e-C, PK-03e-D
+
+**In review:** PK-03e-E (#92; harness CI run on postgres:15-alpine pending; deploy needs owner GO)
 
 **Blocked:** PK-05-A (Clinical rule content needs an approved clinical reviewer [Pending]); PK-05-C (Clinical rule content needs an approved clinical reviewer [Pending])
 

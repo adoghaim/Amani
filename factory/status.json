@@ -184,25 +184,33 @@
         "V2-03e-09"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G3",
         "G5"
       ],
-      "gates_passed": [],
-      "branch": null,
-      "pr": null,
-      "agent": null,
+      "gates_passed": [
+        "G0",
+        "G3"
+      ],
+      "branch": "factory/pk-03e-e-account-deletion-deadlock",
+      "pr": "https://github.com/adoghaim/Amani/pull/92",
+      "agent": "claude-code",
       "owner_approval": null,
       "deployed": {
         "web": false,
-        "supabase": "n/a-or-pending",
+        "supabase": "pending owner GO: migration 20261011000000 then function delete-user-data",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
-      "evidence": [],
+      "evidence": [
+        "PR #92 body: acceptance criteria -> test table",
+        "Local G0 2026-10-11: lint 0 errors, typecheck, validate:contrast, npm test 1249 passed, build, check:functions (baseline unchanged at 8)",
+        "Harness run.sh exit 0 on local Postgres 16.14 (Docker unavailable): Case 11 reproduces 40P01 on old path and passes on pre- and post-cutover clones; mutation (symptom_logs omitted) fails as expected",
+        "PENDING: postgres:15-alpine run via CI job Migration behaviour (Postgres) on PR #92"
+      ],
       "brain_recorded": false,
       "updated": "2026-10-11"
     },
@@ -1026,7 +1034,7 @@
     },
     {
       "id": "PK-S2-07",
-      "title": "Intervention \u2192 outcome",
+      "title": "Intervention → outcome",
       "phase": "S2",
       "wave": "A",
       "tickets": [
@@ -1581,7 +1589,7 @@
     },
     {
       "id": "S2-07",
-      "title": "Intervention \u2192 outcome tracking",
+      "title": "Intervention → outcome tracking",
       "phase": "S2",
       "packet": "PK-S2-07",
       "status": "todo"
