@@ -1,0 +1,1700 @@
+{
+  "schema_version": 1,
+  "repo": "adoghaim/Amani",
+  "generated": "2026-10-11",
+  "status_values": [
+    "todo",
+    "in-progress",
+    "review",
+    "done",
+    "blocked"
+  ],
+  "note": "Ledger of record for the factory. Agents update their own packet entry in their PR; the daily report reads this file. Statuses for V2-03e come from the feature list and must be reconciled with the live repo on first run.",
+  "phases": [
+    {
+      "id": "V2-03e",
+      "name": "Finish V2-03e: legacy remediation workflow + pre-production blockers"
+    },
+    {
+      "id": "V2-04",
+      "name": "V2-04: First-class female health context"
+    },
+    {
+      "id": "V2-05",
+      "name": "V2-05: Deterministic safety authority"
+    },
+    {
+      "id": "V2-06",
+      "name": "V2-06: Unified AmaniContext"
+    },
+    {
+      "id": "S2",
+      "name": "Sprint 2: Intelligence features"
+    },
+    {
+      "id": "L",
+      "name": "Later / Strategic / Backlog"
+    }
+  ],
+  "packets": [
+    {
+      "id": "PK-03e-A",
+      "title": "Remediation server core: bridge + eligibility",
+      "phase": "V2-03e",
+      "wave": "A",
+      "tickets": [
+        "V2-03e-01",
+        "V2-03e-02"
+      ],
+      "depends_on": [],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-03e-B",
+      "title": "Remediation entitlement rules: $0, no counter, no active sub",
+      "phase": "V2-03e",
+      "wave": "B",
+      "tickets": [
+        "V2-03e-03",
+        "V2-03e-04"
+      ],
+      "depends_on": [
+        "PK-03e-A"
+      ],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-03e-C",
+      "title": "Remediation customer UI: state, CTA, failure/retry",
+      "phase": "V2-03e",
+      "wave": "B",
+      "tickets": [
+        "V2-03e-05",
+        "V2-03e-06",
+        "V2-03e-07"
+      ],
+      "depends_on": [
+        "PK-03e-A"
+      ],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-03e-D",
+      "title": "Remediation three-browser + native proof",
+      "phase": "V2-03e",
+      "wave": "C",
+      "tickets": [
+        "V2-03e-08"
+      ],
+      "depends_on": [
+        "PK-03e-B",
+        "PK-03e-C"
+      ],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-03e-E",
+      "title": "Account deletion deadlock fix",
+      "phase": "V2-03e",
+      "wave": "A",
+      "tickets": [
+        "V2-03e-09"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-03e-F",
+      "title": "Trigger ENABLE ALWAYS verification",
+      "phase": "V2-03e",
+      "wave": "A",
+      "tickets": [
+        "V2-03e-10"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-A",
+      "title": "Female context schema, RLS, grants",
+      "phase": "V2-04",
+      "wave": "A",
+      "tickets": [
+        "V2-04-01"
+      ],
+      "depends_on": [
+        "PK-03e-E",
+        "PK-03e-F"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-B",
+      "title": "Female context API + validation",
+      "phase": "V2-04",
+      "wave": "B",
+      "tickets": [
+        "V2-04-02"
+      ],
+      "depends_on": [
+        "PK-04-A"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-C",
+      "title": "Stage + cycle fields",
+      "phase": "V2-04",
+      "wave": "C",
+      "tickets": [
+        "V2-04-03",
+        "V2-04-04"
+      ],
+      "depends_on": [
+        "PK-04-B"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-D",
+      "title": "Pregnancy + postpartum fields",
+      "phase": "V2-04",
+      "wave": "C",
+      "tickets": [
+        "V2-04-05",
+        "V2-04-06"
+      ],
+      "depends_on": [
+        "PK-04-B"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-E",
+      "title": "Contraception, HRT, fertility goal",
+      "phase": "V2-04",
+      "wave": "C",
+      "tickets": [
+        "V2-04-07",
+        "V2-04-08"
+      ],
+      "depends_on": [
+        "PK-04-B"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-G",
+      "title": "Per-report snapshot + legacy mapping",
+      "phase": "V2-04",
+      "wave": "C",
+      "tickets": [
+        "V2-04-10"
+      ],
+      "depends_on": [
+        "PK-04-B"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-I",
+      "title": "Deletion + privacy drafts for female context",
+      "phase": "V2-04",
+      "wave": "C",
+      "tickets": [
+        "V2-04-12"
+      ],
+      "depends_on": [
+        "PK-04-A",
+        "PK-03e-E"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-F",
+      "title": "Female health profile UI",
+      "phase": "V2-04",
+      "wave": "D",
+      "tickets": [
+        "V2-04-09"
+      ],
+      "depends_on": [
+        "PK-04-C",
+        "PK-04-D",
+        "PK-04-E"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-H",
+      "title": "Context-aware scoring + interpretation",
+      "phase": "V2-04",
+      "wave": "D",
+      "tickets": [
+        "V2-04-11"
+      ],
+      "depends_on": [
+        "PK-04-G",
+        "PK-04-C"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-04-J",
+      "title": "V2-04 end-to-end proof",
+      "phase": "V2-04",
+      "wave": "E",
+      "tickets": [
+        "V2-04-13"
+      ],
+      "depends_on": [
+        "PK-04-F",
+        "PK-04-H"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-05-A",
+      "title": "Safety rule schema + approved catalog",
+      "phase": "V2-05",
+      "wave": "A",
+      "tickets": [
+        "V2-05-01"
+      ],
+      "depends_on": [
+        "PK-04-A"
+      ],
+      "status": "blocked",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": "Clinical rule content needs an approved clinical reviewer [Pending]",
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-05-B",
+      "title": "Critical-value engine + unit sanity (pure, dark; may run alongside V2-04)",
+      "phase": "V2-05",
+      "wave": "A",
+      "tickets": [
+        "V2-05-02",
+        "V2-05-03"
+      ],
+      "depends_on": [
+        "PK-03e-E",
+        "PK-03e-F"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-05-C",
+      "title": "Pregnancy red flags",
+      "phase": "V2-05",
+      "wave": "B",
+      "tickets": [
+        "V2-05-04"
+      ],
+      "depends_on": [
+        "PK-05-B",
+        "PK-04-D",
+        "PK-05-A"
+      ],
+      "status": "blocked",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": "Clinical rule content needs an approved clinical reviewer [Pending]",
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-05-D",
+      "title": "Pre-generation enforcement",
+      "phase": "V2-05",
+      "wave": "B",
+      "tickets": [
+        "V2-05-05"
+      ],
+      "depends_on": [
+        "PK-05-B"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-05-E",
+      "title": "Post-generation enforcement, safety pathway, audit",
+      "phase": "V2-05",
+      "wave": "C",
+      "tickets": [
+        "V2-05-06",
+        "V2-05-07",
+        "V2-05-08"
+      ],
+      "depends_on": [
+        "PK-05-D"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-06-A",
+      "title": "AmaniContext contract + builder",
+      "phase": "V2-06",
+      "wave": "A",
+      "tickets": [
+        "V2-06-01"
+      ],
+      "depends_on": [
+        "PK-04-G"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-06-B",
+      "title": "Age, life stage, symptoms",
+      "phase": "V2-06",
+      "wave": "B",
+      "tickets": [
+        "V2-06-02",
+        "V2-06-05"
+      ],
+      "depends_on": [
+        "PK-06-A"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-06-C",
+      "title": "Medications + interventions",
+      "phase": "V2-06",
+      "wave": "B",
+      "tickets": [
+        "V2-06-03",
+        "V2-06-04"
+      ],
+      "depends_on": [
+        "PK-06-A"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-06-D",
+      "title": "Biomarker series + personal baseline",
+      "phase": "V2-06",
+      "wave": "B",
+      "tickets": [
+        "V2-06-06",
+        "V2-06-07"
+      ],
+      "depends_on": [
+        "PK-06-A",
+        "PK-05-B"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-06-E",
+      "title": "Wire AmaniContext + minimization",
+      "phase": "V2-06",
+      "wave": "C",
+      "tickets": [
+        "V2-06-08"
+      ],
+      "depends_on": [
+        "PK-06-B",
+        "PK-06-C",
+        "PK-06-D"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-01",
+      "title": "Ask Amani server",
+      "phase": "S2",
+      "wave": "A",
+      "tickets": [
+        "S2-01"
+      ],
+      "depends_on": [
+        "PK-06-E",
+        "PK-05-E"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-05",
+      "title": "Doctor questions expansion",
+      "phase": "S2",
+      "wave": "A",
+      "tickets": [
+        "S2-05"
+      ],
+      "depends_on": [
+        "PK-06-E"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-06",
+      "title": "Timeline 2.0",
+      "phase": "S2",
+      "wave": "A",
+      "tickets": [
+        "S2-06"
+      ],
+      "depends_on": [
+        "PK-06-D",
+        "PK-06-C"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-07",
+      "title": "Intervention \u2192 outcome",
+      "phase": "S2",
+      "wave": "A",
+      "tickets": [
+        "S2-07"
+      ],
+      "depends_on": [
+        "PK-06-C",
+        "PK-06-D"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-08",
+      "title": "Longitudinal insights",
+      "phase": "S2",
+      "wave": "A",
+      "tickets": [
+        "S2-08"
+      ],
+      "depends_on": [
+        "PK-06-D"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-09",
+      "title": "Cross-marker patterns",
+      "phase": "S2",
+      "wave": "A",
+      "tickets": [
+        "S2-09"
+      ],
+      "depends_on": [
+        "PK-06-D"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-10",
+      "title": "Personal-baseline intelligence",
+      "phase": "S2",
+      "wave": "A",
+      "tickets": [
+        "S2-10"
+      ],
+      "depends_on": [
+        "PK-06-D"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-02",
+      "title": "Ask Amani client + tiering",
+      "phase": "S2",
+      "wave": "B",
+      "tickets": [
+        "S2-02"
+      ],
+      "depends_on": [
+        "PK-S2-01"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-03",
+      "title": "Today / priority view",
+      "phase": "S2",
+      "wave": "B",
+      "tickets": [
+        "S2-03"
+      ],
+      "depends_on": [
+        "PK-06-E",
+        "PK-05-E"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-S2-04",
+      "title": "Doctor Mode",
+      "phase": "S2",
+      "wave": "B",
+      "tickets": [
+        "S2-04"
+      ],
+      "depends_on": [
+        "PK-06-E",
+        "PK-S2-05"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G2",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": null,
+      "pr": null,
+      "agent": null,
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [],
+      "brain_recorded": false,
+      "updated": "2026-10-11"
+    }
+  ],
+  "tickets": [
+    {
+      "id": "V2-03e-01",
+      "title": "Legacy paid/claimed regeneration bridge",
+      "phase": "V2-03e",
+      "packet": "PK-03e-A",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-02",
+      "title": "Legacy remediation eligibility evaluator",
+      "phase": "V2-03e",
+      "packet": "PK-03e-A",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-03",
+      "title": "$0 remediation that consumes no claim and no regeneration count",
+      "phase": "V2-03e",
+      "packet": "PK-03e-B",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-04",
+      "title": "Claimed legacy remediation does not need an active subscription",
+      "phase": "V2-03e",
+      "packet": "PK-03e-B",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-05",
+      "title": "Legacy remediation customer state (UI)",
+      "phase": "V2-03e",
+      "packet": "PK-03e-C",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-06",
+      "title": "\"Regenerate interpretation\" CTA",
+      "phase": "V2-03e",
+      "packet": "PK-03e-C",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-07",
+      "title": "Remediation failure and retry state",
+      "phase": "V2-03e",
+      "packet": "PK-03e-C",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-08",
+      "title": "Three-browser remediation proof",
+      "phase": "V2-03e",
+      "packet": "PK-03e-D",
+      "status": "in-progress"
+    },
+    {
+      "id": "V2-03e-09",
+      "title": "Account erasure / deletion reliability fix (pre-production blocker)",
+      "phase": "V2-03e",
+      "packet": "PK-03e-E",
+      "status": "todo"
+    },
+    {
+      "id": "V2-03e-10",
+      "title": "Database trigger post-deploy verification: ENABLE ALWAYS (pre-production blocker)",
+      "phase": "V2-03e",
+      "packet": "PK-03e-F",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-01",
+      "title": "Female health context data model: migration, RLS, grants",
+      "phase": "V2-04",
+      "packet": "PK-04-A",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-02",
+      "title": "Female context API and validation",
+      "phase": "V2-04",
+      "packet": "PK-04-B",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-03",
+      "title": "Reproductive stage, perimenopause and menopause",
+      "phase": "V2-04",
+      "packet": "PK-04-C",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-04",
+      "title": "Cycle status, cycle length, LMP, cycle day and phase",
+      "phase": "V2-04",
+      "packet": "PK-04-C",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-05",
+      "title": "Pregnancy state and gestational age",
+      "phase": "V2-04",
+      "packet": "PK-04-D",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-06",
+      "title": "Postpartum state, months postpartum, breastfeeding",
+      "phase": "V2-04",
+      "packet": "PK-04-D",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-07",
+      "title": "Contraception type and HRT status",
+      "phase": "V2-04",
+      "packet": "PK-04-E",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-08",
+      "title": "Fertility goal (opt-in)",
+      "phase": "V2-04",
+      "packet": "PK-04-E",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-09",
+      "title": "First-class female health profile UI (onboarding + settings)",
+      "phase": "V2-04",
+      "packet": "PK-04-F",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-10",
+      "title": "Per-report context snapshot and legacy context mapping",
+      "phase": "V2-04",
+      "packet": "PK-04-G",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-11",
+      "title": "Use female context in scoring and interpretation",
+      "phase": "V2-04",
+      "packet": "PK-04-H",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-12",
+      "title": "Deletion sweep and privacy disclosures for female context",
+      "phase": "V2-04",
+      "packet": "PK-04-I",
+      "status": "todo"
+    },
+    {
+      "id": "V2-04-13",
+      "title": "V2-04 end-to-end proof",
+      "phase": "V2-04",
+      "packet": "PK-04-J",
+      "status": "todo"
+    },
+    {
+      "id": "V2-05-01",
+      "title": "Safety rule schema and approved rule catalog",
+      "phase": "V2-05",
+      "packet": "PK-05-A",
+      "status": "blocked"
+    },
+    {
+      "id": "V2-05-02",
+      "title": "Deterministic critical-value engine",
+      "phase": "V2-05",
+      "packet": "PK-05-B",
+      "status": "todo"
+    },
+    {
+      "id": "V2-05-03",
+      "title": "Unit-sanity validation",
+      "phase": "V2-05",
+      "packet": "PK-05-B",
+      "status": "todo"
+    },
+    {
+      "id": "V2-05-04",
+      "title": "Pregnancy-specific red flags",
+      "phase": "V2-05",
+      "packet": "PK-05-C",
+      "status": "blocked"
+    },
+    {
+      "id": "V2-05-05",
+      "title": "Pre-generation safety enforcement",
+      "phase": "V2-05",
+      "packet": "PK-05-D",
+      "status": "todo"
+    },
+    {
+      "id": "V2-05-06",
+      "title": "Post-generation safety enforcement",
+      "phase": "V2-05",
+      "packet": "PK-05-E",
+      "status": "todo"
+    },
+    {
+      "id": "V2-05-07",
+      "title": "Dedicated safety-authority pathway in claims and UI",
+      "phase": "V2-05",
+      "packet": "PK-05-E",
+      "status": "todo"
+    },
+    {
+      "id": "V2-05-08",
+      "title": "Safety audit trail and versioning",
+      "phase": "V2-05",
+      "packet": "PK-05-E",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-01",
+      "title": "AmaniContext type, schema and builder",
+      "phase": "V2-06",
+      "packet": "PK-06-A",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-02",
+      "title": "Age and life-stage in AmaniContext",
+      "phase": "V2-06",
+      "packet": "PK-06-B",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-03",
+      "title": "Medication context",
+      "phase": "V2-06",
+      "packet": "PK-06-C",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-04",
+      "title": "Intervention context",
+      "phase": "V2-06",
+      "packet": "PK-06-C",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-05",
+      "title": "Symptom context",
+      "phase": "V2-06",
+      "packet": "PK-06-B",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-06",
+      "title": "Historical biomarker series",
+      "phase": "V2-06",
+      "packet": "PK-06-D",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-07",
+      "title": "Personal baseline",
+      "phase": "V2-06",
+      "packet": "PK-06-D",
+      "status": "todo"
+    },
+    {
+      "id": "V2-06-08",
+      "title": "Wire AmaniContext into generation and insights, with data minimization",
+      "phase": "V2-06",
+      "packet": "PK-06-E",
+      "status": "todo"
+    },
+    {
+      "id": "S2-01",
+      "title": "Ask Amani: grounded answer engine (server)",
+      "phase": "S2",
+      "packet": "PK-S2-01",
+      "status": "todo"
+    },
+    {
+      "id": "S2-02",
+      "title": "Ask Amani: client experience and tiering",
+      "phase": "S2",
+      "packet": "PK-S2-02",
+      "status": "todo"
+    },
+    {
+      "id": "S2-03",
+      "title": "Today / priority view",
+      "phase": "S2",
+      "packet": "PK-S2-03",
+      "status": "todo"
+    },
+    {
+      "id": "S2-04",
+      "title": "Doctor Visit / Doctor Mode",
+      "phase": "S2",
+      "packet": "PK-S2-04",
+      "status": "todo"
+    },
+    {
+      "id": "S2-05",
+      "title": "Doctor questions / appointment-prep expansion",
+      "phase": "S2",
+      "packet": "PK-S2-05",
+      "status": "todo"
+    },
+    {
+      "id": "S2-06",
+      "title": "Timeline 2.0",
+      "phase": "S2",
+      "packet": "PK-S2-06",
+      "status": "todo"
+    },
+    {
+      "id": "S2-07",
+      "title": "Intervention \u2192 outcome tracking",
+      "phase": "S2",
+      "packet": "PK-S2-07",
+      "status": "todo"
+    },
+    {
+      "id": "S2-08",
+      "title": "Longitudinal insights",
+      "phase": "S2",
+      "packet": "PK-S2-08",
+      "status": "todo"
+    },
+    {
+      "id": "S2-09",
+      "title": "Cross-marker pattern intelligence",
+      "phase": "S2",
+      "packet": "PK-S2-09",
+      "status": "todo"
+    },
+    {
+      "id": "S2-10",
+      "title": "Personal-baseline intelligence",
+      "phase": "S2",
+      "packet": "PK-S2-10",
+      "status": "todo"
+    },
+    {
+      "id": "L-01",
+      "title": "Women's Health Graph",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    },
+    {
+      "id": "L-02",
+      "title": "Wearable integration",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    },
+    {
+      "id": "L-03",
+      "title": "Apple Health / Health Connect",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    },
+    {
+      "id": "L-04",
+      "title": "Lab ordering / blood draw partnerships",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    },
+    {
+      "id": "L-05",
+      "title": "Quest / Labcorp / lab-network result ingestion",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    },
+    {
+      "id": "L-06",
+      "title": "Clinical ordering network / authorizer",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    },
+    {
+      "id": "L-07",
+      "title": "Historical billing / entitlement ledger",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    },
+    {
+      "id": "L-08",
+      "title": "Intelligence-tier pricing",
+      "phase": "L",
+      "packet": null,
+      "status": "todo"
+    }
+  ],
+  "report": {
+    "shipped": [],
+    "in_progress": [
+      "PK-03e-A",
+      "PK-03e-B",
+      "PK-03e-C",
+      "PK-03e-D"
+    ],
+    "blocked": [
+      {
+        "id": "PK-05-A",
+        "reason": "Clinical rule content needs an approved clinical reviewer [Pending]"
+      },
+      {
+        "id": "PK-05-C",
+        "reason": "Clinical rule content needs an approved clinical reviewer [Pending]"
+      }
+    ],
+    "next_suggested": [
+      "PK-03e-E",
+      "PK-03e-F"
+    ],
+    "owner_actions": [
+      "Approve or reject open factory PRs",
+      "Give GO for any pending Supabase migration/function deploys",
+      "Answer [Pending] items in brain/open-questions.md"
+    ],
+    "growth_suggestions": [
+      "Audit landing-page copy against clinical-language rules (\"worrying\", \"sits where it should\", Hone mention) before paid acquisition",
+      "Add crawlable, prerendered education pages; every route currently serves the same SPA shell and meta tags",
+      "Decide first GTM path (see gtm.md) and the freemium activation date"
+    ]
+  }
+}
