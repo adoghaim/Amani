@@ -286,7 +286,9 @@ describe('findings confidentiality (one shared SQL fixture)', () => {
     expect(generator).toContain('buildBasicProjection(interpretationJson, undefined, { source: shaped.source })');
     // V2-03c: active generation projects from the claim set; Basic is served through the read gate.
     expect(generator).toContain('projectBasic(interpretationJson, { source: shaped.source })');
-    expect(generator).toContain('shaped.tier === "plus" ? interpretationJson : servedBasic(basicProjection)');
+    // TASK-048: a regeneration serves the committed version's pair; a first generation, its own.
+    expect(generator).toContain('shaped.tier === "plus" ? servedFull : servedBasic(servedBasicProjection)');
+    expect(generator).toContain('const servedBasicProjection = appended ? appended.version.basic : basicProjection;');
     const reader = readFileSync(new URL('./interpretation-read.ts', import.meta.url), 'utf8');
     expect(reader).toContain('sanitizeBasicProjection(customer, provenance.source)');
     expect(cycleMigration.match(/ELSE public.interpretation_sanitize_basic\(i.json_output_basic,i.interpretation_source\)/g)).toHaveLength(2);

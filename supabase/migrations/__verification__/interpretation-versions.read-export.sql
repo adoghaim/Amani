@@ -35,7 +35,7 @@ DO $$ DECLARE c record; sw boolean; got jsonb; views jsonb; rewound boolean;
       INSERT INTO h048v_parity SELECT jsonb_build_object(
         'name',c.name||CASE WHEN rewound THEN '-rewound' ELSE '' END,
         'history',(SELECT jsonb_build_object('id',i.id,'full',i.json_output,'basic',i.json_output_basic,
-          'source',i.interpretation_source,'generated_at',i.generated_at,'stored_depth',i.stored_depth)
+          'source',i.interpretation_source,'generated_at',i.generated_at,'stored_depth',i.stored_depth,'tier',i.tier)
           FROM interpretations_private i WHERE i.lab_report_id=c.r),
         'selected',(SELECT jsonb_build_object('id',v.id,'full',v.json_output,'basic',v.json_output_basic,
           'source',v.interpretation_source,'generated_at',v.generated_at,'stored_depth',v.stored_depth)

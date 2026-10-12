@@ -10,8 +10,8 @@ GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 
 CREATE TABLE users (id uuid PRIMARY KEY DEFAULT gen_random_uuid());
 -- file_url and regeneration_count match 20260216193045_initial_schema.sql:86,94;
--- the TASK-048 remediation evaluator reads the first and its mutations write the
--- second. content_hash arrives later via 20260925000003.
+-- the TASK-048 writer mutations write the second (regeneration_count must stay
+-- untouched by a version append). content_hash arrives later via 20260925000003.
 CREATE TABLE lab_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,

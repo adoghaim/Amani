@@ -392,7 +392,8 @@ export function ParserDebugger() {
       await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId }),
+        // TASK-048: regenerating a report that holds an interpretation needs a per-request id.
+        body: JSON.stringify({ reportId, request_id: crypto.randomUUID() }),
       });
       const { data: rpt } = await supabase.from('lab_reports').select('status').eq('id', reportId).maybeSingle();
       setReport(prev => prev ? { ...prev, status: rpt?.status ?? 'processing' } : prev);

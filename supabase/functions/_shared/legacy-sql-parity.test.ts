@@ -83,7 +83,7 @@ if (process.env.TASK047_SQL_RESULTS !== undefined) {
 // real TS functions decide what that body must be, from the exported inputs.
 if (process.env.TASK048_READ_RESULTS !== undefined) {
   type Stored = { id: string; full: InterpretationPayload; basic: InterpretationPayload; source: string | null;
-    generated_at: string; stored_depth: string };
+    generated_at: string; stored_depth: string; tier?: string | null };
   type RpcRow = { json_output: InterpretationPayload; stored_depth: string; has_claim: boolean; tier: string;
     interpretation_source: string | null; historical_interpretation_id: string | null;
     selected_version_id: string | null; selected_generated_at: string | null };
@@ -117,10 +117,15 @@ if (process.env.TASK048_READ_RESULTS !== undefined) {
         expect(row.selected_generated_at).toBe(c.selected?.generated_at ?? null);
         expect(row.historical_interpretation_id).toBe(c.selected ? c.history.id : null);
       }
+      // Owner Ruling 2: the view's one id slot is the served body's identity.
+      // Turn 10: a version's effective tier is 'plus'; otherwise the row's tier.
+      const tier = c.selected ? 'plus' : c.history.tier;
       for (const row of [c.view_off, c.view_on]) {
-        expect(row.id).toBe(c.history.id);
+        expect(row.id).toBe(served.id);
         expect(row.generated_at).toBe(served.generated_at);
+        expect(row.tier).toBe(tier);
       }
+      for (const row of [c.rpc_full, c.rpc_basic]) expect(row.tier).toBe(tier);
       // The same SQL rows through the real edge read policy.
       const result = await readInterpretation({ ownsReport: async () => true,
         resolveEntitlement: async () => ({ allowed: true, plan: 'free' }),

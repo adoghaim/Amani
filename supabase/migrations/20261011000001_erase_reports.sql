@@ -8,10 +8,10 @@ DO $$ BEGIN
   IF to_regprocedure('public.erase_reports(uuid[])') IS NOT NULL THEN
     RAISE EXCEPTION 'TASK-048 erase_reports is already applied; this migration is one-shot';
   END IF;
-  IF to_regprocedure('public.append_remediation_version(uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)') IS NULL
+  IF to_regprocedure('public.append_interpretation_version(uuid,uuid,uuid,jsonb,jsonb,text,text,jsonb)') IS NULL
     OR to_regprocedure('public.delete_interpretations(uuid[])') IS NULL
     OR to_regclass('public.interpretation_history_protection') IS NULL THEN
-    RAISE EXCEPTION 'Apply the remediation wrapper 20261011000000 before erase_reports';
+    RAISE EXCEPTION 'Apply the version writer 20261011000000 before erase_reports';
   END IF;
 END $$;
 

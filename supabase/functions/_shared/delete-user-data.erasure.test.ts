@@ -4,7 +4,7 @@ import { transformSync } from 'esbuild';
 
 /**
  * Executes delete-user-data's real `deleteDataTables` from source (the
- * legacy-remediation.handler.test.ts technique) against a recording fake. Every
+ * entitlement-response.test.ts technique) against a recording fake. Every
  * query records when it starts executing and when it settles, and the RPC
  * settles only on a later macrotask, so any overlap with the report-graph
  * erasure is visible. The SQL side (erase_reports deletes the whole graph, no

@@ -33,9 +33,7 @@ import { resolveTier } from './tier';
 import { buildBasicProjection } from './interpretation-visibility';
 import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation } from './response-shaping';
 import { generationSample } from './generation-cost';
-import {
-  isHistoryProtected, LEGACY_REMEDIATION_MODE, legacyHistoryProtectedResponse, parseRemediationRequest, ProtectedHistoryError,
-} from './legacy-remediation';
+import * as versionWrite from './interpretation-version-write';
 
 const source = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
 function evaluate(fragment: string, values: Record<string, unknown>) {
@@ -44,7 +42,7 @@ function evaluate(fragment: string, values: Record<string, unknown>) {
 }
 function pipelineSource() {
   const start = source.indexOf('// ─── Shared generation pipeline');
-  const end = source.indexOf('// ─── Claim-only legacy remediation', start);
+  const end = source.indexOf('// ─── Version store', start);
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start);
   return source.slice(start, end);
@@ -80,7 +78,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
     rpc: async (name: string, args: Record<string, unknown>) => { calls.push({ name, args }); return { error: null }; } };
   const noCall = vi.fn(() => { throw new Error('inactive branch accessed'); });
   const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-  // The stages shared with remediation (TASK-048) are executed from source too.
+  // The stages shared with regeneration (TASK-048) are executed from source too.
   evaluate(pipelineSource() + '\nsink.pipeline = { loadGenerationContext, trendEvidenceFor, produceInterpretation };', {
     sink, sanitizeReportContext: () => undefined, buildPrimaryContext: () => null, debugLog: () => {},
     errorMessage: String, UserProfileContextSchema: { safeParse: noCall }, formatUserContextBlock: noCall,
@@ -103,8 +101,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       tryOpenAI: async () => generated, addFindingMetadata: noCall, buildBasicProjection,
       findFloorViolations, commitGeneratedInterpretation: noCall, recordGenerationCosts: noCall,
       isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers, ...sink.pipeline,
-      parseRemediationRequest, isHistoryProtected, ProtectedHistoryError, legacyHistoryProtectedResponse,
-      legacyRemediationResponse: noCall, LEGACY_REMEDIATION_MODE,
+      ...versionWrite, hasAnchor: async () => false, findRequestVersion: noCall, appendVersion: noCall,
     });
     const response = await handler(new Request('https://example.invalid', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: '{}' }));
     expect(response.status).toBe(200);

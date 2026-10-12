@@ -50,6 +50,7 @@ import {
 } from 'lucide-react';
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { createRegenerationRequests } from '../lib/regenerationRequest';
 import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
@@ -387,6 +388,7 @@ export function ReportView() {
   // The server refused to generate for this viewer (402): offer Premium, don't retry.
   const [generatePremiumRequired, setGeneratePremiumRequired] = useState(false);
   const [regenerateFailed, setRegenerateFailed] = useState(false);
+  const regenerationRequests = useRef(createRegenerationRequests()).current;
   const [paywallOpen, setPaywallOpen] = useState(false);
   const accessStateRef = useRef<InterpretationAccessResult | null>(null);
   const accessRequester = useRef(createAccessRequester(id => fetchInterpretationAccess(
@@ -1107,9 +1109,12 @@ export function ReportView() {
 
   const totalAnalyteCount = useMemo(() => reportAnalytes.filter(a => !a.is_core).length, [reportAnalytes]);
 
-  const handleRegenerate = async () => {
+  // `retry === true` only from the failed-regenerate retry action; a click
+  // passes its event, which is a new tap.
+  const handleRegenerate = async (retry?: unknown) => {
     if (!report || report.regeneration_count >= 3) return;
     if (freemium ? !freemiumCanRegenerate(accessState, report.regeneration_count) : !entitled) return;
+    const requestId = regenerationRequests.next(retry === true);
     setRegenerating(true);
     setError('');
     setRegenerateFailed(false);
@@ -1142,10 +1147,10 @@ export function ReportView() {
     };
     try {
       /*
-        Deliberately NOT deleting the existing interpretation first.
-        `generate-interpretation` upserts on `lab_report_id`, which is UNIQUE
-        (20260312070949_add_interpretation_source_and_unique_constraint.sql), so
-        a successful run replaces the row on its own. Deleting up front opened a
+        Deliberately NOT deleting the existing interpretation first. Once the
+        report holds one, `generate-interpretation` appends a new version keyed
+        by `request_id` (TASK-048) and the readers serve it; the historical row
+        is never replaced. Deleting up front opened a
         window where any failure — a 429 on the daily cap, a dropped connection,
         a 500 — destroyed the interpretation the user already had and could not
         get back, since the retry that would have replaced it is the thing that
@@ -1159,8 +1164,10 @@ export function ReportView() {
         body: {
           reportId,
           primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
+          request_id: requestId,
         },
       });
+      if (!interpError && fnData?.success) regenerationRequests.settle();
       if (freemium && (interpError || !fnData?.success)) {
         await failFreemium(interpError);
         return;
@@ -1456,7 +1463,7 @@ export function ReportView() {
               inline
               title={FREEMIUM_COPY.report.regenerateErrorTitle}
               body={FREEMIUM_COPY.report.regenerateErrorBody}
-              onRetry={() => { void handleRegenerate(); }}
+              onRetry={() => { void handleRegenerate(true); }}
             />
           )}
 

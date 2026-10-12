@@ -2,19 +2,20 @@
 -- TASK-048 turn 8 fixtures, shared by interpretation-versions.read.sql and
 -- interpretation-versions.read-export.sql. Include inside an open transaction
 -- that is rolled back. Versions are written only through the real service
--- wrapper; the two pointer states the wrapper cannot produce are constructed by
+-- writer (append_interpretation_version, turn 10); the two pointer states the
+-- writer cannot produce are constructed by
 -- the harness owner directly on interpretation_current_versions (no guard on
 -- that table) and are declared as administrative construction:
 --   rB: a version with its pointer deleted (version present, no selection);
 --   rA/rE rewound to their first version inside read.sql (pointer <> MAX).
 -- u1 owns rA..rD and holds report-linked claims on rA, rB, rC (three: the cap).
---   rA legacy, remediated twice, pointer on the second.
---   rB legacy, remediated once, pointer then deleted.
---   rC legacy, claimed, never remediated.
+--   rA legacy, regenerated twice, pointer on the second.
+--   rB legacy, regenerated once, pointer then deleted.
+--   rC legacy, claimed, never regenerated.
 --   rD current-policy body, no versions, unclaimed.
 -- u3 owns rE: legacy, claim on its content-hash draw only (report_id NULL), so
 --   the readers' claim.covered (historical blood_draw_id) is false: the Free
---   reader of a remediated report gets Basic. Remediated twice; the first
+--   reader of a regenerated report gets Basic. Regenerated twice; the first
 --   version's Basic carries an unknown claim policy (control 13).
 -- u2 owns rF: legacy, unclaimed. The foreign user for every cross-user probe.
 CREATE TEMP TABLE h048v_fixture(name text PRIMARY KEY,id uuid NOT NULL) ON COMMIT DROP;
@@ -47,22 +48,22 @@ BEGIN
     (u1,ra,md5('h048v-ra')||md5('h048v-ra-draw'),'accession'),
     (u1,rb,md5('h048v-rb')||md5('h048v-rb-draw'),'accession'),
     (u1,rc,md5('h048v-rc')||md5('h048v-rc-draw'),'accession'),
-    -- The evaluator's content-hash draw key (pinned against TypeScript in
-    -- remediation-draw-parity.test.ts); reproduced here only to build the fixture.
+    -- A content-hash draw key with report_id NULL: the historical row stores no
+    -- blood_draw_id, so the readers' claim.covered is false for rE.
     (u3,NULL,encode(sha256(convert_to('sha256:'||repeat('e',64),'UTF8')),'hex'),'content_hash');
-  -- Versions through the real claim-only wrapper, in order.
+  -- Versions through the real ordinary writer, in order.
   EXECUTE 'SET LOCAL ROLE service_role';
-  PERFORM append_remediation_version(u1,ra,gen_random_uuid(),f||'{"h048v_version":"A1"}',
+  PERFORM append_interpretation_version(u1,ra,gen_random_uuid(),f||'{"h048v_version":"A1"}',
     stale_policy||'{"headline":"H048V A1 basic"}','deep','h048v.1',meta);
   -- h048v_retired: inert under today's classifier; read.sql retires it to prove
   -- the reader still quarantines a selected version.
-  PERFORM append_remediation_version(u1,ra,gen_random_uuid(),f||'{"h048v_version":"A2","h048v_retired":true}',
+  PERFORM append_interpretation_version(u1,ra,gen_random_uuid(),f||'{"h048v_version":"A2","h048v_retired":true}',
     b||'{"headline":"H048V A2 basic"}','deep','h048v.2',meta);
-  PERFORM append_remediation_version(u1,rb,gen_random_uuid(),f||'{"h048v_version":"B1"}',
+  PERFORM append_interpretation_version(u1,rb,gen_random_uuid(),f||'{"h048v_version":"B1"}',
     b||'{"headline":"H048V B1 basic"}','deep','h048v.1',meta);
-  PERFORM append_remediation_version(u3,re,gen_random_uuid(),f||'{"h048v_version":"E1"}',
+  PERFORM append_interpretation_version(u3,re,gen_random_uuid(),f||'{"h048v_version":"E1"}',
     stale_policy||'{"headline":"H048V E1 basic"}','deep','h048v.1',meta);
-  PERFORM append_remediation_version(u3,re,gen_random_uuid(),f||'{"h048v_version":"E2"}',
+  PERFORM append_interpretation_version(u3,re,gen_random_uuid(),f||'{"h048v_version":"E2"}',
     b||'{"headline":"H048V E2 basic"}','deep','h048v.2',meta);
   EXECUTE 'RESET ROLE';
   -- Administrative construction: version present, pointer absent.

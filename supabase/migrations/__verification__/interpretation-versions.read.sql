@@ -88,17 +88,22 @@ BEGIN
     got:=pg_temp.one(pg_temp.rpc(u1,ra,p),'rpc ra');
     PERFORM pg_temp.vassert(got->'json_output'=va2.json_output,'H048V-SELECTED-BODY rpc premium='||p||tag);
     PERFORM pg_temp.vassert(got->>'stored_depth'='deep' AND got->>'interpretation_source'='ai'
-      AND (got->>'has_claim')::boolean AND got->>'tier'=ha.tier,'H048V-SELECTED-FIELDS rpc premium='||p||tag);
+      AND (got->>'has_claim')::boolean,'H048V-SELECTED-FIELDS rpc premium='||p||tag);
+    -- Turn 10: a version is a deep current-policy AI body; its effective tier is
+    -- 'plus', never the historical row's ('free' in this fixture).
+    PERFORM pg_temp.vassert(got->>'tier'='plus' AND ha.tier='free','H048V-VERSION-TIER rpc premium='||p||tag);
     PERFORM pg_temp.vassert(pg_temp.rpc_identity(got,va2.id),'H048V-IDENTITY rpc premium='||p||tag);
   END LOOP;
   got:=pg_temp.one(pg_temp.vread(u1,ra),'view ra');
   PERFORM pg_temp.vassert(got->'json_output'=va2.json_output,'H048V-SELECTED-BODY view'||tag);
-  -- The view keeps the historical row id (its one identity slot); every other
-  -- field is the version's, and its time is never the historical time.
-  PERFORM pg_temp.vassert((got->>'id')::uuid=ha.id AND (got->>'generated_at')::timestamptz=va2.generated_at
+  -- Owner Ruling 2: the view's one identity slot is the served version's id;
+  -- body, time and id are all the version's, never the historical row's.
+  PERFORM pg_temp.vassert((got->>'id')::uuid=va2.id AND (got->>'id')::uuid<>ha.id,'H048V-VIEW-ID-SELECTED'||tag);
+  PERFORM pg_temp.vassert((got->>'generated_at')::timestamptz=va2.generated_at
     AND (got->>'generated_at')::timestamptz IS DISTINCT FROM ha.generated_at
-    AND got->>'disclaimer_version'='h048v.2' AND got->>'interpretation_source'='ai' AND got->>'tier'=ha.tier,
+    AND got->>'disclaimer_version'='h048v.2' AND got->>'interpretation_source'='ai',
     'H048V-IDENTITY view'||tag);
+  PERFORM pg_temp.vassert(got->>'tier'='plus','H048V-VERSION-TIER view'||tag);
 
   -- 1b. Control 13: the non-covered Free reader of a remediated report gets Basic
   -- built from the VERSION's json_output_basic; Premium gets the version Full.
@@ -129,6 +134,7 @@ BEGIN
   got:=pg_temp.one(pg_temp.vread(u1,ra),'view ra rewound');
   PERFORM pg_temp.vassert(got->'json_output'=va1.json_output AND (got->>'generated_at')::timestamptz=va1.generated_at
     AND got->>'disclaimer_version'='h048v.1','H048V-EXPLICIT-SELECTION view'||tag);
+  PERFORM pg_temp.vassert((got->>'id')::uuid=va1.id,'H048V-VIEW-ID-SELECTED rewound'||tag);
   got:=pg_temp.one(pg_temp.rpc(u3,re,false),'rpc re rewound');
   PERFORM pg_temp.vassert(got->'json_output'=interpretation_sanitize_basic(ve1.json_output_basic,'ai')
     AND pg_temp.rpc_identity(got,ve1.id),'H048V-EXPLICIT-SELECTION rpc basic'||tag);
@@ -162,7 +168,12 @@ BEGIN
   END LOOP;
   got:=pg_temp.one(pg_temp.vread(u1,rb),'view rb');
   PERFORM pg_temp.vassert(got->'json_output'=shell AND (got->>'id')::uuid=hb.id AND (got->>'generated_at')::timestamptz=hb.generated_at
-    AND got->>'disclaimer_version' IS NOT DISTINCT FROM hb.disclaimer_version,'H048V-NO-POINTER view'||tag);
+    AND got->>'disclaimer_version' IS NOT DISTINCT FROM hb.disclaimer_version AND got->>'tier' IS NOT DISTINCT FROM hb.tier,
+    'H048V-NO-POINTER view'||tag);
+  FOREACH p IN ARRAY ARRAY[false,true] LOOP
+    PERFORM pg_temp.vassert(pg_temp.one(pg_temp.rpc(u1,rb,p),'rpc rb tier')->>'tier' IS NOT DISTINCT FROM hb.tier,
+      'H048V-NO-POINTER-TIER rpc premium='||p||tag);
+  END LOOP;
   got:=pg_temp.one(pg_temp.vread(u1,rc),'view rc');
   PERFORM pg_temp.vassert(got->'json_output'=shell AND (got->>'id')::uuid=hc.id,'H048V-NEVER-REMEDIATED view'||tag);
   got:=pg_temp.one(pg_temp.vread(u1,rd),'view rd');

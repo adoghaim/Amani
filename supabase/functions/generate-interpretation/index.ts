@@ -31,17 +31,17 @@ import {
 } from "../_shared/response-shaping.ts";
 import {
   isHistoryProtected,
-  LEGACY_REMEDIATION_MODE,
+  isVersionable,
   legacyHistoryProtectedResponse,
-  parseRemediationRequest,
   ProtectedHistoryError,
-  REMEDIATION_DISCLAIMER_VERSION,
-  RemediationAppendError,
-  remediationErrorResponse,
-  remediationServedBody,
-  runLegacyRemediation,
-  type RemediationActions,
-} from "../_shared/legacy-remediation.ts";
+  regenerationFailedResponse,
+  regenerationProvenance,
+  REQUEST_ID_REQUIRED,
+  REQUEST_REUSED_SQLSTATE,
+  VERSION_DISCLAIMER_VERSION,
+  versionIdentity,
+  type StoredVersion,
+} from "../_shared/interpretation-version-write.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
@@ -1280,8 +1280,8 @@ function sanitizeReportContext(raw: unknown): LabReportData["context"] {
 }
 
 // ─── Shared generation pipeline ───────────────────────────────────────────────
-// Ordinary generation and claim-only legacy remediation (TASK-048) run these
-// identical stages. Only entitlement and the commit differ, in the handler.
+// First generation and regeneration (TASK-048) run these identical stages. Only
+// the commit differs: the anchor row first, an appended version afterwards.
 
 // The same `createClient(url, key)` call the handler makes, so the shared stages
 // see its client and row types. `ReturnType<typeof createClient>` would erase
@@ -1417,7 +1417,8 @@ function trendEvidenceFor(ctx: GenerationContext): TrendEvidence[] {
 }
 
 /** Model call, shaping, V2-03c claim authority, Basic projection and the floor
- * check. `policyActive` selects the activated pipeline; remediation always does. */
+ * check. `policyActive` selects the activated pipeline; a regeneration that
+ * appends a version always does. */
 async function produceInterpretation(input: {
   ctx: GenerationContext;
   reportId: string;
@@ -1506,7 +1507,7 @@ async function produceInterpretation(input: {
   const floorViolations = findFloorViolations(interpretationJson);
   if (floorViolations.length > 0) {
     console.error(
-      "[generate-interpretation] MEDICAL FLOOR VIOLATION — ordinary generation persists anyway; remediation refuses (nothing stored):",
+      "[generate-interpretation] MEDICAL FLOOR VIOLATION — a first generation persists anyway; a version append refuses (nothing stored):",
       JSON.stringify({ reportId, tier: shaped.tier, depth: shaped.depth, floorViolations }),
     );
   }
@@ -1514,94 +1515,61 @@ async function produceInterpretation(input: {
   return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations };
 }
 
-// ─── Claim-only legacy remediation (TASK-048) ────────────────────────────────
-// Ordering lives in _shared/legacy-remediation.ts; this is wiring. No
-// subscription check, no claim commit, no save_interpretation, no counter, no
-// report status write. Every failure is a stable code, never the old prose.
+// ─── Version store (TASK-048) ────────────────────────────────────────────────
+// A report that already holds its anchor interpretation is never overwritten in
+// place: its regeneration appends a version through the trusted writer, which
+// decides nothing about entitlement and consumes nothing. Wiring only.
 
-async function legacyRemediationResponse(input: {
-  supabase: ServiceClient;
-  userId: string;
-  reportId: string;
-  requestId: string;
-  pinnedSlug: string | null;
-  openaiApiKey: string | undefined;
-  recordCost: (sample: GenerationSample) => void;
-}): Promise<Response> {
-  const { supabase, userId, reportId, requestId } = input;
-  const json = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), {
-    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+/** Whether the report already holds its anchor interpretation. Through the
+ * owner-bound service reader (one row per owned report), never the raw table. */
+async function hasAnchor(supabase: ServiceClient, userId: string, reportId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("read_interpretation_for_server", {
+    p_user_id: userId, p_report_id: reportId, p_premium: false,
   });
-  const actions: RemediationActions = {
-    async evaluate(user, report) {
-      const { data, error } = await supabase.rpc("evaluate_legacy_remediation", { p_user_id: user, p_report_id: report });
-      if (error) throw new Error(`Remediation eligibility failed: ${error.message}`);
-      if (!Array.isArray(data) || data.length !== 1) throw new Error("Unexpected remediation eligibility shape");
-      const row = data[0] as { eligible?: unknown; history_id?: unknown; claim_id?: unknown };
-      return {
-        eligible: row.eligible === true,
-        historyId: typeof row.history_id === "string" ? row.history_id : null,
-        claimId: typeof row.claim_id === "string" ? row.claim_id : null,
-      };
-    },
-    async findVersion(report, request) {
-      const { data, error } = await supabase.from("interpretation_versions")
-        .select("id, historical_interpretation_id, generated_at, json_output, json_output_basic")
-        .eq("lab_report_id", report).eq("request_id", request).maybeSingle();
-      if (error) throw new Error(`Remediation version read failed: ${error.message}`);
-      if (!data) return null;
-      return {
-        versionId: data.id, historicalInterpretationId: data.historical_interpretation_id,
-        generatedAt: data.generated_at, full: data.json_output, basic: data.json_output_basic,
-      };
-    },
-    async generate() {
-      const ctx = await loadGenerationContext(supabase, reportId, userId, input.pinnedSlug);
-      const produced = await produceInterpretation({
-        ctx, reportId, trendEvidence: trendEvidenceFor(ctx), tier: "plus",
-        generateDeep: true, policyActive: true, openaiApiKey: input.openaiApiKey, recordCost: input.recordCost,
-      });
-      if (produced.aiInterpretation === null) return null;
-      // Versions are append-only, so a floor violation is refused here rather
-      // than stored permanently; the customer keeps raw labs and can retry.
-      if (produced.floorViolations.length > 0) return null;
-      return {
-        full: produced.interpretationJson, basic: produced.basicProjection,
-        depth: produced.shaped.depth, source: produced.shaped.source,
-        provenance: { pipeline: "generate-interpretation", mode: LEGACY_REMEDIATION_MODE },
-      };
-    },
-    async append({ userId: user, reportId: report, requestId: request, output }) {
-      const { data, error } = await supabase.rpc("append_remediation_version", {
-        p_user_id: user, p_report_id: report, p_request_id: request,
-        p_full: output.full, p_basic: output.basic, p_depth: output.depth,
-        p_disclaimer: REMEDIATION_DISCLAIMER_VERSION, p_provenance: output.provenance,
-      });
-      if (error) throw new RemediationAppendError(error.code ?? null, error.message);
-      if (!Array.isArray(data) || data.length !== 1) throw new RemediationAppendError(null, "Unexpected append shape");
-      const row = data[0] as { version_id: string; history_id: string; version_generated_at: string };
-      return {
-        versionId: row.version_id, historicalInterpretationId: row.history_id,
-        generatedAt: row.version_generated_at, full: output.full, basic: output.basic,
-      };
-    },
+  if (error) throw new Error(`Anchor read failed: ${error.message}`);
+  if (!Array.isArray(data)) throw new Error("Unexpected anchor read shape");
+  return data.length > 0;
+}
+
+/** The version already committed for this request, if any. */
+async function findRequestVersion(supabase: ServiceClient, reportId: string, requestId: string): Promise<StoredVersion | null> {
+  const { data, error } = await supabase.from("interpretation_versions")
+    .select("id, historical_interpretation_id, generated_at, json_output, json_output_basic")
+    .eq("lab_report_id", reportId).eq("request_id", requestId).maybeSingle();
+  if (error) throw new Error(`Version read failed: ${error.message}`);
+  if (!data) return null;
+  return {
+    versionId: data.id, historicalInterpretationId: data.historical_interpretation_id,
+    generatedAt: data.generated_at, full: data.json_output, basic: data.json_output_basic,
   };
-  try {
-    const outcome = await runLegacyRemediation(actions, { userId, reportId, requestId });
-    if (outcome.status === "served") {
-      return json(200, {
-        ...remediationServedBody(outcome.version, outcome.created),
-        ...visibleClaimProjection(outcome.version.basic),
-      });
+}
+
+/** Appends and selects a version. A request id reused with different output is a
+ * concurrent twin of this request that committed first: serve it. */
+async function appendVersion(supabase: ServiceClient, input: {
+  userId: string; reportId: string; requestId: string;
+  full: Record<string, unknown>; basic: Record<string, unknown>;
+}): Promise<{ version: StoredVersion; created: boolean }> {
+  const { data, error } = await supabase.rpc("append_interpretation_version", {
+    p_user_id: input.userId, p_report_id: input.reportId, p_request_id: input.requestId,
+    p_full: input.full, p_basic: input.basic, p_depth: "deep",
+    p_disclaimer: VERSION_DISCLAIMER_VERSION, p_provenance: regenerationProvenance(),
+  });
+  if (isHistoryProtected(error)) throw new ProtectedHistoryError();
+  if (error) {
+    if (error.code === REQUEST_REUSED_SQLSTATE) {
+      const twin = await findRequestVersion(supabase, input.reportId, input.requestId);
+      if (twin) return { version: twin, created: false };
     }
-    if (outcome.status === "failed") console.warn("[generate-interpretation] remediation failed at stage:", outcome.stage);
-    const { status, body } = remediationErrorResponse(outcome);
-    return json(status, body);
-  } catch (err) {
-    console.error("[generate-interpretation] remediation threw:", errorMessage(err));
-    const { status, body } = remediationErrorResponse({ status: "failed", stage: "append" });
-    return json(status, body);
+    throw new Error(`append_interpretation_version failed: ${error.message}`);
   }
+  if (!Array.isArray(data) || data.length !== 1) throw new Error("Unexpected append shape");
+  const row = data[0] as { version_id: string; history_id: string; version_generated_at: string };
+  return {
+    version: { versionId: row.version_id, historicalInterpretationId: row.history_id,
+      generatedAt: row.version_generated_at, full: input.full, basic: input.basic },
+    created: true,
+  };
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -1656,29 +1624,7 @@ Deno.serve(async (req: Request) => {
       );
     }
     reportId = parsedBody.data.reportId;
-
-    // TASK-048: claim-only legacy remediation. Branches before the ownership
-    // and subscription checks on purpose: the evaluator decides ownership and
-    // eligibility, so a missing and a foreign report get one answer, and a
-    // claim holder without a subscription is not refused. Never throws.
-    const remediationRequest = parseRemediationRequest(body);
-    if (remediationRequest.kind === "invalid") {
-      return new Response(JSON.stringify({ error: "Invalid request body" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (remediationRequest.kind === "remediation") {
-      // Model spend is accounted as remediation; the customer pays nothing.
-      costContext = {
-        userId: user.id, reportId, interpretationTier: "plus",
-        planAtRequest: LEGACY_REMEDIATION_MODE, claimConsumed: false, deep: true,
-      };
-      return await legacyRemediationResponse({
-        supabase, userId: user.id, reportId, requestId: remediationRequest.requestId,
-        pinnedSlug: parsedBody.data.primary_canonical_slug ?? null, openaiApiKey,
-        recordCost: sample => costSamples.push(sample),
-      });
-    }
+    const requestId = parsedBody.data.request_id ?? null;
 
     const { data: reportCheck } = await supabase
       .from("lab_reports")
@@ -1695,6 +1641,16 @@ Deno.serve(async (req: Request) => {
     if (reportCheck.user_id !== user.id) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // TASK-048: once the report holds its anchor interpretation, a regeneration
+    // appends a version instead of overwriting it, keyed by the client's per-tap
+    // request_id so a retried regeneration appends nothing twice.
+    const appendsVersion = await hasAnchor(supabase, user.id, reportId);
+    if (appendsVersion && requestId === null) {
+      return new Response(JSON.stringify({ error: REQUEST_ID_REQUIRED }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -1730,13 +1686,34 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // A retry of a committed regeneration is answered from the version store
+    // without model spend, claim decision or any write but the report status.
+    if (appendsVersion) {
+      const committed = await findRequestVersion(supabase, reportId, requestId!);
+      if (committed) {
+        await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
+        return new Response(JSON.stringify(active ? {
+          success: true, source: "ai", reused: true,
+          access: tierDecision.tier === "plus" ? "full" : "basic",
+          interpretation: tierDecision.tier === "plus" ? committed.full : servedBasic(committed.basic),
+          ...visibleClaimProjection(committed.basic), ...versionIdentity(committed),
+        } : { success: true, source: "ai", reused: true, ...versionIdentity(committed) }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const ctx = await loadGenerationContext(
       supabase, reportId, reportCheck.user_id, parsedBody.data.primary_canonical_slug ?? null,
     );
     const { analytes, primaryContext } = ctx;
+    // A version must pass V2-03c claim authority whatever the switch says, so a
+    // regeneration that appends one always runs the activated pipeline. First
+    // generation keeps today's behaviour in both states.
+    const policyActive = active || appendsVersion;
     // Activated only: per-marker comparison against the same prior report the
     // primary context uses. Inactive requests keep prompt and payload unchanged.
-    const trendEvidence: TrendEvidence[] = active ? trendEvidenceFor(ctx) : [];
+    const trendEvidence: TrendEvidence[] = policyActive ? trendEvidenceFor(ctx) : [];
     debugLog(`[generate-interpretation] primaryContext:`, primaryContext
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");
@@ -1836,8 +1813,8 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    const { shaped, aiInterpretation, interpretationJson, basicProjection } = await produceInterpretation({
-      ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive: active, openaiApiKey,
+    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations } = await produceInterpretation({
+      ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive, openaiApiKey,
       recordCost: costContext ? sample => costSamples.push(sample) : undefined,
     });
 
@@ -1860,7 +1837,31 @@ Deno.serve(async (req: Request) => {
 
     // A race loser saves the already-generated payload with Free metadata.
     // Post-limit always-generation uses this same upsert without consuming a claim.
-    if (!savedByLedger) {
+    // TASK-048: when the report already holds its anchor, the same outcomes
+    // append a version instead; only a deep current-policy AI body qualifies.
+    let appended: { version: StoredVersion; created: boolean } | null = null;
+    if (!savedByLedger && appendsVersion) {
+      if (!isVersionable({ source, depth: shaped.depth, floorViolations })) {
+        // Nothing persisted: the selected interpretation stands, never a fallback.
+        console.warn("[generate-interpretation] Regeneration not versioned:", JSON.stringify({ source, depth: shaped.depth }));
+        const refused = regenerationFailedResponse(generateDeep);
+        return new Response(JSON.stringify(refused.body), {
+          status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        appended = await appendVersion(supabase, {
+          userId: user.id, reportId, requestId: requestId!, full: interpretationJson, basic: basicProjection,
+        });
+      } catch (err) {
+        if (err instanceof ProtectedHistoryError) throw err;
+        // The previously selected interpretation is intact, so the report is not in error.
+        console.error("[generate-interpretation] Version append error:", errorMessage(err));
+        return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (!savedByLedger) {
       const { error: upsertError } = await supabase.rpc("save_interpretation", {
         p_user_id: user.id, p_report_id: reportId,
         p_interpretation: interpretationJson,
@@ -1890,13 +1891,18 @@ Deno.serve(async (req: Request) => {
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
     console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
 
-    // The same gate get-interpretation applies, so both responses agree.
+    // The same gate get-interpretation applies, so both responses agree. A
+    // version is served as committed (a concurrent twin's body, if it won) and
+    // under its own identity, never the historical row's.
+    const servedFull = appended ? appended.version.full : interpretationJson;
+    const servedBasicProjection = appended ? appended.version.basic : basicProjection;
+    const identity = appended ? { reused: !appended.created, ...versionIdentity(appended.version) } : {};
     return new Response(JSON.stringify(active ? {
       success: true, source,
       access: shaped.tier === "plus" ? "full" : "basic",
-      interpretation: shaped.tier === "plus" ? interpretationJson : servedBasic(basicProjection),
-      ...visibleClaimProjection(basicProjection),
-    } : { success: true, source }), {
+      interpretation: shaped.tier === "plus" ? servedFull : servedBasic(servedBasicProjection),
+      ...visibleClaimProjection(servedBasicProjection), ...identity,
+    } : { success: true, source, ...identity }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 

@@ -37,7 +37,7 @@ CREATE FUNCTION pg_temp.graph(ids uuid[]) RETURNS text LANGUAGE sql AS $$
       UNION ALL SELECT lab_report_id FROM public.report_analytes) x WHERE lab_report_id=ANY(ids))) $$;
 
 -- e1 holds two reports, both legacy, both with versions: eA through the
--- remediation wrapper on a durable claim (two versions, parent-linked), eB
+-- ordinary writer (two versions, parent-linked) with a durable claim, eB
 -- through the primitive. e2 owns eC with a version, which must survive.
 DO $$ DECLARE basic jsonb; full_body jsonb;
   legacy jsonb:='{"headline":"H048E legacy canary","overall_interpretation":"H048E legacy prose canary"}';
@@ -57,8 +57,8 @@ DO $$ DECLARE basic jsonb; full_body jsonb;
   END LOOP;
   INSERT INTO introductory_deep_access_claims(user_id,report_id,blood_draw_id,evidence_tier) VALUES(e1,ea,repeat('e',64),'accession');
   EXECUTE 'SET LOCAL ROLE service_role';
-  PERFORM append_remediation_version(e1,ea,gen_random_uuid(),full_body,basic,'deep','1.0','{"test_only":"H048E"}');
-  PERFORM append_remediation_version(e1,ea,gen_random_uuid(),full_body,basic,'deep','1.0','{"test_only":"H048E"}');
+  PERFORM append_interpretation_version(e1,ea,gen_random_uuid(),full_body,basic,'deep','1.0','{"test_only":"H048E"}');
+  PERFORM append_interpretation_version(e1,ea,gen_random_uuid(),full_body,basic,'deep','1.0','{"test_only":"H048E"}');
   EXECUTE 'RESET ROLE';
   PERFORM append_interpretation_version_internal(e1,eb,(SELECT id FROM interpretations_private WHERE lab_report_id=eb),
     gen_random_uuid(),NULL,full_body,basic,'deep','1.0','{}');
