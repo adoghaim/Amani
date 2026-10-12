@@ -24,7 +24,9 @@ ORDER BY c.relname, t.tgname;
 -- interpretation overwrite protection, legacy-writer projection trigger,
 -- users privileged-column triggers, and any V2 additions). Do not guess names.
 WITH expected(table_name, trigger_name) AS (
-  VALUES ('REPLACE_table', 'REPLACE_trigger')
+  VALUES ('REPLACE_table', 'REPLACE_trigger'),
+         -- PK-FIX-04 (20261015110000): records a deleted report's stored file.
+         ('lab_reports', 'zz_record_lab_file_cleanup')
 )
 SELECT e.table_name, e.trigger_name, COALESCE(t.tgenabled::text, 'MISSING') AS mode
 FROM expected e

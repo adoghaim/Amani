@@ -42,3 +42,9 @@ verify_jwt = true
 
 [functions.get-interpretation]
 verify_jwt = true
+
+# Single-report deletion (PK-FIX-04). The report id is checked against the
+# caller from this JWT (RLS read), never trusted from the body alone; the
+# function also calls `auth.getUser()` itself.
+[functions.delete-report]
+verify_jwt = true
