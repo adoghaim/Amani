@@ -217,7 +217,7 @@ BEGIN
 
   -- 9. Once versioned, the anchors stay frozen to every writer.
   EXECUTE 'SET LOCAL ROLE service_role';
-  PERFORM pg_temp.denied(pg_temp.lsave(l1,lb,f,b),'55000','H048L-VERSIONED-ANCHOR-SAVE');
+  PERFORM pg_temp.denied(pg_temp.lsave(l1,lb,f||'{"headline":"H048L versioned overwrite"}',b),'55000','H048L-VERSIONED-ANCHOR-SAVE');
   EXECUTE 'RESET ROLE';
   PERFORM pg_temp.vassert(pg_temp.lhistory()=history0,'H048L-HISTORY-BYTES final');
   RAISE EXCEPTION USING ERRCODE='P0491',MESSAGE='H048L undo round';

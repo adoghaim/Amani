@@ -19,7 +19,7 @@ DO $$ BEGIN
     OR to_regprocedure('public.commit_deep_access(uuid,uuid,text,text,jsonb,text,text,boolean)') IS NULL
     OR to_regprocedure('public.guard_interpretation_history()') IS NULL
     OR to_regprocedure('public.read_interpretation_for_server(uuid,uuid,boolean)') IS NULL
-    OR strpos(pg_get_function_result('public.read_interpretation_for_server(uuid,uuid,boolean)'::regprocedure),'selected_version_id')=0 THEN
+    OR COALESCE(strpos(pg_get_function_result(to_regprocedure('public.read_interpretation_for_server(uuid,uuid,boolean)')),'selected_version_id'),0)=0 THEN
     RAISE EXCEPTION 'Apply the reader cutover 20261011000002 before the ledger version cutover';
   END IF;
 END $$;
