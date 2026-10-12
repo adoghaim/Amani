@@ -26,12 +26,15 @@
  *      still exists.
  *   3. `deleteStripeCustomer` — mark the customer deleted in Stripe.
  *      Also stops future card charges via out-of-band automations.
- *   4. `deleteLocalStripeRecords` — remove `stripe_customers`,
- *      `stripe_subscriptions`, `stripe_orders` rows for this customer +
- *      user. Idempotent (rows may already be gone on retry).
- *   5. `deleteStorageFiles` — remove uploaded lab PDFs/images.
- *   6. `deleteDataTables` — remove all app data rows keyed on user_id.
- *   7. `deleteAuthUser` — LAST. If any earlier step failed, the user can
+ *   4. `deleteStorageFiles` — remove uploaded lab PDFs/images.
+ *   5. `deleteDataTables` — ONE call to the `delete_user_data` SQL function,
+ *      which erases every user-owned row (including the local Stripe copies)
+ *      in a single transaction with a fixed lock order. It used to be ~20
+ *      separate requests, and two overlapping deletions of a multi-report
+ *      user deadlocked (PK-03e-E). A lock timeout, deadlock or serialization
+ *      failure rolls the whole thing back, so it is retried here — a bounded
+ *      number of times — instead of failing the user's request outright.
+ *   6. `deleteAuthUser` — LAST. If any earlier step failed, the user can
  *      still authenticate and retry deletion. If auth were deleted first
  *      and something later failed, the user would be orphaned with no way
  *      to trigger the rest.
@@ -147,20 +150,67 @@ export interface AccountDeletionActions {
   cancelStripeSubscriptions(customerId: string): Promise<void>;
   /** Delete the customer from Stripe. Idempotent on already-gone. */
   deleteStripeCustomer(customerId: string): Promise<void>;
-  /** Remove local rows in stripe_customers, stripe_subscriptions, stripe_orders. */
-  deleteLocalStripeRecords(userId: string, customerId: string): Promise<void>;
   /** Remove all files under the user's storage prefix. */
   deleteStorageFiles(userId: string): Promise<void>;
-  /** Delete rows from every user-keyed data table. */
+  /**
+   * Erase every user-owned row in one transaction (`delete_user_data`).
+   * Throw with the Postgres SQLSTATE in `code` so a retryable failure can be
+   * told apart from a real one.
+   */
   deleteDataTables(userId: string): Promise<void>;
   /** Delete the auth.users row. LAST — after this the user can't retry. */
   deleteAuthUser(userId: string): Promise<void>;
+}
+
+/**
+ * SQLSTATEs after which the whole erasure transaction has rolled back and an
+ * identical retry can succeed: deadlock_detected, lock_not_available (our
+ * lock_timeout), serialization_failure. Anything else is a real failure.
+ */
+export const RETRYABLE_DELETION_SQLSTATES: ReadonlySet<string> = new Set(["40P01", "55P03", "40001"]);
+
+export function isRetryableDeletionError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && RETRYABLE_DELETION_SQLSTATES.has(code);
+}
+
+export interface DeletionRetryPolicy {
+  /** Total tries including the first. */
+  attempts: number;
+  /** Delay before retry n (1-based) is `baseDelayMs * n`. */
+  baseDelayMs: number;
+  sleep: (ms: number) => Promise<void>;
+}
+
+export const DEFAULT_DELETION_RETRY: DeletionRetryPolicy = {
+  attempts: 3,
+  baseDelayMs: 250,
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
+
+async function eraseDataWithRetry(
+  actions: AccountDeletionActions,
+  userId: string,
+  policy: DeletionRetryPolicy,
+): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await actions.deleteDataTables(userId);
+      return;
+    } catch (error) {
+      // Out of tries, or not a failure a retry can fix: surface it, so the
+      // handler answers non-2xx and auth is never deleted over live rows.
+      if (attempt >= policy.attempts || !isRetryableDeletionError(error)) throw error;
+      await policy.sleep(policy.baseDelayMs * attempt);
+    }
+  }
 }
 
 export async function deleteUserAccount(
   actions: AccountDeletionActions,
   userId: string,
   options: DeleteAccountOptions = {},
+  retry: DeletionRetryPolicy = DEFAULT_DELETION_RETRY,
 ): Promise<void> {
   /*
     Store subscriptions first, before a single destructive call.
@@ -191,11 +241,11 @@ export async function deleteUserAccount(
   if (customerId) {
     await actions.cancelStripeSubscriptions(customerId);
     await actions.deleteStripeCustomer(customerId);
-    await actions.deleteLocalStripeRecords(userId, customerId);
   }
 
   await actions.deleteStorageFiles(userId);
-  await actions.deleteDataTables(userId);
+  // Also drops the local Stripe rows, in the same transaction as everything else.
+  await eraseDataWithRetry(actions, userId, retry);
 
   // Auth deletion is last on purpose. If any prior step throws, the caller
   // returns 5xx and the user retries. Once auth is gone, no retry is possible.

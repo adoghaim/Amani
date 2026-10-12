@@ -269,6 +269,9 @@ docker cp "$HERE/flagged-trends.prelude.sql" "$CONTAINER:/tmp/flagged-prelude.sq
 docker cp "$HERE/flagged-trends.verify.sql" "$CONTAINER:/tmp/flagged-verify.sql" >/dev/null
 # Use a separate database cloned at the prepare stage: the migration commits.
 psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE flagged_before TEMPLATE amani;'
+# PK-03e-E: account erasure must also work before the cutover, which is where
+# production is today. Snapshot this state for Case 11.
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE deletion_before TEMPLATE amani;'
 docker exec -i "$CONTAINER" psql -U postgres -d flagged_before -v ON_ERROR_STOP=1 -v rel=interpretations -q \
   -f /tmp/flagged-prelude.sql -f /tmp/flagged.sql -f /tmp/flagged.sql -f /tmp/flagged-verify.sql -f /tmp/deterministic-verify.sql
 
@@ -338,3 +341,23 @@ psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN
     WHERE b.row_data IS DISTINCT FROM to_jsonb(i)) THEN RAISE EXCEPTION '000001 changed stored rows'; END IF; END \$\$;"
 psql_f -v ON_ERROR_STOP=1 -v rel=interpretations_private -q -f /tmp/deterministic-verify.sql
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/visibility-verify.sql
+
+# Case 11 (PK-03e-E): account erasure, on both sides of the cutover:
+# `deletion_before` (pre-cutover, as production is today) and a clone of the
+# fully migrated `amani`. The real lab_reports, interpretations table,
+# claims (with their immutability trigger), generation costs and
+# commit_deep_access are what gets raced. Reproduces the deadlock of the old
+# multi-request deletion, then proves delete_user_data serialises with a second
+# deletion, regenerate and the cost insert, and leaves no user-owned row.
+echo "==> account erasure: ordered, atomic, deadlock-free"
+ERASURE=20261011000000_delete_user_data_ordered.sql
+psql_f -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE deletion_after TEMPLATE amani;'
+docker cp "$HERE/account-deletion.prelude.sql" "$CONTAINER:/tmp/deletion-prelude.sql" >/dev/null
+docker cp "$HERE/account-deletion.verify.sql" "$CONTAINER:/tmp/deletion-verify.sql" >/dev/null
+docker cp "$HERE/../$ERASURE" "$CONTAINER:/tmp/$ERASURE" >/dev/null
+for db in deletion_before deletion_after; do
+  echo "--- $db"
+  for file in /tmp/deletion-prelude.sql "/tmp/$ERASURE" "/tmp/$ERASURE" /tmp/deletion-verify.sql; do
+    docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "$file"
+  done
+done
