@@ -1,5 +1,10 @@
 # TASK-048 turn 6: claim-only eligibility and the server remediation path
 
+> **Superseded (turns 10 and 13).** Owner Ruling 5 (2026-10-11) and the pre-launch de-scope
+> (2026-10-12) removed the claim-only evaluator, the remediation wrapper and the edge
+> remediation mode this turn built; only its retry/parent/no-rewind rules survive, inside the
+> ordinary writer `append_interpretation_version` (turn 10). Kept as history only. See `turn-10-descope.md` and `turn-13-prelaunch-descope.md`.
+
 Base `558bea0`. The foundation is unchanged and every existing migration is frozen. Nothing customer-visible changes: no `src/**`, no copy, no reader cutover. **I have run none of the SQL**, because there is no Docker in this sandbox. Every database claim below is an executable assertion wired into `interpretation-versions.run.sh`, and it is not proven until the Lead runs that script.
 
 ## Corrections to the directive (with evidence)
