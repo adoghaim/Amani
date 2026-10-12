@@ -574,3 +574,81 @@ describe('owner R1 — model prose renders only as the report\'s own claims', ()
     expect(unresolvedModelProse(app, [])).toHaveLength(3);
   }, 30_000);
 });
+
+/*
+  PK-FIX-06 (owner decision D13). A report with a cycle day but no phase used
+  to hide the day. The real page now shows the day, with a neutral note, when
+  no phase was estimated for it: a draw after day 35, or a known typical length
+  other than 28 days.
+
+  Nothing else changes:
+  - no phase label anywhere and no model text on the card;
+  - V2 still withholds the cycle-dependent hormone;
+  - page-wide policy language holds;
+  - a day the map labels, with no phase and no known length, still shows no
+    card. An example is a lab-printed day with no last period date.
+
+  Synthetic rows.
+*/
+describe('PK-FIX-06: the cycle day renders without a phase, in neutral language', () => {
+  function seedCycle(facts: Record<string, unknown>) {
+    seed(9, 6);
+    // The model claims a phase and a confident day; neither may reach the card.
+    fixture.interpretation = { json_output: {
+      ...(fixture.interpretation!['json_output'] as Record<string, unknown>),
+      cycle_context: { estimated_cycle_day: 3, estimated_cycle_phase: 'luteal', confidence: 'high', explanation: C[4] },
+    } };
+    Object.assign(fixture.tables.lab_reports!.find(r => r['id'] === CURRENT)!, facts);
+    // A cycle-dependent hormone, so the page shows whether V2 scores or withholds it.
+    fixture.tables.biomarkers!.push(...rows(CURRENT, [['estradiol', 150, 'pg/mL', 30, 400]]));
+  }
+  const cycleCard = () => Array.from(app.querySelectorAll('h3'))
+    .find(h => h.textContent === 'Cycle context')?.parentElement?.parentElement ?? null;
+  const estradiolCard = () => app.querySelector('article[aria-label="Estradiol (E2) result"]');
+  const WITHHELD = 'Amani context score unavailable';
+
+  it.each([
+    ['(a) day 36, unknown length', { estimated_cycle_day: 36, average_cycle_length: null }, '36', 'Phase not estimated after cycle day 35.'],
+    ['(a) day 36, 28 stored (as every report saved since 2026-04-14)', { estimated_cycle_day: 36, average_cycle_length: 28 }, '36',
+      'Phase not estimated after cycle day 35.'],
+    ['(b) day 21 of a 35-day cycle', { estimated_cycle_day: 21, average_cycle_length: 35 }, '21', 'Phase not estimated for a 35-day cycle.'],
+    ['(b) day 10 of a 24-day cycle', { estimated_cycle_day: 10, average_cycle_length: 24 }, '10', 'Phase not estimated for a 24-day cycle.'],
+  ])('%s: the card shows the cycle day and the note, no phase; estradiol withheld', async (_name, facts, day, note) => {
+    seedCycle({ estimated_cycle_phase: 'unknown', ...facts });
+    await renderAndOpenAll();
+    const card = cycleCard();
+    expect(card).not.toBeNull();
+    expect(Array.from(card!.querySelectorAll('p')).map(p => p.textContent)).toEqual(['Cycle day', day, note]);
+    expect(card!.querySelector('[data-cycle-phase-note]')?.textContent).toBe(note);
+    expect(card!.querySelector('[data-model-surface], [data-model-field]')).toBeNull();
+    expect(card!.textContent).not.toMatch(/confidence/i);
+    // No phase anywhere on the page: no header pill, no phase-specific band.
+    expect(app.textContent).not.toMatch(/luteal|follicular|ovulatory|menstrual phase/i);
+    expect(estradiolCard()?.textContent).toContain(WITHHELD);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('PRESERVE: a day-map phase renders as before, with no note, and estradiol is scored', async () => {
+    seedCycle({ estimated_cycle_phase: 'luteal', estimated_cycle_day: 21, average_cycle_length: null });
+    await renderAndOpenAll();
+    expect(Array.from(cycleCard()!.querySelectorAll('p')).map(p => p.textContent)).toEqual(['Phase', 'luteal', 'Cycle day', '21']);
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+    expect(estradiolCard()).not.toBeNull();
+    expect(estradiolCard()?.textContent).not.toContain(WITHHELD);
+  }, 30_000);
+
+  it('PRESERVE: a day the map labels, with no phase and no known length, shows no card, as before', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: 14, average_cycle_length: null, last_period_start_date: null });
+    await renderAndOpenAll();
+    expect(cycleCard()).toBeNull();
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+    expect(estradiolCard()?.textContent).toContain(WITHHELD);
+  }, 30_000);
+
+  it('missing last-period date (no cycle day): no cycle card', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: null, average_cycle_length: 35, last_period_start_date: null });
+    await renderAndOpenAll();
+    expect(cycleCard()).toBeNull();
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+  }, 30_000);
+});

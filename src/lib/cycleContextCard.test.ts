@@ -60,6 +60,46 @@ describe('cycle context card: deterministic phase/day; model prose only as an au
   it('old string cycle_context rows show only report facts', () => {
     expect(cycleContextCard(report, 'Old model cycle narrative')).toEqual({ phase: 'luteal', day: 21, confidence: null, explanation: null });
   });
+  it('PK-FIX-06 (D13): the cycle day shows without a phase after day 35, or for a known length other than 28', () => {
+    const DAY_NOTE = 'Phase not estimated after cycle day 35.';
+    const cases: [Record<string, unknown>, string][] = [
+      // (a) Day 36+: a new report with an unknown or 28-day length, and a report saved since 2026-04-14 (they all stored 28).
+      [{ estimated_cycle_day: 36, average_cycle_length: null }, DAY_NOTE],
+      [{ estimated_cycle_day: 36, average_cycle_length: 28 }, DAY_NOTE],
+      [{ estimated_cycle_day: 52, average_cycle_length: 28 }, DAY_NOTE],
+      [{ estimated_cycle_day: 40 }, DAY_NOTE],
+      // (b) Day 21 of a 35-day cycle (main labelled it luteal), and a 24-day cycle.
+      [{ estimated_cycle_day: 21, average_cycle_length: 35 }, 'Phase not estimated for a 35-day cycle.'],
+      [{ estimated_cycle_day: 10, average_cycle_length: 24 }, 'Phase not estimated for a 24-day cycle.'],
+      [{ estimated_cycle_day: 40, average_cycle_length: 35 }, 'Phase not estimated for a 35-day cycle.'],
+    ];
+    for (const [facts, phaseNote] of cases) {
+      for (const phase of ['unknown', null, undefined]) {
+        expect(cycleContextCard({ estimated_cycle_phase: phase, ...facts }, basicAi), JSON.stringify(facts)).toEqual({
+          phase: null, day: facts.estimated_cycle_day, confidence: null, explanation: null, phaseNote,
+        });
+      }
+    }
+  });
+  it('PK-FIX-06: a card without a phase carries report facts only, never model prose or confidence', () => {
+    const claim = tsh();
+    const authorized = { ...modelOverride, explanation: 'Your TSH increased from your previous result.' };
+    for (const context of [modelOverride, authorized, basicFallback, 'Old model cycle narrative']) {
+      expect(cycleContextCard({ estimated_cycle_phase: 'unknown', estimated_cycle_day: 21, average_cycle_length: 35 }, context, [claim]))
+        .toEqual({ phase: null, day: 21, confidence: null, explanation: null, phaseNote: 'Phase not estimated for a 35-day cycle.' });
+    }
+  });
+  it('PK-FIX-06: no card without a day to show, and a card with a phase is unchanged with no note', () => {
+    for (const day of [null, undefined, 0, -3, 2.5, Number.NaN]) {
+      expect(cycleContextCard({ estimated_cycle_phase: 'unknown', estimated_cycle_day: day, average_cycle_length: 35 }, basicAi)).toBeNull();
+    }
+    // A lab-printed phase on a report with a known 35-day length still shows as before.
+    for (const average_cycle_length of [28, 35, null]) {
+      const card = cycleContextCard({ estimated_cycle_phase: 'luteal', estimated_cycle_day: 21, average_cycle_length }, basicAi);
+      expect(card).toEqual({ phase: 'luteal', day: 21, confidence: null, explanation: null });
+      expect(card).not.toHaveProperty('phaseNote');
+    }
+  });
   it('ReportView renders only through this helper, with the report claims', () => {
     const source = readFileSync(new URL('../pages/ReportView.tsx', import.meta.url), 'utf8');
     expect(source).toContain('cycleContextCard(report, interpretation?.cycle_context, reportClaims)');
