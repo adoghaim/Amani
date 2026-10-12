@@ -534,3 +534,148 @@ test "$(v048_snap)" = "$v048e_snap1" || { echo 'FAIL H048E-REFORWARD catalog dif
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$V048E_T" -f /tmp/interpretation-versions.storage.sql
 rm -f "$v048_log" "$v048_log.a" "$v048_log.b"
 echo 'PASS H048E: out-of-order refusal, fresh chain, no write, one-shot replay, coexistence, whole-graph erasure, no refund, boundary, mutations, pre-use rollback and re-forward.'
+
+# 10. Turn 8: reader cutover. Both readers serve the explicitly selected version.
+# See docs/clinical/TASK-048/turn-8-reader-cutover.md for the control map.
+READ_MIGRATION=20261011000002_interpretation_version_readers.sql
+docker cp "$HERE/../$READ_MIGRATION" "$CONTAINER:/tmp/$READ_MIGRATION" >/dev/null
+for file in interpretation-versions.{read,read-fixture,read-export,read-rollback}.sql; do
+  docker cp "$HERE/$file" "$CONTAINER:/tmp/$file" >/dev/null
+done
+v048_log=$(mktemp)
+v048v_cutover="SELECT COALESCE(strpos(pg_get_function_result(to_regprocedure('public.read_interpretation_for_server(uuid,uuid,boolean)')),'selected_version_id')>0,false)"
+# Out of order: no foundation (flagged_before) and foundation without the wrapper
+# (task048_concurrency) both refuse and leave the readers as they were.
+for db in flagged_before task048_concurrency; do
+  if docker exec -i "$CONTAINER" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_MIGRATION" >"$v048_log" 2>&1; then
+    echo "FAIL H048V-OUT-OF-ORDER: applied on $db" >&2; exit 1
+  fi
+  v048_expect_log 'before the reader cutover' "H048V-OUT-OF-ORDER $db"
+  test "$(docker exec -i "$CONTAINER" psql -U postgres -d "$db" -tA -c "$v048v_cutover")" = f \
+    || { echo "FAIL H048V-OUT-OF-ORDER: partial cutover survived in $db" >&2; exit 1; }
+done
+echo 'PASS H048V-OUT-OF-ORDER: refused atomically without the foundation or the wrapper.'
+
+# Fresh chain: writes nothing; then the reader properties and earlier proofs.
+v048v_before=$(v048_fresh -tA -c "$v048r_count")
+v048_fresh -q -f "/tmp/$READ_MIGRATION"
+test "$(v048_fresh -tA -c "$v048r_count")" = "$v048v_before" || { echo 'FAIL H048V-NO-BACKFILL fresh' >&2; exit 1; }
+v048_fresh -q -f /tmp/interpretation-versions.read.sql -f /tmp/interpretation-versions.remediation.sql \
+  -f /tmp/interpretation-versions.erase-reports.sql -f /tmp/legacy-quarantine.verify.sql
+echo 'PASS H048V-FRESH: no write; selected-version reads, quarantine, identity and ownership hold on the fresh chain.'
+
+# Upgrade: capture every reader output first (kept until re-forward so the
+# catalog snapshots agree), forward, no write, one-shot replay, coexistence.
+psql_f -v ON_ERROR_STOP=1 -v target=task048_reads_pre_cutover -q -f /tmp/legacy-quarantine.capture.sql
+v048v_snap0=$(v048_snap)
+v048v_before=$(psql_f -tA -c "$v048r_count")
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_MIGRATION" -f /tmp/interpretation-versions.storage.sql
+test "$(psql_f -tA -c "$v048r_count")" = "$v048v_before" || { echo 'FAIL H048V-NO-BACKFILL upgrade' >&2; exit 1; }
+v048v_snap1=$(v048_snap)
+if psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_MIGRATION" >"$v048_log" 2>&1; then
+  echo 'FAIL H048V-REPLAY: expected one-shot rejection' >&2; exit 1
+fi
+v048_expect_log 'TASK-048 reader cutover is already applied; this migration is one-shot' 'H048V-REPLAY'
+test "$(v048_snap)" = "$v048v_snap1" || { echo 'FAIL H048V-REPLAY changed the catalog' >&2; exit 1; }
+v048v_changed=$(diff <(printf '%s\n' "$v048v_snap0") <(printf '%s\n' "$v048v_snap1") \
+  | sed -n 's/^[<>] \([^|]*\)|.*/\1/p' | LC_ALL=C sort -u || true)
+v048v_expected=$(printf '%s\n' 'function:read_compatible_interpretations()' \
+  'function:read_interpretation_for_server(uuid,uuid,boolean)' | LC_ALL=C sort -u)
+if [ "$v048v_changed" != "$v048v_expected" ]; then
+  echo 'FAIL H048V-COEXISTENCE: unexpected catalog changes:' >&2
+  diff <(printf '%s\n' "$v048v_expected") <(printf '%s\n' "$v048v_changed") >&2 || true
+  exit 1
+fi
+echo 'PASS H048V-COEXISTENCE: only the two readers changed.'
+# No report holds a pointer here, so every served body and every pre-existing
+# column is byte-identical; the three new RPC identity columns are all NULL.
+psql_f -v ON_ERROR_STOP=1 -v target=task048_reads_post_cutover -q -f /tmp/legacy-quarantine.capture.sql
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN IF EXISTS(
+  (SELECT surface,reader,switch_on,premium,report_id,body,metadata FROM task048_reads_pre_cutover
+   EXCEPT ALL SELECT surface,reader,switch_on,premium,report_id,body,
+     metadata-'historical_interpretation_id'-'selected_version_id'-'selected_generated_at' FROM task048_reads_post_cutover)
+  UNION ALL (SELECT surface,reader,switch_on,premium,report_id,body,
+     metadata-'historical_interpretation_id'-'selected_version_id'-'selected_generated_at' FROM task048_reads_post_cutover
+   EXCEPT ALL SELECT surface,reader,switch_on,premium,report_id,body,metadata FROM task048_reads_pre_cutover))
+  OR EXISTS(SELECT 1 FROM task048_reads_post_cutover WHERE surface='rpc' AND NOT (metadata @>
+    '{\"historical_interpretation_id\":null,\"selected_version_id\":null,\"selected_generated_at\":null}'::jsonb))
+  OR NOT EXISTS(SELECT 1 FROM task048_reads_post_cutover WHERE surface='rpc')
+  THEN RAISE EXCEPTION 'FAIL H048V-READ-PARITY'; END IF; END \$\$;
+  DROP TABLE task048_reads_post_cutover;"
+echo 'PASS H048V-READ-PARITY: with no selection every reader output is unchanged.'
+
+# Properties on the upgraded database; the foundation's, turn 6's and turn 7's still hold.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.read.sql \
+  -f /tmp/interpretation-versions.remediation.sql -f /tmp/interpretation-versions.erase-reports.sql \
+  -f /tmp/interpretation-versions.erasure.sql -f /tmp/interpretation-versions.verify.sql \
+  -f /tmp/interpretation-versions.storage.sql -f /tmp/legacy-quarantine.verify.sql
+echo 'PASS H048V-PROPERTIES: pointer selection, version identity, Basic from the version, quarantine, ownership, no history bytes, both states.'
+
+# Live SQL -> real TypeScript parity on the version cases (no SQL reimplementation).
+v048v_result=$(mktemp)
+v048v_export() { psql_f -v ON_ERROR_STOP=1 -qAt "$@" -f /tmp/interpretation-versions.read-export.sql >"$v048v_result"; test -s "$v048v_result"; }
+v048v_parity() { (cd "$TASK047_ROOT" && TASK048_READ_RESULTS="$v048v_result" node_modules/.bin/vitest run \
+  supabase/functions/_shared/legacy-sql-parity.test.ts -t 'TASK-048 LIVE'); }
+v048v_export
+v048v_parity
+echo 'PASS H048V-PARITY: SQL readers and the TypeScript read policy agree on every version case.'
+
+# Killing mutations: one installed-body anchor per reader, uncommitted.
+V048V_T=interpretation-versions.read.sql
+V048V_RPC='public.read_interpretation_for_server(uuid,uuid,boolean)'
+V048V_VIEW='public.read_compatible_interpretations()'
+V048V_POINTER='FROM public.interpretation_current_versions s JOIN public.interpretation_versions v ON v.id=s.version_id AND v.lab_report_id=s.lab_report_id WHERE s.lab_report_id=i.lab_report_id'
+V048V_MAX='FROM public.interpretation_versions v WHERE v.lab_report_id=i.lab_report_id AND v.generated_at=(SELECT max(x.generated_at) FROM public.interpretation_versions x WHERE x.lab_report_id=i.lab_report_id)'
+for side in RPC VIEW; do
+  if [ "$side" = RPC ]; then fn=$V048V_RPC; surface=rpc; else fn=$V048V_VIEW; surface=view; fi
+  v048_kill "READ-HISTORY-FIRST-$side" "$V048V_T" "FAIL H048V-SELECTED-BODY $surface" \
+    "$(v048r_patch "$fn" 'ORDER BY c.precedence LIMIT 1' 'ORDER BY c.precedence DESC LIMIT 1')"
+  v048_kill "READ-MAX-GENERATED-$side" "$V048V_T" "FAIL H048V-EXPLICIT-SELECTION $surface" \
+    "$(v048r_patch "$fn" "$V048V_POINTER" "$V048V_MAX")"
+  v048_kill "READ-UNION-$side" "$V048V_T" "FAIL H048V-ONE-ROW $surface" \
+    "$(v048r_patch "$fn" 'ORDER BY c.precedence LIMIT 1' 'ORDER BY c.precedence')"
+  v048_kill "READ-SKIP-QUARANTINE-$side" "$V048V_T" "FAIL H048V-QUARANTINE-BINDS $surface" \
+    "$(v048r_patch "$fn" 'sel.interpretation_source) AS json_output' \
+      "CASE WHEN sel.version_id IS NULL THEN sel.interpretation_source ELSE 'deterministic' END) AS json_output")"
+  v048_kill "READ-BASIC-FROM-HISTORY-$side" "$V048V_T" "FAIL H048V-BASIC-FROM-VERSION $surface" \
+    "$(v048r_patch "$fn" 'public.interpretation_sanitize_basic(sel.json_output_basic,' 'public.interpretation_sanitize_basic(i.json_output_basic,')"
+done
+v048_kill READ-IDENTITY-SWAP-RPC "$V048V_T" 'FAIL H048V-IDENTITY rpc' \
+  "$(v048r_patch "$V048V_RPC" 'v.id AS version_id' 'i.id AS version_id')"
+v048_kill READ-TIME-SWAP-RPC "$V048V_T" 'FAIL H048V-IDENTITY rpc' \
+  "$(v048r_patch "$V048V_RPC" 'v.generated_at AS version_generated_at' 'i.generated_at AS version_generated_at')"
+v048_kill READ-TIME-SWAP-VIEW "$V048V_T" 'FAIL H048V-IDENTITY view' \
+  "$(v048r_patch "$V048V_VIEW" 'v.interpretation_source,v.generated_at,v.disclaimer_version' 'v.interpretation_source,i.generated_at,v.disclaimer_version')"
+v048_kill READ-CROSS-USER-RPC "$V048V_T" 'FAIL H048V-CROSS-USER rpc' \
+  "$(v048r_patch "$V048V_RPC" 'WHERE r.user_id=p_user_id AND r.id=p_report_id;' 'WHERE r.id=p_report_id;')"
+v048_kill READ-CROSS-USER-VIEW "$V048V_T" 'FAIL H048V-CROSS-USER view' \
+  "$(v048r_patch "$V048V_VIEW" 'WHERE r.user_id=auth.uid();' 'WHERE true;')"
+# The same SQL-only history-first bypass must also turn the live TS parity red.
+v048v_export -c 'BEGIN' -c "$(v048r_patch "$V048V_RPC" 'ORDER BY c.precedence LIMIT 1' 'ORDER BY c.precedence DESC LIMIT 1')"
+if v048v_parity >"$v048_log" 2>&1; then
+  echo 'FAIL H048V-MUTATION-PARITY-HISTORY-FIRST survived live parity' >&2; exit 1
+fi
+v048_expect_log 'version parity: selected-covered' 'H048V-MUTATION-PARITY-HISTORY-FIRST'
+echo 'PASS H048V-MUTATION-PARITY-HISTORY-FIRST killed: live TS parity red'
+test "$(v048_snap)" = "$v048v_snap1" || { echo 'FAIL H048V-MUTATIONS leaked into the catalog' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.storage.sql -f "/tmp/$V048V_T"
+v048v_export
+v048v_parity
+echo 'PASS H048V-MUTATIONS: every killing mutation turned its probe red; catalog and bytes unchanged afterwards.'
+
+# Rollback rehearsal and re-forward: exact catalog and exact reads both ways.
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.read-rollback.sql -f /tmp/interpretation-versions.storage.sql
+test "$(v048_snap)" = "$v048v_snap0" || { echo 'FAIL H048V-ROLLBACK catalog differs from pre-forward' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -v target=task048_reads_rolled_back -q -f /tmp/legacy-quarantine.capture.sql
+psql_f -v ON_ERROR_STOP=1 -q -c "DO \$\$ BEGIN IF EXISTS(
+  (SELECT * FROM task048_reads_pre_cutover EXCEPT ALL SELECT * FROM task048_reads_rolled_back)
+  UNION ALL (SELECT * FROM task048_reads_rolled_back EXCEPT ALL SELECT * FROM task048_reads_pre_cutover))
+  THEN RAISE EXCEPTION 'FAIL H048V-ROLLBACK-READS'; END IF; END \$\$; DROP TABLE task048_reads_rolled_back;"
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/legacy-quarantine.verify.sql -f /tmp/interpretation-versions.verify.sql \
+  -f /tmp/interpretation-versions.remediation.sql
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$READ_MIGRATION"
+test "$(v048_snap)" = "$v048v_snap1" || { echo 'FAIL H048V-REFORWARD catalog differs from first forward' >&2; exit 1; }
+psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$V048V_T" -f /tmp/interpretation-versions.storage.sql
+psql_f -v ON_ERROR_STOP=1 -q -c 'DROP TABLE task048_reads_pre_cutover;'
+rm -f "$v048_log" "$v048v_result"
+echo 'PASS H048V: out-of-order refusal, fresh chain, no write, one-shot replay, coexistence, read parity, selected-version reads, live TS parity, mutations, rollback and re-forward.'

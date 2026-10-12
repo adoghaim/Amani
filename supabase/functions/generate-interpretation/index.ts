@@ -1506,7 +1506,7 @@ async function produceInterpretation(input: {
   const floorViolations = findFloorViolations(interpretationJson);
   if (floorViolations.length > 0) {
     console.error(
-      "[generate-interpretation] MEDICAL FLOOR VIOLATION — persisting anyway:",
+      "[generate-interpretation] MEDICAL FLOOR VIOLATION — ordinary generation persists anyway; remediation refuses (nothing stored):",
       JSON.stringify({ reportId, tier: shaped.tier, depth: shaped.depth, floorViolations }),
     );
   }

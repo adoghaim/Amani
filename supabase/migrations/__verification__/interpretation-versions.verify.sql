@@ -134,12 +134,26 @@ DO $$ DECLARE c record; full_body jsonb; basic jsonb; v uuid; BEGIN
 END $$;
 -- Existence of versions changes nothing served, to any reader, in either state,
 -- and grants nothing: has_claim is part of the captured RPC rows.
+-- After the turn-8 reader cutover (20261011000002) a report holding a pointer is
+-- served its selected version: that body change is the cutover itself, proved in
+-- interpretation-versions.read.sql. Here such reports are excluded from the
+-- byte comparison, and must still keep their claim coverage. Before the cutover
+-- nothing is excluded and the check is exactly the foundation's.
 CREATE TEMP TABLE task048_served_after AS SELECT * FROM task048_served_before WHERE false;
 SELECT pg_temp.capture_served('task048_served_after');
+CREATE TEMP TABLE task048_selected AS SELECT s.lab_report_id FROM interpretation_current_versions s
+  WHERE strpos(pg_get_function_result('public.read_interpretation_for_server(uuid,uuid,boolean)'::regprocedure),'selected_version_id')>0;
 SELECT pg_temp.vassert((SELECT count(*) FROM task048_served_before)>0 AND NOT EXISTS(
-  (SELECT * FROM task048_served_before EXCEPT ALL SELECT * FROM task048_served_after)
-  UNION ALL (SELECT * FROM task048_served_after EXCEPT ALL SELECT * FROM task048_served_before)),
+  (SELECT * FROM task048_served_before WHERE report_id NOT IN (SELECT lab_report_id FROM task048_selected)
+   EXCEPT ALL SELECT * FROM task048_served_after WHERE report_id NOT IN (SELECT lab_report_id FROM task048_selected))
+  UNION ALL (SELECT * FROM task048_served_after WHERE report_id NOT IN (SELECT lab_report_id FROM task048_selected)
+   EXCEPT ALL SELECT * FROM task048_served_before WHERE report_id NOT IN (SELECT lab_report_id FROM task048_selected))),
   'H048-VERSION-NOT-SERVED-NO-ENTITLEMENT');
+SELECT pg_temp.vassert(NOT EXISTS(
+  SELECT 1 FROM task048_served_before b JOIN task048_served_after a USING(sw,report_id,surface)
+  WHERE b.surface='rpc' AND b.report_id IN (SELECT lab_report_id FROM task048_selected)
+    AND jsonb_path_query_array(b.served,'$[*].has_claim') IS DISTINCT FROM jsonb_path_query_array(a.served,'$[*].has_claim')),
+  'H048-SELECTED-NO-ENTITLEMENT');
 \ir interpretation-versions.storage.sql
 -- The erasure RPC's name understates it; its catalog comment must not.
 SELECT pg_temp.vassert(strpos(obj_description('public.delete_interpretations(uuid[])'::regprocedure,'pg_proc'),

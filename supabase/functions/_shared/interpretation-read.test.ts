@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { readInterpretation as readWithFlag, type InterpretationReadActions } from './interpretation-read';
 import { resolveEntitlement } from './entitlement';
-import { legacyCustomerFloor } from './claim-authority';
-import { buildBasicProjection } from './interpretation-visibility';
+import { legacyCustomerFloor, visibleClaimProjection } from './claim-authority';
+import { buildBasicProjection, sanitizeBasicProjection } from './interpretation-visibility';
+import type { InterpretationPayload } from './response-shaping';
 const readInterpretation = (actions: InterpretationReadActions) => readWithFlag(actions, true);
 const full = { headline: 'h', cycle_context: {}, questions_for_doctor: [], disclaimer: 'd', key_findings: [], private: 'full body' };
 function actions(overrides: Partial<InterpretationReadActions> = {}): InterpretationReadActions {
@@ -120,6 +121,7 @@ describe('explicit server dark gate', () => {
       expect(result).toEqual({ status: 200, body: {
         access: 'full', interpretation: legacyCustomerFloor(), stored_depth, preview: null,
         locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, complimentary: null,
+        historical_interpretation_id: null, version: null,
         plan: ['active_subscription', 'active_iap', 'complimentary'].includes(entitlement.reason)
           ? 'premium' : entitlement.reason === 'error' ? null : 'free',
       } });
@@ -214,4 +216,94 @@ it.each(['ai', null, undefined, 'fallback', 'deterministic'])('quarantines legac
     } else expect(result.body.interpretation).toEqual(interpretation_source === 'fallback' || interpretation_source === 'deterministic' ? payload : legacyCustomerFloor());
   }
   expect(payload).toEqual(original);
+});
+
+describe('TASK-048 turn 8: the explicitly selected version (20261011000002)', () => {
+  type Case = { name: string; source: string | null; full: InterpretationPayload; basic: InterpretationPayload };
+  const corpus: Case[] = JSON.parse(readFileSync(new URL('../../migrations/__verification__/legacy-quarantine.corpus.json', import.meta.url), 'utf8'));
+  const current = corpus.find(c => c.name === 'current-authorized')!;
+  // Floor keys present so the version is a complete stored body (no floor log).
+  const versionFull = { ...current.full, cycle_context: {}, disclaimer: 'd', h048v_version: 'V2' };
+  const history = { id: '04880000-0000-4000-8000-0000000000a1', generated_at: '2026-01-01T00:00:00+00:00' };
+  const selected = { id: '04880000-0000-4000-8000-0000000000b2', generated_at: '2026-10-11T09:00:00.123456+00:00' };
+  const identity = { historical_interpretation_id: history.id, selected_version_id: selected.id,
+    selected_generated_at: selected.generated_at };
+  const premium = async () => ({ allowed: true as const, plan: 'premium' as const,
+    reason: 'active_subscription' as const, source: 'active_subscription' as const });
+  // The RPC has already chosen the body: Full for Premium or a covered claim,
+  // otherwise the version's own sanitized json_output_basic.
+  const versionRow = (has_claim: boolean, basic: InterpretationPayload = current.basic) => vi.fn(async (p: boolean) => ({
+    json_output: p || has_claim ? versionFull : basic, stored_depth: 'deep', has_claim, tier: 'free',
+    interpretation_source: 'ai', ...identity }));
+
+  it.each([
+    ['covered claim holder', () => ({ readSelected: versionRow(true) })],
+    ['Premium', () => ({ resolveEntitlement: premium, readSelected: versionRow(false) })],
+  ] as const)('serves the version body Full to the %s, under the version identity', async (_label, overrides) => {
+    const result = await readInterpretation(actions(overrides()));
+    expect(result.status).toBe(200);
+    expect(result.body.access).toBe('full');
+    expect(result.body.interpretation).toEqual(versionFull);
+    expect(result.body.historical_interpretation_id).toBe(history.id);
+    expect(result.body.version).toEqual(selected);
+    expect(result.body.version?.id).not.toBe(history.id);
+    expect(result.body.version?.generated_at).not.toBe(history.generated_at);
+  });
+
+  it("control 13: a non-covered Free reader gets Basic from the version's json_output_basic, preview only under a known policy", async () => {
+    const readSelected = versionRow(false);
+    const result = await readInterpretation(actions({ readSelected }));
+    expect(readSelected).toHaveBeenCalledWith(false);
+    expect(result.body.access).toBe('basic');
+    expect(result.body.interpretation).toEqual({ ...sanitizeBasicProjection(current.basic, 'ai'), ...visibleClaimProjection(current.basic) });
+    expect(result.body.interpretation).not.toHaveProperty('h048v_version');
+    expect(result.body.preview).not.toBeNull();
+    expect(result.body.locked).toMatchObject({ cross_report: 1 });
+    expect(result.body.version).toEqual(selected);
+
+    const unknownPolicy = { ...current.basic, locked: { ...(current.basic.locked as object), claim_policy_version: 'h048v-unknown', cross_report: 5 } };
+    const withheld = await readInterpretation(actions({ readSelected: versionRow(false, unknownPolicy) }));
+    expect(withheld.body.access).toBe('basic');
+    expect(withheld.body.preview).toBeNull();
+    expect(withheld.body.locked).toEqual({ patterns: 0, cross_report: 0, lifestyle: 0 });
+    expect(withheld.body.interpretation?.preview).toBeNull();
+  });
+
+  it.each([false, true])('control 12: with no pointer the historical row stays quarantined, never its prose (gate=%s)', async flag => {
+    const legacy = { headline: 'H048V historical canary', overall_interpretation: 'H048V historical prose canary' };
+    for (const has_claim of [false, true]) {
+      const result = await readWithFlag(actions({ readSelected: async () => ({ json_output: legacy, stored_depth: 'standard',
+        has_claim, tier: 'free', interpretation_source: 'ai', historical_interpretation_id: null,
+        selected_version_id: null, selected_generated_at: null }) }), flag);
+      expect(result.status).toBe(200);
+      expect(JSON.stringify(result.body)).not.toContain('H048V historical');
+      expect(result.body.historical_interpretation_id).toBeNull();
+      expect(result.body.version).toBeNull();
+    }
+  });
+
+  it('gate OFF serves the selected version Full with its identity', async () => {
+    const result = await readWithFlag(actions({ readSelected: versionRow(false) }), false);
+    expect(result.body).toMatchObject({ access: 'full', interpretation: versionFull, stored_depth: 'deep',
+      historical_interpretation_id: history.id, version: selected });
+  });
+
+  it('an older RPC without identity columns reads as no selection', async () => {
+    const result = await readInterpretation(actions({ resolveEntitlement: premium,
+      readSelected: async () => ({ json_output: versionFull, stored_depth: 'deep', has_claim: false, tier: 'plus', interpretation_source: 'ai' }) }));
+    expect(result.body).toMatchObject({ access: 'full', interpretation: versionFull, historical_interpretation_id: null, version: null });
+  });
+
+  it.each([
+    ['the historical id as the version', { ...identity, selected_version_id: history.id }],
+    ['a version without its time', { ...identity, selected_generated_at: null }],
+    ['a version without its history', { ...identity, historical_interpretation_id: null }],
+    ['history without a version', { historical_interpretation_id: history.id, selected_version_id: null, selected_generated_at: null }],
+  ])('fails closed on an incoherent identity: %s', async (_label, broken) => {
+    for (const flag of [false, true]) {
+      const result = await readWithFlag(actions({ resolveEntitlement: premium, readSelected: async () => ({ json_output: versionFull,
+        stored_depth: 'deep', has_claim: false, tier: 'free', interpretation_source: 'ai', ...broken }) }), flag);
+      expect(result).toMatchObject({ status: 503, body: { access: 'error', interpretation: null, version: null } });
+    }
+  });
 });

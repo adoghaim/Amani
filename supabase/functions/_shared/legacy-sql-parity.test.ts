@@ -7,6 +7,7 @@ import { ClinicalObservation } from '../../../src/components/ClinicalObservation
 import { authorizeModelProse, describeMeasuredMovement } from '../../../src/lib/scoring/insightCopy';
 import { storedClaimSet, quarantineCustomerRead, legacyCustomerFloor, servedBasic } from './claim-authority';
 import { sanitizeBasicProjection, isDeterministicSource, BASIC_KEYS } from './interpretation-visibility';
+import { readInterpretation } from './interpretation-read';
 import type { InterpretationPayload } from './response-shaping';
 
 type Result = { current: boolean; trust: string; full: InterpretationPayload; rpc_basic: InterpretationPayload; view_basic: InterpretationPayload };
@@ -72,6 +73,63 @@ if (process.env.TASK047_SQL_RESULTS !== undefined) {
       const { name: _name, ...result } = actual!;
       expect(result).toEqual(typescript(c));
       expect(result).toEqual(c.expected);
+    });
+  });
+}
+
+// TASK-048 turn 8. interpretation-versions.run.sh §10 ALWAYS supplies this from
+// interpretation-versions.read-export.sql after the reader cutover; ordinary
+// Vitest has no live SQL and skips it. The SQL readers choose the body; the
+// real TS functions decide what that body must be, from the exported inputs.
+if (process.env.TASK048_READ_RESULTS !== undefined) {
+  type Stored = { id: string; full: InterpretationPayload; basic: InterpretationPayload; source: string | null;
+    generated_at: string; stored_depth: string };
+  type RpcRow = { json_output: InterpretationPayload; stored_depth: string; has_claim: boolean; tier: string;
+    interpretation_source: string | null; historical_interpretation_id: string | null;
+    selected_version_id: string | null; selected_generated_at: string | null };
+  type ViewRow = { id: string; json_output: InterpretationPayload; generated_at: string; disclaimer_version: string | null;
+    interpretation_source: string | null; tier: string };
+  type ReadCase = { name: string; history: Stored; selected: Stored | null; rpc_full: RpcRow; rpc_basic: RpcRow;
+    view_off: ViewRow; view_on: ViewRow };
+  const cases: ReadCase[] = JSON.parse(readFileSync(process.env.TASK048_READ_RESULTS, 'utf8'));
+  describe('TASK-048 LIVE version readers versus real TypeScript functions', () => {
+    it('contains every version case exactly once', () => {
+      expect(cases.map(c => c.name).sort()).toEqual(['current-no-versions', 'never-remediated', 'selected-covered',
+        'selected-covered-rewound', 'selected-uncovered', 'selected-uncovered-rewound', 'version-without-pointer']);
+      expect(cases.filter(c => c.selected !== null).map(c => c.name).sort()).toEqual(['selected-covered',
+        'selected-covered-rewound', 'selected-uncovered', 'selected-uncovered-rewound']);
+    });
+    it.each(cases)('version parity: $name', async c => {
+      // Selected version when there is one; otherwise the historical row, as before.
+      const served = c.selected ?? c.history;
+      const trusted = isDeterministicSource(served.source) || storedClaimSet(served.full) !== null;
+      const full = quarantineCustomerRead(served.full, true, served.source);
+      const basic = trusted ? sanitizeBasicProjection(served.basic, served.source) : legacyCustomerFloor();
+      const covered = c.rpc_basic.has_claim; // fixtures hold no subscription: claim is the only Full route
+      expect(c.rpc_full.json_output).toEqual(full);
+      expect(c.rpc_basic.json_output).toEqual(covered ? full : basic);
+      expect(c.view_off.json_output).toEqual(full);
+      expect(c.view_on.json_output).toEqual(covered ? full : trusted ? servedBasic(basic) : legacyCustomerFloor());
+      for (const row of [c.rpc_full, c.rpc_basic]) {
+        expect(row.stored_depth).toBe(served.stored_depth);
+        expect(row.interpretation_source).toBe(served.source);
+        expect(row.selected_version_id).toBe(c.selected?.id ?? null);
+        expect(row.selected_generated_at).toBe(c.selected?.generated_at ?? null);
+        expect(row.historical_interpretation_id).toBe(c.selected ? c.history.id : null);
+      }
+      for (const row of [c.view_off, c.view_on]) {
+        expect(row.id).toBe(c.history.id);
+        expect(row.generated_at).toBe(served.generated_at);
+      }
+      // The same SQL rows through the real edge read policy.
+      const result = await readInterpretation({ ownsReport: async () => true,
+        resolveEntitlement: async () => ({ allowed: true, plan: 'free' }),
+        readSelected: async premium => premium ? c.rpc_full : c.rpc_basic, countClaims: async () => 1 }, true);
+      expect(result.status).toBe(200);
+      expect(result.body.version).toEqual(c.selected ? { id: c.selected.id, generated_at: c.selected.generated_at } : null);
+      expect(result.body.historical_interpretation_id).toBe(c.selected ? c.history.id : null);
+      if (c.selected) expect(result.body.version?.id).not.toBe(c.history.id);
+      expect(JSON.stringify([c.rpc_full, c.rpc_basic, c.view_off, c.view_on, result.body])).not.toContain('H048V historical');
     });
   });
 }

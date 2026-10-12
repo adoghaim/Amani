@@ -15,8 +15,31 @@ export interface InterpretationReadActions {
     json_output: InterpretationPayload; stored_depth: string; has_claim: boolean; tier: string;
     /** Absent from a pre-20260926000004 RPC; treated as non-deterministic. */
     interpretation_source?: string | null;
+    /** TASK-048 (20261011000002): set only when the RPC served the selected
+     * version; absent from older RPCs and NULL for the historical row. */
+    historical_interpretation_id?: string | null;
+    selected_version_id?: string | null;
+    selected_generated_at?: string | null;
   } | null>;
   countClaims(): Promise<number>;
+}
+
+export interface SelectedVersion { id: string; generated_at: string }
+
+/** The served version's own identity, never the historical row's. All three
+ * fields or none: a partial or self-referencing identity is a corrupt selection
+ * and fails closed rather than presenting a body under the wrong identity. */
+function selectedIdentity(row: Awaited<ReturnType<InterpretationReadActions["readSelected"]>>): {
+  historical_interpretation_id: string | null; version: SelectedVersion | null;
+} {
+  const history = row?.historical_interpretation_id ?? null;
+  const id = row?.selected_version_id ?? null;
+  const at = row?.selected_generated_at ?? null;
+  if (history === null && id === null && at === null) return { historical_interpretation_id: null, version: null };
+  if (typeof history !== "string" || typeof id !== "string" || typeof at !== "string" || id === history) {
+    throw new Error("Incoherent selected interpretation identity");
+  }
+  return { historical_interpretation_id: history, version: { id, generated_at: at } };
 }
 
 export async function readInterpretation(actions: InterpretationReadActions, freemiumActive: boolean): Promise<{
@@ -27,11 +50,14 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     plan: "premium" | "free" | null;
     complimentary: { used: number; total: number; remaining: number } | null;
     stored_depth: string | null;
+    historical_interpretation_id: string | null;
+    version: SelectedVersion | null;
     code?: string; retryable?: boolean;
   };
 }> {
   const empty = { stored_depth: null, interpretation: null, preview: null,
-    locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, plan: null, complimentary: null };
+    locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, plan: null, complimentary: null,
+    historical_interpretation_id: null, version: null };
   const failure = (status: number, code: string, retryable = false) => ({
     status, body: { ...empty, access: "error" as const, code, retryable },
   });
@@ -46,7 +72,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
           || ["active_subscription", "active_iap", "complimentary"].includes(entitlement.reason ?? ""))
           ? "premium" as const : "free" as const;
       const row = await actions.readSelected(true);
-      return { status: 200, body: { ...empty, plan,
+      return { status: 200, body: { ...empty, plan, ...selectedIdentity(row),
         access: row ? "full" : "generation_needed",
         interpretation: row ? quarantineCustomerRead(row.json_output, true, row.interpretation_source) : null, stored_depth: row?.stored_depth ?? null } };
     }
@@ -60,7 +86,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     const row = await actions.readSelected(premium);
     const used = await actions.countClaims();
     if (!Number.isInteger(used) || used < 0) throw new Error("Invalid claim count");
-    const common = { plan: entitlement.plan, stored_depth: row?.stored_depth ?? null,
+    const common = { plan: entitlement.plan, stored_depth: row?.stored_depth ?? null, ...selectedIdentity(row),
       complimentary: { used, total: FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS,
         remaining: Math.max(0, FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS - used) } };
     if (!row) return { status: 200, body: { ...empty, ...common, access: "generation_needed" } };
