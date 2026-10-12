@@ -105,7 +105,7 @@ BEGIN
     'H048V-IDENTITY view'||tag);
   PERFORM pg_temp.vassert(got->>'tier'='plus','H048V-VERSION-TIER view'||tag);
 
-  -- 1b. Control 13: the non-covered Free reader of a remediated report gets Basic
+  -- 1b. Control 13: the non-covered Free reader of a versioned report gets Basic
   -- built from the VERSION's json_output_basic; Premium gets the version Full.
   expected:=interpretation_sanitize_basic(ve2.json_output_basic,'ai');
   PERFORM pg_temp.vassert(strpos(expected::text,'H048V E2 basic')>0
