@@ -12,6 +12,23 @@ attended session.
 It runs on the **owner's Claude subscription** via Claude Code's headless mode (`claude -p`) with Claude Code's
 own login — no Anthropic API key.
 
+## Quick start
+
+1. Clone the repo on the machine that will run Jarvis (macOS or Linux).
+2. Copy `jarvis/.env.example` to `jarvis/.env` and fill it in.
+3. Run `bash jarvis/setup.sh`. It signs in with your **Claude subscription** (`claude auth login`, no API key) and schedules the daily run for **7:30 AM** (`REPORT_TIME`).
+4. Test it any time with `bash jarvis/setup.sh --test` or `bash jarvis/run-daily.sh --collect-only`.
+
+**Day-1 minimum `.env`:** `GITHUB_REPO` (plus `gh auth login`) and the three PostHog values `POSTHOG_HOST`, `POSTHOG_PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY`. Stripe, RevenueCat, Netlify, the app stores and all social/ad accounts can be added later; any service whose variables are blank is skipped with a note in the report.
+
+**New accounts:** `jarvis/SETUP_ACCOUNTS.md` walks through creating each social and ad account for Amani and obtaining every key, with links to the official docs.
+
+**Approvals:** the daily run is read-only. Posts, experiments and ad changes are written as proposals to `jarvis/approvals/pending/`. Nothing executes until you mark a proposal approved and run `bash jarvis/execute-approved.sh` yourself, and any marketing copy is re-checked by the clinical-language checker first.
+
+**Verification status (2026-10-11):** all scripts pass syntax checks; every collector was dry-run with an empty `.env`, and the GitHub collector ran live. PostHog, Stripe, the social APIs and a full `claude -p` run have **not** been exercised yet because they need real keys.
+
+---
+
 ---
 
 ## Architecture
