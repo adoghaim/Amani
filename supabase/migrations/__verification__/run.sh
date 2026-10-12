@@ -544,3 +544,8 @@ psql_del_v2 -q -f /tmp/deletion-v2-verify.sql
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$ERASURE_V2"
 rm -f "$del_v2_log"
 echo "PASS: delete_user_data on V2: out-of-order refusal, live-body negative control, replay, Case 11 suite and V2 graph cases."
+
+# Case 14 (PK-03e-F, V2-03e-10): every safety trigger is ENABLE ALWAYS, checked
+# with the post-deploy query factory/sql/verify-triggers-enable-always.sql, by
+# replica-mode behaviour and by killing mutations.
+source "$HERE/trigger-enable-always.run.sh"
