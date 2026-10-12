@@ -90,6 +90,11 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/lib/native",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
     "directory": "src/lib/observability",
     "mode": "excluded",
     "reason": "Telemetry initialization and privacy scrubbing; no rendered copy. Exclusion proven by scan: the guard fails if any claim appears."
