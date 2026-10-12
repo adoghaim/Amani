@@ -7,21 +7,34 @@ BEGIN;
 \ir interpretation-versions.helpers.sql
 \ir interpretation-versions.read-fixture.sql
 CREATE TEMP TABLE h048v_parity(result jsonb);
-DO $$ DECLARE c record; sw boolean; got jsonb; views jsonb; rewound boolean;
+DO $$ DECLARE c record; sw boolean; got jsonb; views jsonb; phase text; anchor_full jsonb; anchor_basic jsonb;
   fx jsonb:=(SELECT jsonb_object_agg(name,id) FROM h048v_fixture); BEGIN
-  FOREACH rewound IN ARRAY ARRAY[false,true] LOOP
-    IF rewound THEN
+  FOREACH phase IN ARRAY ARRAY['as-built','rewound','regenerated'] LOOP
+    IF phase='rewound' THEN
       -- Explicit selection of an earlier version (administrative construction).
       UPDATE interpretation_current_versions SET version_id=(fx->>'va1')::uuid WHERE lab_report_id=(fx->>'ra')::uuid;
       UPDATE interpretation_current_versions SET version_id=(fx->>'ve1')::uuid WHERE lab_report_id=(fx->>'re')::uuid;
+    ELSIF phase='regenerated' THEN
+      -- PK-03e-H: regenerate the current-policy report rD through the real
+      -- writer, then read it (the normal pre-launch regenerate-then-read case).
+      SELECT i.json_output,i.json_output_basic INTO STRICT anchor_full,anchor_basic
+        FROM interpretations_private i WHERE i.lab_report_id=(fx->>'rd')::uuid;
+      EXECUTE 'SET LOCAL ROLE service_role';
+      PERFORM append_interpretation_version((fx->>'u1')::uuid,(fx->>'rd')::uuid,gen_random_uuid(),
+        anchor_full||'{"h048v_version":"D1"}',anchor_basic||'{"headline":"H048V D1 basic"}',
+        'deep','h048v.3','{"test_only":"H048V regenerate then read"}');
+      EXECUTE 'RESET ROLE';
     END IF;
     FOR c IN SELECT * FROM (VALUES
       ('selected-covered',(fx->>'u1')::uuid,(fx->>'ra')::uuid),
       ('selected-uncovered',(fx->>'u3')::uuid,(fx->>'re')::uuid),
       ('version-without-pointer',(fx->>'u1')::uuid,(fx->>'rb')::uuid),
       ('never-remediated',(fx->>'u1')::uuid,(fx->>'rc')::uuid),
-      ('current-no-versions',(fx->>'u1')::uuid,(fx->>'rd')::uuid)) x(name,u,r)
-      WHERE NOT rewound OR x.name IN ('selected-covered','selected-uncovered') LOOP
+      ('current-no-versions',(fx->>'u1')::uuid,(fx->>'rd')::uuid),
+      ('current-regenerated',(fx->>'u1')::uuid,(fx->>'rd')::uuid)) x(name,u,r)
+      WHERE CASE phase WHEN 'as-built' THEN x.name<>'current-regenerated'
+        WHEN 'rewound' THEN x.name IN ('selected-covered','selected-uncovered')
+        ELSE x.name='current-regenerated' END LOOP
       views:='{}';
       FOREACH sw IN ARRAY ARRAY[false,true] LOOP
         UPDATE interpretation_visibility_config SET enabled=sw WHERE singleton;
@@ -33,7 +46,7 @@ DO $$ DECLARE c record; sw boolean; got jsonb; views jsonb; rewound boolean;
       END LOOP;
       PERFORM set_config('request.jwt.claim.sub','',true);
       INSERT INTO h048v_parity SELECT jsonb_build_object(
-        'name',c.name||CASE WHEN rewound THEN '-rewound' ELSE '' END,
+        'name',c.name||CASE WHEN phase='rewound' THEN '-rewound' ELSE '' END,
         'history',(SELECT jsonb_build_object('id',i.id,'full',i.json_output,'basic',i.json_output_basic,
           'source',i.interpretation_source,'generated_at',i.generated_at,'stored_depth',i.stored_depth,'tier',i.tier)
           FROM interpretations_private i WHERE i.lab_report_id=c.r),

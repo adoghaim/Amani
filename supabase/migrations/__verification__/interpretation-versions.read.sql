@@ -66,6 +66,7 @@ DECLARE
   ha record; hb record; hc record; hd record; he record;
   va1 record; va2 record; ve1 record; ve2 record;
   got jsonb; expected jsonb; p boolean; u uuid; r uuid; seen text:=''; bytes0 text; tag text;
+  pd1 uuid; pd2 uuid; vd1 record; vd2 record; vretry record;
 BEGIN
   -- Real switch direction, asserted from the persisted state.
   UPDATE interpretation_visibility_config SET enabled=sw WHERE singleton;
@@ -223,6 +224,56 @@ BEGIN
 
   -- 7. Reads write nothing: history, versions and pointers byte-identical.
   PERFORM pg_temp.vassert(pg_temp.read_bytes() IS NOT DISTINCT FROM bytes0,'H048V-READ-NO-WRITE'||tag);
+
+  -- 8. PK-03e-H: regenerate, then read. The normal pre-launch case is rD, a
+  -- current-policy anchor with no versions and no claim. Each regeneration goes
+  -- through the real ordinary writer; both readers switch to the version it
+  -- selects (Premium Full, Free Basic from the version's own json_output_basic),
+  -- a second request switches again, a retry of the first never rewinds, and the
+  -- anchor bytes never change. Undone with the round.
+  pd1:=gen_random_uuid(); pd2:=gen_random_uuid();
+  EXECUTE 'SET LOCAL ROLE service_role';
+  SELECT * INTO STRICT vd1 FROM append_interpretation_version(u1,rd,pd1,hd.json_output||'{"h048v_version":"D1"}',
+    hd.json_output_basic||'{"headline":"H048V D1 basic"}','deep','h048v.3','{"test_only":"H048V regenerate then read"}');
+  EXECUTE 'RESET ROLE';
+  PERFORM pg_temp.vassert(vd1.history_id=hd.id AND vd1.version_id<>hd.id,'H048V-REGEN-APPENDED D1'||tag);
+  FOREACH p IN ARRAY ARRAY[false,true] LOOP
+    got:=pg_temp.one(pg_temp.rpc(u1,rd,p),'rpc rd regenerated');
+    expected:=CASE WHEN p THEN hd.json_output||'{"h048v_version":"D1"}'
+      ELSE interpretation_sanitize_basic(hd.json_output_basic||'{"headline":"H048V D1 basic"}','ai') END;
+    PERFORM pg_temp.vassert(got->'json_output'=expected AND NOT (got->>'has_claim')::boolean
+      AND got->>'stored_depth'='deep' AND got->>'tier'='plus' AND pg_temp.rpc_identity(got,vd1.version_id),
+      'H048V-REGEN-THEN-READ rpc premium='||p||tag);
+  END LOOP;
+  got:=pg_temp.one(pg_temp.vread(u1,rd),'view rd regenerated');
+  expected:=CASE WHEN sw THEN interpretation_claim_gate(interpretation_sanitize_basic(hd.json_output_basic||'{"headline":"H048V D1 basic"}','ai'))
+    ELSE hd.json_output||'{"h048v_version":"D1"}' END;
+  PERFORM pg_temp.vassert(got->'json_output'=expected AND (got->>'id')::uuid=vd1.version_id
+    AND (got->>'generated_at')::timestamptz=vd1.version_generated_at AND got->>'disclaimer_version'='h048v.3',
+    'H048V-REGEN-THEN-READ view'||tag);
+  -- A new request appends again and both readers follow the pointer to it.
+  EXECUTE 'SET LOCAL ROLE service_role';
+  SELECT * INTO STRICT vd2 FROM append_interpretation_version(u1,rd,pd2,hd.json_output||'{"h048v_version":"D2"}',
+    hd.json_output_basic||'{"headline":"H048V D2 basic"}','deep','h048v.3','{"test_only":"H048V regenerate then read"}');
+  -- An identical retry of the first request returns D1 and does not rewind.
+  SELECT * INTO STRICT vretry FROM append_interpretation_version(u1,rd,pd1,hd.json_output||'{"h048v_version":"D1"}',
+    hd.json_output_basic||'{"headline":"H048V D1 basic"}','deep','h048v.3','{"test_only":"H048V regenerate then read"}');
+  EXECUTE 'RESET ROLE';
+  PERFORM pg_temp.vassert(vd2.version_id NOT IN (vd1.version_id,hd.id) AND vretry.version_id=vd1.version_id,'H048V-REGEN-APPENDED D2'||tag);
+  FOREACH p IN ARRAY ARRAY[false,true] LOOP
+    got:=pg_temp.one(pg_temp.rpc(u1,rd,p),'rpc rd regenerated twice');
+    expected:=CASE WHEN p THEN hd.json_output||'{"h048v_version":"D2"}'
+      ELSE interpretation_sanitize_basic(hd.json_output_basic||'{"headline":"H048V D2 basic"}','ai') END;
+    PERFORM pg_temp.vassert(got->'json_output'=expected AND pg_temp.rpc_identity(got,vd2.version_id),
+      'H048V-REGEN-SWITCHES rpc premium='||p||tag);
+  END LOOP;
+  got:=pg_temp.one(pg_temp.vread(u1,rd),'view rd regenerated twice');
+  PERFORM pg_temp.vassert((got->>'id')::uuid=vd2.version_id AND strpos(got::text,'"D1"')=0
+    AND strpos(got::text,'H048V D1 basic')=0,'H048V-REGEN-SWITCHES view'||tag);
+  -- The anchor is history: byte-identical after both appends and the retry.
+  PERFORM pg_temp.vassert((SELECT to_jsonb(i) FROM interpretations_private i WHERE i.lab_report_id=rd)=to_jsonb(hd)
+    AND (SELECT count(*)=2 FROM interpretation_versions WHERE lab_report_id=rd),'H048V-REGEN-ANCHOR-UNCHANGED'||tag);
+  RAISE NOTICE 'PASS H048V-REGEN-THEN-READ switch=%: rD regenerated twice through the writer, both readers switched, retry did not rewind, anchor unchanged',sw;
   RAISE EXCEPTION USING ERRCODE='P0489',MESSAGE='H048V undo round';
 END $$;
 
