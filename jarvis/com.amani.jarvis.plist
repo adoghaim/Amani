@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for the Jarvis daily LaunchAgent. setup.sh renders it to
+  ~/Library/LaunchAgents/com.amani.jarvis.plist, replacing the __PLACEHOLDERS__.
+  Runs as the logged-in user (so the Claude Code login in the macOS Keychain is reachable).
+  If the Mac is asleep at the scheduled time, launchd runs the job when it wakes;
+  if it is powered off, that day's run is skipped (run ./run-daily.sh by hand).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.amani.jarvis</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__JARVIS_DIR__/run-daily.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__JARVIS_DIR__</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>__HOUR__</integer>
+    <key>Minute</key>
+    <integer>__MINUTE__</integer>
+  </dict>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__PATH__</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>__JARVIS_DIR__/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__JARVIS_DIR__/logs/launchd.err.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
