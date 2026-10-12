@@ -104,6 +104,32 @@ it.each(['generation_needed', 'basic'])('keeps the regeneration cap for a stored
   expect(app.textContent).not.toContain('Regenerate (');
 });
 
+// TASK-048: a regeneration of a stored row is keyed by a per-tap request_id;
+// the failed-regenerate retry re-sends it, a new tap after success does not.
+it('regenerate sends a per-tap request_id and the retry re-sends the same one', async () => {
+  fixture.access = 'basic';
+  fixture.interpretation = { headline: 'Stored analysis', summary: 'Existing result' };
+  fixture.regenerationCount = 1;
+  await renderReport();
+  const generateBodies = () => fixture.invoke.mock.calls
+    .filter(([name]) => name === 'generate-interpretation').map(([, options]) => (options as { body: Record<string, unknown> }).body);
+  const button = (text: string) => Array.from(app.querySelectorAll('button')).find(b => b.textContent?.includes(text));
+  await act(async () => button('Regenerate (')!.click());
+  const first = generateBodies()[0]!;
+  expect(first.request_id).toMatch(/^[0-9a-f-]{36}$/);
+  // The default fixture fails generation: the retry action is shown and re-sends the id.
+  await act(async () => button('Try again')!.click());
+  expect(generateBodies()[1]!.request_id).toBe(first.request_id);
+  fixture.invoke.mockImplementation(async (name: string) => name === 'get-interpretation'
+    ? { data: { access: fixture.access, interpretation: fixture.interpretation, stored_depth: 'shallow' }, error: null }
+    : { data: { success: true }, error: null });
+  await act(async () => button('Try again')!.click());
+  expect(generateBodies()[2]!.request_id).toBe(first.request_id);
+  // Success settled the tap: the next tap is a new request.
+  await act(async () => button('Regenerate (')!.click());
+  expect(generateBodies()[3]!.request_id).not.toBe(first.request_id);
+});
+
 it('does not open the paywall when first generation returns 402', async () => {
   await renderReport();
   fixture.invoke.mockResolvedValueOnce({ data: null, error: new FunctionsHttpError(new Response(null, { status: 402 })) });

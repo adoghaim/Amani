@@ -1,0 +1,137 @@
+[
+  {
+    "directory": "src",
+    "mode": "excluded",
+    "reason": "Application bootstrap, routing and Stripe catalog direct files (App.tsx, main.tsx, stripe-config.ts, vite-env.d.ts). Exclusion is proven, not asserted: the guard scans these files and fails if any claim appears. Children classified separately; a new directory fails closed."
+  },
+  {
+    "directory": "src/components",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/components/auth",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/components/freemium",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/components/pricing",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/contexts",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/onboarding",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/onboarding/steps",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/settings",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/hooks",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib",
+    "mode": "scanned",
+    "reason": "Reclassified in amendment 4. Direct modules author clinical copy (cyclePhase.ts pregnancy and phase text, cycleContextCard.ts) beside service, native and entitlement plumbing. Scanned; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/biomarkers",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/capacitor-stubs",
+    "mode": "excluded",
+    "reason": "Native API stubs with technical errors. Exclusion proven by scan: the guard fails if any claim appears."
+  },
+  {
+    "directory": "src/lib/cards",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/freemium",
+    "mode": "excluded",
+    "reason": "User-visible purchase/locked-report copy in forbidden freemium/entitlement scope. Exclusion proven by scan under the current vocabulary (zero matches); not certified clinical-free beyond that vocabulary, and the guard fails if a claim appears."
+  },
+  {
+    "directory": "src/lib/insights",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/observability",
+    "mode": "excluded",
+    "reason": "Telemetry initialization and privacy scrubbing; no rendered copy. Exclusion proven by scan: the guard fails if any claim appears."
+  },
+  {
+    "directory": "src/lib/personalization",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/scoring",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/pages",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/styles",
+    "mode": "excluded",
+    "reason": "CSS only; contains no .ts/.tsx source. Exclusion proven by scan: a TypeScript file with a claim added here fails the guard."
+  },
+  {
+    "directory": "src/types",
+    "mode": "scanned",
+    "reason": "Reclassified in amendment 4. The earlier reason (\"type declarations only\") was false: index.ts exports the runtime CATEGORY_DISPLAY label table rendered by ReportView and RecommendedLabs. Scanned; matches are pinned, not clinically approved."
+  },
+  {
+    "directory": "src/utils",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/utils/parser",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/utils/parser/__fixtures__",
+    "mode": "test-data",
+    "reason": "Synthetic parser input data. Outside the inventory only because the guard proves no production module imports it; an import from production code fails the guard."
+  },
+  {
+    "directory": "src/utils/parser/__snapshots__",
+    "mode": "test-data",
+    "reason": "Parser test snapshots (.snap). Outside the inventory only because the guard proves no production module imports it; an import from production code fails the guard."
+  }
+]

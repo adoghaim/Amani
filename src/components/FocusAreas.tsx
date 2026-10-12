@@ -1,36 +1,26 @@
 import { Compass } from 'lucide-react';
 import type { FocusArea, FocusAreaMarker } from '../lib/insights/buildFocusAreas';
+import { CUE_STYLE, FOCUS_AREAS_EMPTY, FOCUS_AREAS_INTRO } from '../lib/scoring/insightCopy';
 
 interface FocusAreasProps {
   focusAreas: FocusArea[];
 }
 
-const STATUS_DOT: Record<FocusAreaMarker['status'], { dot: string; chipBg: string; chipText: string; chipBorder: string }> = {
-  attention: {
-    dot: 'bg-theme-flag-low',
-    chipBg: 'bg-theme-flag-low-bg',
-    chipText: 'text-theme-flag-low',
-    chipBorder: 'border-theme-flag-low-border',
-  },
-  monitor: {
-    dot: 'bg-theme-flag-watch',
-    chipBg: 'bg-theme-flag-watch-bg',
-    chipText: 'text-theme-flag-watch',
-    chipBorder: 'border-theme-flag-watch-border',
-  },
-  reassuring: {
-    dot: 'bg-theme-flag-ok',
-    chipBg: 'bg-theme-flag-ok-bg',
-    chipText: 'text-theme-flag-ok',
-    chipBorder: 'border-theme-flag-ok-border',
-  },
-};
+/*
+  V2-03b Stage 2 (R3). Chips were red for 'attention', amber for 'monitor' and
+  green for 'reassuring', judged from unreviewed bands alone. A chip now marks
+  a marker outside its band with the neutral attention cue. The sentence is
+  composed by buildFocusAreas from policy output only, so no qualifier is
+  applied here: there is no unauthorized claim left to filter.
+*/
+const CHIP_CUE: Record<FocusAreaMarker['status'], 'attention'> = { outside: 'attention' };
 
 function MarkerChip({ marker }: { marker: FocusAreaMarker }) {
-  const cfg = STATUS_DOT[marker.status];
+  const cfg = CUE_STYLE[CHIP_CUE[marker.status]];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full border ${cfg.chipBg} ${cfg.chipText} ${cfg.chipBorder}`}
+      data-language-cue={CHIP_CUE[marker.status]}
+      className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} aria-hidden />
       {marker.displayName}
@@ -45,15 +35,11 @@ export function FocusAreas({ focusAreas }: FocusAreasProps) {
         <Compass className="w-3.5 h-3.5 text-theme-muted-text-2" />
         <h2 className="text-sm text-theme-text">Focus areas</h2>
       </div>
-      <p className="text-xs text-theme-muted-text-3 px-1">
-        Where to direct your attention from this report.
-      </p>
+      <p className="text-xs text-theme-muted-text-3 px-1">{FOCUS_AREAS_INTRO}</p>
 
       {focusAreas.length === 0 ? (
         <div className="bg-theme-surface rounded-xl border border-theme-border px-4 py-5">
-          <p className="text-sm text-theme-muted-text-2 leading-relaxed">
-            Your panel is generally within range. Continue tracking baseline markers.
-          </p>
+          <p className="text-sm text-theme-muted-text-2 leading-relaxed">{FOCUS_AREAS_EMPTY}</p>
         </div>
       ) : (
         <div className="space-y-2">

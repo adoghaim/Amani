@@ -1,21 +1,27 @@
-import { CheckCircle2, AlertCircle, TrendingUp, Sparkles, LineChart } from 'lucide-react';
+import { Sparkles, LineChart, ArrowRightLeft } from 'lucide-react';
 import type { BiggestChange, TopFinding } from '../lib/insights/buildInsightSummary';
+import type { BiomarkerName } from '../types';
+import { authorizedLanguage, crossingObservation, type AuthorizedLanguage, valuesChangeObservation } from '../lib/scoring/insightCopy';
+import { describeMeasuredMovement, describeComparisonBand, type ClinicalLanguage } from '../lib/scoring/insightCopy';
+import { ClinicalObservation } from './ClinicalObservation';
 
-type BulletKind = 'improved' | 'worsened' | 'stable_elevated' | 'first';
+/*
+  'changed' is a movement toward a band (V2-03 amendment 4, R1): neutral words,
+  neutral icon. V2-03b Stage 2 removed the 'improved' kind, its wording and its
+  green check. Their only authority was a boolean on the band, not a reviewed
+  rule the policy can trace, so even a SAFE band now reads as a movement. The
+  'worsened' and 'stable_elevated' kinds keep their ranking and render neutrally.
+*/
+type BulletKind = 'changed' | 'worsened' | 'stable_elevated' | 'first';
 
 interface TrajectoryBullet {
   kind: BulletKind;
   text: string;
   isPrimary: boolean;
+  observations?: Extract<ClinicalLanguage, { category: 'factual_observation' | 'comparison_band' }>[];
   /** Present only when this exact bullet renders both numeric values. */
   values?: { previous: number; current: number; unit: string };
 }
-
-const BUCKET_LABEL: Record<string, string> = {
-  optimal: 'optimal range',
-  borderline: 'borderline',
-  out_of_range: 'out of range',
-};
 
 function isPlural(name: string): boolean {
   return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/i.test(name);
@@ -36,10 +42,9 @@ function formatPriorDate(date: string): string {
   return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
 }
 
-function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryBullet | null {
-  const { displayName, trajectoryStatus, boundaryCrossing, trendDirection, previousValue, currentValue, unit, isFirstRecorded, priorReportDate, priorIsOlderThanImmediatePrior } = change;
+function bulletForChange(change: BiggestChange, isPrimary: boolean, language: AuthorizedLanguage): TrajectoryBullet | null {
+  const { displayName, trajectoryStatus, boundaryCrossing, previousValue, currentValue, unit, isFirstRecorded, priorReportDate, priorIsOlderThanImmediatePrior } = change;
   const c = conjugate(displayName);
-  const formatBoundary = (b: string) => BUCKET_LABEL[b] ?? b.replace(/_/g, ' ');
   const sinceClause = priorIsOlderThanImmediatePrior && priorReportDate
     ? ` since ${formatPriorDate(priorReportDate)}`
     : '';
@@ -47,24 +52,29 @@ function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryB
   if (isFirstRecorded) {
     return { kind: 'first', isPrimary, text: `${displayName} ${c.is} measured for the first time at ${currentValue} ${unit}.` };
   }
-  if (trajectoryStatus === 'normalized' && boundaryCrossing) {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
+  // A crossing names no bucket: no raw or neutral bucket label is echoed.
+  if ((trajectoryStatus === 'normalized' || trajectoryStatus === 'changed_into_band') && boundaryCrossing) {
+    return { kind: 'changed', isPrimary, text: crossingObservation(displayName, sinceClause, language).text };
   }
-  if (boundaryCrossing && boundaryCrossing.direction === 'improved') {
-    return { kind: 'improved', isPrimary, text: `${displayName} improved from ${formatBoundary(boundaryCrossing.from)} to ${formatBoundary(boundaryCrossing.to)}${sinceClause}.` };
+  if (boundaryCrossing && (boundaryCrossing.direction === 'improved' || boundaryCrossing.direction === 'changed')) {
+    return { kind: 'changed', isPrimary, text: crossingObservation(displayName, sinceClause, language).text };
   }
-  if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low') {
-    return { kind: 'improved', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} improved from ${previousValue} to ${currentValue} ${unit}${sinceClause}, still outside optimal.` };
+  if (trajectoryStatus === 'improving_still_high' || trajectoryStatus === 'improving_still_low'
+    || trajectoryStatus === 'changed_still_high' || trajectoryStatus === 'changed_still_low') {
+    const values = { previous: previousValue, current: currentValue, unit };
+    return { kind: 'changed', isPrimary, values, text: valuesChangeObservation(displayName, previousValue, currentValue, unit, sinceClause, language).text };
   }
   if (trajectoryStatus === 'worsening_still_high' || trajectoryStatus === 'worsening_still_low') {
-    const verb = trendDirection === 'up' ? 'risen' : trendDirection === 'down' ? 'dropped' : 'shifted';
-    return { kind: 'worsened', isPrimary, values: { previous: previousValue, current: currentValue, unit }, text: `${displayName} ${c.has} ${verb} from ${previousValue} to ${currentValue} ${unit}${sinceClause} and ${c.remains} outside optimal.` };
+    const observations = [describeMeasuredMovement(change, 'direction'), describeComparisonBand(language, 'outside')];
+    return { kind: 'worsened', isPrimary, observations, values: { previous: previousValue, current: currentValue, unit }, text: observations.map(o => o.text).join(' ') };
   }
   if (trajectoryStatus === 'newly_abnormal') {
-    return { kind: 'worsened', isPrimary, text: `${displayName} ${c.is} newly outside optimal at ${currentValue} ${unit}.` };
+    const observations = [describeMeasuredMovement(change, 'magnitude'), describeComparisonBand(language, 'outside')];
+    return { kind: 'worsened', isPrimary, observations, text: observations.map(o => o.text).join(' ') };
   }
   if (trajectoryStatus === 'stable_abnormal') {
-    return { kind: 'stable_elevated', isPrimary, text: `${displayName} ${c.remains} outside optimal and ${c.is} being tracked over time.` };
+    const observations = [describeMeasuredMovement(change, 'magnitude'), describeComparisonBand(language, 'outside')];
+    return { kind: 'stable_elevated', isPrimary, observations, text: observations.map(o => o.text).join(' ') };
   }
   return null;
 }
@@ -72,7 +82,7 @@ function bulletForChange(change: BiggestChange, isPrimary: boolean): TrajectoryB
 const KIND_PRIORITY: Record<BulletKind, number> = {
   worsened: 0,
   stable_elevated: 1,
-  improved: 2,
+  changed: 2,
   first: 3,
 };
 
@@ -86,6 +96,8 @@ interface Props {
   changes: BiggestChange[];
   primaryFinding: TopFinding | null;
   reportCount: number;
+  /** Destination-band language per analyte (R1). Absent means not established: neutral. */
+  bandLanguage?: ReadonlyMap<BiomarkerName, AuthorizedLanguage>;
 }
 
 /**
@@ -96,17 +108,21 @@ interface Props {
  * tie-break (separate task).
  */
 // eslint-disable-next-line react-refresh/only-export-components -- Pure selection is shared with the Basic panel to match the rendered values exactly.
-export function selectTrajectoryBullets(changes: BiggestChange[], primaryFinding: TopFinding | null) {
+export function selectTrajectoryBullets(
+  changes: BiggestChange[],
+  primaryFinding: TopFinding | null,
+  bandLanguage?: ReadonlyMap<BiomarkerName, AuthorizedLanguage>,
+) {
   const primaryKey = primaryFinding?.key ?? null;
 
   const bullets: (TrajectoryBullet & { key: BiggestChange['key'] })[] = [];
   for (const change of changes) {
     const isPrimary = change.key === primaryKey;
-    const bullet = bulletForChange(change, isPrimary);
+    const bullet = bulletForChange(change, isPrimary, bandLanguage?.get(change.key) ?? authorizedLanguage(null));
     if (bullet) bullets.push({ ...bullet, key: change.key });
   }
 
-  // Sort: primary with historical context first, then worsened > stable_elevated > improved > first,
+  // Sort: primary with historical context first, then worsened > stable_elevated > changed > first,
   // then significance: significant > moderate > minor
   const indexedBullets = bullets.map((b, i) => ({ b, change: changes[i] }));
   indexedBullets.sort((a, b) => {
@@ -120,8 +136,8 @@ export function selectTrajectoryBullets(changes: BiggestChange[], primaryFinding
   return indexedBullets.slice(0, 4).map(x => x.b);
 }
 
-export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Props) {
-  const top = selectTrajectoryBullets(changes, primaryFinding);
+export function YourTrajectoryCard({ changes, primaryFinding, reportCount, bandLanguage }: Props) {
+  const top = selectTrajectoryBullets(changes, primaryFinding, bandLanguage);
 
   if (top.length === 0) return null;
 
@@ -145,11 +161,13 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
       <ul className="px-5 py-4 space-y-2.5">
         {top.map((b, i) => (
           <li key={i} className="flex items-start gap-3">
-            <span className="flex-shrink-0 mt-0.5">
-              <BulletIcon kind={b.kind} />
+            <span className="flex-shrink-0 mt-0.5" data-bullet-kind={b.observations ? 'changed' : b.kind}>
+              <BulletIcon kind={b.observations ? 'changed' : b.kind} />
             </span>
             <p className={`text-sm leading-relaxed ${b.isPrimary ? 'font-semibold text-theme-text' : 'text-theme-text-body'}`}>
-              {b.text}
+              {b.observations ? b.observations.map((language, index) => <span key={index}>
+                {index > 0 ? ' ' : ''}<ClinicalObservation language={language} />
+              </span>) : b.text}
             </p>
           </li>
         ))}
@@ -159,8 +177,7 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount }: Pro
 }
 
 function BulletIcon({ kind }: { kind: BulletKind }) {
-  if (kind === 'improved') return <CheckCircle2 className="w-4 h-4 text-theme-flag-ok" />;
-  if (kind === 'worsened') return <TrendingUp className="w-4 h-4 text-theme-flag-watch" />;
-  if (kind === 'stable_elevated') return <AlertCircle className="w-4 h-4 text-theme-flag-watch" />;
-  return <Sparkles className="w-4 h-4 text-theme-cat-sleep" />;
+  // No green check, and no amber for a band movement (R3): one neutral icon.
+  if (kind === 'first') return <Sparkles className="w-4 h-4 text-theme-cat-sleep" />;
+  return <ArrowRightLeft className="w-4 h-4 text-theme-muted-text-3" />;
 }

@@ -1,7 +1,8 @@
 import type { EntitlementResult } from "./entitlement.ts";
 import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
 import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
-import { sanitizeBasicProjection, buildBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
+import { sanitizeBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
+import { projectBasic, servedBasic, visibleClaimProjection, quarantineCustomerRead } from "./claim-authority.ts";
 import type { LockedCounts } from "./preview-selector.ts";
 
 export interface InterpretationReadActions {
@@ -14,8 +15,31 @@ export interface InterpretationReadActions {
     json_output: InterpretationPayload; stored_depth: string; has_claim: boolean; tier: string;
     /** Absent from a pre-20260926000004 RPC; treated as non-deterministic. */
     interpretation_source?: string | null;
+    /** TASK-048 (20261011000002): set only when the RPC served the selected
+     * version; absent from older RPCs and NULL for the historical row. */
+    historical_interpretation_id?: string | null;
+    selected_version_id?: string | null;
+    selected_generated_at?: string | null;
   } | null>;
   countClaims(): Promise<number>;
+}
+
+export interface SelectedVersion { id: string; generated_at: string }
+
+/** The served version's own identity, never the historical row's. All three
+ * fields or none: a partial or self-referencing identity is a corrupt selection
+ * and fails closed rather than presenting a body under the wrong identity. */
+function selectedIdentity(row: Awaited<ReturnType<InterpretationReadActions["readSelected"]>>): {
+  historical_interpretation_id: string | null; version: SelectedVersion | null;
+} {
+  const history = row?.historical_interpretation_id ?? null;
+  const id = row?.selected_version_id ?? null;
+  const at = row?.selected_generated_at ?? null;
+  if (history === null && id === null && at === null) return { historical_interpretation_id: null, version: null };
+  if (typeof history !== "string" || typeof id !== "string" || typeof at !== "string" || id === history) {
+    throw new Error("Incoherent selected interpretation identity");
+  }
+  return { historical_interpretation_id: history, version: { id, generated_at: at } };
 }
 
 export async function readInterpretation(actions: InterpretationReadActions, freemiumActive: boolean): Promise<{
@@ -26,11 +50,14 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     plan: "premium" | "free" | null;
     complimentary: { used: number; total: number; remaining: number } | null;
     stored_depth: string | null;
+    historical_interpretation_id: string | null;
+    version: SelectedVersion | null;
     code?: string; retryable?: boolean;
   };
 }> {
   const empty = { stored_depth: null, interpretation: null, preview: null,
-    locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, plan: null, complimentary: null };
+    locked: { patterns: 0, cross_report: 0, lifestyle: 0 }, plan: null, complimentary: null,
+    historical_interpretation_id: null, version: null };
   const failure = (status: number, code: string, retryable = false) => ({
     status, body: { ...empty, access: "error" as const, code, retryable },
   });
@@ -45,9 +72,9 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
           || ["active_subscription", "active_iap", "complimentary"].includes(entitlement.reason ?? ""))
           ? "premium" as const : "free" as const;
       const row = await actions.readSelected(true);
-      return { status: 200, body: { ...empty, plan,
+      return { status: 200, body: { ...empty, plan, ...selectedIdentity(row),
         access: row ? "full" : "generation_needed",
-        interpretation: row?.json_output ?? null, stored_depth: row?.stored_depth ?? null } };
+        interpretation: row ? quarantineCustomerRead(row.json_output, true, row.interpretation_source) : null, stored_depth: row?.stored_depth ?? null } };
     }
     const entitlement = await actions.resolveEntitlement();
     if (!entitlement.allowed) return entitlement.reason === "error"
@@ -59,27 +86,32 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     const row = await actions.readSelected(premium);
     const used = await actions.countClaims();
     if (!Number.isInteger(used) || used < 0) throw new Error("Invalid claim count");
-    const common = { plan: entitlement.plan, stored_depth: row?.stored_depth ?? null,
+    const common = { plan: entitlement.plan, stored_depth: row?.stored_depth ?? null, ...selectedIdentity(row),
       complimentary: { used, total: FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS,
         remaining: Math.max(0, FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS - used) } };
     if (!row) return { status: 200, body: { ...empty, ...common, access: "generation_needed" } };
     const full = premium || row.has_claim;
     const provenance = { source: row.interpretation_source ?? null };
+    const customer = quarantineCustomerRead(row.json_output, full, provenance.source);
     if (full && row.stored_depth !== "deep") {
-      const basic = buildBasicProjection(row.json_output, undefined, provenance);
+      // V2-03c: preview and counts only from a validated claim set (legacy: none).
+      const basic = servedBasic(projectBasic(customer, provenance));
       // A deterministic body IS the medical floor: serve it whole, still asking
       // for the deep generation this reader is entitled to.
-      const interpretation = isDeterministicSource(provenance.source) ? row.json_output : basic;
+      const interpretation = isDeterministicSource(provenance.source) ? customer : basic;
       return { status: 200, body: { ...common, access: "generation_needed", interpretation,
         preview: basic.preview, locked: basic.locked as LockedCounts } };
     }
-    const violations = findFloorViolations(row.json_output);
+    const violations = findFloorViolations(customer);
     if (violations.length) console.error("[get-interpretation] MEDICAL FLOOR VIOLATION — serving stored payload", violations);
-    // Basic arrives precompiled; rebuilding it would discard its chosen preview.
-    const projection = full ? buildBasicProjection(row.json_output, undefined, provenance) : row.json_output;
+    // Basic arrives precompiled and is not rebuilt. Its preview and counts are
+    // served only if compiled under a known claim policy (V2-03c); a legacy
+    // row's were chosen from unvalidated model content and are withheld.
+    const projection = full ? projectBasic(customer, provenance) : customer;
+    const visible = visibleClaimProjection(projection);
     return { status: 200, body: { ...common, access: full ? "full" : "basic",
-      interpretation: full ? row.json_output : sanitizeBasicProjection(row.json_output, provenance.source), preview: projection.preview ?? null,
-      locked: (projection.locked ?? empty.locked) as LockedCounts } };
+      interpretation: full ? customer : { ...sanitizeBasicProjection(customer, provenance.source), ...visible },
+      preview: visible.preview, locked: visible.locked } };
   } catch {
     return failure(503, "entitlement_unavailable", true);
   }

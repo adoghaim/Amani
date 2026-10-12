@@ -1,5 +1,6 @@
 import type { BiomarkerName, CyclePhase, AmaniStatus, LabStatus } from '../../types';
-import { getEntry, getRangesForPhase, getScoreWeight, getImportance } from '../biomarkers/dictionary';
+import { getRangesForPhase, getScoreWeight, getImportance } from '../biomarkers/dictionary';
+import { assessAmaniContext, contextFromReport, type NonCyclingState } from './amaniContext';
 
 export type ConcernLevel = 0 | 1 | 2;
 
@@ -15,43 +16,20 @@ export interface ScoredBiomarker {
   deviationMultiplier: number;
 }
 
+/**
+ * Amani's context status for one value, or 'unknown' when Amani withholds.
+ * A cycle-dependent marker with no usable phase, or any marker whose catalog
+ * flags the reported non-cycling state, gets no Amani status at all: it is
+ * never classified against a broad unphased fallback band (V2-03).
+ */
 export function computeAmaniStatus(
   name: BiomarkerName,
   value: number,
-  cyclePhase?: CyclePhase | null,
+  cyclePhase?: CyclePhase | string | null,
+  state: NonCyclingState | null = null,
 ): AmaniStatus {
-  const entry = getEntry(name);
-  if (!entry) return 'unknown';
-
-  const ranges = getRangesForPhase(name, cyclePhase);
-  if (!ranges) return 'unknown';
-
-  const { optimal, clinical } = ranges;
-  const optMin = optimal.min;
-  const optMax = optimal.max;
-  const clinMin = clinical.min;
-  const clinMax = clinical.max;
-
-  if (optMin !== null && optMax !== null && value >= optMin && value <= optMax) return 'optimal';
-
-  const borderlineBuffer = 0.15;
-
-  if (optMax !== null && value > optMax) {
-    if (entry.higherIsBetter) return 'optimal';
-    const threshold = optMax * (1 + borderlineBuffer);
-    if (clinMax !== null && value > clinMax) return 'out_of_range_high';
-    if (value <= threshold) return 'borderline_high';
-    return 'out_of_range_high';
-  }
-
-  if (optMin !== null && value < optMin) {
-    const threshold = optMin * (1 - borderlineBuffer);
-    if (clinMin !== null && value < clinMin) return 'out_of_range_low';
-    if (value >= threshold) return 'borderline_low';
-    return 'out_of_range_low';
-  }
-
-  return 'normal';
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state));
+  return assessment.kind === 'scored' ? assessment.status : 'unknown';
 }
 
 export function computeLabStatus(

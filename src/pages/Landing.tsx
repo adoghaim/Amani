@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { AmaniLogo } from '../components/AmaniLogo';
@@ -9,47 +10,16 @@ import { FREEMIUM_COPY } from '../lib/freemium/copy';
   The old page opened with a centred headline over three equal icon columns —
   the most generic layout on the web, and it described the product instead of
   showing it. This version leads with a real reading: a specimen panel with an
-  actual cycle day, actual biomarkers and an actual out-of-range value, so the
-  thing Amani does is visible before anyone has read a word of copy.
+  actual cycle day, actual biomarkers and an actual change since an earlier
+  panel, so the thing Amani does is visible before anyone has read a word of copy.
 
   Asymmetric by default. Nothing here is centred except the legal note, which
   should read as a statement rather than a pitch.
 */
 
-/** One biomarker row in the specimen panel. `pos` and `width` place the marker
- *  within its reference range, so the bar carries the same meaning as the
- *  number rather than decorating it. */
-function SpecimenRow({
-  name, value, unit, range, pos, width, tone,
-}: {
-  name: string; value: string; unit: string; range: string;
-  pos: number; width: number; tone: 'ok' | 'watch' | 'low';
-}) {
-  const bar = {
-    ok: 'bg-theme-flag-ok',
-    watch: 'bg-theme-flag-watch',
-    low: 'bg-theme-flag-low',
-  }[tone];
-
-  return (
-    <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 items-baseline">
-      <div>
-        <span className="text-sm font-medium text-theme-text">{name}</span>
-        <span className="block font-mono text-[11px] text-theme-muted-text-3 mt-0.5">{range}</span>
-      </div>
-      <div className="text-right">
-        <span className="font-mono text-base text-theme-text tabular-nums">{value}</span>
-        <span className="block font-mono text-[10px] text-theme-muted-text-3">{unit}</span>
-      </div>
-      <div className="col-span-2 h-1 rounded-full bg-theme-surface-2 relative overflow-hidden">
-        <span
-          className={`absolute inset-y-0 rounded-full ${bar}`}
-          style={{ left: `${pos}%`, width: `${width}%` }}
-        />
-      </div>
-    </div>
-  );
-}
+// Owner R3: the specimen's statements come from the clinical-language policy.
+// Lazy, because the policy imports the clinical catalog (LandingSpecimen.tsx).
+const LandingSpecimen = lazy(() => import('./LandingSpecimen'));
 
 function Step({ n, title, body }: { n: string; title: string; body: string }) {
   return (
@@ -96,10 +66,11 @@ export function Landing() {
             <h1 className="text-[2.6rem] sm:text-5xl lg:text-[3.4rem] leading-[1.04] mb-6">
               Your labs, read against your cycle.
             </h1>
+            {/* Owner R3: differentiate by context, not judgement. The old line,
+                "normal on day 3 and worrying on day 21", was a clinical judgement. */}
             <p className="text-lg text-theme-text-body mb-9 max-w-[38ch]">
-              The same hormone can be normal on day 3 and worrying on day 21. Amani reads
-              every result in the context of where you actually are, then explains it in
-              language you can take to your doctor.
+              Hormone results can mean different things at different points in the menstrual
+              cycle. Amani asks for the missing context instead of guessing.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 mb-5">
               <Link to="/signup" className="sm:w-auto">
@@ -136,16 +107,10 @@ export function Landing() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <SpecimenRow name="Ferritin" value="18" unit="ng/mL" range="15–150 ng/mL" pos={2} width={7} tone="low" />
-                <SpecimenRow name="Estradiol" value="142" unit="pg/mL" range="26–165 pg/mL · luteal" pos={71} width={9} tone="ok" />
-                <SpecimenRow name="TSH" value="4.12" unit="mIU/L" range="0.45–4.50 mIU/L" pos={87} width={8} tone="watch" />
-              </div>
-
-              <p className="mt-6 pt-5 border-t border-theme-border-inner text-sm text-theme-text-body">
-                <span className="text-theme-flag-low font-medium">Ferritin is low</span> and has been
-                falling since October. Everything else sits where it should for day 21.
-              </p>
+              {/* Fallback holds the panel's height so nothing shifts when it loads. */}
+              <Suspense fallback={<div className="min-h-[15rem]" aria-hidden="true" />}>
+                <LandingSpecimen />
+              </Suspense>
             </div>
           </div>
         </div>
@@ -170,12 +135,12 @@ export function Landing() {
               <Step
                 n="02"
                 title="Say where you are"
-                body="Cycle dates and anything you have noticed — sleep, energy, a new supplement. This is what turns a reference range into an answer."
+                body="Cycle dates and anything you have noticed — sleep, energy, a new supplement. Amani asks for this context instead of guessing it."
               />
               <Step
                 n="03"
                 title="Get it in plain language"
-                body="What each marker means at this point in your cycle, what changed since last time, and the specific questions worth raising at your next appointment."
+                body="Each result beside the interval your laboratory printed, what changed since last time, and questions you could bring to your next appointment."
               />
             </ol>
           </div>
@@ -228,7 +193,7 @@ export function Landing() {
         <ul className="grid sm:grid-cols-2 gap-x-10 gap-y-3 mt-10 max-w-3xl">
           {[
             'Unlimited lab panels',
-            'Cycle-aware interpretation',
+            'Results read with your cycle context',
             'Trends across every past panel',
             'Questions to take to your doctor',
           ].map(f => (

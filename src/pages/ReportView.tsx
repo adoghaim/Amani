@@ -1,3 +1,5 @@
+import { ArrowRightLeft } from 'lucide-react';
+import { ClinicalObservation, ModelProse, ModelProseText } from '../components/ClinicalObservation';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
@@ -9,7 +11,6 @@ import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
 import { YourHealthStory } from '../components/YourHealthStory';
 import { FocusAreas } from '../components/FocusAreas';
 import { GuidanceCards } from '../components/GuidanceCards';
-import { NextBestSteps } from '../components/NextBestSteps';
 import { buildCards } from '../lib/cards/buildCards';
 import { buildHealthStory, type PrimaryContext } from '../lib/insights/buildHealthStory';
 import { buildFocusAreas } from '../lib/insights/buildFocusAreas';
@@ -19,12 +20,22 @@ import { DoctorQuestionsCard } from '../components/DoctorQuestionsCard';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { RecommendedLabs } from '../components/RecommendedLabs';
 import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMetrics';
+import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
+import { bandLanguageByKey } from '../lib/scoring/compareReports';
+import {
+  authorizedLanguage, authorizeModelProse, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
+  labIntervalObservation, markerBandPlacement, movementClaimsByKey, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL,
+  primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
+  type AuthorizedLanguage, type AuthorizedModelProse,
+} from '../lib/scoring/insightCopy';
+import { SafetyWarnings } from '../components/SafetyWarnings';
+import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
+import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
-import { classifyLabValue } from '../utils/classifyLabValue';
-import { buildInsightSummary, formatPriorReportDate } from '../lib/insights/buildInsightSummary';
+import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
-import { CATEGORY_DISPLAY, PERSONALIZATION_THRESHOLDS } from '../types';
+import { PERSONALIZATION_THRESHOLDS } from '../types';
 import { YourTrajectoryCard } from '../components/YourTrajectoryCard';
 import type { BaselineStatus, BaselineStaleness, TrendDirection, TrendStrength } from '../types';
 import type { InsightSummary, BiggestChange } from '../lib/insights/buildInsightSummary';
@@ -35,10 +46,11 @@ import type {
 import {
   RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, CalendarDays,
-  CheckCircle2, Loader2, Info, Activity, AlertTriangle, FlaskConical,
+  CheckCircle2, Loader2, Info, Activity, FlaskConical,
 } from 'lucide-react';
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { createRegenerationRequests } from '../lib/regenerationRequest';
 import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
@@ -125,34 +137,19 @@ const CORE_BIOMARKER_CATEGORIES_UI: Record<string, string> = {
   serum_iron: 'Nutrients (Iron)', tibc: 'Nutrients (Iron)', uibc: 'Nutrients (Iron)',
 };
 
-type StatusStyle = { bg: string; text: string; dot: string; label: string };
-
-const STATUS_STYLE: Record<string, StatusStyle> = {
-  in_range:    { bg: 'bg-theme-flag-ok-bg', text: 'text-theme-flag-ok', dot: 'bg-theme-flag-ok', label: 'In range' },
-  out_of_range:{ bg: 'bg-theme-flag-low-bg',     text: 'text-theme-flag-low',     dot: 'bg-theme-flag-low',     label: 'Out of range' },
-  borderline:  { bg: 'bg-theme-flag-watch-bg',   text: 'text-theme-flag-watch',   dot: 'bg-theme-flag-watch',   label: 'Borderline' },
-  unknown:     { bg: 'bg-theme-neutral-100',   text: 'text-theme-neutral-500',    dot: 'bg-theme-neutral-400',    label: 'No range' },
-};
-
-const STATUS_STYLE_FALLBACK: StatusStyle = { bg: 'bg-theme-neutral-100', text: 'text-theme-neutral-500', dot: 'bg-theme-neutral-400', label: 'No range' };
-
 const CONFIDENCE_STYLE: Record<string, string> = {
   high:   'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border',
   medium: 'text-theme-flag-watch bg-theme-flag-watch-bg border-theme-flag-watch-border',
   low:    'text-theme-neutral-500 bg-theme-neutral-100 border-theme-neutral-200',
 };
 
-type PatternConfidenceStyle = { bg: string; text: string; border: string; label: string };
-
-const PATTERN_CONFIDENCE_STYLE: Record<string, PatternConfidenceStyle> = {
-  high:   { bg: 'bg-theme-flag-low-bg',   text: 'text-theme-flag-low',   border: 'border-theme-flag-low-border',   label: 'High confidence' },
-  medium: { bg: 'bg-theme-flag-watch-bg',  text: 'text-theme-flag-watch',  border: 'border-theme-flag-watch-border',  label: 'Medium confidence' },
-  low:    { bg: 'bg-theme-neutral-50',   text: 'text-theme-neutral-600',   border: 'border-theme-neutral-200',   label: 'Low confidence' },
-};
-
-const PATTERN_CONFIDENCE_FALLBACK: PatternConfidenceStyle = {
-  bg: 'bg-theme-neutral-50', text: 'text-theme-neutral-600', border: 'border-theme-neutral-200', label: 'Low confidence',
-};
+/*
+  V2-03b Stage 2, owner R1. The model's pattern signals carried a title naming
+  a pattern, a free-text explanation and a red/amber "confidence" badge, none of
+  it resting on an authorized rule. A signal now renders only the sentences that
+  resolve to the report's own measured-change claims, in neutral ink; the
+  title, the badge and the model's choice of related markers do not render.
+*/
 
 interface OpeningContext {
   primaryIsImproving: boolean;
@@ -165,20 +162,6 @@ interface OpeningContext {
   anyWorsening: boolean;
   worseningChange: BiggestChange | null;
   anyBoundaryCrossImproved: boolean;
-}
-
-function isPluralSubject(displayName: string): boolean {
-  const n = displayName.toLowerCase();
-  return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(n);
-}
-
-function conjugate(displayName: string): { remains: string; has: string; is: string } {
-  const plural = isPluralSubject(displayName);
-  return {
-    remains: plural ? 'remain' : 'remains',
-    has: plural ? 'have' : 'has',
-    is: plural ? 'are' : 'is',
-  };
 }
 
 function getOpeningContext(summary: InsightSummary): OpeningContext {
@@ -291,16 +274,23 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
   };
 }
 
+/*
+  Release invariant 1. This row is her laboratory's interval, so it says only
+  where the value sits against that interval as printed. It used to add an 8%
+  margin and call a value past the lab's bound "Borderline", a placement her
+  lab never made, coloured green, amber or red.
+*/
 function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
-  const status = classifyLabValue(
+  const label = analyte.display_name || analyte.raw_name;
+  const placement = labIntervalObservation(
+    label,
     analyte.value_numeric,
     analyte.normalized_min,
     analyte.normalized_max,
     analyte.normalized_operator,
-    analyte.normalized_operator_value
+    analyte.normalized_operator_value,
   );
-  const style = STATUS_STYLE[status] ?? STATUS_STYLE.unknown ?? STATUS_STYLE_FALLBACK;
-  const label = analyte.display_name || analyte.raw_name;
+  const style = CUE_STYLE[placement?.cue ?? 'neutral'];
   const isUnmapped = analyte.parse_status === 'unmapped';
   return (
     <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-theme-neutral-50 transition-colors">
@@ -320,9 +310,10 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
           {analyte.raw_value_text ?? analyte.value_numeric}
           {analyte.unit && <span className="text-theme-neutral-500 font-normal ml-1 text-xs">{analyte.unit}</span>}
         </span>
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}
+          data-language-category={placement?.category} data-language-source={placement?.authority.kind} data-language-cue={placement?.cue}>
           <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-          {style.label}
+          {placement?.text ?? NO_LAB_INTERVAL}
         </span>
       </div>
     </div>
@@ -363,24 +354,6 @@ function normalizeInterpretation(raw: unknown): AIInterpretation {
   };
 }
 
-function systemContextPhrase(key: BiomarkerName | null): string | null {
-  if (!key) return null;
-  const cat = getCategory(key);
-  if (!cat) return null;
-  switch (cat) {
-    case 'thyroid':       return 'thyroid function markers';
-    case 'lipids':        return 'the lipid panel';
-    case 'hormones':      return 'the rest of your hormone panel';
-    case 'metabolic':     return 'blood-sugar markers';
-    case 'kidney':        return 'kidney function markers';
-    case 'liver':         return 'liver function markers';
-    case 'inflammation':  return 'inflammation markers';
-    case 'nutrients':     return 'the rest of your nutrient panel';
-    case 'blood':         return 'the rest of your hematology panel';
-    default:              return null;
-  }
-}
-
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
   /*
@@ -415,6 +388,7 @@ export function ReportView() {
   // The server refused to generate for this viewer (402): offer Premium, don't retry.
   const [generatePremiumRequired, setGeneratePremiumRequired] = useState(false);
   const [regenerateFailed, setRegenerateFailed] = useState(false);
+  const regenerationRequests = useRef(createRegenerationRequests()).current;
   const [paywallOpen, setPaywallOpen] = useState(false);
   const accessStateRef = useRef<InterpretationAccessResult | null>(null);
   const accessRequester = useRef(createAccessRequester(id => fetchInterpretationAccess(
@@ -763,8 +737,19 @@ export function ReportView() {
   };
 
   const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
+  // V2-03: no pattern card may be built from an input Amani withholds for
+  // this report's context (e.g. a PCOS pattern from an unphased LH:FSH ratio).
+  // Amendment 4 (R2): a card that survives says only what its bands authorize.
   const insightFlags = useMemo(
-    () => evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+    () => authorizeInsightMatches(
+      gateInsightMatches(
+        evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
+        biomarkers,
+        contextFromReport(report?.estimated_cycle_phase),
+      ),
+      biomarkers,
+      contextFromReport(report?.estimated_cycle_phase),
+    ),
     [biomarkers, report]
   );
 
@@ -910,36 +895,44 @@ export function ReportView() {
     ));
   }, [biomarkers, report]);
 
-  // Optimization-only state: clinical labs are clean (no marker outside the
-  // lab's reference range) but at least one marker is outside Amani's tighter
-  // optimal range. Used to soften "Top Priority" → "Main Focus" and to swap
-  // the headline to acknowledge both truths (Phase 8B).
-  const isOptimizationOnly = useMemo(() => {
-    const clinicallyOutOfRange = scoredBiomarkers.some(
-      s => s.labStatus === 'out_of_range_low' || s.labStatus === 'out_of_range_high',
-    );
-    const outsideOptimal = scoredBiomarkers.some(s => s.concern > 0);
-    return !clinicallyOutOfRange && outsideOptimal;
-  }, [scoredBiomarkers]);
-  const topPriorityLabel = isOptimizationOnly ? 'Main Focus' : 'Top Priority';
+  /*
+    V2-03b. "Top Priority" / "Main Focus" and the optimization-only headline
+    ranked her results and called her lab results "stable" from Amani's bands
+    (and a lab margin Amani added). The label is now a neutral selection name
+    and the headline is the policy's placement sentence. Each scored marker's
+    band language, with the report's own phase, decides what may be said.
+  */
+  const markerBandLanguage = useMemo(() => {
+    const context = contextFromReport(report?.estimated_cycle_phase);
+    const map = new Map<string, AuthorizedLanguage>();
+    for (const b of biomarkers) {
+      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context);
+      if (assessment.kind === 'scored') map.set(b.name, authorizedLanguage(assessment.band));
+    }
+    return map;
+  }, [biomarkers, report]);
+  const safetyWarnings = useMemo(
+    () => evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
+    [biomarkers],
+  );
 
   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
   // server's interpretation already carries one but it's not surfaced to the
   // client; this matches the same shape so YourHealthStory can render the
   // honest "first tracked" / "improved" / "worsened" sentence.
+  const primaryBandLanguage = useMemo(() => {
+    const key = insightSummary?.primaryFinding?.key;
+    // The current band, with or without a prior report: a first report has no delta.
+    return (key ? markerBandLanguage.get(key) ?? insightSummary?.deltaMap.get(key)?.bandLanguage : undefined) ?? authorizedLanguage(null);
+  }, [insightSummary, markerBandLanguage]);
+
   const frontendPrimaryContext = useMemo<PrimaryContext | null>(() => {
     if (!insightSummary?.primaryFinding) return null;
     const pf = insightSummary.primaryFinding;
     const change = insightSummary.biggestChanges.find(c => c.key === pf.key);
 
-    let trajectory: PrimaryContext['trajectory'] = 'no_prior_data';
-    if (change && !change.isFirstRecorded && change.previousValue !== null) {
-      if (change.boundaryCrossing?.direction === 'improved') trajectory = 'improving';
-      else if (change.boundaryCrossing?.direction === 'worsened') trajectory = 'worsening';
-      else if (change.trajectoryStatus === 'improving_still_high' || change.trajectoryStatus === 'improving_still_low') trajectory = 'improving';
-      else if (change.trajectoryStatus === 'worsening_still_high' || change.trajectoryStatus === 'worsening_still_low') trajectory = 'worsening';
-      else trajectory = 'unchanged';
-    }
+    // V2-03 amendment 5: exhaustive, so no movement can read "unchanged".
+    const trajectory = primaryTrajectory(change, primaryBandLanguage);
 
     const currentStatus: PrimaryContext['current_status'] =
       pf.status === 'out_of_range' ? (pf.direction === 'high' ? 'elevated' : pf.direction === 'low' ? 'low' : 'out_of_range')
@@ -958,7 +951,7 @@ export function ReportView() {
       prior_report_date: change?.priorReportDate ?? null,
       supporting_biomarker: null,
     };
-  }, [insightSummary]);
+  }, [insightSummary, primaryBandLanguage]);
 
   const primaryCategory = useMemo<BiomarkerCategory | null>(() => {
     if (!insightSummary?.primaryFinding) return null;
@@ -966,8 +959,8 @@ export function ReportView() {
   }, [insightSummary]);
 
   const flaggedSlugs = useMemo<BiomarkerName[]>(
-    () => scoredBiomarkers.filter(s => s.concern > 0).map(s => s.key),
-    [scoredBiomarkers],
+    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside').map(s => s.key),
+    [scoredBiomarkers, report?.estimated_cycle_phase],
   );
 
   const flaggedCategories = useMemo<BiomarkerCategory[]>(
@@ -980,11 +973,11 @@ export function ReportView() {
     return buildFocusAreas(
       insightSummary,
       insightSummary.watchSignals,
-      scoredBiomarkers,
-      interpretation?.what_you_can_do_now,
+      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside'),
+      null,
       primaryCategory,
     );
-  }, [insightSummary, scoredBiomarkers, interpretation, primaryCategory]);
+  }, [insightSummary, scoredBiomarkers, primaryCategory, report?.estimated_cycle_phase]);
 
   const guidanceCards = useMemo(() => {
     const primaryFocusId = focusAreas.find((a) => a.isPrimaryAligned)?.id ?? null;
@@ -993,12 +986,12 @@ export function ReportView() {
 
   const healthStory = useMemo(() => {
     if (!insightSummary) return { sentences: [] };
-    return buildHealthStory({
+    return withBandReview(buildHealthStory({
       primaryContext: frontendPrimaryContext,
       focusAreas,
       primaryCategory,
-    });
-  }, [insightSummary, frontendPrimaryContext, focusAreas, primaryCategory]);
+    }), frontendPrimaryContext?.trajectory, primaryBandLanguage);
+  }, [insightSummary, frontendPrimaryContext, focusAreas, primaryCategory, primaryBandLanguage]);
 
   const groupedBiomarkers = useMemo(() => {
     const groups: Partial<Record<BiomarkerCategory, Biomarker[]>> = {};
@@ -1045,6 +1038,43 @@ export function ReportView() {
     return new Map(interpretation.biomarkers.map(b => [b.name, b]));
   }, [interpretation]);
 
+  /*
+    Owner R1: model prose is a proposal. Each model field below renders only
+    the sentences that resolve to a claim this page issued from the report's
+    own measured changes; everything else is suppressed, not labelled. A
+    marker card may only state its own marker's claim.
+  */
+  const movementClaims = useMemo(() => movementClaimsByKey(insightSummary?.deltaMap ?? []), [insightSummary]);
+  const reportClaims = useMemo(() => [...movementClaims.values()], [movementClaims]);
+  const modelProse = useMemo(() => ({
+    headline: authorizeModelProse('interpretation.headline', interpretation?.headline, reportClaims),
+    summary: authorizeModelProse('interpretation.summary_bullets', interpretation?.summary_bullets, reportClaims),
+    patterns: (interpretation?.pattern_signals ?? []).flatMap(signal => {
+      const prose = [
+        ...authorizeModelProse('interpretation.pattern_signals.title', signal?.title, reportClaims),
+        ...authorizeModelProse('interpretation.pattern_signals.explanation', signal?.explanation, reportClaims),
+      ];
+      return prose.length > 0 ? [prose] : [];
+    }),
+  }), [interpretation, reportClaims]);
+  const markerProse = useMemo(() => {
+    const map = new Map<string, AuthorizedModelProse[]>();
+    for (const b of biomarkers) {
+      const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
+      const claim = movementClaims.get(b.name as BiomarkerName);
+      if (!interp || !claim) continue;
+      const seen = new Set<string>();
+      const prose = [
+        ...authorizeModelProse('interpretation.biomarkers.plain_english_meaning', interp.plain_english_meaning, [claim]),
+        ...authorizeModelProse('interpretation.biomarkers.timing_notes', interp.timing_notes, [claim]),
+        ...authorizeModelProse('interpretation.biomarkers.common_non_alarm_reasons', interp.common_non_alarm_reasons, [claim]),
+        ...authorizeModelProse('interpretation.biomarkers.when_clinicians_follow_up', interp.when_clinicians_follow_up, [claim]),
+      ].filter(p => !seen.has(p.language.text) && !!seen.add(p.language.text));
+      if (prose.length > 0) map.set(b.name, prose);
+    }
+    return map;
+  }, [biomarkers, interpMap, movementClaims]);
+
   const filteredCategories = useMemo(() => {
     if (activeCategory) {
       const items = sortedGroupedBiomarkers[activeCategory];
@@ -1079,9 +1109,12 @@ export function ReportView() {
 
   const totalAnalyteCount = useMemo(() => reportAnalytes.filter(a => !a.is_core).length, [reportAnalytes]);
 
-  const handleRegenerate = async () => {
+  // `retry === true` only from the failed-regenerate retry action; a click
+  // passes its event, which is a new tap.
+  const handleRegenerate = async (retry?: unknown) => {
     if (!report || report.regeneration_count >= 3) return;
     if (freemium ? !freemiumCanRegenerate(accessState, report.regeneration_count) : !entitled) return;
+    const requestId = regenerationRequests.next(retry === true);
     setRegenerating(true);
     setError('');
     setRegenerateFailed(false);
@@ -1114,10 +1147,10 @@ export function ReportView() {
     };
     try {
       /*
-        Deliberately NOT deleting the existing interpretation first.
-        `generate-interpretation` upserts on `lab_report_id`, which is UNIQUE
-        (20260312070949_add_interpretation_source_and_unique_constraint.sql), so
-        a successful run replaces the row on its own. Deleting up front opened a
+        Deliberately NOT deleting the existing interpretation first. Once the
+        report holds one, `generate-interpretation` appends a new version keyed
+        by `request_id` (TASK-048) and the readers serve it; the historical row
+        is never replaced. Deleting up front opened a
         window where any failure — a 429 on the daily cap, a dropped connection,
         a 500 — destroyed the interpretation the user already had and could not
         get back, since the retry that would have replaced it is the thing that
@@ -1131,8 +1164,10 @@ export function ReportView() {
         body: {
           reportId,
           primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
+          request_id: requestId,
         },
       });
+      if (!interpError && fnData?.success) regenerationRequests.settle();
       if (freemium && (interpError || !fnData?.success)) {
         await failFreemium(interpError);
         return;
@@ -1428,7 +1463,7 @@ export function ReportView() {
               inline
               title={FREEMIUM_COPY.report.regenerateErrorTitle}
               body={FREEMIUM_COPY.report.regenerateErrorBody}
-              onRetry={() => { void handleRegenerate(); }}
+              onRetry={() => { void handleRegenerate(true); }}
             />
           )}
 
@@ -1482,6 +1517,9 @@ export function ReportView() {
             && (generating || accessState?.access === 'error' || accessState?.access === 'generation_needed')
             && freemiumPanel}
 
+          {/* ── A. Safety channel: approved deterministic rules only, never band-derived ── */}
+          {!isProcessing && <SafetyWarnings warnings={safetyWarnings} />}
+
           {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
             <div className="rounded-2xl overflow-hidden border border-theme-border-subtle shadow-sm">
@@ -1509,90 +1547,27 @@ export function ReportView() {
                     const isStableAbnormal = ctx?.primaryIsStableAbnormal && ctx?.primaryStableChange !== null;
 
                     if (insightSummary) {
-                      const allFindings = insightSummary.primaryFinding ? [insightSummary.primaryFinding, ...insightSummary.topFindings] : insightSummary.topFindings;
-                      const outOfRange = allFindings.filter(f => f.status === 'out_of_range');
-                      const borderline = allFindings.filter(f => f.status === 'borderline');
-                      const topName = outOfRange[0]?.displayName ?? borderline[0]?.displayName;
-                      const secondName = outOfRange[1]?.displayName ?? (outOfRange.length === 0 ? borderline[1]?.displayName : borderline[0]?.displayName);
-                      const topConj = topName ? conjugate(topName) : { remains: 'remains', has: 'has', is: 'is' };
-                      const dirLabel = insightSummary.primaryFinding?.direction === 'low' ? `${topConj.remains} low` : `${topConj.remains} elevated`;
-
-                      // Force trajectory headline override if improving
-                      if (isImproving && ctx.primaryImprovingChange) {
-                        const ch = ctx.primaryImprovingChange;
-                        const worsened = ctx.worseningChange;
-                        const secondaryFinding = outOfRange.find(f => f.displayName !== topName)
-                          ?? borderline.find(f => f.displayName !== topName)
-                          ?? null;
-                        const main = ch.priorReportDate
-                          ? `${topName} ${dirLabel} but ${topConj.has} improved since ${formatPriorReportDate(ch.priorReportDate)}.`
-                          : `${topName} ${dirLabel} but ${topConj.has} improved since your prior report.`;
-                        if (worsened && worsened.displayName !== topName) {
-                          const wConj = conjugate(worsened.displayName);
-                          const w = worsened.trendDirection === 'up' ? `${wConj.has} risen` : worsened.trendDirection === 'down' ? `${wConj.has} dropped` : `${wConj.has} shifted`;
-                          return `${main} Your ${worsened.displayName} ${w} since your last report and ${wConj.is} worth monitoring.`;
-                        }
-                        if (secondaryFinding) {
-                          const sConj = conjugate(secondaryFinding.displayName);
-                          const dirWord = secondaryFinding.direction === 'low' ? 'low' : 'high';
-                          return `${main} Your ${secondaryFinding.displayName} ${sConj.is} also ${dirWord} and worth monitoring.`;
-                        }
-                        return main;
+                      // A comparison trajectory authorizes observations, never
+                      // judgement or advice, in either direction (R1, R2).
+                      const observedChange = isImproving ? ctx.primaryImprovingChange
+                        : isWorsening ? ctx.primaryWorseningChange
+                        : isStableAbnormal ? ctx.primaryStableChange : null;
+                      if (observedChange) {
+                        return <ClinicalObservation language={describeMeasuredMovement(observedChange)} />;
                       }
 
-                      // Force trajectory headline override if primary is worsening
-                      if (isWorsening && ctx.primaryWorseningChange) {
-                        const ch = ctx.primaryWorseningChange;
-                        const dateClause = ch.priorReportDate
-                          ? `since ${formatPriorReportDate(ch.priorReportDate)}`
-                          : 'since your last report';
-                        return `${topName} ${dirLabel} and has worsened ${dateClause} — worth discussing with your provider.`;
-                      }
-
-                      // Force trajectory headline override if primary is stable abnormal
-                      if (isStableAbnormal && ctx.primaryStableChange) {
-                        return `${topName} ${dirLabel} and has not changed significantly from the prior report.`;
-                      }
-
-                      // Deterministic safety net (Phase 8B): when labs are clinically
-                      // stable but at least one marker is outside Amani's optimal range,
-                      // override any AI headline so it never says "all within range"
-                      // while the UI flags a marker as Outside Optimal.
-                      if (isOptimizationOnly && insightSummary.primaryFinding) {
-                        return `Your standard lab ranges look stable overall, with ${insightSummary.primaryFinding.displayName} standing out as the main area to optimize.`;
-                      }
-
-                      // If AI headline available and no trajectory override, use AI headline
-                      if (interpretation?.headline) return interpretation.headline;
-
-                      // Fallbacks if no AI headline
-                      if (outOfRange.length === 0 && borderline.length === 0) {
-                        if (ctx?.anyBoundaryCrossImproved) {
-                          const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `All values are within optimal range, and ${name} has improved since your last draw.`;
-                        }
-                        return 'All measured values are within the Amani optimal range.';
-                      }
-
-                      if (outOfRange.length > 0 && borderline.length > 0 && secondName) {
-                        return `${topName} is outside optimal range and ${secondName} is borderline. These are the two areas worth focusing on.`;
-                      }
-                      if (outOfRange.length >= 2 && secondName) {
-                        return `${topName} and ${secondName} are both outside optimal range. These are your top priorities.`;
-                      }
-                      if (outOfRange.length === 1 && borderline.length === 0) {
-                        if (ctx?.anyBoundaryCrossImproved) {
-                          const name = insightSummary.biggestChanges.find(c => c.boundaryCrossing?.direction === 'improved')!.displayName;
-                          return `${topName} is outside optimal range, though ${name} has improved since your last report.`;
-                        }
-                        return `${topName} is outside optimal range and is the primary finding on this panel.`;
-                      }
-                      if (borderline.length >= 2 && secondName) {
-                        return `${topName} and ${secondName} are both borderline. Worth monitoring but no urgent flags.`;
-                      }
-                      return `${topName} is borderline. Worth keeping an eye on over time.`;
+                      // Amani writes the headline from its own data. A model headline
+                      // is not authority for clinical meaning ("because the LLM
+                      // generated it" is inadmissible), and it could read "all within
+                      // range" while a card says otherwise (Phase 8B, kept).
+                      const outside = scoredBiomarkers
+                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
+                        .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
+                      const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
+                      return <ClinicalObservation language={headline} />;
                     }
-                    return interpretation?.headline || '';
+                    const modelHeadline = modelProse.headline[0];
+                    return modelHeadline ? <ModelProse prose={modelHeadline} /> : REPORT_TITLE;
                   })()}
                 </h2>
               </div>
@@ -1603,164 +1578,53 @@ export function ReportView() {
                 const isImproving = ctx?.primaryIsImproving && ctx?.primaryImprovingChange !== null;
                 const isWorsening = ctx?.primaryIsWorsening && ctx?.primaryWorseningChange !== null;
                 const isStableAbnormal = ctx?.primaryIsStableAbnormal && ctx?.primaryStableChange !== null;
-                const aiTitleMatchesPrimary =
-                  !!interpretation?.primary_concern &&
-                  !!insightSummary?.primaryFinding &&
-                  (interpretation.primary_concern as { canonical_slug?: string }).canonical_slug === insightSummary.primaryFinding.key;
 
-                // 1a. Deterministic Override — Improving
-                if (isImproving && ctx.primaryImprovingChange && insightSummary?.primaryFinding) {
-                  const pf = insightSummary.primaryFinding;
-                  const conj = conjugate(pf.displayName);
-                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
-                  const subnote = `${pf.displayName} ${conj.is} still ${dirWord === 'low' ? 'below range' : 'above range'}, but the trend is moving in the right direction. Continue tracking this${ctxPhrase ? ` alongside ${ctxPhrase}` : ''}.`;
+                // Comparison movement and magnitude keep a neutral attention cue.
+                // AI prose is not independent authority for advice in this channel.
+                // V2-03b: movement toward a band is the same observation; its
+                // green "right direction" branch had only a boolean's authority.
+                const observedChange = isImproving ? ctx.primaryImprovingChange
+                  : isWorsening ? ctx.primaryWorseningChange
+                  : isStableAbnormal ? ctx.primaryStableChange : null;
+                if (observedChange && insightSummary?.primaryFinding) {
                   return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                    <div data-testid="primary-movement-observation" className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-flag-ok/15">
-                          <AlertTriangle className="w-5 h-5 text-theme-flag-ok" />
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-surface">
+                          <ArrowRightLeft aria-hidden="true" className="w-5 h-5 text-theme-muted-text-2" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-theme-flag-ok">
-                            {topPriorityLabel}
-                          </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
-                          </p>
-                          <p className="text-xs text-theme-flag-ok leading-relaxed border-l-2 border-theme-flag-ok-border/60 pl-3">
-                            {subnote}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // 1b. Deterministic Override — Worsening
-                if (isWorsening && ctx.primaryWorseningChange && insightSummary?.primaryFinding) {
-                  const aiWhyItMatters = aiTitleMatchesPrimary ? interpretation?.primary_concern?.why_it_matters : undefined;
-                  const pf = insightSummary.primaryFinding;
-                  const conj = conjugate(pf.displayName);
-                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
-                  const closer = ctxPhrase
-                    ? `Worth attention with your provider, alongside ${ctxPhrase}.`
-                    : 'Worth attention with your provider.';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} shifted in the wrong direction since your prior report. ${closer}`;
-                  return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-theme-flag-watch/15">
-                          <AlertTriangle className="w-5 h-5 text-theme-flag-watch" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] mb-2 text-theme-flag-watch">
-                            {topPriorityLabel}
-                          </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
-                          </p>
-                          {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-flag-watch-border/60 pl-3">
-                              {aiWhyItMatters}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-theme-flag-watch leading-relaxed border-l-2 border-theme-flag-watch-border/60 pl-3">
-                              {subnote}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // 1c. Deterministic Override — Stable Abnormal
-                if (isStableAbnormal && ctx.primaryStableChange && insightSummary?.primaryFinding) {
-                  const aiWhyItMatters = aiTitleMatchesPrimary ? interpretation?.primary_concern?.why_it_matters : undefined;
-                  const pf = insightSummary.primaryFinding;
-                  const conj = conjugate(pf.displayName);
-                  const dirWord = pf.direction === 'low' ? 'low' : 'elevated';
-                  const ctxPhrase = systemContextPhrase(pf.key as BiomarkerName);
-                  const closer = ctxPhrase
-                    ? `Continued tracking with ${ctxPhrase} will clarify the pattern.`
-                    : 'Continued tracking at your next panel will clarify the pattern.';
-                  const subnote = `${pf.displayName} ${conj.remains} ${dirWord} and ${conj.has} not changed significantly. ${closer}`;
-                  return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            {topPriorityLabel}
-                          </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {aiTitleMatchesPrimary ? interpretation!.primary_concern!.title : insightSummary.primaryFinding.displayName}
-                          </p>
-                          {aiWhyItMatters ? (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
-                              {aiWhyItMatters}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3">
-                              {subnote}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // 2. Standard AI Path — only when AI title matches deterministic primary
-                if (interpretation?.primary_concern && aiTitleMatchesPrimary) {
-                  return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            {topPriorityLabel}
-                          </p>
-                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">
-                            {interpretation.primary_concern.title}
-                          </p>
+                          <p className="text-base font-bold text-theme-text mb-2 leading-snug">{insightSummary.primaryFinding.displayName}</p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {interpretation.primary_concern.summary}
+                            <ClinicalObservation language={describeMeasuredMovement(observedChange)} />{' '}
+                            <ClinicalObservation language={describeComparisonBand(primaryBandLanguage, 'outside')} />
                           </p>
-                          {interpretation.primary_concern.why_it_matters && (
-                            <p className="text-xs text-theme-muted-text-2 leading-relaxed border-l-2 border-theme-primary/40 pl-3 mt-2.5">
-                              {interpretation.primary_concern.why_it_matters}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </div>
                   );
                 }
 
-                // 3. Complete Fallback Path
+                // V2-03b: the model's primary_concern title, summary and
+                // why_it_matters no longer render here. A model is not authority
+                // for clinical meaning, and the warning triangle signalled danger
+                // from an unreviewed band. The deterministic finding remains.
                 if (insightSummary?.primaryFinding) {
                   return (
-                    <div className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
+                    <div data-testid="primary-finding" className="border-b border-theme-border-inner bg-theme-background-tint px-6 py-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-theme-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-theme-primary" />
+                        <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Info aria-hidden="true" className="w-5 h-5 text-theme-muted-text-2" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-extrabold text-theme-primary uppercase tracking-[0.15em] mb-2">
-                            {topPriorityLabel}
+                          <p className="text-[11px] font-extrabold text-theme-muted-text-2 uppercase tracking-[0.15em] mb-2">
+                            {PRIMARY_FINDING_LABEL}
                           </p>
                           <p className="text-base font-bold text-theme-text mb-2 leading-snug">
                             {insightSummary.primaryFinding.displayName}
                           </p>
                           <p className="text-sm text-theme-text-body leading-relaxed">
-                            {insightSummary.primaryFinding.fact}
+                            {primaryFindingSentence(insightSummary.primaryFinding, primaryBandLanguage)}
                           </p>
                         </div>
                       </div>
@@ -1771,14 +1635,14 @@ export function ReportView() {
                 return null;
               })()}
 
-              {/* Summary bullets: only when no primary_concern */}
-              {interpretation && !interpretation.primary_concern && interpretation.summary_bullets.length > 0 && (
-                <div className="bg-theme-surface px-6 py-5">
+              {/* Summary bullets: only those that resolve to a measured-change claim (owner R1) */}
+              {modelProse.summary.length > 0 && (
+                <div className="bg-theme-surface px-6 py-5" data-model-surface="summary_bullets">
                   <ul className="space-y-3">
-                    {interpretation.summary_bullets.map((bullet, i) => (
-                      <li key={i} className="flex items-start gap-3">
+                    {modelProse.summary.map(prose => (
+                      <li key={prose.language.text} className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-theme-primary flex-shrink-0 mt-2" />
-                        <p className="text-sm text-theme-text-body leading-relaxed">{bullet}</p>
+                        <p className="text-sm text-theme-text-body leading-relaxed"><ModelProse prose={prose} /></p>
                       </li>
                     ))}
                   </ul>
@@ -1799,6 +1663,7 @@ export function ReportView() {
               changes={insightSummary.biggestChanges}
               primaryFinding={insightSummary.primaryFinding}
               reportCount={historicalReportCount}
+              bandLanguage={bandLanguageByKey(insightSummary.deltaMap.values())}
             />
           )}
 
@@ -1811,15 +1676,13 @@ export function ReportView() {
             <GuidanceCards cards={guidanceCards} />
           )}
 
-          {/* ── B4. Next Best Steps (NEW — merges old "Next Steps" + "What to Do Next" into Track/Discuss/Support/Retest) ─── */}
-          {!isProcessing && interpretation && (
-            <NextBestSteps
-              whatYouCanDoNow={interpretation.what_you_can_do_now}
-              whatToDoNext={interpretation.what_to_do_next}
-              hideSupportBucket={guidanceCards.length > 0}
-              primaryDisplayName={insightSummary?.primaryFinding?.displayName ?? null}
-            />
-          )}
+          {/* ── B4. Next Best Steps: not mounted (V2-03b Stage 2, owner R4).
+              Every item is model-written what_you_can_do_now / what_to_do_next.
+              Its "Support" bucket is food, nutrient, supplement and lifestyle
+              advice tied to her result with no Clinical Truth rule, and the
+              keyword bucketing cannot keep that advice out of the others
+              ("Ask your doctor whether an iron supplement makes sense" files
+              under Discuss). Suppressed whole, not relabelled. ─── */}
 
           {/* ── Flag on: Basic insights, Premium Preview, locked cards ── */}
           {freemiumPanel && !isProcessing && !accessLoading && !generating
@@ -1836,7 +1699,7 @@ export function ReportView() {
               See git history for the original implementations. */}
 
           {/* ── E. More Details (Pattern Signals, Flags, Derived) ── */}
-          {((interpretation?.pattern_signals?.length ?? 0) > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
+          {(modelProse.patterns.length > 0 || insightFlags.length > 0 || derivedMetrics.length > 0) && (
             <div className="rounded-2xl border border-theme-neutral-200 overflow-hidden">
               <button
                 className="flex items-center justify-between w-full px-5 py-4 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
@@ -1854,32 +1717,14 @@ export function ReportView() {
               </button>
               {showMoreDetails && (
                 <div className="border-t border-theme-neutral-100 px-5 py-5 space-y-6">
-                  {(interpretation?.pattern_signals?.length ?? 0) > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Pattern signals</p>
-                      {interpretation!.pattern_signals!.map((signal, i) => {
-                        const style = PATTERN_CONFIDENCE_STYLE[signal.confidence] ?? PATTERN_CONFIDENCE_STYLE.low ?? PATTERN_CONFIDENCE_FALLBACK;
-                        return (
-                          <div key={i} className={`rounded-xl border p-4 ${style.bg} ${style.border}`}>
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                              <p className="text-sm font-semibold text-theme-text">{signal.title}</p>
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${style.bg} ${style.text} ${style.border}`}>
-                                {style.label}
-                              </span>
-                            </div>
-                            <p className={`text-xs leading-relaxed mb-2 ${style.text}`}>{signal.explanation}</p>
-                            {signal.related_biomarkers?.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
-                                {signal.related_biomarkers.map((slug, j) => (
-                                  <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-theme-surface/70 border border-theme-neutral-200 text-theme-muted-text-2">
-                                    {getDisplayName(slug as BiomarkerName)}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                  {modelProse.patterns.length > 0 && (
+                    <div className="space-y-3" data-model-surface="pattern_signals">
+                      <p className="text-xs font-bold text-theme-muted-text-3 uppercase tracking-widest">Measured changes</p>
+                      {modelProse.patterns.map(prose => (
+                        <div key={prose.map(p => p.language.text).join('|')} className="rounded-xl border border-theme-neutral-200 bg-theme-neutral-50 p-4">
+                          <p className="text-xs leading-relaxed text-theme-neutral-600"><ModelProseText items={prose} /></p>
+                        </div>
+                      ))}
                     </div>
                   )}
                   {insightFlags.length > 0 && <InsightFlagsPanel flags={insightFlags} />}
@@ -1935,7 +1780,7 @@ export function ReportView() {
           {/* ── Cycle context ─────────────────────────────────────── */}
           {!isProcessing && (() => {
             // Phase/day always come from the report; see cycleContextCard.
-            const card = cycleContextCard(report, interpretation?.cycle_context);
+            const card = cycleContextCard(report, interpretation?.cycle_context, reportClaims);
             if (!card) return null;
             return (
               <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface px-5 py-5">
@@ -1963,13 +1808,15 @@ export function ReportView() {
                   )}
                 </div>
                 {card.explanation && (
-                  <p className="text-xs text-theme-muted-text-2 leading-relaxed">{card.explanation}</p>
+                  <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-model-surface="cycle_context">
+                    <ModelProse prose={card.explanation} />
+                  </p>
                 )}
               </div>
             );
           })()}
 
-          {/* ── Questions for Your Doctor (deterministic) ──────── */}
+          {/* ── Discussion preparation (deterministic, DISCUSSION_PREP_PROMPT) ──────── */}
           {insightSummary && !isProcessing && insightSummary.questionsForDoctor.length > 0 && (
             <DoctorQuestionsCard questions={insightSummary.questionsForDoctor} />
           )}
@@ -1982,7 +1829,7 @@ export function ReportView() {
                   Health Systems
                   {activeCategory && (
                     <span className="ml-2 text-sm font-normal text-theme-primary">
-                      : {CATEGORY_DISPLAY[activeCategory].label}
+                      : {systemDisplayLabel(activeCategory)}
                       <button onClick={() => setActiveCategory(null)} className="ml-2 underline text-xs">
                         clear
                       </button>
@@ -2007,7 +1854,9 @@ export function ReportView() {
 
               <div className="mt-5 space-y-2">
                 {filteredCategories.map(({ category, items }) => {
-                  const flaggedCount = items.filter(b => b.flagged === 'out_of_range' || b.flagged === 'borderline').length;
+                  // Counted live, not from the persisted upload-time flag: a flag stored
+                  // before V2-03 may have come from a fallback band Amani now withholds.
+                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase) === 'outside').length;
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {
@@ -2021,15 +1870,16 @@ export function ReportView() {
                     <div key={category} className="rounded-xl border border-theme-neutral-200 overflow-hidden">
                       <button
                         onClick={toggleCollapsed}
+                        aria-expanded={!isCollapsed}
                         className="flex items-center justify-between w-full px-4 py-3 text-left bg-theme-surface hover:bg-theme-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="text-sm font-semibold text-theme-text">
-                            {CATEGORY_DISPLAY[category].label}
+                            {systemDisplayLabel(category)}
                           </span>
                           {flaggedCount > 0 && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-flag-watch-bg text-theme-flag-watch">
-                              {flaggedCount} outside optimal
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CUE_STYLE.attention.bg} ${CUE_STYLE.attention.text}`}>
+                              {outsideBandCount(flaggedCount)}
                             </span>
                           )}
                         </div>
@@ -2044,7 +1894,6 @@ export function ReportView() {
                       {!isCollapsed && (
                         <div className="px-4 pb-4 pt-1 border-t border-theme-neutral-100 space-y-2">
                           {items.map(b => {
-                            const interp = interpMap.get(b.name) ?? interpMap.get(b.name.replace(/_/g, ' '));
                             const personalization = biomarkerPersonalizationMap.get(b.name);
                             return (
                               <BiomarkerCard
@@ -2056,10 +1905,7 @@ export function ReportView() {
                                 labRefMin={b.reference_min}
                                 labRefMax={b.reference_max}
                                 cyclePhase={cyclePhase}
-                                plainEnglishMeaning={interp?.plain_english_meaning}
-                                timingNotes={interp?.timing_notes}
-                                commonNonAlarmReasons={interp?.common_non_alarm_reasons}
-                                whenCliniciansFollowUp={interp?.when_clinicians_follow_up}
+                                modelProse={markerProse.get(b.name)}
                                 baselineStatus={personalization?.baselineStatus}
                                 baselineStaleness={personalization?.baselineStaleness}
                                 baselineValue={personalization?.baselineValue}
@@ -2078,10 +1924,16 @@ export function ReportView() {
           )}
 
           {/* ── H. Disclaimer ───────────────────────────────────── */}
+          {/* The policy's product disclaimer; the model's own disclaimer text never renders (owner R1). */}
           {interpretation && (
             <div className="flex items-start gap-3 px-4 py-4">
               <Info className="w-3.5 h-3.5 text-theme-neutral-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-theme-muted-text-3 leading-relaxed italic">{interpretation.disclaimer}</p>
+              <p className="text-xs text-theme-muted-text-3 leading-relaxed italic"
+                data-language-category={PRODUCT_DISCLAIMERS.report.category}
+                data-language-source={PRODUCT_DISCLAIMERS.report.authority.kind}
+                data-language-cue={PRODUCT_DISCLAIMERS.report.cue}>
+                {PRODUCT_DISCLAIMERS.report.text}
+              </p>
             </div>
           )}
 

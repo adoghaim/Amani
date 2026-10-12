@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, Minus, ArrowRight, AlertCircle, Activity } from 'lucide-react';
 import type { BiggestChange } from '../lib/insights/buildInsightSummary';
-import type { TrajectoryStatus } from '../lib/scoring/compareReports';
+import { boundaryBucketLabel, type TrajectoryStatus } from '../lib/scoring/compareReports';
 
 const BOUNDARY_CROSSING_STYLE: Record<string, {
   bg: string; border: string; text: string; badge: string; label: string;
@@ -89,19 +89,22 @@ function getSubtitle(change: BiggestChange): string | null {
   if (change.boundaryCrossing) {
     const bc = change.boundaryCrossing;
     const verb = bc.direction === 'improved' ? 'Improved' : 'Moved';
-    return `${verb} from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}${sinceClause}`;
+    // Neutral bucket wording only (V2-03 amendment 2); never echo a raw bucket.
+    const from = boundaryBucketLabel(bc.from);
+    const to = boundaryBucketLabel(bc.to);
+    return from && to ? `${verb} from ${from} to ${to}${sinceClause}` : null;
   }
   if (ts === 'improving_still_high') {
-    return `Still elevated, but moving toward the optimal range${sinceClause}`;
+    return `Still elevated, but moving toward the Amani band${sinceClause}`;
   }
   if (ts === 'improving_still_low') {
-    return `Still below optimal, but moving in the right direction${sinceClause}`;
+    return `Still below the Amani band, but moving in the right direction${sinceClause}`;
   }
   if (ts === 'worsening_still_high') {
-    return `Moving further above the optimal range${sinceClause}`;
+    return `Moving further above the Amani band${sinceClause}`;
   }
   if (ts === 'worsening_still_low') {
-    return `Moving further below the optimal range${sinceClause}`;
+    return `Moving further below the Amani band${sinceClause}`;
   }
   return null;
 }
@@ -133,7 +136,7 @@ function buildSummaryLine(changes: BiggestChange[]): string | null {
 
   if (worsened.length > 0 && improved.length === 0) {
     const names = worsened.slice(0, 2).map(c => c.displayName).join(' and ');
-    return `${names} ${worsened.length === 1 ? 'has' : 'have'} shifted outside optimal range — worth tracking at your next draw.`;
+    return `${names} ${worsened.length === 1 ? 'has' : 'have'} shifted outside the Amani band — worth tracking at your next draw.`;
   }
 
   if (improved.length > 0 && worsened.length > 0 && improved[0] && worsened[0]) {
@@ -142,10 +145,10 @@ function buildSummaryLine(changes: BiggestChange[]): string | null {
 
   if (improvingAbnormal.length > 0 && worsened.length === 0) {
     if (improvingAbnormal.length === 1 && improvingAbnormal[0]) {
-      return `${improvingAbnormal[0].displayName} remains outside the optimal range but has improved since the prior report.`;
+      return `${improvingAbnormal[0].displayName} remains outside the Amani band but has improved since the prior report.`;
     }
     const names = improvingAbnormal.slice(0, 2).map(c => c.displayName).join(' and ');
-    return `${names} both remain outside the optimal range but have improved since the prior report.`;
+    return `${names} both remain outside the Amani band but have improved since the prior report.`;
   }
 
   const allUp = changes.every(c => c.trendDirection === 'up');

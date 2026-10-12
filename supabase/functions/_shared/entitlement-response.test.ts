@@ -33,11 +33,19 @@ import { resolveTier } from './tier';
 import { buildBasicProjection } from './interpretation-visibility';
 import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation } from './response-shaping';
 import { generationSample } from './generation-cost';
+import * as versionWrite from './interpretation-version-write';
 
 const source = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
 function evaluate(fragment: string, values: Record<string, unknown>) {
   const { code } = transformSync(fragment, { loader: 'ts', target: 'es2022' });
   return new Function(...Object.keys(values), code)(...Object.values(values));
+}
+function pipelineSource() {
+  const start = source.indexOf('// ─── Shared generation pipeline');
+  const end = source.indexOf('// ─── Version store', start);
+  expect(start).toBeGreaterThan(0);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
 }
 
 it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no findings, costs or ledger', async activeFlag => {
@@ -47,7 +55,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
   // The model tries to author phase/day/confidence; only its explanation may survive.
   const generated: Record<string, unknown> = { headline: 'h', cycle_context: { estimated_cycle_day: 3, estimated_cycle_phase: 'pregnancy_t2',
     confidence: 'high', explanation: 'model prose' }, questions_for_doctor: [], disclaimer: 'd', key_findings: [], deep_body: 'full' };
-  const sink: { helpers?: Record<string, unknown> } = {};
+  const sink: { helpers?: Record<string, unknown>; pipeline?: Record<string, unknown> } = {};
   evaluate(source.slice(source.indexOf('function deterministicCycleFacts('), source.indexOf('function generateFallbackInterpretation('))
     + '\nsink.helpers = { deterministicCycleFacts, modelCycleExplanation };', { sink });
   const from = (table: string) => {
@@ -70,6 +78,15 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
     rpc: async (name: string, args: Record<string, unknown>) => { calls.push({ name, args }); return { error: null }; } };
   const noCall = vi.fn(() => { throw new Error('inactive branch accessed'); });
   const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  // The stages shared with regeneration (TASK-048) are executed from source too.
+  evaluate(pipelineSource() + '\nsink.pipeline = { loadGenerationContext, trendEvidenceFor, produceInterpretation };', {
+    sink, sanitizeReportContext: () => undefined, buildPrimaryContext: () => null, debugLog: () => {},
+    errorMessage: String, UserProfileContextSchema: { safeParse: noCall }, formatUserContextBlock: noCall,
+    buildTrendEvidence: noCall, slug: noCall, classifyAnalyte: noCall, withClaimAuthority: noCall, projectBasic: noCall,
+    generateFallbackInterpretation: noCall, formatPrimarySummary: noCall,
+    tryOpenAI: async () => generated, shouldRequestDeepInterpretation, shapeInterpretation, buildBasicProjection,
+    findFloorViolations, ...sink.helpers,
+  });
   try {
     evaluate(source.slice(source.indexOf('Deno.serve(')), {
       Deno: { env: { get: (name: string) => name === 'OPENAI_API_KEY' ? 'test-key' : 'test' }, serve: (fn: typeof handler) => { handler = fn; } },
@@ -83,7 +100,9 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation, shapeInterpretation,
       tryOpenAI: async () => generated, addFindingMetadata: noCall, buildBasicProjection,
       findFloorViolations, commitGeneratedInterpretation: noCall, recordGenerationCosts: noCall,
-      isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers,
+      isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers, ...sink.pipeline,
+      ...versionWrite, readAnchor: async () => null, findRequestVersion: noCall, appendVersion: noCall,
+      commitLedgerVersion: noCall,
     });
     const response = await handler(new Request('https://example.invalid', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: '{}' }));
     expect(response.status).toBe(200);
@@ -122,7 +141,7 @@ it('actual OpenAI call records one null-usage sample on a non-OK response', asyn
 it.each(['extract-biomarkers', 'parse-lab-report-ocr', 'lab-insights', 'generate-interpretation'])('%s actual guard maps read errors to 503', async name => {
   const handlerSource = readFileSync(new URL(`../${name}/index.ts`, import.meta.url), 'utf8');
   const start = handlerSource.indexOf(name === 'generate-interpretation' ? '    let active = freemiumActive();' : '    const subCheck = await checkUserSubscription(');
-  const end = handlerSource.indexOf(name === 'generate-interpretation' ? '    const { data: report }' : name === 'lab-insights' ? '    if (!openaiApiKey)' : '    const supabaseAdmin', start);
+  const end = handlerSource.indexOf(name === 'generate-interpretation' ? '    const ctx = await loadGenerationContext(' : name === 'lab-insights' ? '    if (!openaiApiKey)' : '    const supabaseAdmin', start);
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start);
   const response = await evaluate('return (async () => {\n' + handlerSource.slice(start, end) + '\n})();', {

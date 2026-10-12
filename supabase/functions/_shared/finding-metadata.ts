@@ -74,7 +74,11 @@ export function flaggedTrends(payload: InterpretationPayload): FlaggedTrend[] {
   }));
 }
 
-/** Stored-only additive catalog for PR 3: json_output.findings[] contains
+/** Legacy catalog. Since V2-03c the writer stores claim-authority.ts
+ * claimCatalog instead: model items are not catalogued, so they can neither be
+ * previewed nor counted. Kept as the definition of what legacy rows hold.
+ *
+ * Stored-only additive catalog for PR 3: json_output.findings[] contains
  * { source_path, content, kind, confidence, magnitude_normalized, observed_at,
  *   visibility_hint }. source_path is a JSON pointer into the unchanged legacy
  * payload; content retains its object/string shape. This avoids replacing string

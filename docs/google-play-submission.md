@@ -121,9 +121,9 @@ YOUR CYCLE IS PART OF THE PICTURE
 
 Plenty of the results women are handed move with the menstrual cycle, and a number read without that context can mislead. Amani asks when your last period started and how long your cycle usually runs, estimates where in the cycle the blood draw happened, and scores your results against cycle-phase-aware ranges. It covers more than 80 biomarkers across nine body systems: hormones, thyroid, metabolic, lipids, liver, kidney, inflammation, nutrients, and blood count.
 
-QUESTIONS WORTH ASKING
+QUESTIONS TO PREPARE
 
-Alongside the explanation you get a short list of questions drawn from your own results, and follow-up tests that may be worth raising. The point is not to replace the conversation with your clinician — it is to help you walk into it knowing what to ask.
+Alongside your results you get a short list of neutral questions built from your own measured values and the changes between reports, and a list of related markers your report did not include. The point is not to replace the conversation with your clinician — it is to help you prepare for it.
 
 WATCH THINGS CHANGE
 
@@ -159,7 +159,8 @@ Amani Plus is a subscription. Your first 7 days are free.
 | "how much of the page it read cleanly" | `ConfidenceBadge` (`src/components/ConfidenceBadge.tsx`) — coverage, % mapped, parser quality |
 | More than 80 biomarkers, nine body systems | `src/lib/biomarkers/dictionary.ts` (83 entries), `src/utils/parser/patterns.ts` (83), `canonical_analytes` seed migration (81: 44 core + 37 extended). Categories in `src/types/index.ts`: Hormones, Thyroid, Metabolic, Lipids, Liver, Kidney, Inflammation & Autoimmune, Nutrients & Deficiency, Blood & Hematology. |
 | Cycle-phase-aware ranges | `src/lib/biomarkers/dictionary.ts` — six analytes (estradiol, progesterone, FSH, LH and others) carry per-phase ranges for menstrual / follicular / ovulatory / luteal |
-| Follow-up tests worth raising | `src/lib/biomarkers/recommendedLabs.ts`, rendered on `src/pages/ReportView.tsx` |
+| Neutral questions from measured values and changes | `DISCUSSION_PREP` in `src/lib/scoring/insightCopy.ts` (owner ruling R2: preparation, not escalation), rendered by `src/components/DoctorQuestionsCard.tsx` |
+| Related markers the report did not include | `src/lib/biomarkers/recommendedLabs.ts`, rendered on `src/pages/ReportView.tsx` as "Related markers not on this report" (V2-03b: no longer framed as tests to raise) |
 | Two panels side by side | `CompareView` on the Tracker's *labs* tab; `src/lib/scoring/compareReports.ts` |
 | Timeline of everything uploaded | `LabsTimeline` on the Tracker's *labs* tab |
 | Periods with flow, symptoms, interventions | `PeriodLogModal` (Spotting/Light/Medium/Heavy), `SymptomLogModal`, `src/components/Interventions.tsx` (Supplement, Diet, Exercise, Medication, Sleep, Other) |

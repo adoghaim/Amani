@@ -1,6 +1,7 @@
 import { Eye, TrendingUp, GitCommitHorizontal, Layers, ArrowRightLeft } from 'lucide-react';
 import type { WatchSignal, WatchSignalType } from '../lib/insights/buildInsightSummary';
 import { getDisplayName } from '../lib/biomarkers/dictionary';
+import { FOCUS_AREA_BAND_SENTENCE, withoutOptimalClaims } from '../lib/scoring/insightCopy';
 import type { BiomarkerName } from '../types';
 
 const SIGNAL_CONFIG: Record<WatchSignalType, {
@@ -103,7 +104,7 @@ export function WhatToWatchCard({ signals }: Props) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className={`text-sm font-medium leading-snug ${cfg.titleColor}`}>{signal.title}</p>
-                  <p className={`text-xs leading-relaxed mt-0.5 ${cfg.descColor}`}>{signal.description}</p>
+                  <p className={`text-xs leading-relaxed mt-0.5 ${cfg.descColor}`}>{withoutOptimalClaims(signal.description, FOCUS_AREA_BAND_SENTENCE)}</p>
                   {signal.relatedBiomarkers.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5 items-center">
                       {signal.relatedBiomarkers.map(key => (

@@ -1,9 +1,12 @@
 import type { BiomarkerCategory } from '../../types';
 import { CATEGORY_DISPLAY } from '../../types';
 import { getCategory } from '../biomarkers/dictionary';
+import { markerBandPlacement } from './insightCopy';
 import type { ScoredBiomarker } from './scoreBiomarker';
 
-export type SystemLabel = 'optimal' | 'mild_attention' | 'attention';
+// not_scored: every marker in the system is unscored (for example, withheld for
+// missing cycle context). Averaging zero markers must not read as reassurance.
+export type SystemLabel = 'optimal' | 'mild_attention' | 'attention' | 'not_scored';
 
 export interface SystemGroup {
   category: BiomarkerCategory;
@@ -12,6 +15,8 @@ export interface SystemGroup {
   systemLabel: SystemLabel;
   biomarkers: ScoredBiomarker[];
   totalCount: number;
+  /** Markers Amani actually scored; the rest are withheld or have no band. */
+  scoredCount: number;
   flaggedCount: number;
   weightedConcernAvg: number;
 }
@@ -24,6 +29,7 @@ function computeSystemLabel(weightedConcernAvg: number): SystemLabel {
 
 export function groupBySystem(
   scored: ScoredBiomarker[],
+  cyclePhase?: string | null,
 ): SystemGroup[] {
   const grouped = new Map<BiomarkerCategory, ScoredBiomarker[]>();
 
@@ -54,7 +60,7 @@ export function groupBySystem(
     }
 
     const flaggedCount = biomarkers.filter(
-      b => b.concern >= 1,
+      b => markerBandPlacement(b.key, b.value, cyclePhase) === 'outside',
     ).length;
 
     const display = CATEGORY_DISPLAY[cat];
@@ -63,9 +69,10 @@ export function groupBySystem(
       category: cat,
       label: display.label,
       shortLabel: display.shortLabel,
-      systemLabel: computeSystemLabel(weightedConcernAvg),
+      systemLabel: scorable.length === 0 ? 'not_scored' : computeSystemLabel(weightedConcernAvg),
       biomarkers,
       totalCount: biomarkers.length,
+      scoredCount: scorable.length,
       flaggedCount,
       weightedConcernAvg: Math.round(weightedConcernAvg * 100) / 100,
     });
@@ -74,32 +81,6 @@ export function groupBySystem(
   return result;
 }
 
-export const SYSTEM_LABEL_CONFIG: Record<SystemLabel, {
-  label: string;
-  bg: string;
-  text: string;
-  border: string;
-  dot: string;
-}> = {
-  optimal: {
-    label: 'Optimal',
-    bg: 'bg-theme-flag-ok-bg',
-    text: 'text-theme-flag-ok',
-    border: 'border-theme-flag-ok-border',
-    dot: 'bg-theme-flag-ok',
-  },
-  mild_attention: {
-    label: 'Mild Attention',
-    bg: 'bg-theme-flag-watch-bg',
-    text: 'text-theme-flag-watch',
-    border: 'border-theme-flag-watch-border',
-    dot: 'bg-theme-flag-watch',
-  },
-  attention: {
-    label: 'Needs Attention',
-    bg: 'bg-theme-flag-low-bg',
-    text: 'text-theme-flag-low',
-    border: 'border-theme-flag-low-border',
-    dot: 'bg-theme-flag-low',
-  },
-};
+// V2-03b: the label a system card shows is band language, authored by
+// insightCopy.systemSummaryLabel from counts. "Mild Attention" and "Needs
+// Attention" judged the weighted average against no reviewed rule.

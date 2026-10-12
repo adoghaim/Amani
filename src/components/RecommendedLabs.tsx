@@ -7,6 +7,7 @@ import {
 } from '../lib/biomarkers/recommendedLabs';
 import { getDisplayName, getCategory } from '../lib/biomarkers/dictionary';
 import { CATEGORY_DISPLAY } from '../types';
+import { RELATED_MARKERS_HEADING, relatedMarkersIntro } from '../lib/scoring/insightCopy';
 import type { BiomarkerCategory, BiomarkerName } from '../types';
 
 interface Props {
@@ -79,11 +80,9 @@ export function RecommendedLabs({
     <div className="bg-theme-surface rounded-2xl border border-theme-border p-6">
       <div className="flex items-center gap-2 mb-1">
         <FlaskConical className="w-5 h-5 text-theme-primary" />
-        <h2 className="text-lg text-theme-text">Recommended labs</h2>
+        <h2 className="text-lg text-theme-text">{RELATED_MARKERS_HEADING}</h2>
       </div>
-      <p className="text-sm text-theme-muted-text-2">
-        {ranked.length} {ranked.length === 1 ? 'lab' : 'labs'} suggested based on this report
-      </p>
+      <p className="text-sm text-theme-muted-text-2">{relatedMarkersIntro(ranked.length)}</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
         {visible.map(item => (

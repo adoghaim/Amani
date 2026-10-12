@@ -28,38 +28,32 @@ const BUCKET_META: Record<NextStepBucket, {
     iconColor: 'text-theme-cat-sleep',
     iconBg: 'bg-theme-cat-sleep-bg',
   },
+  // Colour names the bucket, not a judgement: red "Support" and green "Retest"
+  // read as danger and success (V2-03b, R3).
   support: {
     label: 'Support',
     icon: Heart,
-    iconColor: 'text-theme-flag-low',
-    iconBg: 'bg-theme-flag-low-bg',
+    iconColor: 'text-theme-info',
+    iconBg: 'bg-theme-info-bg',
   },
   retest: {
     label: 'Retest',
     icon: Calendar,
-    iconColor: 'text-theme-flag-ok',
-    iconBg: 'bg-theme-flag-ok-bg',
+    iconColor: 'text-theme-muted-text-2',
+    iconBg: 'bg-theme-surface-2',
   },
 };
 
-export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket, primaryDisplayName }: NextBestStepsProps) {
+/*
+  V2-03b Stage 2 (owner R2). The Phase 8C "safety net" injected "Discuss whether
+  <primary> should be rechecked and what range your provider wants to target"
+  whenever the model's steps did not name the primary finding. The primary
+  finding is a placement against an unreviewed band, and no rule authorizes
+  advice from it, so nothing is injected. primaryDisplayName is accepted and
+  unused so existing callers need no change.
+*/
+export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket }: NextBestStepsProps) {
   const buckets = categorizeNextSteps(whatYouCanDoNow, whatToDoNext);
-
-  // Phase 8C safety net: when there's a clear primary finding but the AI's
-  // next-steps text never mentions it, inject one non-prescriptive Discuss
-  // item so the Main Focus always has at least one explicit next step.
-  if (primaryDisplayName) {
-    const needle = primaryDisplayName.toLowerCase();
-    const mentioned = (Object.values(buckets) as string[][]).some(items =>
-      items.some(item => item.toLowerCase().includes(needle)),
-    );
-    if (!mentioned) {
-      buckets.discuss = [
-        `Discuss whether ${primaryDisplayName} should be rechecked and what range your provider wants to target.`,
-        ...buckets.discuss,
-      ];
-    }
-  }
 
   const bucketOrder = hideSupportBucket
     ? BUCKET_ORDER.filter(b => b !== 'support')
@@ -72,8 +66,8 @@ export function NextBestSteps({ whatYouCanDoNow, whatToDoNext, hideSupportBucket
     <div className="rounded-2xl border border-theme-border-subtle bg-theme-surface overflow-hidden">
       <div className="px-5 py-4 border-b border-theme-border-inner">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-theme-flag-watch-bg flex items-center justify-center">
-            <ArrowRight className="w-4 h-4 text-theme-flag-watch" />
+          <div className="w-7 h-7 rounded-lg bg-theme-surface-2 flex items-center justify-center">
+            <ArrowRight className="w-4 h-4 text-theme-muted-text-2" />
           </div>
           <div>
             <h2 className="text-sm text-theme-text">Next best steps</h2>

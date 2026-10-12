@@ -1,4 +1,5 @@
 import type { BiomarkerCategory } from '../../types';
+import { HEALTH_STORY_EMPTY } from '../scoring/insightCopy';
 import type { FocusArea } from './buildFocusAreas';
 
 export interface PrimaryContext {
@@ -8,7 +9,7 @@ export interface PrimaryContext {
   previous_value: number | null;
   unit: string | null;
   current_status: 'elevated' | 'low' | 'in_range' | 'borderline' | 'out_of_range';
-  trajectory: 'improving' | 'worsening' | 'unchanged' | 'no_prior_data';
+  trajectory: 'improving' | 'worsening' | 'changed' | 'unchanged' | 'no_prior_data';
   percent_change: number | null;
   prior_report_date: string | null;
   supporting_biomarker: { name: string; value: string; direction: string } | null;
@@ -31,10 +32,14 @@ interface BuildHealthStoryArgs {
 
 function trajectoryVerb(trajectory: PrimaryContext['trajectory'] | null): string {
   switch (trajectory) {
+    // V2-03b Stage 2: "right direction but still needs follow-up" and "wrong
+    // direction" judged movement and gave advice. Neither direction has
+    // authority to do that, so every movement reads as a movement (owner R1, R2).
     case 'improving':
-      return 'is moving in the right direction but still needs follow-up';
     case 'worsening':
-      return 'has shifted in the wrong direction since your prior report';
+    case 'changed':
+      // V2-03 amendment 5: a movement the band does not authorize judging.
+      return 'has changed since your prior report';
     case 'unchanged':
       return 'is unchanged from your prior report';
     case 'no_prior_data':
@@ -116,15 +121,11 @@ function buildFocusPointer(focusAreas: FocusArea[]): HealthStorySentence | null 
 export function buildHealthStory(args: BuildHealthStoryArgs): HealthStory {
   const { primaryContext, focusAreas, primaryCategory } = args;
 
+  // "Your overall panel is generally within reference ranges" was reassurance
+  // about her lab's ranges, inferred from Amani's bands. The policy states the
+  // fact that produced it.
   if (focusAreas.length === 0) {
-    return {
-      sentences: [
-        {
-          kind: 'theme',
-          text: 'Your overall panel is generally within reference ranges.',
-        },
-      ],
-    };
+    return { sentences: [{ kind: 'theme', text: HEALTH_STORY_EMPTY }] };
   }
 
   const sentences: HealthStorySentence[] = [];

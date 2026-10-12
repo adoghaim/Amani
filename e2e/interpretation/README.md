@@ -1,0 +1,5 @@
+# interpretation
+
+Planned scenarios: Interpretation generation and error recovery; critical-result presentation and lab-range versus Amani-context presentation only where implemented. Expected clinical values must come from the Clinical Truth Layer, never Context7.
+
+Implemented (TASK-048 turn 10): `version-regeneration.spec.ts` (default suite, flag off: first render, keyed regenerate, the selected version replaces the previous body) and `version-regeneration.freemium.spec.ts` (`npx playwright test -c e2e/interpretation/playwright.config.ts`: a Free reader of a regenerated report is served Basic). Everything else here remains a future-suite placeholder, not implemented coverage. Confirm functionality in the target commit before adding tests. Use synthetic data only; no production credentials, PHI, destructive production requests, or arbitrary sleeps. Extend the smoke-only test selection deliberately when adding a suite. See [engineering tooling](../../docs/engineering-tooling/README.md).

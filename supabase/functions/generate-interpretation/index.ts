@@ -19,16 +19,29 @@ import {
   type IntroductoryAccessActions,
 } from "../_shared/introductory-access.ts";
 import { deriveBloodDrawIdentity, hashDrawKey } from "../_shared/blood-draw-identity.ts";
-import { addFindingMetadata } from "../_shared/finding-metadata.ts";
+import { projectBasic, servedBasic, visibleClaimProjection, withClaimAuthority } from "../_shared/claim-authority.ts";
 import { buildTrendEvidence, formatTrendEvidencePrompt, type TrendEvidence } from "../_shared/trend-evidence.ts";
 import { generationSample, recordGenerationCosts, type GenerationSample, type GenerationCostContext } from "../_shared/generation-cost.ts";
-import { resolveTier } from "../_shared/tier.ts";
+import { resolveTier, type Tier } from "../_shared/tier.ts";
 import {
   findFloorViolations,
   shapeInterpretation,
   shouldRequestDeepInterpretation,
   shouldGenerateDeepInterpretation,
 } from "../_shared/response-shaping.ts";
+import {
+  isHistoryProtected,
+  isVersionable,
+  legacyHistoryProtectedResponse,
+  ProtectedHistoryError,
+  regenerationFailedResponse,
+  regenerationProvenance,
+  REQUEST_ID_REQUIRED,
+  REQUEST_REUSED_SQLSTATE,
+  VERSION_DISCLAIMER_VERSION,
+  versionIdentity,
+  type StoredVersion,
+} from "../_shared/interpretation-version-write.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
@@ -1266,6 +1279,341 @@ function sanitizeReportContext(raw: unknown): LabReportData["context"] {
   return result.success ? result.data : undefined;
 }
 
+// ─── Shared generation pipeline ───────────────────────────────────────────────
+// First generation and regeneration (TASK-048) run these identical stages. Only
+// the commit differs: the anchor row first, an appended version afterwards.
+
+// The same `createClient(url, key)` call the handler makes, so the shared stages
+// see its client and row types. `ReturnType<typeof createClient>` would erase
+// the schema generics and type every row as `never`. Type-only; never called.
+function serviceClientShape(url: string, key: string) {
+  return createClient(url, key);
+}
+type ServiceClient = ReturnType<typeof serviceClientShape>;
+
+interface GenerationContext {
+  report: LabReportData | null;
+  userContextBlock: string | null;
+  analytes: AnalyteData[];
+  priorAnalytes: AnalyteData[];
+  priorReportDate: string | null;
+  primaryContext: PrimaryContext | null;
+  isOptimizationOnly: boolean;
+}
+
+async function loadGenerationContext(
+  supabase: ServiceClient,
+  reportId: string,
+  userId: string,
+  pinnedSlug: string | null,
+): Promise<GenerationContext> {
+  const { data: report } = await supabase
+    .from("lab_reports")
+    .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  if (report) {
+    (report as { context?: unknown }).context = sanitizeReportContext(
+      (report as { context?: unknown }).context,
+    );
+  }
+
+  // ── Voluntary user profile context (Phase 8A) ──────────────────────────
+  // Belt-and-braces: any failure here must NOT block interpretation. On
+  // schema-fail, fetch-fail, or empty fields, userContextBlock stays null
+  // and the prompt is byte-identical to pre-8A behavior.
+  let userContextBlock: string | null = null;
+  try {
+    const { data: userProfileRaw } = await supabase
+      .from("users")
+      .select("full_name, age_range, sex_at_birth, pregnancy_status, health_goals, symptoms")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (userProfileRaw) {
+      const parsed = UserProfileContextSchema.safeParse(userProfileRaw);
+      if (parsed.success) {
+        userContextBlock = formatUserContextBlock(parsed.data);
+      } else {
+        console.warn(
+          "[generate-interpretation] user profile context failed schema validation:",
+          parsed.error.flatten(),
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "[generate-interpretation] user profile context fetch threw:",
+      errorMessage(err),
+    );
+  }
+
+  const { data: rawAnalytes } = await supabase
+    .from("report_analytes")
+    .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
+    .eq("lab_report_id", reportId)
+    .order("raw_name");
+
+  const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
+  debugLog(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
+
+  // ── Fetch most recent prior report analytes for the same user ──────────
+  let priorAnalytes: AnalyteData[] = [];
+  let priorReportDate: string | null = null;
+  if (report && userId) {
+    const { data: priorReport } = await supabase
+      .from("lab_reports")
+      .select("id, report_date")
+      .eq("user_id", userId)
+      .neq("id", reportId)
+      .lt("report_date", report.report_date)
+      .order("report_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (priorReport?.id) {
+      priorReportDate = priorReport.report_date;
+      const { data: priorRows } = await supabase
+        .from("report_analytes")
+        .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
+        .eq("lab_report_id", priorReport.id);
+      priorAnalytes = (priorRows ?? []) as AnalyteData[];
+    }
+  }
+
+  const primaryContext = buildPrimaryContext(
+    analytes,
+    priorAnalytes,
+    priorReportDate,
+    pinnedSlug,
+  );
+
+  // Optimization-only signal: the client pinned a primary slug because its UI
+  // flags it as outside Amani's *optimal* range, yet the server's clinical
+  // classifier sees the marker as in-range against the lab's reference range.
+  // When true, the AI prompt switches tone from "clinical concern" to
+  // "main focus to optimize" so the headline never says "all within range"
+  // while the UI flags a marker as Outside Optimal.
+  const isOptimizationOnly = !!(
+    pinnedSlug &&
+    primaryContext &&
+    primaryContext.current_status === "in_range"
+  );
+
+  return {
+    report: (report ?? null) as LabReportData | null,
+    userContextBlock, analytes, priorAnalytes, priorReportDate, primaryContext, isOptimizationOnly,
+  };
+}
+
+/** Per-marker comparison against the same prior report the primary context uses. */
+function trendEvidenceFor(ctx: GenerationContext): TrendEvidence[] {
+  return buildTrendEvidence(
+    ctx.analytes.map(a => ({ slug: slug(a), name: a.raw_name, value: a.value_numeric, unit: a.unit })),
+    ctx.priorAnalytes.map(a => ({ slug: slug(a), name: a.raw_name, value: a.value_numeric, unit: a.unit })),
+    ctx.priorReportDate,
+  );
+}
+
+/** Model call, shaping, V2-03c claim authority, Basic projection and the floor
+ * check. `policyActive` selects the activated pipeline; a regeneration that
+ * appends a version always does. */
+async function produceInterpretation(input: {
+  ctx: GenerationContext;
+  reportId: string;
+  trendEvidence: TrendEvidence[];
+  tier: Tier;
+  generateDeep: boolean;
+  policyActive: boolean;
+  openaiApiKey: string | undefined;
+  recordCost?: (sample: GenerationSample) => void;
+}) {
+  const { ctx: { report, analytes, primaryContext, userContextBlock, isOptimizationOnly },
+    reportId, trendEvidence, generateDeep, openaiApiKey } = input;
+  const active = input.policyActive;
+
+  // The floor, as a thunk. Only evaluated on the branch that persists it, so
+  // this keeps running exactly as often as it did before tiering — on a
+  // skipped or failed model call, never on a successful one.
+  const deterministicInterpretation = (): AIInterpretationOutput => report
+    ? generateFallbackInterpretation(report as LabReportData, analytes, primaryContext)
+    : {
+        headline: "Lab data could not be loaded for this report.",
+        summary_bullets: [],
+        top_findings: [],
+        pattern_signals: [],
+        cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" },
+        questions_for_doctor: [],
+        disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
+      };
+
+
+  let aiInterpretation: AIInterpretationOutput | null = null;
+
+  if (shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && report) {
+    console.log("[generate-interpretation] Trying OpenAI...");
+    const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
+      input.recordCost, trendEvidence);
+    if (aiResult) {
+      // Phase/day/confidence come from the report, never the model; any
+      // model-supplied values are discarded before storage.
+      aiResult.cycle_context = { ...deterministicCycleFacts(report as LabReportData), explanation: modelCycleExplanation(aiResult.cycle_context) };
+      // Guarantee overall_interpretation is grounded in deterministic primary_context
+      if (primaryContext) {
+        aiResult.overall_interpretation = aiResult.overall_interpretation ?? formatPrimarySummary(primaryContext);
+      }
+      aiInterpretation = aiResult;
+      console.log("[generate-interpretation] OpenAI succeeded");
+    } else {
+      console.log("[generate-interpretation] OpenAI failed, using fallback");
+    }
+  } else if (!generateDeep) {
+    // on_demand skips model spend after introductory access is exhausted.
+    console.log("[generate-interpretation] Deep access not granted — deterministic interpretation");
+  } else {
+    console.log("[generate-interpretation] Using fallback (no key or no analytes)");
+  }
+
+  const shaped = shapeInterpretation({
+    tier: input.tier,
+    deepAccessGranted: generateDeep,
+    aiInterpretation,
+    deterministicInterpretation,
+  });
+
+  // V2-03c: the model's output is a proposal. Claims are issued only from the
+  // server's trend_evidence and reference-range classifier; server-owned keys
+  // are always the server's; Basic preview and counts come from the claim set.
+  // A deterministic source keeps its narrative in Basic
+  // (MEDICAL_FLOOR.deterministicInterpretation). Inactive requests unchanged.
+  const interpretationJson = active
+    ? withClaimAuthority(shaped.payload, {
+        source: shaped.source, trendEvidence,
+        statuses: analytes.map(a => ({ biomarker_slug: slug(a), marker: a.raw_name,
+          value: Number(a.value_numeric), unit: a.unit, status: classifyAnalyte(a) })),
+      })
+    : shaped.payload;
+  const basicProjection = active
+    ? projectBasic(interpretationJson, { source: shaped.source })
+    : buildBasicProjection(interpretationJson, undefined, { source: shaped.source });
+
+  /*
+    The medical floor is checked on whatever is about to be persisted, at every
+    tier. A violation is logged and the row is still written: it means our
+    shaping is wrong, and withholding the report on top of that would punish
+    the user for our bug by denying them their own lab data.
+  */
+  const floorViolations = findFloorViolations(interpretationJson);
+  if (floorViolations.length > 0) {
+    console.error(
+      "[generate-interpretation] MEDICAL FLOOR VIOLATION — a first generation persists anyway; a version append refuses (nothing stored):",
+      JSON.stringify({ reportId, tier: shaped.tier, depth: shaped.depth, floorViolations }),
+    );
+  }
+
+  return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations };
+}
+
+// ─── Version store (TASK-048) ────────────────────────────────────────────────
+// A report that already holds its anchor interpretation is never overwritten in
+// place: its regeneration appends a version through the trusted writer, which
+// decides nothing about entitlement and consumes nothing, or — for a Free
+// request the introductory ledger settles — through commit_deep_access_version,
+// which settles the claim and appends in one transaction. Wiring only.
+
+/** The report's anchor interpretation, if it holds one, and whether an
+ * introductory claim covers it. Through the owner-bound service reader (one row
+ * per owned report, the same claim derivation every reader uses), never the raw table. */
+async function readAnchor(supabase: ServiceClient, userId: string, reportId: string): Promise<{ claimCovered: boolean } | null> {
+  const { data, error } = await supabase.rpc("read_interpretation_for_server", {
+    p_user_id: userId, p_report_id: reportId, p_premium: false,
+  });
+  if (error) throw new Error(`Anchor read failed: ${error.message}`);
+  if (!Array.isArray(data)) throw new Error("Unexpected anchor read shape");
+  if (data.length === 0) return null;
+  return { claimCovered: (data[0] as { has_claim?: unknown }).has_claim === true };
+}
+
+type LedgerOutcome = "committed" | "already_claimed" | "limit_reached";
+
+/** Settles the introductory claim and appends the version in one transaction.
+ * `limit_reached` persisted nothing. A request id reused with different output
+ * is a concurrent twin that committed first (and settled the claim): serve it. */
+async function commitLedgerVersion(supabase: ServiceClient, input: {
+  userId: string; reportId: string; requestId: string; bloodDrawId: string; evidenceTier: string;
+  consumeCredit: boolean; full: Record<string, unknown>; basic: Record<string, unknown>;
+}): Promise<{ outcome: LedgerOutcome; appended: { version: StoredVersion; created: boolean } | null }> {
+  const { data, error } = await supabase.rpc("commit_deep_access_version", {
+    p_user_id: input.userId, p_report_id: input.reportId, p_blood_draw_id: input.bloodDrawId,
+    p_evidence_tier: input.evidenceTier, p_request_id: input.requestId, p_full: input.full, p_basic: input.basic,
+    p_consume_credit: input.consumeCredit, p_provenance: regenerationProvenance(),
+  });
+  if (isHistoryProtected(error)) throw new ProtectedHistoryError();
+  if (error) {
+    if (error.code === REQUEST_REUSED_SQLSTATE) {
+      const twin = await findRequestVersion(supabase, input.reportId, input.requestId);
+      if (twin) return { outcome: "already_claimed", appended: { version: twin, created: false } };
+    }
+    throw new Error(`commit_deep_access_version failed: ${error.message}`);
+  }
+  if (!Array.isArray(data) || data.length !== 1) throw new Error("Unexpected ledger version shape");
+  const row = data[0] as { outcome: string; version_id: string | null; history_id: string | null; version_generated_at: string | null };
+  if (row.outcome === "limit_reached") return { outcome: "limit_reached", appended: null };
+  if ((row.outcome !== "committed" && row.outcome !== "already_claimed") || !row.version_id || !row.history_id || !row.version_generated_at) {
+    throw new Error("Unexpected ledger version outcome");
+  }
+  return {
+    outcome: row.outcome,
+    appended: {
+      version: { versionId: row.version_id, historicalInterpretationId: row.history_id,
+        generatedAt: row.version_generated_at, full: input.full, basic: input.basic },
+      created: true,
+    },
+  };
+}
+
+/** The version already committed for this request, if any. */
+async function findRequestVersion(supabase: ServiceClient, reportId: string, requestId: string): Promise<StoredVersion | null> {
+  const { data, error } = await supabase.from("interpretation_versions")
+    .select("id, historical_interpretation_id, generated_at, json_output, json_output_basic")
+    .eq("lab_report_id", reportId).eq("request_id", requestId).maybeSingle();
+  if (error) throw new Error(`Version read failed: ${error.message}`);
+  if (!data) return null;
+  return {
+    versionId: data.id, historicalInterpretationId: data.historical_interpretation_id,
+    generatedAt: data.generated_at, full: data.json_output, basic: data.json_output_basic,
+  };
+}
+
+/** Appends and selects a version. A request id reused with different output is a
+ * concurrent twin of this request that committed first: serve it. */
+async function appendVersion(supabase: ServiceClient, input: {
+  userId: string; reportId: string; requestId: string;
+  full: Record<string, unknown>; basic: Record<string, unknown>;
+}): Promise<{ version: StoredVersion; created: boolean }> {
+  const { data, error } = await supabase.rpc("append_interpretation_version", {
+    p_user_id: input.userId, p_report_id: input.reportId, p_request_id: input.requestId,
+    p_full: input.full, p_basic: input.basic, p_depth: "deep",
+    p_disclaimer: VERSION_DISCLAIMER_VERSION, p_provenance: regenerationProvenance(),
+  });
+  if (isHistoryProtected(error)) throw new ProtectedHistoryError();
+  if (error) {
+    if (error.code === REQUEST_REUSED_SQLSTATE) {
+      const twin = await findRequestVersion(supabase, input.reportId, input.requestId);
+      if (twin) return { version: twin, created: false };
+    }
+    throw new Error(`append_interpretation_version failed: ${error.message}`);
+  }
+  if (!Array.isArray(data) || data.length !== 1) throw new Error("Unexpected append shape");
+  const row = data[0] as { version_id: string; history_id: string; version_generated_at: string };
+  return {
+    version: { versionId: row.version_id, historicalInterpretationId: row.history_id,
+      generatedAt: row.version_generated_at, full: input.full, basic: input.basic },
+    created: true,
+  };
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -1318,6 +1666,7 @@ Deno.serve(async (req: Request) => {
       );
     }
     reportId = parsedBody.data.reportId;
+    const requestId = parsedBody.data.request_id ?? null;
 
     const { data: reportCheck } = await supabase
       .from("lab_reports")
@@ -1334,6 +1683,17 @@ Deno.serve(async (req: Request) => {
     if (reportCheck.user_id !== user.id) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // TASK-048: once the report holds its anchor interpretation, a regeneration
+    // appends a version instead of overwriting it, keyed by the client's per-tap
+    // request_id so a retried regeneration appends nothing twice.
+    const anchor = await readAnchor(supabase, user.id, reportId);
+    const appendsVersion = anchor !== null;
+    if (appendsVersion && requestId === null) {
+      return new Response(JSON.stringify({ error: REQUEST_ID_REQUIRED }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -1369,114 +1729,47 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: report } = await supabase
-      .from("lab_reports")
-      .select("id, report_date, estimated_cycle_day, estimated_cycle_phase, context")
-      .eq("id", reportId)
-      .maybeSingle();
-
-    if (report) {
-      (report as { context?: unknown }).context = sanitizeReportContext(
-        (report as { context?: unknown }).context,
-      );
-    }
-
-    // ── Voluntary user profile context (Phase 8A) ──────────────────────────
-    // Belt-and-braces: any failure here must NOT block interpretation. On
-    // schema-fail, fetch-fail, or empty fields, userContextBlock stays null
-    // and the prompt is byte-identical to pre-8A behavior.
-    let userContextBlock: string | null = null;
-    try {
-      const { data: userProfileRaw } = await supabase
-        .from("users")
-        .select("full_name, age_range, sex_at_birth, pregnancy_status, health_goals, symptoms")
-        .eq("id", reportCheck.user_id)
-        .maybeSingle();
-
-      if (userProfileRaw) {
-        const parsed = UserProfileContextSchema.safeParse(userProfileRaw);
-        if (parsed.success) {
-          userContextBlock = formatUserContextBlock(parsed.data);
-        } else {
-          console.warn(
-            "[generate-interpretation] user profile context failed schema validation:",
-            parsed.error.flatten(),
-          );
-        }
-      }
-    } catch (err) {
-      console.warn(
-        "[generate-interpretation] user profile context fetch threw:",
-        errorMessage(err),
-      );
-    }
-
-    const { data: rawAnalytes } = await supabase
-      .from("report_analytes")
-      .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
-      .eq("lab_report_id", reportId)
-      .order("raw_name");
-
-    const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
-    debugLog(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
-
-    // ── Fetch most recent prior report analytes for the same user ──────────
-    let priorAnalytes: AnalyteData[] = [];
-    let priorReportDate: string | null = null;
-    if (report && reportCheck?.user_id) {
-      const { data: priorReport } = await supabase
-        .from("lab_reports")
-        .select("id, report_date")
-        .eq("user_id", reportCheck.user_id)
-        .neq("id", reportId)
-        .lt("report_date", report.report_date)
-        .order("report_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (priorReport?.id) {
-        priorReportDate = priorReport.report_date;
-        const { data: priorRows } = await supabase
-          .from("report_analytes")
-          .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
-          .eq("lab_report_id", priorReport.id);
-        priorAnalytes = (priorRows ?? []) as AnalyteData[];
+    // A retry of a committed regeneration is answered from the version store
+    // without model spend, claim decision or any write but the report status.
+    // Access is the readers' rule: Plus, or an introductory claim on this report.
+    if (appendsVersion) {
+      const committed = await findRequestVersion(supabase, reportId, requestId!);
+      if (committed) {
+        await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
+        const full = tierDecision.tier === "plus" || anchor?.claimCovered === true;
+        return new Response(JSON.stringify(active ? {
+          success: true, source: "ai", reused: true,
+          access: full ? "full" : "basic",
+          interpretation: full ? committed.full : servedBasic(committed.basic),
+          ...visibleClaimProjection(committed.basic), ...versionIdentity(committed),
+        } : { success: true, source: "ai", reused: true, ...versionIdentity(committed) }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
-    const primaryContext = buildPrimaryContext(
-      analytes,
-      priorAnalytes,
-      priorReportDate,
-      parsedBody.data.primary_canonical_slug ?? null,
+    const ctx = await loadGenerationContext(
+      supabase, reportId, reportCheck.user_id, parsedBody.data.primary_canonical_slug ?? null,
     );
+    const { analytes, primaryContext } = ctx;
+    // A version must pass V2-03c claim authority whatever the switch says, so a
+    // regeneration that appends one always runs the activated pipeline. First
+    // generation keeps today's behaviour in both states.
+    const policyActive = active || appendsVersion;
     // Activated only: per-marker comparison against the same prior report the
     // primary context uses. Inactive requests keep prompt and payload unchanged.
-    const trendEvidence: TrendEvidence[] = active ? buildTrendEvidence(
-      analytes.map(a => ({ slug: slug(a), name: a.raw_name, value: a.value_numeric, unit: a.unit })),
-      priorAnalytes.map(a => ({ slug: slug(a), name: a.raw_name, value: a.value_numeric, unit: a.unit })),
-      priorReportDate,
-    ) : [];
+    const trendEvidence: TrendEvidence[] = policyActive ? trendEvidenceFor(ctx) : [];
     debugLog(`[generate-interpretation] primaryContext:`, primaryContext
       ? `${primaryContext.primary_biomarker} trajectory=${primaryContext.trajectory} prev=${primaryContext.previous_value}`
       : "null");
-
-    // Optimization-only signal: the client pinned a primary slug because its UI
-    // flags it as outside Amani's *optimal* range, yet the server's clinical
-    // classifier sees the marker as in-range against the lab's reference range.
-    // When true, the AI prompt switches tone from "clinical concern" to
-    // "main focus to optimize" so the headline never says "all within range"
-    // while the UI flags a marker as Outside Optimal.
-    const isOptimizationOnly = !!(
-      parsedBody.data.primary_canonical_slug &&
-      primaryContext &&
-      primaryContext.current_status === "in_range"
-    );
 
     // Only activated Free requests read the ledger or derive a draw identity.
     // Keep the legacy generation predicate unchanged when the flag is off.
     let accessDecision: DeepAccessDecision | null = null;
     let claimRequest: Omit<CommitRequest, "interpretation"> | null = null;
+    // TASK-048 turn 11: what the ledger persisted for an anchored report.
+    let ledgerVersion: { version: StoredVersion; created: boolean } | null = null;
+    let ledgerLimitReached = false;
     const introActions: IntroductoryAccessActions = {
       async findClaim(userId, bloodDrawId) {
         const { data, error } = await supabase
@@ -1499,6 +1792,22 @@ Deno.serve(async (req: Request) => {
         return count;
       },
       async commitDeepAccess(input) {
+        // An anchored report never persists through commit_deep_access_v2 /
+        // save_interpretation: the claim settles with an appended version.
+        if (appendsVersion) {
+          const settled = await commitLedgerVersion(supabase, {
+            userId: input.userId, reportId: input.reportId, requestId: requestId!,
+            bloodDrawId: input.bloodDrawId, evidenceTier: input.evidenceTier, consumeCredit: input.consumeCredit,
+            full: input.interpretation as Record<string, unknown>, basic: basicProjection,
+          });
+          ledgerVersion = settled.appended;
+          ledgerLimitReached = settled.outcome === "limit_reached";
+          if (costContext && settled.outcome === "committed" && input.consumeCredit) {
+            costContext.claimConsumed = true;
+            costContext.interpretationTier = "plus";
+          }
+          return settled.outcome;
+        }
         const { data, error } = await supabase.rpc("commit_deep_access_v2", {
           p_user_id: input.userId,
           p_report_id: input.reportId,
@@ -1510,6 +1819,7 @@ Deno.serve(async (req: Request) => {
           p_tier: "plus",
           p_consume_credit: input.consumeCredit,
         });
+        if (isHistoryProtected(error)) throw new ProtectedHistoryError();
         if (error) throw new Error(`commit_deep_access failed: ${error.message}`);
         if (data !== "committed" && data !== "already_claimed" && data !== "limit_reached") {
           throw new Error("Unexpected commit_deep_access outcome");
@@ -1567,99 +1877,86 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    // The floor, as a thunk. Only evaluated on the branch that persists it, so
-    // this keeps running exactly as often as it did before tiering — on a
-    // skipped or failed model call, never on a successful one.
-    const deterministicInterpretation = (): AIInterpretationOutput => report
-      ? generateFallbackInterpretation(report as LabReportData, analytes, primaryContext)
-      : {
-          headline: "Lab data could not be loaded for this report.",
-          summary_bullets: [],
-          top_findings: [],
-          pattern_signals: [],
-          cycle_context: { estimated_cycle_day: null, estimated_cycle_phase: "unknown", confidence: "low", explanation: "" },
-          questions_for_doctor: [],
-          disclaimer: "This report is for educational purposes only and does not constitute medical advice.",
-        };
-
-
-    let aiInterpretation: AIInterpretationOutput | null = null;
-
-    if (shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && report) {
-      console.log("[generate-interpretation] Trying OpenAI...");
-      const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
-        costContext ? sample => costSamples.push(sample) : undefined, trendEvidence);
-      if (aiResult) {
-        // Phase/day/confidence come from the report, never the model; any
-        // model-supplied values are discarded before storage.
-        aiResult.cycle_context = { ...deterministicCycleFacts(report as LabReportData), explanation: modelCycleExplanation(aiResult.cycle_context) };
-        // Guarantee overall_interpretation is grounded in deterministic primary_context
-        if (primaryContext) {
-          aiResult.overall_interpretation = aiResult.overall_interpretation ?? formatPrimarySummary(primaryContext);
-        }
-        aiInterpretation = aiResult;
-        console.log("[generate-interpretation] OpenAI succeeded");
-      } else {
-        console.log("[generate-interpretation] OpenAI failed, using fallback");
-      }
-    } else if (!generateDeep) {
-      // on_demand skips model spend after introductory access is exhausted.
-      console.log("[generate-interpretation] Deep access not granted — deterministic interpretation");
-    } else {
-      console.log("[generate-interpretation] Using fallback (no key or no analytes)");
-    }
-
-    const shaped = shapeInterpretation({
-      tier: tierDecision.tier,
-      deepAccessGranted: generateDeep,
-      aiInterpretation,
-      deterministicInterpretation,
+    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations } = await produceInterpretation({
+      ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive, openaiApiKey,
+      recordCost: costContext ? sample => costSamples.push(sample) : undefined,
     });
-
-    // trend_evidence is additive and attached to either payload; the catalog
-    // derives kind:'trend' from it. A deterministic source keeps its narrative
-    // in Basic (MEDICAL_FLOOR.deterministicInterpretation).
-    const interpretationJson = active
-      ? addFindingMetadata(trendEvidence.length > 0
-          ? { ...shaped.payload, trend_evidence: trendEvidence } : shaped.payload,
-        { observedAt: report?.report_date })
-      : shaped.payload;
-    const basicProjection = buildBasicProjection(interpretationJson, undefined, { source: shaped.source });
-
-    /*
-      The medical floor is checked on whatever is about to be persisted, at every
-      tier. A violation is logged and the row is still written: it means our
-      shaping is wrong, and withholding the report on top of that would punish
-      the user for our bug by denying them their own lab data.
-    */
-    const floorViolations = findFloorViolations(interpretationJson);
-    if (floorViolations.length > 0) {
-      console.error(
-        "[generate-interpretation] MEDICAL FLOOR VIOLATION — persisting anyway:",
-        JSON.stringify({ reportId, tier: shaped.tier, depth: shaped.depth, floorViolations }),
-      );
-    }
 
     const source = shaped.source;
 
+    // TASK-048: an anchored report persists only a deep current-policy AI body,
+    // whatever the entitlement outcome. Checked before the ledger, so a refused
+    // regeneration consumes no claim. Nothing persisted: the selected
+    // interpretation stands, never a fallback.
+    if (appendsVersion && !isVersionable({ source, depth: shaped.depth, floorViolations })) {
+      console.warn("[generate-interpretation] Regeneration not versioned:", JSON.stringify({ source, depth: shaped.depth }));
+      const refused = regenerationFailedResponse(generateDeep);
+      return new Response(JSON.stringify(refused.body), {
+        status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let savedByLedger = false;
     if (active && tierDecision.tier === "free") {
-      const committed = await commitGeneratedInterpretation(introActions, {
-        freemiumActive: true,
-        tier: tierDecision.tier,
-        decision: accessDecision,
-        completion: { parseConfident: analytes.length > 0, interpretationGenerated: aiInterpretation !== null },
-        request: claimRequest ? { ...claimRequest, interpretation: interpretationJson } : null,
-      });
+      let committed: Awaited<ReturnType<typeof commitGeneratedInterpretation>>;
+      try {
+        committed = await commitGeneratedInterpretation(introActions, {
+          freemiumActive: true,
+          tier: tierDecision.tier,
+          decision: accessDecision,
+          completion: { parseConfident: analytes.length > 0, interpretationGenerated: aiInterpretation !== null },
+          request: claimRequest ? { ...claimRequest, interpretation: interpretationJson } : null,
+        });
+      } catch (err) {
+        if (!appendsVersion || err instanceof ProtectedHistoryError) throw err;
+        // The transaction rolled back whole (no claim, no version); the
+        // previously selected interpretation is intact, so the report is not in error.
+        console.error("[generate-interpretation] Ledger version commit error:", errorMessage(err));
+        return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       savedByLedger = committed.committed;
       shaped.tier = committed.tier;
+    }
+
+    // TASK-048 turn 11: the ledger settled an anchored report's claim together
+    // with its version, or refused at the limit and persisted nothing. A refused
+    // claim is not appended as a Free version: no write, the selection stands.
+    // A retry is decided afresh (an exhausted decision, then post-limit rules).
+    if (appendsVersion && ledgerLimitReached) {
+      console.warn("[generate-interpretation] Regeneration not versioned: introductory limit reached at commit");
+      const refused = regenerationFailedResponse(true);
+      return new Response(JSON.stringify(refused.body), {
+        status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (appendsVersion && savedByLedger && !ledgerVersion) {
+      throw new Error("Ledger committed an anchored report without a version");
     }
 
     if (costContext) costContext.interpretationTier = shaped.tier;
 
     // A race loser saves the already-generated payload with Free metadata.
     // Post-limit always-generation uses this same upsert without consuming a claim.
-    if (!savedByLedger) {
+    // TASK-048: when the report already holds its anchor, the same outcomes
+    // append a version instead (the ledger's own version when it settled one);
+    // save_interpretation is reached only by a report with no anchor.
+    let appended: { version: StoredVersion; created: boolean } | null = savedByLedger ? ledgerVersion : null;
+    if (!savedByLedger && appendsVersion) {
+      try {
+        appended = await appendVersion(supabase, {
+          userId: user.id, reportId, requestId: requestId!, full: interpretationJson, basic: basicProjection,
+        });
+      } catch (err) {
+        if (err instanceof ProtectedHistoryError) throw err;
+        // The previously selected interpretation is intact, so the report is not in error.
+        console.error("[generate-interpretation] Version append error:", errorMessage(err));
+        return new Response(JSON.stringify({ error: "Failed to save interpretation" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (!savedByLedger) {
       const { error: upsertError } = await supabase.rpc("save_interpretation", {
         p_user_id: user.id, p_report_id: reportId,
         p_interpretation: interpretationJson,
@@ -1668,6 +1965,15 @@ Deno.serve(async (req: Request) => {
         p_blood_draw_id: claimRequest?.bloodDrawId ?? null,
       });
 
+      if (isHistoryProtected(upsertError)) {
+        // TASK-048: the guard refused an in-place overwrite (a report that
+        // gained its anchor after the anchor read: the first-generation race).
+        // Nothing was written; the report is intact, so its status is too.
+        console.warn("[generate-interpretation] Ordinary regeneration refused: historical interpretation is protected");
+        return new Response(JSON.stringify(legacyHistoryProtectedResponse.body), {
+          status: legacyHistoryProtectedResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (upsertError) {
         console.error("[generate-interpretation] Upsert error:", upsertError.message);
         await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
@@ -1681,13 +1987,18 @@ Deno.serve(async (req: Request) => {
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
     console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
 
+    // The same gate get-interpretation applies, so both responses agree. A
+    // version is served as committed (a concurrent twin's body, if it won) and
+    // under its own identity, never the historical row's.
+    const servedFull = appended ? appended.version.full : interpretationJson;
+    const servedBasicProjection = appended ? appended.version.basic : basicProjection;
+    const identity = appended ? { reused: !appended.created, ...versionIdentity(appended.version) } : {};
     return new Response(JSON.stringify(active ? {
       success: true, source,
       access: shaped.tier === "plus" ? "full" : "basic",
-      interpretation: shaped.tier === "plus" ? interpretationJson : basicProjection,
-      preview: basicProjection.preview,
-      locked: basicProjection.locked,
-    } : { success: true, source }), {
+      interpretation: shaped.tier === "plus" ? servedFull : servedBasic(servedBasicProjection),
+      ...visibleClaimProjection(servedBasicProjection), ...identity,
+    } : { success: true, source, ...identity }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
@@ -1703,6 +2014,14 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // Same reasoning for a protected legacy row refused by the claim commit:
+    // the transaction rolled back, and the report is not in error.
+    if (err instanceof ProtectedHistoryError) {
+      return new Response(JSON.stringify(legacyHistoryProtectedResponse.body), {
+        status: legacyHistoryProtectedResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (reportId) {

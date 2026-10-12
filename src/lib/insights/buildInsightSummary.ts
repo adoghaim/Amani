@@ -3,6 +3,11 @@ import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictio
 import { scoreBiomarker, type ScoredBiomarker } from '../scoring/scoreBiomarker';
 import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
+import { assessAmaniContext, contextFromReport } from '../scoring/amaniContext';
+import {
+  authorizedLanguage, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, WATCH_SIGNALS,
+  type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
+} from '../scoring/insightCopy';
 
 export interface TopFinding {
   key: BiomarkerName;
@@ -39,10 +44,8 @@ export interface BiggestChange {
   priorIsOlderThanImmediatePrior: boolean;
 }
 
-export interface DoctorQuestion {
-  text: string;
-  relatedBiomarker: BiomarkerName;
-}
+/** A policy-issued DISCUSSION_PREP_PROMPT; only issued prompts render. */
+export type DoctorQuestion = DiscussionPrepPrompt;
 
 export type WatchSignalType = 'system' | 'boundary' | 'trend' | 'pattern';
 
@@ -69,6 +72,12 @@ export interface InsightSummary {
   topFindings: TopFinding[];
   biggestChanges: BiggestChange[];
   deltaMap: Map<BiomarkerName, BiomarkerDelta>;
+  /**
+   * Language each scored marker's current band authorizes, for this report's
+   * context, with or without a prior report. Optional only so hand-built
+   * summaries still type; buildInsightSummary always sets it.
+   */
+  bandLanguage?: Map<BiomarkerName, AuthorizedLanguage>;
   systemSummaries: SystemGroup[];
   questionsForDoctor: DoctorQuestion[];
   watchSignals: WatchSignal[];
@@ -95,26 +104,14 @@ function toTopFinding(
   const displayName = getDisplayName(s.key);
   const statusLabel = s.concern === 2 ? 'out_of_range' : 'borderline';
   const direction: 'high' | 'low' | 'unknown' = s.amaniStatus.includes('high') ? 'high' : s.amaniStatus.includes('low') ? 'low' : 'unknown';
-  const dirLabel = direction === 'high' ? 'above' : direction === 'low' ? 'below' : 'outside';
 
-  let fact = `${displayName} is ${dirLabel} the optimal range at ${s.value} ${s.unit}`;
-
-  if (delta && delta.significance !== 'minor') {
-    if (
-      delta.trajectoryStatus === 'improving_still_high' ||
-      delta.trajectoryStatus === 'improving_still_low'
-    ) {
-      const pct = delta.percentDelta !== null
-        ? ` (${Math.abs(delta.percentDelta)}% improvement)`
-        : '';
-      fact += `, though it has improved from ${delta.previousValue} ${s.unit} since the prior report${pct}.`;
-    } else if (
-      delta.trajectoryStatus === 'worsening_still_high' ||
-      delta.trajectoryStatus === 'worsening_still_low'
-    ) {
-      fact += `, and it has worsened from ${delta.previousValue} ${s.unit} since the prior report.`;
-    }
-  }
+  // V2-03b: no surface renders `fact` today. It said "the optimal range",
+  // "has improved" and "has worsened"; it now carries the policy's placement
+  // and, where there is a prior value, the measured movement.
+  const fact = [
+    primaryFindingSentence({ displayName, direction, value: s.value, unit: s.unit }),
+    delta && delta.significance !== 'minor' ? describeMeasuredMovement({ ...delta, displayName }).text : '',
+  ].filter(Boolean).join(' ');
 
   let trend: TopFinding['trend'] = null;
   if (delta) {
@@ -201,20 +198,6 @@ export function formatPriorReportDate(date: string): string {
   return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
 }
 
-function isPluralSubject(displayName: string): boolean {
-  const n = displayName.toLowerCase();
-  return /(antibodies|cells|ratios|levels|counts|enzymes|lipids|electrolytes|hormones|platelets|lymphocytes|monocytes|eosinophils|basophils|neutrophils|reticulocytes|triglycerides|globulins)\b/.test(n);
-}
-
-function conjugate(displayName: string): { has: 'has' | 'have'; remain: 'remains' | 'remain'; is: 'is' | 'are' } {
-  const plural = isPluralSubject(displayName);
-  return {
-    has: plural ? 'have' : 'has',
-    remain: plural ? 'remain' : 'remains',
-    is: plural ? 'are' : 'is',
-  };
-}
-
 function deltaToChange(d: BiomarkerDelta, immediatePriorReportDate: string | null): BiggestChange {
   const pct = d.percentDelta !== null
     ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)`
@@ -229,21 +212,10 @@ function deltaToChange(d: BiomarkerDelta, immediatePriorReportDate: string | nul
     ? ` since ${formatPriorReportDate(d.priorReportDate)}`
     : '';
 
-  let fact: string;
-  if (d.trajectoryStatus === 'improving_still_high') {
-    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause} — meaningful improvement, though it remains elevated above the optimal range.`;
-  } else if (d.trajectoryStatus === 'improving_still_low') {
-    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause} — meaningful improvement, though it remains below the optimal range.`;
-  } else if (d.trajectoryStatus === 'worsening_still_high') {
-    fact = `${d.displayName} increased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}, moving further above the optimal range.`;
-  } else if (d.trajectoryStatus === 'worsening_still_low') {
-    fact = `${d.displayName} decreased from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}, moving further below the optimal range.`;
-  } else if (d.boundaryCrossing) {
-    const bcDir = d.boundaryCrossing.direction === 'improved' ? 'improved' : 'moved';
-    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}. ${bcDir.charAt(0).toUpperCase() + bcDir.slice(1)} from ${d.boundaryCrossing.from.replace(/_/g, ' ')} to ${d.boundaryCrossing.to.replace(/_/g, ' ')}.`;
-  } else {
-    fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}.`;
-  }
+  // V2-03b: one factual form for every trajectory (no surface renders `fact`
+  // today). "Meaningful improvement" and "moving further above the optimal
+  // range" judged movement against an unreviewed band.
+  const fact = `${d.displayName} changed from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}${sinceClause}.`;
 
   return {
     key: d.key,
@@ -268,156 +240,62 @@ function buildBiggestChanges(deltas: BiomarkerDelta[], immediatePriorReportDate:
   return getBiggestChanges(deltas, 5).map(d => deltaToChange(d, immediatePriorReportDate));
 }
 
-function buildDoctorQuestions(
-  scored: ScoredBiomarker[],
-  deltas: BiomarkerDelta[],
-  primaryFinding: TopFinding | null,
-  isOptimizationOnly: boolean,
-): DoctorQuestion[] {
-  const questions: DoctorQuestion[] = [];
+/*
+  V2-03b Stage 2, owner R2: discussion preparation, not escalation. Questions
+  rest only on admissible premises, and those premises also choose them:
+  1. a measured change the deterministic magnitude calculation does not call
+     minor (largest first), stated by value;
+  2. two or more of her values outside their laboratory intervals in one body
+     system, then each remaining one alone, stated against the interval as
+     printed. An Amani band, its concern score or its crossing no longer
+     selects or words a question: none is a reviewed interpretation.
+  The context question assumes nothing, so it closes every list, and the card
+  appears on any report rather than only on one Amani ranks as abnormal.
+*/
+const SIGNIFICANCE_RANK = { significant: 2, moderate: 1, minor: 0 } as const;
+const MAX_QUESTIONS = 5;
+
+function buildDoctorQuestions(current: BiomarkerInput[], deltas: BiomarkerDelta[]): DiscussionPrepPrompt[] {
+  const questions: DiscussionPrepPrompt[] = [];
   const used = new Set<BiomarkerName>();
+  const room = () => questions.length < MAX_QUESTIONS - 1;
 
-  // 1. Boundary crossings (highest priority)
-  const boundaryCrossings = deltas.filter(d => d.boundaryCrossing !== null);
-  for (const d of boundaryCrossings.slice(0, 2)) {
-    if (used.has(d.key)) continue;
+  const changes = deltas
+    .filter(d => d.significance !== 'minor' && d.currentValue !== d.previousValue)
+    .sort((a, b) => SIGNIFICANCE_RANK[b.significance] - SIGNIFICANCE_RANK[a.significance]);
+  for (const d of changes.slice(0, 2)) {
     used.add(d.key);
-    const name = d.displayName;
-    const bc = d.boundaryCrossing!;
-
-    const systemPeers = scored
-      .filter(s => s.key !== d.key && getCategory(s.key) === getCategory(d.key) && s.concern > 0)
-      .slice(0, 2)
-      .map(s => getDisplayName(s.key));
-
-    if (bc.direction === 'worsened' && systemPeers.length > 0) {
-      questions.push({
-        text: `My ${name} moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}. How should I interpret this alongside ${systemPeers.join(' and ')}?`,
-        relatedBiomarker: d.key,
-      });
-    } else if (bc.direction === 'worsened') {
-      questions.push({
-        text: `Could you help me understand this ${name} change? It moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}.`,
-        relatedBiomarker: d.key,
-      });
-    } else {
-      questions.push({
-        text: `My ${name} improved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')}. Is this change clinically meaningful?`,
-        relatedBiomarker: d.key,
-      });
-    }
+    questions.push(DISCUSSION_PREP.change(d.displayName, d.previousValue, d.currentValue, d.unit));
   }
 
-  // 2. System clusters: 2+ flagged markers in the same system
-  const categoryMap = new Map<string, ScoredBiomarker[]>();
-  for (const s of scored.filter(s => s.concern > 0)) {
-    const cat = getCategory(s.key);
-    if (!cat) continue;
-    let bucket = categoryMap.get(cat);
-    if (!bucket) {
-      bucket = [];
-      categoryMap.set(cat, bucket);
-    }
-    bucket.push(s);
+  const outside = current
+    .filter(b => !used.has(b.key))
+    .map(b => ({ key: b.key, prompt: DISCUSSION_PREP.labInterval(getDisplayName(b.key), b.value, b.unit, b.labRefMin, b.labRefMax) }))
+    .filter((o): o is { key: BiomarkerName; prompt: DiscussionPrepPrompt } => o.prompt !== null);
+
+  const bySystem = new Map<string, typeof outside>();
+  for (const o of outside) {
+    const system = getCategory(o.key) ?? 'other';
+    bySystem.set(system, [...(bySystem.get(system) ?? []), o]);
+  }
+  for (const members of bySystem.values()) {
+    if (!room() || members.length < 2) continue;
+    const premises = members.flatMap(m => m.prompt.authority.premises)
+      .filter((p): p is Extract<DiscussionPremise, { kind: 'patient_lab_interval' }> => p.kind === 'patient_lab_interval');
+    const relate = DISCUSSION_PREP.relate(premises);
+    if (!relate) continue;
+    for (const m of members) used.add(m.key);
+    questions.push(relate);
+  }
+  for (const o of outside) {
+    if (!room()) break;
+    if (used.has(o.key)) continue;
+    used.add(o.key);
+    questions.push(o.prompt);
   }
 
-  for (const [, peers] of categoryMap) {
-    if (peers.length < 2) continue;
-    const primary = peers.sort((a, b) => b.weightedConcern - a.weightedConcern)[0];
-    if (!primary || used.has(primary.key)) continue;
-    used.add(primary.key);
-    const peerNames = peers.map(p => getDisplayName(p.key));
-    const systemName = peerNames.slice(0, 2).join(', ');
-    const remainder = peerNames.length > 2 ? ` and ${peerNames.length - 2} other${peerNames.length - 2 !== 1 ? 's' : ''}` : '';
-    questions.push({
-      text: `Could you help me understand how my ${systemName}${remainder} results relate to each other?`,
-      relatedBiomarker: primary.key,
-    });
-    if (questions.length >= 5) break;
-  }
-
-  // 3a. Improving but still abnormal — personalized encouraging question
-  const improvingAbnormal = deltas.filter(
-    d =>
-      d.significance !== 'minor' &&
-      d.boundaryCrossing === null &&
-      !used.has(d.key) &&
-      (d.trajectoryStatus === 'improving_still_high' || d.trajectoryStatus === 'improving_still_low'),
-  );
-  for (const d of improvingAbnormal.slice(0, 1)) {
-    used.add(d.key);
-    const name = d.displayName;
-    const { remain: conjRemain, is: conjAre } = conjugate(name);
-    const dirWord = d.trajectoryStatus === 'improving_still_low' ? 'low' : 'elevated';
-    questions.push({
-      text: `My ${name} ${conjAre} better than the prior result but ${conjRemain} ${dirWord}. Is this rate of change clinically meaningful, and how should we approach it from here?`,
-      relatedBiomarker: d.key,
-    });
-  }
-
-  // 3b. Strong worsening trends (no boundary crossing)
-  const worseningTrends = deltas.filter(
-    d =>
-      d.significance === 'significant' &&
-      d.boundaryCrossing === null &&
-      !used.has(d.key) &&
-      d.trajectoryStatus !== 'improving_still_high' &&
-      d.trajectoryStatus !== 'improving_still_low',
-  );
-  for (const d of worseningTrends.slice(0, 1)) {
-    used.add(d.key);
-    const name = d.displayName;
-    const dir = d.trendDirection === 'up' ? 'increased' : 'decreased';
-    const pct = d.percentDelta !== null ? ` (${d.percentDelta > 0 ? '+' : ''}${d.percentDelta}%)` : '';
-    questions.push({
-      text: `My ${name} ${dir} from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct}. Is this something I should continue monitoring?`,
-      relatedBiomarker: d.key,
-    });
-  }
-
-  // 4. Isolated out-of-range markers (lowest priority)
-  const outOfRange = scored
-    .filter(s => s.concern === 2)
-    .sort((a, b) => b.weightedConcern - a.weightedConcern);
-
-  for (const s of outOfRange) {
-    if (used.has(s.key)) continue;
-    used.add(s.key);
-    const name = getDisplayName(s.key);
-    const direction = s.amaniStatus.includes('high') ? 'elevated' : s.amaniStatus.includes('low') ? 'low' : 'outside the optimal range';
-    questions.push({
-      text: `My ${name} is ${direction} at ${s.value} ${s.unit}. What does this mean in the context of my overall labs?`,
-      relatedBiomarker: s.key,
-    });
-    if (questions.length >= 5) break;
-  }
-
-  // 5. Phase 8C supplement — guarantee 2-3 questions when there's a clear
-  // primary finding, even for borderline / optimization-only primaries that
-  // rules 1-4 skip. Non-prescriptive templates: discuss / ask / consider.
-  if (primaryFinding && questions.length < 3) {
-    const pName = primaryFinding.displayName;
-    if (questions.length < 2) {
-      questions.push({
-        text: `Should we recheck ${pName} in a few months to see how it's tracking?`,
-        relatedBiomarker: primaryFinding.key,
-      });
-    }
-    if (questions.length < 3) {
-      questions.push({
-        text: `Are there lifestyle or routine considerations I should discuss before making changes?`,
-        relatedBiomarker: primaryFinding.key,
-      });
-    }
-    if (isOptimizationOnly && questions.length < 3) {
-      questions.push({
-        text: `Does this ${pName} result matter given the rest of my labs look stable?`,
-        relatedBiomarker: primaryFinding.key,
-      });
-    }
-  }
-
-  return questions.slice(0, 5);
+  questions.push(DISCUSSION_PREP.context());
+  return questions;
 }
 
 function buildWatchSignals(
@@ -439,32 +317,29 @@ function buildWatchSignals(
     if (peers.length < 2) continue;
     const systemLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
     const names = peers.map(p => getDisplayName(p.key));
-    const listed = names.length <= 3
-      ? names.join(', ')
-      : `${names.slice(0, 2).join(', ')} and ${names.length - 2} others`;
+    const listed = names.length <= 3 ? names : [...names.slice(0, 2), `${names.length - 2} others`];
     signals.push({
       type: 'system',
-      title: `${systemLabel}: several markers shifted together`,
-      description: `${listed} ${names.length === 1 ? 'is' : 'are'} each outside their optimal range. Tracking them as a group over time can help reveal whether this is a consistent pattern.`,
+      title: WATCH_SIGNALS.systemTitle(systemLabel),
+      description: WATCH_SIGNALS.systemDescription(listed),
       relatedBiomarkers: peers.map(p => p.key),
     });
   }
 
-  // Boundary signal: markers that crossed a boundary (worsened)
+  // Boundary signal: markers that crossed out of the band
   const worsenedCrossings = deltas.filter(
     d => d.boundaryCrossing?.direction === 'worsened',
   );
   for (const d of worsenedCrossings.slice(0, 2)) {
-    const bc = d.boundaryCrossing!;
     signals.push({
       type: 'boundary',
-      title: `${d.displayName}: range shifted since last report`,
-      description: `Moved from ${bc.from.replace(/_/g, ' ')} to ${bc.to.replace(/_/g, ' ')} since the last report. A single shift may not be meaningful. Tracking it across future panels can help clarify the direction.`,
+      title: WATCH_SIGNALS.crossingTitle(d.displayName),
+      description: WATCH_SIGNALS.change(d.previousValue, d.currentValue, d.unit, ''),
       relatedBiomarkers: [d.key],
     });
   }
 
-  // Improvement signal: markers improving but still outside optimal
+  // Movement toward the band, still outside it
   const improvingStillAbnormal = deltas.filter(
     d =>
       d.significance !== 'minor' &&
@@ -473,11 +348,10 @@ function buildWatchSignals(
   );
   for (const d of improvingStillAbnormal.slice(0, 2)) {
     const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
-    const dir = d.trajectoryStatus === 'improving_still_high' ? 'elevated' : 'low';
     signals.push({
       type: 'trend',
-      title: `${d.displayName}: improving from the prior report`,
-      description: `Moved from ${d.previousValue} to ${d.currentValue} ${d.unit}${pct} — a meaningful step toward the optimal range. It remains ${dir}, so continued monitoring is worthwhile.`,
+      title: WATCH_SIGNALS.changeTitle(d.displayName),
+      description: WATCH_SIGNALS.change(d.previousValue, d.currentValue, d.unit, pct),
       relatedBiomarkers: [d.key],
     });
   }
@@ -491,12 +365,11 @@ function buildWatchSignals(
       d.trajectoryStatus !== 'improving_still_low',
   );
   for (const d of worseningTrends.slice(0, 2)) {
-    const dir = d.trendDirection === 'up' ? 'increasing' : 'decreasing';
     const pct = d.percentDelta !== null ? ` (${Math.abs(d.percentDelta)}%)` : '';
     signals.push({
       type: 'trend',
-      title: `${d.displayName}: notable change from previous report`,
-      description: `Has been ${dir}${pct} since the last panel, while staying within the same range category. Worth tracking to see if this holds across future reports.`,
+      title: WATCH_SIGNALS.changeTitle(d.displayName),
+      description: WATCH_SIGNALS.change(d.previousValue, d.currentValue, d.unit, pct),
       relatedBiomarkers: [d.key],
     });
   }
@@ -516,8 +389,8 @@ function buildWatchSignals(
     const systemLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
     signals.push({
       type: 'pattern',
-      title: `${systemLabel}: related markers shifted since last report`,
-      description: `${systemNames} each shifted since the last panel. When related markers move together, it may be useful context to carry into future results.`,
+      title: WATCH_SIGNALS.patternTitle(systemLabel),
+      description: WATCH_SIGNALS.patternDescription(systemNames),
       relatedBiomarkers: group.map(d => d.key),
     });
     break;
@@ -632,7 +505,12 @@ export function buildInsightSummary(
     scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
   );
 
-  const systemSummaries = groupBySystem(scored);
+  const systemSummaries = groupBySystem(scored, cyclePhase);
+  const bandLanguage = new Map<BiomarkerName, AuthorizedLanguage>();
+  for (const b of current) {
+    const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase));
+    if (assessment.kind === 'scored') bandLanguage.set(b.key, authorizedLanguage(assessment.band));
+  }
   let biggestChanges: BiggestChange[] = [];
   let deltas: BiomarkerDelta[] = [];
   let deltaMap = new Map<BiomarkerName, BiomarkerDelta>();
@@ -700,7 +578,7 @@ export function buildInsightSummary(
           boundaryCrossing: null,
           trajectoryStatus: null,
           distanceToNormalImprovement: null,
-          fact: `${getDisplayName(primaryKey)} is ${primaryScored.value} ${unit} — first result on record, currently out of range.`,
+          fact: describeMeasuredMovement({ displayName: getDisplayName(primaryKey), previousValue: null, currentValue: primaryScored.value, unit, significance: 'significant' }).text,
           isFirstRecorded: true,
           priorReportDate: null,
           priorIsOlderThanImmediatePrior: false,
@@ -798,22 +676,14 @@ export function buildInsightSummary(
     ? topFindings.filter(f => f.key !== primaryFinding!.key)
     : topFindings;
 
-  // Optimization-only state (Phase 8C): no marker is outside the lab's clinical
-  // reference range but at least one is outside Amani's tighter optimal range.
-  // Used by buildDoctorQuestions to soften wording for stable-but-suboptimal cases.
-  const clinicallyOutOfRange = scored.some(
-    s => s.labStatus === 'out_of_range_low' || s.labStatus === 'out_of_range_high',
-  );
-  const outsideOptimal = scored.some(s => s.concern > 0);
-  const isOptimizationOnly = !clinicallyOutOfRange && outsideOptimal;
-
-  const questionsForDoctor = buildDoctorQuestions(scored, deltas, primaryFinding, isOptimizationOnly);
+  const questionsForDoctor = buildDoctorQuestions(current, deltas);
 
   return {
     primaryFinding,
     topFindings: secondaryFindings,
     biggestChanges,
     deltaMap,
+    bandLanguage,
     systemSummaries,
     questionsForDoctor,
     watchSignals,

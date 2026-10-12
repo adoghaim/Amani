@@ -1,23 +1,38 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Info, BookOpen } from 'lucide-react';
-import { computeAmaniStatus, computeLabStatus } from '../lib/scoring/scoreBiomarker';
-import { amaniStatusToVariant, STATUS_PILL_CONFIG } from '../lib/scoring/statusPill';
-import { getEntry, getDisplayName } from '../lib/biomarkers/dictionary';
-import type { BiomarkerName, CyclePhase, AmaniStatus, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
+import {
+  assessAmaniContext,
+  contextFromReport,
+  formatInterval,
+  type AmaniBand,
+} from '../lib/scoring/amaniContext';
+import { getDisplayName } from '../lib/biomarkers/dictionary';
+import type { BiomarkerName, CyclePhase, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
+import {
+  bandBounds, bandInterval, bandTerm, comparisonBandLabel, CUE_STYLE, extremeMagnitudeLabel, LAB_INTERVAL_TERM, labIntervalObservation,
+  personalHistoryLabel, phaseBandNote, reviewStatusLabel, withheldCopy, withoutOptimalClaims,
+  type AuthorizedModelProse, type ComparisonBandLanguage, type FactualLanguage,
+} from '../lib/scoring/insightCopy';
+import { ModelProseText } from './ClinicalObservation';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
   value: number;
   rawValueText?: string | null;
   unit: string;
+  /** The patient's own laboratory interval, from biomarkers.reference_min/max. */
   labRefMin?: number | null;
   labRefMax?: number | null;
-  cyclePhase?: CyclePhase | null;
-  plainEnglishMeaning?: string;
-  timingNotes?: string;
-  commonNonAlarmReasons?: string[];
-  whenCliniciansFollowUp?: string[];
+  /** As recorded on the report. Never inferred here. */
+  cyclePhase?: CyclePhase | string | null;
+  /**
+   * Owner R1: the interpretation's per-marker prose, already reduced to the
+   * sentences that resolve to this marker's own measured-change claim. Raw
+   * model fields (meaning, timing notes, "common reasons", "when clinicians
+   * follow up") are not accepted here.
+   */
+  modelProse?: readonly AuthorizedModelProse[];
   historicalValues?: { date: string; value: number }[];
   baselineStatus?: BaselineStatus;
   baselineValue?: number;
@@ -27,20 +42,21 @@ interface BiomarkerCardProps {
 }
 
 function baselineCopy(
+  subject: string,
   status: BaselineStatus,
   staleness: BaselineStaleness
-): string | null {
-  if (staleness === 'limited') return 'Limited prior history';
-  if (status === 'above_baseline') {
-    return staleness === 'stale' ? 'Higher compared with older history' : 'Higher than your usual level';
-  }
-  if (status === 'below_baseline') {
-    return staleness === 'stale' ? 'Lower compared with older history' : 'Lower than your usual level';
-  }
-  if (status === 'near_baseline') {
-    return staleness === 'stale' ? 'Within your older history range' : 'Within your usual range';
-  }
-  return null;
+): FactualLanguage | null {
+  if (staleness !== 'limited' && status !== 'above_baseline' && status !== 'below_baseline' && status !== 'near_baseline') return null;
+  return personalHistoryLabel(subject, status === 'insufficient_data' ? 'near_baseline' : status, staleness);
+}
+
+/** Every policy-authored label carries its category, source and cue into the DOM. */
+function languageAttributes(language: ComparisonBandLanguage | FactualLanguage) {
+  return {
+    'data-language-category': language.category,
+    'data-language-source': language.authority.kind,
+    'data-language-cue': language.cue,
+  };
 }
 
 function formatRangeLabel(n: number): string {
@@ -50,55 +66,70 @@ function formatRangeLabel(n: number): string {
   return n < 10 ? n.toFixed(1) : n.toFixed(0);
 }
 
+/*
+  The bar draws two different things and must never let one stand in for the
+  other: the patient's laboratory interval (from her report) and Amani's
+  context band (from the catalog). If the report carried no interval, no lab
+  band is drawn — the catalog's lab_reference row is not her lab's range.
+*/
 function RangeBar({
   value,
-  optMin,
-  optMax,
-  clinMin,
-  clinMax,
+  band,
+  labMin,
+  labMax,
 }: {
   value: number;
-  optMin: number | null;
-  optMax: number | null;
-  clinMin: number | null;
-  clinMax: number | null;
+  band: AmaniBand;
+  labMin: number | null;
+  labMax: number | null;
 }) {
-  if (optMin === null || optMax === null) return null;
+  const { min: optMin, max: optMax } = bandBounds(band);
+  if (optMin === null && optMax === null) return null;
+  // Finite viewport edges are not comparison-band limits.
+  const scaleMin = optMin ?? optMax! * 0.5;
+  const scaleMax = optMax ?? Math.max(scaleMin * 1.5, value * 1.1);
 
-  const baseHigh = clinMax ?? optMax * 1.5;
+  const baseHigh = Math.max(labMax ?? scaleMax * 1.5, scaleMax);
   const high = Math.max(baseHigh, value * 1.1);
-  const baseLow = clinMin ?? optMin * 0.5;
+  const baseLow = Math.min(labMin ?? scaleMin * 0.5, scaleMin);
   const low = value < baseLow ? Math.min(baseLow, value * 0.9) : baseLow;
   const span = high - low;
   if (span <= 0) return null;
 
   const toPercent = (v: number) => Math.max(0, Math.min(100, ((v - low) / span) * 100));
 
-  const optLeft = toPercent(optMin);
-  const optWidth = toPercent(optMax) - optLeft;
-  const clinLeft = clinMin !== null ? toPercent(clinMin) : 0;
-  const clinWidth = clinMax !== null ? toPercent(clinMax) - clinLeft : 100 - clinLeft;
+  const optLeft = optMin === null ? 0 : toPercent(optMin);
+  const optWidth = (optMax === null ? 100 : toPercent(optMax)) - optLeft;
+  const hasLab = labMin !== null || labMax !== null;
+  const labLeft = labMin !== null ? toPercent(labMin) : 0;
+  const labWidth = labMax !== null ? toPercent(labMax) - labLeft : 100 - labLeft;
   const valuePos = toPercent(value);
 
-  const rangeMax = clinMax ?? optMax;
+  const rangeMax = labMax ?? optMax;
+  const rangeMin = labMin ?? optMin;
   const isExtremeHigh = rangeMax !== null && rangeMax > 0 && value > rangeMax * 3;
-  const isExtremeLow = (clinMin !== null ? clinMin : optMin) !== null
-    && (clinMin ?? optMin)! > 0
-    && value < (clinMin ?? optMin)! / 3;
+  const isExtremeLow = rangeMin !== null && rangeMin > 0 && value < rangeMin / 3;
   const isExtreme = isExtremeHigh || isExtremeLow;
+  // A magnitude marker, not a danger signal (R3): neutral attention styling.
+  const extreme = CUE_STYLE.attention;
 
   return (
-    <div className="mt-3">
+    <div className="mt-3" aria-hidden="true">
       <div className="relative h-3 rounded-full bg-theme-neutral-100 overflow-visible">
+        {hasLab && (
+          <div
+            className="absolute h-full rounded-full bg-theme-info-bg"
+            style={{ left: `${labLeft}%`, width: `${labWidth}%` }}
+          />
+        )}
+        {/* The band region is shaded neutrally: green would mark it as the good zone. */}
         <div
-          className="absolute h-full rounded-full bg-theme-info-bg"
-          style={{ left: `${clinLeft}%`, width: `${clinWidth}%` }}
-        />
-        <div
-          className="absolute h-full rounded-full bg-theme-flag-ok-bg"
+          data-testid="comparison-region"
+          className="absolute h-full rounded-full bg-theme-neutral-200"
           style={{ left: `${optLeft}%`, width: `${optWidth}%` }}
         />
         <div
+          data-testid="measurement-dot"
           className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-theme-accent border-2 border-theme-surface shadow-theme-sm z-10"
           style={{ left: `calc(${valuePos}% - 6px)` }}
         />
@@ -107,25 +138,25 @@ function RangeBar({
         Range labels are captions, not data. They were coloured green and blue,
         which put two more hues into a row that already carries a status pill, a
         trend arrow and the bar's own banding — and the green read as "in range"
-        when it was only naming the optimal band. A small legend dot carries the
+        when it was only naming the Amani band. A small legend dot carries the
         mapping; the text stays in muted ink.
       */}
       <div className="flex justify-between font-mono text-[10px] text-theme-muted-text-3 mt-1 tabular-nums">
-        <span>{formatRangeLabel(clinMin ?? optMin)}</span>
+        <span>{formatRangeLabel(low)}</span>
         <div className="flex gap-3 text-center items-center">
           <span className="inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-theme-flag-ok" aria-hidden="true" />
-            Opt {formatRangeLabel(optMin)}–{formatRangeLabel(optMax)}
+            <span className="w-1.5 h-1.5 rounded-full bg-theme-neutral-400" />
+            Amani {bandInterval(band)}
           </span>
-          {clinMin !== null && clinMax !== null && (
+          {labMin !== null && labMax !== null && (
             <span className="inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-theme-info" aria-hidden="true" />
-              Lab {formatRangeLabel(clinMin)}–{formatRangeLabel(clinMax)}
+              <span className="w-1.5 h-1.5 rounded-full bg-theme-info" />
+              Lab {formatRangeLabel(labMin)}–{formatRangeLabel(labMax)}
             </span>
           )}
           {isExtreme && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-theme-flag-low-bg text-theme-flag-low border border-theme-flag-low-border">
-              {isExtremeHigh ? 'Far above range' : 'Far below range'}
+            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${extreme.bg} ${extreme.text} ${extreme.border}`}>
+              {extremeMagnitudeLabel(isExtremeHigh ? 'above' : 'below', (isExtremeHigh ? labMax : labMin) !== null ? 'lab' : 'amani')}
             </span>
           )}
         </div>
@@ -135,49 +166,39 @@ function RangeBar({
   );
 }
 
+/*
+  Release invariant 1: her laboratory's interval is stated exactly as printed.
+  This section used to show the lab's interval with an 8% margin Amani added
+  ("Your lab's range: borderline high"), a judgement her lab never made. It
+  also explained a 'normal' status as "outside Amani's context band", which
+  is false: that status is only produced inside a one-sided band.
+*/
 function DualStatusSection({
-  amaniStatus,
+  name,
+  pill,
   labRefMin,
   labRefMax,
   value,
 }: {
-  amaniStatus: AmaniStatus;
-  labRefMin?: number | null;
-  labRefMax?: number | null;
+  name: string;
+  pill: ComparisonBandLanguage;
+  labRefMin: number | null;
+  labRefMax: number | null;
   value: number;
 }) {
-  const labStatus = computeLabStatus(value, labRefMin ?? null, labRefMax ?? null);
-  const amaniVariant = amaniStatusToVariant(amaniStatus);
-  const amaniPill = STATUS_PILL_CONFIG[amaniVariant];
-
-  const isNormalNotOptimal = amaniStatus === 'normal';
-  const hasBoth = labRefMin !== null && labRefMax !== null;
+  const pillStyle = CUE_STYLE[pill.cue];
+  const lab = labIntervalObservation(name, value, labRefMin, labRefMax);
+  const labStyle = lab ? CUE_STYLE[lab.cue] : null;
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${amaniPill.bg} ${amaniPill.text} ${amaniPill.border}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${amaniPill.dot}`} />
-          {amaniPill.label}
-        </div>
-        {hasBoth && labStatus !== 'in_range' && (
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-600">
-            Lab ref: {labStatus.replace(/_/g, ' ')}
-          </div>
-        )}
-        {hasBoth && labStatus === 'in_range' && amaniStatus !== 'optimal' && (
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border border-theme-neutral-200 bg-theme-neutral-50 text-theme-neutral-500">
-            Within lab ref range
-          </div>
-        )}
+    <div className="flex flex-wrap items-center gap-2">
+      <div {...languageAttributes(pill)} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${pillStyle.bg} ${pillStyle.text} ${pillStyle.border}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${pillStyle.dot}`} />
+        {pill.text}
       </div>
-      {isNormalNotOptimal && (
-        <div className="flex items-start gap-1.5 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2">
-          <Info className="w-3.5 h-3.5 text-theme-info mt-0.5 shrink-0" />
-          <p className="text-xs text-theme-info">
-            This result is within the standard lab reference range but below the Amani optimal threshold.
-            Being "normal" and being "optimal" are different — Amani uses tighter ranges for peak health.
-          </p>
+      {lab && labStyle && (
+        <div {...languageAttributes(lab)} className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${labStyle.border} ${labStyle.bg} ${labStyle.text}`}>
+          {lab.text}
         </div>
       )}
     </div>
@@ -192,10 +213,7 @@ export function BiomarkerCard({
   labRefMin,
   labRefMax,
   cyclePhase,
-  plainEnglishMeaning,
-  timingNotes,
-  commonNonAlarmReasons,
-  whenCliniciansFollowUp,
+  modelProse,
   historicalValues,
   baselineStatus,
   baselineStaleness,
@@ -204,23 +222,16 @@ export function BiomarkerCard({
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const amaniStatus = computeAmaniStatus(name, value, cyclePhase);
-  const amaniVariant = amaniStatusToVariant(amaniStatus);
-  const pill = STATUS_PILL_CONFIG[amaniVariant];
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase));
+  const pillLanguage = comparisonBandLabel(assessment, value);
+  const pill = CUE_STYLE[pillLanguage.cue];
+  const band = assessment.kind === 'scored' ? assessment.band : null;
+  const bandText = band ? bandInterval(band) : null;
+  const withheld = assessment.kind === 'withheld' ? withheldCopy(assessment) : null;
 
-  const entry = getEntry(name);
-  let optMin = entry?.optimal.min ?? null;
-  let optMax = entry?.optimal.max ?? null;
-  let clinMin = entry?.clinical.min ?? null;
-  let clinMax = entry?.clinical.max ?? null;
-
-  if (cyclePhase && entry?.phaseRanges?.[cyclePhase]) {
-    const pr = entry.phaseRanges[cyclePhase]!;
-    optMin = pr.optimal.min ?? optMin;
-    optMax = pr.optimal.max ?? optMax;
-    clinMin = pr.clinical.min ?? clinMin;
-    clinMax = pr.clinical.max ?? clinMax;
-  }
+  const labMin = labRefMin ?? null;
+  const labMax = labRefMax ?? null;
+  const labText = formatInterval(labMin, labMax);
 
   const displayName = getDisplayName(name);
   const formattedValue = rawValueText ?? (value % 1 === 0 ? value.toString() : value.toFixed(2));
@@ -234,17 +245,21 @@ export function BiomarkerCard({
   })();
 
   return (
-    <div className={`bg-theme-surface rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}>
+    <article
+      aria-label={`${displayName} result`}
+      className={`bg-theme-surface rounded-xl border overflow-hidden transition-all duration-200 ${pill.border}`}
+    >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-4 flex items-start gap-3 text-left hover:bg-theme-neutral-50/50 transition-colors"
+        aria-expanded={expanded}
+        className="w-full px-4 pt-4 pb-2 flex items-start gap-3 text-left hover:bg-theme-neutral-50/50 transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-sm font-semibold text-theme-text">{displayName}</span>
-            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${pill.bg} ${pill.text} ${pill.border}`}>
+            <div {...languageAttributes(pillLanguage)} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${pill.bg} ${pill.text} ${pill.border}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${pill.dot}`} />
-              {pill.label}
+              {pillLanguage.text}
             </div>
             {trendDir && (
               /*
@@ -276,59 +291,93 @@ export function BiomarkerCard({
           <div className="flex items-baseline gap-1.5 text-theme-muted-text-2">
             <span className="font-mono text-xl text-theme-text tabular-nums">{formattedValue}</span>
             <span className="font-mono text-xs">{unit}</span>
-            {labRefMin !== null && labRefMax !== null && (
-              <span className="font-mono text-xs text-theme-muted-text-3 tabular-nums">
-                · ref {labRefMin}–{labRefMax}
-              </span>
-            )}
           </div>
-          {(() => {
-            const effectiveStaleness: BaselineStaleness = baselineStaleness ?? 'fresh';
-            const showBaselinePill = baselineStatus
-              && baselineStatus !== 'near_baseline'
-              && (effectiveStaleness === 'limited' || baselineStatus !== 'insufficient_data');
-            const baselineLabel = showBaselinePill && baselineStatus
-              ? baselineCopy(baselineStatus, effectiveStaleness)
-              : null;
-            const showTrendPill = trendDirection
-              && trendDirection !== 'stable'
-              && trendDirection !== 'fluctuating'
-              && trendDirection !== 'insufficient_data'
-              && trendStrength !== 'weak';
-            if (!baselineLabel && !showTrendPill) return null;
-            return (
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {baselineLabel && (
-                  <span className="text-[10px] text-theme-flag-ok font-medium">{baselineLabel}</span>
-                )}
-                {showTrendPill && (
-                  <span className="text-[10px] text-theme-info font-medium">
-                    Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-          {(optMin !== null && optMax !== null) && (
-            <RangeBar value={value} optMin={optMin} optMax={optMax} clinMin={labRefMin ?? clinMin} clinMax={labRefMax ?? clinMax} />
-          )}
         </div>
         <div className="shrink-0 pt-0.5 text-theme-muted-text-3">
           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </button>
 
+      {/*
+        Two separate concepts, always labelled, never substituted (V2-03):
+        her laboratory's interval is shown whenever the report supplied one,
+        and Amani's band only when Amani actually applies one — with its
+        review state beside it, because no band has been clinically approved.
+      */}
+      <div className="px-4 pb-4">
+        <dl className="space-y-0.5 text-xs">
+          <div className="flex flex-wrap gap-x-1.5">
+            <dt className="text-theme-muted-text-3">{LAB_INTERVAL_TERM}</dt>
+            <dd className="font-mono tabular-nums text-theme-text-body">
+              {labText ? `${labText} ${unit}` : 'Not provided on your report'}
+            </dd>
+          </div>
+          {band && bandText && (
+            <div className="flex flex-wrap gap-x-1.5">
+              <dt className="text-theme-muted-text-3">{bandTerm(band.phase)}</dt>
+              <dd className="text-theme-text-body">
+                <span className="font-mono tabular-nums">{bandText} {unit}</span>
+                {' · '}
+                <span>{reviewStatusLabel(band)}</span>
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        {withheld && (
+          <div role="note" className="mt-2 flex items-start gap-1.5 bg-theme-surface-2 border border-theme-border rounded-lg px-3 py-2">
+            <Info className="w-3.5 h-3.5 text-theme-muted-text-2 mt-0.5 shrink-0" />
+            <div className="text-xs text-theme-text-body">
+              <p className="font-semibold">{withheld.title}</p>
+              <p className="mt-0.5">{withheld.body}</p>
+            </div>
+          </div>
+        )}
+
+        {(() => {
+          const effectiveStaleness: BaselineStaleness = baselineStaleness ?? 'fresh';
+          const showBaselinePill = baselineStatus
+            && baselineStatus !== 'near_baseline'
+            && (effectiveStaleness === 'limited' || baselineStatus !== 'insufficient_data');
+          const baselineLabel = showBaselinePill && baselineStatus
+            ? baselineCopy(displayName, baselineStatus, effectiveStaleness)
+            : null;
+          const showTrendPill = trendDirection
+            && trendDirection !== 'stable'
+            && trendDirection !== 'fluctuating'
+            && trendDirection !== 'insufficient_data'
+            && trendStrength !== 'weak';
+          if (!baselineLabel && !showTrendPill) return null;
+          return (
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {baselineLabel && (
+                <span {...languageAttributes(baselineLabel)} className="text-[10px] text-theme-muted-text-2 font-medium">{baselineLabel.text}</span>
+              )}
+              {showTrendPill && (
+                <span className="text-[10px] text-theme-info font-medium">
+                  Trend: {trendDirection === 'rising' ? '↑ Rising' : '↓ Falling'}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+        {band && (
+          <RangeBar value={value} band={band} labMin={labMin} labMax={labMax} />
+        )}
+      </div>
+
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-theme-neutral-100 pt-3">
           <DualStatusSection
-            amaniStatus={amaniStatus}
-            labRefMin={labRefMin}
-            labRefMax={labRefMax}
+            name={displayName}
+            pill={pillLanguage}
+            labRefMin={labMin}
+            labRefMax={labMax}
             value={value}
           />
 
           {(() => {
-            const explanation = getBiomarkerExplanation(name);
+            const explanation = withoutOptimalClaims(getBiomarkerExplanation(name) ?? '');
             if (!explanation) return null;
             return (
               <div className="flex items-start gap-2 bg-theme-info-bg border border-theme-info-border rounded-lg px-3 py-2.5">
@@ -341,49 +390,19 @@ export function BiomarkerCard({
             );
           })()}
 
-          {plainEnglishMeaning && (
-            <p className="text-sm text-theme-text-body">{plainEnglishMeaning}</p>
+          {modelProse && modelProse.length > 0 && (
+            <p className="text-sm text-theme-text-body" data-model-surface="marker">
+              <ModelProseText items={modelProse} />
+            </p>
           )}
 
-          {timingNotes && (
-            <p className="text-xs text-theme-muted-text-2 italic border-l-2 border-theme-border pl-2">{timingNotes}</p>
-          )}
-
-          {cyclePhase && entry?.phaseRanges?.[cyclePhase] && (
-            <div className="bg-theme-flag-low-bg border border-theme-flag-low-border rounded-lg px-3 py-2 text-xs text-theme-flag-low">
-              Showing cycle-adjusted ranges for the <span className="font-semibold capitalize">{cyclePhase}</span> phase.
-            </div>
-          )}
-
-          {commonNonAlarmReasons && commonNonAlarmReasons.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">Common reasons for this result</h4>
-              <ul className="space-y-1">
-                {commonNonAlarmReasons.map((r, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
-                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
-                    <span>{r}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {whenCliniciansFollowUp && whenCliniciansFollowUp.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold text-theme-text uppercase tracking-wide mb-1.5">When clinicians may follow up</h4>
-              <ul className="space-y-1">
-                {whenCliniciansFollowUp.map((item, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-theme-text-body">
-                    <span className="text-theme-primary mt-0.5 shrink-0">•</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
+          {band?.phase && (
+            <div className="bg-theme-surface-2 border border-theme-border rounded-lg px-3 py-2 text-xs text-theme-text-body">
+              {phaseBandNote(band.phase, band)}
             </div>
           )}
         </div>
       )}
-    </div>
+    </article>
   );
 }

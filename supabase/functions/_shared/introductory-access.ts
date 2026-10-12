@@ -114,6 +114,10 @@ export interface IntroductoryAccessActions {
    *                     (idempotent retry, or a draw claimed earlier)
    *   `limit_reached`   the ledger refused the claim, so NOTHING was persisted
    *                     as premium and the caller must serve the Free result
+   *
+   * "Saved" is the report's anchor on first generation; once the report holds
+   * its anchor it is an appended version (TASK-048 `commit_deep_access_version`),
+   * never an in-place overwrite.
    */
   commitDeepAccess(
     input: CommitDeepAccessInput,
