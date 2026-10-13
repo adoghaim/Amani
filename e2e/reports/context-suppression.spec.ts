@@ -155,6 +155,21 @@ test.describe('cycle phase recorded on the report', () => {
     await expect(page.getByText(/Luteal Phase Insufficiency|insufficien/i)).toHaveCount(0);
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
+
+  // PK-FIX-02 (c): the header names the recorded phase in that phase's own
+  // ink (the same token as the cycle dial), never the alert palette, and with
+  // no phase tint fill (DESIGN.md: never a phase tint without its pattern).
+  test('12. the report header phase pill wears the phase ink, not the alert palette', async ({ page }) => {
+    await openReport(page, lutealPhaseReport.report.id);
+    const pill = page.getByTestId('report-phase-pill');
+    await expect(pill).toHaveText(/^luteal phase$/i);
+    await expect(pill).toHaveClass(/(?:^|\s)text-theme-phase-luteal(?:\s|$)/);
+    await expect(pill).not.toHaveClass(/flag-(?:ok|watch|low)|bg-theme-phase-/);
+    // Rendered colours, not only class names: phase-luteal #414379 ink and border, no luteal tint fill.
+    await expect(pill).toHaveCSS('color', 'rgb(65, 67, 121)');
+    await expect(pill).toHaveCSS('border-top-color', 'rgb(65, 67, 121)');
+    await expect(pill).not.toHaveCSS('background-color', 'rgb(233, 234, 244)');
+  });
 });
 
 test.describe('pattern cards from withheld inputs', () => {

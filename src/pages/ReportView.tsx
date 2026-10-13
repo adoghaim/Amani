@@ -55,6 +55,7 @@ import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
+import { phaseStyle } from '../lib/cyclePhase';
 import {
   fetchInterpretationAccess,
   type InterpretationAccessResult,
@@ -1352,8 +1353,11 @@ export function ReportView() {
               )}
             </p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
+              {/* PK-FIX-02: the phase word in the phase's own ink (shared with the dial), never the
+                  flag-low alert palette. No phase tint fill: DESIGN.md never uses a phase tint without
+                  its pattern, and the tints are near-identical to the status tints. */}
               {cyclePhase && (
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low capitalize">
+                <span data-testid="report-phase-pill" className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-theme-surface border border-current ${phaseStyle(cyclePhase).text} capitalize`}>
                   {cyclePhase.replace(/_/g, ' ')} phase
                 </span>
               )}

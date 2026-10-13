@@ -469,13 +469,6 @@
     "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
   },
   {
-    "file": "src/features/onboarding/steps/WelcomeStep.tsx",
-    "text": "Amani helps you understand your lab results in plain language, track changes over time, and prepare better questions for your doctor.",
-    "category": "NOT_CLINICAL_LANGUAGE",
-    "basis": "non_clinical_wording",
-    "reason": "Non-clinical lexical match: onboarding product description uses better for question preparation, not clinical improvement in a result."
-  },
-  {
     "file": "src/features/settings/PersonalContextCard.tsx",
     "text": "Age range",
     "category": "NOT_CLINICAL_LANGUAGE",
