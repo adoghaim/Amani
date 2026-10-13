@@ -896,13 +896,6 @@
     "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
   },
   {
-    "file": "src/pages/ReportView.tsx",
-    "text": "text-theme-neutral-500 font-normal ml-1 text-xs",
-    "category": "NOT_CLINICAL_LANGUAGE",
-    "basis": "css_token",
-    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
-  },
-  {
     "file": "src/pages/SuccessPage.tsx",
     "text": "Your payment went through, but activation is taking longer than usual. Nothing is lost — it normally completes on its own within a few minutes.",
     "category": "NOT_CLINICAL_LANGUAGE",
