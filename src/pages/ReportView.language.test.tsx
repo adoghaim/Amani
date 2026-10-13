@@ -686,6 +686,34 @@ describe('PK-FIX-06: the cycle day renders without a phase, in neutral language'
     expect(forbiddenHits(pageText())).toEqual([]);
   }, 30_000);
 
+  /*
+    PK-FIX-06-EXT review blocker (D10): the card's phase follows the cycle rule,
+    like the header line. A stored phase the rule does not draw is shown apart,
+    as recorded with the report, and never with the 28-day estimate label.
+  */
+  it.each([
+    ['a lab-printed phase the day map would not give', { estimated_cycle_phase: 'luteal', estimated_cycle_day: 10, average_cycle_length: null },
+      '10', 'luteal', null],
+    ['a pregnancy value', { estimated_cycle_phase: 'pregnancy_t1', estimated_cycle_day: 10, average_cycle_length: null },
+      '10', 'pregnancy t1', null],
+    ['a phase on a known 35-day cycle', { estimated_cycle_phase: 'luteal', estimated_cycle_day: 20, average_cycle_length: 35 },
+      '20', 'luteal', 'Phase not estimated for a 35-day cycle.'],
+  ])('D10: %s is shown as recorded, never as an estimate; the header and the rule agree', async (_name, facts, day, recorded, note) => {
+    seedCycle(facts);
+    await renderAndOpenAll();
+    const card = cycleCard();
+    expect(card).not.toBeNull();
+    expect(Array.from(card!.querySelectorAll('p')).map(p => p.textContent))
+      .toEqual(['Cycle day', day, 'Phase recorded with this report', recorded, ...(note ? [note] : [])]);
+    expect(app.querySelector('[data-cycle-phase-estimate]')).toBeNull();
+    expect(app.textContent).not.toContain('estimate for a 28-day cycle');
+    expect(app.querySelector('[data-report-cycle-line]')?.textContent).toBe(`Cycle day ${day}`);
+    const rule = app.querySelector('section[data-cycle-rule]');
+    expect(rule?.querySelector('line[data-tick-day]')?.getAttribute('data-tick-day')).toBe(day);
+    expect(rule?.querySelectorAll('[data-band]')).toHaveLength(0);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
   it('missing last-period date (no cycle day): no cycle card', async () => {
     seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: null, average_cycle_length: 35, last_period_start_date: null });
     await renderAndOpenAll();

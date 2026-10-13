@@ -1813,9 +1813,18 @@ export function ReportView() {
                     <div>
                       <p className="text-xs text-theme-muted-text-3">Phase</p>
                       <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
-                        {card.phase.replace(/_/g, ' ')}
+                        {card.phase}
                       </p>
                       <p className="text-xs text-theme-muted-text-2 mt-0.5" data-cycle-phase-estimate>{PHASE_ESTIMATE_LABEL}</p>
+                    </div>
+                  )}
+                  {/* A stored phase the cycle rule does not draw: the report's own record, never an estimate (Q13). */}
+                  {card.recordedPhase && (
+                    <div data-cycle-phase-recorded>
+                      <p className="text-xs text-theme-muted-text-3">Phase recorded with this report</p>
+                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                        {card.recordedPhase.replace(/_/g, ' ')}
+                      </p>
                     </div>
                   )}
                 </div>
