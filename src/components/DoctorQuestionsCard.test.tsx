@@ -7,7 +7,7 @@ import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { formatInterval } from '../lib/scoring/amaniContext';
 import {
   DISCUSSION_PREP, DISCUSSION_PREP_HEADING, DISCUSSION_PREP_INTRO, isIssuedDiscussionPrompt, labIntervalObservation,
-  LANGUAGE_AUTHORITY, type DiscussionPrepPrompt,
+  LANGUAGE_AUTHORITY, nameInSentence, type DiscussionPremise, type DiscussionPrepPrompt,
 } from '../lib/scoring/insightCopy';
 
 /*
@@ -168,5 +168,86 @@ describe('the card renders only policy-issued prompts, and its presence is prepa
       if (change) expect(delta?.significance).not.toBe('minor');
       expect(q.text).not.toMatch(/band|Amani/);
     }
+  });
+});
+
+/*
+  PK-FIX-02 (campaign 06-video d/e): the questions are read aloud to a
+  clinician, so a catalog display name in title case ("Ferritin", "Fasting
+  Insulin") reads in sentence case mid-sentence, and the intro uses the US
+  spelling. Acronyms and mixed-case abbreviations keep their letters.
+*/
+// Capitalised ordinary words after the first word of each sentence.
+const midSentenceCapitals = (text: string): string[] => text.split(/(?<=[.?])\s+/)
+  .flatMap(sentence => sentence.split(/[\s(/),.?%-]+/).filter(Boolean).slice(1))
+  .filter(word => /^[A-Z][a-z]{2,}$/.test(word));
+
+describe('PK-FIX-02 — question wording: sentence-case marker names, US spelling', () => {
+  it('each template writes the name in sentence case; the premise keeps the display name', () => {
+    const change = DISCUSSION_PREP.change('Ferritin', 41, 18, 'ng/mL');
+    expect(change.text).toBe('My ferritin changed from 41 to 18 ng/mL. What could explain this change, and is it clinically meaningful?');
+    expect(change.authority.premises).toEqual([{ kind: 'measured_change', subject: 'Ferritin', previous: 41, current: 18, unit: 'ng/mL' }]);
+    const interval = DISCUSSION_PREP.labInterval('Free T4', 2.1, 'ng/dL', 0.8, 1.8)!;
+    expect(interval.text).toBe(
+      "My free T4 is 2.1 ng/dL, above my lab's reference interval of 0.8–1.8 ng/dL. What does this mean in the context of my overall labs?");
+    expect(interval.authority.premises[0]).toMatchObject({ kind: 'patient_lab_interval', subject: 'Free T4' });
+    const premises = ['Fasting Insulin', 'HbA1c'].map(subject => DISCUSSION_PREP.labInterval(subject, 30, 'u', 1, 20)!.authority.premises[0]!)
+      .filter((p): p is Extract<DiscussionPremise, { kind: 'patient_lab_interval' }> => p.kind === 'patient_lab_interval');
+    expect(DISCUSSION_PREP.relate(premises)?.text)
+      .toBe('Could you help me understand how my fasting insulin and HbA1c results relate to each other?');
+    // Acronyms are untouched, so the e2e-pinned TSH wording is unchanged.
+    expect(DISCUSSION_PREP.change('TSH', 6, 9, 'uIU/mL').text)
+      .toBe('My TSH changed from 6 to 9 uIU/mL. What could explain this change, and is it clinically meaningful?');
+  });
+
+  it('nameInSentence lowercases ordinary words only, at every boundary the catalog uses', () => {
+    for (const [name, expected] of [
+      ['Ferritin', 'ferritin'], ['Fasting Insulin', 'fasting insulin'], ['Free T4', 'free T4'],
+      ['Estradiol (E2)', 'estradiol (E2)'], ['TPO Antibodies', 'TPO antibodies'], ['Free T4 Index (T7)', 'free T4 index (T7)'],
+      ['C-Peptide', 'C-peptide'], ['Non-HDL Cholesterol', 'non-HDL cholesterol'], ['BUN/Creatinine Ratio', 'BUN/creatinine ratio'],
+      ['Chol/HDL Ratio', 'chol/HDL ratio'], ['A/G Ratio', 'A/G ratio'], ['Neutrophils (Absolute)', 'neutrophils (absolute)'],
+      ['Neutrophils %', 'neutrophils %'], ['ANA Screen, IFA', 'ANA screen, IFA'], ['Vitamin B12', 'vitamin B12'],
+      // Kept exactly: acronyms, mixed-case and two-letter abbreviations.
+      ['TSH', 'TSH'], ['HbA1c', 'HbA1c'], ['ApoB', 'ApoB'], ['TgAb', 'TgAb'], ['Lp(a)', 'Lp(a)'], ['eGFR', 'eGFR'],
+      ['hs-CRP', 'hs-CRP'], ['DHEA-S', 'DHEA-S'], ['CO2', 'CO2'],
+      // Not a catalog name: an eponym written with a non-ASCII letter keeps its capital.
+      ['Anti-Müllerian Hormone', 'anti-Müllerian hormone'],
+    ] as const) {
+      expect(nameInSentence(name), name).toBe(expected);
+    }
+  });
+
+  it('every catalog display name changes in case only, and only for ordinary capitalised words', () => {
+    const entries = getAllEntries();
+    expect(entries.length).toBeGreaterThan(80);
+    for (const { displayName } of entries) {
+      const sentence = nameInSentence(displayName);
+      expect(sentence.toLowerCase(), displayName).toBe(displayName.toLowerCase());
+      const before = displayName.split(/([\s(/),%-]+)/);
+      const after = sentence.split(/([\s(/),%-]+)/);
+      expect(after.length, displayName).toBe(before.length);
+      before.forEach((token, i) => {
+        expect(after[i], `${displayName}: ${token}`).toBe(/^[A-Z][a-z]{2,}$/.test(token) ? token.toLowerCase() : token);
+      });
+    }
+  });
+
+  it('the whole-catalog sweep: no question carries a capitalised ordinary word mid-sentence', () => {
+    const { prompts } = sweep();
+    expect(prompts.length).toBeGreaterThan(1000);
+    for (const p of prompts) expect(midSentenceCapitals(p.text), p.text).toEqual([]);
+    // Negative control: the check sees the defect the campaign found.
+    expect(midSentenceCapitals('My Ferritin changed from 41 to 18 ng/mL. What could explain this change, and is it clinically meaningful?'))
+      .toEqual(['Ferritin']);
+    expect(midSentenceCapitals('Could you help me understand how my Fasting Insulin and HbA1c results relate to each other?'))
+      .toEqual(['Fasting', 'Insulin']);
+  });
+
+  it('the intro uses the US spelling "judgment", on the rendered card too', () => {
+    expect(DISCUSSION_PREP_INTRO).toContain('They are preparation only, not a judgment about your results.');
+    expect(DISCUSSION_PREP_INTRO).not.toMatch(/judgement/i);
+    const html = renderToStaticMarkup(<DoctorQuestionsCard questions={[DISCUSSION_PREP.context()]} />);
+    expect(text(html)).toContain('not a judgment about your results.');
+    expect(text(html)).not.toMatch(/judgement/i);
   });
 });

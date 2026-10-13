@@ -155,6 +155,20 @@ test.describe('cycle phase recorded on the report', () => {
     await expect(page.getByText(/Luteal Phase Insufficiency|insufficien/i)).toHaveCount(0);
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
+
+  // PK-FIX-02 (c): the header names the recorded phase in that phase's own
+  // colours (the same tokens as the cycle dial), never the alert palette.
+  test('12. the report header phase pill wears the phase colours, not the alert palette', async ({ page }) => {
+    await openReport(page, lutealPhaseReport.report.id);
+    const pill = page.getByTestId('report-phase-pill');
+    await expect(pill).toHaveText(/^luteal phase$/i);
+    await expect(pill).toHaveClass(/(?:^|\s)bg-theme-phase-luteal-bg(?:\s|$)/);
+    await expect(pill).toHaveClass(/(?:^|\s)text-theme-phase-luteal(?:\s|$)/);
+    await expect(pill).not.toHaveClass(/flag-(?:ok|watch|low)/);
+    // Rendered colours, not only class names: phase-luteal-bg #E9EAF4 and phase-luteal #414379.
+    await expect(pill).toHaveCSS('background-color', 'rgb(233, 234, 244)');
+    await expect(pill).toHaveCSS('color', 'rgb(65, 67, 121)');
+  });
 });
 
 test.describe('pattern cards from withheld inputs', () => {

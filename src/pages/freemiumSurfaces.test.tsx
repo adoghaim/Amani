@@ -194,6 +194,38 @@ describe('flag off: the 1.0.5 copy is untouched', () => {
     expect(billing).not.toContain('Plan: Free');
     expect(text(<SubscriptionStatus />)).not.toContain('Plan:');
   });
+
+  // PK-FIX-02 (campaign 03-emails d): on the last trial day Billing read "Days Remaining: 1 days".
+  it('Billing counts the remaining trial days with the right plural', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      signedIn(); // trial_start_date 2026-09-20
+      subscription(undefined, { source: 'trial', entitled: true });
+      vi.setSystemTime(new Date('2026-09-26T12:00:00Z'));
+      const lastDay = text(<Billing />);
+      expect(lastDay).toMatch(/Days Remaining: 1 day(?!s)/);
+      expect(lastDay).toContain('You have 1 day remaining in your free trial.');
+      expect(lastDay).not.toMatch(/\b1 days\b/);
+      vi.setSystemTime(new Date('2026-09-25T12:00:00Z'));
+      const twoDays = text(<Billing />);
+      expect(twoDays).toContain('Days Remaining: 2 days');
+      expect(twoDays).toContain('You have 2 days remaining in your free trial.');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// PK-FIX-02 (campaign fix e): only four markers are cycle-dependent, so "Every
+// result read against your cycle" overstated; the bullet says what the cycle
+// context does, with the flag on and off.
+describe('signup bullets say what the cycle context does', () => {
+  it.each(['true', ''])('VITE_FREEMIUM_ACTIVE=%j', flag => {
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', flag);
+    const out = text(<SignupPage />);
+    expect(out).toContain('The cycle day of your test, when you add the day your last period started');
+    expect(out).not.toMatch(/every result read against your cycle/i);
+  });
 });
 
 

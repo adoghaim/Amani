@@ -8,7 +8,7 @@ import { FREEMIUM_COPY } from '../lib/freemium/copy'
 
 const INCLUDED = [
   'Seven days free, no card to start',
-  'Every result read against your cycle',
+  'The cycle day of your test, when you add the day your last period started',
   'Trends across all your past panels',
   'Questions to take to your appointment',
 ];

@@ -1017,7 +1017,7 @@ export function NewReport() {
                   <FlaskConical className="w-6 h-6 text-theme-flag-ok" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-theme-neutral-900">Quest diagnostics</p>
+                  <p className="font-semibold text-theme-neutral-900">Quest Diagnostics</p>
                   <p className="text-sm text-theme-neutral-500 mt-0.5">Import from MyQuest portal</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-theme-neutral-400 group-hover:text-theme-flag-ok transition-colors" />
@@ -1203,13 +1203,15 @@ export function NewReport() {
                 </div>
               )}
 
-              {/* Report date */}
+              {/* The draw date (stored as report_date). PK-FIX-02: it is the day the cycle
+                  day is counted to, so it is labelled as the blood draw, not the report. */}
               <div className="mb-5">
-                <label className="flex items-center gap-1.5 text-sm font-semibold text-theme-neutral-700 mb-1.5">
+                <label htmlFor="blood-draw-date" className="flex items-center gap-1.5 text-sm font-semibold text-theme-neutral-700 mb-1.5">
                   <Calendar className="w-3.5 h-3.5 text-theme-neutral-400" />
-                  Report date
+                  Date your blood was drawn
                 </label>
                 <input
+                  id="blood-draw-date"
                   type="date"
                   value={reportDate}
                   onChange={e => setReportDate(e.target.value)}
@@ -1306,7 +1308,7 @@ export function NewReport() {
                     <h3 className="text-base text-theme-neutral-900 mb-0.5">
                       Cycle context <span className="text-theme-neutral-400 font-normal text-sm">(optional)</span>
                     </h3>
-                    <p className="text-xs text-theme-neutral-500">This helps Amani interpret your results more accurately</p>
+                    <p className="text-xs text-theme-neutral-500">Amani counts the cycle day of your test from the day your last period started.</p>
                   </div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-sm font-medium text-theme-neutral-700">Last period start</label>
@@ -1332,7 +1334,7 @@ export function NewReport() {
                     className="w-full px-3 py-2.5 border border-theme-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-neutral-900"
                   />
                   {!lastPeriodDate && !fetchingPeriod && (
-                    <p className="mt-1 text-xs text-theme-neutral-400">Add your last period start date for more accurate insights</p>
+                    <p className="mt-1 text-xs text-theme-neutral-400">Add the day your last period started, if you know it.</p>
                   )}
                 </div>
 

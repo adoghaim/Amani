@@ -322,7 +322,8 @@ const prepQuestions = () => Array.from(app.querySelectorAll('[data-testid="prep-
 // Measured change 6 -> 400, HbA1c above its lab interval, then the context question.
 const PREP_FOR_TSH_400 = [
   'My TSH changed from 6 to 400 uIU/mL. What could explain this change, and is it clinically meaningful?',
-  'My Ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
+  // PK-FIX-02: the marker name reads in sentence case mid-sentence ("my ferritin", not "my Ferritin").
+  'My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
   "My HbA1c is 6 %, above my lab's reference interval of 4–5.6 %. What does this mean in the context of my overall labs?",
   'Is there anything about my routine or history that matters for reading these results?',
 ];
