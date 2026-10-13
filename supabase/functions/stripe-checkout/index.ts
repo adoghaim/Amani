@@ -2,6 +2,19 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
+import { fetchWithBackoff } from '../_shared/fetchWithBackoff.ts';
+import {
+  PROMOTION_LOOKUP_FAILED_MESSAGE,
+  PROMOTION_LOOKUP_TIMEOUT_MS,
+  PROMOTION_LOOKUP_TRIES,
+  PromotionLookupError,
+  createCheckoutSession,
+  lookupActivePromotionCode,
+  parsePromoCodeInput,
+  planPromotion,
+  promotionCodesEnabled,
+  type CheckoutSessionParams,
+} from '../_shared/checkout-promotion.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
@@ -44,7 +57,7 @@ Deno.serve(async (req) => {
       return corsResponse({ error: 'Method not allowed' }, 405);
     }
 
-    const { price_id, success_url, cancel_url, mode } = await req.json();
+    const { price_id, success_url, cancel_url, mode, promo_code } = await req.json();
 
     const error = validateParameters(
       { price_id, success_url, cancel_url, mode },
@@ -60,6 +73,12 @@ Deno.serve(async (req) => {
       return corsResponse({ error }, 400);
     }
 
+    // Optional saved creator/partner code (D29). Validated at the boundary (D5.3).
+    const promoInput = parsePromoCodeInput(promo_code);
+    if (!promoInput.ok) {
+      return corsResponse({ error: promoInput.error }, 400);
+    }
+
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const {
@@ -73,6 +92,37 @@ Deno.serve(async (req) => {
 
     if (!user) {
       return corsResponse({ error: 'User not found' }, 404);
+    }
+
+    /*
+      Decide the promotion field before any customer side effects, so a failed
+      or timed-out lookup (10 s per attempt, R5) answers non-2xx and she can
+      simply retry; a matching code is never dropped into a full-price session.
+    */
+    let promotionPlan;
+    try {
+      promotionPlan = await planPromotion({
+        enabled: promotionCodesEnabled(Deno.env.get('STRIPE_ALLOW_PROMOTION_CODES')),
+        code: promoInput.code,
+        findActivePromotionCode: (code) =>
+          lookupActivePromotionCode(code, {
+            secretKey: stripeSecret,
+            fetch: (url, init) =>
+              fetchWithBackoff(url, init, {
+                attemptTimeoutMs: PROMOTION_LOOKUP_TIMEOUT_MS,
+                tries: PROMOTION_LOOKUP_TRIES,
+              }),
+          }),
+      });
+    } catch (lookupError: unknown) {
+      if (lookupError instanceof PromotionLookupError) {
+        console.error(`Promotion code lookup failed (${lookupError.status})`);
+        return corsResponse(
+          { error: 'promo_lookup_failed', message: PROMOTION_LOOKUP_FAILED_MESSAGE },
+          lookupError.status,
+        );
+      }
+      throw lookupError;
     }
 
     const { data: customer, error: getCustomerError } = await supabase
@@ -178,24 +228,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // create Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: price_id,
-          quantity: 1,
-        },
-      ],
-      mode,
-      success_url,
-      cancel_url,
+    // create Checkout Session (at most one promotion field; see _shared/checkout-promotion.ts)
+    const { session, outcome } = await createCheckoutSession({
+      base: {
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: price_id,
+            quantity: 1,
+          },
+        ],
+        mode,
+        success_url,
+        cancel_url,
+      },
+      plan: promotionPlan,
+      createSession: async (params: CheckoutSessionParams) => {
+        const created = await stripe.checkout.sessions.create(params);
+        return { id: created.id, url: created.url };
+      },
     });
 
-    console.log(`Created checkout session ${session.id} for customer ${customerId}`);
+    console.log(`Created checkout session ${session.id} for customer ${customerId} (promo: ${outcome})`);
 
-    return corsResponse({ sessionId: session.id, url: session.url });
+    return corsResponse({ sessionId: session.id, url: session.url, promo: outcome });
   } catch (error: unknown) {
     const message = errorMessage(error, 'Checkout failed');
     console.error(`Checkout error: ${message}`);
