@@ -38,9 +38,16 @@ export function Button({
       'border border-theme-border text-theme-text bg-theme-surface hover:bg-theme-surface-2 focus-visible:ring-theme-primary',
   };
 
+  /*
+    Every control gets a 44px tap area (D23, DESIGN.md `touch-target`).
+    md is 44px tall. sm keeps its smaller look, about 32px, and an invisible
+    ::before at least 44px each way, centred on the button, takes the taps the
+    size gives up. lg is already over 44px.
+  */
   const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
+    sm: 'px-3 py-1.5 text-sm relative before:absolute before:left-1/2 before:top-1/2 ' +
+      'before:h-[max(100%,44px)] before:w-[max(100%,44px)] before:-translate-x-1/2 before:-translate-y-1/2',
+    md: 'px-4 py-2 text-base min-h-[44px]',
     lg: 'px-6 py-3 text-lg',
   };
 
