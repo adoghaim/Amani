@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
 import { buildBasicProjection } from './interpretation-visibility';
 import {
-  findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation,
+  decideDeepGeneration, findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation,
 } from './response-shaping';
 import { projectBasic, servedBasic, visibleClaimProjection, withClaimAuthority } from './claim-authority';
 import { buildTrendEvidence } from './trend-evidence';
@@ -172,7 +172,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
         : { allowed: true, plan: 'premium', reason: 'active_subscription', source: 'active_subscription' },
     freemiumActive: () => flagOn, generationVisibilityMode, entitlementUnavailable, resolveTier,
     // The real ledger flow: never stubbed out of the version path.
-    shouldGenerateDeepInterpretation, decideIntroductoryAccess, commitGeneratedInterpretation,
+    decideDeepGeneration, shouldGenerateDeepInterpretation, decideIntroductoryAccess, commitGeneratedInterpretation,
     deriveBloodDrawIdentity, hashDrawKey, recordGenerationCosts,
     isRateLimitExceeded: () => false, errorMessage: String, servedBasic, visibleClaimProjection,
     ...versionWrite, ...(sink.p as object), ...(sink.v as object),

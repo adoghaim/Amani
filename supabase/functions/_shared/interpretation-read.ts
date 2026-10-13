@@ -1,6 +1,8 @@
 import type { EntitlementResult } from "./entitlement.ts";
 import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
-import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
+import { decideDeepGeneration, findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
+import { introductoryAccessDecision } from "./introductory-access.ts";
+import { regenerationAvailability, type RegenerationAvailability } from "./interpretation-version-write.ts";
 import { sanitizeBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
 import { projectBasic, servedBasic, visibleClaimProjection, quarantineCustomerRead } from "./claim-authority.ts";
 import type { LockedCounts } from "./preview-selector.ts";
@@ -22,6 +24,9 @@ export interface InterpretationReadActions {
     selected_generated_at?: string | null;
   } | null>;
   countClaims(): Promise<number>;
+  /** FREEMIUM_POST_LIMIT_GENERATION exactly as generate-interpretation reads it
+   * (absent: its default). Decides `regeneration` with that function's rule. */
+  postLimitGeneration?: string;
 }
 
 export interface SelectedVersion { id: string; generated_at: string }
@@ -52,6 +57,10 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     stored_depth: string | null;
     historical_interpretation_id: string | null;
     version: SelectedVersion | null;
+    /** PK-PL-A: whether regenerating this stored report can append a version for
+     * this viewer — generate-interpretation's own depth decision. Present only on
+     * a flag-on answer for a stored report (no stored report is first generation). */
+    regeneration?: RegenerationAvailability;
     code?: string; retryable?: boolean;
   };
 }> {
@@ -91,6 +100,15 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
         remaining: Math.max(0, FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS - used) } };
     if (!row) return { status: 200, body: { ...empty, ...common, access: "generation_needed" } };
     const full = premium || row.has_claim;
+    // The decision generate-interpretation makes for this viewer and report: the
+    // same ledger rule over the readers' claim coverage and count, then the same
+    // depth rule. A regeneration persists only a deep body, so no deep
+    // generation means it cannot succeed (503 regeneration_failed, retryable:false).
+    const regeneration = regenerationAvailability(decideDeepGeneration({
+      freemiumActive: true, tier: premium ? "plus" : "free",
+      decision: premium ? null : introductoryAccessDecision({ tier: "free", existingClaim: row.has_claim, claimsUsed: used }),
+      postLimitGeneration: actions.postLimitGeneration,
+    }));
     const provenance = { source: row.interpretation_source ?? null };
     const customer = quarantineCustomerRead(row.json_output, full, provenance.source);
     if (full && row.stored_depth !== "deep") {
@@ -99,7 +117,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
       // A deterministic body IS the medical floor: serve it whole, still asking
       // for the deep generation this reader is entitled to.
       const interpretation = isDeterministicSource(provenance.source) ? customer : basic;
-      return { status: 200, body: { ...common, access: "generation_needed", interpretation,
+      return { status: 200, body: { ...common, regeneration, access: "generation_needed", interpretation,
         preview: basic.preview, locked: basic.locked as LockedCounts } };
     }
     const violations = findFloorViolations(customer);
@@ -109,7 +127,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     // row's were chosen from unvalidated model content and are withheld.
     const projection = full ? projectBasic(customer, provenance) : customer;
     const visible = visibleClaimProjection(projection);
-    return { status: 200, body: { ...common, access: full ? "full" : "basic",
+    return { status: 200, body: { ...common, regeneration, access: full ? "full" : "basic",
       interpretation: full ? customer : { ...sanitizeBasicProjection(customer, provenance.source), ...visible },
       preview: visible.preview, locked: visible.locked } };
   } catch {

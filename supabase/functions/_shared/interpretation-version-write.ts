@@ -74,3 +74,17 @@ export function regenerationProvenance(): Record<string, unknown> {
 export function regenerationFailedResponse(retryable: boolean): { status: number; body: Record<string, unknown> } {
   return { status: 503, body: { error: REGENERATION_FAILED, retryable } };
 }
+
+/**
+ * Whether a regeneration of a report that already holds an interpretation can
+ * succeed for this viewer, as get-interpretation reports it (PK-PL-A). Only a
+ * deep body is ever appended (`isVersionable`), so it can iff the request would
+ * generate deeply: `deepGeneration` is `decideDeepGeneration`'s answer, the same
+ * call generate-interpretation makes. `unavailable` is the request that would
+ * end in `regenerationFailedResponse(false)` with nothing written.
+ */
+export type RegenerationAvailability = "available" | "unavailable";
+
+export function regenerationAvailability(deepGeneration: boolean): RegenerationAvailability {
+  return deepGeneration ? "available" : "unavailable";
+}

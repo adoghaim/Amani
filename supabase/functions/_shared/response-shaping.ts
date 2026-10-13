@@ -33,6 +33,32 @@ export function shouldGenerateDeepInterpretation(input: {
   );
 }
 
+/**
+ * The one generation-depth decision, from the entitlement facts: Plus (and the
+ * flag-off legacy path, which resolves every entitled caller to Plus) is
+ * granted; an activated Free request is granted by the introductory ledger's
+ * decision, then the post-limit rule above. generate-interpretation decides
+ * every request with it. get-interpretation calls it too, to say whether a
+ * regeneration of a stored report can succeed (only a deep body is ever
+ * appended as a version), so the client offers Regenerate from the server's
+ * answer rather than its own guess (PK-PL-A).
+ */
+export function decideDeepGeneration(input: {
+  freemiumActive: boolean;
+  tier: Tier;
+  /** `decideIntroductoryAccess`'s decision; null when the ledger was not consulted. */
+  decision: DeepAccessDecision | null;
+  postLimitGeneration?: string;
+}): boolean {
+  return shouldGenerateDeepInterpretation({
+    freemiumActive: input.freemiumActive,
+    tier: input.tier,
+    deepAccessGranted: input.decision ? input.decision.granted : input.tier === "plus",
+    decision: input.decision,
+    postLimitGeneration: input.postLimitGeneration,
+  });
+}
+
 /** Whether this row holds the model's work or the deterministic rules'. */
 export type InterpretationDepth = "deep" | "standard";
 
