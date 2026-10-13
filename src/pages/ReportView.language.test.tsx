@@ -628,10 +628,14 @@ describe('PK-FIX-06: the cycle day renders without a phase, in neutral language'
     expect(forbiddenHits(pageText())).toEqual([]);
   }, 30_000);
 
-  it('PRESERVE: a day-map phase renders as before, with no note, and estradiol is scored', async () => {
+  it('PRESERVE: a day-map phase renders, with no note, and estradiol is scored', async () => {
     seedCycle({ estimated_cycle_phase: 'luteal', estimated_cycle_day: 21, average_cycle_length: null });
     await renderAndOpenAll();
-    expect(Array.from(cycleCard()!.querySelectorAll('p')).map(p => p.textContent)).toEqual(['Phase', 'luteal', 'Cycle day', '21']);
+    // PK-FIX-06-EXT (D10) changes only the order and the label: the cycle day
+    // first, then the same phase, labelled as an estimate. Before D10:
+    // ['Phase', 'luteal', 'Cycle day', '21'].
+    expect(Array.from(cycleCard()!.querySelectorAll('p')).map(p => p.textContent))
+      .toEqual(['Cycle day', '21', 'Phase', 'luteal', 'estimate for a 28-day cycle']);
     expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
     expect(estradiolCard()).not.toBeNull();
     expect(estradiolCard()?.textContent).not.toContain(WITHHELD);
@@ -643,6 +647,43 @@ describe('PK-FIX-06: the cycle day renders without a phase, in neutral language'
     expect(cycleCard()).toBeNull();
     expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
     expect(estradiolCard()?.textContent).toContain(WITHHELD);
+  }, 30_000);
+
+  /*
+    PK-FIX-06-EXT (D10 and DESIGN.md): the header leads with the cycle day and
+    labels any phase as an estimate, and the cycle rule sits under the header.
+  */
+  it('D10: the header shows the cycle day first, the phase as an estimate, and the cycle rule under it', async () => {
+    seedCycle({ estimated_cycle_phase: 'luteal', estimated_cycle_day: 21, average_cycle_length: null });
+    await renderAndOpenAll();
+    expect(app.querySelector('[data-report-cycle-line]')?.textContent)
+      .toBe('Cycle day 21 · luteal phase, estimate for a 28-day cycle'); // capitalised by CSS
+    const rule = app.querySelector('section[data-cycle-rule]');
+    expect(rule?.getAttribute('data-cycle-rule')).toBe('placed');
+    expect(rule?.querySelector('line[data-tick-day]')?.getAttribute('data-tick-day')).toBe('21');
+    expect(rule?.querySelectorAll('[data-band]')).toHaveLength(4);
+    // The rule follows the header and comes before the cycle context card.
+    const h1 = app.querySelector('h1')!;
+    expect(h1.compareDocumentPosition(rule!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rule!.compareDocumentPosition(cycleCard()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }, 30_000);
+
+  it('D10: day 36 in the header has no phase; the rule carries the tick and the neutral note', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: 36, average_cycle_length: null });
+    await renderAndOpenAll();
+    expect(app.querySelector('[data-report-cycle-line]')?.textContent).toBe('Cycle day 36');
+    expect(app.querySelector('section[data-cycle-rule] line[data-tick-day]')?.getAttribute('data-tick-day')).toBe('36');
+    expect(app.querySelector('[data-cycle-rule-note]')?.textContent).toBe('Phase not estimated after cycle day 35.');
+  }, 30_000);
+
+  it('D10: no cycle day on the report: an empty rule with one line saying why, and no cycle line in the header', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: null, average_cycle_length: null, last_period_start_date: null });
+    await renderAndOpenAll();
+    expect(app.querySelector('[data-report-cycle-line]')).toBeNull();
+    expect(app.querySelector('section[data-cycle-rule]')?.getAttribute('data-cycle-rule')).toBe('empty');
+    expect(app.querySelector('section[data-cycle-rule] line[data-tick-day]')).toBeNull();
+    expect(app.querySelector('[data-cycle-rule-why]')).not.toBeNull();
+    expect(forbiddenHits(pageText())).toEqual([]);
   }, 30_000);
 
   it('missing last-period date (no cycle day): no cycle card', async () => {

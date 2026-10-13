@@ -30,43 +30,29 @@ import { averageCycleLengthFromLogs, MAX_INFERRED_CYCLE_LENGTH, MIN_INFERRED_CYC
   An unknown length is stored as null, never as 28.
 */
 
-/** The cycle length the fixed day map was written for. */
-export const DAY_MAP_CYCLE_LENGTH = 28;
-/** The fixed day map labels no cycle day after this one. */
-export const DAY_MAP_LAST_DAY = 35;
+import {
+  cycleDayOn, DAY_MAP_CYCLE_LENGTH, DAY_MAP_LAST_DAY, phaseForCycleDay, type EstimatedPhase,
+} from './cycleDayRule';
 
-export type EstimatedPhase = 'menstrual' | 'follicular' | 'ovulatory' | 'luteal';
-
-/**
- * NewReport's fixed day map, transcribed unchanged from calculateCycleInfo
- * (main @ 948dc95). It assumes a 28-day cycle. The catalog records no clinical
- * source for it [Pending clinical reviewer].
- */
-function dayMapPhase(cycleDay: number): EstimatedPhase | 'unknown' {
-  if (cycleDay >= 1 && cycleDay <= 5) return 'menstrual';
-  if (cycleDay >= 6 && cycleDay <= 12) return 'follicular';
-  if (cycleDay >= 13 && cycleDay <= 16) return 'ovulatory';
-  if (cycleDay >= 17 && cycleDay <= DAY_MAP_LAST_DAY) return 'luteal';
-  return 'unknown';
-}
+/*
+  PK-FIX-06-EXT (D10): the day map, the day arithmetic and the phase decision
+  moved, unchanged, to cycleDayRule.ts, so the dashboard predictor reads the
+  same rule. They are re-exported here for existing callers.
+*/
+export { DAY_MAP_CYCLE_LENGTH, DAY_MAP_LAST_DAY, PHASE_ESTIMATE_LABEL } from './cycleDayRule';
+export type { EstimatedPhase } from './cycleDayRule';
 
 /**
- * The cycle day on the draw date, by NewReport's arithmetic, unchanged
- * (main @ 948dc95): whole days from the last period start to the draw, plus one.
+ * The cycle day on the draw date: cycleDayOn in cycleDayRule.ts, NewReport's
+ * arithmetic unchanged (main @ 948dc95).
  *
- * - Both inputs are YYYY-MM-DD, which Date parses as UTC midnight, so a
- *   daylight-saving change cannot move the result.
  * - It returns null when either date is missing. It also returns null for a
  *   date Date cannot read; that value used to be NaN, which was stored as null.
  * - A last period start after the draw gives zero or less. That is stored as
  *   before and never shown, because the card shows only a day of 1 or more.
  */
 export function cycleDayAtDraw(drawDate: string, lastPeriodStart: string): number | null {
-  if (!drawDate || !lastPeriodStart) return null;
-  const daysDiff = Math.floor(
-    (new Date(drawDate).getTime() - new Date(lastPeriodStart).getTime()) / (1000 * 60 * 60 * 24),
-  );
-  return Number.isFinite(daysDiff) ? daysDiff + 1 : null;
+  return cycleDayOn(drawDate, lastPeriodStart);
 }
 
 /**
@@ -143,10 +129,8 @@ export function cycleContextAtDraw(input: {
 }): DrawCycleContext {
   const cycleLengthDays = parseCycleLengthDays(input.cycleLengthDays);
   const cycleDay = cycleDayAtDraw(input.drawDate, input.lastPeriodStart);
-  // (b) No approved method covers a known length other than 28 days.
-  const lengthWithoutMethod = cycleLengthDays !== null && cycleLengthDays !== DAY_MAP_CYCLE_LENGTH;
-  const phase = cycleDay === null || lengthWithoutMethod ? 'unknown' : dayMapPhase(cycleDay);
-  return { cycleDay, phase, cycleLengthDays };
+  // (b) is inside phaseForCycleDay: no approved method covers a known length other than 28 days.
+  return { cycleDay, phase: phaseForCycleDay(cycleDay, cycleLengthDays), cycleLengthDays };
 }
 
 /** Why a cycle day is shown without a phase estimate. */

@@ -55,6 +55,8 @@ import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
+import { PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
+import { CycleRule } from '../components/CycleRule';
 import {
   fetchInterpretationAccess,
   type InterpretationAccessResult,
@@ -1299,6 +1301,9 @@ export function ReportView() {
   */
   const canUpgradeInterpretation = canRegenerate && interpretationTier === 'free';
   const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
+  const cycleDayShown = typeof report.estimated_cycle_day === 'number'
+    && Number.isSafeInteger(report.estimated_cycle_day) && report.estimated_cycle_day >= 1
+    ? report.estimated_cycle_day : null;
   const hasError = report.status === 'error';
   // A rate-limited report sits at 'processing' because the server refused to
   // start rather than failed — but nothing is coming, so stop hiding her lab
@@ -1351,12 +1356,25 @@ export function ReportView() {
                 </span>
               )}
             </p>
+            {/*
+              PK-FIX-06-EXT (D10): the cycle day comes first, and any phase is
+              labelled as the estimate it is. It replaces the phase pill, which
+              wore a status tint (DESIGN.md: phase tints are never status).
+            */}
+            {(cycleDayShown !== null || cyclePhase) && (
+              <p className="text-sm text-theme-text mt-1" data-report-cycle-line>
+                {cycleDayShown !== null && (
+                  <>Cycle day <span className="font-mono tabular-nums">{cycleDayShown}</span></>
+                )}
+                {cycleDayShown !== null && cyclePhase && ' · '}
+                {cyclePhase && (
+                  <span className="text-theme-muted-text-2">
+                    <span className="capitalize">{cyclePhase.replace(/_/g, ' ')}</span> phase, {PHASE_ESTIMATE_LABEL}
+                  </span>
+                )}
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              {cyclePhase && (
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low capitalize">
-                  {cyclePhase.replace(/_/g, ' ')} phase
-                </span>
-              )}
               <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
@@ -1402,6 +1420,9 @@ export function ReportView() {
             </Button>
           </div>
         </div>
+
+        {/* ── Cycle rule (DESIGN.md, D10): the draw day on her cycle ── */}
+        <CycleRule report={report} />
 
         {error && (
           <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-xl mb-6 text-sm">
@@ -1793,19 +1814,21 @@ export function ReportView() {
                     </span>
                   )}
                 </div>
+                {/* D10: the cycle day first; a phase is labelled as an estimate. */}
                 <div className="flex gap-4 mb-3">
+                  {card.day && (
+                    <div>
+                      <p className="text-xs text-theme-muted-text-3">Cycle day</p>
+                      <p className="text-sm font-semibold text-theme-text mt-0.5">{card.day}</p>
+                    </div>
+                  )}
                   {card.phase && (
                     <div>
                       <p className="text-xs text-theme-muted-text-3">Phase</p>
                       <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
                         {card.phase.replace(/_/g, ' ')}
                       </p>
-                    </div>
-                  )}
-                  {card.day && (
-                    <div>
-                      <p className="text-xs text-theme-muted-text-3">Cycle day</p>
-                      <p className="text-sm font-semibold text-theme-text mt-0.5">{card.day}</p>
+                      <p className="text-xs text-theme-muted-text-2 mt-0.5" data-cycle-phase-estimate>{PHASE_ESTIMATE_LABEL}</p>
                     </div>
                   )}
                 </div>

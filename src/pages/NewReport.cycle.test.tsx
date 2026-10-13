@@ -68,12 +68,11 @@ vi.mock('../utils/subscription', () => ({ checkSubscriptionLive: vi.fn(), handle
 vi.mock('../lib/freemium/gates', () => ({ uploadRequiresSubscription: () => false }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 import { NewReport } from './NewReport';
+import {
+  DAYS, daysBefore, DRAW, EXPECTED, EXPECTED_STORED_LENGTH, expectedNote, LENGTHS, PHASE_SYMBOL, trackerLogs,
+  type TypicalLength,
+} from '../lib/cycleR10Table';
 
-const DRAW = '2026-04-30';
-const DAY_MS = 86_400_000;
-/** The calendar date `days` before `iso` (both YYYY-MM-DD). */
-const daysBefore = (iso: string, days: number) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) - days * DAY_MS).toISOString().slice(0, 10);
 
 let root: Root;
 let app: HTMLDivElement;
@@ -198,9 +197,12 @@ async function save() {
               neutral copy and no phase estimate on every day, because no
               approved method covers that length.
 */
-const LENGTHS = ['unknown', 28, 24, 35] as const;
-type TypicalLength = typeof LENGTHS[number];
-const DAYS = 40;
+/*
+  PK-FIX-06-EXT (D10): LENGTHS, DAYS, EXPECTED, EXPECTED_STORED_LENGTH and the
+  tracker logs moved, unchanged, to src/lib/cycleR10Table.ts, so the same
+  table also drives the dashboard predictor (cyclePredictor.r10.test.ts).
+  TODAY stays here: it is this page's captured output.
+*/
 
 const TODAY: Record<TypicalLength, string> = {
   //   cycle day 1   5   10   15   20   25   30   35   40
@@ -212,28 +214,6 @@ const TODAY: Record<TypicalLength, string> = {
 };
 const TODAY_STORED_LENGTH: Record<TypicalLength, number | null> = { unknown: 28, 28: 28, 24: 28, 35: 28 };
 
-const EXPECTED: Record<TypicalLength, string> = {
-  //   cycle day 1   5   10   15   20   25   30   35   40
-  //             |   |    |    |    |    |    |    |    |
-  unknown:      'MMMMMFFFFFFFOOOOLLLLLLLLLLLLLLLLLLL-----',
-  28:           'MMMMMFFFFFFFOOOOLLLLLLLLLLLLLLLLLLL-----',
-  24:           '----------------------------------------',
-  35:           '----------------------------------------',
-};
-// No silent 28: an unknown length is stored as null, a known one as itself.
-const EXPECTED_STORED_LENGTH: Record<TypicalLength, number | null> = { unknown: null, 28: 28, 24: 24, 35: 35 };
-
-/** The neutral note on a '-' cell: (b) for a known length other than 28, else (a). */
-const expectedNote = (length: TypicalLength) => (length === 'unknown' || length === 28
-  ? 'Phase not estimated after cycle day 35.'
-  : `Phase not estimated for a ${length}-day cycle.`);
-
-const PHASE_SYMBOL: Record<string, string> = { menstrual: 'M', follicular: 'F', ovulatory: 'O', luteal: 'L' };
-
-function trackerLogs(length: TypicalLength, lastPeriodStart: string) {
-  if (length === 'unknown') return [{ start_date: lastPeriodStart }];
-  return [2, 1, 0].map(cycles => ({ start_date: daysBefore(lastPeriodStart, cycles * length) }));
-}
 
 /** One cell through the real page: what she sees for this day and typical length. */
 async function observeCell(length: TypicalLength, day: number) {
