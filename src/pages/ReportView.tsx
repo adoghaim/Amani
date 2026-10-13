@@ -2,6 +2,7 @@ import { ArrowRightLeft } from 'lucide-react';
 import { ClinicalObservation, ModelProse, ModelProseText } from '../components/ClinicalObservation';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
@@ -360,6 +361,10 @@ function normalizeInterpretation(raw: unknown): AIInterpretation {
 
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
+  // PK-EXP5 funnel step; off unless first_party_events is on, never blocks the report.
+  useEffect(() => {
+    if (reportId) void firstPartyEvents.track('report_viewed');
+  }, [reportId]);
   /*
     `entitled` is the union of Stripe, StoreKit, Play Billing and the trial —
     the same decision the server's subscription-guard makes. The regeneration

@@ -11,5 +11,7 @@ CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
 WHERE n.nspname = 'public'
   AND c.relname IN ('interpretation_visibility_config', 'interpretations',
                     'interpretations_private', 'introductory_deep_access_claims',
-                    'users', 'rate_limits')
+                    'users', 'rate_limits',
+                    -- PK-EXP5: expect granted = false for every row of these four.
+                    'app_events', 'user_attribution', 'anon_event_counters', 'funnel_daily')
 ORDER BY c.relname, r.role_name, p.privilege;

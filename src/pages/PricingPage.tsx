@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { PricingCard } from '../components/pricing/PricingCard'
@@ -9,6 +10,7 @@ import { FREEMIUM_COPY } from '../lib/freemium/copy'
 import { useAuth } from '../contexts/AuthContext'
 import { useSubscription } from '../hooks/useSubscription'
 import { ComplimentaryCounter } from '../components/freemium/ComplimentaryCounter'
+import { firstPartyEvents } from '../lib/firstPartyEventsClient'
 
 /**
  * Flag on, the "seven days free" line becomes account-aware: signed out sees
@@ -36,6 +38,12 @@ function FreemiumPricingIntro() {
 
 export function PricingPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const signedIn = Boolean(user)
+  // PK-EXP5 funnel step for a signed-in visitor; off unless first_party_events is on, never blocks.
+  useEffect(() => {
+    if (signedIn) void firstPartyEvents.track('paywall_viewed')
+  }, [signedIn])
   const yearly = stripeProducts.find(p => p.interval === 'year')
   const monthly = stripeProducts.find(p => p.interval === 'month')
   const ordered = [yearly, monthly].filter(Boolean) as typeof stripeProducts

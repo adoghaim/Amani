@@ -9,6 +9,7 @@ import {
   type AccountDeletionActions,
   type StoreSubscriptionRecord,
 } from "../_shared/account-deletion.ts";
+import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,6 +195,13 @@ Deno.serve(async (req: Request) => {
 
     await deleteUserAccount(actions, user.id, {
       acknowledgedStoreSubscriptions: acknowledged,
+    });
+
+    // PK-EXP5: counted with no user id, after the account is gone, so the
+    // ledger keeps nothing that points at the erased account. Never throws,
+    // gives up after 3 seconds; the deletion already succeeded either way.
+    await logServerEvent(createAppEventSink(row => supabase.from("app_events").insert(row)), {
+      event: "account_deleted", userId: null,
     });
 
     return new Response(

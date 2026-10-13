@@ -87,6 +87,21 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
       "behind is a live pass for an account that no longer exists. It also cascades on auth.users.",
   },
   {
+    table: "app_events",
+    ownerColumn: "user_id",
+    mechanism: "ordered_delete",
+    reason: "PK-EXP5 first-party usage events. Also cascades on auth.users, but swept here so the events are " +
+      "gone even if the final auth deletion fails. Pre-signup rows carry an anon_id and no user_id; nothing " +
+      "links them to an account.",
+  },
+  {
+    table: "user_attribution",
+    ownerColumn: "user_id",
+    mechanism: "ordered_delete",
+    reason: "PK-EXP5 first-touch signup attribution, one row per user. Also cascades on auth.users, but swept " +
+      "here so it is gone even if the final auth deletion fails.",
+  },
+  {
     table: "users",
     ownerColumn: "id",
     mechanism: "ordered_delete",

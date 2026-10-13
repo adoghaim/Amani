@@ -6,7 +6,7 @@ export default defineConfig({
     ? '**/artifact-probe.spec.ts'
     : ['**/smoke.spec.ts', '**/network-guard.spec.ts', '**/reports/context-suppression.spec.ts',
       '**/reports/clinical-language-policy.spec.ts', '**/interpretation/version-regeneration.spec.ts',
-      '**/reports/report-header.spec.ts', '**/runtime-config.spec.ts'],
+      '**/reports/report-header.spec.ts', '**/runtime-config.spec.ts', '**/signup/first-party-events.spec.ts'],
   // The redirect race is an explicit diagnostic opt-in, excluded from the CI gate.
   ...(process.env.E2E_QUARANTINE === '1'
     ? { grep: /@quarantine/ }

@@ -4,6 +4,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
 import { StripeCheckoutOrderSchema } from '../_shared/schemas/stripe.ts';
 import { type EventClaimStore, withStripeEventClaim } from '../_shared/stripe-idempotency.ts';
+import { createAppEventSink, logServerEvent, stripeFunnelEvent } from '../_shared/app-events.ts';
 
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
@@ -19,6 +20,7 @@ const stripe = new Stripe(stripeSecret, {
 });
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+const appEventSink = createAppEventSink(row => supabase.from('app_events').insert(row));
 
 Deno.serve(async (req) => {
   try {
@@ -191,6 +193,27 @@ async function processEvent(event: Stripe.Event) {
     if (isSubscription) {
       console.info(`Starting subscription sync for customer: ${customerId}`);
       await syncCustomerFromStripe(customerId);
+
+      // PK-EXP5 funnel step (trial_started / subscription_activated), after the
+      // sync succeeded. logServerEvent never throws and gives up after 3
+      // seconds, so a logging failure never fails the webhook.
+      const funnelEvent = stripeFunnelEvent(event);
+      if (funnelEvent) {
+        await logServerEvent(appEventSink, {
+          event: funnelEvent,
+          props: { platform: 'web' },
+          resolveUserId: async () => {
+            const { data, error } = await supabase
+              .from('stripe_customers')
+              .select('user_id')
+              .eq('customer_id', customerId)
+              .is('deleted_at', null)
+              .maybeSingle();
+            if (error) throw new Error(`stripe_customers read failed: ${error.message}`);
+            return (data?.user_id as string | undefined) ?? null;
+          },
+        });
+      }
     } else if (mode === 'payment' && payment_status === 'paid') {
       try {
         // Defense-in-depth: signature was already verified by the SDK, but

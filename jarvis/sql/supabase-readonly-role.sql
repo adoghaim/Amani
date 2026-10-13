@@ -25,6 +25,14 @@ select
   (select count(*) from public.interpretations i where i.created_at::date = d.day)  as interpretations_created
 from days d;
 
+-- PK-EXP5 first-party funnel (read by collectors/funnel.mjs). Run this part only after the owner has
+-- applied supabase/migrations/20261013010000_first_party_events.sql. public.funnel_daily is
+-- service_role only; this view runs as its owner, so jarvis_readonly reads the counts and nothing else.
+-- utm_source is attacker-controlled text (restricted to [A-Za-z0-9._-]{1,64} by the database);
+-- Jarvis treats it as data (jarvis/lib/untrusted.mjs).
+create or replace view jarvis_metrics.funnel_daily as
+select day, event, utm_source, events, actors from public.funnel_daily;
+
 -- Login role. Replace the password; store the connection string only in jarvis/.env.
 -- Use the Supabase pooler or direct connection string with this user (Settings > Database).
 create role jarvis_readonly with login password 'CHANGE_ME_LONG_RANDOM' nosuperuser nocreatedb nocreaterole noinherit;
@@ -32,7 +40,9 @@ alter role jarvis_readonly set default_transaction_read_only = on;
 alter role jarvis_readonly set statement_timeout = '15s';
 grant usage on schema jarvis_metrics to jarvis_readonly;
 grant select on jarvis_metrics.daily_counts to jarvis_readonly;
+grant select on jarvis_metrics.funnel_daily to jarvis_readonly;
 
 -- Rollback:
+--   drop view if exists jarvis_metrics.funnel_daily;
 --   drop view if exists jarvis_metrics.daily_counts; drop schema if exists jarvis_metrics;
 --   drop role if exists jarvis_readonly;

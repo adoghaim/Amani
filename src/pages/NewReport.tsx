@@ -23,6 +23,7 @@ import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { detectLabSource } from '../utils/detectLabSource';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
+import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 import {
   Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle,
   ExternalLink, FlaskConical, ChevronRight, ChevronDown, ChevronUp,
@@ -319,6 +320,8 @@ export function NewReport() {
 
   const handleProceedFromStep1 = async () => {
     if (!file) return;
+    // PK-EXP5 funnel step: not awaited; off unless first_party_events is on.
+    void firstPartyEvents.track('upload_started');
 
     const runId = extractionRunRef.current;
     setStep(2);
@@ -750,6 +753,7 @@ export function NewReport() {
 
       setStep(4);
       setSubmitStep('interpreting');
+      void firstPartyEvents.track('report_parsed');
       supabase.functions.invoke('generate-interpretation', {
         body: { reportId: createdReportId },
         headers: {
