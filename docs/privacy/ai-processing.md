@@ -1,0 +1,112 @@
+# AI processing: what Amani sends to OpenAI
+
+> **DRAFT for lawyer review. This is not legal advice.** PK-PRIV-01 (EXP-6).
+> Function behaviour is taken from the code on this branch (main at 948dc95
+> plus this packet's redaction). Statements about OpenAI's terms are the
+> drafter's understanding at the time of writing and are marked
+> **[lawyer to confirm]** against the current OpenAI API data-usage policy and
+> any signed agreement.
+
+## 1. Calls that leave Amani
+
+All four calls go from a Supabase edge function to
+`https://api.openai.com/v1/chat/completions` with the server-side secret
+`OPENAI_API_KEY`. The client never calls OpenAI directly. The user's email,
+password, auth token and user id are not sent in any of them.
+
+| Function | When it runs | Model in code | What is sent | Redacted by this packet? |
+|---|---|---|---|---|
+| `extract-biomarkers` | The on-device parser read a PDF but its result looks unreliable, so the model checks the work | `gpt-4o-mini` | The **full text extracted from the report** plus extraction instructions | **Yes.** `redactLabText(text)` runs before the prompt is built |
+| `parse-lab-report-ocr` | A photo is uploaded, or a PDF the parser cannot read is rendered to images | `gpt-4o` (vision) | The **page images** (at most 10 per call, `MAX_IMAGES`) plus instructions | **No.** Pixels cannot be redacted server-side without sending them to an OCR engine first. See section 4 |
+| `generate-interpretation` | The user asks for an interpretation of a report | `gpt-4o-mini` | Biomarker names, values, units, reference ranges and statuses; report date; cycle day/phase notes; report context (symptoms, pregnant, postpartum, birth control); the optional profile block (preferred first name, age range, sex at birth, reproductive status, health goals, things to keep in mind); deterministic primary context and trend evidence against a prior report | **Yes**, the whole user message passes through `redactLabText` on every attempt (first and stricter retry). The "Preferred name" line is deliberately kept (see [Pending] 1) |
+| `lab-insights` | The user compares two reports | `gpt-5-mini` | Report dates, the most notable biomarker changes (name, previous and current value, unit, delta), cycle phase/day for both reports, and the title, category and dates of tracked interventions active in the window | **Yes**, the whole user message passes through `redactLabText` |
+
+What the redaction removes and keeps is documented in
+`supabase/functions/_shared/lab-text-redaction.ts` and proven by
+`lab-text-redaction.test.ts`: names, dates of birth, record / accession /
+specimen / requisition / member / account numbers, addresses, phone numbers,
+e-mail addresses and SSNs go; biomarker names, values, units, flags, ranges,
+dates of service, age and sex stay. It is pattern-based minimisation, not
+de-identification: an unlabelled name printed outside a patient block is not
+caught, and the CEO plan records that as an accepted, tracked risk.
+
+### What the model's answer becomes
+
+- `extract-biomarkers` and `parse-lab-report-ocr` return result rows that are
+  stored in `report_analytes` / `report_items`. The OCR answer includes a
+  `source_snippet` copied from the image, which can contain identifiers.
+- `generate-interpretation` output is validated by
+  `_shared/nutrient-policy.ts`, regenerated once on violation, sanitised, and
+  replaced by the deterministic fallback when sanitising fails closed. It is
+  stored as an interpretation version.
+- `lab-insights` output is parsed by `_shared/lab-insights-output.ts` and
+  returned to the client.
+
+## 2. OpenAI's retention, and zero data retention (ZDR)
+
+Drafter's understanding **[lawyer to confirm]**:
+
+- OpenAI states that API inputs and outputs are not used to train its models
+  unless the customer opts in.
+- By default, API content may be retained for up to 30 days for abuse and
+  misuse monitoring, then deleted, unless the law requires longer. In 2025 a US
+  court preservation order in litigation against OpenAI affected the retention
+  of some API content for customers without ZDR; the lawyer should confirm
+  whether any such obligation is still in force.
+- **Zero data retention** is offered to approved customers for eligible
+  endpoints: content is not stored at rest for abuse monitoring. It requires an
+  application to OpenAI and approval; it is not a setting Amani can turn on in
+  code. Some features (for example stored responses, files, or certain tools)
+  are not eligible. Chat Completions without `store: true` is the pattern Amani
+  uses; none of the four calls sets `store`.
+- OpenAI offers a Data Processing Addendum and, for eligible customers, a
+  Business Associate Agreement. Amani is likely not a HIPAA covered entity, so a
+  BAA may not be needed, but the DPA should be signed.
+
+### Owner actions (each needs the owner; none can be done by the factory)
+
+1. Sign OpenAI's DPA for the organisation that owns `OPENAI_API_KEY`.
+2. Apply for ZDR for the Chat Completions endpoint, including vision input,
+   and record the answer and its date in the ledger.
+3. Confirm that the API project behind `OPENAI_API_KEY` has no data-sharing
+   or training opt-in enabled.
+4. Update `src/pages/Privacy.tsx` with the lawyer once ZDR is granted or
+   denied. The current copy says OpenAI "is retained only for a limited period
+   for abuse monitoring", and that the text sent "typically includes your name
+   and date of birth"; after this packet deploys the text path no longer
+   carries labelled identifiers, but the image path still does, so the copy
+   stays accurate (it overstates the text path) until the lawyer revises it.
+
+## 3. If ZDR is denied: fallbacks
+
+| Fallback | Effect | Cost |
+|---|---|---|
+| A. Keep redaction (this packet) and disclose 30-day retention | Labelled identifiers no longer reach OpenAI on the text path; health values still do | None beyond copy; residual risk is the image path and unlabelled names |
+| B. Route the image path through on-device OCR, then the redacted text path | Images never leave the device | Native work (threat-model.md 6.3 option 1) |
+| C. Use a provider that offers zero retention by default for health workloads (e.g. a cloud-hosted model under a healthcare agreement) | Removes the OpenAI copy | Vendor change, re-validation of the nutrient-policy guardrail and the interpretation eval |
+| D. Explicit per-use AI consent (PK-CONSENT-01) and a "no AI" mode that serves the deterministic interpretation only | User controls the exposure | Product: the deterministic interpretation is shorter |
+| E. Pseudonymise the remaining quasi-identifiers: send cycle day but not report date; age range only | Lower linkability | Small loss of context in prose |
+
+The drafter's suggestion for discussion: A immediately, D as part of the
+consent design already required (D7.1), and B before a public launch that
+promotes photo upload. **[Pending, owner + lawyer]**
+
+## 4. The image path
+
+`parse-lab-report-ocr` sends the images as `data:` URLs. Redaction would need
+the text, which is what OCR produces, so redaction would have to run after the
+exposure it is meant to prevent. The options (on-device OCR, on-device crop or
+blur, a separate OCR processor with suitable terms, ZDR, or pausing photo
+upload) are compared in threat-model.md section 6.3. This packet changes
+nothing on that path.
+
+## 5. Questions for the lawyer
+
+1. Is sending lab values and reproductive context to OpenAI under a DPA and
+   30-day retention acceptable under the consumer-health-data laws that apply,
+   with the consent the app collects today?
+2. Does the "Preferred name" line (the user's first name, entered voluntarily
+   and used once in the greeting) need to be removed or separately consented?
+3. Must the privacy policy name each model, or is "OpenAI" enough?
+4. What should the privacy policy say about the image path until it is
+   redacted or moved on-device?

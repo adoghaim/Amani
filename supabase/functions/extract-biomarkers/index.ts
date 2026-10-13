@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { ExtractBiomarkersRequestSchema } from "../_shared/schemas/requests.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -291,6 +292,9 @@ Deno.serve(async (req: Request) => {
       );
     }
     const { text } = parsedBody.data;
+    // PK-PRIV-01: strip direct identifiers (name, DOB, record numbers, address,
+    // phone, email) before the lab text leaves for OpenAI.
+    const labText = redactLabText(text).text;
 
     const { analyteMap, synonymMap } = await loadCanonicalRegistry(supabaseAdmin);
 
@@ -398,7 +402,7 @@ CONFIDENCE:
 - medium: value + unit, no reference range
 - low: value only, unit missing or unclear`;
 
-    const userPrompt = `Extract ALL lab test results from this report. Include every item with a numeric result.\n\n${text}\n\nReturn JSON: { "items": [...] }`;
+    const userPrompt = `Extract ALL lab test results from this report. Include every item with a numeric result.\n\n${labText}\n\nReturn JSON: { "items": [...] }`;
 
     const openaiResponse = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
