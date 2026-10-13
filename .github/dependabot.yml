@@ -1,0 +1,29 @@
+# Dependency update PRs (PK-SUPPLY-01).
+#
+# Dependabot only opens PRs; nothing merges or deploys without the owner.
+# It does not read Deno `npm:`/`jsr:` specifiers under supabase/functions —
+# those are pinned by hand and enforced by tools/supply-chain/check-pinned-imports.mjs.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One PR a week for routine minor/patch bumps; majors stay separate
+      # so each breaking upgrade is reviewed on its own.
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
