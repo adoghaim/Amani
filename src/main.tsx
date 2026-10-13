@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AuthProvider } from './contexts/AuthContext';
 import { initErrorMonitoring } from './lib/observability/initSentry';
+import { loadRuntimeConfig } from './lib/runtimeConfig';
 import App from './App.tsx';
 import './index.css';
 
@@ -25,6 +26,13 @@ initErrorMonitoring();
 window.addEventListener('unhandledrejection', (event) => {
   console.error('[unhandledrejection]', event.reason);
 });
+
+/*
+  Runtime config (PK-CFG-01): the one read of app_public_config for this launch,
+  not awaited, so it never delays the first render. It never rejects; when it
+  fails there is no version gate and every feature flag is off.
+*/
+void loadRuntimeConfig();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
