@@ -22,6 +22,8 @@ import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import type { LabReport } from '../types';
+import { ReportCycleLine } from '../components/ReportCycleLine';
+import { reportCycleLine } from '../lib/reportCycleLine';
 
 type SortKey = 'report_date' | 'upload_date' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -77,22 +79,6 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-theme-neutral-50 text-theme-neutral-600 border border-theme-neutral-200">
       <Clock className="w-3 h-3" /> {status}
-    </span>
-  );
-}
-
-function PhaseBadge({ phase }: { phase?: string | null }) {
-  if (!phase || phase === 'unknown') return null;
-  const colors: Record<string, string> = {
-    menstrual: 'bg-theme-flag-low-bg text-theme-flag-low border-theme-flag-low-border',
-    follicular: 'bg-theme-info-bg text-theme-info border-theme-info-border',
-    ovulatory: 'bg-theme-flag-ok-bg text-theme-flag-ok border-theme-flag-ok-border',
-    luteal: 'bg-theme-cat-sleep-bg text-theme-cat-sleep border-theme-cat-sleep-border',
-  };
-  const cls = colors[phase] ?? 'bg-theme-neutral-50 text-theme-neutral-600 border-theme-neutral-200';
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border capitalize ${cls}`}>
-      {phase}
     </span>
   );
 }
@@ -256,7 +242,8 @@ export function Reports() {
       if (search.trim()) {
         const q = search.toLowerCase();
         const dateStr = formatDate(r.report_date).toLowerCase();
-        const phase = (r.estimated_cycle_phase ?? '').toLowerCase();
+        // Search the phase only where it is shown (D10), never a hidden stored one.
+        const phase = reportCycleLine(r)?.phase ?? '';
         if (!dateStr.includes(q) && !phase.includes(q)) return false;
       }
       return true;
@@ -379,7 +366,7 @@ export function Reports() {
               </div>
             ) : (
               <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
-                <div className="hidden sm:grid grid-cols-[1fr_140px_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
+                <div className="hidden sm:grid grid-cols-[1fr_140px_120px_160px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
                   <button
                     onClick={() => cycleSort('report_date')}
                     className="text-left text-xs font-semibold text-theme-muted-text uppercase tracking-wide hover:text-theme-primary transition-colors"
@@ -398,7 +385,7 @@ export function Reports() {
                   >
                     Status <SortIcon col="status" />
                   </button>
-                  <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Phase</div>
+                  <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Cycle</div>
                   <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Markers</div>
                   <div />
                 </div>
@@ -409,7 +396,8 @@ export function Reports() {
                     return (
                       <div
                         key={report.id}
-                        className="group grid grid-cols-1 sm:grid-cols-[1fr_140px_120px_120px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
+                        data-report-row={report.id}
+                        className="group grid grid-cols-1 sm:grid-cols-[1fr_140px_120px_160px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
                       >
                         <Link to={`/app/reports/${report.id}`} className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 bg-theme-surface-2 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-theme-surface-hover transition-colors">
@@ -445,8 +433,14 @@ export function Reports() {
                         </Link>
 
                         <Link to={`/app/reports/${report.id}`} className="hidden sm:block">
-                          <PhaseBadge phase={report.estimated_cycle_phase} />
-                          {(!report.estimated_cycle_phase || report.estimated_cycle_phase === 'unknown') && (
+                          {/*
+                            D10: the report's cycle day first, and any phase labelled as an
+                            estimate. It replaces a phase pill in status tints (DESIGN.md:
+                            phase tints are never status; status is never a leading badge).
+                          */}
+                          {reportCycleLine(report) ? (
+                            <ReportCycleLine report={report} layout="stacked" className="block text-sm text-theme-text-body" />
+                          ) : (
                             <span className="text-xs text-theme-muted-text-3">—</span>
                           )}
                         </Link>
@@ -463,7 +457,7 @@ export function Reports() {
                         <div className="flex items-center justify-between sm:justify-end gap-2">
                           <div className="flex sm:hidden items-center gap-2 flex-wrap">
                             <StatusBadge status={report.status} />
-                            <PhaseBadge phase={report.estimated_cycle_phase} />
+                            <ReportCycleLine report={report} layout="stacked" className="block text-xs text-theme-text-body" />
                           </div>
                           <div className="flex items-center gap-1">
                             <Link

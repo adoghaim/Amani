@@ -57,6 +57,7 @@ import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
 import { PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
 import { CycleRule } from '../components/CycleRule';
+import { ReportCycleLine } from '../components/ReportCycleLine';
 import {
   fetchInterpretationAccess,
   type InterpretationAccessResult,
@@ -1301,9 +1302,6 @@ export function ReportView() {
   */
   const canUpgradeInterpretation = canRegenerate && interpretationTier === 'free';
   const cyclePhase = report.estimated_cycle_phase !== 'unknown' ? report.estimated_cycle_phase : null;
-  const cycleDayShown = typeof report.estimated_cycle_day === 'number'
-    && Number.isSafeInteger(report.estimated_cycle_day) && report.estimated_cycle_day >= 1
-    ? report.estimated_cycle_day : null;
   const hasError = report.status === 'error';
   // A rate-limited report sits at 'processing' because the server refused to
   // start rather than failed — but nothing is coming, so stop hiding her lab
@@ -1359,21 +1357,10 @@ export function ReportView() {
             {/*
               PK-FIX-06-EXT (D10): the cycle day comes first, and any phase is
               labelled as the estimate it is. It replaces the phase pill, which
-              wore a status tint (DESIGN.md: phase tints are never status).
+              wore a status tint (DESIGN.md: phase tints are never status). The
+              same ReportCycleLine is on the dashboard and the Reports list.
             */}
-            {(cycleDayShown !== null || cyclePhase) && (
-              <p className="text-sm text-theme-text mt-1" data-report-cycle-line>
-                {cycleDayShown !== null && (
-                  <>Cycle day <span className="font-mono tabular-nums">{cycleDayShown}</span></>
-                )}
-                {cycleDayShown !== null && cyclePhase && ' · '}
-                {cyclePhase && (
-                  <span className="text-theme-muted-text-2">
-                    <span className="capitalize">{cyclePhase.replace(/_/g, ' ')}</span> phase, {PHASE_ESTIMATE_LABEL}
-                  </span>
-                )}
-              </p>
-            )}
+            <ReportCycleLine report={report} as="p" className="text-sm text-theme-text mt-1" />
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
