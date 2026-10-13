@@ -3,8 +3,9 @@
   owner-approved at D6). Pure: no React, no Supabase.
 
   - Every range the lab printed, as printed. Amani never invents, rewrites or
-    replaces one; it only splits the persisted text back into the lines the lab
-    printed (PK-FIX-05 joins them with "; ").
+    replaces one; it only splits the persisted text back into the intervals the
+    lab printed (PK-FIX-05 joins printed lines with "; ", and one line can hold
+    several labelled intervals), with the parser's own interval finder.
   - When several labelled ranges were printed, the one whose label names the
     cycle phase estimated for the draw day is marked as applying. The match uses
     the label's own phase word only (the same vocabulary as the report's cycle
@@ -13,6 +14,7 @@
   - The lab's own H/L flag, exactly as printed beside the value.
 */
 import type { LabelledRange } from '../utils/parser/types';
+import { splitPrintedIntervals } from '../utils/parser/rangeDetection';
 
 /** One range as the lab printed it: the words before it and the interval itself. */
 export interface PrintedRange {
@@ -52,10 +54,18 @@ export function printedRanges(
     return candidates.map(c => ({ label: c.label, interval: c.raw }));
   }
   if (!rawReferenceRange || !rawReferenceRange.trim()) return [];
+  // PK-FIX-05 joins one printed line per segment with "; ", and one line can
+  // hold several labelled intervals. Split each segment per interval with the
+  // parser's own interval finder; fall back to the whole segment only when
+  // the finder recognises no interval in it.
   return rawReferenceRange
     .split(/;\s+/)
-    .map(splitLabelled)
-    .filter((r): r is PrintedRange => r !== null);
+    .flatMap((segment): PrintedRange[] => {
+      const perInterval = splitPrintedIntervals(segment);
+      if (perInterval.length > 0) return perInterval;
+      const whole = splitLabelled(segment);
+      return whole ? [whole] : [];
+    });
 }
 
 const PHASE_WORDS: ReadonlyArray<readonly [RangePhase, RegExp]> = [

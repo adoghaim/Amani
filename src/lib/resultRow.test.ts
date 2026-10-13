@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applicableRangeIndex, labelPhase, printedLabFlag, printedRanges, rangePhaseOf } from './resultRow';
+import { bindReferenceRange } from '../utils/parser/rangeDetection';
 
 // Placeholder intervals from the synthetic PK-FIX-05 fixtures. Not clinical ranges.
 const FSH = 'Follicular Phase 2.1-11.1; Mid-Cycle Peak 5.2-22.2; Luteal Phase 1.3-8.8; Postmenopausal 22.2-133.3';
@@ -19,6 +20,38 @@ describe('printedRanges: every range as the lab printed it, never rewritten', ()
     ]);
     expect(printedRanges(E2)[3]).toEqual({ label: 'Postmenopausal', interval: '<=31' });
     expect(printedRanges('Follicular phase 2.5 – 10.5')).toEqual([{ label: 'Follicular phase', interval: '2.5 – 10.5' }]);
+  });
+
+  it('two labelled ranges printed on one line split into two ranges, never one merged row', () => {
+    const split = printedRanges('Follicular Phase 2.1-11.1 Luteal Phase 1.3-8.8; Postmenopausal 22.2-133.3');
+    expect(split).toEqual([
+      { label: 'Follicular Phase', interval: '2.1-11.1' },
+      { label: 'Luteal Phase', interval: '1.3-8.8' },
+      { label: 'Postmenopausal', interval: '22.2-133.3' },
+    ]);
+    expect(applicableRangeIndex(split, 'follicular')).toBe(0);
+    expect(applicableRangeIndex(split, 'luteal')).toBe(1);
+    // Units and comparators printed with an interval stay with it, verbatim.
+    expect(printedRanges('Follicular 21-121 pg/mL Postmenopausal <=31 pg/mL')).toEqual([
+      { label: 'Follicular', interval: '21-121 pg/mL' },
+      { label: 'Postmenopausal', interval: '<=31 pg/mL' },
+    ]);
+  });
+
+  it('round trip through the real binder: the saved text splits like the parser\'s own candidates', () => {
+    for (const lines of [
+      ['FSH 6.1 mIU/mL', 'Follicular Phase 2.1-11.1 Luteal Phase 1.3-8.8', 'Postmenopausal 22.2-133.3'],
+      ['FSH 6.1 mIU/mL Follicular 2.1-11.1 Luteal 1.3-8.8'],
+    ]) {
+      const binding = bindReferenceRange(lines);
+      const saved = binding.ambiguous?.printed ?? '';
+      expect(saved).not.toBe('');
+      const fromSaved = printedRanges(saved);
+      expect(fromSaved.map(r => r.label)).toEqual(binding.candidates.map(c => c.label));
+      expect(fromSaved.map(r => r.interval)).toEqual(binding.candidates.map(c => c.raw));
+      expect(applicableRangeIndex(fromSaved, 'follicular')).toBe(0);
+      expect(applicableRangeIndex(fromSaved, 'luteal')).toBe(1);
+    }
   });
 
   it('an ordinal belongs to the label, not the interval', () => {

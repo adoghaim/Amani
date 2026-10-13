@@ -94,6 +94,29 @@ describe('ResultRow (PK-DS-01, DESIGN.md "Result row")', () => {
     await expectNoAxeViolations();
   });
 
+  it('two labelled ranges printed on one line: each is its own row, and only the matching one is highlighted', async () => {
+    // PK-FIX-05 saves one printed line per "; " segment; this line holds two intervals.
+    const oneLine: Analyte = {
+      ...FSH,
+      raw_reference_range: 'Follicular Phase 2.1-11.1 Luteal Phase 1.3-8.8; Postmenopausal 22.2-133.3',
+    };
+    for (const [phase, index, text, other] of [
+      ['follicular', 0, 'Follicular Phase 2.1-11.1 · your estimated follicular phase on the draw day', '1.3-8.8'],
+      ['luteal', 1, 'Luteal Phase 1.3-8.8 · your estimated luteal phase on the draw day', '2.1-11.1'],
+    ] as const) {
+      render(oneLine, phase);
+      expect(items()).toHaveLength(3);
+      const applied = items().filter(li => li.dataset.applies === 'true');
+      expect(applied).toHaveLength(1);
+      expect(items().indexOf(applied[0]!)).toBe(index);
+      expect(applied[0]!.textContent).toBe(text);
+      expect(applied[0]!.dataset.phase).toBe(phase);
+      // The highlighted row never carries another phase's interval.
+      expect(applied[0]!.textContent).not.toContain(other);
+      await expectNoAxeViolations();
+    }
+  });
+
   it('every phase tint carries its own pattern', () => {
     const labels = { menstrual: 'Menstrual', follicular: 'Follicular', ovulatory: 'Ovulation', luteal: 'Luteal' } as const;
     for (const [phase, label] of Object.entries(labels)) {
