@@ -1,0 +1,39 @@
+name: Feature flags
+
+# D5 (engineering review, 2026-10-12): feature flags are read through
+# src/lib/runtimeConfig.ts from the app_public_config 'features' bundle, where a
+# missing flag means off. The owner switches flags with SQL
+# (docs/runtime-config.md); only PK-CFG-01's migration seeds the bundle. This
+# job fails a PR whose migration writes the bundle, or writes app_public_config
+# in a way that cannot be shown to leave it alone.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feature-flags-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    name: Feature flags bundle (D5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test the lint
+        run: node --test tools/ci/feature-flags-lint.test.mjs
+
+      - name: No migration but PK-CFG-01's seed writes the features bundle
+        run: node tools/ci/feature-flags-lint.mjs

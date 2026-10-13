@@ -14,8 +14,27 @@ const user = {
   created_at: '2026-01-01T00:00:00.000Z',
 };
 
-export const test = base.extend<{ authenticated: boolean; syntheticReports: SyntheticReport[]; syntheticBasicResponse: { reportId: string; body: unknown } | null; networkGuard: void }>({
+/*
+  PK-CFG-01: the app reads app_public_config once per launch, signed in or not.
+  Default reply: the migration's seed (no version gate, every flag off), so
+  every existing test runs exactly as before. A test may swap in another reply,
+  including a failure, and counts the reads through `runtimeConfigReads`.
+*/
+export interface RuntimeConfigReply { status: number; body: unknown }
+export const RUNTIME_CONFIG_SEED_REPLY: RuntimeConfigReply = {
+  status: 200,
+  body: [
+    { key: 'min_version_ios', value: null },
+    { key: 'min_version_android', value: null },
+    { key: 'features', value: {} },
+  ],
+};
+
+export const test = base.extend<{ authenticated: boolean; syntheticReports: SyntheticReport[]; syntheticBasicResponse: { reportId: string; body: unknown } | null; runtimeConfigReply: RuntimeConfigReply; runtimeConfigReads: string[]; networkGuard: void }>({
   authenticated: [false, { option: true }],
+  runtimeConfigReply: [RUNTIME_CONFIG_SEED_REPLY, { option: true }],
+  // eslint-disable-next-line no-empty-pattern -- Playwright fixtures take their dependencies by destructuring.
+  runtimeConfigReads: async ({}, provide) => { await provide([]); },
   // Opt-in synthetic report rows (V2-03). Empty by default, so every existing
   // test keeps the exact allowlist it had.
   syntheticReports: [[], { option: true }],
@@ -44,13 +63,20 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
       }] : [],
     });
   },
-  networkGuard: [async ({ context, authenticated, syntheticReports, syntheticBasicResponse }, provide) => {
+  networkGuard: [async ({ context, authenticated, syntheticReports, syntheticBasicResponse, runtimeConfigReply, runtimeConfigReads }, provide) => {
     const unexpected: string[] = [];
     await context.route('**/*', async route => {
       const request = route.request();
       const url = new URL(request.url());
       if (url.origin === origin && request.method() === 'GET') {
         await route.continue();
+        return;
+      }
+      // PK-CFG-01: exactly the launch read of the public runtime config.
+      if (url.origin === apiOrigin && request.method() === 'GET' && url.pathname === '/rest/v1/app_public_config'
+        && url.searchParams.get('select') === 'key,value' && [...url.searchParams.keys()].length === 1) {
+        runtimeConfigReads.push(`${request.method()} ${url.pathname}`);
+        await route.fulfill({ status: runtimeConfigReply.status, json: runtimeConfigReply.body });
         return;
       }
       // Opt-in projection proof: exact synthetic endpoint, method and report only.
