@@ -36,6 +36,8 @@ vi.mock('../lib/supabase', () => {
       op === 'eq' ? r[col] === v : op === 'lt' ? String(r[col]) < String(v) : op === 'in' ? (v as unknown[]).includes(r[col]) : true));
     const builder = {
       select: () => builder, order: () => builder, limit: () => builder,
+      // PK-FIX-07: the all-history read pages with .range(); the fixture is far under one page.
+      range: () => builder,
       eq: (col: string, v: unknown) => { filters.push(['eq', col, v]); return builder; },
       lt: (col: string, v: unknown) => { filters.push(['lt', col, v]); return builder; },
       in: (col: string, v: unknown[]) => { filters.push(['in', col, v]); return builder; },

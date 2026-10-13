@@ -23,6 +23,7 @@ import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAllRows';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { resolveDashboardEntitlementView } from '../lib/dashboardEntitlement';
@@ -101,7 +102,9 @@ export function Dashboard() {
 
       if (fetchedReports.length > 0) {
         const ids = fetchedReports.map((r) => r.id);
-        const { data: bm } = await supabase.from('biomarkers').select('*').in('lab_report_id', ids);
+        // R27: a user's values across every report can pass PostgREST's 1,000-row cap.
+        const { data: bm } = await fetchAllRows<Biomarker>(() =>
+          supabase.from('biomarkers').select('*').in('lab_report_id', ids).order('id'));
         if (bm) {
           const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
             const bucket = acc[b.lab_report_id] ?? [];
