@@ -5,10 +5,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /*
-  PK-INT-01 (D3): Settings is one ordered list of section components. The
-  split from the single Settings.tsx was proven DOM-identical against main in
-  the PK-INT-01 PR; these tests keep the page equal to its list and pin the
-  delete flow that moved into DeleteAccountSection.
+  PK-INT-01 (D3, D25): Settings is the five D25 sections, each an ordered list
+  of section components. The split from the single Settings.tsx was proven
+  DOM-identical against main in the PK-INT-01 PR; these tests keep the page
+  equal to its list, pin the D25 order, and pin the delete flow that moved into
+  DeleteAccountSection.
 */
 
 const state = vi.hoisted(() => ({
@@ -36,8 +37,8 @@ vi.mock('../../../lib/supabase', () => ({
   },
 }));
 import { Settings } from '../../../pages/Settings';
-import { SETTINGS_SECTIONS } from './index';
-import type { SettingsSectionProps } from './types';
+import { SETTINGS_SECTIONS, settingsOrderProblems } from './index';
+import type { SettingsSection, SettingsSectionProps } from './types';
 import { DeleteAccountSection } from './DeleteAccountSection';
 
 let root: Root;
@@ -77,25 +78,101 @@ const click = async (text: string) => {
 };
 
 describe('Settings sections (PK-INT-01)', () => {
-  it('lists the sections in page order, each once', () => {
-    expect(SETTINGS_SECTIONS.map(s => s.id)).toEqual(['account', 'personal-context', 'reminders', 'privacy', 'delete-account']);
-    expect(new Set(SETTINGS_SECTIONS.map(s => s.Component)).size).toBe(SETTINGS_SECTIONS.length);
+  it('pins the D25 order: five sections, each component once, Delete my data last', () => {
+    expect(SETTINGS_SECTIONS.map(s => ({ section: s.id, title: s.title, entries: s.entries.map(e => e.id) }))).toMatchInlineSnapshot(`
+      [
+        {
+          "entries": [
+            "account-information",
+          ],
+          "section": "account",
+          "title": "Account",
+        },
+        {
+          "entries": [
+            "personal-context",
+          ],
+          "section": "health-profile",
+          "title": "Health profile",
+        },
+        {
+          "entries": [
+            "reminder-preferences",
+          ],
+          "section": "reminders",
+          "title": "Reminders",
+        },
+        {
+          "entries": [
+            "data-privacy",
+          ],
+          "section": "privacy-security",
+          "title": "Privacy & security",
+        },
+        {
+          "entries": [
+            "delete-my-data",
+          ],
+          "section": "your-data",
+          "title": "Your data",
+        },
+      ]
+    `);
+    const components = SETTINGS_SECTIONS.flatMap(s => s.entries.map(e => e.Component));
+    expect(new Set(components).size).toBe(components.length);
+    expect(settingsOrderProblems(SETTINGS_SECTIONS)).toEqual([]);
   });
 
-  it('the page is exactly its section list: each child is that section rendered on its own', async () => {
+  it('the page is exactly its sections, in order: each component is that component rendered on its own', async () => {
     await render(<Settings />);
     const list = app.querySelector('.space-y-6')!;
-    const children = Array.from(list.children).map(child => child.outerHTML);
-    expect(children).toHaveLength(SETTINGS_SECTIONS.length);
-    for (const [index, { id, Component }] of SETTINGS_SECTIONS.entries()) {
-      const holder = document.createElement('div');
-      const alone = createRoot(holder);
-      await render(<Component {...props} />, alone);
-      expect(children[index], id).toBe(holder.innerHTML);
-      await act(async () => alone.unmount());
+    const sections = Array.from(list.children);
+    expect(sections.map(s => [s.tagName, s.getAttribute('aria-label'), s.getAttribute('data-settings-section')])).toEqual(
+      SETTINGS_SECTIONS.map(s => ['SECTION', s.title, s.id]),
+    );
+    for (const [index, { id, entries }] of SETTINGS_SECTIONS.entries()) {
+      const children = Array.from(sections[index]!.children).map(child => child.outerHTML);
+      expect(children, id).toHaveLength(entries.length);
+      for (const [position, entry] of entries.entries()) {
+        const holder = document.createElement('div');
+        const alone = createRoot(holder);
+        await render(<entry.Component {...props} />, alone);
+        expect(children[position], entry.id).toBe(holder.innerHTML);
+        await act(async () => alone.unmount());
+      }
     }
+    // The cards and their headings are unchanged, in the same order.
     expect(Array.from(list.querySelectorAll('h2')).map(h => h.textContent?.trim()))
       .toEqual(['Account information', 'Reminder preferences', 'Data Privacy & Security', 'Delete my data']);
+    expect(list.querySelector('[data-testid="personal-context"]')!.closest('section')!.getAttribute('aria-label')).toBe('Health profile');
+    // Delete my data is the last thing on the page.
+    const headings = Array.from(app.querySelectorAll('h1, h2, h3'));
+    expect(headings[headings.length - 1]!.closest('section')!.getAttribute('data-settings-section')).toBe('your-data');
+  });
+
+  it('the order check fails on every way the D25 order can break', () => {
+    const entry = (id: string) => ({ id, Component: DeleteAccountSection });
+    const sections = (): SettingsSection[] => SETTINGS_SECTIONS.map(s => ({ ...s, entries: [...s.entries] }));
+    const swapped = sections();
+    [swapped[1], swapped[2]] = [swapped[2]!, swapped[1]!];
+    expect(settingsOrderProblems(swapped).join('\n')).toMatch(/D25 is account, health-profile, reminders, privacy-security, your-data/);
+    expect(settingsOrderProblems(sections().slice(0, 4)).join('\n')).toMatch(/D25 is/);
+    const afterDelete = sections();
+    afterDelete[4] = { ...afterDelete[4]!, entries: [...afterDelete[4]!.entries, entry('download-my-data')] };
+    expect(settingsOrderProblems(afterDelete)).toEqual(['delete-my-data must be the last entry, in Your data']);
+    const downloadFirst = sections();
+    downloadFirst[4] = { ...downloadFirst[4]!, entries: [entry('download-my-data'), ...downloadFirst[4]!.entries] };
+    expect(settingsOrderProblems(downloadFirst)).toEqual([]);
+    const moved = sections();
+    moved[3] = { ...moved[3]!, entries: [...moved[3]!.entries, entry('delete-my-data')] };
+    moved[4] = { ...moved[4]!, entries: [entry('download-my-data')] };
+    expect(settingsOrderProblems(moved)).toEqual(['delete-my-data must be the last entry, in Your data']);
+    const twice = sections();
+    twice[2] = { ...twice[2]!, entries: [...twice[2]!.entries, entry('account-information')] };
+    expect(settingsOrderProblems(twice)).toEqual(['account-information is listed twice']);
+    const empty = sections();
+    empty[1] = { ...empty[1]!, entries: [] };
+    expect(settingsOrderProblems(empty)).toEqual(['health-profile has no entries']);
   });
 
   it('shows the loading state, and no section, until the profile is loaded', async () => {
