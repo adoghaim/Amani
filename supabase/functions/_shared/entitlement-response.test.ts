@@ -34,6 +34,7 @@ import { buildBasicProjection } from './interpretation-visibility';
 import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation } from './response-shaping';
 import { generationSample } from './generation-cost';
 import * as versionWrite from './interpretation-version-write';
+import { callModelUnlessPaused } from './ai-pause';
 
 const source = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
 function evaluate(fragment: string, values: Record<string, unknown>) {
@@ -85,7 +86,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
     buildTrendEvidence: noCall, slug: noCall, classifyAnalyte: noCall, withClaimAuthority: noCall, projectBasic: noCall,
     generateFallbackInterpretation: noCall, formatPrimarySummary: noCall,
     tryOpenAI: async () => generated, shouldRequestDeepInterpretation, shapeInterpretation, buildBasicProjection,
-    findFloorViolations, ...sink.helpers,
+    findFloorViolations, callModelUnlessPaused, ...sink.helpers,
   });
   try {
     evaluate(source.slice(source.indexOf('Deno.serve(')), {
@@ -103,6 +104,9 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers, ...sink.pipeline,
       ...versionWrite, readAnchor: async () => null, findRequestVersion: noCall, appendVersion: noCall,
       commitLedgerVersion: noCall,
+      // PK-FIX-01b guards: AI on; the stubbed model reports no usage, so no cost row; no error to report.
+      aiPausedNow: async () => false, inBackground: (p: Promise<unknown>) => { void p; },
+      costLedger: { record: noCall }, reporter: { captureException: noCall },
     });
     const response = await handler(new Request('https://example.invalid', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: '{}' }));
     expect(response.status).toBe(200);

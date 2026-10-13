@@ -11,5 +11,7 @@ CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
 WHERE n.nspname = 'public'
   AND c.relname IN ('interpretation_visibility_config', 'interpretations',
                     'interpretations_private', 'introductory_deep_access_claims',
-                    'users', 'rate_limits')
+                    'users', 'rate_limits',
+                    -- PK-FIX-01b: expected granted = false for every row.
+                    'ai_call_costs', 'ai_budget_alerts')
 ORDER BY c.relname, r.role_name, p.privilege;
