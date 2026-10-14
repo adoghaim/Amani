@@ -276,6 +276,16 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
       "SET NULL, so erase_reports leaves it until then.",
   },
   {
+    table: "lab_file_cleanup",
+    ownerColumn: "user_id",
+    mechanism: "exception",
+    reason: "PK-FIX-04 queue of stored lab files whose report is erased but whose lab-files object is not yet " +
+      "confirmed removed (20261015110000_lab_file_cleanup.sql). Not swept by user_id: user_id REFERENCES " +
+      "public.users(id) ON DELETE CASCADE removes it when the users profile row (the last ordered delete) goes, " +
+      "and account deletion's storage step has already removed the whole <user_id>/ prefix. report_id has no " +
+      "foreign key (the report row is deleted in the same transaction), so erase_reports leaves it until then.",
+  },
+  {
     table: "ai_call_costs",
     ownerColumn: "user_id",
     mechanism: "exception",

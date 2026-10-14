@@ -15,5 +15,7 @@ WHERE n.nspname = 'public'
                     -- PK-FIX-01b: expected granted = false for every row.
                     'ai_call_costs', 'ai_budget_alerts',
                     -- PK-EXP5: expect granted = false for every row of these four.
-                    'app_events', 'user_attribution', 'anon_event_counters', 'funnel_daily')
+                    'app_events', 'user_attribution', 'anon_event_counters', 'funnel_daily',
+                    -- PK-FIX-04 (20261015110000): service-only; expect every row false.
+                    'lab_file_cleanup')
 ORDER BY c.relname, r.role_name, p.privilege;

@@ -490,8 +490,18 @@ describe('the current exceptions and the auth cascade are what their reasons say
     expect(statements).not.toMatch(/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|call|do)\b/i);
   });
 
-  it('every exception is one of the five reviewed here', () => {
+  it('PK-FIX-04: lab_file_cleanup goes with the users row, and erase_reports leaves it', () => {
+    expect(fk('lab_file_cleanup', 'users').map(f => [f.columns, f.onDelete])).toEqual([[['user_id'], 'cascade']]);
+    // report_id has no foreign key: the report row is deleted in the same transaction that records the file.
+    expect(schema.get('lab_file_cleanup')!.fks).toHaveLength(1);
+    expect(cascadesFrom(schema, 'lab_reports', 'lab_file_cleanup')).toBe(false);
+    expect(orderedDeletes().map(e => e.table)).not.toContain('lab_file_cleanup');
+    expect(orderedDeletes().at(-1)).toEqual(expect.objectContaining({ table: 'users', ownerColumn: 'id' }));
+    expect(reasonOf('lab_file_cleanup')).toContain('20261015110000_lab_file_cleanup.sql');
+  });
+
+  it('every exception is one of the six reviewed here', () => {
     expect(USER_DATA_REGISTRY.filter(e => e.mechanism === 'exception').map(e => e.table).sort())
-      .toEqual(['ai_call_costs', 'interpretation_generation_costs', 'stripe_customers', 'stripe_orders', 'stripe_subscriptions']);
+      .toEqual(['ai_call_costs', 'interpretation_generation_costs', 'lab_file_cleanup', 'stripe_customers', 'stripe_orders', 'stripe_subscriptions']);
   });
 });

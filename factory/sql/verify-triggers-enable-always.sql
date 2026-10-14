@@ -34,6 +34,13 @@
 --       ALWAYS would re-create profile rows during a replica-mode load of auth.users.
 -- Made ALWAYS by 20261010000000 (the six V2 guards) and 20261013000000 (the six
 -- pre-V2 safety triggers).
+--   safety ('A'), expected once its migration has created its queue table
+--     lab_reports                        zz_record_lab_file_cleanup                         20261015110000  PK-FIX-04: records a
+--       deleted report's stored file. Created ENABLE ALWAYS by its own migration. The
+--       row is listed only when public.lab_file_cleanup exists, so a database before
+--       20261015110000 does not report it missing; once applied, a missing or
+--       non-'A' recorder is a FAIL like any other safety trigger. The harness checks
+--       it after applying the migration (cases/230-lab-file-cleanup.sh).
 --
 -- Any other non-internal trigger in schema public is 'FAIL: unclassified trigger':
 -- a new trigger cannot ship until it is classified here and in the harness.
@@ -59,6 +66,9 @@ WITH expected(schema_name, table_name, trigger_name, class, expected_mode, sourc
     ('public', 'interpretations_private',           'remember_interpretation_history',          'origin-owner-ruling','O', '20261010000000'),
     ('public', 'iap_subscriptions',                 'iap_subscriptions_set_updated_at',         'origin-by-design',   'O', '20260821000000'),
     ('auth',   'users',                             'on_auth_user_created',                     'origin-by-design',   'O', '20260308131250')
+  UNION ALL
+  SELECT 'public', 'lab_reports', 'zz_record_lab_file_cleanup', 'safety', 'A', '20261015110000'
+  WHERE to_regclass('public.lab_file_cleanup') IS NOT NULL
 ),
 actual AS (
   SELECT n.nspname::text AS schema_name, c.relname::text AS table_name,

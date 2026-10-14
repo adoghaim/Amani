@@ -54,6 +54,14 @@ export const REPORT_HEADER_ACTIONS: readonly ReportHeaderAction[] = [
   {
     id: DELETE_REPORT_ACTION_ID,
     more: true,
-    resolve: ({ deleteReport }) => ({ label: 'Delete report', icon: Trash2, onSelect: deleteReport, tone: 'danger' }),
+    // PK-FIX-04: while the deletion runs it is disabled; once the report is
+    // deleted but its stored file is not yet removed, it offers the retry.
+    resolve: ({ deleteReport, deletion }) => ({
+      label: deletion?.busy ? 'Deleting…' : deletion?.filePending ? 'Retry file removal' : 'Delete report',
+      icon: Trash2,
+      onSelect: deleteReport,
+      disabled: deletion?.busy,
+      tone: 'danger',
+    }),
   },
 ];

@@ -25,6 +25,13 @@ export interface ReportHeaderContext {
   /** Deletes the report, behind its confirmation. */
   deleteReport: () => void;
   /**
+   * PK-FIX-04: the state of a server-side deletion (delete-report). `busy`
+   * while it runs; `filePending` once the report is deleted but its stored lab
+   * file is not yet removed, when deleteReport retries without asking again.
+   * Absent: no deletion has run.
+   */
+  deletion?: { busy: boolean; filePending: boolean };
+  /**
    * Opens "Report a problem" (PK-HARM-01, D20). ReportView supplies it only
    * while features.interpretation_feedback is on; absent, the action is not
    * offered.

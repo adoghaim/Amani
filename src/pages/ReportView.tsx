@@ -60,6 +60,7 @@ import { isAiPausedError, isAiPausedResponse, noteAiPaused, readAiPaused, subscr
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { createRegenerationRequests } from '../lib/regenerationRequest';
+import { requestReportDeletion } from '../lib/reportDeletion';
 import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
@@ -433,6 +434,9 @@ export function ReportView() {
   // "Report a problem" (PK-HARM-01, D20), offered in More only while features.interpretation_feedback is on.
   const [reportProblemOpen, setReportProblemOpen] = useState(false);
   const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  // The report is deleted but its stored file is not removed yet (retryable).
+  const [deleteFilePending, setDeleteFilePending] = useState(false);
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
@@ -1296,10 +1300,24 @@ export function ReportView() {
     }
   };
 
+  // Server-side deletion (delete-report): the report graph AND the uploaded
+  // file. Leave only on confirmed success; otherwise say exactly what is left.
   const handleDelete = async () => {
-    if (!confirm('Delete this report? This cannot be undone.')) return;
-    const { error } = await supabase.from('lab_reports').delete().eq('id', reportId);
-    if (!error) navigate('/app', { replace: true });
+    if (deleting) return;
+    if (!deleteFilePending && !confirm('Delete this report and any uploaded lab file? This cannot be undone.')) return;
+    setDeleting(true);
+    setError('');
+    const outcome = await requestReportDeletion(
+      (name, options) => supabase.functions.invoke(name, options),
+      reportId,
+    );
+    setDeleting(false);
+    if (outcome.kind === 'deleted') {
+      navigate('/app', { replace: true });
+      return;
+    }
+    if (outcome.kind === 'file_pending') setDeleteFilePending(true);
+    setError(outcome.message);
   };
 
   const formatDate = (d: string) => {
@@ -1373,6 +1391,9 @@ export function ReportView() {
       run: () => { void handleRegenerate(); },
     },
     deleteReport: () => { void handleDelete(); },
+    // PK-FIX-04: the deletion runs server-side; while the stored file is not yet
+    // removed, the same action retries without asking again.
+    deletion: { busy: deleting, filePending: deleteFilePending },
     reportProblem: isFeatureEnabled(INTERPRETATION_FEEDBACK_FLAG) ? () => setReportProblemOpen(true) : undefined,
   };
 

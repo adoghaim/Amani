@@ -57,3 +57,9 @@ verify_jwt = false
 # nothing written) when ANON_EVENT_IP_SALT_SECRET is unset.
 [functions.log-anon-event]
 verify_jwt = false
+
+# Single-report deletion (PK-FIX-04). The report id is checked against the
+# caller from this JWT (RLS read), never trusted from the body alone; the
+# function also calls `auth.getUser()` itself.
+[functions.delete-report]
+verify_jwt = true
