@@ -15,7 +15,31 @@
  * Adding a user-owned table: add its entry here with the mechanism that really
  * erases it, then run `npm test`. A new `ordered_delete` goes before `users`,
  * which stays last.
+ *
+ * DEPLOY ORDER (PK-HARM-01 review). delete-user-data deletes from every
+ * `ordered_delete` table and fails closed on any error, so a delete-user-data
+ * built from a commit that carries an entry must not be deployed before the
+ * migration that creates its table is pushed: otherwise every account deletion
+ * fails. An `ordered_delete` table created after the V2 backend runbook
+ * (V2_RUNBOOK_LAST_MIGRATION) names that migration in `requiresMigration`,
+ * or is marked `mayBeUndeployed` when a missing table may safely read as
+ * nothing to erase (PK-EXP5's app_events and user_attribution)
+ * (account-deletion-sweep.test.ts enforces it). Before any delete-user-data
+ * deploy the owner runs factory/sql/verify-account-deletion-tables.sql (the
+ * text of deletionPreflightSql() below): zero rows means every table exists.
+ * The function also checks this itself before deleting anything
+ * (checkUserDataTablesReady in account-deletion.ts: one GET per table that
+ * must return a rows array, never a HEAD, which supabase-js reads as success
+ * for a missing table) and refuses with 503. The preflight SQL is the check to
+ * rely on; the runtime check is the backstop.
  */
+
+/**
+ * The newest migration the V2 backend runbook (PR #93) pushes. A table an
+ * `ordered_delete` entry names that a later migration creates must declare
+ * `requiresMigration`.
+ */
+export const V2_RUNBOOK_LAST_MIGRATION = "20261011000003";
 
 export const ERASURE_MECHANISMS = [
   /** Deleted when erase_reports deletes the user's lab_reports: an ON DELETE CASCADE chain from lab_reports reaches it. */
@@ -48,10 +72,19 @@ export interface UserDataRegistryEntry {
    * after delete-user-data is deployed from main (the owner applies migrations
    * and deploys functions by hand, in separate steps). When the table does not
    * exist, delete-user-data treats it as holding nothing to erase instead of
-   * failing every account deletion. Any other error on it still fails.
-   * Requires a reason naming the migration that creates the table.
+   * failing every account deletion: the readiness check lets that one missing
+   * table through and the data step skips it. Any other error on it still
+   * fails. Requires a reason naming the migration that creates the table. Not
+   * a deploy prerequisite, so the owner preflight does not list it, and never
+   * combined with `requiresMigration`.
    */
   readonly mayBeUndeployed?: true;
+  /**
+   * The version of the migration that creates this table, when that migration
+   * is newer than V2_RUNBOOK_LAST_MIGRATION. It must be pushed to a database
+   * before a delete-user-data that carries this entry is deployed against it.
+   */
+  readonly requiresMigration?: string;
 }
 
 export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
@@ -73,6 +106,17 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
     mechanism: "ordered_delete",
     reason: "Complimentary grant. Also reachable via the CASCADE on users.id, but swept explicitly so erasure " +
       "does not depend on FK ordering.",
+  },
+  {
+    table: "interpretation_feedback",
+    ownerColumn: "user_id",
+    mechanism: "ordered_delete",
+    reason: "PK-HARM-01 problem reports, which may hold her free text. Also reachable via the CASCADEs on " +
+      "lab_reports (report_id) and auth.users (user_id), but swept explicitly by user_id so no row depends on " +
+      "the order the report graph or the auth identity goes in. DEPLOY ORDER: never deploy delete-user-data " +
+      "built from this entry's commit or later until migration 20261015020000 is pushed; until then the " +
+      "function's readiness check refuses every deletion (503) rather than deleting part of an account.",
+    requiresMigration: "20261015020000",
   },
   {
     table: "lab_reports",
@@ -238,7 +282,64 @@ export function orderedDeletes(
   return registry.filter((entry) => entry.mechanism === "ordered_delete");
 }
 
+/** One table delete-user-data will delete from, and the migration that must be pushed first, if any. */
+export interface DeletionDeployPrerequisite {
+  readonly table: string;
+  readonly requiresMigration: string | null;
+}
+
+/**
+ * Every table delete-user-data deletes from that must exist before it is
+ * deployed, in registry order: all of them except the `mayBeUndeployed` ones,
+ * whose absence reads as nothing to erase.
+ */
+export function deletionDeployPrerequisites(
+  registry: readonly UserDataRegistryEntry[] = USER_DATA_REGISTRY,
+): DeletionDeployPrerequisite[] {
+  return orderedDeletes(registry).filter((entry) => !entry.mayBeUndeployed).map((entry) => ({
+    table: entry.table,
+    requiresMigration: entry.requiresMigration ?? null,
+  }));
+}
+
+/**
+ * A read-only query the owner runs in the SQL editor of the database a
+ * delete-user-data deploy will serve, before deploying it. Each row is a table
+ * the function deletes from that does not exist there, with the migration to
+ * push first. Zero rows: safe to deploy. factory/sql/verify-account-deletion-tables.sql
+ * holds this text (a test keeps them identical).
+ */
+export function deletionPreflightSql(
+  registry: readonly UserDataRegistryEntry[] = USER_DATA_REGISTRY,
+): string {
+  const rows = deletionDeployPrerequisites(registry).map(({ table, requiresMigration }, i) => {
+    if (!IDENTIFIER.test(table)) throw new Error(`"${table}" is not a table name`);
+    if (requiresMigration !== null && !MIGRATION_VERSION.test(requiresMigration)) {
+      throw new Error(`${table}: "${requiresMigration}" is not a migration version`);
+    }
+    const migration = requiresMigration === null ? "null::text" : `'${requiresMigration}'::text`;
+    return `  (${i + 1}, '${table}'::text, ${migration})`;
+  });
+  return [
+    "-- Account deletion deploy preflight (generated from supabase/functions/_shared/user-data-registry.ts",
+    "-- by deletionPreflightSql(); a test keeps this file identical to it).",
+    "--",
+    "-- Read-only. Run it in the SQL editor of the project a delete-user-data deploy will serve, BEFORE",
+    "-- `supabase functions deploy delete-user-data`. Each row is a table the function deletes from that does",
+    "-- not exist there, and the migration that creates it. Zero rows: every table exists; safe to deploy.",
+    "-- Any row: push that migration first. Deployed early, the function refuses every account deletion.",
+    "select t.table_name, t.required_migration",
+    "from (values",
+    rows.join(",\n"),
+    ") as t(ord, table_name, required_migration)",
+    "where to_regclass(format('public.%I', t.table_name)) is null",
+    "order by t.ord;",
+    "",
+  ].join("\n");
+}
+
 const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
+const MIGRATION_VERSION = /^\d{14}$/;
 
 /**
  * What is wrong with the registry on its own terms: names, duplicates, unknown
@@ -269,6 +370,15 @@ export function registryProblems(
     }
     if (entry.mayBeUndeployed && !entry.reason?.trim()) {
       problems.push(`${entry.table}: mayBeUndeployed needs a reason naming the migration that creates it`);
+    }
+    if (entry.requiresMigration !== undefined && !MIGRATION_VERSION.test(entry.requiresMigration)) {
+      problems.push(`${entry.table}: requiresMigration "${entry.requiresMigration}" is not a migration version`);
+    }
+    if (entry.requiresMigration !== undefined && entry.mechanism !== "ordered_delete") {
+      problems.push(`${entry.table}: requiresMigration only applies to an ordered delete`);
+    }
+    if (entry.mayBeUndeployed && entry.requiresMigration !== undefined) {
+      problems.push(`${entry.table}: mayBeUndeployed and requiresMigration contradict each other`);
     }
     if (entry.mechanism === "auth_cascade" && !entry.reason?.trim()) {
       problems.push(`${entry.table}: leaving rows to the auth.users cascade needs a reason`);

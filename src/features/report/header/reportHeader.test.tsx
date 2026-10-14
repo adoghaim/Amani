@@ -55,14 +55,17 @@ const moreItems = () => Array.from(app.querySelectorAll<HTMLButtonElement>('[dat
 const primaryButton = () => Array.from(app.querySelectorAll<HTMLButtonElement>('button'))
   .find(b => !b.hasAttribute('data-more-trigger') && !b.hasAttribute('data-more-item')) ?? null;
 
+const byId = (id: string) => REPORT_HEADER_ACTIONS.find(action => action.id === id)!;
+
 describe('report header slot (D19)', () => {
   it('the header list holds the D19 rules: Delete report last, in More, never the primary', () => {
-    expect(REPORT_HEADER_ACTIONS.map(a => a.id)).toEqual(['generate-full-analysis', 'regenerate', DELETE_REPORT_ACTION_ID]);
+    expect(REPORT_HEADER_ACTIONS.map(a => a.id))
+      .toEqual(['generate-full-analysis', 'regenerate', 'report-problem', DELETE_REPORT_ACTION_ID]);
     expect(reportHeaderProblems(REPORT_HEADER_ACTIONS)).toEqual([]);
   });
 
   it('the rule check fails on every way the header can break', () => {
-    const [full, regenerate, remove] = REPORT_HEADER_ACTIONS as [ReportHeaderAction, ReportHeaderAction, ReportHeaderAction];
+    const [full, regenerate, remove] = ['generate-full-analysis', 'regenerate', DELETE_REPORT_ACTION_ID].map(byId) as [ReportHeaderAction, ReportHeaderAction, ReportHeaderAction];
     expect(reportHeaderProblems([full, remove, regenerate])).toEqual([`${DELETE_REPORT_ACTION_ID} must be last`]);
     expect(reportHeaderProblems([full, regenerate])).toEqual([`${DELETE_REPORT_ACTION_ID} is missing`]);
     expect(reportHeaderProblems([full, regenerate, { ...remove, primary: true }]))
@@ -122,7 +125,7 @@ describe('report header slot (D19)', () => {
       id: 'report-problem', more: true,
       resolve: () => ({ label: 'Placeholder problem', icon: Flag, onSelect: () => {} }),
     };
-    const [full, regenerate, remove] = REPORT_HEADER_ACTIONS as [ReportHeaderAction, ReportHeaderAction, ReportHeaderAction];
+    const [full, regenerate, remove] = ['generate-full-analysis', 'regenerate', DELETE_REPORT_ACTION_ID].map(byId) as [ReportHeaderAction, ReportHeaderAction, ReportHeaderAction];
     const actions = [full, prepare, regenerate, problem, remove];
     expect(reportHeaderProblems(actions)).toEqual([]);
     // The full analysis, when on offer, stays the primary; the later candidate goes first in More.
@@ -136,6 +139,23 @@ describe('report header slot (D19)', () => {
     await render(context(), actions);
     expect(primaryButton()!.textContent).toBe('Placeholder prepare');
     expect(moreItems().map(b => b.textContent)).toEqual(['Regenerate (2 left)', 'Placeholder problem', 'Delete report']);
+    expect(await axeViolations(app)).toEqual([]);
+  });
+
+  it('PK-HARM-01: "Report a problem" is in More, before Delete report, only when ReportView supplies it', async () => {
+    // Flag off: ReportView passes no reportProblem, so nothing is offered.
+    await render(context({ remaining: 2 }));
+    expect(moreItems().map(b => b.textContent)).toEqual(['Regenerate (2 left)', 'Delete report']);
+    // Flag on: offered at its D19 place, never the primary, and it opens the flow.
+    const base = context({ upgrade: true });
+    const ctx: ReportHeaderContext = { ...base, reportProblem: () => { base.calls.push('report-problem'); } };
+    await render(ctx);
+    expect(primaryButton()!.textContent).toBe('Generate full Amani analysis');
+    expect(moreItems().map(b => b.textContent)).toEqual(['Report a problem', 'Delete report']);
+    await act(async () => trigger()!.click());
+    await act(async () => moreItems()[0]!.click());
+    expect(base.calls).toEqual(['report-problem']);
+    expect(byId('report-problem').primary).toBeFalsy();
     expect(await axeViolations(app)).toEqual([]);
   });
 });

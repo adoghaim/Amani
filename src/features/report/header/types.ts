@@ -24,6 +24,12 @@ export interface ReportHeaderContext {
   };
   /** Deletes the report, behind its confirmation. */
   deleteReport: () => void;
+  /**
+   * Opens "Report a problem" (PK-HARM-01, D20). ReportView supplies it only
+   * while features.interpretation_feedback is on; absent, the action is not
+   * offered.
+   */
+  reportProblem?: () => void;
 }
 
 /** One action as the header shows it, as the primary button or a More item. */

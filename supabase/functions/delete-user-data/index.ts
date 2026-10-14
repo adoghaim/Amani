@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17.7.0";
 import { errorMessage } from "../_shared/errors.ts";
 import {
+  AccountDeletionNotReadyError,
+  checkUserDataTablesReady,
   deleteUserAccount,
   deleteUserDataTables,
   isMissingTableError,
@@ -58,6 +60,27 @@ Deno.serve(async (req: Request) => {
     const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-11-20.acacia" }) : null;
 
     const actions: AccountDeletionActions = {
+      async checkDataTablesReady() {
+        // One GET per table delete-user-data deletes from, at most one owner
+        // id back, discarded. A table the database lacks (this function
+        // deployed before its migration: user-data-registry.ts, DEPLOY ORDER)
+        // refuses the whole deletion here, before anything is touched.
+        //
+        // Never `{ head: true }`: PostgREST answers a missing table with 404
+        // PGRST205, a HEAD response has no body, and postgrest-js turns a 404
+        // with an empty body into status 204 with `error: null`, so a HEAD
+        // probe passes for a table that does not exist. A GET carries the
+        // error body; and only a real array counts as readable, so any other
+        // shape of "success" also refuses. The error keeps PostgREST's code so
+        // a missing mayBeUndeployed table (PK-EXP5) is let through, and only
+        // that one.
+        await checkUserDataTablesReady(async (table, ownerColumn) => {
+          const { data, error, status } = await supabase.from(table).select(ownerColumn).limit(1);
+          if (error) throw Object.assign(new Error(error.message), { code: error.code });
+          if (!Array.isArray(data)) throw new Error(`unreadable (HTTP ${status}, no rows array)`);
+        });
+      },
+
       async listStoreSubscriptions(userId) {
         // Unfiltered on purpose — which statuses still bill is policy, and it
         // lives in ../_shared/account-deletion.ts where it can be tested.
@@ -233,6 +256,23 @@ Deno.serve(async (req: Request) => {
           })),
         }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    /*
+      A deploy-order mistake, not the user's doing: a table this function
+      deletes from is missing. Nothing was deleted. 503 with a plain message;
+      which table and which migration go to the function log.
+    */
+    if (error instanceof AccountDeletionNotReadyError) {
+      console.error("Account deletion refused, nothing deleted:", error.message, error.tables);
+      return new Response(
+        JSON.stringify({
+          error: "Account deletion is temporarily unavailable. Nothing was deleted. Please try again later.",
+          code: error.code,
+          retry: true,
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

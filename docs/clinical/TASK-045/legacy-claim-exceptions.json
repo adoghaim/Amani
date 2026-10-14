@@ -476,6 +476,13 @@
     "reason": "Non-clinical lexical match: onboarding product description uses better for question preparation, not clinical improvement in a result."
   },
   {
+    "file": "src/features/report/problem/problemReport.ts",
+    "text": "Something here worried me",
+    "category": "NOT_CLINICAL_LANGUAGE",
+    "basis": "form_label",
+    "reason": "Non-clinical lexical match: a choice label in the Report a problem chooser (PK-HARM-01), in the owner's D20 wording. It names how she felt about the report so it can be routed to the clinical reviewer; it says nothing about any result."
+  },
+  {
     "file": "src/features/settings/PersonalContextCard.tsx",
     "text": "Age range",
     "category": "NOT_CLINICAL_LANGUAGE",

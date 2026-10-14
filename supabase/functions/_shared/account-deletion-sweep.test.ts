@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { orderedDeletes, registryProblems, USER_DATA_REGISTRY, type UserDataRegistryEntry } from './user-data-registry.ts';
+import {
+  deletionDeployPrerequisites,
+  deletionPreflightSql,
+  orderedDeletes,
+  registryProblems,
+  USER_DATA_REGISTRY,
+  V2_RUNBOOK_LAST_MIGRATION,
+  type UserDataRegistryEntry,
+} from './user-data-registry.ts';
 
 /*
   Erasure coverage, derived from the migrations rather than from memory.
@@ -416,6 +424,68 @@ describe('the current exceptions and the auth cascade are what their reasons say
     expect(reasonOf('ai_call_costs')).toContain('20261013050000_ai_cost_ledger.sql');
     // The budget alert log holds no user data at all.
     expect(userOwnedTables(schema).has('ai_budget_alerts')).toBe(false);
+  });
+
+  it('PK-HARM-01: interpretation_feedback is user data, swept by user_id, and also goes with its report and its account', () => {
+    expect(userOwnedTables(schema).has('interpretation_feedback')).toBe(true);
+    expect(USER_DATA_REGISTRY.find(e => e.table === 'interpretation_feedback'))
+      .toEqual(expect.objectContaining({ ownerColumn: 'user_id', mechanism: 'ordered_delete' }));
+    expect(fk('interpretation_feedback', 'lab_reports').map(f => [f.columns, f.onDelete])).toEqual([[['report_id'], 'cascade']]);
+    expect(fk('interpretation_feedback', 'auth.users').map(f => [f.columns, f.onDelete])).toEqual([[['user_id'], 'cascade']]);
+  });
+
+  it('deploy order: an ordered delete of a table created after the V2 runbook names the migration that creates it', () => {
+    const version = (file: string) => file.slice(0, 14);
+    const problems: string[] = [];
+    for (const entry of orderedDeletes()) {
+      const created = version(resolve(schema, entry.table)!.createdIn);
+      // PK-EXP5: a mayBeUndeployed table is the other answer to the same
+      // question (its absence reads as nothing to erase); it is created after
+      // the V2 runbook and its reason names the migration that creates it.
+      if (entry.mayBeUndeployed) {
+        if (!(created > V2_RUNBOOK_LAST_MIGRATION)) problems.push(`${entry.table}: mayBeUndeployed but created in ${created}`);
+        if (!entry.reason?.includes(created)) problems.push(`${entry.table}: reason does not name ${created}`);
+        if (entry.requiresMigration !== undefined) problems.push(`${entry.table}: both mayBeUndeployed and requiresMigration`);
+        continue;
+      }
+      const expected = created > V2_RUNBOOK_LAST_MIGRATION ? created : undefined;
+      if (entry.requiresMigration !== expected) {
+        problems.push(`${entry.table}: requiresMigration ${entry.requiresMigration} but it is created in ${created}`);
+      }
+    }
+    expect(problems).toEqual([]);
+    // Not vacuous: this packet's table is the one that needs it.
+    expect(deletionDeployPrerequisites().filter(p => p.requiresMigration !== null))
+      .toEqual([{ table: 'interpretation_feedback', requiresMigration: '20261015020000' }]);
+    expect(migrations.some(m => m.name.startsWith(V2_RUNBOOK_LAST_MIGRATION))).toBe(true);
+    // The reason says the ordering in words, for whoever reads the registry.
+    expect(reasonOf('interpretation_feedback')).toContain('never deploy delete-user-data');
+    expect(reasonOf('interpretation_feedback')).toContain('20261015020000');
+    // A malformed or misplaced declaration is a registry problem.
+    expect(registryProblems([...withEntry({ table: 'x_rows', ownerColumn: 'user_id', mechanism: 'ordered_delete', requiresMigration: '2026' })]))
+      .toEqual(['x_rows: requiresMigration "2026" is not a migration version']);
+    expect(registryProblems([...withEntry({ table: 'x_rows', ownerColumn: 'lab_report_id', mechanism: 'erase_reports_cascade', requiresMigration: '20261015020000' })]))
+      .toEqual(['x_rows: requiresMigration only applies to an ordered delete']);
+    expect(registryProblems([...withEntry({ table: 'x_rows', ownerColumn: 'user_id', mechanism: 'ordered_delete',
+      mayBeUndeployed: true, reason: 'fixture, created by 20261015020000', requiresMigration: '20261015020000' })]))
+      .toEqual(['x_rows: mayBeUndeployed and requiresMigration contradict each other']);
+  });
+
+  it('deploy order: the owner preflight SQL file is exactly deletionPreflightSql()', () => {
+    const file = readFileSync(new URL('../../../factory/sql/verify-account-deletion-tables.sql', import.meta.url), 'utf8');
+    expect(file).toBe(deletionPreflightSql());
+    // Every table that must exist before a deploy; a mayBeUndeployed table
+    // (PK-EXP5) is not a prerequisite, so the preflight does not list it.
+    for (const { table, mayBeUndeployed } of orderedDeletes()) {
+      if (mayBeUndeployed) expect(file).not.toContain(`'${table}'::text`);
+      else expect(file).toContain(`'${table}'::text`);
+    }
+    expect(orderedDeletes().filter(e => e.mayBeUndeployed).map(e => e.table)).toEqual(['app_events', 'user_attribution']);
+    expect(file).toContain("(6, 'interpretation_feedback'::text, '20261015020000'::text)");
+    // Read-only: outside its comments it only selects.
+    const statements = file.replace(/--[^\n]*/g, '');
+    expect(statements).toMatch(/^\s*select\b/i);
+    expect(statements).not.toMatch(/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|call|do)\b/i);
   });
 
   it('every exception is one of the five reviewed here', () => {

@@ -14,6 +14,12 @@
  *
  * Order and rationale, per step:
  *
+ *  -1. `checkDataTablesReady` — read-only: every table step 6 deletes from
+ *      exists. A delete-user-data deployed before the migration that creates
+ *      one of its registry tables (user-data-registry.ts, DEPLOY ORDER) would
+ *      otherwise cancel Stripe, delete files and erase reports, then fail at
+ *      the missing table and leave a half-deleted account that can never
+ *      finish. It refuses before anything is touched instead.
  *   0. `listStoreSubscriptions` — refuse to proceed, before touching anything,
  *      while the user has a live App Store / Play subscription they have not
  *      acknowledged. Neither store lets a server cancel one, so silent
@@ -126,6 +132,73 @@ export function selectBillingStoreSubscriptions(
     }));
 }
 
+export const ACCOUNT_DELETION_NOT_READY_CODE = "account_deletion_not_ready";
+
+/** A table delete-user-data deletes from that the database cannot serve. */
+export interface UnreadyDataTable {
+  table: string;
+  /** The migration that creates it, from the registry, when known. */
+  requiresMigration: string | null;
+  /** What the probe reported. */
+  detail: string;
+}
+
+/**
+ * Thrown before anything is deleted when a table the data step deletes from
+ * cannot be read: a deploy-order mistake (the function went out before its
+ * migration), never the user's doing. Fails closed; the handler answers 503.
+ */
+export class AccountDeletionNotReadyError extends Error {
+  readonly code = ACCOUNT_DELETION_NOT_READY_CODE;
+  readonly tables: readonly UnreadyDataTable[];
+
+  constructor(tables: readonly UnreadyDataTable[]) {
+    super(
+      "Account deletion is not ready: delete-user-data deletes from " +
+        tables.map((t) =>
+          t.requiresMigration ? `${t.table} (push migration ${t.requiresMigration})` : t.table
+        ).join(", ") +
+        ", which this database cannot serve. Nothing was deleted.",
+    );
+    this.name = "AccountDeletionNotReadyError";
+    this.tables = tables;
+  }
+}
+
+/**
+ * Probes every `ordered_delete` table, read-only and concurrently, and throws
+ * AccountDeletionNotReadyError naming each one whose probe failed. `probe`
+ * resolves when the table can be read and rejects otherwise. A probe must
+ * prove a read, not merely see no error: with supabase-js a HEAD request on a
+ * missing table comes back as status 204 with `error: null`, so the handler's
+ * probe is a GET that must return a rows array (delete-user-data/index.ts).
+ *
+ * One exception (PK-EXP5): a probe that rejects with a missing-table error
+ * (`isMissingTableError` on the rejection, e.g. an Error carrying PostgREST's
+ * `code`) on an entry marked `mayBeUndeployed` is not a refusal; the data step
+ * skips that table as nothing to erase. Any other failure on it still refuses.
+ */
+export async function checkUserDataTablesReady(
+  probe: (table: string, ownerColumn: string) => Promise<void>,
+  registry: readonly UserDataRegistryEntry[] = USER_DATA_REGISTRY,
+): Promise<void> {
+  const entries = orderedDeletes(registry);
+  const results = await Promise.allSettled(entries.map((e) => probe(e.table, e.ownerColumn)));
+  const unready: UnreadyDataTable[] = [];
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      const reason: unknown = result.reason;
+      if (entries[i].mayBeUndeployed && isMissingTableError(reason as { code?: string | null })) return;
+      unready.push({
+        table: entries[i].table,
+        requiresMigration: entries[i].requiresMigration ?? null,
+        detail: reason instanceof Error ? reason.message : String(reason),
+      });
+    }
+  });
+  if (unready.length > 0) throw new AccountDeletionNotReadyError(unready);
+}
+
 export interface DeleteAccountOptions {
   /**
    * The user has seen the store-subscription warning and chose to continue
@@ -136,6 +209,12 @@ export interface DeleteAccountOptions {
 }
 
 export interface AccountDeletionActions {
+  /**
+   * Read-only, FIRST: throws AccountDeletionNotReadyError when a table the data
+   * step deletes from does not exist (checkUserDataTablesReady). Nothing else
+   * runs until it passes.
+   */
+  checkDataTablesReady(): Promise<void>;
   /**
    * Every `iap_subscriptions` row for the user, unfiltered.
    *
@@ -259,6 +338,10 @@ export async function deleteUserAccount(
     for an app they can no longer log into — the same defect PR #18 fixed for
     Stripe, one storefront over.
   */
+  // Before anything, read-only: a deploy-order mistake refuses here, with
+  // nothing deleted, instead of failing halfway through the data step.
+  await actions.checkDataTablesReady();
+
   const storeRecords = await actions.listStoreSubscriptions(userId);
   const stillBilling = selectBillingStoreSubscriptions(storeRecords);
 
