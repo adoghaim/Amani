@@ -117,3 +117,23 @@ describe('render helpers', () => {
     expect(previewText({ kind: 'trend', content: { value: 3 } })).toBeNull();
   });
 });
+
+describe('PK-PL-A: the server\'s regeneration availability', () => {
+  const stored = { access: 'basic', interpretation: { headline: 'H' }, stored_depth: 'standard', plan: 'free' };
+
+  it('reads the server\'s answer', () => {
+    expect(parseInterpretationAccess({ ...stored, regeneration: { available: false, reason: 'introductory_access_exhausted' } })
+      .regeneration).toEqual({ available: false, reason: 'introductory_access_exhausted' });
+    expect(parseInterpretationAccess({ ...stored, regeneration: { available: true, reason: null } })
+      .regeneration).toEqual({ available: true, reason: null });
+  });
+
+  it('no answer, or a malformed one, is null: the stored-state rule decides alone, as before', () => {
+    expect(parseInterpretationAccess(stored).regeneration).toBeNull();
+    for (const regeneration of [null, 'unavailable', { available: 'false' }, { reason: 'x' }, []]) {
+      expect(parseInterpretationAccess({ ...stored, regeneration }).regeneration).toBeNull();
+    }
+    expect(parseInterpretationAccess({ access: 'error', code: 'entitlement_unavailable', regeneration: { available: false } })
+      .regeneration).toBeNull();
+  });
+});

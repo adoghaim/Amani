@@ -30,8 +30,8 @@ import {
   findFloorViolations,
   shapeInterpretation,
   shouldRequestDeepInterpretation,
-  shouldGenerateDeepInterpretation,
 } from "../_shared/response-shaping.ts";
+import { decideDeepGeneration } from "../_shared/regeneration-availability.ts";
 import {
   isHistoryProtected,
   isVersionable,
@@ -1658,6 +1658,11 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
+  // PK-PL-A: a regeneration (a keyed request, or a report that already holds its
+  // interpretation) is never branded "error" here on a failure. It wrote nothing,
+  // the interpretation the user has is intact, and the client that keyed it puts
+  // back the status it set.
+  let regeneration = false;
   const costSamples: GenerationSample[] = [];
   let costContext: GenerationCostContext | null = null;
   // PK-FIX-01b: every model call this request made, for ai_call_costs; and the kill switch.
@@ -1711,6 +1716,7 @@ Deno.serve(async (req: Request) => {
     }
     reportId = parsedBody.data.reportId;
     const requestId = parsedBody.data.request_id ?? null;
+    regeneration = requestId !== null;
 
     const { data: reportCheck } = await supabase
       .from("lab_reports")
@@ -1735,6 +1741,7 @@ Deno.serve(async (req: Request) => {
     // request_id so a retried regeneration appends nothing twice.
     const anchor = await readAnchor(supabase, user.id, reportId);
     const appendsVersion = anchor !== null;
+    regeneration ||= appendsVersion;
     if (appendsVersion && requestId === null) {
       return new Response(JSON.stringify({ error: REQUEST_ID_REQUIRED }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1875,7 +1882,6 @@ Deno.serve(async (req: Request) => {
         return data;
       },
     };
-    let deepAccessGranted = tierDecision.tier === "plus";
     if (active && tierDecision.tier === "free") {
       // Raw accession/collection evidence is not retained in production. Hash
       // the stored upload; never use client-editable report_date as identity.
@@ -1901,13 +1907,12 @@ Deno.serve(async (req: Request) => {
       accessDecision = await decideIntroductoryAccess(introActions, {
         tier: "free", userId: user.id, bloodDrawId,
       });
-      deepAccessGranted = accessDecision.granted;
     }
 
     // Access remains the ledger's decision; generation may continue after exhaustion.
-    const generateDeep = shouldGenerateDeepInterpretation({
-      freemiumActive: active, tier: tierDecision.tier,
-      deepAccessGranted, decision: accessDecision,
+    // get-interpretation reports this same decision as `regeneration` (PK-PL-A).
+    const generateDeep = decideDeepGeneration({
+      freemiumActive: active, tier: tierDecision.tier, decision: accessDecision,
       postLimitGeneration: Deno.env.get("FREEMIUM_POST_LIMIT_GENERATION"),
     });
     if (active) {
@@ -2081,7 +2086,10 @@ Deno.serve(async (req: Request) => {
 
     inBackground(reporter.captureException(err, { stage: "generate" }));
 
-    if (reportId) {
+    // A failed first generation leaves the report without an interpretation, so
+    // "error" is true. A failed regeneration wrote nothing and left the selected
+    // interpretation intact, so it is not (PK-PL-A).
+    if (reportId && !regeneration) {
       try {
         await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
       } catch {
