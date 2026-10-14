@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
@@ -198,6 +200,15 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabaseAdmin).check(user.id));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     await enforceRateLimit(createRateLimitStore(supabaseAdmin), {
       userId: user.id,

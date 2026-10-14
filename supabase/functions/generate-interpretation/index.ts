@@ -7,6 +7,8 @@ import {
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { buildBasicProjection } from "../_shared/interpretation-visibility.ts";
 import { entitlementUnavailable, generationVisibilityMode } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -1648,6 +1650,15 @@ Deno.serve(async (req: Request) => {
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabase).check(user.id));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

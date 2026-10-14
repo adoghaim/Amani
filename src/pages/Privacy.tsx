@@ -25,10 +25,12 @@
 import { ArrowLeft } from 'lucide-react';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
+import { useConsentGateFlag } from '../lib/consent/consentStore';
 
 const LAST_UPDATED = '7 September 2026';
 
 export function Privacy() {
+  const consentGateOn = useConsentGateFlag();
   return (
     <div className="min-h-screen bg-theme-background">
       <nav className="bg-theme-surface border-b border-theme-border shadow-sm">
@@ -457,6 +459,36 @@ export function Privacy() {
               requires it.
             </p>
           </section>
+
+          {/*
+            PK-CONSENT-01: DRAFT for the lawyer with the consent copy
+            (src/features/consent/consentCopy.ts, D7.1). Shown only while
+            features.consent_gate is on, because until then the app does not
+            ask for these consents and this page describes what it does today.
+          */}
+          {consentGateOn && (
+            <section aria-labelledby="privacy-your-consent">
+              <h2 id="privacy-your-consent" className="text-xl font-semibold text-theme-text mb-3">Your consent</h2>
+              <p className="mb-3">
+                Before Amani reads any lab report, it asks for three separate answers, each on its
+                own screen: that you are 18 or older; that Amani can process your health data,
+                which is a consent separate from our Terms of Service; and that an AI service
+                (OpenAI, described above) can read your lab values to write your explanation.
+                Amani needs all three to work.
+              </p>
+              <p className="mb-3">
+                We keep a record of each answer: which consent, the version of the wording you saw,
+                whether you gave or withdrew it, when, and whether you used the web, iOS or Android
+                app. That record is deleted with your account.
+              </p>
+              <p>
+                You can withdraw your consent at any time in Settings, under Privacy &amp; security.
+                Amani then stops reading new lab reports and writing explanations straight away. Your
+                saved reports stay until you delete them, and you can delete your account and all your
+                data from the same page. If you tell us you are under 18, we remove your account.
+              </p>
+            </section>
+          )}
 
           <section>
             <h2 className="text-xl font-semibold text-theme-text mb-3">Children</h2>

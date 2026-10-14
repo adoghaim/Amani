@@ -21,7 +21,7 @@ const source = readFileSync(new URL('../delete-user-data/index.ts', import.meta.
 // sweep (lab_reports included, by user_id) and the profile row.
 const USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introductory_deep_access_claims',
   'complimentary_entitlements', 'lab_reports', 'period_logs', 'symptom_logs', 'notification_preferences',
-  'reminders', 'audit_events', 'rate_limits', 'iap_beta_testers', 'users'];
+  'reminders', 'audit_events', 'rate_limits', 'consent_records', 'iap_beta_testers', 'users'];
 
 function slice(startMarker: string, endMarker: string) {
   const start = source.indexOf(startMarker);
