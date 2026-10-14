@@ -135,8 +135,13 @@ export function RemindersSection({ user }: SettingsSectionProps) {
           </div>
           <div>
             <h2 className="text-lg text-theme-neutral-900">Reminder preferences</h2>
+            {/*
+              Nothing delivers a reminder today: no notification plugin,
+              no scheduled sender, and nothing reads the reminders table.
+              Say so rather than describe a delivery channel.
+            */}
             <p className="text-xs text-theme-muted-text">
-              In-app notifications. Mobile push support coming soon.
+              Reminders aren&rsquo;t sent yet.
             </p>
           </div>
         </div>
@@ -200,8 +205,8 @@ export function RemindersSection({ user }: SettingsSectionProps) {
             <div className="flex items-start gap-2">
               <BellOff className="w-4 h-4 text-theme-muted-text mt-0.5 shrink-0" />
               <p className="text-xs text-theme-muted-text leading-relaxed">
-                Reminders currently appear as in-app notifications. Native mobile push
-                notifications are planned and will use these same preferences when available.
+                Nothing is sent to you yet, in the app or on your phone. We&rsquo;ll use
+                these preferences when notifications launch.
               </p>
             </div>
           </div>
