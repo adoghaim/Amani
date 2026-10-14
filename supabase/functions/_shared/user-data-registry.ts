@@ -43,6 +43,15 @@ export interface UserDataRegistryEntry {
   readonly mechanism: ErasureMechanism;
   /** Why this mechanism. Required for `exception` and `auth_cascade`. */
   readonly reason?: string;
+  /**
+   * `ordered_delete` only, for a table whose migration can reach production
+   * after delete-user-data is deployed from main (the owner applies migrations
+   * and deploys functions by hand, in separate steps). When the table does not
+   * exist, delete-user-data treats it as holding nothing to erase instead of
+   * failing every account deletion. Any other error on it still fails.
+   * Requires a reason naming the migration that creates the table.
+   */
+  readonly mayBeUndeployed?: true;
 }
 
 export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
@@ -90,16 +99,21 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
     table: "app_events",
     ownerColumn: "user_id",
     mechanism: "ordered_delete",
+    mayBeUndeployed: true,
     reason: "PK-EXP5 first-party usage events. Also cascades on auth.users, but swept here so the events are " +
       "gone even if the final auth deletion fails. Pre-signup rows carry an anon_id and no user_id; nothing " +
-      "links them to an account.",
+      "links them to an account. mayBeUndeployed: created by 20261015010000_first_party_events.sql, which can " +
+      "reach production after delete-user-data is deployed from main; until then there is nothing to erase.",
   },
   {
     table: "user_attribution",
     ownerColumn: "user_id",
     mechanism: "ordered_delete",
+    mayBeUndeployed: true,
     reason: "PK-EXP5 first-touch signup attribution, one row per user. Also cascades on auth.users, but swept " +
-      "here so it is gone even if the final auth deletion fails.",
+      "here so it is gone even if the final auth deletion fails. mayBeUndeployed: created by " +
+      "20261015010000_first_party_events.sql, which can reach production after delete-user-data is deployed " +
+      "from main; until then there is nothing to erase.",
   },
   {
     table: "users",
@@ -237,6 +251,15 @@ export function registryProblems(
     }
     if (entry.mechanism === "exception" && !entry.reason?.trim()) {
       problems.push(`${entry.table}: an exception needs a reason saying what erases it`);
+    }
+    if (entry.mayBeUndeployed && entry.mechanism !== "ordered_delete") {
+      problems.push(`${entry.table}: mayBeUndeployed only applies to an ordered delete`);
+    }
+    if (entry.mayBeUndeployed && entry.table === "users") {
+      problems.push("users: the profile row can never be treated as undeployed");
+    }
+    if (entry.mayBeUndeployed && !entry.reason?.trim()) {
+      problems.push(`${entry.table}: mayBeUndeployed needs a reason naming the migration that creates it`);
     }
     if (entry.mechanism === "auth_cascade" && !entry.reason?.trim()) {
       problems.push(`${entry.table}: leaving rows to the auth.users cascade needs a reason`);

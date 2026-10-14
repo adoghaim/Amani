@@ -14,6 +14,8 @@ import {
   logServerEvent,
   revenueCatFunnelEvent,
   stripeFunnelEvent,
+  TRUSTED_PROXY_HOPS,
+  UNKNOWN_IP_KEY,
   utcDay,
   type AnonEventActions,
   type AppEventRow,
@@ -161,15 +163,46 @@ describe('log-anon-event: rate limit by hashed IP, plus a global daily cap', () 
     expect(ANON_EVENTS_GLOBAL_PER_DAY).toBeGreaterThan(ANON_EVENTS_PER_IP_PER_DAY);
   });
 
-  it('a request with no IP is counted against the global cap only', async () => {
+  it('a request with no usable IP is counted in the shared unknown bucket AND the global cap, never global only', async () => {
     const fake = fakeActions();
     await send(fake, { ip: null });
-    expect(fake.buckets).toEqual([GLOBAL_BUCKET]);
+    expect(fake.buckets).toEqual([await ipBucket(UNKNOWN_IP_KEY, SECRET, '2026-10-13'), GLOBAL_BUCKET]);
+    expect(fake.buckets[0]).toMatch(/^ip:[0-9a-f]{64}$/);
   });
 
-  it('reads the client IP from the first x-forwarded-for entry, and ignores anything that is not an address', () => {
-    expect(clientIp('203.0.113.7, 10.0.0.1')).toBe('203.0.113.7');
+  it('a garbage x-forwarded-for cannot escape the per-IP limit', async () => {
+    const fake = fakeActions();
+    const limits = { perIp: 60, global: 20000 };
+    const answers: number[] = [];
+    for (let i = 0; i < 100; i++) {
+      answers.push((await send(fake, { ip: clientIp(i % 2 ? 'x' : 'x, not-an-ip'), limits })).status);
+    }
+    expect(answers.filter(s => s === 202)).toHaveLength(60);
+    expect(answers.slice(60).every(s => s === 429)).toBe(true);
+    expect(fake.rows).toHaveLength(60);
+  });
+
+  it('a rotating forged first x-forwarded-for entry cannot escape the per-IP limit', async () => {
+    const fake = fakeActions();
+    const limits = { perIp: 60, global: 20000 };
+    let accepted = 0;
+    // The caller prepends a new fake address each time; the platform appends the real one.
+    for (let i = 0; i < 100; i++) {
+      const header = `198.51.100.${i % 250}, 203.0.113.7`;
+      if ((await send(fake, { ip: clientIp(header), limits })).status === 202) accepted += 1;
+    }
+    expect(accepted).toBe(60);
+  });
+
+  it('reads the client IP from the right of x-forwarded-for (platform-appended), never the caller-controlled first entry', () => {
+    expect(TRUSTED_PROXY_HOPS).toBe(0);
+    expect(clientIp('203.0.113.7')).toBe('203.0.113.7');
+    expect(clientIp('6.6.6.6, 203.0.113.7')).toBe('203.0.113.7');
+    expect(clientIp('x, 198.51.100.9')).toBe('198.51.100.9');
     expect(clientIp('2001:db8::1')).toBe('2001:db8::1');
+    expect(clientIp('6.6.6.6, 203.0.113.7, 10.0.0.1', 1)).toBe('203.0.113.7');
+    expect(clientIp('203.0.113.7', 1)).toBeNull();
+    expect(clientIp('198.51.100.9, x')).toBeNull();
     expect(clientIp(null)).toBeNull();
     expect(clientIp('')).toBeNull();
     expect(clientIp('evil; drop table')).toBeNull();

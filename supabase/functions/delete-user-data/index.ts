@@ -5,6 +5,8 @@ import { errorMessage } from "../_shared/errors.ts";
 import {
   deleteUserAccount,
   deleteUserDataTables,
+  isMissingTableError,
+  MissingTableError,
   StoreSubscriptionAcknowledgementRequiredError,
   type AccountDeletionActions,
   type StoreSubscriptionRecord,
@@ -175,6 +177,8 @@ Deno.serve(async (req: Request) => {
           async deleteOwnedRows(table, ownerColumn, userId) {
             const { error } = await supabase.from(table).delete().eq(ownerColumn, userId);
             if (error) {
+              // Only registry entries marked mayBeUndeployed skip this one (account-deletion.ts).
+              if (isMissingTableError(error)) throw new MissingTableError(table, error.message);
               throw new Error(table === "users"
                 ? `Deleting users row failed: ${error.message}`
                 : `Deleting ${table} failed: ${error.message}`);

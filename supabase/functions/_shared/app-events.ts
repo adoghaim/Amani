@@ -71,7 +71,7 @@ export interface AnonEventActions {
 export interface AnonEventRequest {
   /** The raw request body text (already capped by the handler). */
   bodyText: string;
-  /** The caller's IP from the platform header, or null when there is none. */
+  /** The caller's IP from clientIp(), or null when there is no usable one (shared UNKNOWN_IP_KEY bucket). */
   ip: string | null;
   /** The salt secret's value, or undefined when it is not set. */
   secret: string | undefined;
@@ -111,13 +111,34 @@ export async function ipBucket(ip: string, secret: string, day: string): Promise
 const IP_SHAPE = /^[0-9A-Fa-f:.]{2,45}$/;
 
 /**
- * The client IP from the platform's forwarding header: the first entry of
- * x-forwarded-for. Anything that does not look like an IPv4 or IPv6 address
- * reads as no IP (the global cap still applies).
+ * How many trusted proxies append to x-forwarded-for AFTER the one that saw
+ * the client. 0 means the client address is the rightmost entry. Every proxy
+ * appends, so the entries counted from the right are written by the platform;
+ * anything to their left (including the first entry) is whatever the caller
+ * sent and is never read. [Pending, owner] confirm on a test project which
+ * entry from the right is the caller's address on Supabase Edge Functions; if
+ * it is a proxy's address instead, the effect is that callers share a bucket
+ * (over-limiting, never under-limiting).
  */
-export function clientIp(forwardedFor: string | null | undefined): string | null {
-  const first = forwardedFor?.split(",")[0]?.trim() ?? "";
-  return IP_SHAPE.test(first) ? first : null;
+export const TRUSTED_PROXY_HOPS = 0;
+
+/**
+ * The bucket key for a request whose address is missing or unparseable. Such
+ * requests all share ONE hashed bucket under the same per-IP cap, so a caller
+ * cannot escape the per-IP limit by sending a garbage header.
+ */
+export const UNKNOWN_IP_KEY = "unknown";
+
+/**
+ * The client IP as the platform recorded it: the x-forwarded-for entry
+ * `hops` places from the right (never the caller-controlled first entry).
+ * Anything that does not look like an IPv4 or IPv6 address reads as null,
+ * which handleAnonEvent counts in the shared UNKNOWN_IP_KEY bucket.
+ */
+export function clientIp(forwardedFor: string | null | undefined, hops: number = TRUSTED_PROXY_HOPS): string | null {
+  const entries = (forwardedFor ?? "").split(",").map(entry => entry.trim());
+  const entry = entries[entries.length - 1 - hops] ?? "";
+  return IP_SHAPE.test(entry) ? entry : null;
 }
 
 const reply = (status: number, error?: string): AnonEventResponse =>
@@ -154,10 +175,11 @@ export async function handleAnonEvent(actions: AnonEventActions, request: AnonEv
 
   const day = utcDay(now);
   try {
-    if (request.ip) {
-      const perIp = await actions.incrementCounter(await ipBucket(request.ip, request.secret, day), day);
-      if (perIp > limits.perIp) return reply(429, "rate limited");
-    }
+    // Every request is counted per IP. No usable address means the shared
+    // UNKNOWN_IP_KEY bucket, under the same cap: never "no per-IP limit".
+    const perIpKey = request.ip ?? UNKNOWN_IP_KEY;
+    const perIp = await actions.incrementCounter(await ipBucket(perIpKey, request.secret, day), day);
+    if (perIp > limits.perIp) return reply(429, "rate limited");
     const global = await actions.incrementCounter(GLOBAL_BUCKET, day);
     if (global > limits.global) return reply(429, "daily cap reached");
     await actions.insertEvent({ event, props: checked.props, user_id: null, anon_id: anonId });

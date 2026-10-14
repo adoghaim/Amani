@@ -56,12 +56,25 @@ The numbers are abuse limits chosen by the factory, not owner rulings: tune them
 
 ## The raw IP is never stored
 
-`log-anon-event` reads the first `x-forwarded-for` entry, and uses it only to compute
+`log-anon-event` reads the `x-forwarded-for` entry `TRUSTED_PROXY_HOPS` places from the right (0:
+the rightmost). Every proxy appends to that header, so the right-hand entries are written by the
+platform; the first entry, and anything else the caller sends, is never read. It uses the address
+only to compute
 `HMAC-SHA256(dailySalt, ip)`, where `dailySalt = HMAC-SHA256(ANON_EVENT_IP_SALT_SECRET, "log-anon-event:" + UTC day)`.
 The salt rotates every UTC day, so one IP's buckets cannot be linked across days, and without the
 secret a bucket cannot be tested against a guessed IP. Counters older than yesterday are deleted on
-the next increment. With no IP header, only the global cap applies. With the secret unset, every
-request answers 503 and nothing is written (fail closed).
+the next increment. With the secret unset, every request answers 503 and nothing is written (fail
+closed).
+
+**Every request is counted per IP.** A missing or unparseable address goes into ONE shared hashed
+bucket (`UNKNOWN_IP_KEY`) under the same 60-a-day cap, so a garbage or rotating `X-Forwarded-For`
+cannot escape the per-IP limit and fill the global cap with forged attribution
+(`app-events.test.ts`).
+
+**[Pending, owner]** Before the deploy GO, confirm on a test project which `x-forwarded-for` entry,
+counted from the right, is the caller's address on Supabase Edge Functions, and set
+`TRUSTED_PROXY_HOPS` in `_shared/app-events.ts` to match. If the rightmost entry turns out to be a
+proxy's address, callers share buckets: events are over-limited (lost), never under-limited.
 
 ## The client (D6.2, D17, D29)
 
@@ -89,6 +102,15 @@ request answers 503 and nothing is written (fail closed).
 user, and they are gone even if the auth deletion then fails. Both also cascade on `auth.users`.
 Pre-signup rows carry only a random device id and are not linked to an account.
 
+**Deploy-order safety.** Both entries are marked `mayBeUndeployed`. PR #93's runbook deploys
+`delete-user-data` from main, and once this PR is on main that build names `app_events` and
+`user_attribution`, possibly before `20261015010000` is applied in production. So when PostgREST
+answers that one of these two tables does not exist (`PGRST205` or `42P01`), `delete-user-data`
+treats it as nothing to erase and carries on; there cannot be rows in a table that does not exist.
+Any other error on them still fails the deletion (non-2xx), and a missing table that is not marked
+`mayBeUndeployed` still fails it too (`account-deletion.test.ts`, `user-data-registry.test.ts`).
+Deploying `delete-user-data` from main before this migration is therefore safe.
+
 ## R12: indexes now, a rollup later
 
 `app_events (event, created_at)` and `app_events (user_id, created_at)` exist from day one.
@@ -111,6 +133,8 @@ select * from funnel_daily where day >= current_date - 13 order by day desc, eve
 
 1. `supabase db push` applies `20261015010000_first_party_events.sql` (one-shot; a replay is refused).
    Its relation to the V2 runbook (PR #93) and the migration-order rule (D6) is the owner's call.
+   `delete-user-data` built from main may be deployed before this step (PR #93's runbook step 5):
+   it treats the two missing tables as nothing to erase (see "Account deletion").
 2. Set the function secret `ANON_EVENT_IP_SALT_SECRET` (a long random value; the name only is in
    the repo), then `supabase functions deploy log-anon-event`.
 3. Redeploy `stripe-webhook`, `iap-webhook`, `generate-interpretation` and `delete-user-data` for the
