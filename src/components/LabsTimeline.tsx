@@ -3,6 +3,8 @@ import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
 import { LabReport, Biomarker, Intervention } from '../types';
 import { Card } from './Card';
 import { Button } from './Button';
+import { CorrectionMark } from '../features/report/corrections/CorrectionMark';
+import { valueInkClass } from '../lib/corrections/provenance';
 
 interface LabsTimelineProps {
   reports: LabReport[];
@@ -207,9 +209,10 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
                     <div key={idx} className="flex items-center justify-between py-3 border-b border-theme-border last:border-0">
                       <div className="flex-1">
                         <span className="text-sm font-medium text-theme-text">{biomarkerName}</span>
-                        <div className="text-sm text-theme-muted-text">
+                        <div className={`text-sm ${valueInkClass(current.correction, 'text-theme-muted-text')}`}>
                           {current.value} {current.unit}
                         </div>
+                        {current.correction && <CorrectionMark mark={current.correction} />}
                       </div>
                       {delta && (
                         <div className="flex items-center gap-2">

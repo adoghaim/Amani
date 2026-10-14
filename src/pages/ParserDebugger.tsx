@@ -9,6 +9,8 @@ import {
   CheckCircle, Search, X, ArrowLeft, RefreshCw, ExternalLink, Bug,
   FileText, Layers, FlaskConical, Link2, Database, Cpu, Filter
 } from 'lucide-react';
+import { correctedFlag, parseCorrectionInput } from '../lib/corrections/correctionInput';
+import { supabaseCorrectionPort } from '../lib/corrections/correctAnalyte';
 
 interface ReportAnalyteRow {
   id: string;
@@ -48,6 +50,8 @@ interface LabReport {
   status: string;
   lab_name: string | null;
   file_url: string | null;
+  /** The phase the upload scored against; a correction is re-scored against it (PK-CORRECT-01). */
+  estimated_cycle_phase?: string | null;
 }
 
 type FilterStatus = 'all' | 'mapped' | 'unmapped' | 'parse_error' | 'core' | 'extended' | 'miss' | 'reject';
@@ -186,13 +190,27 @@ function isSuspicious(block: AnalyteBlockDebug): boolean {
   return false;
 }
 
+/*
+  R17 (PK-CORRECT-01): the value columns of report_analytes can no longer be
+  edited directly. The name and the canonical slug are still saved in place;
+  a changed value or unit goes through correct_analyte, which appends a
+  correction and keeps the original reading. The reference range is the
+  lab's, so it is shown but not editable here.
+*/
+export interface DebuggerAnalyteEdit {
+  raw_name: string;
+  canonical_slug: string | null;
+  valueText: string;
+  unit: string;
+}
+
 function EditAnalyteModal({
   row,
   onSave,
   onClose,
 }: {
   row: ReportAnalyteRow;
-  onSave: (updated: Partial<ReportAnalyteRow>) => Promise<void>;
+  onSave: (updated: DebuggerAnalyteEdit) => Promise<void>;
   onClose: () => void;
 }) {
   const [saving, setSaving] = useState(false);
@@ -220,10 +238,12 @@ function EditAnalyteModal({
             { key: 'canonical_slug', label: 'Canonical slug' },
           ].map(({ key, label }) => (
             <div key={key}>
-              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">{label}</label>
+              <label htmlFor={`edit-analyte-${key}`} className="block text-xs font-medium text-theme-neutral-600 mb-1">{label}</label>
               <input
-                className="w-full px-3 py-2 text-sm border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-neutral-500 focus:border-theme-neutral-500"
+                id={`edit-analyte-${key}`}
+                className="w-full px-3 py-2 text-sm border border-theme-neutral-300 rounded-lg focus:ring-2 focus:ring-theme-neutral-500 focus:border-theme-neutral-500 read-only:bg-theme-neutral-50"
                 value={vals[key as keyof typeof vals]}
+                readOnly={key === 'raw_reference_range'}
                 onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
               />
             </div>
@@ -237,10 +257,9 @@ function EditAnalyteModal({
               setSaving(true);
               await onSave({
                 raw_name: vals.raw_name,
-                value_numeric: vals.value_numeric ? parseFloat(vals.value_numeric) : null,
-                unit: vals.unit || null,
-                raw_reference_range: vals.raw_reference_range || null,
                 canonical_slug: vals.canonical_slug || null,
+                valueText: vals.value_numeric,
+                unit: vals.unit,
               });
               setSaving(false);
               onClose();
@@ -279,7 +298,7 @@ export function ParserDebugger() {
     setLoading(true);
 
     Promise.all([
-      supabase.from('lab_reports').select('id,report_date,status,lab_name,file_url').eq('id', reportId).maybeSingle(),
+      supabase.from('lab_reports').select('id,report_date,status,lab_name,file_url,estimated_cycle_phase').eq('id', reportId).maybeSingle(),
       supabase.from('parser_debug').select('*').eq('report_id', reportId).maybeSingle(),
       supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
     ]).then(([{ data: rpt }, { data: dbg }, { data: anas }]) => {
@@ -370,13 +389,36 @@ export function ParserDebugger() {
     };
   }, [analytes]);
 
-  const handleSaveAnalyte = async (rowId: string, updated: Partial<ReportAnalyteRow>) => {
-    const { error: saveErr } = await supabase
-      .from('report_analytes')
-      .update(updated)
-      .eq('id', rowId);
-    if (saveErr) { alert('Save failed: ' + saveErr.message); return; }
-    setAnalytes(prev => prev.map(a => a.id === rowId ? { ...a, ...updated } : a));
+  const handleSaveAnalyte = async (row: ReportAnalyteRow, updated: DebuggerAnalyteEdit) => {
+    // Non-value columns: still saved in place (R17 leaves them editable).
+    if (updated.raw_name !== row.raw_name || updated.canonical_slug !== row.canonical_slug) {
+      const { error: saveErr } = await supabase
+        .from('report_analytes')
+        .update({ raw_name: updated.raw_name, canonical_slug: updated.canonical_slug })
+        .eq('id', row.id);
+      if (saveErr) { alert('Save failed: ' + saveErr.message); return; }
+      setAnalytes(prev => prev.map(a => a.id === row.id
+        ? { ...a, raw_name: updated.raw_name, canonical_slug: updated.canonical_slug } : a));
+    }
+    // A changed value or unit: through correct_analyte, keeping the original reading.
+    const valueChanged = updated.valueText.trim() !== String(row.value_numeric ?? '')
+      || updated.unit.trim() !== (row.unit ?? '');
+    if (valueChanged) {
+      const target = { rawName: row.raw_name, canonicalSlug: row.canonical_slug, isCore: row.is_core };
+      const parsed = parseCorrectionInput(updated.valueText, updated.unit, target);
+      if (!parsed.ok) { alert('Save failed: ' + parsed.error); return; }
+      const result = await supabaseCorrectionPort.correctAnalyte({
+        reportAnalyteId: row.id,
+        value: parsed.value,
+        rawText: parsed.rawText,
+        unit: parsed.unit,
+        flag: correctedFlag(target, parsed.value, report?.estimated_cycle_phase, row.is_core && !!row.canonical_slug),
+      });
+      if (!result.ok) { alert('Save failed: the correction was not saved'); return; }
+      setSavedMsg('Correction saved; the original reading is kept');
+      setTimeout(() => setSavedMsg(''), 3000);
+      return;
+    }
     setSavedMsg('Saved');
     setTimeout(() => setSavedMsg(''), 2000);
   };
@@ -1035,7 +1077,7 @@ export function ParserDebugger() {
       {editRow && (
         <EditAnalyteModal
           row={editRow}
-          onSave={async (updated) => handleSaveAnalyte(editRow.id, updated)}
+          onSave={async (updated) => handleSaveAnalyte(editRow, updated)}
           onClose={() => setEditRow(null)}
         />
       )}

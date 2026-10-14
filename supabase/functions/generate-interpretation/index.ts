@@ -46,6 +46,7 @@ import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts"
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
 import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
+import { loadInterpretationAnalytes, readValueCorrectionsFlag, valueTables } from "../_shared/value-corrections.ts";
 import {
   formatUserContextBlock,
   LabReportContextSchema,
@@ -1349,38 +1350,21 @@ async function loadGenerationContext(
     );
   }
 
-  const { data: rawAnalytes } = await supabase
-    .from("report_analytes")
-    .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
-    .eq("lab_report_id", reportId)
-    .order("raw_name");
-
-  const analytes: AnalyteData[] = (rawAnalytes ?? []) as AnalyteData[];
+  // R18 (PK-CORRECT-01): the corrected view only while features.value_corrections
+  // is on; the queries, filters and order are the ones this function always used
+  // (_shared/value-corrections.ts).
+  const tables = valueTables(
+    await readValueCorrectionsFlag(() => supabase.from("app_public_config").select("key,value").eq("key", "features")),
+  );
+  const loaded = await loadInterpretationAnalytes(supabase, tables, {
+    reportId,
+    userId,
+    report: report ? { report_date: (report as LabReportData).report_date } : null,
+  });
+  const analytes: AnalyteData[] = loaded.analytes as AnalyteData[];
   debugLog(`[generate-interpretation] ${analytes.length} analytes for report ${reportId}`);
-
-  // ── Fetch most recent prior report analytes for the same user ──────────
-  let priorAnalytes: AnalyteData[] = [];
-  let priorReportDate: string | null = null;
-  if (report && userId) {
-    const { data: priorReport } = await supabase
-      .from("lab_reports")
-      .select("id, report_date")
-      .eq("user_id", userId)
-      .neq("id", reportId)
-      .lt("report_date", report.report_date)
-      .order("report_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (priorReport?.id) {
-      priorReportDate = priorReport.report_date;
-      const { data: priorRows } = await supabase
-        .from("report_analytes")
-        .select("id, raw_name, canonical_slug, value_numeric, raw_value_text, unit, raw_reference_range, normalized_min, normalized_max, normalized_operator, normalized_operator_value, is_core")
-        .eq("lab_report_id", priorReport.id);
-      priorAnalytes = (priorRows ?? []) as AnalyteData[];
-    }
-  }
+  const priorAnalytes: AnalyteData[] = loaded.priorAnalytes as AnalyteData[];
+  const priorReportDate: string | null = loaded.priorReportDate;
 
   const primaryContext = buildPrimaryContext(
     analytes,

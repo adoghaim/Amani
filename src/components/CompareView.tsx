@@ -3,6 +3,8 @@ import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Card } from './Card';
 import { LabReport, Biomarker } from '../types';
 import { COMPARE_SHIFTS_NOTE } from '../lib/scoring/insightCopy';
+import { CorrectionMark } from '../features/report/corrections/CorrectionMark';
+import { valueInkClass, type ValueCorrectionMark } from '../lib/corrections/provenance';
 
 interface CompareViewProps {
   reports: LabReport[];
@@ -50,8 +52,8 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
 
     const comparisons: Array<{
       name: string;
-      baseline: { value: number; unit: string };
-      followup: { value: number; unit: string };
+      baseline: { value: number; unit: string; correction?: ValueCorrectionMark };
+      followup: { value: number; unit: string; correction?: ValueCorrectionMark };
       delta: number;
       percentChange: number;
     }> = [];
@@ -68,8 +70,8 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
 
         comparisons.push({
           name: baseBiomarker.name,
-          baseline: { value: baseBiomarker.value, unit: baseBiomarker.unit },
-          followup: { value: followupBiomarker.value, unit: followupBiomarker.unit },
+          baseline: { value: baseBiomarker.value, unit: baseBiomarker.unit, correction: baseBiomarker.correction },
+          followup: { value: followupBiomarker.value, unit: followupBiomarker.unit, correction: followupBiomarker.correction },
           delta,
           percentChange,
         });
@@ -200,10 +202,12 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
                         {comp.name}
                       </td>
                       <td className="px-6 py-4 text-sm text-theme-muted-text">
-                        {comp.baseline.value} {comp.baseline.unit}
+                        <span className={valueInkClass(comp.baseline.correction, '')}>{comp.baseline.value} {comp.baseline.unit}</span>
+                        {comp.baseline.correction && <CorrectionMark mark={comp.baseline.correction} className="flex" />}
                       </td>
                       <td className="px-6 py-4 text-sm text-theme-muted-text">
-                        {comp.followup.value} {comp.followup.unit}
+                        <span className={valueInkClass(comp.followup.correction, '')}>{comp.followup.value} {comp.followup.unit}</span>
+                        {comp.followup.correction && <CorrectionMark mark={comp.followup.correction} className="flex" />}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         {comp.delta === 0 ? (

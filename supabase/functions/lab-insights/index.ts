@@ -8,6 +8,7 @@ import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { parseLabInsightsCompletion } from "../_shared/lab-insights-output.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
+import { loadComparisonBiomarkers, readValueCorrectionsFlag, valueTables } from "../_shared/value-corrections.ts";
 import { compareBiomarkerValues, isSignificantChange, topChanges, type BiomarkerChange } from "../_shared/trend-evidence.ts";
 
 const corsHeaders = {
@@ -141,15 +142,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: currentBiomarkers } = await supabaseAuth
-      .from("biomarkers")
-      .select("name, value, unit")
-      .eq("lab_report_id", currentReportId);
-
-    const { data: previousBiomarkers } = await supabaseAuth
-      .from("biomarkers")
-      .select("name, value, unit")
-      .eq("lab_report_id", previousReportId);
+    // R18 (PK-CORRECT-01): the corrected view only while features.value_corrections
+    // is on, read through her own client so RLS applies (_shared/value-corrections.ts).
+    const tables = valueTables(
+      await readValueCorrectionsFlag(() => supabase.from("app_public_config").select("key,value").eq("key", "features")),
+    );
+    const { current: currentBiomarkers, previous: previousBiomarkers } = await loadComparisonBiomarkers(
+      supabaseAuth, tables, currentReportId, previousReportId,
+    );
 
     // Same pairing rule as generation's stored trend evidence (_shared/trend-evidence.ts).
     const comparable = (b: BiomarkerData) => ({ key: normalizeName(b.name), name: b.name, value: b.value, unit: b.unit });

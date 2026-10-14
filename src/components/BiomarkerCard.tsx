@@ -15,6 +15,8 @@ import {
   type AuthorizedModelProse, type ComparisonBandLanguage, type FactualLanguage,
 } from '../lib/scoring/insightCopy';
 import { ModelProseText } from './ClinicalObservation';
+import { CorrectionMark } from '../features/report/corrections/CorrectionMark';
+import { valueInkClass, type ValueCorrectionMark } from '../lib/corrections/provenance';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
@@ -39,6 +41,8 @@ interface BiomarkerCardProps {
   baselineStaleness?: BaselineStaleness;
   trendDirection?: TrendDirection;
   trendStrength?: TrendStrength;
+  /** PK-CORRECT-01: she corrected this value; it is hers, in pen, with the misread value struck through. */
+  correction?: ValueCorrectionMark;
 }
 
 function baselineCopy(
@@ -219,6 +223,7 @@ export function BiomarkerCard({
   baselineStaleness,
   trendDirection,
   trendStrength,
+  correction,
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -289,9 +294,10 @@ export function BiomarkerCard({
             down a column.
           */}
           <div className="flex items-baseline gap-1.5 text-theme-muted-text-2">
-            <span className="font-mono text-xl text-theme-text tabular-nums">{formattedValue}</span>
+            <span className={`font-mono text-xl tabular-nums ${valueInkClass(correction, 'text-theme-text')}`}>{formattedValue}</span>
             <span className="font-mono text-xs">{unit}</span>
           </div>
+          {correction && <CorrectionMark mark={correction} className="mt-0.5" />}
         </div>
         <div className="shrink-0 pt-0.5 text-theme-muted-text-3">
           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}

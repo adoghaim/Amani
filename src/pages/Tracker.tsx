@@ -47,6 +47,7 @@ import {
   dateToKey,
   toDateOnly,
 } from '../utils/cyclePredictor';
+import { readTrackerBiomarkers } from '../lib/corrections/valueReaders';
 
 type ActiveTab = 'tracker' | 'labs' | 'interventions';
 
@@ -159,10 +160,8 @@ export function Tracker() {
 
       if (fetchedReports.length > 0) {
         const ids = fetchedReports.map((r) => r.id);
-        const { data: bm } = await supabase
-          .from('biomarkers')
-          .select('*')
-          .in('lab_report_id', ids);
+        // R18: the corrected view only while features.value_corrections is on.
+        const { data: bm } = await readTrackerBiomarkers<Biomarker>(ids);
         if (bm) {
           const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
             const bucket = acc[b.lab_report_id] ?? [];

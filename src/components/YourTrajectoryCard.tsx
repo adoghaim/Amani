@@ -1,4 +1,6 @@
 import { Sparkles, LineChart, ArrowRightLeft } from 'lucide-react';
+import { CorrectionMark } from '../features/report/corrections/CorrectionMark';
+import type { ValueCorrectionMark } from '../lib/corrections/provenance';
 import type { BiggestChange, TopFinding } from '../lib/insights/buildInsightSummary';
 import type { BiomarkerName } from '../types';
 import { authorizedLanguage, crossingObservation, type AuthorizedLanguage, valuesChangeObservation } from '../lib/scoring/insightCopy';
@@ -98,6 +100,8 @@ interface Props {
   reportCount: number;
   /** Destination-band language per analyte (R1). Absent means not established: neutral. */
   bandLanguage?: ReadonlyMap<BiomarkerName, AuthorizedLanguage>;
+  /** PK-CORRECT-01: values she corrected, this report's and the prior one's, by marker. */
+  corrections?: ReadonlyMap<string, { current?: ValueCorrectionMark; previous?: ValueCorrectionMark }>;
 }
 
 /**
@@ -136,7 +140,7 @@ export function selectTrajectoryBullets(
   return indexedBullets.slice(0, 4).map(x => x.b);
 }
 
-export function YourTrajectoryCard({ changes, primaryFinding, reportCount, bandLanguage }: Props) {
+export function YourTrajectoryCard({ changes, primaryFinding, reportCount, bandLanguage, corrections }: Props) {
   const top = selectTrajectoryBullets(changes, primaryFinding, bandLanguage);
 
   if (top.length === 0) return null;
@@ -168,11 +172,27 @@ export function YourTrajectoryCard({ changes, primaryFinding, reportCount, bandL
               {b.observations ? b.observations.map((language, index) => <span key={index}>
                 {index > 0 ? ' ' : ''}<ClinicalObservation language={language} />
               </span>) : b.text}
+              <TrajectoryCorrections marks={corrections?.get(b.key)} />
             </p>
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/** DESIGN.md provenance: a compared value she corrected keeps its mark here too. */
+function TrajectoryCorrections({ marks }: { marks?: { current?: ValueCorrectionMark; previous?: ValueCorrectionMark } }) {
+  if (!marks?.current && !marks?.previous) return null;
+  return (
+    <>
+      {marks.current && <span className="block font-normal"><span className="sr-only">This report: </span><CorrectionMark mark={marks.current} /></span>}
+      {marks.previous && (
+        <span className="block font-normal">
+          <span className="text-xs text-theme-muted-text-2">Earlier report: </span><CorrectionMark mark={marks.previous} />
+        </span>
+      )}
+    </>
   );
 }
 

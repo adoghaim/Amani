@@ -51,6 +51,11 @@ import {
 import { ReportHeaderActions } from '../features/report/header/ReportHeaderActions';
 import type { ReportHeaderContext } from '../features/report/header';
 import { ReportNotices } from '../features/report/notices/ReportNotices';
+import { CorrectionMark } from '../features/report/corrections/CorrectionMark';
+import { ValueCorrectionFlow } from '../features/report/corrections/ValueCorrectionFlow';
+import { readHistoricalBiomarkers, readPreviousBiomarkers, readReportValues } from '../lib/corrections/valueReaders';
+import { valueCorrectionsOn, valueTables } from '../lib/corrections/valueTables';
+import { isExplanationStale, latestTime, newestCorrectionAt, valueInkClass, type ValueCorrectionMark } from '../lib/corrections/provenance';
 import { shownExplanationOf, UNIDENTIFIED_EXPLANATION, type ShownExplanation } from '../features/report/notices';
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -310,9 +315,10 @@ function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
         )}
       </div>
       <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <span className="text-sm font-semibold text-theme-neutral-900 tabular-nums">
+        <span className={`text-sm font-semibold tabular-nums ${valueInkClass(analyte.correction, 'text-theme-neutral-900')}`}>
           {analyte.raw_value_text ?? analyte.value_numeric}
           {analyte.unit && <span className="text-theme-neutral-500 font-normal ml-1 text-xs">{analyte.unit}</span>}
+          {analyte.correction && <CorrectionMark mark={analyte.correction} className="block font-normal" />}
         </span>
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}
           data-language-category={placement?.category} data-language-source={placement?.authority.kind} data-language-cue={placement?.cue}>
@@ -421,6 +427,20 @@ export function ReportView() {
     stay null there.
   */
   const [shownExplanation, setShownExplanation] = useState<ShownExplanation | null>(null);
+  /*
+    PK-CORRECT-01 (D20, R19). "A value is wrong" opens the correction screen
+    only while features.value_corrections is on: PK-HARM-01's ReportProblemFlow
+    takes openValueCorrection as its onContinueToCorrection. After a correction
+    the explanation is refreshed as a new version; `explanationCovers` is the
+    newest correction the last successful refresh was written after, so the
+    stale mark clears even where the read did not return the version's time.
+  */
+  const correctionsOn = valueCorrectionsOn();
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [refreshingExplanation, setRefreshingExplanation] = useState(false);
+  const [refreshExplanationFailed, setRefreshExplanationFailed] = useState(false);
+  const [explanationCovers, setExplanationCovers] = useState<string | null>(null);
+  const explanationRequests = useRef(createRegenerationRequests()).current;
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
@@ -429,7 +449,7 @@ export function ReportView() {
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [, setPreviousBiomarkers] = useState<Biomarker[]>([]);
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
-  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>>(new Map());
+  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string; correction?: ValueCorrectionMark }>>(new Map());
   const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
@@ -650,14 +670,18 @@ export function ReportView() {
     }
     setReport(reportData as LabReport);
 
-    const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
-      supabase.from('biomarkers').select('*').eq('lab_report_id', reportId),
-      supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
+    // R18: the value tables come from valueTables(), the corrected views only
+    // while features.value_corrections is on (src/lib/corrections/valueReaders.ts).
+    const tables = valueTables();
+    const [values, { data: interpretationData }] = await Promise.all([
+      readReportValues<Biomarker, ReportAnalyte>(reportId!, tables),
       // Flag on, the body is read only through get-interpretation.
       freemium
         ? Promise.resolve({ data: null })
         : supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
     ]);
+    const biomarkersData = values.biomarkers.data;
+    const analytesData = values.analytes.data;
 
     if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
     if (analytesData) setReportAnalytes(analytesData as ReportAnalyte[]);
@@ -698,10 +722,7 @@ export function ReportView() {
       ]);
 
       if (prevReportData?.id) {
-        const { data: prevBioData } = await supabase
-          .from('biomarkers')
-          .select('*')
-          .eq('lab_report_id', prevReportData.id);
+        const { data: prevBioData } = await readPreviousBiomarkers<Biomarker>(prevReportData.id, tables);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
       }
       if (prevReportData?.report_date) {
@@ -716,14 +737,13 @@ export function ReportView() {
         }
 
         const allHistoricalIds = allReportsData.map(r => r.id);
-        const { data: allHistoricalBiomarkers } = await supabase
-          .from('biomarkers')
-          .select('name, value, unit, reference_min, reference_max, lab_report_id')
-          .in('lab_report_id', allHistoricalIds);
+        const { data: allHistoricalBiomarkers } = await readHistoricalBiomarkers<
+          Pick<Biomarker, 'name' | 'value' | 'unit' | 'reference_min' | 'reference_max' | 'lab_report_id'>
+        >(allHistoricalIds, tables);
 
         if (allHistoricalBiomarkers) {
           const histMap = new Map<string, { reportDate: string; value: number }[]>();
-          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
+          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null; correction?: ValueCorrectionMark }[]>();
           for (const b of allHistoricalBiomarkers) {
             const reportDate = reportDateMap.get(b.lab_report_id);
             if (!reportDate) continue;
@@ -736,11 +756,12 @@ export function ReportView() {
               unit: b.unit,
               reference_min: b.reference_min,
               reference_max: b.reference_max,
+              ...(b.correction ? { correction: b.correction } : {}),
             });
           }
           setHistoricalBiomarkers(histMap);
 
-          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>();
+          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string; correction?: ValueCorrectionMark }>();
           for (const [name, list] of occurrences) {
             const sorted = [...list].sort((a, b) => a.reportDate.localeCompare(b.reportDate));
             const last = sorted[sorted.length - 1];
@@ -753,6 +774,20 @@ export function ReportView() {
   };
 
   const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
+  // R19: when she last corrected one of this report's values (null with the flag off).
+  const newestCorrection = useMemo(
+    () => newestCorrectionAt([...biomarkers, ...reportAnalytes]),
+    [biomarkers, reportAnalytes],
+  );
+  // DESIGN.md provenance on the comparison: this report's and the prior value's marks, by marker.
+  const trajectoryCorrections = useMemo(() => {
+    const marks = new Map<string, { current?: ValueCorrectionMark; previous?: ValueCorrectionMark }>();
+    for (const b of biomarkers) if (b.correction) marks.set(b.name, { current: b.correction });
+    for (const [name, prior] of previousBiomarkerOccurrences) {
+      if (prior.correction) marks.set(name, { ...marks.get(name), previous: prior.correction });
+    }
+    return marks;
+  }, [biomarkers, previousBiomarkerOccurrences]);
   // V2-03: no pattern card may be built from an input Amani withholds for
   // this report's context (e.g. a PCOS pattern from an unphased LH:FSH ratio).
   // Amendment 4 (R2): a card that survives says only what its bands authorize.
@@ -1261,6 +1296,44 @@ export function ReportView() {
     }
   };
 
+  /*
+    R19 / D20: a new explanation version written from the corrected values,
+    through generate-interpretation's versioned writer (a new request_id, so
+    it appends a version and never rewrites one). Credits follow the
+    commitDeepAccess contract on the server: an already-claimed draw refreshes
+    as existing_claim with no credit, and a basic-only report stays basic.
+    It does not touch regeneration_count: whether a correction refresh counts
+    against "Regenerate (N left)" is Adell's pending ruling, and the proposed
+    default is no. A failure leaves the explanation and the stale mark on
+    screen, with the action offered again.
+  */
+  const handleRefreshExplanation = async (justCorrectedAt: string | null = null) => {
+    if (!report || refreshingExplanation) return;
+    // The newest correction this refresh is written after: the one just saved,
+    // when the page's own values have not caught up with it yet.
+    const covers = latestTime(newestCorrection, justCorrectedAt);
+    setRefreshingExplanation(true);
+    setRefreshExplanationFailed(false);
+    try {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('generate-interpretation', {
+        body: { reportId, request_id: explanationRequests.next(false) },
+      });
+      if (fnError || !fnData?.success) {
+        setRefreshExplanationFailed(true);
+        return;
+      }
+      explanationRequests.settle();
+      const writtenAt = typeof fnData?.version?.generated_at === 'string' ? fnData.version.generated_at as string : null;
+      setExplanationCovers(latestTime(writtenAt, covers));
+      await fetchReport();
+      if (freemium) refreshAccess();
+    } catch {
+      setRefreshExplanationFailed(true);
+    } finally {
+      setRefreshingExplanation(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm('Delete this report? This cannot be undone.')) return;
     const { error } = await supabase.from('lab_reports').delete().eq('id', reportId);
@@ -1338,6 +1411,7 @@ export function ReportView() {
       run: () => { void handleRegenerate(); },
     },
     deleteReport: () => { void handleDelete(); },
+    correctValue: correctionsOn ? () => setCorrectionOpen(true) : undefined,
   };
 
   const freemiumPanel = freemium ? (
@@ -1538,7 +1612,19 @@ export function ReportView() {
           {!isProcessing && (
             <ReportNotices
               report={report}
-              versions={{ shown: interpretation ? shownExplanation ?? UNIDENTIFIED_EXPLANATION : null }}
+              versions={{
+                shown: interpretation ? shownExplanation ?? UNIDENTIFIED_EXPLANATION : null,
+                // A correction the last successful refresh was already written after is not newer.
+                newestCorrectionAt: isExplanationStale(newestCorrection, explanationCovers) ? newestCorrection : null,
+              }}
+              actions={{
+                refreshExplanation: {
+                  label: 'Refresh explanation',
+                  onClick: () => { void handleRefreshExplanation(null); },
+                  busy: refreshingExplanation,
+                  failed: refreshExplanationFailed,
+                },
+              }}
             />
           )}
 
@@ -1686,6 +1772,7 @@ export function ReportView() {
               primaryFinding={insightSummary.primaryFinding}
               reportCount={historicalReportCount}
               bandLanguage={bandLanguageByKey(insightSummary.deltaMap.values())}
+              corrections={trajectoryCorrections}
             />
           )}
 
@@ -1924,6 +2011,7 @@ export function ReportView() {
                                 value={b.value}
                                 rawValueText={b.raw_value_text}
                                 unit={b.unit}
+                                correction={b.correction}
                                 labRefMin={b.reference_min}
                                 labRefMax={b.reference_max}
                                 cyclePhase={cyclePhase}
@@ -1961,6 +2049,22 @@ export function ReportView() {
 
         </div>
       </div>
+      {/* PK-CORRECT-01 (D20): opened only while features.value_corrections is on; renders nothing while closed. */}
+      {correctionsOn && (
+        <ValueCorrectionFlow
+          open={correctionOpen}
+          onClose={() => setCorrectionOpen(false)}
+          values={reportAnalytes}
+          biomarkers={biomarkers}
+          cyclePhase={report.estimated_cycle_phase}
+          onCorrected={correctedAt => {
+            void (async () => {
+              await fetchReport();
+              if (interpretation) await handleRefreshExplanation(correctedAt);
+            })();
+          }}
+        />
+      )}
     </Layout>
   );
 }

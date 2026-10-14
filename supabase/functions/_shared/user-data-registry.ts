@@ -111,6 +111,14 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
       "The interpretations name now belongs to the compatibility view. The lab_reports cascade carried over.",
   },
   { table: "interpretation_versions", ownerColumn: "lab_report_id", mechanism: "erase_reports_cascade" },
+  {
+    table: "analyte_corrections",
+    ownerColumn: "lab_report_id",
+    mechanism: "erase_reports_cascade",
+    reason: "PK-CORRECT-01 (20261015100000): values she corrected. lab_report_id, report_analyte_id and biomarker_id " +
+      "all cascade, so erase_reports takes them with the report; user_id also cascades from auth.users. No SET NULL " +
+      "foreign key: the append-only trigger would refuse that UPDATE.",
+  },
   { table: "interpretation_current_versions", ownerColumn: "lab_report_id", mechanism: "erase_reports_cascade" },
   {
     table: "interpretation_history_protection",

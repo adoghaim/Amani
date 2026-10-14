@@ -231,6 +231,8 @@ export interface Biomarker {
   reference_min: number | null;
   reference_max: number | null;
   flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown';
+  /** PK-CORRECT-01: present only when she corrected this value (read from biomarkers_corrected). */
+  correction?: import('../lib/corrections/provenance').ValueCorrectionMark;
 }
 
 export interface BiomarkerInput {
@@ -550,4 +552,6 @@ export interface ReportAnalyte {
   reviewed_by_user?: boolean | null;
 
   created_at: string;
+  /** PK-CORRECT-01: present only when she corrected this value (read from report_analytes_corrected). */
+  correction?: import('../lib/corrections/provenance').ValueCorrectionMark;
 }

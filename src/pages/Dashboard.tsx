@@ -36,6 +36,7 @@ import {
 import { getTrialDaysRemaining } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { formatDate } from '../utils/formatters';
+import { readDashboardBiomarkers } from '../lib/corrections/valueReaders';
 
 type NoteModalState = { open: boolean; defaultDate: string };
 type SymptomLogRow = Omit<SymptomLog, 'symptoms'> & { symptoms: unknown };
@@ -101,7 +102,8 @@ export function Dashboard() {
 
       if (fetchedReports.length > 0) {
         const ids = fetchedReports.map((r) => r.id);
-        const { data: bm } = await supabase.from('biomarkers').select('*').in('lab_report_id', ids);
+        // R18: the corrected view only while features.value_corrections is on.
+        const { data: bm } = await readDashboardBiomarkers<Biomarker>(ids);
         if (bm) {
           const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
             const bucket = acc[b.lab_report_id] ?? [];

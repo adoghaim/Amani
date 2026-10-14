@@ -24,6 +24,14 @@ export interface ReportHeaderContext {
   };
   /** Deletes the report, behind its confirmation. */
   deleteReport: () => void;
+  /**
+   * Opens "A value is wrong"'s correction screen (PK-CORRECT-01, D20).
+   * ReportView supplies it only while features.value_corrections is on. No
+   * header action shows it: PK-HARM-01's "Report a problem" continues into it
+   * (ReportProblemFlow's onContinueToCorrection) after recording the
+   * feedback row. Absent, "A value is wrong" records the feedback row only (A6).
+   */
+  correctValue?: () => void;
 }
 
 /** One action as the header shows it, as the primary button or a More item. */

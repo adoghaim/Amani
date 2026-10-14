@@ -303,6 +303,26 @@ describe('account erasure coverage, derived from the migrations', () => {
     expect(USER_DATA_REGISTRY.find(e => e.table === 'interpretations')?.mechanism).toBe('erase_reports_cascade');
   });
 
+  it('PK-CORRECT-01: analyte_corrections is found as user data and erased with its reports and its auth identity', () => {
+    const corrections = schema.get('analyte_corrections');
+    expect(corrections?.createdIn).toBe('20261015100000_analyte_corrections.sql');
+    expect(userOwnedTables(schema).has('analyte_corrections')).toBe(true);
+    expect(USER_DATA_REGISTRY.find(e => e.table === 'analyte_corrections')).toMatchObject({
+      ownerColumn: 'lab_report_id', mechanism: 'erase_reports_cascade',
+    });
+    expect(cascadesFrom(schema, 'lab_reports', 'analyte_corrections')).toBe(true);
+    expect(cascadesFrom(schema, 'auth.users', 'analyte_corrections')).toBe(true);
+    // Every foreign key cascades: none is SET NULL, an UPDATE the append-only trigger refuses.
+    expect(corrections!.fks.map(f => `${f.columns.join(',')}->${f.target}:${f.onDelete}`).sort()).toEqual([
+      'biomarker_id->biomarkers:cascade', 'lab_report_id->lab_reports:cascade',
+      'report_analyte_id->report_analytes:cascade', 'user_id->auth.users:cascade',
+    ]);
+    // Left out of the registry, the sweep names it.
+    expect(coverageProblems(schema, USER_DATA_REGISTRY.filter(e => e.table !== 'analyte_corrections'))).toEqual([
+      'analyte_corrections holds user data (created in 20261015100000_analyte_corrections.sql) but is not in user-data-registry.ts',
+    ]);
+  });
+
   it('a renamed table may be registered by its first name, but an ordered delete needs the current one, and a table registers once', () => {
     const renamed = deriveSchema([{ name: 'x.sql', sql: `
       CREATE TABLE users (id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE);

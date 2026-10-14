@@ -20,7 +20,7 @@ import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
-import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
+import { uploadFlag } from '../lib/scoring/uploadFlag';
 import { detectLabSource } from '../utils/detectLabSource';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
 import {
@@ -632,11 +632,7 @@ export function NewReport() {
         if (coreItems.length > 0) {
           const biomarkerInserts = coreItems.map(item => {
             const slug = item.canonical_slug! as BiomarkerName;
-            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase);
-            let flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown' = 'in_range';
-            if (status === 'borderline_low' || status === 'borderline_high') flagged = 'borderline';
-            else if (status === 'out_of_range_low' || status === 'out_of_range_high') flagged = 'out_of_range';
-            else if (status === 'unknown') flagged = 'unknown';
+            const flagged = uploadFlag(slug, item.value_numeric!, cyclePhase);
             return {
               lab_report_id: createdReportId!,
               name: slug,

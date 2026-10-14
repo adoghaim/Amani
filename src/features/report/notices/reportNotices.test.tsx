@@ -45,8 +45,9 @@ async function render(notices?: readonly ReportNotice[], v: ReportVersions = ver
 const titles = () => Array.from(app.querySelectorAll('[role="status"]')).map(n => n.querySelector('p')!.textContent);
 
 describe('report notices slot (R22)', () => {
-  it('ships empty: the page is exactly as it was', async () => {
-    expect(REPORT_NOTICES).toEqual([]);
+  it('ships only the planned R19 stale marker, which says nothing without a correction: the page is exactly as it was', async () => {
+    // PK-CORRECT-01 added the first planned entry (index.ts); nothing else.
+    expect(REPORT_NOTICES.map(n => n.id)).toEqual(['stale-explanation']);
     await render();
     expect(app.innerHTML).toBe('');
   });
