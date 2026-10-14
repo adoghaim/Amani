@@ -63,9 +63,20 @@ For any packet that adds or changes `supabase/migrations/`:
 
 **Post-deploy checklist (owner or delegated lead):**
 - [ ] `verify-privileges.sql` shows only intended grants (anon none; authenticated as designed).
-- [ ] `verify-triggers-enable-always.sql` returns zero rows in its "problems" query.
+- [ ] `verify-triggers-enable-always.sql` returns zero rows whose `status` starts with `FAIL` (see the runbook below).
 - [ ] Function probe: `OPTIONS /functions/v1/<name>` answers 200/204 for each deployed function.
 - [ ] Ledger `deployed.supabase` updated with date and who ran it.
+
+**Runbook: trigger-mode check (V2-03e-10, PK-03e-F). Run after every `supabase db push`, every restore (PITR, dump/reload, `pg_restore`) and every manual data fix.**
+
+1. Run `factory/sql/verify-triggers-enable-always.sql` read-only against the target database, as the owner, from the SQL editor or `psql`. Use no `--linked` CLI command and no service key in a script. It is one `SELECT` and writes nothing.
+2. Expected result once `20261013000000` is applied: the 12 `safety` rows show `expected_mode = A`, `actual_mode = A`, `status = ok`; `remember_interpretation_history` (`origin-owner-ruling`) shows `O`, `O`, `ok`. It stays ORIGIN by the owner's TASK-048 turn-5 ruling; do not "fix" it. The two `origin-by-design` rows (`iap_subscriptions_set_updated_at`, `auth.users.on_auth_user_created`) show `O` and `ok`, or `note: absent in this database`.
+   Between V2's `20261010000000` and `20261013000000` the six pre-V2 safety triggers (users clamps, claim limit, claim immutability, `protect_report_content_hash`, `prepare_interpretation_projection`) report `FAIL: safety trigger not ENABLE ALWAYS`. That is the known pre-fix state, and `20261013000000` is the fix.
+3. **Stop condition:** if any row's `status` starts with `FAIL` (`safety trigger not ENABLE ALWAYS`, `mode differs from expected ORIGIN`, `trigger missing` or `unclassified trigger`), stop the rollout. Do not run further migrations, do not deploy functions, and do not reopen writes after a restore. Report the rows to the owner. The fix is a reviewed forward migration (`ALTER TABLE public.<t> ENABLE ALWAYS TRIGGER <name>;`, or classifying a new trigger in the query and in `supabase/migrations/__verification__/trigger-enable-always.run.sh`). Never fix it ad hoc in production.
+4. Restores: run a data load as `postgres`. `protect_report_content_hash` exempts only `postgres` and `service_role`, so a replica-mode load run as another role that writes `content_hash` fails loudly with `42501`; that is intended. Never use `ALTER TABLE ... DISABLE TRIGGER` to get past a safety trigger: it disables even `ENABLE ALWAYS` triggers. Run step 1 again after any restore.
+5. Attach the query output to the ledger entry for the deploy or restore.
+
+The migration harness runs the same file. `trigger-enable-always.run.sh` (sourced by `__verification__/cases/170-trigger-enable-always.sh`, the last case `run.sh` runs) fails when any listed trigger's mode differs from expected, when one is missing, or when a trigger in `public` is unclassified. It also proves that with `session_replication_role = replica` a forbidden overwrite (claim ledger, privileged user columns, `content_hash`) is still rejected, with one killing mutation per pre-V2 safety trigger.
 
 ## G4 — Clinical authority
 

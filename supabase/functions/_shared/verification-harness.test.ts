@@ -150,6 +150,9 @@ describe('the split moved every case of the old run.sh, in its order', () => {
     'source "$HERE/legacy-quarantine.run.sh"',
     '# TASK-041: isolated reference catalog',
     'source "$HERE/interpretation-versions.run.sh"',
+    // PK-03e-F (PR #125) appended this block to the single-file run.sh; it
+    // lands after the split as its own case, still last.
+    'source "$HERE/trigger-enable-always.run.sh"',
   ];
 
   it('each case file holds exactly one of the old blocks, and they run in the old order', () => {
@@ -172,7 +175,7 @@ describe('the split moved every case of the old run.sh, in its order', () => {
   });
 
   it('each sub-harness is sourced by exactly one case', () => {
-    for (const sub of ['legacy-quarantine.run.sh', 'clinical-catalog.run.sh', 'interpretation-versions.run.sh']) {
+    for (const sub of ['legacy-quarantine.run.sh', 'clinical-catalog.run.sh', 'interpretation-versions.run.sh', 'trigger-enable-always.run.sh']) {
       const owners = harnessCaseNames().filter(name => caseText(name).includes(`source "$HERE/${sub}"`));
       expect(owners, sub).toHaveLength(1);
     }
