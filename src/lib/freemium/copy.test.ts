@@ -49,6 +49,13 @@ describe('locked card labels', () => {
   });
 });
 
+describe('signup bullets (PK-FIX-02, campaign fix e)', () => {
+  it('the cycle bullet states the cycle day of the test; no bullet claims every result is read against the cycle', () => {
+    expect(FREEMIUM_COPY.auth.signupIncluded).toContain('The cycle day of your test, when you add the day your last period started');
+    expect(FREEMIUM_COPY.auth.signupIncluded.filter(s => /every result/i.test(s))).toEqual([]);
+  });
+});
+
 describe('flag-on copy', () => {
   const strings = (value: unknown): string[] =>
     typeof value === 'string' ? [value]

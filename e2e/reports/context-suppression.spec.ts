@@ -155,6 +155,18 @@ test.describe('cycle phase recorded on the report', () => {
     await expect(page.getByText(/Luteal Phase Insufficiency|insufficien/i)).toHaveCount(0);
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
+
+  // PK-FIX-02 (c): the header never names the recorded phase in the alert
+  // palette. Merge train (#110 onto #106): PK-FIX-06-EXT (owner decision D10)
+  // removed the header pill; the phase appears only in the report's cycle line,
+  // after the cycle day and labelled as an estimate. This report has no cycle
+  // day, so the header shows no pill, no cycle line and no phase at all.
+  test('12. the report header shows no phase pill and no phase without a cycle day', async ({ page }) => {
+    await openReport(page, lutealPhaseReport.report.id);
+    await expect(page.getByTestId('report-phase-pill')).toHaveCount(0);
+    await expect(page.locator('[data-report-cycle-line]')).toHaveCount(0);
+    await expect(page.locator('[data-report-cycle-phase]')).toHaveCount(0);
+  });
 });
 
 test.describe('pattern cards from withheld inputs', () => {

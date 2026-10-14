@@ -378,8 +378,9 @@ const BASIS_FILES: Record<Exclude<NonClinicalBasis, 'css_token'>, (file: string,
   form_label: f => f.startsWith('src/features/'),
   input_matching_token: f => f === 'src/utils/parser/valueExtraction.ts' || f === 'src/lib/insights/categorizeNextSteps.ts',
   design_sample: f => f === 'src/pages/DesignGallery.tsx',
+  // PK-FIX-02 removed WelcomeStep's "better questions", its only use of this basis, so the file left the list.
   non_clinical_wording: f => [
-    'src/pages/SuccessPage.tsx', 'src/features/onboarding/steps/WelcomeStep.tsx', 'src/lib/insights/buildInsightSummary.ts',
+    'src/pages/SuccessPage.tsx', 'src/lib/insights/buildInsightSummary.ts',
     'src/pages/DesignGallery.tsx',
   ].includes(f),
 };

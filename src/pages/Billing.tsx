@@ -69,6 +69,9 @@ export function Billing() {
     return Math.max(0, 7 - daysSinceStart);
   };
 
+  // "1 day", never "1 days" (PK-FIX-02).
+  const dayCount = (days: number) => `${days} ${days === 1 ? 'day' : 'days'}`;
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     date.setDate(date.getDate() + 7);
@@ -315,7 +318,7 @@ export function Billing() {
                       <span className="font-medium">Status:</span> Free Trial
                     </p>
                     <p className="text-theme-text">
-                      <span className="font-medium">Days Remaining:</span> {getTrialDaysRemaining()} days
+                      <span className="font-medium">Days Remaining:</span> {dayCount(getTrialDaysRemaining())}
                     </p>
                     <p className="text-theme-text">
                       <span className="font-medium">Trial Ends:</span> {userProfile.trial_start_date ? formatDate(userProfile.trial_start_date) : '—'}
@@ -411,7 +414,7 @@ export function Billing() {
                 Your trial is active
               </h3>
               <p className="text-theme-text">
-                You have {getTrialDaysRemaining()} days remaining in your free trial.
+                You have {dayCount(getTrialDaysRemaining())} remaining in your free trial.
                 After your trial ends, a subscription is required to continue using Amani.
               </p>
             </Card>
