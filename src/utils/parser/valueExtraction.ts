@@ -1,6 +1,6 @@
 import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine } from './textUtils';
-import { detectReferenceRange } from './rangeDetection';
+import { bindReferenceRange } from './rangeDetection';
 import { detectUnit } from './labelMatching';
 
 const NUM_RE = /(\d+\.\d+|\d+)/g;
@@ -55,10 +55,13 @@ export function extractValueFromWindow(
   const unit = detectUnit(blockText) ?? preferredUnits[0] ?? null;
 
   const windowText = cleanLines.join(' ');
-  const referenceResult = detectReferenceRange(labelLine, adapter)
-    ?? detectReferenceRange(blockText, adapter)
-    ?? detectReferenceRange(windowText, adapter)
-    ?? undefined;
+  // Only the marker's own lines are read for its interval (PK-FIX-05): taking
+  // the first interval in the block or window bound a neighbour's interval, or
+  // the first of several cycle-phase intervals. When the block prints more than
+  // one, nothing is bound and the ambiguity travels with the result.
+  const binding = bindReferenceRange(cleanLines, adapter);
+  const referenceResult = binding.range;
+  const ambiguity = binding.ambiguous ? { referenceAmbiguity: binding.ambiguous } : {};
 
   const knownRangeNumbers = new Set<string>();
 
@@ -67,9 +70,12 @@ export function extractValueFromWindow(
     knownRangeNumbers.add(String(parseFloat(String(v))));
   }
 
-  if (referenceResult?.min !== undefined) addRangeNumber(referenceResult.min);
-  if (referenceResult?.max !== undefined) addRangeNumber(referenceResult.max);
-  if (referenceResult?.comparator)        addRangeNumber(referenceResult.comparator.value);
+  // Every interval printed for this marker, bound or not: none of its numbers is the result.
+  for (const printed of binding.candidates) {
+    if (printed.min !== undefined) addRangeNumber(printed.min);
+    if (printed.max !== undefined) addRangeNumber(printed.max);
+    if (printed.comparator)        addRangeNumber(printed.comparator.value);
+  }
 
   const ALL_RANGE_RE = /(\d+\.?\d*)\s*[-–—]\s*(\d+\.?\d*)/g;
   let rm: RegExpExecArray | null;
@@ -208,7 +214,7 @@ export function extractValueFromWindow(
         (referenceResult.comparator.value === rawThreshold ||
          knownRangeNumbers.has(String(rawThreshold)));
       if (!isRefComp) {
-        return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult };
+        return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult, ...ambiguity };
       }
     }
   }
@@ -264,19 +270,19 @@ export function extractValueFromWindow(
   if (labelCandidates.length > 0) {
     if (valueCandidates.length === 0 || !referenceResult) {
       const best = pickBest(labelCandidates);
-      if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
+      if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult, ...ambiguity };
     } else {
       // Both candidate arrays are non-empty above, so pickBest returns non-null here.
       const bestLabel = pickBest(labelCandidates);
       const bestValue = pickBest(valueCandidates);
       if (bestLabel && bestValue) {
         if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
-          return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
+          return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult, ...ambiguity };
         }
-        return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
+        return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult, ...ambiguity };
       }
-      if (bestLabel) return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult };
-      if (bestValue) return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult };
+      if (bestLabel) return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult, ...ambiguity };
+      if (bestValue) return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult, ...ambiguity };
     }
   }
 
@@ -300,7 +306,7 @@ export function extractValueFromWindow(
           ambiguousComparator ??= parsed;
           continue;
         }
-        return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
+        return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult, ...ambiguity };
       }
     }
   }
@@ -308,7 +314,7 @@ export function extractValueFromWindow(
   // PRIORITY 3: plain numeric candidates from value lines.
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
-    if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult };
+    if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult, ...ambiguity };
   }
 
   // PRIORITY 5: fallback — scan raw (unfiltered) lines for a standalone numeric value.
@@ -325,7 +331,7 @@ export function extractValueFromWindow(
     if (!parsed) continue;
     if (knownRangeNumbers.has(smToken) || knownRangeNumbers.has(String(parseFloat(smToken)))) continue;
     if (parsed.value > 0 && parsed.value <= 100000) {
-      return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult };
+      return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult, ...ambiguity };
     }
   }
 
@@ -337,7 +343,7 @@ export function extractValueFromWindow(
   // pipeline treats them as extended (non-core, non-scored) items.
   const qualitative = detectQualitativeToken(cleanLines);
   if (qualitative) {
-    return { value: 0, rawValue: qualitative, value_text: qualitative, unit, referenceResult };
+    return { value: 0, rawValue: qualitative, value_text: qualitative, unit, referenceResult, ...ambiguity };
   }
 
   return null;
