@@ -462,3 +462,7 @@ source "$HERE/clinical-catalog.run.sh"
 # TASK-048: non-destructive persistence foundation, the ordinary version writer
 # (§8, turn 10), erasure and (§10) the reader cutover to the selected version.
 source "$HERE/interpretation-versions.run.sh"
+
+# PK-PL-C: rehearse the PREPARED-NOT-APPLIED production SQL (factory/sql/post-deploy
+# and factory/sql/rollback) on a disposable clone of the fully migrated database.
+source "$HERE/factory-prepared.run.sh"
