@@ -127,20 +127,63 @@ export function scrubDomTarget(target: string): string {
   return scrubText(target.replace(REDACTED_DOM_ATTRIBUTES, '[$1]'));
 }
 
+/*
+  PK-FIX-01b: free text that can carry report content. An exception message is
+  where a parser or JSON error echoes what it was reading ("Unexpected token in
+  'Jane Doe ... Ferritin 12 ng/mL'"), so on top of scrubText it loses quoted
+  text (where names and report text sit), every number-with-unit (a lab value),
+  and everything past MAX_FREE_TEXT_LENGTH characters.
+*/
+const QUOTED_PATTERN = /"[^"\n]*"|'[^'\n]*'|`[^`\n]*`/g;
+/* A quoted lower-case identifier ('value', 'json_output') names code, not a person: kept. */
+const CODE_IDENTIFIER = /^(["'`])[a-z_$][A-Za-z0-9_$.]*\1$/;
+const MEASUREMENT_PATTERN =
+  /(?:[<>≤≥]\s?)?\d+(?:[.,]\d+)?\s?(?:%|[A-Za-zµμ]{1,5}\/[A-Za-z0-9.^]{1,6}|(?:mmol|pmol|nmol|mIU|uIU|µIU|mcg|mg|ng|pg|µg|ug|IU|iu|U|g|L|dL|mL|fL|kg|lb|bpm)\b)/g;
+export const MAX_FREE_TEXT_LENGTH = 500;
+export const REPORT_TEXT_REMOVED = '[report text removed]';
+
+/**
+ * scrubText, plus quoted text, lab values, and echoed report text: for
+ * messages that may carry report content.
+ *
+ * A message holding more than one lab value, or longer than
+ * MAX_FREE_TEXT_LENGTH, is report text echoed by a parser or JSON error, where
+ * names and dates of birth sit unquoted and cannot be found by pattern. It is
+ * cut to its first three words, which name the failure, plus a marker.
+ */
+export function scrubFreeText(text: string): string {
+  const out = scrubText(text)
+    .replace(QUOTED_PATTERN, (quoted) => (CODE_IDENTIFIER.test(quoted) ? quoted : '[text]'))
+    .replace(MEASUREMENT_PATTERN, '[value]');
+  const values = out.split('[value]').length - 1;
+  if (values > 1 || text.length > MAX_FREE_TEXT_LENGTH) {
+    return `${out.split(/\s+/).filter(Boolean).slice(0, 3).join(' ')} ${REPORT_TEXT_REMOVED}`;
+  }
+  return out;
+}
+
 const MAX_SCRUB_DEPTH = 6;
+
+/*
+  PK-FIX-01b: keys whose values are a person's details or her health content,
+  whatever their shape. Redacted outright rather than pattern-scrubbed, because
+  a name or a lab value has no pattern to find.
+*/
+const SENSITIVE_KEY =
+  /^(?:[a-z]+_)?(?:name|first_?name|last_?name|full_?name|display_?name|email|phone|dob|birth_?date|date_of_birth|address|value|value_numeric|values|result|results|raw_?text|text|report_?text|extracted_?text|notes?|interpretation|biomarkers?|analytes?)$/i;
 
 /** Recursively redact identifiers from an arbitrary structured value. */
 export function scrubValue(value: unknown, depth = 0): unknown {
   if (typeof value === 'string') return scrubText(value);
-  if (depth >= MAX_SCRUB_DEPTH || value === null || typeof value !== 'object') {
-    return value;
-  }
+  if (value === null || typeof value !== 'object') return value;
+  /* Past the depth cap, fail closed: an unscrubbed subtree must not be sent. */
+  if (depth >= MAX_SCRUB_DEPTH) return '[truncated]';
   if (Array.isArray(value)) {
     return value.map((entry) => scrubValue(entry, depth + 1));
   }
   const out: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = scrubValue(entry, depth + 1);
+    out[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : scrubValue(entry, depth + 1);
   }
   return out;
 }
@@ -171,7 +214,7 @@ export function scrubBreadcrumb(
   if (typeof crumb.message === 'string') {
     crumb.message = crumb.category?.startsWith('ui.')
       ? scrubDomTarget(crumb.message)
-      : scrubText(crumb.message);
+      : scrubFreeText(crumb.message);
   }
 
   const data = crumb.data;
@@ -180,7 +223,7 @@ export function scrubBreadcrumb(
       if (URL_DATA_KEYS.includes(key)) {
         if (typeof value === 'string') data[key] = scrubUrl(value);
       } else {
-        data[key] = scrubValue(value);
+        data[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : scrubValue(value);
       }
     }
   }
@@ -212,10 +255,14 @@ export function scrubEvent(event: ScrubbableEvent): ScrubbableEvent {
   delete event.extra;
 
   if (typeof event.message === 'string') {
-    event.message = scrubText(event.message);
+    event.message = scrubFreeText(event.message);
   }
-  if (event.logentry && typeof event.logentry.message === 'string') {
-    event.logentry.message = scrubText(event.logentry.message);
+  if (event.logentry) {
+    if (typeof event.logentry.message === 'string') {
+      event.logentry.message = scrubFreeText(event.logentry.message);
+    }
+    /* Format arguments are values by definition (PK-FIX-01b): never sent. */
+    delete event.logentry.params;
   }
 
   const request = event.request;
@@ -244,7 +291,7 @@ export function scrubEvent(event: ScrubbableEvent): ScrubbableEvent {
   }
 
   for (const value of event.exception?.values ?? []) {
-    if (typeof value.value === 'string') value.value = scrubText(value.value);
+    if (typeof value.value === 'string') value.value = scrubFreeText(value.value);
   }
 
   if (event.contexts) {

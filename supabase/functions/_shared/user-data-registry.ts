@@ -191,6 +191,15 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
       "CASCADE removes it when the users profile row (the last ordered delete) goes. report_id is ON DELETE " +
       "SET NULL, so erase_reports leaves it until then.",
   },
+  {
+    table: "ai_call_costs",
+    ownerColumn: "user_id",
+    mechanism: "exception",
+    reason: "PK-FIX-01b AI cost ledger: function name, model, token counts and an estimated cost, no health data. " +
+      "Not swept, so the monthly spend the budget alert sums survives: user_id REFERENCES auth.users(id) ON " +
+      "DELETE SET NULL (20261013050000_ai_cost_ledger.sql), so deleteAuthUser, the last step, nulls the user id " +
+      "and the rows are no longer the user's.",
+  },
 ];
 
 /** The `ordered_delete` entries, in the order delete-user-data runs them. */

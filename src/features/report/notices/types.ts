@@ -16,6 +16,12 @@ export interface ShownExplanation {
 export interface ReportVersions {
   /** The explanation on screen, or null while none is shown. */
   shown: ShownExplanation | null;
+  /**
+   * PK-FIX-01b (DT9): the last generation request for this report, in this
+   * session, answered that the AI is paused, so the explanation shown is the
+   * basic one. Absent means no pause was reported.
+   */
+  aiPaused?: boolean;
 }
 
 /** What every report notice is given (R22): the report and its versions. */

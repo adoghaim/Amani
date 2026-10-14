@@ -51,6 +51,13 @@ import {
   LabReportContextSchema,
   UserProfileContextSchema,
 } from "../_shared/schemas/context.ts";
+import { callModelUnlessPaused } from "../_shared/ai-pause.ts";
+import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+
+// PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
+// AI cost ledger, and the kill switch. Once per isolate.
+const reporter = edgeErrorReporter("generate-interpretation");
+const costLedger = edgeAiCostLedger("generate-interpretation");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1427,6 +1434,8 @@ async function produceInterpretation(input: {
   generateDeep: boolean;
   policyActive: boolean;
   openaiApiKey: string | undefined;
+  /** PK-FIX-01b: the owner's kill switch is on. No model call; the deterministic interpretation is served. */
+  aiPaused: boolean;
   recordCost?: (sample: GenerationSample) => void;
 }) {
   const { ctx: { report, analytes, primaryContext, userContextBlock, isOptimizationOnly },
@@ -1451,10 +1460,22 @@ async function produceInterpretation(input: {
 
   let aiInterpretation: AIInterpretationOutput | null = null;
 
-  if (shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && report) {
-    console.log("[generate-interpretation] Trying OpenAI...");
-    const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
-      input.recordCost, trendEvidence);
+  // PK-FIX-01b (D12, DT9): while the kill switch is on the model is not called,
+  // so aiInterpretation stays null, the deterministic interpretation below is
+  // served exactly as on an OpenAI failure, and interpretationGenerated (from
+  // aiInterpretation !== null) keeps commitDeepAccess from charging a claim.
+  const wantsModel = shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && !!report;
+  const { result: aiResult, modelCalled } = await callModelUnlessPaused({
+    paused: input.aiPaused,
+    wanted: wantsModel,
+    call: () => {
+      console.log("[generate-interpretation] Trying OpenAI...");
+      return tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
+        input.recordCost, trendEvidence);
+    },
+  });
+
+  if (modelCalled && report) {
     if (aiResult) {
       // Phase/day/confidence come from the report, never the model; any
       // model-supplied values are discarded before storage.
@@ -1468,6 +1489,8 @@ async function produceInterpretation(input: {
     } else {
       console.log("[generate-interpretation] OpenAI failed, using fallback");
     }
+  } else if (wantsModel && input.aiPaused) {
+    console.log("[generate-interpretation] AI paused by the kill switch — deterministic interpretation, no model call");
   } else if (!generateDeep) {
     // on_demand skips model spend after introductory access is exhausted.
     console.log("[generate-interpretation] Deep access not granted — deterministic interpretation");
@@ -1512,7 +1535,9 @@ async function produceInterpretation(input: {
     );
   }
 
-  return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations };
+  // The pause changed this answer only when the model would otherwise have been called.
+  const pauseApplied = input.aiPaused && wantsModel;
+  return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied };
 }
 
 // ─── Version store (TASK-048) ────────────────────────────────────────────────
@@ -1632,6 +1657,11 @@ Deno.serve(async (req: Request) => {
   let reportId: string | null = null;
   const costSamples: GenerationSample[] = [];
   let costContext: GenerationCostContext | null = null;
+  // PK-FIX-01b: every model call this request made, for ai_call_costs; and the kill switch.
+  const aiCallSamples: GenerationSample[] = [];
+  let callerId: string | null = null;
+  let aiPaused = false;
+  const pausedFlag = () => (aiPaused ? { ai_paused: true } : {});
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -1651,6 +1681,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    callerId = user.id;
     await enforceRateLimit(createRateLimitStore(supabase), {
       userId: user.id,
       endpoint: "generate-interpretation",
@@ -1877,10 +1908,16 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations } = await produceInterpretation({
-      ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive, openaiApiKey,
-      recordCost: costContext ? sample => costSamples.push(sample) : undefined,
+    const killSwitchOn = await aiPausedNow();
+    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied } = await produceInterpretation({
+      ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive, openaiApiKey, aiPaused: killSwitchOn,
+      recordCost: sample => {
+        aiCallSamples.push(sample);
+        if (costContext) costSamples.push(sample);
+      },
     });
+    // Reported to the app (DT9) only when the pause is why this answer is the basic one.
+    aiPaused = pauseApplied;
 
     const source = shaped.source;
 
@@ -1891,7 +1928,7 @@ Deno.serve(async (req: Request) => {
     if (appendsVersion && !isVersionable({ source, depth: shaped.depth, floorViolations })) {
       console.warn("[generate-interpretation] Regeneration not versioned:", JSON.stringify({ source, depth: shaped.depth }));
       const refused = regenerationFailedResponse(generateDeep);
-      return new Response(JSON.stringify(refused.body), {
+      return new Response(JSON.stringify({ ...refused.body, ...pausedFlag() }), {
         status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -1997,8 +2034,8 @@ Deno.serve(async (req: Request) => {
       success: true, source,
       access: shaped.tier === "plus" ? "full" : "basic",
       interpretation: shaped.tier === "plus" ? servedFull : servedBasic(servedBasicProjection),
-      ...visibleClaimProjection(servedBasicProjection), ...identity,
-    } : { success: true, source, ...identity }), {
+      ...visibleClaimProjection(servedBasicProjection), ...identity, ...pausedFlag(),
+    } : { success: true, source, ...identity, ...pausedFlag() }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
@@ -2024,6 +2061,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    inBackground(reporter.captureException(err, { stage: "generate" }));
+
     if (reportId) {
       try {
         await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
@@ -2037,6 +2076,15 @@ Deno.serve(async (req: Request) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } finally {
+    // PK-FIX-01b: one ai_call_costs row per model call, without holding the response.
+    for (const sample of aiCallSamples) {
+      inBackground(costLedger.record({
+        functionName: "generate-interpretation",
+        userId: callerId,
+        model: sample.model,
+        usage: { prompt_tokens: sample.promptTokens, completion_tokens: sample.completionTokens },
+      }));
+    }
     if (costContext) {
       await recordGenerationCosts(costContext, costSamples, async row => {
         const { error } = await supabase.from("interpretation_generation_costs").insert(row);

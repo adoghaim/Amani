@@ -13,6 +13,8 @@ import { checkSubscriptionLive, handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { uploadRequiresSubscription } from '../lib/freemium/gates';
 import { generateFailureKind } from '../lib/freemium/reportAccess';
+import { isAiPausedResponse, noteAiPaused } from '../lib/aiPause';
+import { OcrPausedNotice } from '../components/OcrPausedNotice';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
@@ -130,6 +132,8 @@ export function NewReport() {
   */
   const [aiSkipReason, setAiSkipReason] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // PK-FIX-01b (D12, D7): photo reading answered that the AI is paused.
+  const [ocrPaused, setOcrPaused] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [cameraCapturing, setCameraCapturing] = useState(false);
 
@@ -324,6 +328,7 @@ export function NewReport() {
     setStep(2);
     setExtracting(true);
     setError('');
+    setOcrPaused(false);
 
     try {
       if (file.type === 'application/pdf') {
@@ -425,6 +430,12 @@ export function NewReport() {
         const redirect = await handle402(invokeError);
         if (redirect) { navigate(redirect, { replace: true }); return; }
         throw new Error(`OCR fallback failed: ${invokeError.message}`);
+      }
+
+      if (isAiPausedResponse(data)) {
+        // Not an error: the owner paused AI processing. Say so calmly; manual entry still works.
+        if (runId === extractionRunRef.current) setOcrPaused(true);
+        return;
       }
 
       if (data.items && data.items.length > 0) applyExtractedItems(data.items, runId);
@@ -755,7 +766,9 @@ export function NewReport() {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
-      }).then(async ({ error: interpError }) => {
+      }).then(async ({ data: interpData, error: interpError }) => {
+        // The report screen is usually open by now; it shows the pause notice (DT9).
+        if (!interpError && createdReportId) noteAiPaused(createdReportId, isAiPausedResponse(interpData));
         if (interpError) {
           /*
             Flag on, upload completion is never a paywall. But the server has
@@ -877,6 +890,8 @@ export function NewReport() {
             {error}
           </div>
         )}
+
+        {ocrPaused && <OcrPausedNotice className="mb-6" />}
 
         {/* ── STEP 1: Upload ─────────────────────────────────────────────── */}
         {step === 1 && !guidedStep && (

@@ -387,8 +387,22 @@ describe('the current exceptions and the auth cascade are what their reasons say
     expect(fk('stripe_customers', 'auth.users').map(f => f.onDelete)).toEqual(['no action']);
   });
 
-  it('every exception is one of the four reviewed here', () => {
+  it('ai_call_costs (PK-FIX-01b) is nulled, not erased: auth.users deletion sets user_id null, and nothing cascades it away', () => {
+    expect(fk('ai_call_costs', 'auth.users').map(f => [f.columns, f.onDelete])).toEqual([[['user_id'], 'set null']]);
+    // No other foreign key, so no other deletion (users, lab_reports) reaches it.
+    expect(schema.get('ai_call_costs')!.fks).toHaveLength(1);
+    expect(cascadesFrom(schema, 'auth.users', 'ai_call_costs')).toBe(false);
+    expect(cascadesFrom(schema, 'lab_reports', 'ai_call_costs')).toBe(false);
+    // Not swept early, so the month's spend the budget alert sums survives deletion.
+    expect(orderedDeletes().map(e => e.table)).not.toContain('ai_call_costs');
+    expect(reasonOf('ai_call_costs')).toContain('ON DELETE SET NULL');
+    expect(reasonOf('ai_call_costs')).toContain('20261013050000_ai_cost_ledger.sql');
+    // The budget alert log holds no user data at all.
+    expect(userOwnedTables(schema).has('ai_budget_alerts')).toBe(false);
+  });
+
+  it('every exception is one of the five reviewed here', () => {
     expect(USER_DATA_REGISTRY.filter(e => e.mechanism === 'exception').map(e => e.table).sort())
-      .toEqual(['interpretation_generation_costs', 'stripe_customers', 'stripe_orders', 'stripe_subscriptions']);
+      .toEqual(['ai_call_costs', 'interpretation_generation_costs', 'stripe_customers', 'stripe_orders', 'stripe_subscriptions']);
   });
 });

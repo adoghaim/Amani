@@ -7,6 +7,13 @@ import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
+import { aiPausedBody } from "../_shared/ai-pause.ts";
+import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+
+// PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
+// AI cost ledger, and the kill switch. Once per isolate.
+const reporter = edgeErrorReporter("extract-biomarkers");
+const costLedger = edgeAiCostLedger("extract-biomarkers");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -268,6 +275,16 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // PK-FIX-01b (D12): while the owner's kill switch is on, no model call. No
+    // items, so the app keeps its own parse; before the rate limit, so a paused
+    // attempt spends no quota.
+    if (await aiPausedNow()) {
+      return new Response(
+        JSON.stringify({ ...aiPausedBody(), items: [] }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     await enforceRateLimit(createRateLimitStore(supabaseAdmin), {
       userId: user.id,
       endpoint: "extract-biomarkers",
@@ -429,6 +446,12 @@ CONFIDENCE:
     }
 
     const openaiData = await openaiResponse.json();
+    inBackground(costLedger.record({
+      functionName: "extract-biomarkers",
+      userId: user.id,
+      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-4o-mini",
+      usage: openaiData?.usage,
+    }));
     const content = openaiData.choices[0].message.content;
 
     let rawItems: RawExtractedItem[];
@@ -578,6 +601,7 @@ CONFIDENCE:
       );
     }
 
+    inBackground(reporter.captureException(error, { stage: "extract" }));
     return new Response(
       JSON.stringify({ error: errorMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
