@@ -1,0 +1,129 @@
+# Native build checks for pull requests to main. Complements ci.yml (lint,
+# typecheck, tests, build, edge functions, migration harness) and e2e.yml.
+#
+# Web e2e is e2e.yml ("Browser smoke"): the isolated Playwright suite in
+# Chromium, WebKit and Firefox, served with no env files and no inherited
+# VITE_* values (e2e/env-isolation.test.mjs). This workflow does not repeat it.
+#
+# - Android build (assembleDebug): every pull request to main.
+# - Android emulator smoke: opt-in, with the label factory:android-emulator or
+#   a manual run.
+# - iOS simulator build: opt-in, with the label factory:ios or a manual run;
+#   macOS minutes cost more than Linux.
+#
+# The bundle is built against synthetic Supabase values that cannot resolve (the
+# same convention as e2e/server.mjs): these jobs compile and launch the app and
+# never reach a backend. Never put production values here.
+name: Native build
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      run_ios:
+        description: Run the iOS simulator build (macOS runner, higher cost)
+        type: boolean
+        default: false
+      run_android_emulator:
+        description: Run the Android emulator smoke test
+        type: boolean
+        default: false
+
+concurrency:
+  # A label run gets its own group, so adding an unrelated label (a wave label,
+  # say) never cancels the build of the same commit.
+  group: native-build-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name || 'build' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VITE_SUPABASE_URL: https://amani-native-ci.invalid
+  VITE_SUPABASE_ANON_KEY: synthetic-anon-key-not-a-credential
+
+jobs:
+  android-build:
+    name: Android build (assembleDebug)
+    # Labels other than factory:* do not change the code, so they do not rebuild.
+    if: github.event.action != 'labeled' || startsWith(github.event.label.name, 'factory:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      # v4 installs only platform-tools by default. v3 also asked for the
+      # retired 'tools' package, which current runner images no longer have.
+      - uses: android-actions/setup-android@v4
+      - run: npm ci
+      - name: Build web bundle and sync Capacitor
+        run: npm run cap:sync
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  android-emulator:
+    name: Android emulator smoke (optional)
+    needs: android-build
+    if: (github.event_name == 'workflow_dispatch' && inputs.run_android_emulator) || contains(github.event.pull_request.labels.*.name, 'factory:android-emulator')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: android-debug-apk
+          path: apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          script: |
+            adb install -r apk/*.apk
+            adb shell monkey -p com.amani.health -c android.intent.category.LAUNCHER 1
+            sleep 15
+            adb shell pidof com.amani.health
+            adb exec-out screencap -p > launch.png
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-emulator-evidence
+          path: launch.png
+
+  ios-build:
+    name: iOS simulator build (opt-in, macOS cost)
+    if: (github.event_name == 'workflow_dispatch' && inputs.run_ios) || (contains(github.event.pull_request.labels.*.name, 'factory:ios') && (github.event.action != 'labeled' || github.event.label.name == 'factory:ios'))
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run cap:sync
+      - name: Build for simulator, signing disabled
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 50

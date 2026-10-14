@@ -18,14 +18,14 @@ Rules: no skipped or deleted tests to get green; snapshot updates must explain e
 
 ## G1 — Web end-to-end in three browsers
 
-- Playwright specs for the packet's user flow pass in **Chromium, WebKit and Firefox** (workflow `factory-e2e.yml`, job `web-e2e`).
-- Run against a local production build (`npm run build && npm run preview`) or the Netlify preview, pointed at a **non-production Supabase project** with synthetic users and synthetic lab fixtures. **to-verify:** which test project exists; production is never used.
+- Playwright specs for the packet's user flow pass in **Chromium, WebKit and Firefox** (`npm run test:e2e`; in CI, workflow `e2e.yml`, job "Browser smoke").
+- The suite is isolated: `e2e/server.mjs` serves the app with no env files and no inherited `VITE_*` values (`npm run test:e2e:isolation` proves it), so specs use synthetic data and mocked network and never reach a backend. Real-backend e2e needs a **non-production Supabase project**, which does not exist yet [Pending]; production is never used.
 - Evidence: Playwright HTML report + traces uploaded as artifacts; screenshots for UI changes.
 
 ## G2 — Native builds and smoke
 
 - `npm run cap:sync` (runs `BUILD_TARGET=native vite build && npx cap sync`).
-- **Android:** `cd android && ./gradlew assembleDebug` succeeds (JDK 21, SDK 36, as in `native-grade.md`). Optional: emulator smoke (app launches, login screen renders, packet screen reachable) via the `android-emulator` job.
+- **Android:** `cd android && ./gradlew assembleDebug` succeeds (JDK 21, SDK 36, as in `native-grade.md`); CI runs it on every PR (workflow `native-build.yml`). Optional: emulator smoke (app launches, login screen renders, packet screen reachable) via the `android-emulator` job.
 - **iOS:** `xcodebuild` simulator build with signing disabled succeeds (macOS runner; opt-in because of cost). Signed archives and store uploads are **owner-only** and outside the factory.
 - Device-only checks (edge-to-edge on Android 15+, purchases, App Links) stay on the release QA checklist; the factory reports them as pending.
 

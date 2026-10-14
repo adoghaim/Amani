@@ -39,8 +39,8 @@ tester agent adds/extends e2e + native proof     reviewer agent (adversarial)
 | `factory/templates/` | PR body, feature-request intake, Brain-update note. |
 | `factory/sql/` | Read-only verification queries (privileges, trigger mode). |
 | `factory/scripts/report.mjs` | Prints the daily report from `status.json` (no network). |
-| `factory/e2e/` | Proposed Playwright setup for 3-browser e2e (to-verify against existing config). |
-| `.github/workflows/factory-e2e.yml` | Draft workflow: web e2e x3 browsers, Android build (+ optional emulator smoke), iOS build (opt-in, macOS cost). |
+| `factory/e2e/` | Where web e2e runs and what real-backend e2e would still need. |
+| `.github/workflows/native-build.yml` | Android build on every PR to main (+ optional emulator smoke), iOS simulator build (opt-in, macOS cost). Web e2e is `e2e.yml`. |
 
 ## Rules every agent follows
 
