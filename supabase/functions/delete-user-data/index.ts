@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17.7.0";
 import { errorMessage } from "../_shared/errors.ts";
+import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import {
   AccountDeletionNotReadyError,
   checkUserDataTablesReady,
@@ -14,6 +15,7 @@ import {
   type StoreSubscriptionRecord,
 } from "../_shared/account-deletion.ts";
 import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
+import { createStoreTeardownActions } from "../_shared/store-teardown.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +61,17 @@ Deno.serve(async (req: Request) => {
     const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY");
     const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-11-20.acacia" }) : null;
 
+    // Play cancellation and RevenueCat customer deletion. Every request, its
+    // timeout and retry policy (STORE_REQUEST_POLICY) and its failure policy
+    // live in ../_shared/store-teardown.ts; each step is off while its secret
+    // is unset.
+    const storeTeardown = createStoreTeardownActions({
+      env: (name) => Deno.env.get(name),
+      http: fetchWithBackoff,
+      now: () => Date.now(),
+      log: (level, message) => console[level](`[delete-user-data] ${message}`),
+    });
+
     const actions: AccountDeletionActions = {
       async checkDataTablesReady() {
         // One GET per table delete-user-data deletes from, at most one owner
@@ -86,7 +99,7 @@ Deno.serve(async (req: Request) => {
         // lives in ../_shared/account-deletion.ts where it can be tested.
         const { data, error } = await supabase
           .from("iap_subscriptions")
-          .select("platform, product_id, status, expires_at, environment")
+          .select("platform, product_id, store_subscription_id, status, expires_at, environment")
           .eq("user_id", userId);
 
         /*
@@ -97,6 +110,10 @@ Deno.serve(async (req: Request) => {
         if (error) throw new Error(`Reading iap_subscriptions failed: ${error.message}`);
         return (data ?? []) as StoreSubscriptionRecord[];
       },
+
+      // When each runs is decided in ../_shared/account-deletion.ts.
+      cancelPlaySubscriptions: storeTeardown.cancelPlaySubscriptions,
+      deleteRevenueCatSubscriber: storeTeardown.deleteRevenueCatSubscriber,
 
       async getStripeCustomerId(userId) {
         // Prefer stripe_customers (current); fall back to users.stripe_customer_id (legacy).
