@@ -19,9 +19,13 @@ import { orderedDeletes } from './user-data-registry.ts';
 const source = readFileSync(new URL('../delete-user-data/index.ts', import.meta.url), 'utf8');
 // Every delete the function may issue after erasure: the unchanged user-keyed
 // sweep (lab_reports included, by user_id) and the profile row.
-const USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introductory_deep_access_claims',
+const V2_USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introductory_deep_access_claims',
   'complimentary_entitlements', 'lab_reports', 'period_logs', 'symptom_logs', 'notification_preferences',
   'reminders', 'audit_events', 'rate_limits', 'iap_beta_testers', 'users'];
+// Tables later packets added to the registry, each swept at its place.
+// PK-HARM-01: interpretation_feedback, by user_id, before lab_reports.
+const USER_KEYED = V2_USER_KEYED.flatMap(table =>
+  (table === 'lab_reports' ? ['interpretation_feedback', table] : [table]));
 
 function slice(startMarker: string, endMarker: string) {
   const start = source.indexOf(startMarker);
@@ -142,9 +146,20 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
 
   it('PK-INT-01: the registry drives exactly the V2 sweep, in the V2 order', () => {
     expect(orderedDeletes().map(entry => entry.table)).toEqual(USER_KEYED);
+    // Later tables only add to the V2 sweep; its own order is untouched.
+    expect(orderedDeletes().map(entry => entry.table).filter(table => V2_USER_KEYED.includes(table))).toEqual(V2_USER_KEYED);
     // The handler's method really calls the shared function it was given above.
     expect(source).toMatch(/import \{[^}]*\bdeleteUserDataTables\b[^}]*\} from "\.\.\/_shared\/account-deletion\.ts";/);
     expect(method).toContain('await deleteUserDataTables({');
+  });
+
+  it('PK-HARM-01: interpretation_feedback is swept by user_id after erase_reports and before lab_reports', async () => {
+    const fake = recordingSupabase(['r1']);
+    await deleteDataTables(fake.client)('u');
+    const ops = started(fake.events);
+    expect(ops.indexOf('delete:interpretation_feedback')).toBeGreaterThan(ops.indexOf('rpc:erase_reports'));
+    expect(ops.indexOf('delete:interpretation_feedback')).toBeLessThan(ops.indexOf('delete:lab_reports'));
+    expect(fake.deleteFilters).toContainEqual({ op: 'delete:interpretation_feedback', column: 'user_id' });
   });
 
   it('PK-INT-01: each sweep filters on the same column as before: user_id, and id for the profile row', async () => {

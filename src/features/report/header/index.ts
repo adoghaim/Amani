@@ -1,4 +1,4 @@
-import { RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { Flag, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 import { DELETE_REPORT_ACTION_ID } from './arrange';
 import type { ReportHeaderAction } from './types';
 
@@ -44,6 +44,12 @@ export const REPORT_HEADER_ACTIONS: readonly ReportHeaderAction[] = [
       disabled: regeneration.busy,
       busy: regeneration.busy,
     } : null),
+  },
+  {
+    // PK-HARM-01 (D20): behind features.interpretation_feedback, which ReportView reads.
+    id: 'report-problem',
+    more: true,
+    resolve: ({ reportProblem }) => (reportProblem ? { label: 'Report a problem', icon: Flag, onSelect: reportProblem } : null),
   },
   {
     id: DELETE_REPORT_ACTION_ID,

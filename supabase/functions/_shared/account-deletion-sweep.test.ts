@@ -387,6 +387,14 @@ describe('the current exceptions and the auth cascade are what their reasons say
     expect(fk('stripe_customers', 'auth.users').map(f => f.onDelete)).toEqual(['no action']);
   });
 
+  it('PK-HARM-01: interpretation_feedback is user data, swept by user_id, and also goes with its report and its account', () => {
+    expect(userOwnedTables(schema).has('interpretation_feedback')).toBe(true);
+    expect(USER_DATA_REGISTRY.find(e => e.table === 'interpretation_feedback'))
+      .toEqual(expect.objectContaining({ ownerColumn: 'user_id', mechanism: 'ordered_delete' }));
+    expect(fk('interpretation_feedback', 'lab_reports').map(f => [f.columns, f.onDelete])).toEqual([[['report_id'], 'cascade']]);
+    expect(fk('interpretation_feedback', 'auth.users').map(f => [f.columns, f.onDelete])).toEqual([[['user_id'], 'cascade']]);
+  });
+
   it('every exception is one of the four reviewed here', () => {
     expect(USER_DATA_REGISTRY.filter(e => e.mechanism === 'exception').map(e => e.table).sort())
       .toEqual(['interpretation_generation_costs', 'stripe_customers', 'stripe_orders', 'stripe_subscriptions']);

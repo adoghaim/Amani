@@ -66,6 +66,14 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
       "does not depend on FK ordering.",
   },
   {
+    table: "interpretation_feedback",
+    ownerColumn: "user_id",
+    mechanism: "ordered_delete",
+    reason: "PK-HARM-01 problem reports, which may hold her free text. Also reachable via the CASCADEs on " +
+      "lab_reports (report_id) and auth.users (user_id), but swept explicitly by user_id so no row depends on " +
+      "the order the report graph or the auth identity goes in.",
+  },
+  {
     table: "lab_reports",
     ownerColumn: "user_id",
     mechanism: "ordered_delete",

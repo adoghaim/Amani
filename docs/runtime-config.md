@@ -74,7 +74,7 @@ them needs a migration, and no migration may add one (D5).
 | Flag | What it switches on |
 |---|---|
 | `consent_gate` | the reproductive-data consent gate (its server check reads the same key) |
-| `interpretation_feedback` | feedback on an interpretation |
+| `interpretation_feedback` | "Report a problem" in the report's More menu (PK-HARM-01; needs migration 20261015020000 pushed first; docs/ops/adverse-event-triage.md) |
 | `value_corrections` | correcting an extracted value |
 | `data_export` | self-serve data export |
 | `exit_question` | the cancel-flow exit question (D18) |
