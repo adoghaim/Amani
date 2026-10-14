@@ -6,8 +6,9 @@ import { publicUrl } from '../../lib/appUrl';
 import { openExternalUrl } from '../../lib/native'
 import { errorMessage } from '../../lib/errors'
 import { clientFreemiumActive } from '../../lib/tier'
-import { FREEMIUM_COPY } from '../../lib/freemium/copy'
 import { firstPartyEvents } from '../../lib/firstPartyEventsClient'
+import { planCheckoutCta } from '../../lib/planCta'
+import { readSavedPromoCode } from '../../lib/savedPromoCode'
 
 interface PricingCardProps {
   product: StripeProduct
@@ -34,6 +35,7 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
       // PK-EXP5 funnel step: not awaited, so checkout never waits on it.
       void firstPartyEvents.track('checkout_started', { platform: 'web' })
 
+      const promoCode = readSavedPromoCode()
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
         method: 'POST',
         headers: {
@@ -44,7 +46,10 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
           price_id: product.priceId,
           success_url: publicUrl('/success'),
           cancel_url: publicUrl('/app/pricing'),
-          mode: product.mode
+          mode: product.mode,
+          // Her saved creator/partner code, if any (D29). The server decides
+          // whether it applies; nothing here promises a discount.
+          ...(promoCode ? { promo_code: promoCode } : {}),
         })
       })
 
@@ -52,6 +57,8 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
 
       if (data.url) {
         await openExternalUrl(data.url)
+      } else if (typeof data.message === 'string') {
+        setError(data.message)
       } else {
         setError(`Error (${response.status}): ${data.error || 'Unknown error'}`)
       }
@@ -65,6 +72,8 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
   const fmt = (price: number) => formatPrice(price, product.currency);
 
   const intervalLabel = product.interval === 'year' ? '/yr' : '/mo'
+  const cta = planCheckoutCta(product, { freemium: clientFreemiumActive() })
+  const noteId = `plan-cta-note-${product.id}`
 
   return (
     <div
@@ -110,14 +119,19 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
           onClick={handleSubscribe}
           loading={loading}
           variant={isPopular ? 'primary' : 'outline'}
-          className="w-full"
+          className="w-full min-h-[44px]"
+          aria-describedby={noteId}
         >
-          {clientFreemiumActive() ? FREEMIUM_COPY.pricing.subscribe : 'Start free trial'}
+          {cta.label}
         </Button>
+        {/* What checkout actually does: no trial is added at checkout. */}
+        <p id={noteId} className="mt-3 text-sm text-theme-muted-text-2">{cta.note}</p>
 
-        {error && (
-          <p className="mt-3 text-sm text-theme-flag-low text-center">{error}</p>
-        )}
+        <div aria-live="polite">
+          {error && (
+            <p className="mt-3 text-sm text-theme-flag-low">{error}</p>
+          )}
+        </div>
       </div>
     </div>
   )

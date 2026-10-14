@@ -8,7 +8,8 @@ export default defineConfig({
       '**/reports/clinical-language-policy.spec.ts', '**/interpretation/version-regeneration.spec.ts',
       '**/reports/report-header.spec.ts', '**/runtime-config.spec.ts', '**/update-gate.spec.ts',
       '**/signup/first-party-events.spec.ts', '**/reports/report-problem.spec.ts',
-      '**/consent/consent-gate.spec.ts', '**/interpretation/regeneration-failure.spec.ts'],
+      '**/consent/consent-gate.spec.ts', '**/interpretation/regeneration-failure.spec.ts',
+      '**/billing/checkout-promo-code.spec.ts'],
   // The redirect race is an explicit diagnostic opt-in, excluded from the CI gate.
   ...(process.env.E2E_QUARANTINE === '1'
     ? { grep: /@quarantine/ }
