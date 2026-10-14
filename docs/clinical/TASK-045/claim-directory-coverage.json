@@ -35,6 +35,11 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/features/deviceLock",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
     "directory": "src/features/onboarding",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
@@ -91,6 +96,11 @@
   },
   {
     "directory": "src/lib/cards",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/deviceLock",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { authSessionStorage } from './native'
 
 /*
   No fallback to the production project. The anon key is public by design, so
@@ -28,7 +29,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    // PK-DEVICE-01: on iOS and Android the session lives in the Keychain or
+    // Keystore, migrated from localStorage on first launch. On the web this is
+    // undefined, so supabase-js keeps its localStorage default.
+    storage: authSessionStorage()
   }
 })
 

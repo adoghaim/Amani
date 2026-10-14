@@ -9,6 +9,8 @@ import { isNative, onAppUrlOpen } from './lib/native'
 import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 import { safeRedirectTarget } from './lib/redirect'
+import { deviceLock } from './lib/deviceLock'
+import { DeviceLockGate } from './features/deviceLock/DeviceLockGate'
 
 // Eagerly loaded — tiny pages used immediately on arrival
 import { Landing } from './pages/Landing'
@@ -145,6 +147,11 @@ function AndroidBackHandler() {
 
     import('@capacitor/app').then(({ App: CapApp }) => {
       CapApp.addListener('backButton', ({ canGoBack }) => {
+        // Locked (PK-DEVICE-01): back closes the app, never the page under the lock.
+        if (deviceLock.getState().locked) {
+          CapApp.exitApp();
+          return;
+        }
         // At root routes — exit the app rather than navigating back to a blank state
         const rootRoutes = ['/app', '/login', '/signup', '/', '/pricing', '/success', '/reset-password'];
         if (rootRoutes.includes(location.pathname) || !canGoBack) {
@@ -167,7 +174,9 @@ function App() {
       <AndroidBackHandler />
       <DeepLinkHandler />
       <ErrorBoundary>
-        <AppRoutes />
+        <DeviceLockGate>
+          <AppRoutes />
+        </DeviceLockGate>
       </ErrorBoundary>
     </Router>
   )
