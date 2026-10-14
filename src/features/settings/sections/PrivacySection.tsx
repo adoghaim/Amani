@@ -1,5 +1,6 @@
 import { Card } from '../../../components/Card';
 import { ShieldCheck, Lock } from 'lucide-react';
+import { ConsentSettings } from '../../consent/ConsentSettings';
 
 export function PrivacySection() {
   return (
@@ -21,6 +22,8 @@ export function PrivacySection() {
             <Lock className="w-3.5 h-3.5" />
             <span>All data is scoped to your account and encrypted in transit</span>
           </div>
+          {/* PK-CONSENT-01 (D25): consent status and withdrawal. Nothing while features.consent_gate is off. */}
+          <ConsentSettings />
         </div>
       </div>
     </Card>

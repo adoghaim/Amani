@@ -32,8 +32,10 @@ const V2_USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introdu
 // Tables later packets added to the registry, each swept at its place.
 // PK-HARM-01: interpretation_feedback, by user_id, before lab_reports.
 // PK-EXP5: app_events and user_attribution, by user_id, just before the profile row.
+// PK-CONSENT-01: consent_records, by user_id, after rate_limits and before iap_beta_testers.
 const USER_KEYED = V2_USER_KEYED.flatMap(table =>
   (table === 'lab_reports' ? ['interpretation_feedback', table]
+    : table === 'iap_beta_testers' ? ['consent_records', table]
     : table === 'users' ? ['app_events', 'user_attribution', table] : [table]));
 
 function slice(startMarker: string, endMarker: string) {

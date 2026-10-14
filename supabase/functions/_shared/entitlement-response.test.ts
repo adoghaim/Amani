@@ -35,6 +35,10 @@ import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretat
 import { generationSample } from './generation-cost';
 import * as versionWrite from './interpretation-version-write';
 import { callModelUnlessPaused } from './ai-pause';
+import { consentRefusal, createConsentGate } from './consent';
+// PK-CONSENT-01: features.consent_gate off (the seed), as before the gate existed; a consent read would throw.
+const consentGateOff = () => createConsentGate({ readPublicConfig: async () => [{ key: 'features', value: {} }],
+  readCurrentConsents: async () => { throw new Error('flag off: consent is never read'); }, now: () => 0 });
 
 const source = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
 function evaluate(fragment: string, values: Record<string, unknown>) {
@@ -95,6 +99,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       enforceRateLimit: async () => {}, createRateLimitStore: () => ({}),
       // PK-EXP5: the funnel event is a no-op here; app-events.test.ts covers it.
       logServerEvent: async () => true, createAppEventSink: () => ({}),
+      consentRefusal, consentGateFor: consentGateOff,
       GenerateInterpretationRequestSchema: { safeParse: () => ({ success: true, data: { reportId: 'r' } }) },
       checkUserSubscription: async (_client: unknown, _user: string, active: boolean) => active
         ? ({ allowed: true, plan: 'free' }) : ({ allowed: true, reason: 'trial' }), freemiumActive: () => activeFlag,

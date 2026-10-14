@@ -20,8 +20,9 @@ from (values
   (11, 'reminders'::text, null::text),
   (12, 'audit_events'::text, null::text),
   (13, 'rate_limits'::text, null::text),
-  (14, 'iap_beta_testers'::text, null::text),
-  (15, 'users'::text, null::text)
+  (14, 'consent_records'::text, '20261015040000'::text),
+  (15, 'iap_beta_testers'::text, null::text),
+  (16, 'users'::text, null::text)
 ) as t(ord, table_name, required_migration)
 where to_regclass(format('public.%I', t.table_name)) is null
 order by t.ord;

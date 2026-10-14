@@ -132,6 +132,17 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
   { table: "audit_events", ownerColumn: "user_id", mechanism: "ordered_delete" },
   { table: "rate_limits", ownerColumn: "user_id", mechanism: "ordered_delete" },
   {
+    table: "consent_records",
+    ownerColumn: "user_id",
+    mechanism: "ordered_delete",
+    reason: "PK-CONSENT-01 consent ledger. Append-only, but its guard lets service_role delete (this sweep) and " +
+      "the auth.users ON DELETE CASCADE through, so erasure removes it; also reachable via that cascade. " +
+      "DEPLOY ORDER: never deploy delete-user-data built from this entry's commit or later until migration " +
+      "20261015040000 is pushed; until then the function's readiness check refuses every deletion (503) rather " +
+      "than deleting part of an account.",
+    requiresMigration: "20261015040000",
+  },
+  {
     table: "iap_beta_testers",
     ownerColumn: "user_id",
     mechanism: "ordered_delete",

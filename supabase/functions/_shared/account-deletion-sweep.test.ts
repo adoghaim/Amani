@@ -456,7 +456,9 @@ describe('the current exceptions and the auth cascade are what their reasons say
     expect(problems).toEqual([]);
     // Not vacuous: this packet's table is the one that needs it.
     expect(deletionDeployPrerequisites().filter(p => p.requiresMigration !== null))
-      .toEqual([{ table: 'interpretation_feedback', requiresMigration: '20261015020000' }]);
+      .toEqual([{ table: 'interpretation_feedback', requiresMigration: '20261015020000' },
+        // PK-CONSENT-01: the consent ledger, created after the V2 runbook too.
+        { table: 'consent_records', requiresMigration: '20261015040000' }]);
     expect(migrations.some(m => m.name.startsWith(V2_RUNBOOK_LAST_MIGRATION))).toBe(true);
     // The reason says the ordering in words, for whoever reads the registry.
     expect(reasonOf('interpretation_feedback')).toContain('never deploy delete-user-data');
