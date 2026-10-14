@@ -11,7 +11,7 @@
     "build": "vite build",
     "lint": "eslint . && npm run clinical:lint",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && npm run clinical:typecheck && tsc --noEmit -p e2e/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && npm run clinical:typecheck && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p tools/mcp-amani/tsconfig.json",
     "check:functions": "bash docs/check-functions.sh npx --yes deno@2",
     "test": "vitest run",
     "test:watch": "vitest",
