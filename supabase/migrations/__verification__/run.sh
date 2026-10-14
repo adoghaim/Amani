@@ -462,3 +462,8 @@ source "$HERE/clinical-catalog.run.sh"
 # TASK-048: non-destructive persistence foundation, the ordinary version writer
 # (§8, turn 10), erasure and (§10) the reader cutover to the selected version.
 source "$HERE/interpretation-versions.run.sh"
+
+# PK-03e-F (V2-03e-10): every safety trigger is ENABLE ALWAYS, checked with the
+# post-deploy query factory/sql/verify-triggers-enable-always.sql, by replica-mode
+# behaviour and by killing mutations. Runs last: it needs the full V2 chain.
+source "$HERE/trigger-enable-always.run.sh"
