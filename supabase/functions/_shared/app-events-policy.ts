@@ -8,7 +8,7 @@
  *     stripe-webhook, iap-webhook, generate-interpretation, delete-user-data)
  *     through app-events.ts;
  *   - the client (src/lib/events/firstPartyEvents.ts), which imports this file;
- *   - the migration 20261013010000_first_party_events.sql, whose SQL functions
+ *   - the migration 20261015010000_first_party_events.sql, whose SQL functions
  *     app_events_allowed_events(), app_events_client_events(),
  *     app_events_anon_events() and app_events_allowed_prop_keys() carry the
  *     same lists. SQL cannot import TypeScript, so app-events-policy.test.ts

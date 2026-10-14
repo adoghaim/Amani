@@ -2,7 +2,7 @@
 # A case of the migration harness. run.sh sources every cases/NNN-name.sh in
 # lexical order in one shell; see its header. Not a standalone script.
 #
-# PK-EXP5: 20261013010000_first_party_events.sql, the first-party event
+# PK-EXP5: 20261015010000_first_party_events.sql, the first-party event
 # ledger (app_events), signup attribution (user_attribution), the
 # log-anon-event counters (anon_event_counters), the RPCs log_app_event and
 # save_signup_attribution, and the funnel_daily view.
@@ -25,7 +25,7 @@
 # indexes; erasure by ordered delete and by the auth.users cascade. Details:
 # first-party-events.verify.sql.
 
-FIRST_PARTY_EVENTS=20261013010000_first_party_events.sql
+FIRST_PARTY_EVENTS=20261015010000_first_party_events.sql
 ATOMIC_RATE_LIMITS=20260823010000_atomic_rate_limits.sql
 
 echo

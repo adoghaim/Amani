@@ -181,7 +181,7 @@ type DbResult = PromiseLike<{ data?: unknown; error: { message: string } | null 
  *   createAppEventSink(row => supabase.from("app_events").insert(row))
  * so this module needs no Supabase import and works with any client version.
  * app_events grants INSERT to service_role only, and increment_anon_event_counter
- * is service_role only (20261013010000_first_party_events.sql).
+ * is service_role only (20261015010000_first_party_events.sql).
  */
 export function createAppEventSink(insert: (row: Record<string, unknown>) => DbResult): ServerEventSink {
   return {

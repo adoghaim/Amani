@@ -22,7 +22,7 @@ import {
   than keeping copies.
 */
 
-const MIGRATION = readFileSync(new URL('../../migrations/20261013010000_first_party_events.sql', import.meta.url), 'utf8');
+const MIGRATION = readFileSync(new URL('../../migrations/20261015010000_first_party_events.sql', import.meta.url), 'utf8');
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 /** The quoted strings of `CREATE FUNCTION public.<name>() ... ARRAY[ ... ]`. */

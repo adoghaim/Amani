@@ -1,5 +1,5 @@
 /*
-  Enough of a Supabase project for 20261013010000_first_party_events.sql
+  Enough of a Supabase project for 20261015010000_first_party_events.sql
   (PK-EXP5) to be built and probed, in its own database (first_party_events).
 
   What the migration depends on, made explicit:

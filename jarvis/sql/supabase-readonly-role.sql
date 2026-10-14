@@ -26,7 +26,7 @@ select
 from days d;
 
 -- PK-EXP5 first-party funnel (read by collectors/funnel.mjs). Run this part only after the owner has
--- applied supabase/migrations/20261013010000_first_party_events.sql. public.funnel_daily is
+-- applied supabase/migrations/20261015010000_first_party_events.sql. public.funnel_daily is
 -- service_role only; this view runs as its owner, so jarvis_readonly reads the counts and nothing else.
 -- utm_source is attacker-controlled text (restricted to [A-Za-z0-9._-]{1,64} by the database);
 -- Jarvis treats it as data (jarvis/lib/untrusted.mjs).

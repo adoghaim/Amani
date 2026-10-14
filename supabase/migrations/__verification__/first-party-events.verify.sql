@@ -1,5 +1,5 @@
 /*
-  Assertions for 20261013010000_first_party_events.sql (PK-EXP5), run by
+  Assertions for 20261015010000_first_party_events.sql (PK-EXP5), run by
   cases/180-first-party-events.sh in the first_party_events database after
   first-party-events.prelude.sql, 20260823010000_atomic_rate_limits.sql and the
   migration.

@@ -3,7 +3,7 @@
 Amani's own funnel measurement (EXP-5), with no third-party tracker, pixel or fingerprinting.
 Owner decisions D5.3, D6.1, D6.2, D17, D29 and engineering decision R12 (2026-10-12/13).
 
-Migration: `supabase/migrations/20261013010000_first_party_events.sql`. Edge function:
+Migration: `supabase/migrations/20261015010000_first_party_events.sql`. Edge function:
 `supabase/functions/log-anon-event`. Nothing here is live until the owner pushes the migration,
 deploys the function, sets its secret and turns `features.first_party_events` on (see "Deploy").
 
@@ -109,7 +109,7 @@ select * from funnel_daily where day >= current_date - 13 order by day desc, eve
 
 ## Deploy (each step needs owner GO)
 
-1. `supabase db push` applies `20261013010000_first_party_events.sql` (one-shot; a replay is refused).
+1. `supabase db push` applies `20261015010000_first_party_events.sql` (one-shot; a replay is refused).
    Its relation to the V2 runbook (PR #93) and the migration-order rule (D6) is the owner's call.
 2. Set the function secret `ANON_EVENT_IP_SALT_SECRET` (a long random value; the name only is in
    the repo), then `supabase functions deploy log-anon-event`.
