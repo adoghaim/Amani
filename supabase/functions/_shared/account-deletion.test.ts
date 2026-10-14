@@ -1,11 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   deleteUserAccount,
+  deleteUserDataTables,
   selectBillingStoreSubscriptions,
   StoreSubscriptionAcknowledgementRequiredError,
   type AccountDeletionActions,
   type StoreSubscriptionRecord,
+  type UserDataTablesPort,
 } from './account-deletion.ts';
+import { orderedDeletes, type UserDataRegistryEntry } from './user-data-registry.ts';
 
 const storeRecord = (
   overrides: Partial<StoreSubscriptionRecord> = {},
@@ -280,5 +283,89 @@ describe('selectBillingStoreSubscriptions', () => {
 
   it('handles an empty list', () => {
     expect(selectBillingStoreSubscriptions([])).toEqual([]);
+  });
+});
+
+describe('deleteUserDataTables — driven by user-data-registry.ts (PK-INT-01)', () => {
+  function makePort(reportIds: string[], failOn?: string) {
+    const calls: string[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const step = async (name: string, fail: boolean) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      calls.push(name);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      inFlight -= 1;
+      if (fail) throw new Error(`${name} failed`);
+    };
+    const port: UserDataTablesPort = {
+      listReportIds: vi.fn(async () => {
+        await step('listReportIds', failOn === 'listReportIds');
+        return reportIds;
+      }),
+      eraseReports: vi.fn(async (ids: readonly string[]) => {
+        await step(`eraseReports:${ids.join(',')}`, failOn === 'eraseReports');
+      }),
+      deleteOwnedRows: vi.fn(async (table: string, column: string) => {
+        await step(`delete:${table}.${column}`, failOn === table);
+      }),
+    };
+    return { port, calls, maxInFlight: () => maxInFlight };
+  }
+  const sweep = orderedDeletes().map(e => `delete:${e.table}.${e.ownerColumn}`);
+
+  it('erases the report graphs in one call first, then every ordered delete in registry order, the profile row last', async () => {
+    const { port, calls } = makePort(['r2', 'r1']);
+    await deleteUserDataTables(port, 'user-1');
+    expect(calls).toEqual(['listReportIds', 'eraseReports:r2,r1', ...sweep]);
+    expect(calls.at(-1)).toBe('delete:users.id');
+    expect(port.eraseReports).toHaveBeenCalledOnce();
+  });
+
+  it('runs one call at a time, never two at once', async () => {
+    const { port, maxInFlight } = makePort(['r1']);
+    await deleteUserDataTables(port, 'user-1');
+    expect(maxInFlight()).toBe(1);
+  });
+
+  it('makes no erase_reports call for a user with no reports', async () => {
+    const { port, calls } = makePort([]);
+    await deleteUserDataTables(port, 'user-1');
+    expect(port.eraseReports).not.toHaveBeenCalled();
+    expect(calls).toEqual(['listReportIds', ...sweep]);
+  });
+
+  it('deletes nothing when the report listing fails', async () => {
+    const { port } = makePort(['r1'], 'listReportIds');
+    await expect(deleteUserDataTables(port, 'user-1')).rejects.toThrow('listReportIds failed');
+    expect(port.eraseReports).not.toHaveBeenCalled();
+    expect(port.deleteOwnedRows).not.toHaveBeenCalled();
+  });
+
+  it('touches no user-keyed table when the report erasure fails', async () => {
+    const { port } = makePort(['r1'], 'eraseReports');
+    await expect(deleteUserDataTables(port, 'user-1')).rejects.toThrow('failed');
+    expect(port.deleteOwnedRows).not.toHaveBeenCalled();
+  });
+
+  it('stops at the first table that fails, so the profile row survives for a retry', async () => {
+    const { port, calls } = makePort([], 'rate_limits');
+    await expect(deleteUserDataTables(port, 'user-1')).rejects.toThrow('delete:rate_limits.user_id failed');
+    expect(calls.at(-1)).toBe('delete:rate_limits.user_id');
+    expect(calls).not.toContain('delete:users.id');
+  });
+
+  it('sweeps whatever the registry marks ordered_delete, and nothing it leaves to another mechanism', async () => {
+    const registry: UserDataRegistryEntry[] = [
+      { table: 'new_feature_rows', ownerColumn: 'user_id', mechanism: 'ordered_delete' },
+      { table: 'new_report_child', ownerColumn: 'lab_report_id', mechanism: 'erase_reports_cascade' },
+      { table: 'new_entitlement', ownerColumn: 'user_id', mechanism: 'auth_cascade', reason: 'fixture' },
+      { table: 'new_ledger', ownerColumn: 'customer_id', mechanism: 'exception', reason: 'fixture' },
+      { table: 'users', ownerColumn: 'id', mechanism: 'ordered_delete' },
+    ];
+    const { port, calls } = makePort([]);
+    await deleteUserDataTables(port, 'user-1', registry);
+    expect(calls).toEqual(['listReportIds', 'delete:new_feature_rows.user_id', 'delete:users.id']);
   });
 });

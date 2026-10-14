@@ -44,10 +44,14 @@ import type {
   BiomarkerName, ReportAnalyte,
 } from '../types';
 import {
-  RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
+  RefreshCw, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, CalendarDays,
   CheckCircle2, Loader2, Info, Activity, FlaskConical,
 } from 'lucide-react';
+import { ReportHeaderActions } from '../features/report/header/ReportHeaderActions';
+import type { ReportHeaderContext } from '../features/report/header';
+import { ReportNotices } from '../features/report/notices/ReportNotices';
+import { shownExplanationOf, UNIDENTIFIED_EXPLANATION, type ShownExplanation } from '../features/report/notices';
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { createRegenerationRequests } from '../lib/regenerationRequest';
@@ -410,6 +414,13 @@ export function ReportView() {
     below, never access to anything.
   */
   const [interpretationTier, setInterpretationTier] = useState<string | null>(null);
+  /*
+    Which explanation is on screen, for the notices slot (R22): the row id and
+    generated_at, where the read that produced it returned them. Flag on, the
+    client does not read get-interpretation's version identity yet, so both
+    stay null there.
+  */
+  const [shownExplanation, setShownExplanation] = useState<ShownExplanation | null>(null);
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
@@ -460,6 +471,7 @@ export function ReportView() {
         if (interpData?.json_output) {
           setInterpretation(normalizeInterpretation(interpData.json_output));
           setInterpretationTier((interpData as { tier?: string | null }).tier ?? null);
+          setShownExplanation(shownExplanationOf(interpData));
         }
         return;
       }
@@ -515,6 +527,7 @@ export function ReportView() {
           interpPollingActive.current = false;
           setInterpretation(normalizeInterpretation(existing.json_output));
           setInterpretationTier((existing as { tier?: string | null }).tier ?? null);
+          setShownExplanation(shownExplanationOf(existing));
           return;
         }
 
@@ -553,6 +566,7 @@ export function ReportView() {
             interpPollingActive.current = false;
             setInterpretation(normalizeInterpretation(data.json_output));
             setInterpretationTier((data as { tier?: string | null }).tier ?? null);
+            setShownExplanation(shownExplanationOf(data));
             return;
           }
           if (elapsed >= TIMEOUT_MS) {
@@ -592,6 +606,7 @@ export function ReportView() {
         accessStateRef.current = state;
         setAccessState(state);
         setInterpretation(state.interpretation ? normalizeInterpretation(state.interpretation) : null);
+        setShownExplanation(state.interpretation ? UNIDENTIFIED_EXPLANATION : null);
         if (state.interpretation) {
           writeInterpRateLimit(reportId, null);
           setRateLimitNotice(null);
@@ -651,6 +666,7 @@ export function ReportView() {
       setRateLimitNotice(null);
       setInterpretation(normalizeInterpretation(interpretationData.json_output));
       setInterpretationTier((interpretationData as { tier?: string | null }).tier ?? null);
+      setShownExplanation(shownExplanationOf(interpretationData));
     }
 
     setLoading(false);
@@ -1305,6 +1321,25 @@ export function ReportView() {
   // values behind a spinner that will never resolve.
   const isProcessing = (report.status === 'processing' || regenerating) && !rateLimitNotice;
 
+  /*
+    The header slot (D19): ReportView's own state and handlers for its
+    actions; src/features/report/header decides which is the one primary and
+    what goes in More. The rule for offering a regeneration is the one the
+    header button always had.
+  */
+  const headerContext: ReportHeaderContext = {
+    report,
+    navigate,
+    regeneration: {
+      available: canRegenerate && !(freemium && accessState?.access === 'generation_needed' && !interpretation),
+      upgrade: canUpgradeInterpretation,
+      remaining: 3 - report.regeneration_count,
+      busy: regenerating,
+      run: () => { void handleRegenerate(); },
+    },
+    deleteReport: () => { void handleDelete(); },
+  };
+
   const freemiumPanel = freemium ? (
     <FreemiumReportPanel
       state={accessState}
@@ -1378,29 +1413,8 @@ export function ReportView() {
               )}
             </div>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            {canRegenerate && !(freemium && accessState?.access === 'generation_needed' && !interpretation) && (
-              <Button
-                variant={canUpgradeInterpretation ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={handleRegenerate}
-                disabled={regenerating}
-              >
-                {canUpgradeInterpretation ? (
-                  <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
-                ) : (
-                  <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
-                )}
-                {canUpgradeInterpretation
-                  ? 'Generate full Amani analysis'
-                  : `Regenerate (${3 - report.regeneration_count} left)`}
-              </Button>
-            )}
-            <Button variant="danger" size="sm" onClick={handleDelete}>
-              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-              Delete
-            </Button>
-          </div>
+          {/* One primary action plus a labelled More menu (D19): src/features/report/header. */}
+          <ReportHeaderActions context={headerContext} />
         </div>
 
         {error && (
@@ -1519,6 +1533,14 @@ export function ReportView() {
 
           {/* ── A. Safety channel: approved deterministic rules only, never band-derived ── */}
           {!isProcessing && <SafetyWarnings warnings={safetyWarnings} />}
+
+          {/* ── Notices slot (R22): calm notices about the explanation below, from src/features/report/notices ── */}
+          {!isProcessing && (
+            <ReportNotices
+              report={report}
+              versions={{ shown: interpretation ? shownExplanation ?? UNIDENTIFIED_EXPLANATION : null }}
+            />
+          )}
 
           {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
