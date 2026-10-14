@@ -17,4 +17,5 @@ export { openExternalUrl } from './native/browser';
 export { captureLabPhoto, type CameraResult } from './native/camera';
 export { getNetworkStatus, onNetworkChange, type NetworkStatus } from './native/network';
 export { onAppUrlOpen } from './native/app';
+export { getInstalledAppInfo, openStoreListing, exitAppOnBackButton, type InstalledAppInfo } from './native/appUpdate';
 export { secureStorage } from './native/secureStorage';

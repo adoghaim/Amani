@@ -62,7 +62,9 @@ describe('src/lib/native.ts public API', () => {
     expect(Object.keys(native).sort()).toEqual([
       'captureLabPhoto', 'getNetworkStatus', 'isNative', 'onAppUrlOpen', 'onNetworkChange',
       'openExternalUrl', 'platform', 'secureStorage',
-    ]);
+      // PK-MINVER-01 additions (src/lib/native/appUpdate.ts), on top of the pre-split API.
+      'exitAppOnBackButton', 'getInstalledAppInfo', 'openStoreListing',
+    ].sort());
   });
 
   it('re-exports every runtime export of every module in src/lib/native/', async () => {
