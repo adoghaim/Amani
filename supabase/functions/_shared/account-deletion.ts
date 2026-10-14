@@ -161,6 +161,32 @@ export interface AccountDeletionActions {
 }
 
 /**
+ * PostgREST's answer when the table itself is not there: PGRST205 ("Could not
+ * find the table ... in the schema cache") from current PostgREST, 42P01
+ * (undefined_table) from older ones and from Postgres directly.
+ */
+export const MISSING_TABLE_ERROR_CODES: readonly string[] = ["PGRST205", "42P01"];
+
+/** True when a PostgREST error says the table does not exist (not "no rows", not any other failure). */
+export function isMissingTableError(error: { code?: string | null } | null | undefined): boolean {
+  return typeof error?.code === "string" && MISSING_TABLE_ERROR_CODES.includes(error.code);
+}
+
+/**
+ * Thrown by `deleteOwnedRows` when the table does not exist at all. Only a
+ * registry entry marked `mayBeUndeployed` turns this into "nothing to delete";
+ * for every other table it fails the deletion like any other error.
+ */
+export class MissingTableError extends Error {
+  readonly table: string;
+  constructor(table: string, detail: string) {
+    super(`Deleting ${table} failed: table does not exist (${detail})`);
+    this.name = "MissingTableError";
+    this.table = table;
+  }
+}
+
+/**
  * The I/O behind `deleteDataTables`. Each method throws on failure, with a
  * message that names what failed, so the handler answers non-2xx.
  */
@@ -169,7 +195,10 @@ export interface UserDataTablesPort {
   listReportIds(userId: string): Promise<readonly string[]>;
   /** The erase_reports RPC: deletes those reports in id lock order; their graph cascades. */
   eraseReports(reportIds: readonly string[]): Promise<void>;
-  /** `DELETE FROM table WHERE ownerColumn = userId`. */
+  /**
+   * `DELETE FROM table WHERE ownerColumn = userId`. Throws `MissingTableError`
+   * when the table does not exist, and an ordinary Error for anything else.
+   */
   deleteOwnedRows(table: string, ownerColumn: string, userId: string): Promise<void>;
 }
 
@@ -182,8 +211,11 @@ export interface UserDataTablesPort {
  *   2. The registry's `ordered_delete` entries, in registry order, each by its
  *      owner column (the users profile row last, by id).
  *
- * The first failure stops everything after it. Which tables are in step 2,
- * and why the others are not, is user-data-registry.ts.
+ * The first failure stops everything after it, with one exception: a
+ * `MissingTableError` on an entry marked `mayBeUndeployed` (a table whose
+ * migration may not be applied in production yet) is skipped as nothing to
+ * delete. Which tables are in step 2, and why the others are not, is
+ * user-data-registry.ts.
  */
 export async function deleteUserDataTables(
   port: UserDataTablesPort,
@@ -192,8 +224,16 @@ export async function deleteUserDataTables(
 ): Promise<void> {
   const reportIds = await port.listReportIds(userId);
   if (reportIds.length > 0) await port.eraseReports(reportIds);
-  for (const { table, ownerColumn } of orderedDeletes(registry)) {
-    await port.deleteOwnedRows(table, ownerColumn, userId);
+  for (const { table, ownerColumn, mayBeUndeployed } of orderedDeletes(registry)) {
+    try {
+      await port.deleteOwnedRows(table, ownerColumn, userId);
+    } catch (error) {
+      // A table whose migration has not been applied holds no rows to erase.
+      // Only entries marked mayBeUndeployed get this; any other missing table,
+      // and any other failure on these, still stops the deletion.
+      if (mayBeUndeployed && error instanceof MissingTableError) continue;
+      throw error;
+    }
   }
 }
 

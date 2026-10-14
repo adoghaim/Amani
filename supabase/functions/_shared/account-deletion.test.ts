@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   deleteUserAccount,
   deleteUserDataTables,
+  isMissingTableError,
+  MissingTableError,
   selectBillingStoreSubscriptions,
   StoreSubscriptionAcknowledgementRequiredError,
   type AccountDeletionActions,
@@ -354,6 +356,57 @@ describe('deleteUserDataTables — driven by user-data-registry.ts (PK-INT-01)',
     await expect(deleteUserDataTables(port, 'user-1')).rejects.toThrow('delete:rate_limits.user_id failed');
     expect(calls.at(-1)).toBe('delete:rate_limits.user_id');
     expect(calls).not.toContain('delete:users.id');
+  });
+
+  describe('a table whose migration is not applied yet (deploy-order safety)', () => {
+    function portWithMissing(missing: string[], otherFailure?: string) {
+      const calls: string[] = [];
+      const port: UserDataTablesPort = {
+        listReportIds: vi.fn(async () => []),
+        eraseReports: vi.fn(async () => {}),
+        deleteOwnedRows: vi.fn(async (table: string, column: string) => {
+          calls.push(`delete:${table}.${column}`);
+          if (missing.includes(table)) throw new MissingTableError(table, 'PGRST205');
+          if (table === otherFailure) throw new Error(`Deleting ${table} failed: permission denied`);
+        }),
+      };
+      return { port, calls };
+    }
+
+    it('erases everything else, profile row included, when app_events and user_attribution do not exist yet', async () => {
+      const { port, calls } = portWithMissing(['app_events', 'user_attribution']);
+      await expect(deleteUserDataTables(port, 'user-1')).resolves.toBeUndefined();
+      expect(calls).toEqual(sweep);
+      expect(calls.at(-1)).toBe('delete:users.id');
+    });
+
+    it('still fails on any other error from those two tables', async () => {
+      const { port, calls } = portWithMissing([], 'app_events');
+      await expect(deleteUserDataTables(port, 'user-1')).rejects.toThrow('Deleting app_events failed: permission denied');
+      expect(calls).not.toContain('delete:users.id');
+    });
+
+    it('still fails when a table not marked mayBeUndeployed is missing', async () => {
+      const { port, calls } = portWithMissing(['period_logs']);
+      await expect(deleteUserDataTables(port, 'user-1')).rejects.toBeInstanceOf(MissingTableError);
+      expect(calls.at(-1)).toBe('delete:period_logs.user_id');
+      expect(calls).not.toContain('delete:users.id');
+    });
+
+    it('recognises PostgREST and Postgres "no such table" codes, and nothing else', () => {
+      expect(isMissingTableError({ code: 'PGRST205' })).toBe(true);
+      expect(isMissingTableError({ code: '42P01' })).toBe(true);
+      for (const code of ['42501', 'PGRST116', '23503', '', undefined, null]) {
+        expect(isMissingTableError({ code }), String(code)).toBe(false);
+      }
+      expect(isMissingTableError(null)).toBe(false);
+    });
+
+    it('the delete-user-data wiring maps a missing-table error to MissingTableError', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(new URL('../delete-user-data/index.ts', import.meta.url), 'utf8');
+      expect(src).toContain('if (isMissingTableError(error)) throw new MissingTableError(table, error.message);');
+    });
   });
 
   it('sweeps whatever the registry marks ordered_delete, and nothing it leaves to another mechanism', async () => {

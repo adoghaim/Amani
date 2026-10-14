@@ -13,5 +13,7 @@ WHERE n.nspname = 'public'
                     'interpretations_private', 'introductory_deep_access_claims',
                     'users', 'rate_limits',
                     -- PK-FIX-01b: expected granted = false for every row.
-                    'ai_call_costs', 'ai_budget_alerts')
+                    'ai_call_costs', 'ai_budget_alerts',
+                    -- PK-EXP5: expect granted = false for every row of these four.
+                    'app_events', 'user_attribution', 'anon_event_counters', 'funnel_daily')
 ORDER BY c.relname, r.role_name, p.privilege;

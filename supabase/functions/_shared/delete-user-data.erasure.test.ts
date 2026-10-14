@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
-import { deleteUserDataTables } from './account-deletion.ts';
+import { deleteUserDataTables, isMissingTableError, MissingTableError } from './account-deletion.ts';
 import { orderedDeletes } from './user-data-registry.ts';
 
 /**
@@ -21,7 +21,7 @@ const source = readFileSync(new URL('../delete-user-data/index.ts', import.meta.
 // sweep (lab_reports included, by user_id) and the profile row.
 const USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introductory_deep_access_claims',
   'complimentary_entitlements', 'lab_reports', 'period_logs', 'symptom_logs', 'notification_preferences',
-  'reminders', 'audit_events', 'rate_limits', 'iap_beta_testers', 'users'];
+  'reminders', 'audit_events', 'rate_limits', 'iap_beta_testers', 'app_events', 'user_attribution', 'users'];
 
 function slice(startMarker: string, endMarker: string) {
   const start = source.indexOf(startMarker);
@@ -51,7 +51,9 @@ function deleteDataTablesFrom(methodSource: string) {
   // PK-INT-01: the handler's method calls deleteUserDataTables, which it imports
   // from ../_shared/account-deletion.ts. The real one is passed in under that
   // name, so this still executes the handler's own code and the shared order.
-  return (supabase: unknown) => new Function('supabase', 'deleteUserDataTables', code)(supabase, deleteUserDataTables) as (userId: string) => Promise<void>;
+  // PK-EXP5: likewise isMissingTableError and MissingTableError, the real ones.
+  return (supabase: unknown) => new Function('supabase', 'deleteUserDataTables', 'isMissingTableError', 'MissingTableError', code)(
+    supabase, deleteUserDataTables, isMissingTableError, MissingTableError) as (userId: string) => Promise<void>;
 }
 
 type Event = { at: number; kind: 'start' | 'end'; op: string };
@@ -152,6 +154,36 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
     await deleteDataTables(fake.client)('u');
     expect(fake.deleteFilters).toEqual(USER_KEYED.map(table =>
       ({ op: `delete:${table}`, column: table === 'users' ? 'id' : 'user_id' })));
+  });
+
+  it('PK-EXP5: before 20261015010000 is applied, missing app_events and user_attribution are nothing to erase; any other missing table still fails', async () => {
+    const missing = (tables: string[]) => {
+      const fake = recordingSupabase([]);
+      const from = fake.client.from;
+      const client = {
+        ...fake.client,
+        from: (name: string) => {
+          const query = from(name) as Record<string, unknown>;
+          if (!tables.includes(name)) return query;
+          const remove = query.delete as () => Record<string, unknown>;
+          query.delete = () => {
+            const filtered = remove();
+            filtered.eq = () => ({ then: (done: (v: unknown) => unknown) => Promise.resolve({
+              error: { code: 'PGRST205', message: `Could not find the table 'public.${name}' in the schema cache` },
+            }).then(done) });
+            return filtered;
+          };
+          return query;
+        },
+      };
+      return { fake, run: deleteDataTables(client)('u') };
+    };
+    const undeployed = missing(['app_events', 'user_attribution']);
+    await expect(undeployed.run).resolves.toBeUndefined();
+    expect(started(undeployed.fake.events)).toContain('delete:users');
+    const other = missing(['period_logs']);
+    await expect(other.run).rejects.toThrow('Deleting period_logs failed: table does not exist');
+    expect(started(other.fake.events)).not.toContain('delete:users');
   });
 
   it('PK-INT-01: a failed sweep stops at that table with the message it always had', async () => {
