@@ -26,7 +26,10 @@
  * deploy the owner runs factory/sql/verify-account-deletion-tables.sql (the
  * text of deletionPreflightSql() below): zero rows means every table exists.
  * The function also checks this itself before deleting anything
- * (checkUserDataTablesReady in account-deletion.ts) and refuses with 503.
+ * (checkUserDataTablesReady in account-deletion.ts: one GET per table that
+ * must return a rows array, never a HEAD, which supabase-js reads as success
+ * for a missing table) and refuses with 503. The preflight SQL is the check to
+ * rely on; the runtime check is the backstop.
  */
 
 /**

@@ -168,7 +168,10 @@ export class AccountDeletionNotReadyError extends Error {
 /**
  * Probes every `ordered_delete` table, read-only and concurrently, and throws
  * AccountDeletionNotReadyError naming each one whose probe failed. `probe`
- * resolves when the table can be read and rejects otherwise.
+ * resolves when the table can be read and rejects otherwise. A probe must
+ * prove a read, not merely see no error: with supabase-js a HEAD request on a
+ * missing table comes back as status 204 with `error: null`, so the handler's
+ * probe is a GET that must return a rows array (delete-user-data/index.ts).
  */
 export async function checkUserDataTablesReady(
   probe: (table: string, ownerColumn: string) => Promise<void>,

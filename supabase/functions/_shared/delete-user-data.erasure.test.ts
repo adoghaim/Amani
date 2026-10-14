@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
+import { createClient } from '@supabase/supabase-js';
 import { AccountDeletionNotReadyError, checkUserDataTablesReady, deleteUserDataTables } from './account-deletion.ts';
 import { orderedDeletes } from './user-data-registry.ts';
 
@@ -196,33 +197,65 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
     await expect(profile.run).rejects.toThrow('Deleting users row failed: boom');
   });
 
-  it('PK-HARM-01 deploy order: the handler probes every swept table read-only, and a missing one refuses with 503 before anything is deleted', async () => {
+  it('PK-HARM-01 deploy order: the handler probes every swept table read-only through the real supabase-js, and a missing one refuses with 503 before anything is deleted', async () => {
     const check = slice('async checkDataTablesReady() {', 'async listStoreSubscriptions(');
-    const { code } = transformSync(`const o = {\n${check}\n};\nreturn o.checkDataTablesReady;`, { loader: 'ts', target: 'es2022' });
-    const probes: Array<{ table: string; columns: string; head: unknown }> = [];
-    const client = (absent: string) => ({
-      from: (table: string) => ({
-        select: (columns: string, opts: { head?: boolean }) => {
-          probes.push({ table, columns, head: opts?.head });
-          return {
-            limit: () => Promise.resolve(table === absent
-              ? { error: { message: `Could not find the table 'public.${table}' in the schema cache` } }
-              : { error: null }),
-          };
+    const checkFrom = (body: string) => {
+      const { code } = transformSync(`const o = {\n${body}\n};\nreturn o.checkDataTablesReady;`, { loader: 'ts', target: 'es2022' });
+      return (client: unknown) => (new Function('supabase', 'checkUserDataTablesReady', code)(
+        client, checkUserDataTablesReady) as () => Promise<void>)();
+    };
+
+    // The real client over a stub fetch that answers like PostgREST: a missing
+    // table is 404 PGRST205 with a JSON body, and a HEAD response has no body.
+    // A hand-written `{ error }` fake once hid that postgrest-js reads a
+    // bodiless 404 as success (status 204, error null).
+    const requests: Array<{ method: string; table: string; select: string | null }> = [];
+    const realClient = (absent: string) => createClient('http://postgrest.stub', 'service-role-key', {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+          const method = (init?.method ?? 'GET').toUpperCase();
+          const table = url.pathname.replace(/^\/rest\/v1\//, '');
+          requests.push({ method, table, select: url.searchParams.get('select') });
+          if (method !== 'GET' && method !== 'HEAD') throw new Error(`the readiness check sent ${method} to ${table}`);
+          const headers = { 'Content-Type': 'application/json' };
+          if (table === absent) {
+            const body = JSON.stringify({ code: 'PGRST205', details: null, hint: null,
+              message: `Could not find the table 'public.${table}' in the schema cache` });
+            return new Response(method === 'HEAD' ? null : body, { status: 404, headers });
+          }
+          return new Response(method === 'HEAD' ? null : '[]', { status: 200, headers });
         },
-        delete: () => { throw new Error(`the readiness check deleted from ${table}`); },
-      }),
+      },
     });
-    const run = (absent: string) => (new Function('supabase', 'checkUserDataTablesReady', code)(
-      client(absent), checkUserDataTablesReady) as () => Promise<void>)();
 
-    await expect(run('none')).resolves.toBeUndefined();
-    expect(probes.map(p => `${p.table}.${p.columns}`)).toEqual(orderedDeletes().map(e => `${e.table}.${e.ownerColumn}`));
-    expect(probes.every(p => p.head === true)).toBe(true);
+    const handlerCheck = checkFrom(check);
+    await expect(handlerCheck(realClient('none'))).resolves.toBeUndefined();
+    expect(requests.map(r => `${r.method} ${r.table}.${r.select}`))
+      .toEqual(orderedDeletes().map(e => `GET ${e.table}.${e.ownerColumn}`));
 
-    const error = await run('interpretation_feedback').catch(e => e);
+    const error = await handlerCheck(realClient('interpretation_feedback')).catch(e => e);
     expect(error).toBeInstanceOf(AccountDeletionNotReadyError);
     expect(error.message).toContain('interpretation_feedback (push migration 20261015020000)');
+    expect(error.tables).toEqual([{ table: 'interpretation_feedback', requiresMigration: '20261015020000',
+      detail: "Could not find the table 'public.interpretation_feedback' in the schema cache" }]);
+
+    // Negative control: the stub reproduces the trap. The earlier probe (HEAD,
+    // error-only) passes for the same missing table, which is why it must
+    // never come back.
+    const probeLines = /const \{ data, error, status \} = [^\n]*\n\s*if \(error\) [^\n]*\n\s*if \(!Array\.isArray\(data\)\) [^\n]*\n/;
+    expect(check).toMatch(probeLines);
+    const earlierShape = check.replace(probeLines,
+      'const { error } = await supabase.from(table).select(ownerColumn, { head: true }).limit(1);\n' +
+      'if (error) throw new Error(error.message);\n');
+    await expect(checkFrom(earlierShape)(realClient('interpretation_feedback'))).resolves.toBeUndefined();
+    // The rows-array check is a second, independent layer: a HEAD probe behind
+    // it refuses (every table, since HEAD carries no rows) instead of passing.
+    const headWithArrayCheck = check.replace('.select(ownerColumn).limit(1)', '.select(ownerColumn, { head: true }).limit(1)');
+    expect(headWithArrayCheck).not.toBe(check);
+    await expect(checkFrom(headWithArrayCheck)(realClient('interpretation_feedback')))
+      .rejects.toBeInstanceOf(AccountDeletionNotReadyError);
 
     // It runs first, and the handler answers a refusal with 503, never swallowing it.
     expect(source.indexOf('async checkDataTablesReady() {')).toBeLessThan(source.indexOf('async listStoreSubscriptions('));

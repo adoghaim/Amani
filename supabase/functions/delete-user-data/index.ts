@@ -58,13 +58,21 @@ Deno.serve(async (req: Request) => {
 
     const actions: AccountDeletionActions = {
       async checkDataTablesReady() {
-        // One HEAD read per table delete-user-data deletes from; no rows come
-        // back. A table the database lacks (this function deployed before its
-        // migration: user-data-registry.ts, DEPLOY ORDER) refuses the whole
-        // deletion here, before anything is touched.
+        // One GET per table delete-user-data deletes from, at most one owner
+        // id back, discarded. A table the database lacks (this function
+        // deployed before its migration: user-data-registry.ts, DEPLOY ORDER)
+        // refuses the whole deletion here, before anything is touched.
+        //
+        // Never `{ head: true }`: PostgREST answers a missing table with 404
+        // PGRST205, a HEAD response has no body, and postgrest-js turns a 404
+        // with an empty body into status 204 with `error: null`, so a HEAD
+        // probe passes for a table that does not exist. A GET carries the
+        // error body; and only a real array counts as readable, so any other
+        // shape of "success" also refuses.
         await checkUserDataTablesReady(async (table, ownerColumn) => {
-          const { error } = await supabase.from(table).select(ownerColumn, { head: true }).limit(1);
+          const { data, error, status } = await supabase.from(table).select(ownerColumn).limit(1);
           if (error) throw new Error(error.message);
+          if (!Array.isArray(data)) throw new Error(`unreadable (HTTP ${status}, no rows array)`);
         });
       },
 

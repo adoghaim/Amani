@@ -100,10 +100,16 @@ error. PK-HARM-01 adds `interpretation_feedback` to that list. So:
 - **Check before every `delete-user-data` deploy:** run `factory/sql/verify-account-deletion-tables.sql`
   (read-only) in that project's SQL editor. Zero rows: safe to deploy. A row names a missing table
   and the migration to push first.
-- **If it is deployed early anyway,** the function checks every table first and refuses each
-  deletion with a 503 ("temporarily unavailable, nothing was deleted") before it touches Stripe,
-  storage or any row. Account deletion is down until the migration is pushed. It never deletes part
-  of an account and never skips the missing table.
+- **If it is deployed early anyway,** the function first reads every table it deletes from (one GET
+  per table, at most one owner id back, discarded) and refuses the deletion with a 503 ("temporarily
+  unavailable, nothing was deleted") before it touches Stripe, storage or any row. Account deletion
+  is down until the migration is pushed; a missing table does not leave a half-deleted account and
+  is never skipped. The check is a GET, never a HEAD: PostgREST answers a missing table with 404,
+  a HEAD response has no body, and supabase-js reads a bodiless 404 as a 204 success, so a HEAD
+  probe would pass for a table that is not there. A probe passes only when it gets back a rows
+  array. Verified with the real supabase-js against a stub that answers like PostgREST
+  (`delete-user-data.erasure.test.ts`); not yet against a live Supabase stack (pending). The
+  preflight SQL above remains the check to rely on before deploying.
 
 ## Owner SQL (Supabase SQL editor)
 
