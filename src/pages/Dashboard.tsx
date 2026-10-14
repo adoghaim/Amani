@@ -36,6 +36,8 @@ import {
 import { getTrialDaysRemaining } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { formatDate } from '../utils/formatters';
+import { ReportCycleLine } from '../components/ReportCycleLine';
+import { reportCycleLine } from '../lib/reportCycleLine';
 
 type NoteModalState = { open: boolean; defaultDate: string };
 type SymptomLogRow = Omit<SymptomLog, 'symptoms'> & { symptoms: unknown };
@@ -531,10 +533,11 @@ export function Dashboard() {
                             <div className="text-xs text-theme-muted-text flex items-center gap-2 mt-1 flex-wrap">
                               {getStatusIcon(report.status)}
                               <span>{getStatusText(report.status)}</span>
-                              {report.estimated_cycle_phase !== 'unknown' && (
+                              {/* D10: the report's cycle day first; any phase labelled as an estimate. */}
+                              {reportCycleLine(report) && (
                                 <>
-                                  <span>·</span>
-                                  <span className="capitalize">{report.estimated_cycle_phase}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <ReportCycleLine report={report} />
                                 </>
                               )}
                             </div>

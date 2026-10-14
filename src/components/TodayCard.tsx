@@ -3,6 +3,8 @@ import { CyclePrediction, LabReport, Intervention, PeriodLog, SymptomLog } from 
 import { formatDateShort } from '../utils/cyclePredictor';
 import { CycleDial } from './CycleDial';
 import { phaseLabel, phaseStyle } from '../lib/cyclePhase';
+import { isEstimatedPhase, PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
+import { phaseNotEstimated, phaseNotEstimatedCopy } from '../lib/drawCycleContext';
 
 /**
  * Today, and the one thing worth doing about it.
@@ -12,8 +14,18 @@ import { phaseLabel, phaseStyle } from '../lib/cyclePhase';
  * and intervention count — and this card then restated all of it a third time
  * in a prose NarrativeBlock underneath. Three presentations of four facts.
  *
- * They are now one component. The dial and the phase tint come from the same
+ * They are now one component. The dial and the phase colour come from the same
  * source as everywhere else, so a phase looks identical on every screen.
+ *
+ * PK-FIX-06-EXT (owner decision D10), the report's cycle rule:
+ * - the cycle day comes first, as the heading;
+ * - a phase is shown only when one is estimated, labelled "estimate for a
+ *   28-day cycle";
+ * - a day with no phase says why, in the report's neutral words;
+ * - no period logged: no day and no phase;
+ * - "Avg cycle" is her logged average, never a default.
+ * The header no longer sits on a phase tint: DESIGN.md never uses a phase tint
+ * without its pattern, and the pattern belongs to the report's cycle rule.
  */
 
 interface TodayCardProps {
@@ -43,9 +55,14 @@ export function TodayCard({
   onAddSymptom,
   onUploadLabs,
 }: TodayCardProps) {
-  const phase = prediction?.currentPhase ?? 'unknown';
+  const day = prediction?.currentCycleDay ?? null;
+  const rawPhase = prediction?.currentPhase ?? 'unknown';
+  const phase = day != null && isEstimatedPhase(rawPhase) ? rawPhase : 'unknown';
   const style = phaseStyle(phase);
   const until = prediction ? daysUntil(new Date(prediction.nextPeriodStart)) : null;
+  const why = day != null && phase === 'unknown'
+    ? phaseNotEstimated({ cycleDay: day, cycleLengthDays: prediction?.knownCycleLength ?? null })
+    : null;
 
   const hasNoPeriod = !lastPeriodLog;
   const hasNoLabs = !lastReport;
@@ -60,22 +77,25 @@ export function TodayCard({
 
   return (
     <section className="bg-theme-surface rounded-2xl border border-theme-border overflow-hidden">
-      <div className={`flex items-center gap-5 px-5 sm:px-6 py-5 ${style.surface}`}>
-        <CycleDial
-          day={prediction?.currentCycleDay ?? null}
-          length={prediction?.cycleLength ?? 28}
-          phase={phase}
-          size={88}
-        />
+      <div className="flex items-center gap-5 px-5 sm:px-6 py-5 bg-theme-surface-2">
+        <CycleDial day={day} phase={phase} size={88} />
         <div className="min-w-0">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-theme-muted-text-2 mb-1">
             Cycle day
           </p>
-          <h2 className={`font-display text-2xl leading-tight ${style.text}`}>
-            {phaseLabel(phase)}
+          <h2 className="font-display text-2xl leading-tight text-theme-text" data-today-cycle-day>
+            {day != null ? <>Day <span className="font-mono tabular-nums">{day}</span></> : 'Not placed yet'}
           </h2>
+          {phase !== 'unknown' && (
+            <p className="text-sm mt-1" data-today-phase>
+              <span className="text-theme-text">{phaseLabel(phase)}</span>
+              <span className="text-theme-muted-text-2">, {PHASE_ESTIMATE_LABEL}</span>
+            </p>
+          )}
           <p className="text-sm text-theme-text-body mt-1">
-            {style.note}
+            {phase !== 'unknown' && style.note}
+            {why && <span data-today-phase-note>{phaseNotEstimatedCopy(why)}</span>}
+            {day == null && style.note}
             {until != null && until >= 0 && (
               <>
                 {' '}Next period in{' '}
@@ -117,7 +137,7 @@ export function TodayCard({
 
         {prediction && (
           <dl className="grid grid-cols-3 gap-x-4 pt-4 border-t border-theme-border-inner">
-            <Stat value={prediction.cycleLength} label="Avg cycle" />
+            <Stat value={prediction.knownCycleLength ?? '–'} label="Avg cycle" />
             <Stat value={prediction.periodLength} label="Avg period" />
             <Stat value={periodLogs.length} label="Periods logged" />
           </dl>
@@ -147,7 +167,7 @@ function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; va
   );
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
+function Stat({ value, label }: { value: number | string; label: string }) {
   return (
     <div>
       <dd className="font-mono text-xl text-theme-text tabular-nums leading-none">{value}</dd>

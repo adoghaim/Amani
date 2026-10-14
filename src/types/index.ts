@@ -500,9 +500,14 @@ export interface CyclePrediction {
   fertileWindowStart: Date;
   fertileWindowEnd: Date;
   ovulationDay: Date;
-  currentCycleDay: number;
+  /** Null when no day can be placed (a last period logged after today). */
+  currentCycleDay: number | null;
+  /** By the report's rule (cycleDayRule.ts); 'unknown' when no phase is estimated. */
   currentPhase: CyclePhase;
+  /** The calendar's forecast length only; never shown as hers. */
   cycleLength: number;
+  /** Her logged average cycle length, or null when her logs establish none. */
+  knownCycleLength: number | null;
   periodLength: number;
 }
 

@@ -1,0 +1,433 @@
+// @vitest-environment jsdom
+import { act, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cycleContextCard } from '../lib/cycleContextCard';
+import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
+
+/*
+  PK-FIX-06 on the real upload page. NewReport is rendered in jsdom against a
+  mocked Supabase client; each case drives the user's path (choose a photo, set
+  the dates, save) and reads what the page writes to lab_reports and
+  biomarkers. Synthetic user, dates and values only.
+*/
+
+const fixture = vi.hoisted(() => ({
+  user: { id: '00000000-0000-4000-8000-0000000f1x06' },
+  periodLogs: [] as { start_date: string }[],
+  inserts: [] as { table: string; values: unknown }[],
+  // Cycle facts printed on the lab report, as the OCR function returns them.
+  ocrMetadata: undefined as { cycle_day?: number | null; cycle_phase?: string | null } | undefined,
+}));
+
+vi.mock('../lib/supabase', () => {
+  type Row = Record<string, unknown>;
+  const query = (table: string) => {
+    let upTo: string | null = null;
+    const rows = (): Row[] => (table === 'period_logs'
+      ? fixture.periodLogs.filter(r => upTo === null || r.start_date <= upTo) : []);
+    const builder = {
+      select: () => builder, eq: () => builder, order: () => builder, limit: () => builder, in: () => builder,
+      update: () => builder,
+      lte: (_col: string, value: string) => { upTo = value; return builder; },
+      insert: (values: unknown) => { fixture.inserts.push({ table, values }); return builder; },
+      single: async () => ({ data: table === 'lab_reports' ? { id: 'report-fix06' } : null, error: null }),
+      maybeSingle: async () => ({
+        data: [...rows()].sort((a, b) => String(b['start_date']).localeCompare(String(a['start_date'])))[0] ?? null,
+        error: null,
+      }),
+      then: (resolve: (value: { data: Row[]; error: null }) => unknown) => Promise.resolve({ data: rows(), error: null }).then(resolve),
+    };
+    return builder;
+  };
+  // An estradiol result, so the biomarkers insert shows whether V2 withholds it.
+  const ocrItems = [{
+    raw_name: 'Estradiol', canonical_slug: 'estradiol', category: 'hormones', value_numeric: 150, value_text: '150',
+    unit: 'pg/mL', raw_reference_range: null, normalized_reference_min: null, normalized_reference_max: null,
+    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
+    needs_review: false, source_snippet: 'Estradiol 150 pg/mL', source_format: 'ocr', review_status: 'pending',
+  }];
+  return { supabase: {
+    from: query,
+    auth: { getSession: async () => ({ data: { session: { access_token: 'synthetic-token' } } }) },
+    storage: { from: () => ({ upload: async () => ({ error: null }) }) },
+    functions: { invoke: async (name: string) => (name === 'parse-lab-report-ocr'
+      ? { data: { items: ocrItems, metadata: fixture.ocrMetadata }, error: null } : { data: null, error: null }) },
+  } };
+});
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user }) }));
+vi.mock('../lib/native', () => ({
+  isNative: () => false,
+  captureLabPhoto: vi.fn(),
+  getNetworkStatus: async () => ({ connected: true, connectionType: 'wifi' }),
+  onNetworkChange: () => () => {},
+}));
+vi.mock('../utils/pdfExtractor', () => ({ extractTextFromPDF: vi.fn(), convertPDFToImages: vi.fn() }));
+vi.mock('../utils/subscription', () => ({ checkSubscriptionLive: vi.fn(), handle402: async () => null }));
+vi.mock('../lib/freemium/gates', () => ({ uploadRequiresSubscription: () => false }));
+vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
+import { NewReport } from './NewReport';
+import {
+  DAYS, daysBefore, DRAW, EXPECTED, EXPECTED_STORED_LENGTH, expectedNote, LENGTHS, PHASE_SYMBOL, trackerLogs,
+  type TypicalLength,
+} from '../lib/cycleR10Table';
+
+
+let root: Root;
+let app: HTMLDivElement;
+function mount() {
+  app = document.createElement('div');
+  document.body.append(app);
+  root = createRoot(app);
+}
+async function unmount() {
+  await act(async () => root.unmount());
+  app.remove();
+  sessionStorage.clear();
+}
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  fixture.periodLogs = [];
+  fixture.inserts = [];
+  fixture.ocrMetadata = undefined;
+  mount();
+});
+afterEach(async () => {
+  await unmount();
+  vi.unstubAllGlobals();
+});
+
+async function settle(rounds = 8) {
+  for (let i = 0; i < rounds; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+}
+const button = (label: string) => Array.from(app.querySelectorAll('button')).find(b => b.textContent?.trim() === label) ?? null;
+async function click(el: Element | null) {
+  expect(el).not.toBeNull();
+  await act(async () => { (el as HTMLElement).click(); });
+  await settle();
+}
+async function type(input: HTMLInputElement, value: string) {
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  await act(async () => {
+    setValue.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await settle();
+}
+const dateInputs = () => Array.from(app.querySelectorAll<HTMLInputElement>('input[type="date"]'));
+const reportDateInput = () => dateInputs()[0]!;
+const lastPeriodInput = () => dateInputs()[1]!;
+const lengthInput = () => app.querySelector<HTMLInputElement>('#typical-cycle-length')!;
+const lengthHint = () => app.querySelector('#typical-cycle-length-hint')?.textContent ?? null;
+const lengthError = () => app.querySelector('#typical-cycle-length-error')?.textContent ?? null;
+const autoFilledBadges = () => app.textContent?.match(/Auto-filled from your tracker/g)?.length ?? 0;
+
+/** Renders the page, chooses a synthetic photo and continues to the cycle-context step. */
+async function openCycleStep() {
+  await act(async () => root.render(
+    <MemoryRouter initialEntries={['/app/new']}>
+      <Routes>
+        <Route path="/app/new" element={<NewReport />} />
+        {/* Where the page navigates after saving. */}
+        <Route path="/app/reports/:id" element={null} />
+      </Routes>
+    </MemoryRouter>,
+  ));
+  await settle();
+  const fileInput = app.querySelector<HTMLInputElement>('#file-upload')!;
+  Object.defineProperty(fileInput, 'files', {
+    configurable: true, value: [new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' })],
+  });
+  await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
+  await click(button('Next'));
+  await settle(20);
+  expect(app.textContent).toContain('Cycle context');
+  await type(reportDateInput(), DRAW);
+}
+
+/** Saves and returns what the page wrote. */
+async function save() {
+  await click(button('Next'));
+  await click(button('Save and analyze'));
+  await settle(20);
+  const report = fixture.inserts.find(i => i.table === 'lab_reports')?.values as Record<string, unknown> | undefined;
+  const biomarkers = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(report).toBeDefined();
+  return {
+    report: report!,
+    cycle: {
+      last_period_start_date: report!['last_period_start_date'],
+      average_cycle_length: report!['average_cycle_length'],
+      estimated_cycle_day: report!['estimated_cycle_day'],
+      estimated_cycle_phase: report!['estimated_cycle_phase'],
+    },
+    estradiolFlag: biomarkers?.find(b => b['name'] === 'estradiol')?.['flagged'],
+  };
+}
+
+/*
+  Acceptance table (owner decision D13): days 1-40 x typical cycle lengths
+  {unknown, 28, 24, 35}, through the real page.
+
+  Her typical length reaches the page the way the app knows it today: from her
+  tracker. Three logged period starts L days apart average to L by
+  cyclePredictor's rule; a single logged start establishes no length (unknown).
+  The latest start is the draw date minus (day - 1), so the last-period field
+  auto-fills and the draw falls on cycle day `day`.
+
+  Each cell is one symbol for what she then sees on the saved report:
+    M F O L  phase menstrual / follicular / ovulatory / luteal is stored (header
+             pill); the Cycle context card shows that phase and the cycle day;
+             V2 scores the cycle-dependent hormone (estradiol).
+    x        no phase is stored; the cycle day is NOT shown (no card); V2
+             withholds estradiol.
+    -        no phase is stored; the Cycle context card shows the cycle day,
+             with a neutral note in place of a phase; V2 withholds estradiol.
+
+  TODAY is the output of main @ 948dc95, captured by this test before any
+  PK-FIX-06 logic change. Main has no length input and never reads one, so the
+  length columns cannot differ: every report stores 28.
+
+  EXPECTED is owner decision D13:
+    PRESERVE  unknown and 28, days 1-35: identical to TODAY (asserted below).
+    (a)       day 36 and later: the cycle day shows, with no phase estimate,
+              and estradiol stays withheld.
+    (b)       a known length other than 28 (24, 35): the cycle day shows with
+              neutral copy and no phase estimate on every day, because no
+              approved method covers that length.
+*/
+/*
+  PK-FIX-06-EXT (D10): LENGTHS, DAYS, EXPECTED, EXPECTED_STORED_LENGTH and the
+  tracker logs moved, unchanged, to src/lib/cycleR10Table.ts, so the same
+  table also drives the dashboard predictor (cyclePredictor.r10.test.ts).
+  TODAY stays here: it is this page's captured output.
+*/
+
+const TODAY: Record<TypicalLength, string> = {
+  //   cycle day 1   5   10   15   20   25   30   35   40
+  //             |   |    |    |    |    |    |    |    |
+  unknown:      'MMMMMFFFFFFFOOOOLLLLLLLLLLLLLLLLLLLxxxxx',
+  28:           'MMMMMFFFFFFFOOOOLLLLLLLLLLLLLLLLLLLxxxxx',
+  24:           'MMMMMFFFFFFFOOOOLLLLLLLLLLLLLLLLLLLxxxxx',
+  35:           'MMMMMFFFFFFFOOOOLLLLLLLLLLLLLLLLLLLxxxxx',
+};
+const TODAY_STORED_LENGTH: Record<TypicalLength, number | null> = { unknown: 28, 28: 28, 24: 28, 35: 28 };
+
+
+/** One cell through the real page: what she sees for this day and typical length. */
+async function observeCell(length: TypicalLength, day: number) {
+  const lastPeriodStart = daysBefore(DRAW, day - 1);
+  fixture.periodLogs = trackerLogs(length, lastPeriodStart);
+  fixture.inserts = [];
+  await openCycleStep();
+  expect(lastPeriodInput().value, `${length}/${day}: last period auto-filled`).toBe(lastPeriodStart);
+  const saved = await save();
+  await unmount();
+  mount();
+
+  const phase = saved.cycle.estimated_cycle_phase as string;
+  const card = cycleContextCard(saved.report as Parameters<typeof cycleContextCard>[0], undefined);
+  const estradiol = assessAmaniContext('estradiol', 150, contextFromReport(phase));
+  const where = `${length}/day ${day}`;
+
+  // Invariants of every cell, whatever its symbol.
+  expect(saved.cycle.last_period_start_date, where).toBe(lastPeriodStart);
+  expect(saved.cycle.estimated_cycle_day, where).toBe(day);
+  if (card) expect(card.day, where).toBe(day);
+  expect(saved.estradiolFlag === 'unknown', `${where}: biomarkers.flagged agrees with V2`).toBe(estradiol.kind === 'withheld');
+
+  let symbol: string;
+  if (PHASE_SYMBOL[phase]) {
+    // A card with a phase is as before: no note.
+    expect(card, where).toEqual({ phase, day, confidence: null, explanation: null });
+    expect(card, where).not.toHaveProperty('phaseNote');
+    expect(estradiol.kind, where).toBe('scored');
+    symbol = PHASE_SYMBOL[phase]!;
+  } else {
+    expect(phase, where).toBe('unknown');
+    expect(estradiol, where).toMatchObject({ kind: 'withheld', reason: 'cycle_phase_missing' });
+    if (card) {
+      // The cycle day without a phase: the neutral note, and nothing model-authored.
+      expect(card, where).toEqual({ phase: null, day, confidence: null, explanation: null, phaseNote: expectedNote(length) });
+      symbol = '-';
+    } else {
+      symbol = 'x';
+    }
+  }
+  return { symbol, storedLength: saved.cycle.average_cycle_length };
+}
+
+describe('PK-FIX-06 acceptance table (D13): days 1-40 x typical lengths {unknown, 28, 24, 35}', () => {
+  it('the expected table preserves TODAY for unknown and 28 on days 1-35, and changes only (a) and (b)', () => {
+    for (const length of ['unknown', 28] as const) {
+      expect(EXPECTED[length].slice(0, 35), `${length}: PRESERVE`).toBe(TODAY[length].slice(0, 35));
+    }
+    for (const length of LENGTHS) {
+      for (let day = 1; day <= DAYS; day++) {
+        const intended = day > 35 || (length !== 'unknown' && length !== 28);
+        // D13 cell by cell: (a) and (b) show her cycle day without a phase; every other cell is TODAY's.
+        expect(EXPECTED[length][day - 1], `${length}/day ${day}`).toBe(intended ? '-' : TODAY[length][day - 1]);
+      }
+      // The stored length: 28 for everyone before; now her known length, or null.
+      expect([TODAY_STORED_LENGTH[length], EXPECTED_STORED_LENGTH[length]], `${length}: stored length`)
+        .toEqual([28, length === 'unknown' ? null : length]);
+    }
+  });
+
+  it('the saved report matches the expected table in every cell', async () => {
+    const observed = {} as Record<TypicalLength, string>;
+    const storedLength = {} as Record<TypicalLength, unknown>;
+    for (const length of LENGTHS) {
+      let row = '';
+      for (let day = 1; day <= DAYS; day++) {
+        const cell = await observeCell(length, day);
+        row += cell.symbol;
+        if (day === 1) storedLength[length] = cell.storedLength;
+        else expect(cell.storedLength, `${length}/day ${day}`).toBe(storedLength[length]);
+      }
+      observed[length] = row;
+    }
+    expect(observed).toEqual(EXPECTED);
+    expect(storedLength).toEqual(EXPECTED_STORED_LENGTH);
+  }, 180_000);
+});
+
+/*
+  The optional "Typical cycle length" field at upload: typed, auto-filled from
+  the tracker, overridden or cleared. The table above supplies every length
+  through the tracker; these cases supply it through the field.
+*/
+describe('PK-FIX-06: the typical cycle length field on the upload page', () => {
+  const LENGTH_HINT = 'Days from the first day of one period to the first day of the next';
+
+  it('day 21 of a typed 35-day cycle: day 21, no phase (was luteal), length 35; estradiol withheld', async () => {
+    await openCycleStep();
+    expect(lengthInput().value).toBe('');
+    expect(lengthHint()).toBe(LENGTH_HINT);
+    await type(lastPeriodInput(), '2026-04-10');
+    await type(lengthInput(), '35');
+    expect(await save()).toMatchObject({
+      cycle: { last_period_start_date: '2026-04-10', average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'unknown' },
+      estradiolFlag: 'unknown',
+    });
+  }, 30_000);
+
+  it('a typed 24-day cycle: day 10, no phase (was follicular), length 24', async () => {
+    await openCycleStep();
+    await type(lastPeriodInput(), '2026-04-21');
+    await type(lengthInput(), '24');
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: '2026-04-21', average_cycle_length: 24, estimated_cycle_day: 10, estimated_cycle_phase: 'unknown',
+    });
+  }, 30_000);
+
+  it('a typed 28: day 21 luteal, as before, and estradiol is scored', async () => {
+    await openCycleStep();
+    await type(lastPeriodInput(), '2026-04-10');
+    await type(lengthInput(), '28');
+    const saved = await save();
+    expect(saved.cycle).toEqual({
+      last_period_start_date: '2026-04-10', average_cycle_length: 28, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+    expect(saved.estradiolFlag).not.toBe('unknown');
+  }, 30_000);
+
+  it('no length known: the day map applies exactly as before, and the length is stored as null, not 28', async () => {
+    await openCycleStep();
+    await type(lastPeriodInput(), '2026-04-10');
+    const saved = await save();
+    expect(saved.cycle).toEqual({
+      last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+    expect(saved.estradiolFlag).not.toBe('unknown');
+  }, 30_000);
+
+  it('missing last-period date: no cycle day and no phase, as before; a typed length is still kept', async () => {
+    await openCycleStep();
+    expect(lastPeriodInput().value).toBe('');
+    await type(lengthInput(), '35');
+    expect(await save()).toMatchObject({
+      cycle: { last_period_start_date: null, average_cycle_length: 35, estimated_cycle_day: null, estimated_cycle_phase: 'unknown' },
+      estradiolFlag: 'unknown',
+    });
+  }, 30_000);
+
+  it('the tracker average pre-fills the field with the badge; a typed length overrides it', async () => {
+    // Three logged starts 30 days apart: cyclePredictor's average is 30.
+    fixture.periodLogs = [{ start_date: '2026-02-09' }, { start_date: '2026-03-11' }, { start_date: '2026-04-10' }];
+    await openCycleStep();
+    expect(lastPeriodInput().value).toBe('2026-04-10');
+    expect(lengthInput().value).toBe('30');
+    expect(autoFilledBadges()).toBe(2);
+    await type(lengthInput(), '28');
+    // Only the last-period badge is left.
+    expect(autoFilledBadges()).toBe(1);
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: '2026-04-10', average_cycle_length: 28, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+  }, 30_000);
+
+  it('clearing an auto-filled length makes it unknown again: today\'s phase, and null stored', async () => {
+    fixture.periodLogs = [{ start_date: '2026-02-09' }, { start_date: '2026-03-11' }, { start_date: '2026-04-10' }];
+    await openCycleStep();
+    expect(lengthInput().value).toBe('30');
+    await type(lengthInput(), '');
+    expect(autoFilledBadges()).toBe(1);
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+  }, 30_000);
+
+  it('a typed length that is not a whole number of days from 15 to 60 is flagged and blocks Next', async () => {
+    await openCycleStep();
+    for (const bad of ['90', '10', '0', '28.5', '-28', 'abc']) {
+      await type(lengthInput(), bad);
+      expect(lengthError(), bad).toBe('Enter a whole number of days from 15 to 60');
+      expect(lengthHint(), bad).toBeNull();
+      expect(lengthInput().getAttribute('aria-invalid'), bad).toBe('true');
+      expect(lengthInput().getAttribute('aria-describedby'), bad).toBe('typical-cycle-length-error');
+      expect((button('Next') as HTMLButtonElement).disabled, bad).toBe(true);
+    }
+    await type(lengthInput(), '30');
+    expect(lengthError()).toBeNull();
+    expect(lengthHint()).toBe(LENGTH_HINT);
+    expect(lengthInput().getAttribute('aria-invalid')).toBeNull();
+    expect(lengthInput().getAttribute('aria-describedby')).toBe('typical-cycle-length-hint');
+    expect((button('Next') as HTMLButtonElement).disabled).toBe(false);
+  }, 30_000);
+
+  it('the field is labelled for assistive technology', async () => {
+    await openCycleStep();
+    const label = app.querySelector('label[for="typical-cycle-length"]');
+    expect(label?.textContent?.trim()).toBe('Typical cycle length');
+    expect(lengthInput().getAttribute('inputmode')).toBe('numeric');
+  }, 30_000);
+});
+
+/*
+  Unchanged precedence: a cycle day or phase printed on the lab report (here
+  from the OCR function's metadata) still wins over the calculated value, field
+  by field. That can pair a printed day with a phase from the dates, as before;
+  the PR asks the owner about it rather than changing it.
+*/
+describe('PK-FIX-06: lab-printed cycle facts still win, field by field, as before', () => {
+  it('a printed cycle day wins over the calculated day; the phase still comes from the dates', async () => {
+    fixture.ocrMetadata = { cycle_day: 3, cycle_phase: null };
+    await openCycleStep();
+    await type(lastPeriodInput(), '2026-04-10');
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 3, estimated_cycle_phase: 'luteal',
+    });
+  }, 30_000);
+
+  it('a printed phase wins, even with a known length other than 28; the day still comes from the dates', async () => {
+    fixture.ocrMetadata = { cycle_day: null, cycle_phase: 'follicular' };
+    await openCycleStep();
+    await type(lastPeriodInput(), '2026-04-10');
+    await type(lengthInput(), '35');
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: '2026-04-10', average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'follicular',
+    });
+  }, 30_000);
+});
