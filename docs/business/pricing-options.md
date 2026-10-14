@@ -28,7 +28,18 @@ they may have moved since.
 - `beforePrice` equals `price` on both Stripe products, so no strike-through
   comparison is shown today (`src/stripe-config.ts`).
 - The web pricing page already lists yearly before monthly
-  (`src/pages/PricingPage.tsx`, `ordered = [yearly, monthly]`).
+  (`src/pages/PricingPage.tsx`, `ordered = [yearly, monthly]`), and the
+  first card gets the highlighted "Best Value" treatment (`isPopular`).
+- The native paywall is also yearly-first, and that order is fixed in code.
+  `getIapOfferings()` reads the RevenueCat `current` offering and then sorts
+  the products itself, yearly first (`src/lib/iap.ts`, "Yearly first, matching
+  the web paywall's ordering"), so any order set in the RevenueCat dashboard is
+  overwritten. `toStoreProduct()` drops any product that is not in the
+  hard-coded catalog in `src/lib/iap-config.ts`, so an offering cannot add a
+  product without an app release. `IapPaywall.tsx` has no pre-selected plan: it
+  renders one card per product and highlights the first (`isPopular`). (The
+  JSDoc on `getIapOfferings`, which says the dashboard can reorder products
+  without a release, does not match the sort that follows it.)
 - Arithmetic: twelve monthly payments are $119.88, so yearly is $19.89 (about
   16.6%) cheaper than a year of monthly.
 
@@ -98,10 +109,12 @@ is how to choose.
 
 ### Option A — Annual-first
 
-**What.** Lead with yearly everywhere: yearly pre-selected on the native
-paywall, monthly shown as the secondary choice, per-month equivalent of the
-yearly price displayed. Optionally widen the gap (lower yearly or raise
-monthly) — any new price is Adell's call.
+**What.** Lead with yearly everywhere: yearly first and highlighted, monthly
+shown as the secondary choice, per-month equivalent of the yearly price
+displayed. The ordering and highlight part already ships on both storefronts
+(§1.1); what is not built is a per-month equivalent, a strike-through
+comparison, or a pre-selected plan. Optionally widen the gap (lower yearly or
+raise monthly) — any new price is Adell's call.
 
 **Fit.** Sells a year of access before the second draw, which matches a
 1-4 draws-a-year user better than a monthly plan they can cancel between draws.
@@ -113,9 +126,16 @@ price-increase consent rules; read the current store policy before raising a
 live price).
 
 **Changes needed.**
-- Display only (no price change): web already orders yearly first; the native
-  paywall order comes from the RevenueCat offering, which can be reordered from
-  the dashboard without a release (RevenueCat offerings docs, see §7).
+- Display order only: nothing to change. Web and native are both already
+  yearly-first with yearly highlighted (§1.1), so "annual-first ordering" is
+  the current state, not an untested change, and it cannot be the subject of a
+  new experiment by itself.
+- Further display changes (a per-month equivalent, pre-selecting yearly, or
+  letting RevenueCat control the order): app code on native. Pre-selection
+  needs new selected-plan state in `IapPaywall.tsx`; dashboard-controlled order
+  needs the sort in `getIapOfferings()` removed or made conditional. Either
+  ships to native users only with a store release. On the web it is a
+  `PricingPage.tsx` change deployed by Netlify.
 - New price on existing products: Stripe — create a new Price on the existing
   Product (Stripe prices are immutable), update `priceId` in
   `src/stripe-config.ts`. Apple/Play — edit the price schedule on the existing
@@ -262,14 +282,16 @@ Practical consequences:
 
 | Option | Stripe | RevenueCat | Server / app | New store IDs |
 |---|---|---|---|---|
-| A. Annual-first, display only | none | reorder `default` offering | none (web already yearly-first) | none |
+| A. Annual-first, order only | none | none (offering order is overridden by the sort in `iap.ts`) | none: web and native are already yearly-first | none |
+| A. Annual-first, other display changes (per-month equivalent, pre-selection) | none | none | `PricingPage.tsx`; `IapPaywall.tsx` selected-plan state; native ships only with a store release | none |
 | A. Annual-first, new prices | new Price(s) on existing Products; update `priceId` | none (store prices change in the stores) | `stripe-config.ts` price ids | none |
 | B. Per-report unlock | new one-time Price, `mode: 'payment'` | new product, **not** on `premium`; new package | unlock ledger + deletion registration; IAP normaliser must not treat consumables as subscriptions; `tier.ts` reads ledger | Apple consumable; Play one-time product |
 | C. Family / partner | quantity-based or separate Price | entitlement decision for seats | seats table + invites + entitlement union; EXP-6 sign-off first | new subscription products (Apple Family Sharing is irreversible) |
 | D. Intelligence tier | new Product + 2 Prices | new entitlement, packages, 3-plan offering | third `Tier` + allowances; catalog parity lists | new Apple products in `Amani Premium` at a higher level; Play base plans or new subscription |
 
-Every row except "A, display only" needs code, tests and an owner GO, and every
-row with new store IDs needs a store release.
+Every row except "A, order only" (which is already shipped) needs code, tests
+and an owner GO. Every native app change needs a store release, and so does
+every row with new store IDs.
 
 ---
 
@@ -301,14 +323,27 @@ agrees; none are added here): `paywall_viewed {surface, storefront}`,
 cancellation truth stays in `stripe_subscriptions` / `iap_subscriptions`, not
 in events.
 
-**Step 2 — one change at a time.** The cheapest reversible test is Option A
-display-only on native: a RevenueCat offering variant with yearly pre-selected
-versus the current `default`. RevenueCat can switch the current offering from
-its dashboard without an app release (RevenueCat offerings docs, §7). Its
-built-in Experiments product is listed as Pro/Enterprise-only (§7); whether
-Amani's RevenueCat plan includes it is an open question. Without it,
-assignment can be done server-side (deterministic hash of user id) with the
-arm recorded as a first-party event.
+**Step 2 — one change at a time.** There is no paywall test that runs without
+code. Annual-first ordering is already live on both storefronts (§1.1), so it
+is the baseline, not a test arm. A RevenueCat offering variant cannot change
+what native users see today: `getIapOfferings()` re-sorts the products yearly
+first after reading the offering, `toStoreProduct()` drops any product outside
+the hard-coded catalog, and `IapPaywall.tsx` has no pre-selected plan. Two
+routes, both needing an owner GO:
+
+- **Web-only test (cheapest).** Change the Stripe pricing page
+  (`PricingPage.tsx`), for example a per-month equivalent on the yearly card,
+  with arm assignment in app code. Netlify deploys it with no store release.
+  Results cover web users only.
+- **Native test.** Needs app code (arm assignment, the display change itself
+  such as pre-selection UI, and either removing the sort or reading the arm
+  instead of the offering order) and a store release before it can start.
+  RevenueCat's built-in Experiments product is listed as Pro/Enterprise-only
+  (§7), and on main it would still be overridden by the sort; whether Amani's
+  plan includes it is an open question.
+
+In both routes assignment can be done server-side (deterministic hash of user
+id) with the arm recorded as a first-party event.
 
 - Unit: user, assigned once, sticky across sessions.
 - Primary metric: paid conversions per paywall-viewing user within an owner-set
@@ -370,7 +405,10 @@ or churn figures are quoted, because none were verified.
    announce it earlier?
 7. New product-ID naming convention (§4.2) — approve or replace before any ID
    is created.
-8. Does Amani's RevenueCat plan include Experiments, or should assignment be
+8. Paywall test route: a web-only Stripe pricing-page test (no store
+   release), or a native test that needs app code and a store release? If
+   native, does Amani's RevenueCat plan include Experiments (which would also
+   need the yearly-first sort in `iap.ts` removed), or should assignment be
    done server-side?
 9. Which candidate events in §6 may be added to PK-EXP5's allow-list, and
    under which EXP-6 consent basis?
