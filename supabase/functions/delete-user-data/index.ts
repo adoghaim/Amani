@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17.7.0";
 import { errorMessage } from "../_shared/errors.ts";
 import {
+  AccountDeletionNotReadyError,
+  checkUserDataTablesReady,
   deleteUserAccount,
   deleteUserDataTables,
   StoreSubscriptionAcknowledgementRequiredError,
@@ -55,6 +57,17 @@ Deno.serve(async (req: Request) => {
     const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-11-20.acacia" }) : null;
 
     const actions: AccountDeletionActions = {
+      async checkDataTablesReady() {
+        // One HEAD read per table delete-user-data deletes from; no rows come
+        // back. A table the database lacks (this function deployed before its
+        // migration: user-data-registry.ts, DEPLOY ORDER) refuses the whole
+        // deletion here, before anything is touched.
+        await checkUserDataTablesReady(async (table, ownerColumn) => {
+          const { error } = await supabase.from(table).select(ownerColumn, { head: true }).limit(1);
+          if (error) throw new Error(error.message);
+        });
+      },
+
       async listStoreSubscriptions(userId) {
         // Unfiltered on purpose — which statuses still bill is policy, and it
         // lives in ../_shared/account-deletion.ts where it can be tested.
@@ -221,6 +234,23 @@ Deno.serve(async (req: Request) => {
           })),
         }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    /*
+      A deploy-order mistake, not the user's doing: a table this function
+      deletes from is missing. Nothing was deleted. 503 with a plain message;
+      which table and which migration go to the function log.
+    */
+    if (error instanceof AccountDeletionNotReadyError) {
+      console.error("Account deletion refused, nothing deleted:", error.message, error.tables);
+      return new Response(
+        JSON.stringify({
+          error: "Account deletion is temporarily unavailable. Nothing was deleted. Please try again later.",
+          code: error.code,
+          retry: true,
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

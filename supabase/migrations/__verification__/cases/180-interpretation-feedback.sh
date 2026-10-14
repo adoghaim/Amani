@@ -89,5 +89,38 @@ echo "    refused without its prerequisites"
 
 psql_fb -q -f /tmp/interpretation-feedback.verify.sql
 
+# Deploy order (PK-HARM-01 review): the owner's read-only preflight,
+# factory/sql/verify-account-deletion-tables.sql, run here for real. This
+# database holds only the prelude's stubs, so the tables it lacks are first
+# stubbed (never interpretation_feedback, which the migration created); then
+# the preflight must return zero rows, and with interpretation_feedback gone
+# (renamed inside a rolled-back transaction, as on a project the migration has
+# not reached) exactly that table and its migration.
+docker cp "$HERE/../../../factory/sql/verify-account-deletion-tables.sql" \
+  "$CONTAINER:/tmp/verify-account-deletion-tables.sql" >/dev/null
+fb_missing=$(psql_fb -tA -F'|' -f /tmp/verify-account-deletion-tables.sql)
+if grep -q '^interpretation_feedback|' <<<"$fb_missing"; then
+  echo "FAIL: the deletion preflight reports interpretation_feedback missing after its migration" >&2
+  exit 1
+fi
+# (psql_fb is docker exec -i, which would swallow a loop's stdin: build one batch.)
+fb_stubs=""
+while IFS='|' read -r fb_table _; do
+  [ -n "$fb_table" ] || continue
+  fb_stubs+="CREATE TABLE public.\"$fb_table\" (id uuid, user_id uuid); "
+done <<<"$fb_missing"
+if [ -n "$fb_stubs" ]; then psql_fb -q -c "$fb_stubs" </dev/null >/dev/null; fi
+if [ -n "$(psql_fb -tA -f /tmp/verify-account-deletion-tables.sql)" ]; then
+  echo "FAIL: the deletion preflight reports a table missing once every table exists" >&2
+  exit 1
+fi
+fb_early=$(psql_fb -tA -F'|' -c "BEGIN" -c "ALTER TABLE public.interpretation_feedback RENAME TO interpretation_feedback_hidden" \
+  -f /tmp/verify-account-deletion-tables.sql -c "ROLLBACK")
+if [ "$(grep -v '^$' <<<"$fb_early" | grep -vE '^(BEGIN|ALTER TABLE|ROLLBACK)$')" != "interpretation_feedback|20261015020000" ]; then
+  echo "FAIL: the deletion preflight did not name interpretation_feedback and 20261015020000 before the migration: $fb_early" >&2
+  exit 1
+fi
+echo "    deletion preflight: zero rows with every table; names interpretation_feedback|20261015020000 without it"
+
 echo
-echo "PASS: interpretation feedback: one-shot replay, prerequisites, RLS and grants by role, 1,000-character cap, explanation identity, review queue order, server-stamped status, ENABLE ALWAYS triggers under replica, erasure."
+echo "PASS: interpretation feedback: one-shot replay, prerequisites, RLS and grants by role, 1,000-character cap, explanation identity, review queue order, server-stamped status, ENABLE ALWAYS triggers under replica, erasure, deletion deploy preflight."

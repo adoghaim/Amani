@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
-import { deleteUserDataTables } from './account-deletion.ts';
+import { AccountDeletionNotReadyError, checkUserDataTablesReady, deleteUserDataTables } from './account-deletion.ts';
 import { orderedDeletes } from './user-data-registry.ts';
 
 /**
@@ -194,6 +194,41 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
     expect(started(rateLimits.fake.events)).not.toContain('delete:iap_beta_testers');
     const profile = failing('users');
     await expect(profile.run).rejects.toThrow('Deleting users row failed: boom');
+  });
+
+  it('PK-HARM-01 deploy order: the handler probes every swept table read-only, and a missing one refuses with 503 before anything is deleted', async () => {
+    const check = slice('async checkDataTablesReady() {', 'async listStoreSubscriptions(');
+    const { code } = transformSync(`const o = {\n${check}\n};\nreturn o.checkDataTablesReady;`, { loader: 'ts', target: 'es2022' });
+    const probes: Array<{ table: string; columns: string; head: unknown }> = [];
+    const client = (absent: string) => ({
+      from: (table: string) => ({
+        select: (columns: string, opts: { head?: boolean }) => {
+          probes.push({ table, columns, head: opts?.head });
+          return {
+            limit: () => Promise.resolve(table === absent
+              ? { error: { message: `Could not find the table 'public.${table}' in the schema cache` } }
+              : { error: null }),
+          };
+        },
+        delete: () => { throw new Error(`the readiness check deleted from ${table}`); },
+      }),
+    });
+    const run = (absent: string) => (new Function('supabase', 'checkUserDataTablesReady', code)(
+      client(absent), checkUserDataTablesReady) as () => Promise<void>)();
+
+    await expect(run('none')).resolves.toBeUndefined();
+    expect(probes.map(p => `${p.table}.${p.columns}`)).toEqual(orderedDeletes().map(e => `${e.table}.${e.ownerColumn}`));
+    expect(probes.every(p => p.head === true)).toBe(true);
+
+    const error = await run('interpretation_feedback').catch(e => e);
+    expect(error).toBeInstanceOf(AccountDeletionNotReadyError);
+    expect(error.message).toContain('interpretation_feedback (push migration 20261015020000)');
+
+    // It runs first, and the handler answers a refusal with 503, never swallowing it.
+    expect(source.indexOf('async checkDataTablesReady() {')).toBeLessThan(source.indexOf('async listStoreSubscriptions('));
+    const refusal = slice('if (error instanceof AccountDeletionNotReadyError) {', 'console.error("Error deleting user account:"');
+    expect(refusal).toContain('status: 503');
+    expect(refusal).toContain('Nothing was deleted');
   });
 
   it('negative control: the recorder sees the old shape start child deletes before the RPC settles', async () => {
