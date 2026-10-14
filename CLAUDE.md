@@ -132,3 +132,8 @@ Run `npm run test:e2e:isolation` alone in a disposable worktree without root env
 files to verify served modules and cleanup. Turn-6 execution was blocked by
 sandbox `listen EPERM`; runtime isolation must not be claimed as proven until
 the Lead runs that canary successfully. See the linked tooling report for evidence.
+
+## Design System
+Read DESIGN.md before visual or UI work: it defines the fonts, colors, spacing, and
+aesthetic direction. Ask the user before departing from it. When reviewing or QA-ing
+UI, flag code that doesn't match DESIGN.md.
