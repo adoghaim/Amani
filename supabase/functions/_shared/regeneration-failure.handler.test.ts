@@ -14,6 +14,7 @@ import { deriveBloodDrawIdentity, hashDrawKey } from './blood-draw-identity';
 import { decideDeepGeneration } from './regeneration-availability';
 import { readInterpretation } from './interpretation-read';
 import * as versionWrite from './interpretation-version-write';
+import * as regenerationLimit from './regeneration-limit';
 import { classifyRegenerationFailure } from '../../../src/lib/regenerationFailure';
 
 /**
@@ -91,6 +92,8 @@ function fakeSupabase(s: Scenario) {
   const reply = (table: string, selection: string) => {
     if (table === 'lab_reports') {
       if (selection === 'id, user_id') return { data: { id: REPORT, user_id: USER }, error: null };
+      // PK-REGEN-01: the server-owned count, with attempts left.
+      if (selection === 'regeneration_count') return { data: { regeneration_count: 0 }, error: null };
       if (selection === 'file_url, content_hash') return { data: { file_url: null, content_hash: 'c'.repeat(64) }, error: null };
       return { data: selection.includes('context')
         ? { id: REPORT, report_date: '2026-09-26', estimated_cycle_day: 21, estimated_cycle_phase: 'luteal' } : null, error: null };
@@ -136,6 +139,7 @@ function fakeSupabase(s: Scenario) {
     }
     if (name === 'commit_deep_access_v2') return { data: s.ledgerOutcome ?? (s.claim ? 'already_claimed' : 'committed'), error: null };
     if (name === 'save_interpretation') return { data: null, error: null };
+    if (name === 'record_regeneration') return { data: 1, error: null };
     return { data: null, error: { code: 'XX000', message: `unexpected rpc ${name}` } };
   };
   return { client: { from, rpc, auth: { getUser: async () => ({ data: { user: { id: USER } }, error: null }) } }, rpcs, writes };
@@ -158,7 +162,7 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
     ...(sink.a as object), ...(sink.c as object),
   });
   evaluate(slice(source, '// ─── Version store', '// ─── Handler')
-    + '\nsink.v = { readAnchor, findRequestVersion, appendVersion, commitLedgerVersion };', { sink, ...versionWrite });
+    + '\nsink.v = { readAnchor, findRequestVersion, appendVersion, commitLedgerVersion, regenerationLimitActions };', { sink, ...versionWrite });
   let handler: (req: Request) => Promise<Response> = async () => new Response(null, { status: 500 });
   const flagOn = s.plan !== 'off';
   evaluate(handlerSource.slice(handlerSource.indexOf('Deno.serve(')), {
@@ -177,7 +181,7 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
     shouldGenerateDeepInterpretation, decideDeepGeneration, decideIntroductoryAccess, commitGeneratedInterpretation,
     deriveBloodDrawIdentity, hashDrawKey, recordGenerationCosts: vi.fn(async () => {}),
     isRateLimitExceeded: () => false, errorMessage: String, servedBasic, visibleClaimProjection,
-    ...versionWrite, ...(sink.p as object), ...(sink.v as object),
+    ...versionWrite, ...regenerationLimit, ...(sink.p as object), ...(sink.v as object),
   });
   return { handler, tryOpenAI };
 }

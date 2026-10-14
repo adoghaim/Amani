@@ -466,3 +466,7 @@ source "$HERE/interpretation-versions.run.sh"
 # PK-PL-A: a regeneration that fails writes nothing, so it consumes no attempt
 # (lab_reports.regeneration_count) and no credit (introductory claims).
 source "$HERE/regeneration-no-write.run.sh"
+
+# PK-REGEN-01: the regeneration count is the server's; a client UPDATE of
+# lab_reports.regeneration_count is denied. Own databases, own fixture.
+source "$HERE/regeneration-limit.run.sh"

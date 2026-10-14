@@ -1129,15 +1129,22 @@ export function ReportView() {
       PK-PL-A (Adell's pre-launch ruling), both flag states. A failed regenerate
       wrote nothing: the server appends a version only on success, keyed by
       request_id, so the retry below can never append twice. So it spends no
-      attempt and never brands the report "error" — put back the status and the
-      attempt spent optimistically, then say what happened: 402 → Premium (the
+      attempt and never brands the report "error" — put back the status, then
+      say what happened: 402 → Premium (the
       paywall flag on; pricing or billing flag off), 429 → the daily-limit
       notice, anything else → a calm notice whose wording and retry follow the
       server's answer (lib/regenerationFailure.ts).
 
       Flag off with no analysis on screen the first analysis itself failed, and
       the report has none: it stays marked failed for the existing retry card,
-      as before — its attempt is still put back.
+      as before.
+
+      PK-REGEN-01 (R26): the page no longer writes `regeneration_count` at all.
+      generate-interpretation counts a regeneration only after it wrote a
+      version, refuses a fourth (400 regeneration_limit_reached, read as
+      "unavailable"), and the count shown is the one re-read from the report.
+      The column is off the authenticated UPDATE grant, so writing it here would
+      make the status UPDATE fail.
     */
     const fail = async (err: unknown) => {
       const redirect = freemium ? null : await handle402(err);
@@ -1146,7 +1153,6 @@ export function ReportView() {
       const noAnalysis = !freemium && !analysisOnScreen && (kind === 'retryable' || kind === 'unavailable');
       await supabase.from('lab_reports').update({
         status: noAnalysis ? 'error' : priorStatus,
-        regeneration_count: report.regeneration_count,
       }).eq('id', reportId);
       if (redirect) { navigate(redirect, { replace: true }); return; }
       // Re-read first: a stored analysis clears any old daily-limit notice, and
@@ -1178,10 +1184,7 @@ export function ReportView() {
         get back, since the retry that would have replaced it is the thing that
         just failed.
       */
-      await supabase.from('lab_reports').update({
-        status: 'processing',
-        regeneration_count: report.regeneration_count + 1,
-      }).eq('id', reportId);
+      await supabase.from('lab_reports').update({ status: 'processing' }).eq('id', reportId);
       const { data: fnData, error: interpError } = await supabase.functions.invoke('generate-interpretation', {
         body: {
           reportId,
@@ -1236,7 +1239,9 @@ export function ReportView() {
       const { data, error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
         body: {
           reportId, primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
-          ...(requestId ? { request_id: requestId } : {}),
+          // PK-REGEN-01: the offer spends no regeneration; the server checks
+          // that the stored analysis is not already the deep one.
+          ...(requestId ? { request_id: requestId, purpose: 'fuller_analysis' } : {}),
         },
       });
       if (requestId && !invokeErr && data?.success) regenerationRequests.settle();

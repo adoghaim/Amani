@@ -1,7 +1,7 @@
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 import {
-  LEGACY_HISTORY_PROTECTED, REGENERATION_COPY, REGENERATION_FAILED, REQUEST_ID_REQUIRED,
+  LEGACY_HISTORY_PROTECTED, REGENERATION_COPY, REGENERATION_FAILED, REGENERATION_LIMIT_REACHED, REQUEST_ID_REQUIRED,
   classifyRegenerationFailure, regenerationFailureOf,
 } from './regenerationFailure';
 import { FREEMIUM_COPY } from './freemium/copy';
@@ -17,6 +17,8 @@ describe('what a failed regeneration means', () => {
     // A future name for the same refusal still reads as "nothing replaced".
     [409, { error: 'history_protected' }, 'already_saved'],
     [400, { error: 'request_id_required' }, 'unavailable'],
+    // PK-REGEN-01: the server's limit refusal is calm, never a retry into the same refusal.
+    [400, { error: 'regeneration_limit_reached' }, 'unavailable'],
     [503, { error: 'regeneration_failed', retryable: false }, 'unavailable'],
     [503, { error: 'regeneration_failed', retryable: true }, 'retryable'],
     [503, { code: 'entitlement_unavailable', retryable: true }, 'retryable'],
@@ -29,8 +31,8 @@ describe('what a failed regeneration means', () => {
   });
 
   it('names the server\'s codes (the executed-handler mapping is in regeneration-failure.handler.test.ts)', () => {
-    expect([LEGACY_HISTORY_PROTECTED, REQUEST_ID_REQUIRED, REGENERATION_FAILED])
-      .toEqual(['legacy_history_protected', 'request_id_required', 'regeneration_failed']);
+    expect([LEGACY_HISTORY_PROTECTED, REQUEST_ID_REQUIRED, REGENERATION_FAILED, REGENERATION_LIMIT_REACHED])
+      .toEqual(['legacy_history_protected', 'request_id_required', 'regeneration_failed', 'regeneration_limit_reached']);
   });
 
   it('reads a supabase-js failure; a call with no answer is retryable', async () => {

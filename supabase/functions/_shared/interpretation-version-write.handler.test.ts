@@ -13,6 +13,7 @@ import { commitGeneratedInterpretation, decideIntroductoryAccess } from './intro
 import { decideDeepGeneration } from './regeneration-availability';
 import { deriveBloodDrawIdentity, hashDrawKey } from './blood-draw-identity';
 import * as versionWrite from './interpretation-version-write';
+import * as regenerationLimit from './regeneration-limit';
 
 /**
  * TASK-048 turns 10 and 11: executes the real generate-interpretation handler,
@@ -84,6 +85,8 @@ function fakeSupabase(opts: Scenario) {
   const reply = (table: string, selection: string) => {
     if (table === 'lab_reports') {
       if (selection === 'id, user_id') return { id: REPORT, user_id: USER };
+      // PK-REGEN-01: the server-owned count, with attempts left.
+      if (selection === 'regeneration_count') return { regeneration_count: 0 };
       if (selection === 'file_url, content_hash') return { file_url: null, content_hash: 'c'.repeat(64) };
       return selection.includes('context') ? { id: REPORT, report_date: '2026-09-26', estimated_cycle_day: 21, estimated_cycle_phase: 'luteal' } : null;
     }
@@ -131,6 +134,7 @@ function fakeSupabase(opts: Scenario) {
     }
     if (name === 'commit_deep_access_v2') return { data: opts.ledgerOutcome ?? (opts.claim ? 'already_claimed' : 'committed'), error: null };
     if (name === 'save_interpretation') return { data: null, error: null };
+    if (name === 'record_regeneration') return { data: 1, error: null };
     return { data: null, error: { code: 'XX000', message: `unexpected rpc ${name}` } };
   };
   return { client: { from, rpc, auth: { getUser: async () => ({ data: { user: { id: USER } }, error: null }) } }, rpcs, writes, reads };
@@ -157,7 +161,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
     ...(sink.a as object), ...(sink.c as object),
   });
   evaluate(slice(source, '// ─── Version store', '// ─── Handler')
-    + '\nsink.v = { readAnchor, findRequestVersion, appendVersion, commitLedgerVersion };', { sink, ...versionWrite });
+    + '\nsink.v = { readAnchor, findRequestVersion, appendVersion, commitLedgerVersion, regenerationLimitActions };', { sink, ...versionWrite });
   let handler: (req: Request) => Promise<Response> = async () => new Response(null, { status: 500 });
   const recordGenerationCosts = vi.fn(async () => {});
   evaluate(handlerSource.slice(handlerSource.indexOf('Deno.serve(')), {
@@ -176,7 +180,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
     shouldGenerateDeepInterpretation, decideDeepGeneration, decideIntroductoryAccess, commitGeneratedInterpretation,
     deriveBloodDrawIdentity, hashDrawKey, recordGenerationCosts,
     isRateLimitExceeded: () => false, errorMessage: String, servedBasic, visibleClaimProjection,
-    ...versionWrite, ...(sink.p as object), ...(sink.v as object),
+    ...versionWrite, ...regenerationLimit, ...(sink.p as object), ...(sink.v as object),
   });
   return { handler, tryOpenAI };
 }
@@ -209,7 +213,8 @@ describe('generate-interpretation V2 version cutover (executed from source)', ()
   it.each([false, true])('a report with an anchor appends a version, never save_interpretation (flag on: %s)', async flagOn => {
     const result = await run({ anchor: true, flagOn });
     expect(result.response.status).toBe(200);
-    expect(names(result.rpcs)).toEqual(['read_interpretation_for_server', 'append_interpretation_version']);
+    // PK-REGEN-01: the created version is then counted, once, by the server.
+    expect(names(result.rpcs)).toEqual(['read_interpretation_for_server', 'append_interpretation_version', 'record_regeneration']);
     const args = result.rpcs[1].args;
     expect(args).toMatchObject({ p_user_id: USER, p_report_id: REPORT, p_request_id: REQUEST, p_depth: 'deep',
       p_disclaimer: '1.0', p_provenance: { pipeline: 'generate-interpretation', mode: 'regeneration', claim_policy_version: 'v2-03c.1' } });
@@ -310,7 +315,7 @@ describe('generate-interpretation Free ledger on an anchored report (turn 11, ex
   it('an existing claim settles and appends through commit_deep_access_version only', async () => {
     const result = await run({ anchor: true, free: true, claim: true });
     expect(result.response.status).toBe(200);
-    expect(persisting(result.rpcs)).toEqual(['commit_deep_access_version']);
+    expect(persisting(result.rpcs)).toEqual(['commit_deep_access_version', 'record_regeneration']);
     const args = result.rpcs.find(r => r.name === 'commit_deep_access_version')!.args;
     expect(args).toMatchObject({ p_user_id: USER, p_report_id: REPORT, p_request_id: REQUEST, p_consume_credit: false,
       p_provenance: { pipeline: 'generate-interpretation', mode: 'regeneration', claim_policy_version: 'v2-03c.1' } });
@@ -330,7 +335,7 @@ describe('generate-interpretation Free ledger on an anchored report (turn 11, ex
   it('a fresh credit is consumed in the same RPC as the version', async () => {
     const result = await run({ anchor: true, free: true, claim: false, claimCount: 1 });
     expect(result.response.status).toBe(200);
-    expect(persisting(result.rpcs)).toEqual(['commit_deep_access_version']);
+    expect(persisting(result.rpcs)).toEqual(['commit_deep_access_version', 'record_regeneration']);
     expect(result.rpcs.find(r => r.name === 'commit_deep_access_version')!.args.p_consume_credit).toBe(true);
     expect(result.body).toMatchObject({ access: 'full', version: { id: 'v2' } });
   });
@@ -357,7 +362,7 @@ describe('generate-interpretation Free ledger on an anchored report (turn 11, ex
   it('introductory access exhausted before the model (post-limit default): ordinary writer, no ledger, served Basic', async () => {
     const result = await run({ anchor: true, free: true, claim: false, claimCount: 3 });
     expect(result.response.status).toBe(200);
-    expect(persisting(result.rpcs)).toEqual(['append_interpretation_version']);
+    expect(persisting(result.rpcs)).toEqual(['append_interpretation_version', 'record_regeneration']);
     expect(result.body).toMatchObject({ access: 'basic', version: { id: 'v1' } });
   });
 

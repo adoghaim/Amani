@@ -8,8 +8,8 @@ import { ferritinDecreased, stage2CurrentReport, stage2PriorReport, type Synthet
   (generate-interpretation answers a failure only when no version, claim or
   anchor change was written: supabase/functions/_shared/regeneration-failure
   .handler.test.ts and __verification__/regeneration-no-write.sql), so the page
-  puts back the status and the attempt it spent optimistically, never writes
-  status "error", keeps the analysis on screen and says calmly what happened.
+  puts back the status it set (PK-REGEN-01: it never writes the attempt
+  counter, which the server owns), never writes status "error", keeps the analysis on screen and says calmly what happened.
 
   The network stands in for the database: lab_reports PATCH bodies are recorded
   exactly as the client sends them, and generate-interpretation answers with the
@@ -31,6 +31,9 @@ const OUTCOMES = [
   { label: '409 legacy_history_protected', status: 409, body: { error: 'legacy_history_protected' },
     title: 'Your saved analysis was kept', note: 'Nothing was replaced. You are seeing the analysis saved for this report.', retry: false },
   { label: '400 request_id_required', status: 400, body: { error: 'request_id_required' },
+    title: "A new analysis isn't available for this report", note: 'Your current analysis is unchanged.', retry: false },
+  // PK-REGEN-01: the server's refusal past the report's limit.
+  { label: '400 regeneration_limit_reached', status: 400, body: { error: 'regeneration_limit_reached' },
     title: "A new analysis isn't available for this report", note: 'Your current analysis is unchanged.', retry: false },
   { label: '500 Failed to save interpretation', status: 500, body: { error: 'Failed to save interpretation' },
     title: "We couldn't regenerate your analysis", note: 'Your current analysis is unchanged. Please try again in a moment.', retry: true },
@@ -77,11 +80,12 @@ test.describe('PK-PL-A: a failed regenerate, flag off', () => {
       await expect(notice).toContainText(outcome.note);
       await expect(notice.getByRole('button', { name: 'Try again' })).toHaveCount(outcome.retry ? 1 : 0);
 
-      // One keyed request; the optimistic spend, then exactly the values it replaced.
+      // One keyed request; the status it set, then exactly the one it replaced.
+      // PK-REGEN-01: the client never writes regeneration_count (the server counts).
       expect(state.generateBodies).toHaveLength(1);
       expect(state.generateBodies[0].request_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-      expect(state.patches[0]).toEqual({ status: 'processing', regeneration_count: 1 });
-      expect(state.patches.at(-1)).toEqual({ status: 'ready', regeneration_count: 0 });
+      expect(state.patches[0]).toEqual({ status: 'processing' });
+      expect(state.patches.at(-1)).toEqual({ status: 'ready' });
       expect(state.patches.filter(p => p.status === 'error')).toEqual([]);
 
       // The analysis on screen is intact and no failure card replaces it.

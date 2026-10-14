@@ -119,7 +119,9 @@ test.describe('V2 version regeneration, flag off', () => {
     await expect(summary(page)).not.toContainText(ferritinDecreased);
     await expect(page.locator('[data-model-field]').filter({ hasText: ferritinDecreased })).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText(PREVIOUS_CANARY);
-    // The client spent one regeneration and wrote nothing but the report row.
-    expect(state.patches).toContainEqual(expect.objectContaining({ regeneration_count: 1 }));
+    // The client wrote nothing but the report row's status. PK-REGEN-01: the
+    // regeneration is counted by the server, never by a client write.
+    expect(state.patches).toContainEqual({ status: 'processing' });
+    expect(state.patches.filter(p => typeof p === 'object' && p !== null && 'regeneration_count' in p)).toEqual([]);
   });
 });

@@ -19,6 +19,12 @@ import { PRODUCT_DISCLAIMERS } from '../lib/scoring/insightCopy';
       screen, and a calm notice says what happened.
   (c) Flag on, the Regenerate action is hidden when get-interpretation says a
       regeneration cannot succeed for this viewer.
+
+  PK-REGEN-01 (R26): the page never writes regeneration_count any more (the
+  server counts a regeneration after it wrote a version, and the column is off
+  the authenticated UPDATE grant). Every test below ends by checking that no
+  lab_reports UPDATE carried it; a success that the server counted is modelled
+  by the fake's generate reply raising the stored count.
 */
 
 type Reply = { data: unknown; error: unknown };
@@ -96,6 +102,8 @@ beforeEach(() => {
   root = createRoot(app);
 });
 afterEach(async () => {
+  // PK-REGEN-01: the client writes status only; the count is the server's.
+  expect(fixture.updates.filter(u => 'regeneration_count' in u)).toEqual([]);
   await act(async () => root.unmount());
   app.remove();
   sessionStorage.clear();
@@ -136,9 +144,9 @@ describe('PK-PL-A (b), flag off: a failed regenerate spends nothing and brands n
 
     expect(fixture.generateBodies).toHaveLength(1);
     expect(fixture.generateBodies[0]!.request_id).toMatch(/^[0-9a-f-]{36}$/);
-    // The optimistic spend, then exactly the values it replaced: no attempt consumed.
-    expect(fixture.updates[0]).toEqual({ status: 'processing', regeneration_count: 2 });
-    expect(last(fixture.updates)).toEqual({ status: 'ready', regeneration_count: 1 });
+    // The status the tap set, then exactly the one it replaced; the count is untouched.
+    expect(fixture.updates[0]).toEqual({ status: 'processing' });
+    expect(last(fixture.updates)).toEqual({ status: 'ready' });
     expect(branded()).toEqual([]);
     expect(fixture.report).toMatchObject({ status: 'ready', regeneration_count: 1 });
     // The page shows the same remaining count and the analysis it had.
@@ -150,12 +158,14 @@ describe('PK-PL-A (b), flag off: a failed regenerate spends nothing and brands n
     expect(buttons(/^Try again$/)).toHaveLength(retry ? 1 : 0);
   });
 
-  it('the retry re-sends the same request and, on success, spends exactly one attempt', async () => {
+  it('the retry re-sends the same request and, on success, shows the one attempt the server counted', async () => {
     fixture.report.regeneration_count = 1;
     fixture.generate = async () => http(503, { error: 'regeneration_failed', retryable: true });
     await renderReport();
     await act(async () => button(/^Regenerate \(2 left\)$/).click());
-    fixture.generate = async () => ({ data: { success: true }, error: null });
+    expect(fixture.report.regeneration_count).toBe(1);
+    // The server writes the version, then counts it (record_regeneration).
+    fixture.generate = async () => { fixture.report.regeneration_count = 2; return { data: { success: true }, error: null }; };
     await act(async () => button(/^Try again$/).click());
     expect(fixture.generateBodies[1]!.request_id).toBe(fixture.generateBodies[0]!.request_id);
     expect(fixture.report).toMatchObject({ status: 'processing', regeneration_count: 2 });
@@ -168,7 +178,7 @@ describe('PK-PL-A (b), flag off: a failed regenerate spends nothing and brands n
     fixture.generate = async () => http(402, { error: 'subscription_required', reason: 'trial_expired' });
     await renderReport();
     await act(async () => button(/^Regenerate \(3 left\)$/).click());
-    expect(last(fixture.updates)).toEqual({ status: 'ready', regeneration_count: 0 });
+    expect(last(fixture.updates)).toEqual({ status: 'ready' });
     expect(branded()).toEqual([]);
     expect(text()).toContain('Synthetic pricing page');
   });
@@ -177,7 +187,7 @@ describe('PK-PL-A (b), flag off: a failed regenerate spends nothing and brands n
     fixture.generate = async () => http(429, { error: 'Synthetic daily limit message.' });
     await renderReport();
     await act(async () => button(/^Regenerate \(3 left\)$/).click());
-    expect(last(fixture.updates)).toEqual({ status: 'ready', regeneration_count: 0 });
+    expect(last(fixture.updates)).toEqual({ status: 'ready' });
     expect(text()).toContain('Synthetic daily limit message.');
     expect(branded()).toEqual([]);
   });
@@ -186,7 +196,7 @@ describe('PK-PL-A (b), flag off: a failed regenerate spends nothing and brands n
     fixture.generate = async () => { throw new Error('synthetic transport failure'); };
     await renderReport();
     await act(async () => button(/^Regenerate \(3 left\)$/).click());
-    expect(last(fixture.updates)).toEqual({ status: 'ready', regeneration_count: 0 });
+    expect(last(fixture.updates)).toEqual({ status: 'ready' });
     expect(branded()).toEqual([]);
     expect(text()).toContain(REGENERATION_COPY.retryable.title);
   });
@@ -200,17 +210,35 @@ describe('PK-PL-A (b), flag off: a failed regenerate spends nothing and brands n
     expect(text()).toContain('AI summary failed');
     fixture.updates = [];
     await act(async () => button(/^Retry summary \(3 of 3 left\)$/).click());
-    expect(fixture.updates[0]).toEqual({ status: 'processing', regeneration_count: 1 });
-    expect(last(fixture.updates)).toEqual({ status: 'error', regeneration_count: 0 });
+    expect(fixture.updates[0]).toEqual({ status: 'processing' });
+    expect(last(fixture.updates)).toEqual({ status: 'error' });
     expect(buttons(/^Retry summary \(3 of 3 left\)$/)).toHaveLength(1);
     expect(text()).not.toContain(REGENERATION_COPY.retryable.title);
   });
 
-  it('control: a successful regenerate spends one attempt and shows no notice', async () => {
+  it('control: a successful regenerate shows the attempt the server counted and no notice', async () => {
+    fixture.generate = async () => { fixture.report.regeneration_count = 1; return { data: { success: true }, error: null }; };
     await renderReport();
     await act(async () => button(/^Regenerate \(3 left\)$/).click());
-    expect(fixture.updates).toEqual([{ status: 'processing', regeneration_count: 1 }]);
+    expect(fixture.updates).toEqual([{ status: 'processing' }]);
+    expect(buttons(/^Regenerate \(2 left\)$/)).toHaveLength(1);
     expect(text()).not.toContain(REGENERATION_COPY.retryable.title);
+  });
+
+  it('PK-REGEN-01: the server refuses a regeneration past the limit; calm notice, status put back, no retry', async () => {
+    // A count the page read as 2 that the server already holds at 3 (another device spent it).
+    fixture.report.regeneration_count = 2;
+    fixture.generate = async () => { fixture.report.regeneration_count = 3; return http(400, { error: 'regeneration_limit_reached' }); };
+    await renderReport();
+    await act(async () => button(/^Regenerate \(1 left\)$/).click());
+    expect(last(fixture.updates)).toEqual({ status: 'ready' });
+    expect(branded()).toEqual([]);
+    expect(analysisOnScreen()).toBe(true);
+    expect(text()).toContain(REGENERATION_COPY.unavailable.title);
+    expect(text()).toContain(REGENERATION_COPY.unavailable.body);
+    expect(buttons(/^Try again$/)).toHaveLength(0);
+    // The re-read server count leaves no Regenerate action.
+    expect(buttons(/Regenerate/)).toHaveLength(0);
   });
 });
 
@@ -251,7 +279,7 @@ describe('PK-PL-A, flag on', () => {
     await renderReport();
     const readsBefore = fixture.reads;
     await act(async () => button(/^Regenerate \(3 left\)$/).click());
-    expect(last(fixture.updates)).toEqual({ status: 'ready', regeneration_count: 0 });
+    expect(last(fixture.updates)).toEqual({ status: 'ready' });
     expect(branded()).toEqual([]);
     expect(fixture.reads).toBeGreaterThan(readsBefore);
     expect(text()).toContain(REGENERATION_COPY.unavailable.title);
@@ -264,8 +292,8 @@ describe('PK-PL-A, flag on', () => {
       fixture.generate = async () => reply();
       await renderReport();
       await act(async () => button(/^Regenerate \(3 left\)$/).click());
-      expect(fixture.updates[0]).toEqual({ status: 'processing', regeneration_count: 1 });
-      expect(last(fixture.updates)).toEqual({ status: 'ready', regeneration_count: 0 });
+      expect(fixture.updates[0]).toEqual({ status: 'processing' });
+      expect(last(fixture.updates)).toEqual({ status: 'ready' });
       expect(branded()).toEqual([]);
       expect(text()).toContain(REGENERATION_COPY[notice].title);
       expect(buttons(/^Try again$/)).toHaveLength(retry ? 1 : 0);
@@ -283,6 +311,8 @@ describe('PK-PL-A, flag on', () => {
     await act(async () => button(/^Generate full Amani analysis$/).click());
     expect(fixture.generateBodies).toHaveLength(1);
     expect(fixture.generateBodies[0]!.request_id).toMatch(/^[0-9a-f-]{36}$/);
+    // PK-REGEN-01: labelled, so the server spends no regeneration on the offer.
+    expect(fixture.generateBodies[0]!.purpose).toBe('fuller_analysis');
     expect(fixture.updates).toEqual([]);
     expect(text()).toContain(REGENERATION_COPY.retryable.title);
     // The offer itself is the way to try again; the notice carries no second button.

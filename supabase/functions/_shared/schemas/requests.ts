@@ -6,6 +6,11 @@ export const GenerateInterpretationRequestSchema = z.object({
   // TASK-048: per-tap identity of a regeneration; required once the report
   // holds an interpretation, so a retried regeneration appends no second version.
   request_id: z.string().uuid().optional(),
+  // PK-REGEN-01: what the request is for, which decides whether a written
+  // version spends one of the report's regenerations (_shared/regeneration-limit.ts).
+  // Absent means an ordinary regeneration. "correction" is not accepted until
+  // PK-CORRECT-01 establishes the correction on the server.
+  purpose: z.enum(["regenerate", "fuller_analysis"]).optional(),
 });
 export type GenerateInterpretationRequest = z.infer<
   typeof GenerateInterpretationRequestSchema

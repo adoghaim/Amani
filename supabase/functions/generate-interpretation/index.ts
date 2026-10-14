@@ -30,6 +30,13 @@ import {
 } from "../_shared/response-shaping.ts";
 import { decideDeepGeneration } from "../_shared/regeneration-availability.ts";
 import {
+  admitRegeneration,
+  countsAgainstLimit,
+  recordRegeneration,
+  regenerationLimitResponse,
+  type RegenerationLimitActions,
+} from "../_shared/regeneration-limit.ts";
+import {
   isHistoryProtected,
   isVersionable,
   legacyHistoryProtectedResponse,
@@ -1525,14 +1532,34 @@ async function produceInterpretation(input: {
 /** The report's anchor interpretation, if it holds one, and whether an
  * introductory claim covers it. Through the owner-bound service reader (one row
  * per owned report, the same claim derivation every reader uses), never the raw table. */
-async function readAnchor(supabase: ServiceClient, userId: string, reportId: string): Promise<{ claimCovered: boolean } | null> {
+async function readAnchor(supabase: ServiceClient, userId: string, reportId: string): Promise<{ claimCovered: boolean; storedDepth: string | null } | null> {
   const { data, error } = await supabase.rpc("read_interpretation_for_server", {
     p_user_id: userId, p_report_id: reportId, p_premium: false,
   });
   if (error) throw new Error(`Anchor read failed: ${error.message}`);
   if (!Array.isArray(data)) throw new Error("Unexpected anchor read shape");
   if (data.length === 0) return null;
-  return { claimCovered: (data[0] as { has_claim?: unknown }).has_claim === true };
+  const row = data[0] as { has_claim?: unknown; stored_depth?: unknown };
+  return { claimCovered: row.has_claim === true, storedDepth: typeof row.stored_depth === "string" ? row.stored_depth : null };
+}
+
+/** PK-REGEN-01: the report's regeneration count, read and written by the server only. */
+function regenerationLimitActions(supabase: ServiceClient, userId: string, reportId: string): RegenerationLimitActions {
+  return {
+    async readCount() {
+      const { data, error } = await supabase.from("lab_reports")
+        .select("regeneration_count").eq("id", reportId).eq("user_id", userId).maybeSingle();
+      if (error) throw new Error(`Regeneration count read failed: ${error.message}`);
+      if (!data || typeof data.regeneration_count !== "number") throw new Error("Regeneration count missing");
+      return data.regeneration_count;
+    },
+    async record() {
+      const { data, error } = await supabase.rpc("record_regeneration", { p_user_id: userId, p_report_id: reportId });
+      if (error) throw new Error(`record_regeneration failed: ${error.message}`);
+      return typeof data === "number" ? data : null;
+    },
+    warn: message => console.warn(message),
+  };
 }
 
 type LedgerOutcome = "committed" | "already_claimed" | "limit_reached";
@@ -1736,6 +1763,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // PK-REGEN-01: whether a version written for this request spends one of the
+    // report's regenerations, decided from the server's own read of the anchor.
+    // A first generation is not a regeneration and never reaches the limit.
+    const countedRegeneration = appendsVersion && countsAgainstLimit({
+      purpose: parsedBody.data.purpose ?? "regenerate", selectedDepth: anchor?.storedDepth ?? null,
+    });
+    const limitActions = countedRegeneration ? regenerationLimitActions(supabase, user.id, reportId) : null;
+
     // A retry of a committed regeneration is answered from the version store
     // without model spend, claim decision or any write but the report status.
     // Access is the readers' rule: Plus, or an introductory claim on this report.
@@ -1753,6 +1788,15 @@ Deno.serve(async (req: Request) => {
           status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+    }
+
+    // PK-REGEN-01: after the committed-retry answer (a request already counted is
+    // served, never refused) and before any model spend, the limit is the
+    // server's. Nothing written.
+    if (limitActions && !(await admitRegeneration(limitActions)).admitted) {
+      return new Response(JSON.stringify(regenerationLimitResponse.body), {
+        status: regenerationLimitResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const ctx = await loadGenerationContext(
@@ -1988,6 +2032,9 @@ Deno.serve(async (req: Request) => {
       }
 
     }
+
+    // PK-REGEN-01: counted only now, once this request has created a version.
+    if (limitActions) await recordRegeneration(limitActions, { counted: countedRegeneration, created: appended?.created === true });
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
     console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);

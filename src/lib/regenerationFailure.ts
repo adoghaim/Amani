@@ -7,9 +7,9 @@
   writes that version only on success. Every failure answer means nothing was
   written: no version, no claim, no change to the interpretation on screen. A
   failure is therefore never an "error" on the report and never spends one of
-  its regeneration attempts. ReportView puts back the status and the attempt it
-  spent optimistically, in both flag states, and shows one of the calm notices
-  below.
+  its regeneration attempts: since PK-REGEN-01 the server counts an attempt
+  only after it wrote a version. ReportView puts back the status it set, in both
+  flag states, and shows one of the calm notices below.
 
   The server's outcomes, and what they mean here:
 
@@ -17,6 +17,7 @@
     429                                  rate_limited      today's analysis limit
     409 legacy_history_protected         already_saved     another write won; nothing replaced
     400 request_id_required              unavailable       this request cannot be keyed
+    400 regeneration_limit_reached       unavailable       the report's regenerations are used (PK-REGEN-01)
     503 regeneration_failed, retryable   retryable         nothing appended; try again
     503 regeneration_failed, !retryable  unavailable       cannot succeed for this viewer now
     anything else, or no answer          retryable         a retry re-sends the same request_id
@@ -44,6 +45,8 @@ export type RegenerationNoticeKind = Extract<RegenerationFailureKind, 'already_s
 export const REGENERATION_FAILED = 'regeneration_failed';
 export const REQUEST_ID_REQUIRED = 'request_id_required';
 export const LEGACY_HISTORY_PROTECTED = 'legacy_history_protected';
+/** PK-REGEN-01: the server refused a regeneration past the report's limit (_shared/regeneration-limit.ts). */
+export const REGENERATION_LIMIT_REACHED = 'regeneration_limit_reached';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
@@ -55,6 +58,7 @@ export function classifyRegenerationFailure(status: number | undefined, body: un
   const code = isRecord(body) && typeof body.error === 'string' ? body.error : null;
   if (status === 409 || code === LEGACY_HISTORY_PROTECTED) return 'already_saved';
   if (code === REQUEST_ID_REQUIRED) return 'unavailable';
+  if (code === REGENERATION_LIMIT_REACHED) return 'unavailable';
   if (code === REGENERATION_FAILED && isRecord(body) && body.retryable === false) return 'unavailable';
   return 'retryable';
 }
