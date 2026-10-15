@@ -33,6 +33,8 @@ test.describe('report a problem (D20), flag on', () => {
   });
 
   test('worried: help first, then a note, one row written; axe is clean on every step', async ({ page }) => {
+    // Four steps, each with an axe scan: past the 30 s default on CI WebKit.
+    test.slow();
     const posted: unknown[] = [];
     await page.route('https://amani-e2e.invalid/rest/v1/interpretation_feedback*', async route => {
       if (route.request().method() !== 'POST') return route.fallback();
