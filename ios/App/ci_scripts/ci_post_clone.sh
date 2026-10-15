@@ -16,11 +16,12 @@ if [ -z "${VITE_SUPABASE_ANON_KEY:-}" ]; then
 fi
 
 set -x
-if brew info node@22 >/dev/null 2>&1; then
-  brew install node@22
-  export PATH="$(brew --prefix node@22)/bin:$PATH"
+# Node 24 (LTS) matches the GitHub native build. Homebrew deprecates and later
+# disables versioned formulae, so fall back when the install itself fails.
+if brew install node@24; then
+  export PATH="$(brew --prefix node@24)/bin:$PATH"
 else
-  echo 'Node 22 formula unavailable; installing the default Homebrew Node formula.'
+  echo 'node@24 could not be installed; installing the default Homebrew Node formula.'
   brew install node
   export PATH="$(brew --prefix node)/bin:$PATH"
 fi
@@ -31,6 +32,9 @@ node -e 'if (Number(process.versions.node.split(".")[0]) < 22) { console.error("
 
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 HUSKY=0 npm ci --no-audit --no-fund
+# Name the Sentry release after the commit, as Netlify (COMMIT_REF) and GitHub
+# (GITHUB_SHA) builds do; vite.config.ts reads COMMIT_REF.
+if [ -n "${CI_COMMIT:-}" ]; then export COMMIT_REF="$CI_COMMIT"; fi
 BUILD_TARGET=native npm run build
 npx cap sync ios
 ls -l ios/App/App/public/index.html node_modules/@capacitor/app/Package.swift
