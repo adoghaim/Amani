@@ -192,25 +192,57 @@ function isUnitOrFlagOnly(line: string): boolean {
  * number, unit or flag. A trailing "<" or ">" belongs to the interval
  * ("Postmenopausal <6.0 - 54.7"). printedStart is relative to `segment`.
  */
-function labelBefore(segment: string): { label: string | null; printedStart: number } {
+function labelBefore(segment: string): { label: string | null; printedStart: number; intervalStart: number } {
   const glyph = /[<>]=?\s*$/.exec(segment);
   const intervalStart = glyph ? glyph.index : segment.length;
   const tokens = [...segment.slice(0, intervalStart).matchAll(/\S+/g)];
   let first = tokens.length;
   while (first > 0 && isLabelWord(tokens[first - 1]?.[0] ?? '')) first--;
   const label = tokens.slice(first).map(t => t[0]).join(' ').replace(/[\s:;,.–-]+$/, '');
-  if (label.length === 0) return { label: null, printedStart: intervalStart };
-  return { label, printedStart: tokens[first]?.index ?? 0 };
+  if (label.length === 0) return { label: null, printedStart: intervalStart, intervalStart };
+  return { label, printedStart: tokens[first]?.index ?? 0, intervalStart };
 }
 
 /** Labels each interval with the words between it and the previous one (or `from`). */
 function labelIntervals(line: string, intervals: Interval[], from: number) {
   let previousEnd = from;
   return intervals.map(iv => {
-    const { label, printedStart } = labelBefore(line.slice(previousEnd, iv.start));
-    const labelled = { iv, label, printedStart: previousEnd + printedStart };
+    const { label, printedStart, intervalStart } = labelBefore(line.slice(previousEnd, iv.start));
+    const labelled = {
+      iv,
+      label,
+      printedStart: previousEnd + printedStart,
+      intervalStart: previousEnd + intervalStart,
+    };
     previousEnd = iv.end;
     return labelled;
+  });
+}
+
+/** One interval as printed: the words that label it and the interval text itself. */
+export interface PrintedInterval {
+  label: string | null;
+  /** From the interval (with any leading "<"/">") up to the next interval's label, verbatim. */
+  interval: string;
+}
+
+/**
+ * Splits printed reference text (one saved segment, as PK-FIX-05 persists it)
+ * into one entry per interval, with the same interval finder and labelling the
+ * binder uses, so "Follicular Phase 2.1-11.1 Luteal Phase 1.3-8.8" printed on
+ * one line becomes two entries. No text is dropped or rewritten: anything
+ * printed before the first label stays in the first entry's label. Returns []
+ * when the text holds no interval the finder recognises.
+ */
+export function splitPrintedIntervals(text: string, adapter?: SourceAdapter): PrintedInterval[] {
+  const line = text.replace(/\s+/g, ' ').trim();
+  const labelled = labelIntervals(line, findIntervals(line, adapter), 0);
+  return labelled.map((entry, i) => {
+    const next = labelled[i + 1];
+    const end = next ? next.printedStart : line.length;
+    const interval = line.slice(entry.intervalStart, end).trim();
+    const lead = i === 0 ? line.slice(0, entry.intervalStart).trim().replace(/[\s:;,]+$/, '') : entry.label;
+    return { label: lead ? lead : null, interval };
   });
 }
 

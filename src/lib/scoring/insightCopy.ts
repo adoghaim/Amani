@@ -666,6 +666,19 @@ const LAB_PLACEMENT_TEXT: Record<LabPlacement, string> = {
 
 export const NO_LAB_INTERVAL = 'No lab range';
 
+/*
+  PK-DS-01 result row (DESIGN.md "Result row"). Every range her lab printed is
+  shown as printed; the one whose label names the estimated draw-day phase is
+  marked. Placement is never stated against a range Amani picked: a row whose
+  lab printed several ranges and bound none says only that.
+*/
+export const SEVERAL_LAB_INTERVALS = 'Your lab printed several ranges';
+export const PRINTED_INTERVALS_LABEL = 'Ranges printed by your lab';
+export const LAB_FLAG_PREFIX = 'Flag printed by your lab: ';
+export function drawDayPhaseNote(phase: string): string {
+  return `your estimated ${phase} phase on the draw day`;
+}
+
 /** Null when the report printed no usable interval. */
 export function labIntervalObservation(
   subject: string,

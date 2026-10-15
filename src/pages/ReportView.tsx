@@ -7,6 +7,7 @@ import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAllRows';
 import { BiomarkerCard } from '../components/BiomarkerCard';
+import { ResultRow } from '../components/ResultRow';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
 import { YourHealthStory } from '../components/YourHealthStory';
@@ -25,7 +26,7 @@ import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insi
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
   authorizedLanguage, authorizeModelProse, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  labIntervalObservation, markerBandPlacement, movementClaimsByKey, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL,
+  markerBandPlacement, movementClaimsByKey, outsideBandCount, PRIMARY_FINDING_LABEL,
   primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
   type AuthorizedLanguage, type AuthorizedModelProse,
 } from '../lib/scoring/insightCopy';
@@ -292,52 +293,6 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
     worseningChange,
     anyBoundaryCrossImproved: summary.biggestChanges.some(c => c.boundaryCrossing?.direction === 'improved'),
   };
-}
-
-/*
-  Release invariant 1. This row is her laboratory's interval, so it says only
-  where the value sits against that interval as printed. It used to add an 8%
-  margin and call a value past the lab's bound "Borderline", a placement her
-  lab never made, coloured green, amber or red.
-*/
-function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
-  const label = analyte.display_name || analyte.raw_name;
-  const placement = labIntervalObservation(
-    label,
-    analyte.value_numeric,
-    analyte.normalized_min,
-    analyte.normalized_max,
-    analyte.normalized_operator,
-    analyte.normalized_operator_value,
-  );
-  const style = CUE_STYLE[placement?.cue ?? 'neutral'];
-  const isUnmapped = analyte.parse_status === 'unmapped';
-  return (
-    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-theme-neutral-50 transition-colors">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-theme-neutral-900 truncate">{label}</p>
-          {isUnmapped && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-theme-neutral-100 text-theme-neutral-500 flex-shrink-0">unmapped</span>
-          )}
-        </div>
-        {analyte.raw_reference_range && (
-          <p className="text-xs text-theme-neutral-400 mt-0.5">Ref: {analyte.raw_reference_range}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <span className="text-sm font-semibold text-theme-neutral-900 tabular-nums">
-          {analyte.raw_value_text ?? analyte.value_numeric}
-          {analyte.unit && <span className="text-theme-neutral-500 font-normal ml-1 text-xs">{analyte.unit}</span>}
-        </span>
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}
-          data-language-category={placement?.category} data-language-source={placement?.authority.kind} data-language-cue={placement?.cue}>
-          <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-          {placement?.text ?? NO_LAB_INTERVAL}
-        </span>
-      </div>
-    </div>
-  );
 }
 
 function normalizeInterpretation(raw: unknown): AIInterpretation {
@@ -1867,7 +1822,7 @@ export function ReportView() {
                       <div key={cat}>
                         <h3 className="text-xs text-theme-neutral-400 uppercase tracking-widest mb-2">{cat}</h3>
                         <div className="divide-y divide-theme-neutral-100">
-                          {items.map(item => <AnalyteRow key={item.id} analyte={item} />)}
+                          {items.map(item => <ResultRow key={item.id} analyte={item} cyclePhase={cyclePhase} />)}
                         </div>
                       </div>
                     ))}
