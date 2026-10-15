@@ -13,6 +13,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && npm run clinical:typecheck && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p tools/mcp-amani/tsconfig.json",
     "check:functions": "bash docs/check-functions.sh npx --yes deno@2",
+    "check:pinned-imports": "node tools/supply-chain/check-pinned-imports.mjs",
+    "test:supply-chain": "node --test tools/supply-chain/pinned-imports.test.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "cap:sync": "BUILD_TARGET=native vite build && npx cap sync",

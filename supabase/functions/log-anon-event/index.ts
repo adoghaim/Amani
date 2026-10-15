@@ -12,8 +12,8 @@
  * 503 and nothing is written.
  */
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import {
   ANON_EVENT_MAX_BODY_BYTES,
   ANON_EVENT_SALT_SECRET_NAME,

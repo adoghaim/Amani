@@ -17,7 +17,7 @@
  * file is wiring.
  */
 
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+import 'jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
 import { fetchWithBackoff } from '../_shared/fetchWithBackoff.ts';

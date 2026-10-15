@@ -1,5 +1,5 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import Stripe from "npm:stripe@17.7.0";
 import { errorMessage } from "../_shared/errors.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
