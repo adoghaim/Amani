@@ -153,8 +153,13 @@ describe('the split moved every case of the old run.sh, in its order', () => {
   ];
 
   it('each case file holds exactly one of the old blocks, and they run in the old order', () => {
-    const names = harnessCaseNames();
+    // Cases added after the split (D3: a new case is a new file) hold none of
+    // the old blocks; every file that holds one is checked exactly as before.
+    const names = harnessCaseNames().filter(name => ORIGINAL_ORDER.some(marker => caseText(name).includes(marker)));
     expect(names).toHaveLength(ORIGINAL_ORDER.length);
+    // A case added after the split runs after every moved block, never between them.
+    const added = harnessCaseNames().filter(name => !names.includes(name));
+    for (const name of added) expect(name > names[names.length - 1]!, name).toBe(true);
     names.forEach((name, index) => {
       const text = caseText(name);
       const held = ORIGINAL_ORDER.filter(marker => text.includes(marker));
