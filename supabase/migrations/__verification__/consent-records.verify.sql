@@ -1,6 +1,6 @@
 /*
   Assertions for 20261015040000_consent_records.sql (PK-CONSENT-01), run by
-  cases/180-consent-records.sh in the consent_records database after
+  cases/210-consent-records.sh in the consent_records database after
   consent-records.prelude.sql, 20261013040000_runtime_config.sql and the
   migration.
 

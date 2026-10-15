@@ -1,7 +1,7 @@
 /*
   Enough of a Supabase project for 20261015040000_consent_records.sql
   (PK-CONSENT-01) to be built and probed, in its own database (consent_records).
-  cases/180-consent-records.sh applies 20261013040000_runtime_config.sql (the
+  cases/210-consent-records.sh applies 20261013040000_runtime_config.sql (the
   real one: the gate reads its features bundle) after this, then the migration.
 
     - the three PostgREST roles, created only when an earlier case has not,

@@ -14,7 +14,7 @@ import { stage2CurrentReport, stage2PriorReport } from './synthetic-reports';
   ['Regenerate (N left)', 'Delete report'].
 
   Real-stack proof (RLS on a deployed table) is the migration harness
-  (cases/180-interpretation-feedback.sh); an end-to-end run against a real
+  (cases/230-interpretation-feedback.sh); an end-to-end run against a real
   Supabase stack is pending a test project.
 */
 

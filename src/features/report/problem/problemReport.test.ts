@@ -21,7 +21,7 @@ import {
 /*
   PK-HARM-01 (D20): the chooser's categories, the 1,000-character cap, and the
   one row every report writes. The database side (RLS, CHECKs, the queue) is
-  proven by the migration harness, cases/180-interpretation-feedback.sh.
+  proven by the migration harness, cases/230-interpretation-feedback.sh.
 */
 
 const MIGRATION = readFileSync(new URL('../../../../supabase/migrations/20261015020000_interpretation_feedback.sql', import.meta.url), 'utf8');

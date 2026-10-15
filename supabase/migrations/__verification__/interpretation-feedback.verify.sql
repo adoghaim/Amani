@@ -1,6 +1,6 @@
 /*
   Assertions for 20261015020000_interpretation_feedback.sql (PK-HARM-01), run
-  by cases/180-interpretation-feedback.sh in the interpretation_feedback
+  by cases/230-interpretation-feedback.sh in the interpretation_feedback
   database after interpretation-feedback.prelude.sql and the migration.
 
   Each role is tried for real (SET LOCAL ROLE plus the JWT `sub` PostgREST

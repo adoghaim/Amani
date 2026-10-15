@@ -1,6 +1,6 @@
 /*
   Assertions for 20261013050000_ai_cost_ledger.sql (PK-FIX-01b), run by
-  cases/180-ai-cost-ledger.sh in the ai_cost_ledger database after
+  cases/200-ai-cost-ledger.sh in the ai_cost_ledger database after
   ai-cost-ledger.prelude.sql and the migration.
 
   The grants are checked against a real Postgres with Supabase's default

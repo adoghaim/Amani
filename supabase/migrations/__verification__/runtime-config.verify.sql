@@ -1,6 +1,6 @@
 /*
   Assertions for 20261013040000_runtime_config.sql (PK-CFG-01), run by
-  cases/170-runtime-config.sh in the runtime_config database after
+  cases/190-runtime-config.sh in the runtime_config database after
   runtime-config.prelude.sql and the migration.
 
   The grants are checked against a real Postgres with Supabase's default
