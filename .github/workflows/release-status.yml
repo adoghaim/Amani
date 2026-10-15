@@ -1,0 +1,184 @@
+{
+  "name": "RC store readiness",
+  "on": {
+    "workflow_dispatch": {
+      "inputs": {
+        "frozen_sha": {
+          "description": "Full frozen SHA, ancestor of main; 1.0.7 onward only",
+          "required": true,
+          "type": "string"
+        },
+        "marketing_version": {
+          "description": "Existing marketing version (never incremented)",
+          "required": true,
+          "type": "string"
+        },
+        "ios_build_number": {
+          "description": "Existing iOS build number",
+          "required": true,
+          "type": "string"
+        },
+        "android_version_code": {
+          "description": "Existing Android versionCode",
+          "required": true,
+          "type": "string"
+        },
+        "track": {
+          "description": "Closed testing track",
+          "required": true,
+          "type": "choice",
+          "options": [
+            "alpha"
+          ],
+          "default": "alpha"
+        },
+        "freemium_client_flag": {
+          "description": "Native build flag",
+          "required": true,
+          "type": "choice",
+          "options": [
+            "true"
+          ],
+          "default": "true"
+        },
+        "testflight_group": {
+          "description": "Existing internal TestFlight group",
+          "required": true,
+          "type": "string",
+          "default": "internal test"
+        },
+        "GCP_WORKLOAD_IDENTITY_PROVIDER": {
+          "description": "Owner-configured WIF provider resource",
+          "required": true,
+          "type": "string"
+        },
+        "GCP_SERVICE_ACCOUNT_EMAIL": {
+          "description": "Testing-only Play service account",
+          "required": true,
+          "type": "string"
+        }
+      }
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "amani-rc-distribution",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "status": {
+      "if": "${{ github.ref == 'refs/heads/main' }}",
+      "runs-on": "macos-15",
+      "environment": "rc-distribution",
+      "permissions": {
+        "contents": "read",
+        "id-token": "write"
+      },
+      "timeout-minutes": 15,
+      "env": {
+        "FROZEN_SHA": "${{ inputs.frozen_sha }}",
+        "MARKETING_VERSION": "${{ inputs.marketing_version }}",
+        "IOS_BUILD_NUMBER": "${{ inputs.ios_build_number }}",
+        "ANDROID_VERSION_CODE": "${{ inputs.android_version_code }}",
+        "TRACK": "${{ inputs.track }}",
+        "FREEMIUM_CLIENT_FLAG": "${{ inputs.freemium_client_flag }}",
+        "TESTFLIGHT_GROUP": "${{ inputs.testflight_group }}",
+        "SOURCE_DIR": "${{ github.workspace }}/source",
+        "TOOLS_DIR": "${{ github.workspace }}/automation/tools/release",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "steps": [
+        {
+          "uses": "actions/checkout@v4",
+          "with": {
+            "ref": "${{ github.sha }}",
+            "path": "automation",
+            "fetch-depth": 1,
+            "persist-credentials": false
+          }
+        },
+        {
+          "uses": "actions/checkout@v4",
+          "with": {
+            "ref": "main",
+            "path": "source",
+            "fetch-depth": 0,
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Validate frozen source",
+          "shell": "bash",
+          "run": "bash \"$TOOLS_DIR/preflight.sh\" \"$SOURCE_DIR\""
+        },
+        {
+          "name": "Prepare private directories",
+          "shell": "bash",
+          "run": "umask 077\nRELEASE_PRIVATE=\"$RUNNER_TEMP/amani-private-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"\nRELEASE_OUT=\"$RUNNER_TEMP/amani-output-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"\nmkdir -p \"$RELEASE_PRIVATE\" \"$RELEASE_OUT\"\nprintf 'RELEASE_PRIVATE=%s\\nRELEASE_OUT=%s\\n' \"$RELEASE_PRIVATE\" \"$RELEASE_OUT\" >> \"$GITHUB_ENV\""
+        },
+        {
+          "name": "Materialize ASC key",
+          "shell": "bash",
+          "run": "python3 \"$TOOLS_DIR/setup.py\" asc",
+          "env": {
+            "APPLE_ASC_KEY_ID": "${{ secrets.APPLE_ASC_KEY_ID }}",
+            "APPLE_ASC_ISSUER_ID": "${{ secrets.APPLE_ASC_ISSUER_ID }}",
+            "APPLE_ASC_PRIVATE_KEY_B64": "${{ secrets.APPLE_ASC_PRIVATE_KEY_B64 }}"
+          }
+        },
+        {
+          "name": "Google WIF access token",
+          "id": "google_status",
+          "uses": "google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193",
+          "with": {
+            "workload_identity_provider": "${{ inputs.GCP_WORKLOAD_IDENTITY_PROVIDER }}",
+            "service_account": "${{ inputs.GCP_SERVICE_ACCOUNT_EMAIL }}",
+            "token_format": "access_token",
+            "access_token_scopes": "https://www.googleapis.com/auth/androidpublisher",
+            "access_token_lifetime": "3600s",
+            "create_credentials_file": false,
+            "export_environment_variables": false
+          }
+        },
+        {
+          "name": "Read store readiness",
+          "shell": "bash",
+          "run": "python3 \"$TOOLS_DIR/release.py\" status",
+          "env": {
+            "APPLE_ASC_KEY_ID": "${{ secrets.APPLE_ASC_KEY_ID }}",
+            "APPLE_ASC_ISSUER_ID": "${{ secrets.APPLE_ASC_ISSUER_ID }}",
+            "PLAY_ACCESS_TOKEN": "${{ steps.google_status.outputs.access_token }}"
+          }
+        },
+        {
+          "name": "Sanitized summary",
+          "shell": "bash",
+          "run": "python3 \"$TOOLS_DIR/release.py\" summary",
+          "env": {
+            "JOB_OUTCOME": "${{ job.status }}"
+          },
+          "if": "${{ always() }}"
+        },
+        {
+          "name": "Remove keychain and private files",
+          "shell": "bash",
+          "run": "python3 \"$TOOLS_DIR/cleanup.py\"",
+          "if": "${{ always() }}"
+        },
+        {
+          "name": "Publish sanitized evidence",
+          "if": "${{ always() }}",
+          "uses": "actions/upload-artifact@v4",
+          "with": {
+            "name": "rc-evidence-${{ github.run_id }}-${{ github.run_attempt }}",
+            "path": "${{ env.RELEASE_OUT }}/*.json\n${{ env.RELEASE_OUT }}/*.md",
+            "if-no-files-found": "warn",
+            "retention-days": 30
+          }
+        }
+      ]
+    }
+  }
+}

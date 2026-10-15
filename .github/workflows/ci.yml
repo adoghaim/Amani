@@ -46,6 +46,9 @@ jobs:
       - name: Clinical catalog drift
         run: npm run clinical:check
 
+      - name: Offline release automation tests
+        run: bash tools/release/check.sh
+
       - name: Lint
         run: npm run lint
 
