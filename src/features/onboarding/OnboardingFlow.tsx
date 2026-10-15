@@ -7,6 +7,7 @@ import { SafetyDisclaimerStep } from './steps/SafetyDisclaimerStep';
 import { HealthGoalsStep } from './steps/HealthGoalsStep';
 import { PersonalContextStep } from './steps/PersonalContextStep';
 import { UploadIntroStep } from './steps/UploadIntroStep';
+import { firstPartyEvents } from '../../lib/firstPartyEventsClient';
 
 const TOTAL_STEPS = 5;
 
@@ -41,6 +42,8 @@ export function OnboardingFlow() {
       setIsSubmitting(false);
       return;
     }
+    // PK-EXP5 funnel step: not awaited; off unless first_party_events is on.
+    void firstPartyEvents.track('onboarding_completed');
     navigate('/app/new');
   };
 

@@ -13,6 +13,7 @@ import { isNative, onAppUrlOpen } from './lib/native'
 import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 import { safeRedirectTarget } from './lib/redirect'
+import { CampaignLinkRedirect, FirstPartyEventsLifecycle } from './components/FirstPartyEventsLifecycle'
 
 // Eagerly loaded — tiny pages used immediately on arrival
 import { Landing } from './pages/Landing'
@@ -80,6 +81,8 @@ function AppRoutes() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={user ? <Navigate to={redirectTarget} replace /> : <LoginPage />} />
         <Route path="/signup" element={user ? <Navigate to={redirectTarget} replace /> : <SignupPage />} />
+        {/* PK-EXP5 campaign link (D17, D29): captures the key when first-party events are on, then signup. */}
+        <Route path="/go/:key" element={<CampaignLinkRedirect />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/success" element={<SuccessPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -179,6 +182,7 @@ function App() {
     <Router>
       <AndroidBackHandler />
       <DeepLinkHandler />
+      <FirstPartyEventsLifecycle />
       <ErrorBoundary>
         {/* PK-MINVER-01 (D8): native only, and first in the launch gate order:
             the update block, then the biometric lock, then consent and the

@@ -171,6 +171,8 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
       serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => client, corsHeaders: {}, debugLog: () => {}, enforceRateLimit: async () => {}, createRateLimitStore: () => ({}),
     consentRefusal, consentGateFor: consentGateOff,
+    // PK-EXP5: the funnel event is a no-op here; app-events.test.ts covers it.
+    logServerEvent: async () => true, createAppEventSink: () => ({}),
     GenerateInterpretationRequestSchema: { safeParse: (body: { reportId: string; request_id?: string }) =>
       ({ success: true, data: { reportId: body.reportId, request_id: body.request_id } }) },
     checkUserSubscription: async () => !flagOn

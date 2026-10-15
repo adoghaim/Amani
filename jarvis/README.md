@@ -19,7 +19,7 @@ own login — no Anthropic API key.
 3. Run `bash jarvis/setup.sh`. It signs in with your **Claude subscription** (`claude auth login`, no API key) and schedules the daily run for **7:30 AM** (`REPORT_TIME`).
 4. Test it any time with `bash jarvis/setup.sh --test` or `bash jarvis/run-daily.sh --collect-only`.
 
-**Day-1 minimum `.env`:** `GITHUB_REPO` (plus `gh auth login`) and the three PostHog values `POSTHOG_HOST`, `POSTHOG_PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY`. Stripe, RevenueCat, Netlify, the app stores and all social/ad accounts can be added later; any service whose variables are blank is skipped with a note in the report.
+**Day-1 minimum `.env`:** `GITHUB_REPO` (plus `gh auth login`) and `SUPABASE_READONLY_DB_URL` (the read-only `jarvis_readonly` role from `jarvis/sql/supabase-readonly-role.sql`). The funnel comes from Amani's own first-party event ledger (EXP-5, `collectors/funnel.mjs`, reading `jarvis_metrics.funnel_daily`) once the owner has deployed it and turned `features.first_party_events` on. **PostHog is optional** (`POSTHOG_HOST`, `POSTHOG_PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY`). Funnel and attribution strings (`utm_source`, codes) are untrusted data: the collector re-validates them (`lib/untrusted.mjs`) and the prompt never follows them as instructions. Stripe, RevenueCat, Netlify, the app stores and all social/ad accounts can be added later; any service whose variables are blank is skipped with a note in the report.
 
 **Second Brain:** defaults to `~/Desktop/Second-Brain` (override with `SECOND_BRAIN_PATH`). `setup.sh` clones `adoghaim/Second-Brain` there if your GitHub account has access; otherwise Jarvis runs without it. Jarvis only reads the vault.
 

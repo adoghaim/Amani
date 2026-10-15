@@ -6,11 +6,14 @@ import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import {
   deleteUserAccount,
   deleteUserDataTables,
+  isMissingTableError,
+  MissingTableError,
   StoreSubscriptionAcknowledgementRequiredError,
   type AccountDeletionActions,
   type StoreSubscriptionRecord,
 } from "../_shared/account-deletion.ts";
 import { createStoreTeardownActions } from "../_shared/store-teardown.ts";
+import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -191,6 +194,8 @@ Deno.serve(async (req: Request) => {
           async deleteOwnedRows(table, ownerColumn, userId) {
             const { error } = await supabase.from(table).delete().eq(ownerColumn, userId);
             if (error) {
+              // Only registry entries marked mayBeUndeployed skip this one (account-deletion.ts).
+              if (isMissingTableError(error)) throw new MissingTableError(table, error.message);
               throw new Error(table === "users"
                 ? `Deleting users row failed: ${error.message}`
                 : `Deleting ${table} failed: ${error.message}`);
@@ -211,6 +216,13 @@ Deno.serve(async (req: Request) => {
 
     await deleteUserAccount(actions, user.id, {
       acknowledgedStoreSubscriptions: acknowledged,
+    });
+
+    // PK-EXP5: counted with no user id, after the account is gone, so the
+    // ledger keeps nothing that points at the erased account. Never throws,
+    // gives up after 3 seconds; the deletion already succeeded either way.
+    await logServerEvent(createAppEventSink(row => supabase.from("app_events").insert(row)), {
+      event: "account_deleted", userId: null,
     });
 
     return new Response(

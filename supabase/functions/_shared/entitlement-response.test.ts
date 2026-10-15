@@ -99,6 +99,8 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       createClient: () => client, corsHeaders: {}, debugLog: () => {},
       enforceRateLimit: async () => {}, createRateLimitStore: () => ({}),
       consentRefusal, consentGateFor: consentGateOff,
+      // PK-EXP5: the funnel event is a no-op here; app-events.test.ts covers it.
+      logServerEvent: async () => true, createAppEventSink: () => ({}),
       GenerateInterpretationRequestSchema: { safeParse: () => ({ success: true, data: { reportId: 'r' } }) },
       checkUserSubscription: async (_client: unknown, _user: string, active: boolean) => active
         ? ({ allowed: true, plan: 'free' }) : ({ allowed: true, reason: 'trial' }), freemiumActive: () => activeFlag,

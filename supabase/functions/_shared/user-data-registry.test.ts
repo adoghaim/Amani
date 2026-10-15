@@ -27,6 +27,12 @@ describe('user-data-registry.ts', () => {
     for (const entry of USER_DATA_REGISTRY) expect(ERASURE_MECHANISMS, entry.table).toContain(entry.mechanism);
   });
 
+  it('marks only the PK-EXP5 tables mayBeUndeployed, each naming the migration that creates it', () => {
+    const marked = USER_DATA_REGISTRY.filter(e => e.mayBeUndeployed);
+    expect(marked.map(e => e.table)).toEqual(['app_events', 'user_attribution']);
+    for (const entry of marked) expect(entry.reason, entry.table).toContain('20261015010000_first_party_events.sql');
+  });
+
   it('every exception and auth cascade explains itself', () => {
     for (const entry of USER_DATA_REGISTRY.filter(e => e.mechanism === 'exception' || e.mechanism === 'auth_cascade')) {
       expect(entry.reason?.trim().length ?? 0, entry.table).toBeGreaterThan(40);
@@ -49,6 +55,12 @@ describe('user-data-registry.ts', () => {
     ['a schema-qualified table', [sweep('public.a'), users], '"public.a" is not a table name'],
     ['a malformed column', [{ table: 'a', ownerColumn: 'user id', mechanism: 'ordered_delete' }, users],
       'a: "user id" is not a column name'],
+    ['mayBeUndeployed on a cascade', [{ table: 'a', ownerColumn: 'lab_report_id', mechanism: 'erase_reports_cascade',
+      mayBeUndeployed: true, reason: 'fixture' }, users], 'a: mayBeUndeployed only applies to an ordered delete'],
+    ['mayBeUndeployed on the profile row', [{ ...users, mayBeUndeployed: true, reason: 'fixture' }],
+      'users: the profile row can never be treated as undeployed'],
+    ['mayBeUndeployed with no reason', [{ ...sweep('a'), mayBeUndeployed: true }, users],
+      'a: mayBeUndeployed needs a reason naming the migration that creates it'],
   ])('reports %s', (_label, registry, problem) => {
     expect(registryProblems(registry)).toContain(problem);
   });

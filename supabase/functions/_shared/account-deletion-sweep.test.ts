@@ -294,6 +294,23 @@ describe('account erasure coverage, derived from the migrations', () => {
     }
   });
 
+  it('PK-EXP5: the event ledger and signup attribution are user data, swept by delete-user-data before the auth user', () => {
+    const owned = userOwnedTables(schema);
+    for (const name of ['app_events', 'user_attribution']) {
+      expect(owned.has(name), name).toBe(true);
+      // An ordered delete, so the rows are gone even if deleteAuthUser later fails.
+      expect(USER_DATA_REGISTRY.find(e => e.table === name), name)
+        .toEqual(expect.objectContaining({ ownerColumn: 'user_id', mechanism: 'ordered_delete' }));
+      expect(cascadesFrom(schema, 'auth.users', name), name).toBe(true);
+    }
+    // Hashed IP counters hold no user id and are not user data.
+    expect(owned.has('anon_event_counters')).toBe(false);
+    // Unregistering either one fails the coverage check.
+    for (const name of ['app_events', 'user_attribution']) {
+      expect(coverageProblems(schema, USER_DATA_REGISTRY.filter(e => e.table !== name)).join('\n')).toContain(name);
+    }
+  });
+
   it('follows the interpretations rename: registered by its creation name, erased with its reports', () => {
     const interpretations = resolve(schema, 'interpretations')!;
     expect(interpretations.names).toHaveLength(2);

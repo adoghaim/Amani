@@ -203,6 +203,31 @@ export function Privacy() {
               see Sentry below for what those reports deliberately exclude. Our hosting and
               infrastructure providers keep standard server logs, which include IP addresses.
             </p>
+
+            {/*
+              PK-EXP5 first-party events and attribution. Both paragraphs are
+              flagged for legal review in the PR and are not final until the
+              owner and counsel sign them off.
+            */}
+            <h3 className="font-semibold text-theme-text mt-5 mb-2">Usage events</h3>
+            <p className="mb-3">
+              Amani counts a small number of steps in the app in its own database, so we can see
+              where people get stuck: for example opening the home page, creating an account,
+              uploading a report, viewing a report, or starting a subscription. Each record holds
+              the name of the step, when it happened, whether you used the website or the app,
+              the app version, and any campaign link or promo or referral code you arrived with
+              or typed when you signed up. These records never contain your lab values, your
+              health details or anything else you write. They are not sent to any third-party
+              analytics or advertising tracker. Before you sign in, a step is tied only to a
+              random identifier stored on your device, not to your account. After you sign in,
+              the steps and your signup code are tied to your account and are deleted when you
+              delete your account.
+            </p>
+            <p>
+              To stop the page that records steps before signup from being abused, we use your IP
+              address briefly to count requests. We keep only a scrambled (hashed) form of it,
+              made with a key that changes every day, and we never store the address itself.
+            </p>
           </section>
 
           <section>

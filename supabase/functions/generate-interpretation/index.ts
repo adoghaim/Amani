@@ -6,6 +6,7 @@ import {
   validateInterpretationOutput,
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
@@ -2042,6 +2043,11 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
     console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
+    // PK-EXP5 funnel step. Never throws, gives up after 3 seconds: a logging
+    // failure never blocks the interpretation the user is waiting for.
+    await logServerEvent(createAppEventSink(row => supabase.from("app_events").insert(row)), {
+      event: "interpretation_generated", userId: user.id, props: { tier: shaped.tier },
+    });
 
     // The same gate get-interpretation applies, so both responses agree. A
     // version is served as committed (a concurrent twin's body, if it won) and

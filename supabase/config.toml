@@ -55,3 +55,11 @@ verify_jwt = true
 # secret is unset. verify_jwt = false so the scheduler needs no user JWT.
 [functions.ai-budget-check]
 verify_jwt = false
+
+# PK-EXP5 pre-signup events (owner decision D5.3). Called before an account
+# exists, so there is no user JWT to verify: verify_jwt = false is intentional.
+# The function accepts only landing_view and signup_started, rate-limits by a
+# salted daily-rotating IP hash plus a global daily cap, and fails closed (503,
+# nothing written) when ANON_EVENT_IP_SALT_SECRET is unset.
+[functions.log-anon-event]
+verify_jwt = false

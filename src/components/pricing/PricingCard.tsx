@@ -8,6 +8,7 @@ import { errorMessage } from '../../lib/errors'
 import { clientFreemiumActive } from '../../lib/tier'
 import { planCheckoutCta } from '../../lib/planCta'
 import { readSavedPromoCode } from '../../lib/savedPromoCode'
+import { firstPartyEvents } from '../../lib/firstPartyEventsClient'
 
 interface PricingCardProps {
   product: StripeProduct
@@ -30,6 +31,9 @@ export function PricingCard({ product, isPopular = false }: PricingCardProps) {
         window.location.href = `/signup?redirect=${encodeURIComponent('/pricing')}`
         return
       }
+
+      // PK-EXP5 funnel step: not awaited, so checkout never waits on it.
+      void firstPartyEvents.track('checkout_started', { platform: 'web' })
 
       const promoCode = readSavedPromoCode()
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
