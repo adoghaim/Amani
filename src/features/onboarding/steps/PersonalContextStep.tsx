@@ -1,5 +1,11 @@
+import { useId } from 'react';
 import { Button } from '../../../components/Button';
-import { AGE_RANGES, SEX_OPTIONS, PREGNANCY_OPTIONS } from '../contextOptions';
+import {
+  AGE_RANGES,
+  SEX_OPTIONS,
+  PREGNANCY_OPTIONS,
+  isUnder18AgeRange,
+} from '../contextOptions';
 import { ChipInput, SelectField } from '../contextInputs';
 
 export interface PersonalContextValue {
@@ -31,6 +37,22 @@ export function PersonalContextStep({
   ) => {
     onChange({ ...value, [key]: next });
   };
+
+  /*
+    Defensive guard. It cannot fire in the app today, so no user sees the
+    adults-only message below:
+    - the picker no longer offers 'Under 18' (AGE_RANGES);
+    - OnboardingFlow starts age_range at null and never reads the stored
+      age, so a stored 'Under 18' never reaches this step;
+    - anyone who stored one through the app has finished or skipped
+      onboarding (Settings sits behind OnboardingGate), and Onboarding.tsx
+      sends them to /app.
+    Even if it fired, it is a notice, not enforcement: choosing an adult
+    range clears it. A reachable age gate is an owner decision that has not
+    been made. OnboardingFlow.test.tsx pins that this guard is unreachable.
+  */
+  const ageBlocked = isUnder18AgeRange(value.age_range);
+  const ageMessageId = useId();
 
   return (
     <div className="flex flex-col">
@@ -64,6 +86,22 @@ export function PersonalContextStep({
             onChange={(v) => update('age_range', v)}
           />
         </div>
+
+        {ageBlocked && (
+          <div
+            id={ageMessageId}
+            role="alert"
+            className="px-4 py-3 rounded-xl bg-theme-surface-2 border border-theme-border"
+          >
+            <p className="text-sm font-medium text-theme-text">
+              Amani is for adults 18 and over
+            </p>
+            <p className="mt-1 text-sm text-theme-muted-text leading-relaxed">
+              Thank you for your interest. Amani is built for adults, so we can&rsquo;t
+              continue setting up an account for anyone under 18.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <SelectField
@@ -118,7 +156,11 @@ export function PersonalContextStep({
           variant="primary"
           size="lg"
           className="flex-1"
-          onClick={onNext}
+          onClick={() => {
+            if (!ageBlocked) onNext();
+          }}
+          disabled={ageBlocked}
+          aria-describedby={ageBlocked ? ageMessageId : undefined}
         >
           Continue
         </Button>

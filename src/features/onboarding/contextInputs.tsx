@@ -81,6 +81,14 @@ interface SelectFieldProps {
 }
 
 export function SelectField({ label, value, options, placeholder, onChange }: SelectFieldProps) {
+  /*
+    A stored answer that is no longer offered (for example the retired
+    'Under 18' age) is still shown as the current answer instead of silently
+    falling back to the placeholder. It is disabled, so once changed it cannot
+    be picked again. Nothing here rewrites the stored value.
+  */
+  const retired = value !== null && value !== '' && !options.includes(value);
+
   return (
     <div className="w-full space-y-1">
       <label className="block text-sm font-medium text-theme-text">{label}</label>
@@ -90,6 +98,11 @@ export function SelectField({ label, value, options, placeholder, onChange }: Se
         className="block w-full px-3 py-1.5 border border-theme-border rounded-xl shadow-sm bg-theme-surface text-theme-text focus:outline-none focus:ring-2 focus:ring-theme-primary focus:border-transparent transition-all text-sm"
       >
         <option value="">{placeholder}</option>
+        {retired && (
+          <option value={value} disabled>
+            {value}
+          </option>
+        )}
         {options.map((opt) => (
           <option key={opt} value={opt}>
             {opt}
