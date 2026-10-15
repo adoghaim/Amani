@@ -68,7 +68,10 @@ test.describe('PK-PL-A: a failed regenerate, flag off', () => {
       await page.goto(`/app/reports/${reportId}`);
       await expect(summary(page)).toContainText(ferritinDecreased);
 
+      // D19 (PK-INT-01): Regenerate lives in the labelled More menu; its behaviour and copy are unchanged.
+      const more = page.getByRole('button', { name: 'More', exact: true });
       const generated = page.waitForResponse(r => r.url().endsWith('/functions/v1/generate-interpretation'));
+      await more.click();
       await page.getByRole('button', { name: /^Regenerate \(3 left\)$/ }).click();
       expect((await generated).status()).toBe(outcome.status);
 
@@ -87,6 +90,8 @@ test.describe('PK-PL-A: a failed regenerate, flag off', () => {
       // The analysis on screen is intact and no failure card replaces it.
       await expect(summary(page)).toContainText(ferritinDecreased);
       await expect(page.getByText('AI summary failed')).toHaveCount(0);
+      // The menu closes once an action runs; reopen it to see Regenerate still offered with 3 left.
+      await more.click();
       await expect(page.getByRole('button', { name: /^Regenerate \(3 left\)$/ })).toBeVisible();
     });
   }
