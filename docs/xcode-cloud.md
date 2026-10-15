@@ -6,12 +6,13 @@ Swift packages. The SPM manifest references plugins in `node_modules`, which
 are absent from a fresh clone.
 
 The script prints the repository, project, and workflow context, checks required
-build variables, installs Node 22 with Homebrew, and prints Node/npm versions.
-If the versioned formula is unavailable, it installs Homebrew's default Node;
-Node must still be **22 or newer** for Capacitor. It installs locked dependencies
-with Husky disabled, builds with `BUILD_TARGET=native`, runs `npx cap sync ios`,
-and lists the generated web entry point and Capacitor App package manifest.
-Any failed step stops the build.
+build variables, installs Node 24 with Homebrew (the version the GitHub native
+build uses), and prints Node/npm versions. If that formula cannot be installed,
+it installs Homebrew's default Node; Node must still be **22 or newer** for
+Capacitor. It installs locked dependencies with Husky disabled, builds with
+`BUILD_TARGET=native` (naming the Sentry release after `CI_COMMIT`), runs
+`npx cap sync ios`, and lists the generated web entry point and Capacitor App
+package manifest. Any failed step stops the build.
 
 ## Workflow environment variables
 
@@ -23,9 +24,17 @@ Required (the script rejects missing or empty values):
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
+Any archive that can reach TestFlight or the App Store ships with these baked
+in, so they must point at the production project (`eyfvqdnczorscwveaadv`), the
+only correct Supabase project. Mark the anon key as **Secret** in Xcode Cloud.
+
+Required for store-bound archives (the script does not check it):
+
+- `VITE_REVENUECAT_IOS_KEY` — RevenueCat iOS SDK key. Without it the app reports
+  in-app purchases as unavailable. Mark it as **Secret**.
+
 Optional or behavioral; follow `.env.example` and the intended release settings:
 
-- `VITE_REVENUECAT_IOS_KEY` — RevenueCat iOS SDK configuration.
 - `VITE_ENABLE_APPLE_OAUTH` — Apple OAuth UI setting; native visibility remains governed by the app's native gate.
 - `VITE_APP_URL` — public origin for links leaving the app.
 - `VITE_FREEMIUM_ACTIVE` — tiering behavior; must match server configuration.
@@ -40,14 +49,17 @@ for a build. In the post-clone logs, confirm Node is at least 22, npm installati
 the native web build, and iOS sync succeed, and both final file paths are listed.
 Then confirm package resolution and the archive succeed.
 
-Xcode Cloud manages build numbers only when the workflow is configured to do so.
-Per the Lead's TASK-019 brief, this workflow keeps `CURRENT_PROJECT_VERSION` from
-the project. **OWNER DECISION:** keep “manage build number” OFF, or explicitly
-accept Xcode Cloud numbering. This bootstrap does not change project versions.
+Before setting the variables, check the workflow's start conditions and post-
+actions. If it starts on every push to `main` and has a TestFlight post-action,
+every merge uploads a build.
 
-Per the Lead-verified TASK-019 release facts, the frozen 1.0.5 RC is based on
-`02e9251019d710ef73d778ea38b34bc273f68b76`. This separate-branch CI addition does
-not change that release.
+Build numbers: Xcode Cloud archive actions stamp the build number from its own
+counter (`CI_BUILD_NUMBER`), not `CURRENT_PROJECT_VERSION` (currently 11 for
+1.0.6). Before this workflow distributes to TestFlight, set the next build
+number in App Store Connect above the last manual upload, and confirm the
+stamped number in the first archive's log. **OWNER DECISION:** use Xcode Cloud
+numbering for releases, or keep distribution manual. This bootstrap does not
+change project versions.
 
 Offline checks cover shell syntax and executable permissions (plus ShellCheck
 when installed). A script-body dry-run is not possible without network access;
