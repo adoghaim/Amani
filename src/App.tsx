@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { OnboardingGate } from './components/OnboardingGate'
+import { UpdateGate } from './components/UpdateGate'
 import { UploadGate } from './components/freemium/UploadGate'
 import { isNative, onAppUrlOpen } from './lib/native'
 import { deepLinkTarget } from './lib/deepLinks'
@@ -167,7 +168,12 @@ function App() {
       <AndroidBackHandler />
       <DeepLinkHandler />
       <ErrorBoundary>
-        <AppRoutes />
+        {/* PK-MINVER-01 (D8): native only, and first in the launch gate order:
+            the update block, then the biometric lock, then consent and the
+            rest of onboarding. On web it renders AppRoutes and nothing else. */}
+        <UpdateGate>
+          <AppRoutes />
+        </UpdateGate>
       </ErrorBoundary>
     </Router>
   )

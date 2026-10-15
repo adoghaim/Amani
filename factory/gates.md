@@ -33,6 +33,12 @@ Foundation PRs carry the extension points other packets build on (PK-INT-01, PK-
 - On a failure, renumber the PR's own migration to a version after `main`'s newest (rename the file; keep its contents). The factory renumbers on request. Never edit, rename or renumber a migration that is already on `main`, and never reuse a version that production has recorded.
 - Stacked PRs are checked when GitHub retargets them to `main`.
 
+## Store builds (D7.4)
+
+- **Store builds are cut from an approved, pinned SHA, never "from main".** The owner names the commit; the build, its `npm run cap:sync` and every native gate run on exactly that SHA, and the PR or release note records it.
+- A pinned release candidate is never rewritten by the factory (owner ruling on PR #93). A fix after the pin is a new commit and a new pin, approved again.
+- The first public-launch store build contains the native minimum-version gate (EXP-8, PK-MINVER-01), so later breaking backend changes can be gated.
+
 ## Integration preview (D11)
 
 `.github/workflows/integration-preview.yml` runs daily (and on demand): it merges every open `wave:*` PR in queue order (#104) onto a scratch commit of `main`, runs lint, typecheck, test, build, `check:functions` and the migration harness on the result, and comments conflicts and failing gates on #104. It never pushes. It is an early warning, not a merge gate: each PR's own G0 checks still decide.

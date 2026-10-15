@@ -117,6 +117,14 @@ update app_public_config set value = '"1.0.7"' where key = 'min_version_ios';
 update app_public_config set value = 'null' where key = 'min_version_android';
 ```
 
+What the app does with these (PK-MINVER-01, native builds only; the web app is never gated):
+an installed version below `min_version_<platform>` gets the full-screen "Please update Amani"
+block; one below `latest_version_<platform>` but not below the minimum gets a dismissible banner.
+Before you ever set `min_version_ios`, the App Store id must be set in `src/lib/storeListing.ts`
+(`APP_STORE_ID`, [Pending]) and shipped in a store build; until then the iOS button opens the App
+Store app rather than Amani's listing. Details and the on-device test plan:
+`docs/min-version-gate.md`.
+
 **Announce the latest app version** (D8; drives the dismissible update banner, `null` hides it):
 
 ```sql
