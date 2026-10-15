@@ -16,7 +16,10 @@ export const HISTORY_PROTECTED_SQLSTATE = "55000";
 /** SQLSTATE the primitive raises for a request id reused with different output. */
 export const REQUEST_REUSED_SQLSTATE = "22023";
 
-/** Stable response codes. */
+/** Stable response codes. Since turn 11 the guard protects every anchor, not
+ * only legacy rows, so "legacy" overstates this one; PK-PL-A proposes
+ * `history_protected` and holds the rename for Adell ([Pending]). The web client
+ * already reads any 409 as "nothing replaced", so a later rename stays compatible. */
 export const LEGACY_HISTORY_PROTECTED = "legacy_history_protected";
 export const REQUEST_ID_REQUIRED = "request_id_required";
 export const REGENERATION_FAILED = "regeneration_failed";

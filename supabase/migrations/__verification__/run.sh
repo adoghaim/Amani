@@ -465,3 +465,7 @@ source "$HERE/interpretation-versions.run.sh"
 
 # PK-FIX-04: report deletion records the stored lab file (20261015110000).
 source "$HERE/lab-file-cleanup.run.sh"
+
+# PK-PL-A: a regeneration that fails writes nothing, so it consumes no attempt
+# (lab_reports.regeneration_count) and no credit (introductory claims).
+source "$HERE/regeneration-no-write.run.sh"

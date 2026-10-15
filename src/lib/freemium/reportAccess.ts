@@ -84,9 +84,16 @@ export function applyAccessResult(
  * nothing usable yet (`generation_needed`) or a body below the deep analysis.
  * The server decides whether this viewer may have a deep one (402 → paywall).
  * Unknown (no answer yet, or an error) offers nothing.
+ *
+ * PK-PL-A: and never when the server has said a regeneration cannot succeed
+ * for this viewer (`regeneration.available === false`, e.g. Free after the
+ * complimentary analyses with post-limit generation on demand). That answer is
+ * generate-interpretation's own decision, so the action is hidden exactly when
+ * tapping it would end in `regeneration_failed` with `retryable: false`.
  */
 export function freemiumCanRegenerate(state: InterpretationAccessResult | null, regenerationCount: number): boolean {
   if (regenerationCount >= 3 || !state || state.access === 'error') return false;
+  if (state.regeneration?.available === false) return false;
   return state.access === 'generation_needed' || state.stored_depth !== 'deep';
 }
 
