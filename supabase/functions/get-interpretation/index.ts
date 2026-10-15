@@ -1,5 +1,5 @@
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { readInterpretation, type InterpretationReadActions } from "../_shared/interpretation-read.ts";
 

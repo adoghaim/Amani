@@ -1,4 +1,4 @@
-import { z } from "npm:zod@^3.25.76";
+import { z } from "npm:zod@3.25.76";
 
 // Mirrors the JSON schema embedded in the system prompt of
 // `generate-interpretation/index.ts` (see "Required schema:" block).

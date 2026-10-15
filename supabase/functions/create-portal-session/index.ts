@@ -1,5 +1,5 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import Stripe from "npm:stripe@14.11.0";
 
 const corsHeaders = {

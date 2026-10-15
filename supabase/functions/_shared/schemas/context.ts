@@ -1,4 +1,4 @@
-import { z } from "npm:zod@^3.25.76";
+import { z } from "npm:zod@3.25.76";
 
 // `lab_reports.context` is jsonb and user-writable via standard RLS UPDATE,
 // so anything that flows from here into the OpenAI prompt is a prompt-

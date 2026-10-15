@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.105.3";
 import { loadBetaTester, type BetaAllowlistActions } from "./beta-allowlist.ts";
 import {
   BETA_TESTER_COLUMNS,

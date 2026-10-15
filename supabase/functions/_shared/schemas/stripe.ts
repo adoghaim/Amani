@@ -1,4 +1,4 @@
-import { z } from "npm:zod@^3.25.76";
+import { z } from "npm:zod@3.25.76";
 
 // Used in `stripe-webhook/index.ts` for the one-time-payment branch
 // (`checkout.session.completed` with `mode === "payment"`). The Stripe SDK
