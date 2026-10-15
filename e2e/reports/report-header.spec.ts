@@ -51,7 +51,8 @@ test.describe('report header slot (D19)', () => {
     page.on('dialog', dialog => { dialogs.push(dialog.message()); void dialog.dismiss(); });
     await more.click();
     await list.getByRole('button', { name: 'Delete report' }).click();
-    await expect.poll(() => dialogs).toEqual(['Delete this report? This cannot be undone.']);
+    // PK-FIX-04 (#103) names the stored lab file in the confirmation; the prompt is unchanged otherwise.
+    await expect.poll(() => dialogs).toEqual(['Delete this report and any uploaded lab file? This cannot be undone.']);
     await expect(page).toHaveURL(new RegExp(`/app/reports/${reportId}$`));
   });
 });
