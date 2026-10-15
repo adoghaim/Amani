@@ -1,19 +1,24 @@
 {
   "schema_version": 1,
   "repo": "adoghaim/Amani",
-  "generated": "2026-10-11",
+  "generated": "2026-10-15",
   "status_values": [
     "todo",
     "in-progress",
     "review",
     "done",
-    "blocked"
+    "blocked",
+    "superseded"
   ],
-  "note": "Ledger of record for the factory. Agents update their own packet entry in their PR; the daily report reads this file. Statuses for V2-03e come from the feature list and must be reconciled with the live repo on first run.",
+  "note": "Ledger of record for the factory. Agents update their own packet entry in their PR; the daily report reads this file. Statuses for V2-03e come from the feature list and must be reconciled with the live repo on first run. Status \"superseded\" means an owner ruling replaced the packet; it satisfies dependencies like \"done\".",
   "phases": [
     {
       "id": "V2-03e",
       "name": "Finish V2-03e: legacy remediation workflow + pre-production blockers"
+    },
+    {
+      "id": "PL",
+      "name": "Pre-launch hardening (factory backlog, merged 2026-10-15)"
     },
     {
       "id": "V2-04",
@@ -47,7 +52,7 @@
         "V2-03e-02"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "superseded",
       "gates_required": [
         "G0",
         "G3",
@@ -66,9 +71,11 @@
         "android": false
       },
       "blocked_reason": null,
-      "evidence": [],
+      "evidence": [
+        "Owner ruling: V2-03e turn 10 (dd7fd4e) removed the legacy remediation flow; 3fb8468 deleted the remediation-only tombstones; V2 merged into main as PR #93 (7b2ecf4)."
+      ],
       "brain_recorded": false,
-      "updated": "2026-10-11"
+      "updated": "2026-10-15"
     },
     {
       "id": "PK-03e-B",
@@ -82,7 +89,7 @@
       "depends_on": [
         "PK-03e-A"
       ],
-      "status": "in-progress",
+      "status": "superseded",
       "gates_required": [
         "G0",
         "G3",
@@ -100,9 +107,11 @@
         "android": false
       },
       "blocked_reason": null,
-      "evidence": [],
+      "evidence": [
+        "Owner ruling: V2-03e turn 10 (dd7fd4e) removed the legacy remediation flow; 3fb8468 deleted the remediation-only tombstones; V2 merged into main as PR #93 (7b2ecf4)."
+      ],
       "brain_recorded": false,
-      "updated": "2026-10-11"
+      "updated": "2026-10-15"
     },
     {
       "id": "PK-03e-C",
@@ -117,7 +126,7 @@
       "depends_on": [
         "PK-03e-A"
       ],
-      "status": "in-progress",
+      "status": "superseded",
       "gates_required": [
         "G0",
         "G3",
@@ -136,9 +145,11 @@
         "android": false
       },
       "blocked_reason": null,
-      "evidence": [],
+      "evidence": [
+        "Owner ruling: V2-03e turn 10 (dd7fd4e) removed the legacy remediation flow; 3fb8468 deleted the remediation-only tombstones; V2 merged into main as PR #93 (7b2ecf4)."
+      ],
       "brain_recorded": false,
-      "updated": "2026-10-11"
+      "updated": "2026-10-15"
     },
     {
       "id": "PK-03e-D",
@@ -152,7 +163,7 @@
         "PK-03e-B",
         "PK-03e-C"
       ],
-      "status": "in-progress",
+      "status": "superseded",
       "gates_required": [
         "G0",
         "G1",
@@ -171,9 +182,11 @@
         "android": false
       },
       "blocked_reason": null,
-      "evidence": [],
+      "evidence": [
+        "Owner ruling: V2-03e turn 10 (dd7fd4e) removed the legacy remediation flow; 3fb8468 deleted the remediation-only tombstones; V2 merged into main as PR #93 (7b2ecf4)."
+      ],
       "brain_recorded": false,
-      "updated": "2026-10-11"
+      "updated": "2026-10-15"
     },
     {
       "id": "PK-03e-E",
@@ -184,15 +197,15 @@
         "V2-03e-09"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "superseded",
       "gates_required": [
         "G0",
         "G3",
         "G5"
       ],
       "gates_passed": [],
-      "branch": null,
-      "pr": null,
+      "branch": "factory/pk-03e-e-account-deletion-deadlock",
+      "pr": "#92 (closed)",
       "agent": null,
       "owner_approval": null,
       "deployed": {
@@ -202,9 +215,12 @@
         "android": false
       },
       "blocked_reason": null,
-      "evidence": [],
+      "evidence": [
+        "PR #92 closed by the owner 2026-10-12 as superseded: V2 (PR #93) closes the deadlock with erase_reports (ordered FOR UPDATE, called once by delete-user-data).",
+        "Its migration 20261011000000_delete_user_data_ordered.sql had reached production; the history row was reverted 2026-10-15 (supabase migration repair --status reverted 20261011000000) so the V2 version writer can apply."
+      ],
       "brain_recorded": false,
-      "updated": "2026-10-11"
+      "updated": "2026-10-15"
     },
     {
       "id": "PK-03e-F",
@@ -215,27 +231,29 @@
         "V2-03e-10"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "done",
       "gates_required": [
         "G0",
         "G3",
         "G5"
       ],
       "gates_passed": [],
-      "branch": null,
-      "pr": null,
+      "branch": "factory/pk-03e-f-main",
+      "pr": "#125",
       "agent": null,
-      "owner_approval": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "n/a-or-pending",
+        "supabase": "pending",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
-      "evidence": [],
+      "evidence": [
+        "Merged with the 2026-10-15 merge train. Migration 20261013000000 not pushed. Harness case 165-trigger-enable-always.sh."
+      ],
       "brain_recorded": false,
-      "updated": "2026-10-11"
+      "updated": "2026-10-15"
     },
     {
       "id": "PK-04-A",
@@ -1026,7 +1044,7 @@
     },
     {
       "id": "PK-S2-07",
-      "title": "Intervention \u2192 outcome",
+      "title": "Intervention → outcome",
       "phase": "S2",
       "wave": "A",
       "tickets": [
@@ -1261,6 +1279,622 @@
       "evidence": [],
       "brain_recorded": false,
       "updated": "2026-10-11"
+    },
+    {
+      "id": "PK-FIX-01a",
+      "title": "Truth fixes: Settings privacy and reminder copy, adults-only onboarding",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-01a-truth-copy",
+      "pr": "#99",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-STORE-01",
+      "title": "Store-subscription teardown on account deletion (RevenueCat, Google Play cancel)",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-store-01-deletion-teardown",
+      "pr": "#102",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Functions to deploy: delete-user-data"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-FIX-04",
+      "title": "Deleting one report also removes its stored lab file",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-04-report-file-deletion",
+      "pr": "#103",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261015110000",
+        "Functions to deploy: delete-report"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-PL-A",
+      "title": "Pre-launch rulings: calm regeneration failures, no attempt lost on a no-write failure",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-pl-a-regeneration-ux",
+      "pr": "#105",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Functions to deploy: generate-interpretation get-interpretation"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-FIX-06",
+      "title": "Cycle day for any cycle length; no silent 28-day assumption",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-06-cycle-length",
+      "pr": "#106",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-INT-01",
+      "title": "Integration extension points (harness cases, deletion registry, Settings sections, header actions)",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-int-01",
+      "pr": "#107",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Functions to deploy: delete-user-data"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-FIX-05",
+      "title": "Parser: bind each printed range to its marker",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-05-multi-range",
+      "pr": "#109",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-FIX-02",
+      "title": "UI truth fixes (neutral colors, wording, labels)",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-02-ui-truth",
+      "pr": "#110",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-CFG-01",
+      "title": "Runtime config: minimum app version, AI kill switch, feature flags",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-cfg-01",
+      "pr": "#111",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261013040000",
+        "Functions to deploy: delete-user-data"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-MINVER-01",
+      "title": "Native minimum-version gate driven by runtime config",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-minver-01",
+      "pr": "#112",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261013040000",
+        "Functions to deploy: delete-user-data"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-FIX-03",
+      "title": "Billing truth: plan CTAs match checkout; optional promo codes",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-03-billing-truth",
+      "pr": "#113",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Functions to deploy: stripe-checkout"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-FIX-07",
+      "title": "Page the all-reports value reads past the 1,000-row cap",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-07-row-paging",
+      "pr": "#114",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-FIX-01b",
+      "title": "Backend guards: Sentry PHI scrubbing, AI cost ledger, budget alerts, AI kill switch",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-fix-01b-backend-guards",
+      "pr": "#115",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261013040000 20261013050000",
+        "Functions to deploy: ai-budget-check delete-user-data extract-biomarkers generate-interpretation lab-insights parse-lab-report-ocr"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-DS-01",
+      "title": "Result rows per DESIGN.md",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-ds-01-result-rows",
+      "pr": "#116",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-SUPPLY-01",
+      "title": "Supply-chain scanning and pinned edge-function imports",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-supply-01",
+      "pr": "#117",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Functions to deploy: create-portal-session delete-user-data extract-biomarkers generate-interpretation get-interpretation iap-webhook lab-insights parse-lab-report-ocr stripe-checkout stripe-webhook verify-iap-purchase"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-PRIV-01",
+      "title": "Privacy pack + text-path redaction before OpenAI",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-priv-01",
+      "pr": "#118",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Functions to deploy: extract-biomarkers generate-interpretation lab-insights"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-CONSENT-01",
+      "title": "Launch consent: health-data, AI-processing, 18+, consent ledger (flag off)",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-consent-01",
+      "pr": "#119",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261013040000 20261015040000",
+        "Functions to deploy: delete-user-data extract-biomarkers generate-interpretation lab-insights parse-lab-report-ocr"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-EXP5",
+      "title": "First-party funnel events and signup attribution",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-exp5-first-party-events",
+      "pr": "#120",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261013040000 20261015010000",
+        "Functions to deploy: delete-user-data generate-interpretation iap-webhook log-anon-event stripe-webhook"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-PL-C",
+      "title": "Browser smoke on main, prepared post-deploy SQL, V2 post-deploy smoke script",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-pl-c-ci-and-post-deploy",
+      "pr": "#121",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-PRICE-01",
+      "title": "Pricing options analysis (docs only)",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-price-01",
+      "pr": "#122",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "n/a",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-AIDIST-01",
+      "title": "AI-assistant distribution design + MCP connector prototype (not deployed)",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-aidist-01",
+      "pr": "#123",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261013040000",
+        "Functions to deploy: delete-user-data"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
+    },
+    {
+      "id": "PK-HARM-01",
+      "title": "Adverse-event pathway (report a problem) + breach response plan",
+      "phase": "PL",
+      "wave": "A",
+      "tickets": [],
+      "depends_on": [],
+      "status": "done",
+      "gates_required": [],
+      "gates_passed": [],
+      "branch": "factory/pk-harm-01",
+      "pr": "#124",
+      "agent": null,
+      "owner_approval": "2026-10-15 Mohammed (merge train)",
+      "deployed": {
+        "web": false,
+        "supabase": "pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Merged with the 2026-10-15 merge train.",
+        "Migrations to push: 20261013040000 20261015020000",
+        "Functions to deploy: delete-user-data"
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-15"
     }
   ],
   "tickets": [
@@ -1581,7 +2215,7 @@
     },
     {
       "id": "S2-07",
-      "title": "Intervention \u2192 outcome tracking",
+      "title": "Intervention → outcome tracking",
       "phase": "S2",
       "packet": "PK-S2-07",
       "status": "todo"
@@ -1666,12 +2300,7 @@
   ],
   "report": {
     "shipped": [],
-    "in_progress": [
-      "PK-03e-A",
-      "PK-03e-B",
-      "PK-03e-C",
-      "PK-03e-D"
-    ],
+    "in_progress": [],
     "blocked": [
       {
         "id": "PK-05-A",
@@ -1683,13 +2312,16 @@
       }
     ],
     "next_suggested": [
-      "PK-03e-E",
-      "PK-03e-F"
+      "PK-04-A",
+      "PK-05-B"
     ],
     "owner_actions": [
-      "Approve or reject open factory PRs",
-      "Give GO for any pending Supabase migration/function deploys",
-      "Answer [Pending] items in brain/open-questions.md"
+      "Netlify: approve mawadSur as a Git contributor or upgrade the plan; until then only a commit authored by adoghaim publishes main",
+      "Backend deploy (owner GO): supabase db push (V2 migrations 20261006-20261011000003, then 20261013000000, 20261013040000, 20261013050000, 20261015010000, 20261015020000, 20261015040000, 20261015110000), then deploy the edge functions listed per packet; run factory/sql/verify-account-deletion-tables.sql before deploying delete-user-data",
+      "Run factory/sql/verify-triggers-enable-always.sql after the push (runbook in factory/gates.md)",
+      "Xcode Cloud: set workflow variables in App Store Connect (docs/xcode-cloud.md)",
+      "Add \"Browser smoke\" to required checks on main (factory/gates.md)",
+      "Answer [Pending] items in brain/open-questions.md (clinical reviewer for PK-05-A/C)"
     ],
     "growth_suggestions": [
       "Audit landing-page copy against clinical-language rules (\"worrying\", \"sits where it should\", Hone mention) before paid acquisition",
