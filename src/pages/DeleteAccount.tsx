@@ -111,9 +111,9 @@ export function DeleteAccount() {
 
         {/*
           Two store-subscription facts, both load-bearing and easy to get wrong.
-          Step 0 of the deletion flow REFUSES to proceed while a live App Store
-          or Play subscription exists, because neither store lets a server
-          cancel one — so "we don't cancel it for you" understates it. And
+          Step 0 requires acknowledgment that a live App Store or Play
+          subscription keeps billing after account deletion. The user can
+          then proceed and cancel the subscription in the store themselves.
           Stripe subscriptions ARE cancelled automatically (step 2), which the
           user should know so they don't cancel twice or worry they were missed.
         */}
@@ -126,10 +126,12 @@ export function DeleteAccount() {
                   If you subscribe through the App Store or Google Play
                 </h2>
                 <p className="text-theme-text text-sm mb-3">
-                  Apple and Google do not allow an app to cancel a subscription bought through
-                  their stores. So deletion will stop and ask you to cancel first if you have a
-                  live App Store or Google Play subscription. Cancel it in your Apple or Google
-                  subscription settings, then come back and delete your account.
+                  Deleting your Amani account does not cancel an App Store or Google Play
+                  subscription. If you have a live store subscription, the app warns you that
+                  billing will continue until you cancel it in your Apple or Google subscription
+                  settings. After acknowledging this warning, you can choose
+                  &ldquo;Delete anyway — I’ll cancel my subscription myself&rdquo; to delete your
+                  account. You must still cancel the subscription in the store to stop billing.
                 </p>
                 <p className="text-theme-text text-sm">
                   Subscriptions purchased on the web are different: those are cancelled
