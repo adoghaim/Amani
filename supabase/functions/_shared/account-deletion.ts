@@ -14,33 +14,54 @@
  *
  * Order and rationale, per step:
  *
+ *  -1. `checkDataTablesReady` — read-only: every table step 6 deletes from
+ *      exists. A delete-user-data deployed before the migration that creates
+ *      one of its registry tables (user-data-registry.ts, DEPLOY ORDER) would
+ *      otherwise cancel Stripe, delete files and erase reports, then fail at
+ *      the missing table and leave a half-deleted account that can never
+ *      finish. It refuses before anything is touched instead.
  *   0. `listStoreSubscriptions` — refuse to proceed, before touching anything,
  *      while the user has a live App Store / Play subscription they have not
- *      acknowledged. Neither store lets a server cancel one, so silent
- *      deletion would leave them paying for an account that no longer exists.
- *   1. `getStripeCustomerId` — check both `stripe_customers` (new) and
+ *      acknowledged. Apple does not let a server cancel one at all, and the
+ *      Play cancel below is off unless its credentials are configured, so
+ *      silent deletion could leave them paying for an account that no longer
+ *      exists.
+ *   1. `cancelPlaySubscriptions` — stop future Play payments server-side for
+ *      every Play subscription still billing. Billing teardown, so it runs
+ *      first, like Stripe's, before any data is touched. A no-op unless Play
+ *      Developer API credentials are configured (see store-teardown.ts).
+ *   2. `getStripeCustomerId` — check both `stripe_customers` (new) and
  *      `users.stripe_customer_id` (legacy). Either can be present.
- *   2. `cancelStripeSubscriptions` — cancel any active/trialing/past_due
+ *   3. `cancelStripeSubscriptions` — cancel any active/trialing/past_due
  *      subscription so the user isn't billed after they leave. Runs before
  *      the customer delete so cancellation events fire while the customer
  *      still exists.
- *   3. `deleteStripeCustomer` — mark the customer deleted in Stripe.
+ *   4. `deleteStripeCustomer` — mark the customer deleted in Stripe.
  *      Also stops future card charges via out-of-band automations.
- *   4. `deleteLocalStripeRecords` — remove `stripe_customers`,
+ *   5. `deleteLocalStripeRecords` — remove `stripe_customers`,
  *      `stripe_subscriptions`, `stripe_orders` rows for this customer +
  *      user. Idempotent (rows may already be gone on retry).
- *   5. `deleteStorageFiles` — remove uploaded lab PDFs/images.
- *   6. `deleteDataTables` — remove all app data rows keyed on user_id.
- *   7. `deleteAuthUser` — LAST. If any earlier step failed, the user can
+ *   6. `deleteStorageFiles` — remove uploaded lab PDFs/images.
+ *   7. `deleteDataTables` — remove all app data rows keyed on user_id:
+ *      `deleteUserDataTables` below, driven by user-data-registry.ts.
+ *   8. `deleteRevenueCatSubscriber` — delete the RevenueCat customer record.
+ *      Deliberately the last step before auth, for the same reason
+ *      `iap_subscriptions` rides the auth cascade: RevenueCat is what
+ *      attributes store renewals to this account, so erasing its record early
+ *      and then failing later would leave a live account whose renewals no
+ *      longer reach it.
+ *   9. `deleteAuthUser` — LAST. If any earlier step failed, the user can
  *      still authenticate and retry deletion. If auth were deleted first
  *      and something later failed, the user would be orphaned with no way
  *      to trigger the rest.
  *
  * Every step throws on unrecoverable failure so the handler responds
  * non-2xx and the client shows a real error (never a false "success").
- * A resource-already-gone response from Stripe is treated as success —
- * idempotency, not failure.
+ * A resource-already-gone response from Stripe, Google or RevenueCat is
+ * treated as success — idempotency, not failure.
  */
+
+import { orderedDeletes, USER_DATA_REGISTRY, type UserDataRegistryEntry } from "./user-data-registry.ts";
 
 /**
  * An `iap_subscriptions` row as the deletion flow needs to read it.
@@ -50,9 +71,20 @@
 export interface StoreSubscriptionRecord {
   platform: string;
   product_id: string;
+  /**
+   * The store's id for the subscription — for Play, the order id (or purchase
+   * token) Google needs to cancel it. Never sent to the client.
+   */
+  store_subscription_id: string;
   status: string;
   expires_at: string | null;
   environment: string;
+}
+
+/** A Play subscription the server can stop billing on the user's behalf. */
+export interface PlaySubscriptionToCancel {
+  productId: string;
+  storeSubscriptionId: string;
 }
 
 /** A store subscription that will keep charging after the account is gone. */
@@ -110,9 +142,7 @@ const BILLING_HAS_STOPPED = new Set(["expired", "revoked"]);
 export function selectBillingStoreSubscriptions(
   records: readonly StoreSubscriptionRecord[],
 ): ActiveStoreSubscription[] {
-  return records
-    .filter((r) => r.environment !== "sandbox")
-    .filter((r) => !BILLING_HAS_STOPPED.has(r.status))
+  return stillBillingRecords(records)
     .filter((r): r is StoreSubscriptionRecord & { platform: "ios" | "android" } =>
       r.platform === "ios" || r.platform === "android"
     )
@@ -121,6 +151,97 @@ export function selectBillingStoreSubscriptions(
       productId: r.product_id,
       expiresAt: r.expires_at,
     }));
+}
+
+/**
+ * The Play subscriptions to cancel server-side: exactly the Play rows the
+ * acknowledgement above treats as still billing, once per store id.
+ *
+ * The same policy on purpose. Sandbox rows never charge real money, and a row
+ * the store has already stopped billing has nothing left to cancel; Google's
+ * own answer is checked again before any cancel is sent (store-teardown.ts).
+ */
+export function selectPlaySubscriptionsToCancel(
+  records: readonly StoreSubscriptionRecord[],
+): PlaySubscriptionToCancel[] {
+  const seen = new Set<string>();
+  const selected: PlaySubscriptionToCancel[] = [];
+  for (const record of stillBillingRecords(records)) {
+    if (record.platform !== "android" || seen.has(record.store_subscription_id)) continue;
+    seen.add(record.store_subscription_id);
+    selected.push({ productId: record.product_id, storeSubscriptionId: record.store_subscription_id });
+  }
+  return selected;
+}
+
+/** Real-money rows the store has not stopped billing. Sandbox never charges. */
+function stillBillingRecords(records: readonly StoreSubscriptionRecord[]): StoreSubscriptionRecord[] {
+  return records
+    .filter((r) => r.environment !== "sandbox")
+    .filter((r) => !BILLING_HAS_STOPPED.has(r.status));
+}
+
+export const ACCOUNT_DELETION_NOT_READY_CODE = "account_deletion_not_ready";
+
+/** A table delete-user-data deletes from that the database cannot serve. */
+export interface UnreadyDataTable {
+  table: string;
+  /** The migration that creates it, from the registry, when known. */
+  requiresMigration: string | null;
+  /** What the probe reported. */
+  detail: string;
+}
+
+/**
+ * Thrown before anything is deleted when a table the data step deletes from
+ * cannot be read: a deploy-order mistake (the function went out before its
+ * migration), never the user's doing. Fails closed; the handler answers 503.
+ */
+export class AccountDeletionNotReadyError extends Error {
+  readonly code = ACCOUNT_DELETION_NOT_READY_CODE;
+  readonly tables: readonly UnreadyDataTable[];
+
+  constructor(tables: readonly UnreadyDataTable[]) {
+    super(
+      "Account deletion is not ready: delete-user-data deletes from " +
+        tables.map((t) =>
+          t.requiresMigration ? `${t.table} (push migration ${t.requiresMigration})` : t.table
+        ).join(", ") +
+        ", which this database cannot serve. Nothing was deleted.",
+    );
+    this.name = "AccountDeletionNotReadyError";
+    this.tables = tables;
+  }
+}
+
+/**
+ * Probes every `ordered_delete` table except `mayBeUndeployed` ones, read-only and concurrently, and throws
+ * AccountDeletionNotReadyError naming each one whose probe failed. `probe`
+ * resolves when the table can be read and rejects otherwise. A probe must
+ * prove a read, not merely see no error: with supabase-js a HEAD request on a
+ * missing table comes back as status 204 with `error: null`, so the handler's
+ * probe is a GET that must return a rows array (delete-user-data/index.ts).
+ */
+export async function checkUserDataTablesReady(
+  probe: (table: string, ownerColumn: string) => Promise<void>,
+  registry: readonly UserDataRegistryEntry[] = USER_DATA_REGISTRY,
+): Promise<void> {
+  // A `mayBeUndeployed` table that is missing holds nothing to erase
+  // (deleteUserDataTables skips it), so it never makes deletion unready.
+  const entries = orderedDeletes(registry).filter((e) => !e.mayBeUndeployed);
+  const results = await Promise.allSettled(entries.map((e) => probe(e.table, e.ownerColumn)));
+  const unready: UnreadyDataTable[] = [];
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      const reason: unknown = result.reason;
+      unready.push({
+        table: entries[i].table,
+        requiresMigration: entries[i].requiresMigration ?? null,
+        detail: reason instanceof Error ? reason.message : String(reason),
+      });
+    }
+  });
+  if (unready.length > 0) throw new AccountDeletionNotReadyError(unready);
 }
 
 export interface DeleteAccountOptions {
@@ -134,6 +255,12 @@ export interface DeleteAccountOptions {
 
 export interface AccountDeletionActions {
   /**
+   * Read-only, FIRST: throws AccountDeletionNotReadyError when a table the data
+   * step deletes from does not exist (checkUserDataTablesReady). Nothing else
+   * runs until it passes.
+   */
+  checkDataTablesReady(): Promise<void>;
+  /**
    * Every `iap_subscriptions` row for the user, unfiltered.
    *
    * Read before anything is deleted: neither Apple nor Google lets a server
@@ -141,6 +268,19 @@ export interface AccountDeletionActions {
    * flow can do is refuse to proceed silently.
    */
   listStoreSubscriptions(userId: string): Promise<readonly StoreSubscriptionRecord[]>;
+  /**
+   * Stop future Play payments for these subscriptions, server-side.
+   *
+   * Resolves (doing nothing) when Play Developer API credentials are not
+   * configured — the acknowledgement already told the user to cancel in the
+   * store. Resolves when Google says a subscription is already cancelled or
+   * gone. MUST throw on anything else, so the account is not reported deleted
+   * while Google may still be billing for it.
+   */
+  cancelPlaySubscriptions(
+    userId: string,
+    subscriptions: readonly PlaySubscriptionToCancel[],
+  ): Promise<void>;
   /** Look up the Stripe customer_id from both new and legacy locations. */
   getStripeCustomerId(userId: string): Promise<string | null>;
   /** Cancel any subscription in an active/trialing/past_due state. */
@@ -153,8 +293,91 @@ export interface AccountDeletionActions {
   deleteStorageFiles(userId: string): Promise<void>;
   /** Delete rows from every user-keyed data table. */
   deleteDataTables(userId: string): Promise<void>;
+  /**
+   * Delete the RevenueCat customer whose app user id is this account's id.
+   * Idempotent: a customer that is already gone (404) is success. A no-op
+   * when the RevenueCat secret is not configured. MUST throw on anything else.
+   */
+  deleteRevenueCatSubscriber(userId: string): Promise<void>;
   /** Delete the auth.users row. LAST — after this the user can't retry. */
   deleteAuthUser(userId: string): Promise<void>;
+}
+
+/**
+ * PostgREST's answer when the table itself is not there: PGRST205 ("Could not
+ * find the table ... in the schema cache") from current PostgREST, 42P01
+ * (undefined_table) from older ones and from Postgres directly.
+ */
+export const MISSING_TABLE_ERROR_CODES: readonly string[] = ["PGRST205", "42P01"];
+
+/** True when a PostgREST error says the table does not exist (not "no rows", not any other failure). */
+export function isMissingTableError(error: { code?: string | null } | null | undefined): boolean {
+  return typeof error?.code === "string" && MISSING_TABLE_ERROR_CODES.includes(error.code);
+}
+
+/**
+ * Thrown by `deleteOwnedRows` when the table does not exist at all. Only a
+ * registry entry marked `mayBeUndeployed` turns this into "nothing to delete";
+ * for every other table it fails the deletion like any other error.
+ */
+export class MissingTableError extends Error {
+  readonly table: string;
+  constructor(table: string, detail: string) {
+    super(`Deleting ${table} failed: table does not exist (${detail})`);
+    this.name = "MissingTableError";
+    this.table = table;
+  }
+}
+
+/**
+ * The I/O behind `deleteDataTables`. Each method throws on failure, with a
+ * message that names what failed, so the handler answers non-2xx.
+ */
+export interface UserDataTablesPort {
+  /** Ids of every lab_reports row the user owns. */
+  listReportIds(userId: string): Promise<readonly string[]>;
+  /** The erase_reports RPC: deletes those reports in id lock order; their graph cascades. */
+  eraseReports(reportIds: readonly string[]): Promise<void>;
+  /**
+   * `DELETE FROM table WHERE ownerColumn = userId`. Throws `MissingTableError`
+   * when the table does not exist, and an ordinary Error for anything else.
+   */
+  deleteOwnedRows(table: string, ownerColumn: string, userId: string): Promise<void>;
+}
+
+/**
+ * Erases the user's data tables, strictly one awaited call at a time:
+ *
+ *   1. The report graphs, in ONE awaited erase_reports call. Nothing else
+ *      touches that graph while it runs; the old concurrent child deletes are
+ *      what deadlocked against it. A user with no reports makes no call.
+ *   2. The registry's `ordered_delete` entries, in registry order, each by its
+ *      owner column (the users profile row last, by id).
+ *
+ * The first failure stops everything after it, with one exception: a
+ * `MissingTableError` on an entry marked `mayBeUndeployed` (a table whose
+ * migration may not be applied in production yet) is skipped as nothing to
+ * delete. Which tables are in step 2, and why the others are not, is
+ * user-data-registry.ts.
+ */
+export async function deleteUserDataTables(
+  port: UserDataTablesPort,
+  userId: string,
+  registry: readonly UserDataRegistryEntry[] = USER_DATA_REGISTRY,
+): Promise<void> {
+  const reportIds = await port.listReportIds(userId);
+  if (reportIds.length > 0) await port.eraseReports(reportIds);
+  for (const { table, ownerColumn, mayBeUndeployed } of orderedDeletes(registry)) {
+    try {
+      await port.deleteOwnedRows(table, ownerColumn, userId);
+    } catch (error) {
+      // A table whose migration has not been applied holds no rows to erase.
+      // Only entries marked mayBeUndeployed get this; any other missing table,
+      // and any other failure on these, still stops the deletion.
+      if (mayBeUndeployed && error instanceof MissingTableError) continue;
+      throw error;
+    }
+  }
 }
 
 export async function deleteUserAccount(
@@ -169,21 +392,36 @@ export async function deleteUserAccount(
     that. Apple does not — there is no App Store Server API endpoint to cancel
     an auto-renewable subscription, by design; only the customer can, from
     their own account settings. Google *does* expose
-    purchases.subscriptionsv2.cancel, but it needs Play Developer API
-    credentials that this project does not hold (they live in RevenueCat), so
-    it is not wired up here either.
+    purchases.subscriptionsv2.cancel, and it is wired up below, but it needs
+    Play Developer API credentials the project may not hold, so it ships off
+    until they are configured.
 
-    That leaves exactly one honest behaviour: find out, tell the user in
-    specific terms, and refuse to continue until they say they understand.
-    Deleting the account silently would leave someone paying Apple every month
-    for an app they can no longer log into — the same defect PR #18 fixed for
-    Stripe, one storefront over.
+    That leaves the gate as the one behaviour that holds for every storefront
+    and every configuration: find out, tell the user in specific terms, and
+    refuse to continue until they say they understand. Deleting the account
+    silently would leave someone paying Apple every month for an app they can
+    no longer log into — the same defect PR #18 fixed for Stripe, one
+    storefront over.
   */
+  // Before anything, read-only: a deploy-order mistake refuses here, with
+  // nothing deleted, instead of failing halfway through the data step.
+  await actions.checkDataTablesReady();
+
   const storeRecords = await actions.listStoreSubscriptions(userId);
   const stillBilling = selectBillingStoreSubscriptions(storeRecords);
 
   if (stillBilling.length > 0 && !options.acknowledgedStoreSubscriptions) {
     throw new StoreSubscriptionAcknowledgementRequiredError(stillBilling);
+  }
+
+  /*
+    Acknowledged (or nothing billing): now stop what a server can stop. Play
+    first, with the other billing teardown and before any data is touched, so
+    a failure here leaves the account exactly as it was and the user retries.
+  */
+  const playSubscriptions = selectPlaySubscriptionsToCancel(storeRecords);
+  if (playSubscriptions.length > 0) {
+    await actions.cancelPlaySubscriptions(userId, playSubscriptions);
   }
 
   const customerId = await actions.getStripeCustomerId(userId);
@@ -196,6 +434,15 @@ export async function deleteUserAccount(
 
   await actions.deleteStorageFiles(userId);
   await actions.deleteDataTables(userId);
+
+  /*
+    The RevenueCat customer goes last before auth, for the reason
+    `iap_subscriptions` rides the auth cascade: RevenueCat is what attributes a
+    store renewal to this account. Erased early, a later failure would leave a
+    live account whose renewals no longer reach it. Erased here, the window is
+    one step wide, and a retry finishes it (already gone is success).
+  */
+  await actions.deleteRevenueCatSubscriber(userId);
 
   // Auth deletion is last on purpose. If any prior step throws, the caller
   // returns 5xx and the user retries. Once auth is gone, no retry is possible.

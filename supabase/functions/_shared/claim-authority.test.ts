@@ -12,6 +12,7 @@ import { readInterpretation, type InterpretationReadActions } from './interpreta
 import { contentFingerprint } from './preview-selector';
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, type InterpretationPayload } from './response-shaping';
 import { buildTrendEvidence, type TrendEvidence } from './trend-evidence';
+import { harnessText } from '../../migrations/__verification__/harness-cases';
 
 /*
   V2-03c proofs. Every claim is checked against the legacy pipeline on the same
@@ -528,7 +529,8 @@ describe('20261008000000 historical gate fixture (legacy SQL parity pending TASK
     expect(body(gateMigration)).not.toBe(body(basicCycleMigration));
   });
   it('the harness runs the case: refusal, forward, replay, rollback, fresh chain and the baseline compare', () => {
-    const harness = readFileSync(new URL('supabase/migrations/__verification__/run.sh', root), 'utf8');
+    // run.sh plus its cases/ files, in run order (PK-INT-01 moved the cases out of run.sh).
+    const harness = harnessText();
     expect(harness).toContain('GATE=20261008000000_claim_policy_basic_gate.sql');
     expect(harness.match(/-f "\/tmp\/\$GATE"/g)!.length).toBeGreaterThanOrEqual(6);
     for (const step of ['claim-policy-gate.rollback.sql', 'claim-policy-gate.compare.sql', 'claim_gate_fresh', 'target=claim_gate_before']) {

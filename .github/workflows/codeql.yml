@@ -1,0 +1,59 @@
+# CodeQL static analysis for the web app and the edge functions (PK-SUPPLY-01).
+#
+# The repository is private. CodeQL on a private repository needs GitHub Code
+# Security (licensing), and GitHub rejects results until code scanning is on.
+# Enabling it is the owner's action, not the factory's, so this job is dormant
+# (shown as "skipped", never red) until the owner turns on Code Security and
+# sets the repository variable CODE_SCANNING_ENABLED=true. Steps are in
+# docs/security/github-settings.md. From then on it runs on every PR to main,
+# weekly, and on demand, and results land in the Security tab.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Mondays 06:17 UTC (off the hour to avoid the scheduled-job rush).
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    if: vars.CODE_SCANNING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          # Interpreted languages need no build; this also covers the Deno
+          # TypeScript under supabase/functions.
+          build-mode: none
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - node_modules
+              - dist
+              - android
+              - ios
+              - artifacts
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript

@@ -118,7 +118,7 @@ export const FREEMIUM_COPY = Object.freeze({
     signupTitle: 'Create your account',
     signupIncluded: [
       'Basic insights on every report, free',
-      'Every result read against your cycle',
+      'The cycle day of your test, when you add the day your last period started',
       '3 complimentary Premium analyses included',
       'Questions to take to your appointment',
     ],

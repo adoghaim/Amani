@@ -42,3 +42,24 @@ verify_jwt = true
 
 [functions.get-interpretation]
 verify_jwt = true
+
+# Single-report deletion (PK-FIX-04). The report id is checked against the
+# caller from this JWT (RLS read), never trusted from the body alone; the
+# function also calls `auth.getUser()` itself.
+[functions.delete-report]
+verify_jwt = true
+
+# PK-FIX-01b scheduled AI budget check. Called by the owner's scheduler, not by
+# the app: it authenticates the caller itself with the x-amani-scheduler-secret
+# header against AI_BUDGET_CHECK_SECRET, and refuses every call while that
+# secret is unset. verify_jwt = false so the scheduler needs no user JWT.
+[functions.ai-budget-check]
+verify_jwt = false
+
+# PK-EXP5 pre-signup events (owner decision D5.3). Called before an account
+# exists, so there is no user JWT to verify: verify_jwt = false is intentional.
+# The function accepts only landing_view and signup_started, rate-limits by a
+# salted daily-rotating IP hash plus a global daily cap, and fails closed (503,
+# nothing written) when ANON_EVENT_IP_SALT_SECRET is unset.
+[functions.log-anon-event]
+verify_jwt = false

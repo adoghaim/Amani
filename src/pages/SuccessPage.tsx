@@ -18,7 +18,7 @@
 */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle, Loader2, Clock } from 'lucide-react'
 import { Button } from '../components/Button'
 import { checkSubscriptionLive } from '../utils/subscription'
@@ -26,6 +26,7 @@ import { supabase } from '../lib/supabase'
 import { clientFreemiumActive } from '../lib/tier'
 import { FREEMIUM_COPY } from '../lib/freemium/copy'
 import { waitForStripePurchase, type StripeSubscriptionRow } from '../lib/freemium/purchaseConfirmation'
+import { PROMO_NOT_APPLIED_COPY, promoNotApplied } from '../lib/promoReturn'
 
 /** How often to re-ask the server. */
 const POLL_INTERVAL_MS = 2000
@@ -43,6 +44,8 @@ export function SuccessPage() {
   const [state, setState] = useState<State>('confirming')
   const cancelled = useRef(false)
   const freemium = clientFreemiumActive()
+  const [searchParams] = useSearchParams()
+  const codeNotApplied = promoNotApplied(searchParams)
 
   const poll = useCallback(async () => {
     /*
@@ -112,6 +115,17 @@ export function SuccessPage() {
     <div className="min-h-dvh bg-theme-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 safe-top safe-bottom">
       <div className="max-w-md w-full text-center">
         <div className="bg-theme-surface rounded-lg shadow-lg p-8 border border-theme-border">
+          {/*
+            A5: stripe-checkout could not apply her saved code, so checkout ran
+            at the listed price. A calm, left-aligned notice, announced politely.
+          */}
+          <div aria-live="polite">
+            {codeNotApplied && (
+              <p className="mb-6 text-left text-sm text-theme-muted-text-2 border-l-2 border-theme-border pl-3">
+                {PROMO_NOT_APPLIED_COPY}
+              </p>
+            )}
+          </div>
           {state === 'confirming' && (
             <>
               <div className="flex justify-center mb-6">

@@ -27,7 +27,7 @@ const prediction = {
   nextPeriodStart: new Date(Date.now() + 7 * 86_400_000),
   nextPeriodEnd: new Date(Date.now() + 12 * 86_400_000),
   fertileWindowStart: new Date(), fertileWindowEnd: new Date(), ovulationDay: new Date(),
-  currentCycleDay: 21, currentPhase: 'luteal' as CyclePhase, cycleLength: 28, periodLength: 5,
+  currentCycleDay: 21, currentPhase: 'luteal' as CyclePhase, cycleLength: 28, knownCycleLength: 28, periodLength: 5,
 };
 
 const sample = {
@@ -65,12 +65,12 @@ export function DesignGallery() {
           <div className="flex flex-wrap gap-8">
             {PHASES.map((p, i) => (
               <div key={p} className="text-center">
-                <CycleDial day={[3, 9, 14, 21][i] ?? 1} length={28} phase={p} size={84} />
+                <CycleDial day={[3, 9, 14, 21][i] ?? 1} phase={p} size={84} />
                 <p className="text-xs text-theme-muted-text-2 mt-2 capitalize">{p}</p>
               </div>
             ))}
             <div className="text-center">
-              <CycleDial day={null} length={28} phase="unknown" size={84} />
+              <CycleDial day={null} phase="unknown" size={84} />
               <p className="text-xs text-theme-muted-text-2 mt-2">unknown</p>
             </div>
           </div>

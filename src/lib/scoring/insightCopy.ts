@@ -666,6 +666,19 @@ const LAB_PLACEMENT_TEXT: Record<LabPlacement, string> = {
 
 export const NO_LAB_INTERVAL = 'No lab range';
 
+/*
+  PK-DS-01 result row (DESIGN.md "Result row"). Every range her lab printed is
+  shown as printed; the one whose label names the estimated draw-day phase is
+  marked. Placement is never stated against a range Amani picked: a row whose
+  lab printed several ranges and bound none says only that.
+*/
+export const SEVERAL_LAB_INTERVALS = 'Your lab printed several ranges';
+export const PRINTED_INTERVALS_LABEL = 'Ranges printed by your lab';
+export const LAB_FLAG_PREFIX = 'Flag printed by your lab: ';
+export function drawDayPhaseNote(phase: string): string {
+  return `your estimated ${phase} phase on the draw day`;
+}
+
 /** Null when the report printed no usable interval. */
 export function labIntervalObservation(
   subject: string,
@@ -922,16 +935,30 @@ export function isIssuedDiscussionPrompt(value: unknown): value is DiscussionPre
 export const DISCUSSION_PREP_HEADING = 'Questions you could bring to a clinician';
 export const DISCUSSION_PREP_INTRO =
   'Optional questions built from the values on this report, to help you prepare for any conversation with your clinician. '
-  + 'They are preparation only, not a judgement about your results.';
+  + 'They are preparation only, not a judgment about your results.';
 
 const LAB_INTERVAL_WORDS: Record<Exclude<LabPlacement, 'within'>, string> = {
   below: 'below', above: 'above',
 };
 
+/**
+ * A marker's display name as it reads inside a question (PK-FIX-02): "My
+ * ferritin changed…", never "My Ferritin changed…". Catalog display names are
+ * title case ("Fasting Insulin", "Free T4"), so each ordinary capitalised word
+ * of three or more letters is lowercased. Acronyms and mixed-case
+ * abbreviations keep their letters exactly (TSH, HbA1c, ApoB, Lp(a), eGFR,
+ * T4, C-peptide's C). A premise keeps the display name; only the sentence
+ * changes. An eponym added to the catalog would need an exception here.
+ */
+export function nameInSentence(displayName: string): string {
+  return displayName.replace(/(^|[\s(/-])([A-Z][a-z]{2,})(?=$|[\s),/%-])/g,
+    (_match, lead: string, word: string) => lead + word.toLowerCase());
+}
+
 export const DISCUSSION_PREP = {
   /** A measured change between two of her results. */
   change: (subject: string, previous: number, current: number, unit: string): DiscussionPrepPrompt => prepPrompt(
-    `My ${subject} changed from ${previous} to ${current} ${unit}. What could explain this change, and is it clinically meaningful?`,
+    `My ${nameInSentence(subject)} changed from ${previous} to ${current} ${unit}. What could explain this change, and is it clinically meaningful?`,
     [{ kind: 'measured_change', subject, previous, current, unit }],
   ),
   /** Her value outside her own laboratory's printed interval, exactly as labIntervalPlacement reads it. */
@@ -940,7 +967,7 @@ export const DISCUSSION_PREP = {
     const interval = formatInterval(min ?? null, max ?? null);
     if (!placement || placement === 'within' || !interval) return null;
     return prepPrompt(
-      `My ${subject} is ${value} ${unit}, ${LAB_INTERVAL_WORDS[placement]} my lab's reference interval of ${interval} ${unit}. `
+      `My ${nameInSentence(subject)} is ${value} ${unit}, ${LAB_INTERVAL_WORDS[placement]} my lab's reference interval of ${interval} ${unit}. `
         + 'What does this mean in the context of my overall labs?',
       [{ kind: 'patient_lab_interval', subject, value, unit, min: min ?? null, max: max ?? null, placement }],
     );
@@ -949,8 +976,8 @@ export const DISCUSSION_PREP = {
   relate: (premises: readonly Extract<DiscussionPremise, { kind: 'patient_lab_interval' }>[]): DiscussionPrepPrompt | null => {
     if (premises.length < 2) return null;
     const names = premises.length > 3
-      ? [...premises.slice(0, 2).map(p => p.subject), `${premises.length - 2} other results`]
-      : premises.map(p => p.subject);
+      ? [...premises.slice(0, 2).map(p => nameInSentence(p.subject)), `${premises.length - 2} other results`]
+      : premises.map(p => nameInSentence(p.subject));
     return prepPrompt(`Could you help me understand how my ${listOf(names)} results relate to each other?`, premises);
   },
   /** Assumes nothing about her results, so it may appear on any report. */

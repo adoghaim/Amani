@@ -10,8 +10,14 @@ import { buildTrendEvidence } from './trend-evidence';
 import { resolveTier } from './tier';
 import { entitlementUnavailable, generationVisibilityMode } from './entitlement-response';
 import { commitGeneratedInterpretation, decideIntroductoryAccess } from './introductory-access';
+import { decideDeepGeneration } from './regeneration-availability';
 import { deriveBloodDrawIdentity, hashDrawKey } from './blood-draw-identity';
 import * as versionWrite from './interpretation-version-write';
+import { callModelUnlessPaused } from './ai-pause';
+import { consentRefusal, createConsentGate } from './consent';
+// PK-CONSENT-01: features.consent_gate off (the seed), as before the gate existed; a consent read would throw.
+const consentGateOff = () => createConsentGate({ readPublicConfig: async () => [{ key: 'features', value: {} }],
+  readCurrentConsents: async () => { throw new Error('flag off: consent is never read'); }, now: () => 0 });
 
 /**
  * TASK-048 turns 10 and 11: executes the real generate-interpretation handler,
@@ -140,7 +146,8 @@ const REQUIRE_REQUEST = 'if (appendsVersion && requestId === null) {';
 const LEDGER_CUTOVER = 'if (appendsVersion) {\n          const settled = await commitLedgerVersion(';
 const VERSIONABLE_FIRST = 'if (appendsVersion && !isVersionable(';
 
-function buildHandler(handlerSource: string, model: Record<string, unknown> | null, flagOn: boolean, free: boolean, client: unknown) {
+function buildHandler(handlerSource: string, model: Record<string, unknown> | null, flagOn: boolean, free: boolean, client: unknown,
+  aiPaused = false) {
   const sink: Record<string, unknown> = {};
   evaluate(slice(source, 'function classifyAnalyte(', 'function displayVal(') + '\nsink.a = { classifyAnalyte, slug };', { sink });
   evaluate(slice(source, 'function deterministicCycleFacts(', 'function generateFallbackInterpretation(')
@@ -152,7 +159,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
     UserProfileContextSchema: { safeParse: () => ({ success: false, error: { flatten: () => ({}) } }) },
     formatUserContextBlock: () => null, buildTrendEvidence, withClaimAuthority, projectBasic, buildBasicProjection,
     findFloorViolations, shapeInterpretation, shouldRequestDeepInterpretation, formatPrimarySummary: () => '',
-    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI,
+    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI, callModelUnlessPaused,
     ...(sink.a as object), ...(sink.c as object),
   });
   evaluate(slice(source, '// ─── Version store', '// ─── Handler')
@@ -163,6 +170,9 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
     Deno: { env: { get: (name: string) => name === 'OPENAI_API_KEY' ? 'test-key' : undefined },
       serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => client, corsHeaders: {}, debugLog: () => {}, enforceRateLimit: async () => {}, createRateLimitStore: () => ({}),
+    consentRefusal, consentGateFor: consentGateOff,
+    // PK-EXP5: the funnel event is a no-op here; app-events.test.ts covers it.
+    logServerEvent: async () => true, createAppEventSink: () => ({}),
     GenerateInterpretationRequestSchema: { safeParse: (body: { reportId: string; request_id?: string }) =>
       ({ success: true, data: { reportId: body.reportId, request_id: body.request_id } }) },
     checkUserSubscription: async () => !flagOn
@@ -172,20 +182,23 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
         : { allowed: true, plan: 'premium', reason: 'active_subscription', source: 'active_subscription' },
     freemiumActive: () => flagOn, generationVisibilityMode, entitlementUnavailable, resolveTier,
     // The real ledger flow: never stubbed out of the version path.
-    shouldGenerateDeepInterpretation, decideIntroductoryAccess, commitGeneratedInterpretation,
+    shouldGenerateDeepInterpretation, decideDeepGeneration, decideIntroductoryAccess, commitGeneratedInterpretation,
     deriveBloodDrawIdentity, hashDrawKey, recordGenerationCosts,
     isRateLimitExceeded: () => false, errorMessage: String, servedBasic, visibleClaimProjection,
+    // PK-FIX-01b guards: the kill switch as the scenario sets it; telemetry is inert here.
+    aiPausedNow: async () => aiPaused, inBackground: (p: Promise<unknown>) => { void p; },
+    costLedger: { record: async () => {} }, reporter: { captureException: async () => false },
     ...versionWrite, ...(sink.p as object), ...(sink.v as object),
   });
   return { handler, tryOpenAI };
 }
 
 async function call(scenario: Scenario & { model?: Record<string, unknown> | null; flagOn?: boolean; requestId?: string | null;
-  handlerSource?: string }) {
+  handlerSource?: string; aiPaused?: boolean }) {
   const fake = fakeSupabase(scenario);
   const flagOn = !!scenario.flagOn || !!scenario.free;
   const { handler, tryOpenAI } = buildHandler(scenario.handlerSource ?? source,
-    scenario.model === undefined ? generated() : scenario.model, flagOn, !!scenario.free, fake.client);
+    scenario.model === undefined ? generated() : scenario.model, flagOn, !!scenario.free, fake.client, !!scenario.aiPaused);
   const silence = [vi.spyOn(console, 'log'), vi.spyOn(console, 'warn'), vi.spyOn(console, 'error')]
     .map(spy => spy.mockImplementation(() => {}));
   try {
@@ -406,6 +419,40 @@ describe('generate-interpretation Free ledger on an anchored report (turn 11, ex
     const mutated = source.replace(VERSIONABLE_FIRST, 'if (false && !isVersionable(');
     const result = await run({ anchor: true, free: true, claim: false, claimCount: 1, model: null, handlerSource: mutated });
     expect(persisting(result.rpcs)).toContain('append_interpretation_version');
+  });
+
+  it('PK-FIX-01b DT9: kill switch on, Free first generation with a credit: no model call, no claim, no credit, Basic, ai_paused', async () => {
+    const paused = await run({ anchor: false, free: true, claim: false, claimCount: 0, requestId: null, aiPaused: true });
+    expect(paused.tryOpenAI).not.toHaveBeenCalled();
+    expect(paused.response.status).toBe(200);
+    expect(persisting(paused.rpcs)).toEqual(['save_interpretation']);
+    expect(names(paused.rpcs)).not.toContain('commit_deep_access_v2');
+    expect(names(paused.rpcs)).not.toContain('commit_deep_access_version');
+    expect(paused.rpcs.find(r => r.name === 'save_interpretation')!.args).toMatchObject({ p_source: 'fallback', p_tier: 'free' });
+    expect(paused.body).toMatchObject({ success: true, access: 'basic', ai_paused: true });
+
+    // Control: the same request with the switch off calls the model and commits the claim.
+    const live = await run({ anchor: false, free: true, claim: false, claimCount: 0, requestId: null });
+    expect(live.tryOpenAI).toHaveBeenCalledTimes(1);
+    expect(persisting(live.rpcs)).toEqual(['commit_deep_access_v2']);
+    expect(live.body).not.toHaveProperty('ai_paused');
+  });
+
+  it('PK-FIX-01b DT9: kill switch on, a regeneration appends nothing, claims nothing, and the refusal says paused', async () => {
+    const paused = await run({ anchor: true, free: true, claim: false, claimCount: 0, aiPaused: true });
+    expect(paused.tryOpenAI).not.toHaveBeenCalled();
+    expect(paused.response.status).toBe(503);
+    expect(persisting(paused.rpcs)).toEqual([]);
+    expect(paused.writes).toEqual([]);
+    expect(paused.body).toMatchObject({ error: 'regeneration_failed', ai_paused: true });
+  });
+
+  it('PK-FIX-01b: kill switch on, a Premium first generation serves the deterministic interpretation with ai_paused', async () => {
+    const paused = await run({ anchor: false, flagOn: true, requestId: null, aiPaused: true });
+    expect(paused.tryOpenAI).not.toHaveBeenCalled();
+    expect(paused.response.status).toBe(200);
+    expect(persisting(paused.rpcs)).toEqual(['save_interpretation']);
+    expect(paused.body).toMatchObject({ success: true, source: 'fallback', ai_paused: true });
   });
 
   it('no Free path with an anchor reaches an in-place writer', async () => {

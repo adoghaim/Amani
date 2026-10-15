@@ -327,8 +327,9 @@ supabase secrets set REVENUECAT_WEBHOOK_AUTH=<the §8.6 header value>
 
 | Secret | Where it comes from | Used by |
 |---|---|---|
-| `REVENUECAT_SECRET_API_KEY` | RevenueCat → API keys → **Secret** key (`sk_...`) | `verify-iap-purchase`, to read the subscriber record server-side |
+| `REVENUECAT_SECRET_API_KEY` | RevenueCat → API keys → **Secret** key (`sk_...`) | `verify-iap-purchase`, to read the subscriber record server-side; `delete-user-data`, to delete the RevenueCat customer when an account is deleted |
 | `REVENUECAT_WEBHOOK_AUTH` | You generate it (§8.6) | `iap-webhook`, to authenticate deliveries |
+| `GOOGLE_PLAY_SUBSCRIPTIONS_SERVICE_ACCOUNT_JSON` | *Optional.* The contents (not a path) of a Play Developer API service-account JSON key with *View financial data* and *Manage orders and subscriptions* (§7.5) | `delete-user-data`, to cancel a deleted account's Play subscription server-side. Unset = off (no Play request is made). Set or not, deletion still asks the user to acknowledge a live store subscription first |
 
 The secret key is **not** the SDK key. Never put `sk_...` in `.env` or in the
 client bundle — it can read and modify every subscriber in the project.

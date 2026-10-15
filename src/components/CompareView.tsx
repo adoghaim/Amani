@@ -3,6 +3,7 @@ import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Card } from './Card';
 import { LabReport, Biomarker } from '../types';
 import { COMPARE_SHIFTS_NOTE } from '../lib/scoring/insightCopy';
+import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 
 interface CompareViewProps {
   reports: LabReport[];
@@ -33,6 +34,12 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
       }, 500);
     }
   }, [sortedReports]);
+
+  // PK-EXP5 funnel step, once per pair shown; off unless first_party_events is on.
+  const comparing = Boolean(baselineId && followupId);
+  useEffect(() => {
+    if (comparing) void firstPartyEvents.track('compare_viewed');
+  }, [comparing, baselineId, followupId]);
 
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -206,20 +213,28 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
                         {comp.followup.value} {comp.followup.unit}
                       </td>
                       <td className="px-6 py-4 text-sm">
+                        {/*
+                          Direction is not valence (PK-FIX-02). Increases were
+                          amber and decreases green, which read as bad and good
+                          for every marker. Whether a change matters depends on
+                          the marker and where it started, which this table does
+                          not know, so both directions use the same neutral ink;
+                          the arrow and the sign carry the direction.
+                        */}
                         {comp.delta === 0 ? (
                           <div className="flex items-center gap-1 text-theme-muted-text">
                             <Minus className="w-4 h-4" />
                             <span>No change</span>
                           </div>
                         ) : comp.delta > 0 ? (
-                          <div className="flex items-center gap-1 text-theme-warning">
+                          <div className="flex items-center gap-1 text-theme-text">
                             <ArrowUp className="w-4 h-4" />
                             <span className="font-medium">
                               +{comp.delta.toFixed(2)} ({comp.percentChange.toFixed(0)}%)
                             </span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1 text-theme-success">
+                          <div className="flex items-center gap-1 text-theme-text">
                             <ArrowDown className="w-4 h-4" />
                             <span className="font-medium">
                               {comp.delta.toFixed(2)} ({comp.percentChange.toFixed(0)}%)

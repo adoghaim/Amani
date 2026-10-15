@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import type { RateLimitStore } from "./rate-limit.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;

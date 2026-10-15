@@ -7,6 +7,9 @@ import { Button } from '../Button'
 import { Input } from '../Input'
 import { Alert } from '../Alert'
 import { SocialAuthButton } from './SocialAuthButton'
+import { SignupCodeField } from './SignupCodeField'
+import { firstPartyEvents } from '../../lib/firstPartyEventsClient'
+import { useFirstPartyEventsEnabled } from '../../hooks/useFirstPartyEventsEnabled'
 
 interface SignupFormProps {
   onSuccess?: () => void
@@ -21,11 +24,15 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // PK-EXP5 (D6.2): the code field and every event call stay off until the owner turns this on.
+  const eventsOn = useFirstPartyEventsEnabled()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    // Never throws and never waits on the network.
+    if (eventsOn) firstPartyEvents.markSignupStarted()
 
     if (password !== confirmPassword) {
       setError('Passwords do not match')
@@ -68,6 +75,8 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
   const handleOAuth = async (action: () => Promise<void>) => {
     setError('')
+    // Before the redirect, so the held code and the started signup survive it.
+    if (eventsOn) firstPartyEvents.markSignupStarted()
     try {
       await action()
     } catch (err) {
@@ -77,6 +86,9 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
   return (
     <div className="space-y-4">
+      {/* D17: above every signup route, the Google and Apple buttons and the email form. */}
+      {eventsOn && <SignupCodeField events={firstPartyEvents} />}
+
       {error && (
         <Alert type="error">
           {error}

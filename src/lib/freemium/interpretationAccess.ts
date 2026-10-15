@@ -28,6 +28,17 @@ export interface PremiumPreview {
   content: unknown;
 }
 
+/**
+ * PK-PL-A: the server's answer to "can a regeneration of this stored report
+ * succeed for this viewer?" — generate-interpretation's own entitlement and
+ * depth decision, reported by get-interpretation.
+ */
+export interface RegenerationAvailability {
+  available: boolean;
+  /** Why not, in the server's vocabulary; null when available. */
+  reason: string | null;
+}
+
 export interface InterpretationAccessResult {
   access: InterpretationAccess;
   interpretation: Record<string, unknown> | null;
@@ -36,6 +47,9 @@ export interface InterpretationAccessResult {
   plan: 'premium' | 'free' | null;
   complimentary: { used: number; total: number; remaining: number } | null;
   stored_depth: string | null;
+  /** Null when the server did not say (nothing stored, flag off, an error, or a
+   * server older than PK-PL-A): the stored-state rule decides alone, as before. */
+  regeneration: RegenerationAvailability | null;
   code: string | null;
   retryable: boolean;
 }
@@ -45,7 +59,7 @@ const EMPTY_LOCKED: LockedCounts = Object.freeze({ patterns: 0, cross_report: 0,
 export function accessError(code: string, retryable = true): InterpretationAccessResult {
   return {
     access: 'error', interpretation: null, preview: null, locked: EMPTY_LOCKED,
-    plan: null, complimentary: null, stored_depth: null, code, retryable,
+    plan: null, complimentary: null, stored_depth: null, regeneration: null, code, retryable,
   };
 }
 
@@ -63,6 +77,12 @@ function parseLocked(value: unknown): LockedCounts {
 function parsePreview(value: unknown): PremiumPreview | null {
   if (!isRecord(value) || value.content == null || value.content === '') return null;
   return { kind: typeof value.kind === 'string' ? value.kind : 'pattern', content: value.content };
+}
+
+/** A malformed answer is treated as no answer: the stored-state rule decides, as before PK-PL-A. */
+function parseRegeneration(value: unknown): RegenerationAvailability | null {
+  if (!isRecord(value) || typeof value.available !== 'boolean') return null;
+  return { available: value.available, reason: typeof value.reason === 'string' ? value.reason : null };
 }
 
 function parseComplimentary(value: unknown): InterpretationAccessResult['complimentary'] {
@@ -94,6 +114,7 @@ export function parseInterpretationAccess(raw: unknown): InterpretationAccessRes
     plan: raw.plan === 'premium' || raw.plan === 'free' ? raw.plan : null,
     complimentary: parseComplimentary(raw.complimentary),
     stored_depth: typeof raw.stored_depth === 'string' ? raw.stored_depth : null,
+    regeneration: parseRegeneration(raw.regeneration),
     code: null,
     retryable: false,
   };

@@ -469,11 +469,11 @@
     "reason": "Non-clinical lexical match: age-selection form label; range refers to an age input, not a biomarker band or interpretation."
   },
   {
-    "file": "src/features/onboarding/steps/WelcomeStep.tsx",
-    "text": "Amani helps you understand your lab results in plain language, track changes over time, and prepare better questions for your doctor.",
+    "file": "src/features/report/problem/problemReport.ts",
+    "text": "Something here worried me",
     "category": "NOT_CLINICAL_LANGUAGE",
-    "basis": "non_clinical_wording",
-    "reason": "Non-clinical lexical match: onboarding product description uses better for question preparation, not clinical improvement in a result."
+    "basis": "form_label",
+    "reason": "Non-clinical lexical match: a choice label in the Report a problem chooser (PK-HARM-01), in the owner's D20 wording. It names how she felt about the report so it can be routed to the clinical reviewer; it says nothing about any result."
   },
   {
     "file": "src/features/settings/PersonalContextCard.tsx",
@@ -891,13 +891,6 @@
   {
     "file": "src/pages/ReportView.tsx",
     "text": "ml-2 text-sm font-normal text-theme-primary",
-    "category": "NOT_CLINICAL_LANGUAGE",
-    "basis": "css_token",
-    "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."
-  },
-  {
-    "file": "src/pages/ReportView.tsx",
-    "text": "text-theme-neutral-500 font-normal ml-1 text-xs",
     "category": "NOT_CLINICAL_LANGUAGE",
     "basis": "css_token",
     "reason": "Utility-class literal; 'normal' here is font weight. Verified by the css_token shape check, not by this sentence."

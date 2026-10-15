@@ -1,12 +1,15 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import {
   ALLOWED_NUTRIENTS_PROMPT_LIST,
   sanitizeViolations,
   validateInterpretationOutput,
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { buildBasicProjection } from "../_shared/interpretation-visibility.ts";
 import { entitlementUnavailable, generationVisibilityMode } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -27,8 +30,8 @@ import {
   findFloorViolations,
   shapeInterpretation,
   shouldRequestDeepInterpretation,
-  shouldGenerateDeepInterpretation,
 } from "../_shared/response-shaping.ts";
+import { decideDeepGeneration } from "../_shared/regeneration-availability.ts";
 import {
   isHistoryProtected,
   isVersionable,
@@ -44,6 +47,7 @@ import {
 } from "../_shared/interpretation-version-write.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
+import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
 import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
 import {
@@ -51,6 +55,13 @@ import {
   LabReportContextSchema,
   UserProfileContextSchema,
 } from "../_shared/schemas/context.ts";
+import { callModelUnlessPaused } from "../_shared/ai-pause.ts";
+import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+
+// PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
+// AI cost ledger, and the kill switch. Once per isolate.
+const reporter = edgeErrorReporter("generate-interpretation");
+const costLedger = edgeAiCostLedger("generate-interpretation");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1231,7 +1242,8 @@ async function callOpenAIOnce(
               role: "system",
               content: "You are Amani's clinical interpretation engine. Return ONLY valid JSON. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
             },
-            { role: "user", content: prompt },
+            // PK-PRIV-01: identifiers out before the prompt leaves for OpenAI.
+            { role: "user", content: redactLabText(prompt).text },
           ],
           max_tokens: 2200,
           temperature: 0.25,
@@ -1427,6 +1439,8 @@ async function produceInterpretation(input: {
   generateDeep: boolean;
   policyActive: boolean;
   openaiApiKey: string | undefined;
+  /** PK-FIX-01b: the owner's kill switch is on. No model call; the deterministic interpretation is served. */
+  aiPaused: boolean;
   recordCost?: (sample: GenerationSample) => void;
 }) {
   const { ctx: { report, analytes, primaryContext, userContextBlock, isOptimizationOnly },
@@ -1451,10 +1465,22 @@ async function produceInterpretation(input: {
 
   let aiInterpretation: AIInterpretationOutput | null = null;
 
-  if (shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && report) {
-    console.log("[generate-interpretation] Trying OpenAI...");
-    const aiResult = await tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
-      input.recordCost, trendEvidence);
+  // PK-FIX-01b (D12, DT9): while the kill switch is on the model is not called,
+  // so aiInterpretation stays null, the deterministic interpretation below is
+  // served exactly as on an OpenAI failure, and interpretationGenerated (from
+  // aiInterpretation !== null) keeps commitDeepAccess from charging a claim.
+  const wantsModel = shouldRequestDeepInterpretation(generateDeep, !!openaiApiKey, analytes.length > 0) && !!report;
+  const { result: aiResult, modelCalled } = await callModelUnlessPaused({
+    paused: input.aiPaused,
+    wanted: wantsModel,
+    call: () => {
+      console.log("[generate-interpretation] Trying OpenAI...");
+      return tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
+        input.recordCost, trendEvidence);
+    },
+  });
+
+  if (modelCalled && report) {
     if (aiResult) {
       // Phase/day/confidence come from the report, never the model; any
       // model-supplied values are discarded before storage.
@@ -1468,6 +1494,8 @@ async function produceInterpretation(input: {
     } else {
       console.log("[generate-interpretation] OpenAI failed, using fallback");
     }
+  } else if (wantsModel && input.aiPaused) {
+    console.log("[generate-interpretation] AI paused by the kill switch — deterministic interpretation, no model call");
   } else if (!generateDeep) {
     // on_demand skips model spend after introductory access is exhausted.
     console.log("[generate-interpretation] Deep access not granted — deterministic interpretation");
@@ -1512,7 +1540,9 @@ async function produceInterpretation(input: {
     );
   }
 
-  return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations };
+  // The pause changed this answer only when the model would otherwise have been called.
+  const pauseApplied = input.aiPaused && wantsModel;
+  return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied };
 }
 
 // ─── Version store (TASK-048) ────────────────────────────────────────────────
@@ -1630,8 +1660,18 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   let reportId: string | null = null;
+  // PK-PL-A: a regeneration (a keyed request, or a report that already holds its
+  // interpretation) is never branded "error" here on a failure. It wrote nothing,
+  // the interpretation the user has is intact, and the client that keyed it puts
+  // back the status it set.
+  let regeneration = false;
   const costSamples: GenerationSample[] = [];
   let costContext: GenerationCostContext | null = null;
+  // PK-FIX-01b: every model call this request made, for ai_call_costs; and the kill switch.
+  const aiCallSamples: GenerationSample[] = [];
+  let callerId: string | null = null;
+  let aiPaused = false;
+  const pausedFlag = () => (aiPaused ? { ai_paused: true } : {});
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -1651,6 +1691,17 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    callerId = user.id;
+
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabase).check(user.id));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     await enforceRateLimit(createRateLimitStore(supabase), {
       userId: user.id,
       endpoint: "generate-interpretation",
@@ -1667,6 +1718,7 @@ Deno.serve(async (req: Request) => {
     }
     reportId = parsedBody.data.reportId;
     const requestId = parsedBody.data.request_id ?? null;
+    regeneration = requestId !== null;
 
     const { data: reportCheck } = await supabase
       .from("lab_reports")
@@ -1691,6 +1743,7 @@ Deno.serve(async (req: Request) => {
     // request_id so a retried regeneration appends nothing twice.
     const anchor = await readAnchor(supabase, user.id, reportId);
     const appendsVersion = anchor !== null;
+    regeneration ||= appendsVersion;
     if (appendsVersion && requestId === null) {
       return new Response(JSON.stringify({ error: REQUEST_ID_REQUIRED }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1831,7 +1884,6 @@ Deno.serve(async (req: Request) => {
         return data;
       },
     };
-    let deepAccessGranted = tierDecision.tier === "plus";
     if (active && tierDecision.tier === "free") {
       // Raw accession/collection evidence is not retained in production. Hash
       // the stored upload; never use client-editable report_date as identity.
@@ -1857,13 +1909,12 @@ Deno.serve(async (req: Request) => {
       accessDecision = await decideIntroductoryAccess(introActions, {
         tier: "free", userId: user.id, bloodDrawId,
       });
-      deepAccessGranted = accessDecision.granted;
     }
 
     // Access remains the ledger's decision; generation may continue after exhaustion.
-    const generateDeep = shouldGenerateDeepInterpretation({
-      freemiumActive: active, tier: tierDecision.tier,
-      deepAccessGranted, decision: accessDecision,
+    // get-interpretation reports this same decision as `regeneration` (PK-PL-A).
+    const generateDeep = decideDeepGeneration({
+      freemiumActive: active, tier: tierDecision.tier, decision: accessDecision,
       postLimitGeneration: Deno.env.get("FREEMIUM_POST_LIMIT_GENERATION"),
     });
     if (active) {
@@ -1877,10 +1928,16 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations } = await produceInterpretation({
-      ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive, openaiApiKey,
-      recordCost: costContext ? sample => costSamples.push(sample) : undefined,
+    const killSwitchOn = await aiPausedNow();
+    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied } = await produceInterpretation({
+      ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive, openaiApiKey, aiPaused: killSwitchOn,
+      recordCost: sample => {
+        aiCallSamples.push(sample);
+        if (costContext) costSamples.push(sample);
+      },
     });
+    // Reported to the app (DT9) only when the pause is why this answer is the basic one.
+    aiPaused = pauseApplied;
 
     const source = shaped.source;
 
@@ -1891,7 +1948,7 @@ Deno.serve(async (req: Request) => {
     if (appendsVersion && !isVersionable({ source, depth: shaped.depth, floorViolations })) {
       console.warn("[generate-interpretation] Regeneration not versioned:", JSON.stringify({ source, depth: shaped.depth }));
       const refused = regenerationFailedResponse(generateDeep);
-      return new Response(JSON.stringify(refused.body), {
+      return new Response(JSON.stringify({ ...refused.body, ...pausedFlag() }), {
         status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -1986,6 +2043,11 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from("lab_reports").update({ status: "ready" }).eq("id", reportId);
     console.log("[generate-interpretation] Done — status: ready, source:", source, "tier:", shaped.tier, "depth:", shaped.depth);
+    // PK-EXP5 funnel step. Never throws, gives up after 3 seconds: a logging
+    // failure never blocks the interpretation the user is waiting for.
+    await logServerEvent(createAppEventSink(row => supabase.from("app_events").insert(row)), {
+      event: "interpretation_generated", userId: user.id, props: { tier: shaped.tier },
+    });
 
     // The same gate get-interpretation applies, so both responses agree. A
     // version is served as committed (a concurrent twin's body, if it won) and
@@ -1997,8 +2059,8 @@ Deno.serve(async (req: Request) => {
       success: true, source,
       access: shaped.tier === "plus" ? "full" : "basic",
       interpretation: shaped.tier === "plus" ? servedFull : servedBasic(servedBasicProjection),
-      ...visibleClaimProjection(servedBasicProjection), ...identity,
-    } : { success: true, source, ...identity }), {
+      ...visibleClaimProjection(servedBasicProjection), ...identity, ...pausedFlag(),
+    } : { success: true, source, ...identity, ...pausedFlag() }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
@@ -2024,7 +2086,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (reportId) {
+    inBackground(reporter.captureException(err, { stage: "generate" }));
+
+    // A failed first generation leaves the report without an interpretation, so
+    // "error" is true. A failed regeneration wrote nothing and left the selected
+    // interpretation intact, so it is not (PK-PL-A).
+    if (reportId && !regeneration) {
       try {
         await supabase.from("lab_reports").update({ status: "error" }).eq("id", reportId);
       } catch {
@@ -2037,6 +2104,15 @@ Deno.serve(async (req: Request) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } finally {
+    // PK-FIX-01b: one ai_call_costs row per model call, without holding the response.
+    for (const sample of aiCallSamples) {
+      inBackground(costLedger.record({
+        functionName: "generate-interpretation",
+        userId: callerId,
+        model: sample.model,
+        usage: { prompt_tokens: sample.promptTokens, completion_tokens: sample.completionTokens },
+      }));
+    }
     if (costContext) {
       await recordGenerationCosts(costContext, costSamples, async row => {
         const { error } = await supabase.from("interpretation_generation_costs").insert(row);

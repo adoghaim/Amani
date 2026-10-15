@@ -116,7 +116,7 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
   test('R2: discussion-prep questions are neutral, rest on admissible premises and agree with the page', async ({ page }) => {
     await openEverything(page);
     const card = page.getByTestId('prep-questions');
-    await expect(card).toContainText('They are preparation only, not a judgement about your results.');
+    await expect(card).toContainText('They are preparation only, not a judgment about your results.');
     const items = card.locator('[data-language-category]');
     await expect(items).toHaveCount(4);
     for (const item of await items.all()) {
@@ -131,6 +131,8 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
     expect(await card.evaluate(el => el.outerHTML)).not.toMatch(/flag-(?:ok|watch|low)/);
     // Standing rule 5: the same facts, stated the same way elsewhere on the page.
     await expect(items.nth(0)).toHaveText('My TSH changed from 6 to 9 uIU/mL. What could explain this change, and is it clinically meaningful?');
+    // PK-FIX-02: a title-case display name reads in sentence case mid-sentence; acronyms keep their capitals.
+    await expect(items.nth(1)).toHaveText('My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?');
     await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 uIU/mL');
     await expect(items.nth(2)).toContainText("above my lab's reference interval of 4–5.6 %");
     const hba1c = page.getByRole('article', { name: 'HbA1c result', exact: true });

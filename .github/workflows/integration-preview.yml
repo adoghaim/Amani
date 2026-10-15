@@ -1,0 +1,163 @@
+name: Integration preview
+
+# D11 (engineering review, 2026-10-12): merge every open PR labelled wave:*,
+# in the order of the pinned queue issue, onto a scratch commit of main and
+# run the gates on the result, so a combination that breaks shows up before
+# anyone merges. Failures are commented on the queue issue. Nothing is pushed:
+# the scratch commit exists only on the runner.
+#
+# Order and merging: tools/ci/integration-preview.mjs. A PR that conflicts with
+# main plus the PRs before it is left out and reported; the rest still merge.
+# Only this repository's branches are merged (a fork's head is left out).
+#
+# Two jobs, two permission sets. `preview` runs PR code, so its token can only
+# read, and the checkout's credential is removed before any PR code runs. Only
+# `report` can write to issues; it runs main's own tools/ci code and builds the
+# comment from values the runner computed (the merge step's output, recorded
+# before PR code ran, and each gate step's outcome).
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-preview
+  cancel-in-progress: false
+
+env:
+  QUEUE_ISSUE: '104'
+
+jobs:
+  preview:
+    name: Merge the wave queue and run the gates
+    runs-on: ubuntu-latest
+    # The migration harness alone takes up to ~45 minutes on a runner.
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      merge: ${{ steps.merge.outputs.merge }}
+      install: ${{ steps.install.outcome }}
+      lint: ${{ steps.lint.outcome }}
+      typecheck: ${{ steps.typecheck.outcome }}
+      test: ${{ steps.test.outcome }}
+      build: ${{ steps.build.outcome }}
+      functions: ${{ steps.functions.outcome }}
+      harness: ${{ steps.harness.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test the queue tooling
+        run: node --test tools/ci/integration-preview.test.mjs
+
+      - name: Merge every wave:* PR in queue order onto a scratch commit
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/ci/integration-preview.mjs merge --issue "$QUEUE_ISSUE" --base origin/main
+
+      # From here on the workspace is PR code.
+      - name: Remove the checkout credential before running PR code
+        if: steps.merge.outputs.count != '0'
+        run: git config --local --unset-all http.https://github.com/.extraheader || true
+
+      - uses: denoland/setup-deno@v2
+        if: steps.merge.outputs.count != '0'
+        with:
+          deno-version: v2.x
+
+      - name: npm ci
+        id: install
+        if: steps.merge.outputs.count != '0'
+        continue-on-error: true
+        run: npm ci
+
+      - name: Lint
+        id: lint
+        if: steps.merge.outputs.count != '0'
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Typecheck
+        id: typecheck
+        if: steps.merge.outputs.count != '0'
+        continue-on-error: true
+        run: npm run typecheck
+
+      - name: Test
+        id: test
+        if: steps.merge.outputs.count != '0'
+        continue-on-error: true
+        run: npm test
+
+      - name: Build
+        id: build
+        if: steps.merge.outputs.count != '0'
+        continue-on-error: true
+        run: npm run build
+
+      - name: Edge function typecheck
+        id: functions
+        if: steps.merge.outputs.count != '0'
+        continue-on-error: true
+        run: bash docs/check-functions.sh deno
+
+      - name: Migration harness
+        id: harness
+        if: steps.merge.outputs.count != '0'
+        continue-on-error: true
+        run: ./supabase/migrations/__verification__/run.sh
+
+  report:
+    name: Comment failures on the queue issue
+    needs: preview
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: tools/ci
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Write the report
+        id: report
+        env:
+          PREVIEW_RESULT: ${{ needs.preview.result }}
+          MERGE_JSON: ${{ needs.preview.outputs.merge }}
+          GATE_INSTALL: ${{ needs.preview.outputs.install }}
+          GATE_LINT: ${{ needs.preview.outputs.lint }}
+          GATE_TYPECHECK: ${{ needs.preview.outputs.typecheck }}
+          GATE_TEST: ${{ needs.preview.outputs.test }}
+          GATE_BUILD: ${{ needs.preview.outputs.build }}
+          GATE_FUNCTIONS: ${{ needs.preview.outputs.functions }}
+          GATE_HARNESS: ${{ needs.preview.outputs.harness }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node tools/ci/integration-preview.mjs report --issue "$QUEUE_ISSUE" --out "$RUNNER_TEMP/integration-preview.md"
+
+      - name: Comment on the queue issue
+        if: steps.report.outputs.failed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment "$QUEUE_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/integration-preview.md"

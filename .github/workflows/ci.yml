@@ -18,6 +18,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Supabase resolves npm:/jsr:/https: imports at deploy time, so a range
+      # or bare major would let production code change without a commit.
+      # Plain node, no dependencies: runs before the Deno check.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Pinned edge-function imports (checker tests)
+        run: node --test tools/supply-chain/pinned-imports.test.mjs
+
+      - name: Pinned edge-function imports
+        run: node tools/supply-chain/check-pinned-imports.mjs
+
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -45,6 +58,9 @@ jobs:
 
       - name: Clinical catalog drift
         run: npm run clinical:check
+
+      - name: Offline release automation tests
+        run: bash tools/release/check.sh
 
       - name: Lint
         run: npm run lint

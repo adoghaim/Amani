@@ -23,6 +23,7 @@ import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAllRows';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { resolveDashboardEntitlementView } from '../lib/dashboardEntitlement';
@@ -36,6 +37,8 @@ import {
 import { getTrialDaysRemaining } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { formatDate } from '../utils/formatters';
+import { ReportCycleLine } from '../components/ReportCycleLine';
+import { reportCycleLine } from '../lib/reportCycleLine';
 
 type NoteModalState = { open: boolean; defaultDate: string };
 type SymptomLogRow = Omit<SymptomLog, 'symptoms'> & { symptoms: unknown };
@@ -101,7 +104,9 @@ export function Dashboard() {
 
       if (fetchedReports.length > 0) {
         const ids = fetchedReports.map((r) => r.id);
-        const { data: bm } = await supabase.from('biomarkers').select('*').in('lab_report_id', ids);
+        // R27: a user's values across every report can pass PostgREST's 1,000-row cap.
+        const { data: bm } = await fetchAllRows<Biomarker>(() =>
+          supabase.from('biomarkers').select('*').in('lab_report_id', ids).order('id'));
         if (bm) {
           const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
             const bucket = acc[b.lab_report_id] ?? [];
@@ -531,10 +536,11 @@ export function Dashboard() {
                             <div className="text-xs text-theme-muted-text flex items-center gap-2 mt-1 flex-wrap">
                               {getStatusIcon(report.status)}
                               <span>{getStatusText(report.status)}</span>
-                              {report.estimated_cycle_phase !== 'unknown' && (
+                              {/* D10: the report's cycle day first; any phase labelled as an estimate. */}
+                              {reportCycleLine(report) && (
                                 <>
-                                  <span>·</span>
-                                  <span className="capitalize">{report.estimated_cycle_phase}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <ReportCycleLine report={report} />
                                 </>
                               )}
                             </div>

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_FREE_TEXT_LENGTH,
+  REPORT_TEXT_REMOVED,
   scrubBreadcrumb,
   scrubDomTarget,
   scrubEvent,
+  scrubFreeText,
   scrubText,
   scrubUrl,
   scrubValue,
@@ -334,5 +337,83 @@ describe('scrubEvent', () => {
   it('handles a minimal event without throwing', () => {
     expect(() => scrubEvent({})).not.toThrow();
     expect(scrubEvent({})).toEqual({});
+  });
+});
+
+/*
+  PK-FIX-01b: the web beforeSend removes lab values, names, emails and report
+  text, wherever the SDK puts them.
+*/
+describe('scrubEvent removes lab values, names, emails and report text (PK-FIX-01b)', () => {
+  const REPORT_TEXT =
+    'QUEST DIAGNOSTICS Patient: Jane Doe DOB: 04/02/1990 TSH 4.2 uIU/mL (0.45-4.5) Ferritin 12 ng/mL ' +
+    'Estradiol 145 pg/mL Vitamin D 18 ng/mL '.repeat(20);
+
+  function phiEvent(): ScrubbableEvent {
+    return {
+      message: `Failed to parse "${REPORT_TEXT}"`,
+      logentry: { message: 'Saved %s for %s', params: ['Ferritin 12 ng/mL', 'Jane Doe'] },
+      exception: {
+        values: [
+          { value: `SyntaxError: Unexpected token in JSON at 'Jane Doe, Ferritin 12 ng/mL' for jane@example.com` },
+          { value: `TSH 4.2 uIU/mL out of range for ${REPORT_ID}` },
+          { value: `Parser failed on ${REPORT_TEXT}` },
+        ],
+      },
+      contexts: {
+        report: { name: 'Jane Doe', full_name: 'Jane Doe', value: 12, unit: 'ng/mL', raw_text: REPORT_TEXT },
+        profile: { first_name: 'Jane', last_name: 'Doe', date_of_birth: '1990-04-02', email: 'jane@example.com' },
+      },
+      breadcrumbs: [
+        { category: 'supabase', message: 'insert report_items Ferritin 12 ng/mL', data: { value: 12, biomarker: 'Ferritin', status_code: 201 } },
+      ],
+      user: { username: 'Jane Doe', email: 'jane@example.com' },
+      extra: { report_text: REPORT_TEXT },
+    };
+  }
+
+  it('leaves no name, email, lab value or report text anywhere in the event', () => {
+    const serialised = JSON.stringify(scrubEvent(phiEvent()));
+    for (const leak of ['Jane', 'Doe', 'jane@example.com', '1990', '4.2', '12 ng', '145', 'uIU/mL', 'pg/mL', 'QUEST', 'Patient:']) {
+      expect(serialised, leak).not.toContain(leak);
+    }
+  });
+
+  it('cuts an echoed report, unquoted names and all, down to the words that name the failure', () => {
+    const event = scrubEvent(phiEvent());
+    expect(event.exception!.values![2]!.value).toBe(`Parser failed on ${REPORT_TEXT_REMOVED}`);
+    // Two lab values in one short message are report text too.
+    expect(scrubFreeText('Row lookup failed Patient Jane Doe TSH 4.2 uIU/mL Ferritin 12 ng/mL'))
+      .toBe(`Row lookup failed ${REPORT_TEXT_REMOVED}`);
+    // So is anything longer than the cap.
+    expect(scrubFreeText(`Parse error at ${'Jane '.repeat(MAX_FREE_TEXT_LENGTH / 5)}`))
+      .toBe(`Parse error at ${REPORT_TEXT_REMOVED}`);
+    // One value alone is a readable message.
+    expect(scrubFreeText('TSH 4.2 uIU/mL out of range')).toBe('TSH [value] out of range');
+  });
+
+  it('keeps a quoted code identifier, which names code rather than a person', () => {
+    expect(scrubFreeText("Cannot read properties of undefined (reading 'value')"))
+      .toBe("Cannot read properties of undefined (reading 'value')");
+    expect(scrubFreeText("Unknown biomarker 'Jane Doe'")).toBe('Unknown biomarker [text]');
+  });
+
+  it('keeps the error type words and the structure that make a report debuggable', () => {
+    const event = scrubEvent(phiEvent());
+    expect(event.exception!.values![0]!.value).toBe('SyntaxError: Unexpected token in JSON at [text] for [email]');
+    expect(event.exception!.values![1]!.value).toBe('TSH [value] out of range for [id]');
+    expect(event.logentry).toEqual({ message: 'Saved %s for %s' });
+    expect(event.breadcrumbs![0]!.data).toEqual({ value: '[redacted]', biomarker: '[redacted]', status_code: 201 });
+  });
+
+  it('scrubFreeText leaves ordinary prose alone', () => {
+    const message = 'Failed to save biomarkers: duplicate key value';
+    expect(scrubFreeText(message)).toBe(message);
+  });
+
+  it('fails closed past the depth cap instead of sending an unscrubbed subtree', () => {
+    let deep: Record<string, unknown> = { note: 'x', other: 'jane@example.com' };
+    for (let i = 0; i < 20; i += 1) deep = { nested: deep };
+    expect(JSON.stringify(scrubValue(deep))).not.toContain('jane@example.com');
   });
 });

@@ -25,10 +25,12 @@
 import { ArrowLeft } from 'lucide-react';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
+import { useConsentGateFlag } from '../lib/consent/consentStore';
 
 const LAST_UPDATED = '7 September 2026';
 
 export function Privacy() {
+  const consentGateOn = useConsentGateFlag();
   return (
     <div className="min-h-screen bg-theme-background">
       <nav className="bg-theme-surface border-b border-theme-border shadow-sm">
@@ -200,6 +202,31 @@ export function Privacy() {
               something in the app crashes we receive an error report describing what failed —
               see Sentry below for what those reports deliberately exclude. Our hosting and
               infrastructure providers keep standard server logs, which include IP addresses.
+            </p>
+
+            {/*
+              PK-EXP5 first-party events and attribution. Both paragraphs are
+              flagged for legal review in the PR and are not final until the
+              owner and counsel sign them off.
+            */}
+            <h3 className="font-semibold text-theme-text mt-5 mb-2">Usage events</h3>
+            <p className="mb-3">
+              Amani counts a small number of steps in the app in its own database, so we can see
+              where people get stuck: for example opening the home page, creating an account,
+              uploading a report, viewing a report, or starting a subscription. Each record holds
+              the name of the step, when it happened, whether you used the website or the app,
+              the app version, and any campaign link or promo or referral code you arrived with
+              or typed when you signed up. These records never contain your lab values, your
+              health details or anything else you write. They are not sent to any third-party
+              analytics or advertising tracker. Before you sign in, a step is tied only to a
+              random identifier stored on your device, not to your account. After you sign in,
+              the steps and your signup code are tied to your account and are deleted when you
+              delete your account.
+            </p>
+            <p>
+              To stop the page that records steps before signup from being abused, we use your IP
+              address briefly to count requests. We keep only a scrambled (hashed) form of it,
+              made with a key that changes every day, and we never store the address itself.
             </p>
           </section>
 
@@ -457,6 +484,36 @@ export function Privacy() {
               requires it.
             </p>
           </section>
+
+          {/*
+            PK-CONSENT-01: DRAFT for the lawyer with the consent copy
+            (src/features/consent/consentCopy.ts, D7.1). Shown only while
+            features.consent_gate is on, because until then the app does not
+            ask for these consents and this page describes what it does today.
+          */}
+          {consentGateOn && (
+            <section aria-labelledby="privacy-your-consent">
+              <h2 id="privacy-your-consent" className="text-xl font-semibold text-theme-text mb-3">Your consent</h2>
+              <p className="mb-3">
+                Before Amani reads any lab report, it asks for three separate answers, each on its
+                own screen: that you are 18 or older; that Amani can process your health data,
+                which is a consent separate from our Terms of Service; and that an AI service
+                (OpenAI, described above) can read your lab values to write your explanation.
+                Amani needs all three to work.
+              </p>
+              <p className="mb-3">
+                We keep a record of each answer: which consent, the version of the wording you saw,
+                whether you gave or withdrew it, when, and whether you used the web, iOS or Android
+                app. That record is deleted with your account.
+              </p>
+              <p>
+                You can withdraw your consent at any time in Settings, under Privacy &amp; security.
+                Amani then stops reading new lab reports and writing explanations straight away. Your
+                saved reports stay until you delete them, and you can delete your account and all your
+                data from the same page. If you tell us you are under 18, we remove your account.
+              </p>
+            </section>
+          )}
 
           <section>
             <h2 className="text-xl font-semibold text-theme-text mb-3">Children</h2>

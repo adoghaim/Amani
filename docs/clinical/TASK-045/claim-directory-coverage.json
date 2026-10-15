@@ -35,6 +35,11 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/features/consent",
+    "mode": "scanned",
+    "reason": "PK-CONSENT-01 launch consent: production literals are scanned like every other directory; consent copy is DRAFT for the lawyer and carries no clinical claim. Tests are excluded."
+  },
+  {
     "directory": "src/features/onboarding",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
@@ -45,7 +50,32 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/features/report",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/report/header",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/report/notices",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/report/problem",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
     "directory": "src/features/settings",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/settings/sections",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
@@ -75,12 +105,22 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/lib/consent",
+    "mode": "scanned",
+    "reason": "PK-CONSENT-01 launch consent: production literals are scanned like every other directory; consent copy is DRAFT for the lawyer and carries no clinical claim. Tests are excluded."
+  },
+  {
     "directory": "src/lib/freemium",
     "mode": "excluded",
     "reason": "User-visible purchase/locked-report copy in forbidden freemium/entitlement scope. Exclusion proven by scan under the current vocabulary (zero matches); not certified clinical-free beyond that vocabulary, and the guard fails if a claim appears."
   },
   {
     "directory": "src/lib/insights",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/native",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },

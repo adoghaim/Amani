@@ -32,8 +32,14 @@ import { transformSync } from 'esbuild';
 import { resolveTier } from './tier';
 import { buildBasicProjection } from './interpretation-visibility';
 import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation } from './response-shaping';
+import { decideDeepGeneration } from './regeneration-availability';
 import { generationSample } from './generation-cost';
 import * as versionWrite from './interpretation-version-write';
+import { callModelUnlessPaused } from './ai-pause';
+import { consentRefusal, createConsentGate } from './consent';
+// PK-CONSENT-01: features.consent_gate off (the seed), as before the gate existed; a consent read would throw.
+const consentGateOff = () => createConsentGate({ readPublicConfig: async () => [{ key: 'features', value: {} }],
+  readCurrentConsents: async () => { throw new Error('flag off: consent is never read'); }, now: () => 0 });
 
 const source = readFileSync(new URL('../generate-interpretation/index.ts', import.meta.url), 'utf8');
 function evaluate(fragment: string, values: Record<string, unknown>) {
@@ -85,24 +91,30 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
     buildTrendEvidence: noCall, slug: noCall, classifyAnalyte: noCall, withClaimAuthority: noCall, projectBasic: noCall,
     generateFallbackInterpretation: noCall, formatPrimarySummary: noCall,
     tryOpenAI: async () => generated, shouldRequestDeepInterpretation, shapeInterpretation, buildBasicProjection,
-    findFloorViolations, ...sink.helpers,
+    findFloorViolations, callModelUnlessPaused, ...sink.helpers,
   });
   try {
     evaluate(source.slice(source.indexOf('Deno.serve(')), {
       Deno: { env: { get: (name: string) => name === 'OPENAI_API_KEY' ? 'test-key' : 'test' }, serve: (fn: typeof handler) => { handler = fn; } },
       createClient: () => client, corsHeaders: {}, debugLog: () => {},
       enforceRateLimit: async () => {}, createRateLimitStore: () => ({}),
+      consentRefusal, consentGateFor: consentGateOff,
+      // PK-EXP5: the funnel event is a no-op here; app-events.test.ts covers it.
+      logServerEvent: async () => true, createAppEventSink: () => ({}),
       GenerateInterpretationRequestSchema: { safeParse: () => ({ success: true, data: { reportId: 'r' } }) },
       checkUserSubscription: async (_client: unknown, _user: string, active: boolean) => active
         ? ({ allowed: true, plan: 'free' }) : ({ allowed: true, reason: 'trial' }), freemiumActive: () => activeFlag,
       generationVisibilityMode, entitlementUnavailable, resolveTier,
       sanitizeReportContext: () => undefined, buildPrimaryContext: () => null,
-      shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation, shapeInterpretation,
+      shouldGenerateDeepInterpretation, decideDeepGeneration, shouldRequestDeepInterpretation, shapeInterpretation,
       tryOpenAI: async () => generated, addFindingMetadata: noCall, buildBasicProjection,
       findFloorViolations, commitGeneratedInterpretation: noCall, recordGenerationCosts: noCall,
       isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers, ...sink.pipeline,
       ...versionWrite, readAnchor: async () => null, findRequestVersion: noCall, appendVersion: noCall,
       commitLedgerVersion: noCall,
+      // PK-FIX-01b guards: AI on; the stubbed model reports no usage, so no cost row; no error to report.
+      aiPausedNow: async () => false, inBackground: (p: Promise<unknown>) => { void p; },
+      costLedger: { record: noCall }, reporter: { captureException: noCall },
     });
     const response = await handler(new Request('https://example.invalid', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: '{}' }));
     expect(response.status).toBe(200);

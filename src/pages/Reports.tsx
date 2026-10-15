@@ -20,8 +20,11 @@ import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
+import { requestReportDeletion } from '../lib/reportDeletion';
 import { useAuth } from '../contexts/AuthContext';
 import type { LabReport } from '../types';
+import { ReportCycleLine } from '../components/ReportCycleLine';
+import { reportCycleLine } from '../lib/reportCycleLine';
 
 type SortKey = 'report_date' | 'upload_date' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -81,31 +84,17 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function PhaseBadge({ phase }: { phase?: string | null }) {
-  if (!phase || phase === 'unknown') return null;
-  const colors: Record<string, string> = {
-    menstrual: 'bg-theme-flag-low-bg text-theme-flag-low border-theme-flag-low-border',
-    follicular: 'bg-theme-info-bg text-theme-info border-theme-info-border',
-    ovulatory: 'bg-theme-flag-ok-bg text-theme-flag-ok border-theme-flag-ok-border',
-    luteal: 'bg-theme-cat-sleep-bg text-theme-cat-sleep border-theme-cat-sleep-border',
-  };
-  const cls = colors[phase] ?? 'bg-theme-neutral-50 text-theme-neutral-600 border-theme-neutral-200';
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border capitalize ${cls}`}>
-      {phase}
-    </span>
-  );
-}
-
 interface DeleteModalProps {
   report: LabReport;
   onConfirm: () => void;
   onCancel: () => void;
   deleting: boolean;
   error?: string | null;
+  /** The report is deleted but its uploaded file is not removed yet: confirm retries the file. */
+  filePending?: boolean;
 }
 
-function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteModalProps) {
+function DeleteModal({ report, onConfirm, onCancel, deleting, error, filePending = false }: DeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -115,17 +104,23 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
               <AlertTriangle className="w-5 h-5 text-theme-flag-low" />
             </div>
             <div>
-              <h2 className="text-base text-theme-text">Delete report?</h2>
-              <p className="text-sm text-theme-muted-text mt-0.5">This cannot be undone.</p>
+              <h2 className="text-base text-theme-text">
+                {filePending ? 'Uploaded file not removed yet' : 'Delete report?'}
+              </h2>
+              <p className="text-sm text-theme-muted-text mt-0.5">
+                {filePending ? 'The report and its results are deleted.' : 'This cannot be undone.'}
+              </p>
             </div>
           </div>
         </div>
         <div className="px-6 py-4">
-          <p className="text-sm text-theme-text-body">
-            You are about to permanently delete the report from{' '}
-            <span className="font-semibold text-theme-text">{formatDate(report.report_date)}</span>
-            , including all biomarkers and AI insights. This action cannot be reversed.
-          </p>
+          {!filePending && (
+            <p className="text-sm text-theme-text-body">
+              You are about to permanently delete the report from{' '}
+              <span className="font-semibold text-theme-text">{formatDate(report.report_date)}</span>
+              , including all biomarkers, AI insights and any uploaded lab file. This action cannot be reversed.
+            </p>
+          )}
           {error && (
             <div className="mt-3 px-3 py-2 rounded-lg bg-theme-flag-low-bg border border-theme-flag-low-border text-sm text-theme-flag-low">
               {error}
@@ -138,7 +133,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
             disabled={deleting}
             className="px-4 py-2 text-sm font-medium text-theme-text-body bg-theme-surface border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
           >
-            Cancel
+            {filePending ? 'Close' : 'Cancel'}
           </button>
           <button
             onClick={onConfirm}
@@ -148,11 +143,11 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
             {deleting ? (
               <>
                 <span className="w-3.5 h-3.5 border-2 border-theme-surface/40 border-t-white rounded-full animate-spin" />
-                Deleting...
+                {filePending ? 'Removing...' : 'Deleting...'}
               </>
             ) : (
               <>
-                <Trash2 className="w-3.5 h-3.5" /> Delete report
+                <Trash2 className="w-3.5 h-3.5" /> {filePending ? 'Try again' : 'Delete report'}
               </>
             )}
           </button>
@@ -176,6 +171,8 @@ export function Reports() {
   const [deleteTarget, setDeleteTarget] = useState<LabReport | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The report is deleted but its stored file is not removed yet (retryable).
+  const [deleteFilePending, setDeleteFilePending] = useState(false);
 
   useEffect(() => {
     if (user) fetchData();
@@ -227,18 +224,37 @@ export function Reports() {
     }
   };
 
+  // Server-side deletion: the delete-report function erases the report graph
+  // and removes the uploaded file, so success is shown only when both are gone.
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    const target = deleteTarget;
     setDeleting(true);
     setDeleteError(null);
-    const { error } = await supabase.from('lab_reports').delete().eq('id', deleteTarget.id);
+    const outcome = await requestReportDeletion(
+      (name, options) => supabase.functions.invoke(name, options),
+      target.id,
+    );
     setDeleting(false);
-    if (error) {
-      setDeleteError(errorMessage(error, 'Failed to delete this report. Please try again.'));
+    if (outcome.kind === 'failed') {
+      setDeleteError(outcome.message);
       return;
     }
-    setReports(prev => prev.filter(r => r.id !== deleteTarget.id));
+    // The report rows are gone in both remaining outcomes.
+    setReports(prev => prev.filter(r => r.id !== target.id));
+    if (outcome.kind === 'file_pending') {
+      setDeleteFilePending(true);
+      setDeleteError(outcome.message);
+      return;
+    }
+    setDeleteFilePending(false);
     setDeleteTarget(null);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null);
+    setDeleteError(null);
+    setDeleteFilePending(false);
   };
 
   const cycleSort = (key: SortKey) => {
@@ -256,7 +272,8 @@ export function Reports() {
       if (search.trim()) {
         const q = search.toLowerCase();
         const dateStr = formatDate(r.report_date).toLowerCase();
-        const phase = (r.estimated_cycle_phase ?? '').toLowerCase();
+        // Search the phase only where it is shown (D10), never a hidden stored one.
+        const phase = reportCycleLine(r)?.phase ?? '';
         if (!dateStr.includes(q) && !phase.includes(q)) return false;
       }
       return true;
@@ -288,9 +305,10 @@ export function Reports() {
         <DeleteModal
           report={deleteTarget}
           onConfirm={handleDelete}
-          onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
+          onCancel={closeDeleteModal}
           deleting={deleting}
           error={deleteError}
+          filePending={deleteFilePending}
         />
       )}
 
@@ -379,7 +397,7 @@ export function Reports() {
               </div>
             ) : (
               <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
-                <div className="hidden sm:grid grid-cols-[1fr_140px_120px_120px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
+                <div className="hidden sm:grid grid-cols-[1fr_140px_120px_160px_80px_48px] gap-4 px-5 py-3 border-b border-theme-border-inner bg-theme-background-tint">
                   <button
                     onClick={() => cycleSort('report_date')}
                     className="text-left text-xs font-semibold text-theme-muted-text uppercase tracking-wide hover:text-theme-primary transition-colors"
@@ -398,7 +416,7 @@ export function Reports() {
                   >
                     Status <SortIcon col="status" />
                   </button>
-                  <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Phase</div>
+                  <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Cycle</div>
                   <div className="text-xs font-semibold text-theme-muted-text uppercase tracking-wide">Markers</div>
                   <div />
                 </div>
@@ -409,7 +427,8 @@ export function Reports() {
                     return (
                       <div
                         key={report.id}
-                        className="group grid grid-cols-1 sm:grid-cols-[1fr_140px_120px_120px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
+                        data-report-row={report.id}
+                        className="group grid grid-cols-1 sm:grid-cols-[1fr_140px_120px_160px_80px_48px] gap-3 sm:gap-4 px-5 py-4 hover:bg-theme-background-tint transition-colors items-center"
                       >
                         <Link to={`/app/reports/${report.id}`} className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 bg-theme-surface-2 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-theme-surface-hover transition-colors">
@@ -445,8 +464,14 @@ export function Reports() {
                         </Link>
 
                         <Link to={`/app/reports/${report.id}`} className="hidden sm:block">
-                          <PhaseBadge phase={report.estimated_cycle_phase} />
-                          {(!report.estimated_cycle_phase || report.estimated_cycle_phase === 'unknown') && (
+                          {/*
+                            D10: the report's cycle day first, and any phase labelled as an
+                            estimate. It replaces a phase pill in status tints (DESIGN.md:
+                            phase tints are never status; status is never a leading badge).
+                          */}
+                          {reportCycleLine(report) ? (
+                            <ReportCycleLine report={report} layout="stacked" className="block text-sm text-theme-text-body" />
+                          ) : (
                             <span className="text-xs text-theme-muted-text-3">—</span>
                           )}
                         </Link>
@@ -463,7 +488,7 @@ export function Reports() {
                         <div className="flex items-center justify-between sm:justify-end gap-2">
                           <div className="flex sm:hidden items-center gap-2 flex-wrap">
                             <StatusBadge status={report.status} />
-                            <PhaseBadge phase={report.estimated_cycle_phase} />
+                            <ReportCycleLine report={report} layout="stacked" className="block text-xs text-theme-text-body" />
                           </div>
                           <div className="flex items-center gap-1">
                             <Link

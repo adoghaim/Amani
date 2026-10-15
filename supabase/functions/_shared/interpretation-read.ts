@@ -3,6 +3,7 @@ import { FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS } from "./tier.ts";
 import { findFloorViolations, type InterpretationPayload } from "./response-shaping.ts";
 import { sanitizeBasicProjection, isDeterministicSource } from "./interpretation-visibility.ts";
 import { projectBasic, servedBasic, visibleClaimProjection, quarantineCustomerRead } from "./claim-authority.ts";
+import { regenerationAvailability, type RegenerationAvailability } from "./regeneration-availability.ts";
 import type { LockedCounts } from "./preview-selector.ts";
 
 export interface InterpretationReadActions {
@@ -22,6 +23,10 @@ export interface InterpretationReadActions {
     selected_generated_at?: string | null;
   } | null>;
   countClaims(): Promise<number>;
+  /** FREEMIUM_POST_LIMIT_GENERATION, read exactly as generate-interpretation reads
+   * it (absent: undefined). Configuration, not an action: it decides
+   * `regeneration` with that function's own rule (PK-PL-A). */
+  postLimitGeneration?: string;
 }
 
 export interface SelectedVersion { id: string; generated_at: string }
@@ -52,6 +57,11 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     stored_depth: string | null;
     historical_interpretation_id: string | null;
     version: SelectedVersion | null;
+    /** PK-PL-A: flag on, for a report that holds its interpretation, whether this
+     * viewer's regeneration can append a version — generate-interpretation's own
+     * depth decision (`regeneration-availability.ts`). Absent from a flag-off
+     * answer, an error, and a report with nothing stored (that is first generation). */
+    regeneration?: RegenerationAvailability;
     code?: string; retryable?: boolean;
   };
 }> {
@@ -91,6 +101,13 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
         remaining: Math.max(0, FREE_INTRODUCTORY_DEEP_ACCESS_CLAIMS - used) } };
     if (!row) return { status: 200, body: { ...empty, ...common, access: "generation_needed" } };
     const full = premium || row.has_claim;
+    // The report holds its interpretation, so a regeneration appends a version,
+    // and only a deep body is ever appended: it can succeed iff generate-
+    // interpretation would generate deeply for this viewer. Same ledger rule over
+    // the readers' claim coverage and count, same depth rule, same switch.
+    const regeneration = regenerationAvailability({
+      premium, hasClaim: row.has_claim === true, claimsUsed: used, postLimitGeneration: actions.postLimitGeneration,
+    });
     const provenance = { source: row.interpretation_source ?? null };
     const customer = quarantineCustomerRead(row.json_output, full, provenance.source);
     if (full && row.stored_depth !== "deep") {
@@ -99,7 +116,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
       // A deterministic body IS the medical floor: serve it whole, still asking
       // for the deep generation this reader is entitled to.
       const interpretation = isDeterministicSource(provenance.source) ? customer : basic;
-      return { status: 200, body: { ...common, access: "generation_needed", interpretation,
+      return { status: 200, body: { ...common, regeneration, access: "generation_needed", interpretation,
         preview: basic.preview, locked: basic.locked as LockedCounts } };
     }
     const violations = findFloorViolations(customer);
@@ -109,7 +126,7 @@ export async function readInterpretation(actions: InterpretationReadActions, fre
     // row's were chosen from unvalidated model content and are withheld.
     const projection = full ? projectBasic(customer, provenance) : customer;
     const visible = visibleClaimProjection(projection);
-    return { status: 200, body: { ...common, access: full ? "full" : "basic",
+    return { status: 200, body: { ...common, regeneration, access: full ? "full" : "basic",
       interpretation: full ? customer : { ...sanitizeBasicProjection(customer, provenance.source), ...visible },
       preview: visible.preview, locked: visible.locked } };
   } catch {

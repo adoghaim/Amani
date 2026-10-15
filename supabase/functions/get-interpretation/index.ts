@@ -1,5 +1,5 @@
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { readInterpretation, type InterpretationReadActions } from "../_shared/interpretation-read.ts";
 
@@ -64,6 +64,9 @@ Deno.serve(async (req: Request) => {
         if (error || count === null) throw error ?? new Error("Missing claim count");
         return count;
       },
+      // Read exactly as generate-interpretation reads it, so the answer's
+      // `regeneration` is that function's own depth decision (PK-PL-A).
+      postLimitGeneration: Deno.env.get("FREEMIUM_POST_LIMIT_GENERATION"),
     }, freemiumActive);
     return new Response(JSON.stringify(result.body), { status: result.status, headers });
   } catch (error) {

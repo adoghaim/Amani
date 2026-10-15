@@ -36,6 +36,8 @@ vi.mock('../lib/supabase', () => {
       op === 'eq' ? r[col] === v : op === 'lt' ? String(r[col]) < String(v) : op === 'in' ? (v as unknown[]).includes(r[col]) : true));
     const builder = {
       select: () => builder, order: () => builder, limit: () => builder,
+      // PK-FIX-07: the all-history read pages with .range(); the fixture is far under one page.
+      range: () => builder,
       eq: (col: string, v: unknown) => { filters.push(['eq', col, v]); return builder; },
       lt: (col: string, v: unknown) => { filters.push(['lt', col, v]); return builder; },
       in: (col: string, v: unknown[]) => { filters.push(['in', col, v]); return builder; },
@@ -322,7 +324,8 @@ const prepQuestions = () => Array.from(app.querySelectorAll('[data-testid="prep-
 // Measured change 6 -> 400, HbA1c above its lab interval, then the context question.
 const PREP_FOR_TSH_400 = [
   'My TSH changed from 6 to 400 uIU/mL. What could explain this change, and is it clinically meaningful?',
-  'My Ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
+  // PK-FIX-02: the marker name reads in sentence case mid-sentence ("my ferritin", not "my Ferritin").
+  'My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
   "My HbA1c is 6 %, above my lab's reference interval of 4–5.6 %. What does this mean in the context of my overall labs?",
   'Is there anything about my routine or history that matters for reading these results?',
 ];
@@ -572,5 +575,152 @@ describe('owner R1 — model prose renders only as the report\'s own claims', ()
     app.querySelector('[data-model-surface="summary_bullets"] ul')!.insertAdjacentHTML('beforeend', `<li><p>${C[1]}</p></li>`);
     expect(unprovenancedText(app, ['Measured changes'])).toEqual([`summary_bullets: ${C[1]}`]);
     expect(unresolvedModelProse(app, [])).toHaveLength(3);
+  }, 30_000);
+});
+
+/*
+  PK-FIX-06 (owner decision D13). A report with a cycle day but no phase used
+  to hide the day. The real page now shows the day, with a neutral note, when
+  no phase was estimated for it: a draw after day 35, or a known typical length
+  other than 28 days.
+
+  Nothing else changes:
+  - no phase label anywhere and no model text on the card;
+  - V2 still withholds the cycle-dependent hormone;
+  - page-wide policy language holds;
+  - a day the map labels, with no phase and no known length, still shows no
+    card. An example is a lab-printed day with no last period date.
+
+  Synthetic rows.
+*/
+describe('PK-FIX-06: the cycle day renders without a phase, in neutral language', () => {
+  function seedCycle(facts: Record<string, unknown>) {
+    seed(9, 6);
+    // The model claims a phase and a confident day; neither may reach the card.
+    fixture.interpretation = { json_output: {
+      ...(fixture.interpretation!['json_output'] as Record<string, unknown>),
+      cycle_context: { estimated_cycle_day: 3, estimated_cycle_phase: 'luteal', confidence: 'high', explanation: C[4] },
+    } };
+    Object.assign(fixture.tables.lab_reports!.find(r => r['id'] === CURRENT)!, facts);
+    // A cycle-dependent hormone, so the page shows whether V2 scores or withholds it.
+    fixture.tables.biomarkers!.push(...rows(CURRENT, [['estradiol', 150, 'pg/mL', 30, 400]]));
+  }
+  const cycleCard = () => Array.from(app.querySelectorAll('h3'))
+    .find(h => h.textContent === 'Cycle context')?.parentElement?.parentElement ?? null;
+  const estradiolCard = () => app.querySelector('article[aria-label="Estradiol (E2) result"]');
+  const WITHHELD = 'Amani context score unavailable';
+
+  it.each([
+    ['(a) day 36, unknown length', { estimated_cycle_day: 36, average_cycle_length: null }, '36', 'Phase not estimated after cycle day 35.'],
+    ['(a) day 36, 28 stored (as every report saved since 2026-04-14)', { estimated_cycle_day: 36, average_cycle_length: 28 }, '36',
+      'Phase not estimated after cycle day 35.'],
+    ['(b) day 21 of a 35-day cycle', { estimated_cycle_day: 21, average_cycle_length: 35 }, '21', 'Phase not estimated for a 35-day cycle.'],
+    ['(b) day 10 of a 24-day cycle', { estimated_cycle_day: 10, average_cycle_length: 24 }, '10', 'Phase not estimated for a 24-day cycle.'],
+  ])('%s: the card shows the cycle day and the note, no phase; estradiol withheld', async (_name, facts, day, note) => {
+    seedCycle({ estimated_cycle_phase: 'unknown', ...facts });
+    await renderAndOpenAll();
+    const card = cycleCard();
+    expect(card).not.toBeNull();
+    expect(Array.from(card!.querySelectorAll('p')).map(p => p.textContent)).toEqual(['Cycle day', day, note]);
+    expect(card!.querySelector('[data-cycle-phase-note]')?.textContent).toBe(note);
+    expect(card!.querySelector('[data-model-surface], [data-model-field]')).toBeNull();
+    expect(card!.textContent).not.toMatch(/confidence/i);
+    // No phase anywhere on the page: no header pill, no phase-specific band.
+    expect(app.textContent).not.toMatch(/luteal|follicular|ovulatory|menstrual phase/i);
+    expect(estradiolCard()?.textContent).toContain(WITHHELD);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('PRESERVE: a day-map phase renders, with no note, and estradiol is scored', async () => {
+    seedCycle({ estimated_cycle_phase: 'luteal', estimated_cycle_day: 21, average_cycle_length: null });
+    await renderAndOpenAll();
+    // PK-FIX-06-EXT (D10) changes only the order and the label: the cycle day
+    // first, then the same phase, labelled as an estimate. Before D10:
+    // ['Phase', 'luteal', 'Cycle day', '21'].
+    expect(Array.from(cycleCard()!.querySelectorAll('p')).map(p => p.textContent))
+      .toEqual(['Cycle day', '21', 'Phase', 'luteal', 'estimate for a 28-day cycle']);
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+    expect(estradiolCard()).not.toBeNull();
+    expect(estradiolCard()?.textContent).not.toContain(WITHHELD);
+  }, 30_000);
+
+  it('PRESERVE: a day the map labels, with no phase and no known length, shows no card, as before', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: 14, average_cycle_length: null, last_period_start_date: null });
+    await renderAndOpenAll();
+    expect(cycleCard()).toBeNull();
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+    expect(estradiolCard()?.textContent).toContain(WITHHELD);
+  }, 30_000);
+
+  /*
+    PK-FIX-06-EXT (D10 and DESIGN.md): the header leads with the cycle day and
+    labels any phase as an estimate, and the cycle rule sits under the header.
+  */
+  it('D10: the header shows the cycle day first, the phase as an estimate, and the cycle rule under it', async () => {
+    seedCycle({ estimated_cycle_phase: 'luteal', estimated_cycle_day: 21, average_cycle_length: null });
+    await renderAndOpenAll();
+    expect(app.querySelector('[data-report-cycle-line]')?.textContent)
+      .toBe('Cycle day 21 · luteal phase, estimate for a 28-day cycle'); // capitalised by CSS
+    const rule = app.querySelector('section[data-cycle-rule]');
+    expect(rule?.getAttribute('data-cycle-rule')).toBe('placed');
+    expect(rule?.querySelector('line[data-tick-day]')?.getAttribute('data-tick-day')).toBe('21');
+    expect(rule?.querySelectorAll('[data-band]')).toHaveLength(4);
+    // The rule follows the header and comes before the cycle context card.
+    const h1 = app.querySelector('h1')!;
+    expect(h1.compareDocumentPosition(rule!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rule!.compareDocumentPosition(cycleCard()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }, 30_000);
+
+  it('D10: day 36 in the header has no phase; the rule carries the tick and the neutral note', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: 36, average_cycle_length: null });
+    await renderAndOpenAll();
+    expect(app.querySelector('[data-report-cycle-line]')?.textContent).toBe('Cycle day 36');
+    expect(app.querySelector('section[data-cycle-rule] line[data-tick-day]')?.getAttribute('data-tick-day')).toBe('36');
+    expect(app.querySelector('[data-cycle-rule-note]')?.textContent).toBe('Phase not estimated after cycle day 35.');
+  }, 30_000);
+
+  it('D10: no cycle day on the report: an empty rule with one line saying why, and no cycle line in the header', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: null, average_cycle_length: null, last_period_start_date: null });
+    await renderAndOpenAll();
+    expect(app.querySelector('[data-report-cycle-line]')).toBeNull();
+    expect(app.querySelector('section[data-cycle-rule]')?.getAttribute('data-cycle-rule')).toBe('empty');
+    expect(app.querySelector('section[data-cycle-rule] line[data-tick-day]')).toBeNull();
+    expect(app.querySelector('[data-cycle-rule-why]')).not.toBeNull();
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  /*
+    PK-FIX-06-EXT review blocker (D10): the card's phase follows the cycle rule,
+    like the header line. A stored phase the rule does not draw is shown apart,
+    as recorded with the report, and never with the 28-day estimate label.
+  */
+  it.each([
+    ['a lab-printed phase the day map would not give', { estimated_cycle_phase: 'luteal', estimated_cycle_day: 10, average_cycle_length: null },
+      '10', 'luteal', null],
+    ['a pregnancy value', { estimated_cycle_phase: 'pregnancy_t1', estimated_cycle_day: 10, average_cycle_length: null },
+      '10', 'pregnancy t1', null],
+    ['a phase on a known 35-day cycle', { estimated_cycle_phase: 'luteal', estimated_cycle_day: 20, average_cycle_length: 35 },
+      '20', 'luteal', 'Phase not estimated for a 35-day cycle.'],
+  ])('D10: %s is shown as recorded, never as an estimate; the header and the rule agree', async (_name, facts, day, recorded, note) => {
+    seedCycle(facts);
+    await renderAndOpenAll();
+    const card = cycleCard();
+    expect(card).not.toBeNull();
+    expect(Array.from(card!.querySelectorAll('p')).map(p => p.textContent))
+      .toEqual(['Cycle day', day, 'Phase recorded with this report', recorded, ...(note ? [note] : [])]);
+    expect(app.querySelector('[data-cycle-phase-estimate]')).toBeNull();
+    expect(app.textContent).not.toContain('estimate for a 28-day cycle');
+    expect(app.querySelector('[data-report-cycle-line]')?.textContent).toBe(`Cycle day ${day}`);
+    const rule = app.querySelector('section[data-cycle-rule]');
+    expect(rule?.querySelector('line[data-tick-day]')?.getAttribute('data-tick-day')).toBe(day);
+    expect(rule?.querySelectorAll('[data-band]')).toHaveLength(0);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('missing last-period date (no cycle day): no cycle card', async () => {
+    seedCycle({ estimated_cycle_phase: 'unknown', estimated_cycle_day: null, average_cycle_length: 35, last_period_start_date: null });
+    await renderAndOpenAll();
+    expect(cycleCard()).toBeNull();
+    expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
   }, 30_000);
 });

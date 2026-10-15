@@ -4,11 +4,16 @@ import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { OnboardingGate } from './components/OnboardingGate'
+import { UpdateGate } from './components/UpdateGate'
 import { UploadGate } from './components/freemium/UploadGate'
+import { ConsentGate } from './features/consent/ConsentGate'
+import { AdultsOnlyExit } from './features/consent/AdultsOnlyExit'
+import { ADULTS_ONLY_PATH } from './features/consent/ConsentSteps'
 import { isNative, onAppUrlOpen } from './lib/native'
 import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 import { safeRedirectTarget } from './lib/redirect'
+import { CampaignLinkRedirect, FirstPartyEventsLifecycle } from './components/FirstPartyEventsLifecycle'
 
 // Eagerly loaded — tiny pages used immediately on arrival
 import { Landing } from './pages/Landing'
@@ -39,7 +44,14 @@ const DesignGallery = lazyWithRetry(() => import('./pages/DesignGallery').then(m
 
 const enableParserDebugger = import.meta.env.DEV
 
-function ProtectedRoute({ children }: { children: ReactNode }) {
+/*
+  Every signed-in route. Gate order at launch: the update block (PK-MINVER-01)
+  and the lock (PK-DEVICE-01) mount here before ConsentGate when their packets
+  land; then consent (PK-CONSENT-01, behind features.consent_gate); then
+  onboarding (OnboardingGate inside the route, or the /onboarding route).
+  `consentExempt` is for Settings only (withdrawal and deletion stay reachable).
+*/
+function ProtectedRoute({ children, consentExempt = false }: { children: ReactNode; consentExempt?: boolean }) {
   const { user, loading } = useAuth()
 
   if (loading) {
@@ -51,7 +63,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to={`/login?redirect=${redirect}`} replace />
   }
 
-  return <>{children}</>
+  return <ConsentGate exempt={consentExempt}>{children}</ConsentGate>
 }
 
 function AppRoutes() {
@@ -69,6 +81,8 @@ function AppRoutes() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={user ? <Navigate to={redirectTarget} replace /> : <LoginPage />} />
         <Route path="/signup" element={user ? <Navigate to={redirectTarget} replace /> : <SignupPage />} />
+        {/* PK-EXP5 campaign link (D17, D29): captures the key when first-party events are on, then signup. */}
+        <Route path="/go/:key" element={<CampaignLinkRedirect />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/success" element={<SuccessPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -84,6 +98,8 @@ function AppRoutes() {
             to be able to reach it. Linking to /app/settings instead would
             bounce a signed-out visitor to the login screen. */}
         <Route path="/delete-account" element={<DeleteAccount />} />
+        {/* D13: the under-18 exit, shown after the account is erased and signed out. Local state only. */}
+        <Route path={ADULTS_ONLY_PATH} element={<AdultsOnlyExit />} />
 
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
@@ -95,7 +111,7 @@ function AppRoutes() {
         <Route path="/app/reports/:id" element={<ProtectedRoute><OnboardingGate><ReportView /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/settings" element={<ProtectedRoute><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
+        <Route path="/app/settings" element={<ProtectedRoute consentExempt><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
         {enableParserDebugger && (
           <Route path="/dev/design" element={<DesignGallery />} />
         )}
@@ -166,8 +182,14 @@ function App() {
     <Router>
       <AndroidBackHandler />
       <DeepLinkHandler />
+      <FirstPartyEventsLifecycle />
       <ErrorBoundary>
-        <AppRoutes />
+        {/* PK-MINVER-01 (D8): native only, and first in the launch gate order:
+            the update block, then the biometric lock, then consent and the
+            rest of onboarding. On web it renders AppRoutes and nothing else. */}
+        <UpdateGate>
+          <AppRoutes />
+        </UpdateGate>
       </ErrorBoundary>
     </Router>
   )

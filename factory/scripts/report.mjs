@@ -8,7 +8,8 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const ledger = JSON.parse(readFileSync(join(here, '..', 'status.json'), 'utf8'));
 const pk = ledger.packets;
-const done = new Set(pk.filter((p) => p.status === 'done').map((p) => p.id));
+// A superseded packet (an owner ruling replaced it) satisfies dependencies like a done one.
+const done = new Set(pk.filter((p) => p.status === 'done' || p.status === 'superseded').map((p) => p.id));
 const phaseOrder = ledger.phases.map((p) => p.id);
 const byOrder = (a, b) => phaseOrder.indexOf(a.phase) - phaseOrder.indexOf(b.phase) || a.wave.localeCompare(b.wave) || a.id.localeCompare(b.id);
 

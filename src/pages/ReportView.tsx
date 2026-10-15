@@ -2,10 +2,13 @@ import { ArrowRightLeft } from 'lucide-react';
 import { ClinicalObservation, ModelProse, ModelProseText } from '../components/ClinicalObservation';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAllRows';
 import { BiomarkerCard } from '../components/BiomarkerCard';
+import { ResultRow } from '../components/ResultRow';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
 import { InsightFlagsPanel } from '../components/InsightFlagsPanel';
 import { YourHealthStory } from '../components/YourHealthStory';
@@ -24,7 +27,7 @@ import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insi
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
   authorizedLanguage, authorizeModelProse, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  labIntervalObservation, markerBandPlacement, movementClaimsByKey, NO_LAB_INTERVAL, outsideBandCount, PRIMARY_FINDING_LABEL,
+  markerBandPlacement, movementClaimsByKey, outsideBandCount, PRIMARY_FINDING_LABEL,
   primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
   type AuthorizedLanguage, type AuthorizedModelProse,
 } from '../lib/scoring/insightCopy';
@@ -44,17 +47,30 @@ import type {
   BiomarkerName, ReportAnalyte,
 } from '../types';
 import {
-  RefreshCw, Trash2, AlertCircle, ChevronDown, ChevronRight,
+  RefreshCw, AlertCircle, ChevronDown, ChevronRight,
   Microscope, Sparkles, CalendarDays,
   CheckCircle2, Loader2, Info, Activity, FlaskConical,
 } from 'lucide-react';
+import { ReportHeaderActions } from '../features/report/header/ReportHeaderActions';
+import type { ReportHeaderContext } from '../features/report/header';
+import { ReportNotices } from '../features/report/notices/ReportNotices';
+import { ReportProblemFlow } from '../features/report/problem/ReportProblemFlow';
+import { INTERPRETATION_FEEDBACK_FLAG } from '../features/report/problem/problemReport';
+import { isFeatureEnabled } from '../lib/runtimeConfig';
+import { shownExplanationOf, UNIDENTIFIED_EXPLANATION, type ShownExplanation } from '../features/report/notices';
+import { isAiPausedError, isAiPausedResponse, noteAiPaused, readAiPaused, subscribeAiPaused } from '../lib/aiPause';
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { createRegenerationRequests } from '../lib/regenerationRequest';
+import { requestReportDeletion } from '../lib/reportDeletion';
+import { REGENERATION_COPY, regenerationFailureOf, type RegenerationNoticeKind } from '../lib/regenerationFailure';
 import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
+import { PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
+import { CycleRule } from '../components/CycleRule';
+import { ReportCycleLine } from '../components/ReportCycleLine';
 import {
   fetchInterpretationAccess,
   type InterpretationAccessResult,
@@ -67,7 +83,6 @@ import {
   generateFailureKind,
 } from '../lib/freemium/reportAccess';
 import { AccessErrorNotice, FreemiumReportPanel } from '../components/freemium/FreemiumReportPanel';
-import { FREEMIUM_COPY } from '../lib/freemium/copy';
 import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
 
 /*
@@ -150,6 +165,16 @@ const CONFIDENCE_STYLE: Record<string, string> = {
   resolve to the report's own measured-change claims, in neutral ink; the
   title, the badge and the model's choice of related markers do not render.
 */
+
+/** The columns the all-history read selects for baselines and trends. */
+interface HistoricalBiomarkerRow {
+  name: string;
+  value: number;
+  unit: string;
+  reference_min: number | null;
+  reference_max: number | null;
+  lab_report_id: string;
+}
 
 interface OpeningContext {
   primaryIsImproving: boolean;
@@ -274,52 +299,6 @@ function getOpeningContext(summary: InsightSummary): OpeningContext {
   };
 }
 
-/*
-  Release invariant 1. This row is her laboratory's interval, so it says only
-  where the value sits against that interval as printed. It used to add an 8%
-  margin and call a value past the lab's bound "Borderline", a placement her
-  lab never made, coloured green, amber or red.
-*/
-function AnalyteRow({ analyte }: { analyte: ReportAnalyte }) {
-  const label = analyte.display_name || analyte.raw_name;
-  const placement = labIntervalObservation(
-    label,
-    analyte.value_numeric,
-    analyte.normalized_min,
-    analyte.normalized_max,
-    analyte.normalized_operator,
-    analyte.normalized_operator_value,
-  );
-  const style = CUE_STYLE[placement?.cue ?? 'neutral'];
-  const isUnmapped = analyte.parse_status === 'unmapped';
-  return (
-    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-theme-neutral-50 transition-colors">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-theme-neutral-900 truncate">{label}</p>
-          {isUnmapped && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-theme-neutral-100 text-theme-neutral-500 flex-shrink-0">unmapped</span>
-          )}
-        </div>
-        {analyte.raw_reference_range && (
-          <p className="text-xs text-theme-neutral-400 mt-0.5">Ref: {analyte.raw_reference_range}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <span className="text-sm font-semibold text-theme-neutral-900 tabular-nums">
-          {analyte.raw_value_text ?? analyte.value_numeric}
-          {analyte.unit && <span className="text-theme-neutral-500 font-normal ml-1 text-xs">{analyte.unit}</span>}
-        </span>
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}
-          data-language-category={placement?.category} data-language-source={placement?.authority.kind} data-language-cue={placement?.cue}>
-          <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-          {placement?.text ?? NO_LAB_INTERVAL}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function normalizeInterpretation(raw: unknown): AIInterpretation {
   const data = raw && typeof raw === 'object'
     ? raw as Partial<AIInterpretation> & Record<string, unknown>
@@ -356,6 +335,10 @@ function normalizeInterpretation(raw: unknown): AIInterpretation {
 
 export function ReportView() {
   const { id: reportId = '' } = useParams<{ id: string }>();
+  // PK-EXP5 funnel step; off unless first_party_events is on, never blocks the report.
+  useEffect(() => {
+    if (reportId) void firstPartyEvents.track('report_viewed');
+  }, [reportId]);
   /*
     `entitled` is the union of Stripe, StoreKit, Play Billing and the trial —
     the same decision the server's subscription-guard makes. The regeneration
@@ -387,7 +370,10 @@ export function ReportView() {
   const [generating, setGenerating] = useState(false);
   // The server refused to generate for this viewer (402): offer Premium, don't retry.
   const [generatePremiumRequired, setGeneratePremiumRequired] = useState(false);
-  const [regenerateFailed, setRegenerateFailed] = useState(false);
+  // PK-PL-A: what the last failed regenerate (or fuller-analysis) request meant,
+  // shown as a calm notice above the analysis it left intact. `retry` offers the
+  // keyed retry; without it the action on the page is the way to try again.
+  const [regenerateFailure, setRegenerateFailure] = useState<{ kind: RegenerationNoticeKind; retry: boolean } | null>(null);
   const regenerationRequests = useRef(createRegenerationRequests()).current;
   const [paywallOpen, setPaywallOpen] = useState(false);
   const accessStateRef = useRef<InterpretationAccessResult | null>(null);
@@ -410,7 +396,19 @@ export function ReportView() {
     below, never access to anything.
   */
   const [interpretationTier, setInterpretationTier] = useState<string | null>(null);
+  /*
+    Which explanation is on screen, for the notices slot (R22): the row id and
+    generated_at, where the read that produced it returned them. Flag on, the
+    client does not read get-interpretation's version identity yet, so both
+    stay null there.
+  */
+  const [shownExplanation, setShownExplanation] = useState<ShownExplanation | null>(null);
+  // "Report a problem" (PK-HARM-01, D20), offered in More only while features.interpretation_feedback is on.
+  const [reportProblemOpen, setReportProblemOpen] = useState(false);
   const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  // The report is deleted but its stored file is not removed yet (retryable).
+  const [deleteFilePending, setDeleteFilePending] = useState(false);
   const [activeCategory, setActiveCategory] = useState<BiomarkerCategory | null>(null);
   const [showFullPanel, setShowFullPanel] = useState(false);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
@@ -423,10 +421,19 @@ export function ReportView() {
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
+  // PK-FIX-01b (DT9, D12): the last generation answered that the AI is paused.
+  const [aiPaused, setAiPaused] = useState(() => readAiPaused(reportId));
   const interpPollingActive = useRef(false);
   const interpRetryFired = useRef(false);
 
   useEffect(() => { fetchReport(); }, [reportId]);
+
+  // NewReport notes the pause when generate-interpretation answers, which can
+  // be after it has navigated here.
+  useEffect(() => {
+    setAiPaused(readAiPaused(reportId));
+    return subscribeAiPaused(reportId, setAiPaused);
+  }, [reportId]);
 
   useEffect(() => {
     if (!report || report.status !== 'processing') return;
@@ -460,6 +467,7 @@ export function ReportView() {
         if (interpData?.json_output) {
           setInterpretation(normalizeInterpretation(interpData.json_output));
           setInterpretationTier((interpData as { tier?: string | null }).tier ?? null);
+          setShownExplanation(shownExplanationOf(interpData));
         }
         return;
       }
@@ -515,14 +523,16 @@ export function ReportView() {
           interpPollingActive.current = false;
           setInterpretation(normalizeInterpretation(existing.json_output));
           setInterpretationTier((existing as { tier?: string | null }).tier ?? null);
+          setShownExplanation(shownExplanationOf(existing));
           return;
         }
 
         interpRetryFired.current = true;
-        const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+        const { data: retryData, error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
           body: { reportId },
         });
         if (cancelled) return;
+        if (!invokeErr) noteAiPaused(reportId, isAiPausedResponse(retryData));
         if (invokeErr) {
           const redirect = await handle402(invokeErr);
           if (redirect && !cancelled) { navigate(redirect, { replace: true }); return; }
@@ -553,6 +563,7 @@ export function ReportView() {
             interpPollingActive.current = false;
             setInterpretation(normalizeInterpretation(data.json_output));
             setInterpretationTier((data as { tier?: string | null }).tier ?? null);
+            setShownExplanation(shownExplanationOf(data));
             return;
           }
           if (elapsed >= TIMEOUT_MS) {
@@ -592,6 +603,7 @@ export function ReportView() {
         accessStateRef.current = state;
         setAccessState(state);
         setInterpretation(state.interpretation ? normalizeInterpretation(state.interpretation) : null);
+        setShownExplanation(state.interpretation ? UNIDENTIFIED_EXPLANATION : null);
         if (state.interpretation) {
           writeInterpRateLimit(reportId, null);
           setRateLimitNotice(null);
@@ -651,6 +663,7 @@ export function ReportView() {
       setRateLimitNotice(null);
       setInterpretation(normalizeInterpretation(interpretationData.json_output));
       setInterpretationTier((interpretationData as { tier?: string | null }).tier ?? null);
+      setShownExplanation(shownExplanationOf(interpretationData));
     }
 
     setLoading(false);
@@ -700,10 +713,13 @@ export function ReportView() {
         }
 
         const allHistoricalIds = allReportsData.map(r => r.id);
-        const { data: allHistoricalBiomarkers } = await supabase
-          .from('biomarkers')
-          .select('name, value, unit, reference_min, reference_max, lab_report_id')
-          .in('lab_report_id', allHistoricalIds);
+        // R27: every prior report's values can pass PostgREST's 1,000-row cap.
+        const { data: allHistoricalBiomarkers } = await fetchAllRows<HistoricalBiomarkerRow>(() =>
+          supabase
+            .from('biomarkers')
+            .select('name, value, unit, reference_min, reference_max, lab_report_id')
+            .in('lab_report_id', allHistoricalIds)
+            .order('id'));
 
         if (allHistoricalBiomarkers) {
           const histMap = new Map<string, { reportDate: string; value: number }[]>();
@@ -1117,34 +1133,53 @@ export function ReportView() {
     const requestId = regenerationRequests.next(retry === true);
     setRegenerating(true);
     setError('');
-    setRegenerateFailed(false);
+    setRegenerateFailure(null);
     const priorStatus = report.status;
+    const analysisOnScreen = interpretation !== null;
     writeInterpRateLimit(reportId, null);
     setRateLimitNotice(null);
     /*
-      Flag on, a failed regenerate leaves the stored body exactly as it was
-      (the server upserts only on success), so put back the status and the
-      retry spent optimistically, and say what happened: 402 → Premium in
-      place, 429 → the daily-limit notice, anything else → a retryable error.
-      No get-interpretation read — there is nothing new to read.
+      PK-PL-A (Adell's pre-launch ruling), both flag states. A failed regenerate
+      wrote nothing: the server appends a version only on success, keyed by
+      request_id, so the retry below can never append twice. So it spends no
+      attempt and never brands the report "error" — put back the status and the
+      attempt spent optimistically, then say what happened: 402 → Premium (the
+      paywall flag on; pricing or billing flag off), 429 → the daily-limit
+      notice, anything else → a calm notice whose wording and retry follow the
+      server's answer (lib/regenerationFailure.ts).
+
+      Flag off with no analysis on screen the first analysis itself failed, and
+      the report has none: it stays marked failed for the existing retry card,
+      as before — its attempt is still put back.
     */
-    const failFreemium = async (err: unknown) => {
+    const fail = async (err: unknown) => {
+      const redirect = freemium ? null : await handle402(err);
+      const limitMessage = await rateLimitMessage(err);
+      const kind = limitMessage ? 'rate_limited' : await regenerationFailureOf(err);
+      const noAnalysis = !freemium && !analysisOnScreen && (kind === 'retryable' || kind === 'unavailable');
       await supabase.from('lab_reports').update({
-        status: priorStatus,
+        status: noAnalysis ? 'error' : priorStatus,
         regeneration_count: report.regeneration_count,
       }).eq('id', reportId);
-      const kind = generateFailureKind(httpStatus(err));
-      const limitMessage = kind === 'rate_limited' ? await rateLimitMessage(err) : null;
-      if (kind === 'premium_required') {
-        setPaywallOpen(true);
-      } else if (limitMessage) {
+      if (redirect) { navigate(redirect, { replace: true }); return; }
+      // Re-read first: a stored analysis clears any old daily-limit notice, and
+      // this one is new.
+      await fetchReport();
+      if (limitMessage) {
         writeInterpRateLimit(reportId, limitMessage);
         setRateLimitNotice(limitMessage);
-      } else {
-        setRegenerateFailed(true);
+      } else if (kind === 'premium_required' && freemium) {
+        setPaywallOpen(true);
+      } else if (!noAnalysis) {
+        const notice: RegenerationNoticeKind = kind === 'already_saved' || kind === 'unavailable' ? kind
+          : kind === 'premium_required' ? 'unavailable' : 'retryable';
+        setRegenerateFailure({ kind: notice, retry: notice === 'retryable' });
       }
-      await fetchReport();
+      // The answer changed what is true for this report (the analysis another
+      // request saved, or the server's availability): read it again.
+      if (freemium && (kind === 'already_saved' || kind === 'unavailable')) refreshAccess();
     };
+    let failure: { error: unknown } | null = null;
     try {
       /*
         Deliberately NOT deleting the existing interpretation first. Once the
@@ -1167,39 +1202,29 @@ export function ReportView() {
           request_id: requestId,
         },
       });
-      if (!interpError && fnData?.success) regenerationRequests.settle();
-      if (freemium && (interpError || !fnData?.success)) {
-        await failFreemium(interpError);
-        return;
+      if (!interpError) noteAiPaused(reportId, isAiPausedResponse(fnData));
+      if (interpError && await isAiPausedError(interpError)) {
+        // PK-FIX-01b (D12): the AI is paused, so nothing was generated and the
+        // explanation she has stands. Put back the status and the attempt spent
+        // above, and say so calmly (DT9) instead of a failure notice.
+        await supabase.from('lab_reports').update({
+          status: priorStatus,
+          regeneration_count: report.regeneration_count,
+        }).eq('id', reportId);
+        noteAiPaused(reportId, true);
+        await fetchReport();
+      } else if (interpError || !fnData?.success) {
+        failure = { error: interpError };
+      } else {
+        regenerationRequests.settle();
+        await fetchReport();
+        if (freemium) refreshAccess();
       }
-      if (interpError) {
-        const redirect = await handle402(interpError);
-        if (redirect) { navigate(redirect, { replace: true }); return; }
-        const limitMessage = await rateLimitMessage(interpError);
-        if (limitMessage) {
-          // The request never reached the model, so put back the status and the
-          // retry we spent optimistically above and tell her why instead.
-          await supabase.from('lab_reports').update({
-            status: priorStatus,
-            regeneration_count: report.regeneration_count,
-          }).eq('id', reportId);
-          writeInterpRateLimit(reportId, limitMessage);
-          setRateLimitNotice(limitMessage);
-        } else {
-          await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-        }
-      } else if (!fnData?.success) {
-        await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-      }
-      await fetchReport();
-      if (freemium) refreshAccess();
     } catch (err) {
-      if (freemium) {
-        await failFreemium(err);
-        return;
-      }
-      await supabase.from('lab_reports').update({ status: 'error' }).eq('id', reportId);
-      await fetchReport();
+      failure = { error: err };
+    }
+    try {
+      if (failure) await fail(failure.error);
     } finally {
       setRegenerating(false);
     }
@@ -1213,18 +1238,33 @@ export function ReportView() {
     once. Never opens a paywall: a report that is not ready yet is not an
     upsell moment. A 402 shows the Premium entry point in place of the
     generate action instead of retrying into the same refusal.
+
+    PK-PL-A: when a body is already stored (the fuller-analysis offer), the
+    report holds its interpretation, so the server appends a version keyed by
+    request_id and refuses an unkeyed request (400 request_id_required) — which
+    used to leave this offer silently doing nothing. It is keyed like a
+    regenerate tap, still without spending a regeneration attempt, and a failure
+    says calmly that the stored analysis is unchanged.
   */
   const handleGenerate = async () => {
     if (generating) return;
     setGenerating(true);
     setGeneratePremiumRequired(false);
+    setRegenerateFailure(null);
     writeInterpRateLimit(reportId, null);
     setRateLimitNotice(null);
+    const storedBody = accessState?.access === 'generation_needed' && accessState.interpretation !== null;
+    const requestId = storedBody ? regenerationRequests.next(false) : null;
     let refresh = true;
     try {
-      const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
-        body: { reportId, primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null },
+      const { data, error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+        body: {
+          reportId, primary_canonical_slug: insightSummary?.primaryFinding?.key ?? null,
+          ...(requestId ? { request_id: requestId } : {}),
+        },
       });
+      if (requestId && !invokeErr && data?.success) regenerationRequests.settle();
+      if (!invokeErr) noteAiPaused(reportId, isAiPausedResponse(data));
       if (invokeErr && generateFailureKind(httpStatus(invokeErr)) === 'premium_required') {
         refresh = false;
         setGeneratePremiumRequired(true);
@@ -1235,20 +1275,39 @@ export function ReportView() {
           refresh = false;
           writeInterpRateLimit(reportId, limitMessage);
           setRateLimitNotice(limitMessage);
+        } else if (storedBody) {
+          const kind = await regenerationFailureOf(invokeErr);
+          // The offer itself stays on the page as the way to try again.
+          setRegenerateFailure({ kind: kind === 'already_saved' || kind === 'unavailable' ? kind : 'retryable', retry: false });
         }
       }
     } catch {
       // Fall through to a fresh read, which renders whatever is true now.
+      if (storedBody) setRegenerateFailure({ kind: 'retryable', retry: false });
     } finally {
       setGenerating(false);
       if (refresh) refreshAccess();
     }
   };
 
+  // Server-side deletion (delete-report): the report graph AND the uploaded
+  // file. Leave only on confirmed success; otherwise say exactly what is left.
   const handleDelete = async () => {
-    if (!confirm('Delete this report? This cannot be undone.')) return;
-    const { error } = await supabase.from('lab_reports').delete().eq('id', reportId);
-    if (!error) navigate('/app', { replace: true });
+    if (deleting) return;
+    if (!deleteFilePending && !confirm('Delete this report and any uploaded lab file? This cannot be undone.')) return;
+    setDeleting(true);
+    setError('');
+    const outcome = await requestReportDeletion(
+      (name, options) => supabase.functions.invoke(name, options),
+      reportId,
+    );
+    setDeleting(false);
+    if (outcome.kind === 'deleted') {
+      navigate('/app', { replace: true });
+      return;
+    }
+    if (outcome.kind === 'file_pending') setDeleteFilePending(true);
+    setError(outcome.message);
   };
 
   const formatDate = (d: string) => {
@@ -1305,6 +1364,28 @@ export function ReportView() {
   // values behind a spinner that will never resolve.
   const isProcessing = (report.status === 'processing' || regenerating) && !rateLimitNotice;
 
+  /*
+    The header slot (D19): ReportView's own state and handlers for its
+    actions; src/features/report/header decides which is the one primary and
+    what goes in More. The rule for offering a regeneration is the one the
+    header button always had.
+  */
+  const headerContext: ReportHeaderContext = {
+    report,
+    navigate,
+    regeneration: {
+      available: canRegenerate && !(freemium && accessState?.access === 'generation_needed' && !interpretation),
+      upgrade: canUpgradeInterpretation,
+      remaining: 3 - report.regeneration_count,
+      busy: regenerating,
+      run: () => { void handleRegenerate(); },
+    },
+    deleteReport: () => { void handleDelete(); },
+    deleting,
+    deleteFilePending,
+    reportProblem: isFeatureEnabled(INTERPRETATION_FEEDBACK_FLAG) ? () => setReportProblemOpen(true) : undefined,
+  };
+
   const freemiumPanel = freemium ? (
     <FreemiumReportPanel
       state={accessState}
@@ -1351,12 +1432,14 @@ export function ReportView() {
                 </span>
               )}
             </p>
+            {/*
+              PK-FIX-06-EXT (D10): the cycle day comes first, and any phase is
+              labelled as the estimate it is. It replaces the phase pill, which
+              wore a status tint (DESIGN.md: phase tints are never status). The
+              same ReportCycleLine is on the dashboard and the Reports list.
+            */}
+            <ReportCycleLine report={report} as="p" className="text-sm text-theme-text mt-1" />
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              {cyclePhase && (
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low capitalize">
-                  {cyclePhase.replace(/_/g, ' ')} phase
-                </span>
-              )}
               <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
@@ -1378,30 +1461,12 @@ export function ReportView() {
               )}
             </div>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            {canRegenerate && !(freemium && accessState?.access === 'generation_needed' && !interpretation) && (
-              <Button
-                variant={canUpgradeInterpretation ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={handleRegenerate}
-                disabled={regenerating}
-              >
-                {canUpgradeInterpretation ? (
-                  <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
-                ) : (
-                  <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? 'animate-spin' : ''}`} />
-                )}
-                {canUpgradeInterpretation
-                  ? 'Generate full Amani analysis'
-                  : `Regenerate (${3 - report.regeneration_count} left)`}
-              </Button>
-            )}
-            <Button variant="danger" size="sm" onClick={handleDelete}>
-              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-              Delete
-            </Button>
-          </div>
+          {/* One primary action plus a labelled More menu (D19): src/features/report/header. */}
+          <ReportHeaderActions context={headerContext} />
         </div>
+
+        {/* ── Cycle rule (DESIGN.md, D10): the draw day on her cycle ── */}
+        <CycleRule report={report} />
 
         {error && (
           <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-xl mb-6 text-sm">
@@ -1453,17 +1518,18 @@ export function ReportView() {
             </div>
           )}
 
-          {/* ── Flag on: a failed refresh/regenerate never hides the body on screen ── */}
+          {/* ── Flag on: a failed refresh never hides the body on screen ── */}
           {freemium && accessInlineError && !isProcessing && (
             <AccessErrorNotice state={accessInlineError} onRetry={refreshAccess} inline />
           )}
-          {freemium && regenerateFailed && !isProcessing && (
+          {/* ── Both flag states (PK-PL-A): a failed regenerate is a calm notice above the intact analysis ── */}
+          {regenerateFailure && !isProcessing && (
             <AccessErrorNotice
               state={null}
               inline
-              title={FREEMIUM_COPY.report.regenerateErrorTitle}
-              body={FREEMIUM_COPY.report.regenerateErrorBody}
-              onRetry={() => { void handleRegenerate(true); }}
+              title={REGENERATION_COPY[regenerateFailure.kind].title}
+              body={REGENERATION_COPY[regenerateFailure.kind].body}
+              onRetry={regenerateFailure.retry && canRegenerate ? () => { void handleRegenerate(true); } : undefined}
             />
           )}
 
@@ -1519,6 +1585,14 @@ export function ReportView() {
 
           {/* ── A. Safety channel: approved deterministic rules only, never band-derived ── */}
           {!isProcessing && <SafetyWarnings warnings={safetyWarnings} />}
+
+          {/* ── Notices slot (R22): calm notices about the explanation below, from src/features/report/notices ── */}
+          {!isProcessing && (
+            <ReportNotices
+              report={report}
+              versions={{ shown: interpretation ? shownExplanation ?? UNIDENTIFIED_EXPLANATION : null, aiPaused }}
+            />
+          )}
 
           {/* ── B. Amani Summary (Headline) ──────────────────────── */}
           {(insightSummary || interpretation) && !isProcessing && (
@@ -1759,7 +1833,7 @@ export function ReportView() {
                       <div key={cat}>
                         <h3 className="text-xs text-theme-neutral-400 uppercase tracking-widest mb-2">{cat}</h3>
                         <div className="divide-y divide-theme-neutral-100">
-                          {items.map(item => <AnalyteRow key={item.id} analyte={item} />)}
+                          {items.map(item => <ResultRow key={item.id} analyte={item} cyclePhase={cyclePhase} />)}
                         </div>
                       </div>
                     ))}
@@ -1793,20 +1867,39 @@ export function ReportView() {
                     </span>
                   )}
                 </div>
+                {/* D10: the cycle day first; a phase is labelled as an estimate. */}
                 <div className="flex gap-4 mb-3">
-                  <div>
-                    <p className="text-xs text-theme-muted-text-3">Phase</p>
-                    <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
-                      {card.phase.replace(/_/g, ' ')}
-                    </p>
-                  </div>
                   {card.day && (
                     <div>
                       <p className="text-xs text-theme-muted-text-3">Cycle day</p>
                       <p className="text-sm font-semibold text-theme-text mt-0.5">{card.day}</p>
                     </div>
                   )}
+                  {card.phase && (
+                    <div>
+                      <p className="text-xs text-theme-muted-text-3">Phase</p>
+                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                        {card.phase}
+                      </p>
+                      <p className="text-xs text-theme-muted-text-2 mt-0.5" data-cycle-phase-estimate>{PHASE_ESTIMATE_LABEL}</p>
+                    </div>
+                  )}
+                  {/* A stored phase the cycle rule does not draw: the report's own record, never an estimate (Q13). */}
+                  {card.recordedPhase && (
+                    <div data-cycle-phase-recorded>
+                      <p className="text-xs text-theme-muted-text-3">Phase recorded with this report</p>
+                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                        {card.recordedPhase.replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                  )}
                 </div>
+                {/* PK-FIX-06: a cycle day shown without a phase says why, neutrally. */}
+                {card.phaseNote && (
+                  <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-cycle-phase-note>
+                    {card.phaseNote}
+                  </p>
+                )}
                 {card.explanation && (
                   <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-model-surface="cycle_context">
                     <ModelProse prose={card.explanation} />
@@ -1939,6 +2032,13 @@ export function ReportView() {
 
         </div>
       </div>
+      {/* PK-HARM-01 (D20): opened from More; renders nothing while closed. */}
+      <ReportProblemFlow
+        open={reportProblemOpen}
+        onClose={() => setReportProblemOpen(false)}
+        reportId={report.id}
+        interpretationId={interpretation ? shownExplanation?.id ?? null : null}
+      />
     </Layout>
   );
 }

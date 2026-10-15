@@ -1,7 +1,10 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { redactLabText } from "../_shared/lab-text-redaction.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
 import { entitlementUnavailable, premiumRequired } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -9,6 +12,13 @@ import { parseLabInsightsCompletion } from "../_shared/lab-insights-output.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { compareBiomarkerValues, isSignificantChange, topChanges, type BiomarkerChange } from "../_shared/trend-evidence.ts";
+import { aiPausedBody } from "../_shared/ai-pause.ts";
+import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+
+// PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
+// AI cost ledger, and the kill switch. Once per isolate.
+const reporter = edgeErrorReporter("lab-insights");
+const costLedger = edgeAiCostLedger("lab-insights");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,7 +98,24 @@ Deno.serve(async (req: Request) => {
       throw new Error("OpenAI API key not configured");
     }
 
+    // PK-FIX-01b (D12): while the owner's kill switch is on, no model call: 503
+    // with the calm paused body. Before the rate limit, so it spends no quota.
+    if (await aiPausedNow()) {
+      return new Response(JSON.stringify(aiPausedBody()), {
+        status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabase).check(userId));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     await enforceRateLimit(createRateLimitStore(supabase), {
       userId,
@@ -244,7 +271,8 @@ Remember:
             },
             {
               role: "user",
-              content: prompt,
+              // PK-PRIV-01: identifiers out before the prompt leaves for OpenAI.
+              content: redactLabText(prompt).text,
             },
           ],
           temperature: 0.7,
@@ -259,6 +287,12 @@ Remember:
     }
 
     const openaiData = await openaiResponse.json();
+    inBackground(costLedger.record({
+      functionName: "lab-insights",
+      userId,
+      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-5-mini",
+      usage: openaiData?.usage,
+    }));
 
     /*
       Previously: `JSON.parse(openaiData.choices[0].message.content)` straight
@@ -301,6 +335,7 @@ Remember:
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    inBackground(reporter.captureException(error, { stage: "insights" }));
     const message = errorMessage(error, "Failed to generate insights");
     return new Response(
       JSON.stringify({

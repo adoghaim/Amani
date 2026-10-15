@@ -1,11 +1,20 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
+import { aiPausedBody } from "../_shared/ai-pause.ts";
+import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+
+// PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
+// AI cost ledger, and the kill switch. Once per isolate.
+const reporter = edgeErrorReporter("parse-lab-report-ocr");
+const costLedger = edgeAiCostLedger("parse-lab-report-ocr");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -199,6 +208,25 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabaseAdmin).check(user.id));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PK-FIX-01b (D12): while the owner's kill switch is on, no model call and
+    // a calm paused answer the app shows as a notice, not an error. Before the
+    // rate limit, so a paused attempt does not spend her daily quota.
+    if (await aiPausedNow()) {
+      return new Response(
+        JSON.stringify({ ...aiPausedBody(), items: [], metadata: { cycle_day: null, cycle_phase: null } }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     await enforceRateLimit(createRateLimitStore(supabaseAdmin), {
       userId: user.id,
       endpoint: "parse-lab-report-ocr",
@@ -317,6 +345,12 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
     }
 
     const openaiData = await openaiResponse.json();
+    inBackground(costLedger.record({
+      functionName: "parse-lab-report-ocr",
+      userId: user.id,
+      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-4o",
+      usage: openaiData?.usage,
+    }));
     const content = openaiData.choices[0].message.content;
 
     let rawItems: RawExtractedItem[];
@@ -445,6 +479,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
       );
     }
 
+    inBackground(reporter.captureException(error, { stage: "ocr" }));
     return new Response(
       JSON.stringify({ error: errorMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

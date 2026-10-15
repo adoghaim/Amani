@@ -98,6 +98,8 @@ test.describe('V2 version regeneration, flag off', () => {
     // Closeout 6 before regeneration: untrusted prose of the stored body never renders.
     await expect(page.locator('body')).not.toContainText(PREVIOUS_CANARY);
 
+    // D19 (PK-INT-01): Regenerate moved into the labelled More menu; its behaviour and copy are unchanged.
+    await page.getByRole('button', { name: 'More', exact: true }).click();
     const regenerate = page.getByRole('button', { name: /^Regenerate \(3 left\)$/ });
     await expect(regenerate).toBeVisible();
     const generated = page.waitForResponse(r => r.url().endsWith('/functions/v1/generate-interpretation'));

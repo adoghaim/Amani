@@ -15,7 +15,7 @@
  * which is pure and unit tested. This file is wiring.
  */
 
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+import 'jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
 import {
@@ -29,11 +29,14 @@ import {
   type NormalizedIapSubscription,
 } from '../_shared/iap-verification.ts';
 import { persistIapWebhookEvent, type EventClaimStore } from '../_shared/iap-idempotency.ts';
+import { createAppEventSink, logServerEvent, revenueCatFunnelEvent } from '../_shared/app-events.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 );
+
+const appEventSink = createAppEventSink(row => supabase.from('app_events').insert(row));
 
 const iapStore: IapStore = {
   async findByStoreSubscription(platform: IapPlatform, storeSubscriptionId: string) {
@@ -238,6 +241,17 @@ Deno.serve(async (req) => {
       `[iap-webhook] ${outcome.action} ${subscription.platform}/${subscription.productId} ` +
         `for ${subscription.userId} → ${subscription.status}`,
     );
+
+    // PK-EXP5 funnel step, only for a delivery that was applied. Never throws,
+    // gives up after 3 seconds: a logging failure never fails the webhook.
+    const funnelEvent = revenueCatFunnelEvent(body);
+    if (funnelEvent) {
+      await logServerEvent(appEventSink, {
+        event: funnelEvent,
+        userId: subscription.userId,
+        props: { platform: subscription.platform },
+      });
+    }
 
     return Response.json({ received: true });
   } catch (error: unknown) {

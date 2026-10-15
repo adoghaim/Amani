@@ -1,4 +1,4 @@
-import { z } from "npm:zod@^3.25.76";
+import { z } from "npm:zod@3.25.76";
 
 export const GenerateInterpretationRequestSchema = z.object({
   reportId: z.string().uuid(),

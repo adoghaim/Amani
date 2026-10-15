@@ -172,6 +172,30 @@ export async function decideIntroductoryAccess(
 ): Promise<DeepAccessDecision> {
   const { tier, userId, bloodDrawId } = input;
 
+  if (tier === "plus") return introductoryAccessDecision({ tier, existingClaim: false, claimsUsed: 0 });
+
+  const existing = await actions.findClaim(userId, bloodDrawId);
+  const claimsUsed = await actions.countClaims(userId);
+
+  return introductoryAccessDecision({ tier, existingClaim: !!existing, claimsUsed });
+}
+
+/**
+ * The decision itself, from the ledger facts, written once. Pure.
+ * `decideIntroductoryAccess` reads the facts through its port before the model
+ * call; get-interpretation passes the readers' claim coverage and the claim
+ * count, so that whether a regeneration can succeed is answered by this same
+ * rule rather than a copy of it (PK-PL-A, `regeneration-availability.ts`).
+ */
+export function introductoryAccessDecision(input: {
+  tier: Tier;
+  /** This draw (or report) already holds a claim. */
+  existingClaim: boolean;
+  /** Lifetime claims spent. Ignored for Plus. */
+  claimsUsed: number;
+}): DeepAccessDecision {
+  const { tier, existingClaim, claimsUsed } = input;
+
   if (tier === "plus") {
     return {
       granted: true,
@@ -182,10 +206,7 @@ export async function decideIntroductoryAccess(
     };
   }
 
-  const existing = await actions.findClaim(userId, bloodDrawId);
-  const claimsUsed = await actions.countClaims(userId);
-
-  if (existing) {
+  if (existingClaim) {
     return {
       granted: true,
       reason: "existing_claim",
