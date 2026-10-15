@@ -1,4 +1,4 @@
-# Sourced by run.sh after interpretation-versions.run.sh, when every V2
+# Sourced by cases/240-regeneration-no-write.sh, after interpretation-versions.run.sh, when every V2
 # migration is applied (the ledger cutover re-forwarded). PK-PL-A, Adell's
 # pre-launch ruling (b): a regeneration that fails writes nothing, so it
 # consumes no attempt and no credit. Property and control map:

@@ -109,7 +109,11 @@ answers that one of these two tables does not exist (`PGRST205` or `42P01`), `de
 treats it as nothing to erase and carries on; there cannot be rows in a table that does not exist.
 Any other error on them still fails the deletion (non-2xx), and a missing table that is not marked
 `mayBeUndeployed` still fails it too (`account-deletion.test.ts`, `user-data-registry.test.ts`).
-Deploying `delete-user-data` from main before this migration is therefore safe.
+Deploying `delete-user-data` from main before this migration is therefore safe as far as these two
+tables go. Main's build also deletes from `interpretation_feedback` (`20261015020000`) and
+`consent_records` (`20261015040000`), which are not `mayBeUndeployed`: run
+`factory/sql/verify-account-deletion-tables.sql` before any `delete-user-data` deploy (see
+`docs/runtime-config.md`, "Deploy order: account deletion").
 
 ## R12: indexes now, a rollup later
 

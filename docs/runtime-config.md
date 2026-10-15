@@ -98,14 +98,16 @@ them needs a migration, and no migration may add one (D5).
 
 A packet that adds a flag adds its row here, in the same PR.
 
-## Deploy order: account deletion (PK-HARM-01)
+## Deploy order: account deletion (PK-HARM-01, PK-CONSENT-01)
 
 A feature flag does not protect `delete-user-data`. It deletes from every `ordered_delete` table in
 `supabase/functions/_shared/user-data-registry.ts`, whatever the flags say, and fails closed on any
-error. PK-HARM-01 adds `interpretation_feedback` to that list. So:
+error. PK-HARM-01 adds `interpretation_feedback` to that list, and PK-CONSENT-01 adds
+`consent_records`. So:
 
 - **Never deploy `delete-user-data` built from the PK-HARM-01 commit or later until migration
-  `20261015020000_interpretation_feedback.sql` is pushed to the same project.** This includes
+  `20261015020000_interpretation_feedback.sql` is pushed to the same project.** Built from the
+  PK-CONSENT-01 commit or later, it also needs `20261015040000_consent_records.sql` pushed first. This includes
   running the V2 runbook (PR #93) from a `main` that already contains PK-HARM-01: push
   20261015020000 with or before the V2 migrations, or deploy `delete-user-data` from a commit
   before PK-HARM-01.
@@ -122,7 +124,7 @@ error. PK-HARM-01 adds `interpretation_feedback` to that list. So:
   array. Verified with the real supabase-js against a stub that answers like PostgREST
   (`delete-user-data.erasure.test.ts`); not yet against a live Supabase stack (pending). The
   preflight SQL above remains the check to rely on before deploying.
-- **The one exception (PK-EXP5):** `app_events` and `user_attribution` are marked `mayBeUndeployed`
+- **The two exceptions (PK-EXP5):** `app_events` and `user_attribution` are marked `mayBeUndeployed`
   in the registry. Until `20261015010000_first_party_events.sql` is pushed they hold nothing to
   erase, so the readiness check lets those two through when (and only when) they do not exist, the
   data step skips them, and the preflight does not list them. Any other error on them still refuses.

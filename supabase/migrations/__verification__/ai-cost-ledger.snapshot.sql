@@ -1,6 +1,6 @@
 -- PK-FIX-01b: one line per catalog object and stored row of the AI cost ledger
 -- migration (columns, constraints, indexes, policies, ACLs, the spend function,
--- rows). Read-only. cases/180 compares it before and after a replay, which
+-- rows). Read-only. cases/190 compares it before and after a replay, which
 -- must change nothing.
 SELECT line FROM (
   SELECT 'column:' || c.relname || '.' || a.attname || ':' || format_type(a.atttypid, a.atttypmod)
