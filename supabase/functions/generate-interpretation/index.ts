@@ -47,6 +47,7 @@ import {
 } from "../_shared/interpretation-version-write.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
+import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { InterpretationSchema } from "../_shared/schemas/interpretation.ts";
 import { GenerateInterpretationRequestSchema } from "../_shared/schemas/requests.ts";
 import {
@@ -1241,7 +1242,8 @@ async function callOpenAIOnce(
               role: "system",
               content: "You are Amani's clinical interpretation engine. Return ONLY valid JSON. No markdown, no code blocks, no preamble. Educational use only — not medical advice.",
             },
-            { role: "user", content: prompt },
+            // PK-PRIV-01: identifiers out before the prompt leaves for OpenAI.
+            { role: "user", content: redactLabText(prompt).text },
           ],
           max_tokens: 2200,
           temperature: 0.25,

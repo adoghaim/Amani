@@ -4,6 +4,7 @@ import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
+import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
 import { entitlementUnavailable, premiumRequired } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -270,7 +271,8 @@ Remember:
             },
             {
               role: "user",
-              content: prompt,
+              // PK-PRIV-01: identifiers out before the prompt leaves for OpenAI.
+              content: redactLabText(prompt).text,
             },
           ],
           temperature: 0.7,
