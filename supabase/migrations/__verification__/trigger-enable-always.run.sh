@@ -47,6 +47,34 @@ TEA_SAFETY=(
 # The harness users stub predates 20260826000000; catch it up and apply the real
 # migration so the users clamp triggers are production DDL, not stand-ins.
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/trigger-enable-always.prelude.sql
+# The prelude widens the shared users stub, so every users row's to_jsonb bytes
+# change. Case 160 captured task048_users_before, the byte baseline that
+# interpretation-versions.storage.sql compares users against
+# (H048-NO-CONSUMPTION), before this. Later cases on this database run storage.sql
+# again (230, lab-file-cleanup.run.sh). Prove the prelude changed nothing but
+# adding its own columns, then re-capture the baseline in the same transaction,
+# so from here on every byte of every users row is still compared.
+psql_f -v ON_ERROR_STOP=1 -q <<'SQL'
+BEGIN;
+DO $$ BEGIN
+  IF to_regclass('public.task048_users_before') IS NULL THEN
+    RAISE EXCEPTION 'FAIL TEA-USERS-BASELINE: case 160 left no task048_users_before';
+  END IF;
+  IF EXISTS(
+    SELECT 1 FROM (SELECT b.id AS b_id, u.id AS u_id, convert_from(b.bytes,'UTF8')::jsonb AS before, to_jsonb(u) AS now
+                   FROM public.task048_users_before b FULL JOIN public.users u USING(id)) p
+    WHERE p.b_id IS NULL OR p.u_id IS NULL
+      OR p.before IS DISTINCT FROM (SELECT jsonb_object_agg(e.key, e.value) FROM jsonb_each(p.now) e WHERE p.before ? e.key)
+      OR EXISTS(SELECT 1 FROM jsonb_object_keys(p.now) k(key) WHERE NOT p.before ? k.key
+                  AND k.key NOT IN ('email','subscription_status','trial_start_date','stripe_customer_id','stripe_subscription_id'))) THEN
+    RAISE EXCEPTION 'FAIL TEA-USERS-BASELINE: the prelude changed users beyond adding its columns';
+  END IF;
+END $$;
+DROP TABLE public.task048_users_before;
+CREATE TABLE public.task048_users_before AS SELECT id,convert_to(to_jsonb(u)::text,'UTF8') AS bytes FROM public.users u;
+COMMIT;
+SQL
+echo "PASS TEA-USERS-BASELINE: the prelude only added users columns; the TASK-048 users byte baseline is re-captured."
 psql_f -v ON_ERROR_STOP=1 -q -f "/tmp/$TEA_COMPAT" >"$tea_log" 2>&1 \
   || { echo "FAIL TEA-PRELUDE: $TEA_COMPAT did not apply" >&2; cat "$tea_log" >&2; exit 1; }
 
