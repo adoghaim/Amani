@@ -255,7 +255,7 @@
         },
         {
           "name": "Keep verified binaries",
-          "uses": "actions/upload-artifact@v4",
+          "uses": "actions/upload-artifact@v7",
           "with": {
             "name": "rc-binaries-${{ github.run_id }}-${{ github.run_attempt }}",
             "path": "${{ env.RELEASE_OUT }}/app.ipa\n${{ env.RELEASE_OUT }}/app.aab\n${{ env.RELEASE_OUT }}/app.apk",
@@ -330,7 +330,7 @@
         {
           "name": "Publish sanitized evidence",
           "if": "${{ always() }}",
-          "uses": "actions/upload-artifact@v4",
+          "uses": "actions/upload-artifact@v7",
           "with": {
             "name": "rc-evidence-${{ github.run_id }}-${{ github.run_attempt }}",
             "path": "${{ env.RELEASE_OUT }}/*.json\n${{ env.RELEASE_OUT }}/*.md",
