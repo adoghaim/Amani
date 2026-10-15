@@ -28,6 +28,12 @@ export interface ReportHeaderContext {
   deleting?: boolean;
   /** PK-FIX-04: the report is deleted but its stored file is not removed yet (retryable). */
   deleteFilePending?: boolean;
+  /**
+   * Opens "Report a problem" (PK-HARM-01, D20). ReportView supplies it only
+   * while features.interpretation_feedback is on; absent, the action is not
+   * offered.
+   */
+  reportProblem?: () => void;
 }
 
 /** One action as the header shows it, as the primary button or a More item. */

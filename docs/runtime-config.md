@@ -85,7 +85,7 @@ them needs a migration, and no migration may add one (D5).
 | Flag | What it switches on |
 |---|---|
 | `consent_gate` | the reproductive-data consent gate (its server check reads the same key) |
-| `interpretation_feedback` | feedback on an interpretation |
+| `interpretation_feedback` | "Report a problem" in the report's More menu (PK-HARM-01; needs migration 20261015020000 pushed first; docs/ops/adverse-event-triage.md). **Also gates a function deploy, flag or not: never deploy `delete-user-data` built from the PK-HARM-01 commit or later until 20261015020000 is pushed** (see "Deploy order: account deletion" below) |
 | `value_corrections` | correcting an extracted value |
 | `data_export` | self-serve data export |
 | `exit_question` | the cancel-flow exit question (D18) |
@@ -97,6 +97,31 @@ them needs a migration, and no migration may add one (D5).
 | `ai_assistant_connector` | the AI-assistant connector prototype, not deployed (PK-AIDIST-01, `docs/ai-distribution/design.md`) |
 
 A packet that adds a flag adds its row here, in the same PR.
+
+## Deploy order: account deletion (PK-HARM-01)
+
+A feature flag does not protect `delete-user-data`. It deletes from every `ordered_delete` table in
+`supabase/functions/_shared/user-data-registry.ts`, whatever the flags say, and fails closed on any
+error. PK-HARM-01 adds `interpretation_feedback` to that list. So:
+
+- **Never deploy `delete-user-data` built from the PK-HARM-01 commit or later until migration
+  `20261015020000_interpretation_feedback.sql` is pushed to the same project.** This includes
+  running the V2 runbook (PR #93) from a `main` that already contains PK-HARM-01: push
+  20261015020000 with or before the V2 migrations, or deploy `delete-user-data` from a commit
+  before PK-HARM-01.
+- **Check before every `delete-user-data` deploy:** run `factory/sql/verify-account-deletion-tables.sql`
+  (read-only) in that project's SQL editor. Zero rows: safe to deploy. A row names a missing table
+  and the migration to push first.
+- **If it is deployed early anyway,** the function first reads every table it deletes from (one GET
+  per table, at most one owner id back, discarded) and refuses the deletion with a 503 ("temporarily
+  unavailable, nothing was deleted") before it touches Stripe, storage or any row. Account deletion
+  is down until the migration is pushed; a missing table does not leave a half-deleted account and
+  is never skipped. The check is a GET, never a HEAD: PostgREST answers a missing table with 404,
+  a HEAD response has no body, and supabase-js reads a bodiless 404 as a 204 success, so a HEAD
+  probe would pass for a table that is not there. A probe passes only when it gets back a rows
+  array. Verified with the real supabase-js against a stub that answers like PostgREST
+  (`delete-user-data.erasure.test.ts`); not yet against a live Supabase stack (pending). The
+  preflight SQL above remains the check to rely on before deploying.
 
 ## Owner SQL (Supabase SQL editor)
 

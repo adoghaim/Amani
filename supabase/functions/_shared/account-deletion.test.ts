@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  AccountDeletionNotReadyError,
+  checkUserDataTablesReady,
   deleteUserAccount,
   deleteUserDataTables,
   isMissingTableError,
@@ -44,6 +46,7 @@ function makeActions(overrides: Partial<AccountDeletionActions> = {}): {
   };
 
   const actions: AccountDeletionActions = {
+    checkDataTablesReady: vi.fn(track('checkDataTablesReady')),
     listStoreSubscriptions: vi.fn(async (_userId: string) => {
       calls.push('listStoreSubscriptions');
       return [] as StoreSubscriptionRecord[];
@@ -73,6 +76,7 @@ describe('deleteUserAccount', () => {
     await deleteUserAccount(actions, 'user-1');
 
     expect(calls).toEqual([
+      'checkDataTablesReady',
       'listStoreSubscriptions',
       'getStripeCustomerId',
       'cancelStripeSubscriptions',
@@ -96,6 +100,7 @@ describe('deleteUserAccount', () => {
     await deleteUserAccount(actions, 'user-2');
 
     expect(calls).toEqual([
+      'checkDataTablesReady',
       'listStoreSubscriptions',
       'getStripeCustomerId',
       'deleteStorageFiles',
@@ -160,6 +165,7 @@ describe('deleteUserAccount', () => {
     await deleteUserAccount(actions, 'user-6');
 
     expect(calls).toEqual([
+      'checkDataTablesReady',
       'listStoreSubscriptions',
       'getStripeCustomerId',
       'deleteStorageFiles',
@@ -605,5 +611,59 @@ describe('deleteUserDataTables — driven by user-data-registry.ts (PK-INT-01)',
     const { port, calls } = makePort([]);
     await deleteUserDataTables(port, 'user-1', registry);
     expect(calls).toEqual(['listReportIds', 'delete:new_feature_rows.user_id', 'delete:users.id']);
+  });
+});
+
+describe('deploy order: a table delete-user-data deletes from is missing (PK-HARM-01 review)', () => {
+  // The hazard: delete-user-data deployed from a commit whose registry names
+  // interpretation_feedback before migration 20261015020000 is pushed. The
+  // readiness check must refuse before a single destructive call, and never
+  // swallow the missing table.
+  const missing = (absent: string[]) => vi.fn(async (table: string, _ownerColumn: string) => {
+    if (absent.includes(table)) throw new Error(`Could not find the table 'public.${table}' in the schema cache`);
+  });
+
+  it('probes every ordered_delete table, and only those', async () => {
+    const probe = missing([]);
+    await checkUserDataTablesReady(probe);
+    expect(probe.mock.calls.map(([t, c]) => `${t}.${c}`))
+      .toEqual(orderedDeletes().map(e => `${e.table}.${e.ownerColumn}`));
+    expect(probe.mock.calls.map(([t]) => t)).toContain('interpretation_feedback');
+  });
+
+  it('names the missing table and the migration to push, with every unready table', async () => {
+    const error = await checkUserDataTablesReady(missing(['interpretation_feedback', 'reminders'])).catch(e => e);
+    expect(error).toBeInstanceOf(AccountDeletionNotReadyError);
+    expect(error.code).toBe('account_deletion_not_ready');
+    expect(error.tables).toEqual([
+      expect.objectContaining({ table: 'interpretation_feedback', requiresMigration: '20261015020000' }),
+      expect.objectContaining({ table: 'reminders', requiresMigration: null }),
+    ]);
+    expect(error.message).toContain('interpretation_feedback (push migration 20261015020000)');
+    expect(error.message).toContain('Nothing was deleted');
+  });
+
+  it('a refused deletion touches nothing: no store read, no Stripe, no storage, no data, no auth', async () => {
+    const { actions, calls } = makeActions({
+      checkDataTablesReady: vi.fn(async () => {
+        calls.push('checkDataTablesReady');
+        await checkUserDataTablesReady(missing(['interpretation_feedback']));
+      }),
+    });
+    await expect(deleteUserAccount(actions, 'user-15')).rejects.toBeInstanceOf(AccountDeletionNotReadyError);
+    expect(calls).toEqual(['checkDataTablesReady']);
+    expect(actions.listStoreSubscriptions).not.toHaveBeenCalled();
+    expect(actions.getStripeCustomerId).not.toHaveBeenCalled();
+    expect(actions.cancelStripeSubscriptions).not.toHaveBeenCalled();
+    expect(actions.deleteStorageFiles).not.toHaveBeenCalled();
+    expect(actions.deleteDataTables).not.toHaveBeenCalled();
+    expect(actions.deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('any probe failure fails closed, not only a missing table', async () => {
+    const probe = vi.fn(async (table: string) => { if (table === 'users') throw 'network down'; });
+    const error = await checkUserDataTablesReady(probe).catch(e => e);
+    expect(error).toBeInstanceOf(AccountDeletionNotReadyError);
+    expect(error.tables).toEqual([{ table: 'users', requiresMigration: null, detail: 'network down' }]);
   });
 });

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
-import { deleteUserDataTables, isMissingTableError, MissingTableError } from './account-deletion.ts';
+import { createClient } from '@supabase/supabase-js';
+import { AccountDeletionNotReadyError, checkUserDataTablesReady, deleteUserDataTables, isMissingTableError, MissingTableError } from './account-deletion.ts';
 import { orderedDeletes } from './user-data-registry.ts';
 
 /**
@@ -19,9 +20,13 @@ import { orderedDeletes } from './user-data-registry.ts';
 const source = readFileSync(new URL('../delete-user-data/index.ts', import.meta.url), 'utf8');
 // Every delete the function may issue after erasure: the unchanged user-keyed
 // sweep (lab_reports included, by user_id) and the profile row.
-const USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introductory_deep_access_claims',
+const V2_USER_KEYED = ['interventions', 'cycle_events', 'parser_debug', 'introductory_deep_access_claims',
   'complimentary_entitlements', 'lab_reports', 'period_logs', 'symptom_logs', 'notification_preferences',
   'reminders', 'audit_events', 'rate_limits', 'consent_records', 'iap_beta_testers', 'app_events', 'user_attribution', 'users'];
+// Tables later packets added to the registry, each swept at its place.
+// PK-HARM-01: interpretation_feedback, by user_id, before lab_reports.
+const USER_KEYED = V2_USER_KEYED.flatMap(table =>
+  (table === 'lab_reports' ? ['interpretation_feedback', table] : [table]));
 
 function slice(startMarker: string, endMarker: string) {
   const start = source.indexOf(startMarker);
@@ -144,9 +149,20 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
 
   it('PK-INT-01: the registry drives exactly the V2 sweep, in the V2 order', () => {
     expect(orderedDeletes().map(entry => entry.table)).toEqual(USER_KEYED);
+    // Later tables only add to the V2 sweep; its own order is untouched.
+    expect(orderedDeletes().map(entry => entry.table).filter(table => V2_USER_KEYED.includes(table))).toEqual(V2_USER_KEYED);
     // The handler's method really calls the shared function it was given above.
     expect(source).toMatch(/import \{[^}]*\bdeleteUserDataTables\b[^}]*\} from "\.\.\/_shared\/account-deletion\.ts";/);
     expect(method).toContain('await deleteUserDataTables({');
+  });
+
+  it('PK-HARM-01: interpretation_feedback is swept by user_id after erase_reports and before lab_reports', async () => {
+    const fake = recordingSupabase(['r1']);
+    await deleteDataTables(fake.client)('u');
+    const ops = started(fake.events);
+    expect(ops.indexOf('delete:interpretation_feedback')).toBeGreaterThan(ops.indexOf('rpc:erase_reports'));
+    expect(ops.indexOf('delete:interpretation_feedback')).toBeLessThan(ops.indexOf('delete:lab_reports'));
+    expect(fake.deleteFilters).toContainEqual({ op: 'delete:interpretation_feedback', column: 'user_id' });
   });
 
   it('PK-INT-01: each sweep filters on the same column as before: user_id, and id for the profile row', async () => {
@@ -211,6 +227,73 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
     expect(started(rateLimits.fake.events)).not.toContain('delete:iap_beta_testers');
     const profile = failing('users');
     await expect(profile.run).rejects.toThrow('Deleting users row failed: boom');
+  });
+
+  it('PK-HARM-01 deploy order: the handler probes every swept table read-only through the real supabase-js, and a missing one refuses with 503 before anything is deleted', async () => {
+    const check = slice('async checkDataTablesReady() {', 'async listStoreSubscriptions(');
+    const checkFrom = (body: string) => {
+      const { code } = transformSync(`const o = {\n${body}\n};\nreturn o.checkDataTablesReady;`, { loader: 'ts', target: 'es2022' });
+      return (client: unknown) => (new Function('supabase', 'checkUserDataTablesReady', code)(
+        client, checkUserDataTablesReady) as () => Promise<void>)();
+    };
+
+    // The real client over a stub fetch that answers like PostgREST: a missing
+    // table is 404 PGRST205 with a JSON body, and a HEAD response has no body.
+    // A hand-written `{ error }` fake once hid that postgrest-js reads a
+    // bodiless 404 as success (status 204, error null).
+    const requests: Array<{ method: string; table: string; select: string | null }> = [];
+    const realClient = (absent: string) => createClient('http://postgrest.stub', 'service-role-key', {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+          const method = (init?.method ?? 'GET').toUpperCase();
+          const table = url.pathname.replace(/^\/rest\/v1\//, '');
+          requests.push({ method, table, select: url.searchParams.get('select') });
+          if (method !== 'GET' && method !== 'HEAD') throw new Error(`the readiness check sent ${method} to ${table}`);
+          const headers = { 'Content-Type': 'application/json' };
+          if (table === absent) {
+            const body = JSON.stringify({ code: 'PGRST205', details: null, hint: null,
+              message: `Could not find the table 'public.${table}' in the schema cache` });
+            return new Response(method === 'HEAD' ? null : body, { status: 404, headers });
+          }
+          return new Response(method === 'HEAD' ? null : '[]', { status: 200, headers });
+        },
+      },
+    });
+
+    const handlerCheck = checkFrom(check);
+    await expect(handlerCheck(realClient('none'))).resolves.toBeUndefined();
+    expect(requests.map(r => `${r.method} ${r.table}.${r.select}`))
+      .toEqual(orderedDeletes().map(e => `GET ${e.table}.${e.ownerColumn}`));
+
+    const error = await handlerCheck(realClient('interpretation_feedback')).catch(e => e);
+    expect(error).toBeInstanceOf(AccountDeletionNotReadyError);
+    expect(error.message).toContain('interpretation_feedback (push migration 20261015020000)');
+    expect(error.tables).toEqual([{ table: 'interpretation_feedback', requiresMigration: '20261015020000',
+      detail: "Could not find the table 'public.interpretation_feedback' in the schema cache" }]);
+
+    // Negative control: the stub reproduces the trap. The earlier probe (HEAD,
+    // error-only) passes for the same missing table, which is why it must
+    // never come back.
+    const probeLines = /const \{ data, error, status \} = [^\n]*\n\s*if \(error\) [^\n]*\n\s*if \(!Array\.isArray\(data\)\) [^\n]*\n/;
+    expect(check).toMatch(probeLines);
+    const earlierShape = check.replace(probeLines,
+      'const { error } = await supabase.from(table).select(ownerColumn, { head: true }).limit(1);\n' +
+      'if (error) throw new Error(error.message);\n');
+    await expect(checkFrom(earlierShape)(realClient('interpretation_feedback'))).resolves.toBeUndefined();
+    // The rows-array check is a second, independent layer: a HEAD probe behind
+    // it refuses (every table, since HEAD carries no rows) instead of passing.
+    const headWithArrayCheck = check.replace('.select(ownerColumn).limit(1)', '.select(ownerColumn, { head: true }).limit(1)');
+    expect(headWithArrayCheck).not.toBe(check);
+    await expect(checkFrom(headWithArrayCheck)(realClient('interpretation_feedback')))
+      .rejects.toBeInstanceOf(AccountDeletionNotReadyError);
+
+    // It runs first, and the handler answers a refusal with 503, never swallowing it.
+    expect(source.indexOf('async checkDataTablesReady() {')).toBeLessThan(source.indexOf('async listStoreSubscriptions('));
+    const refusal = slice('if (error instanceof AccountDeletionNotReadyError) {', 'console.error("Error deleting user account:"');
+    expect(refusal).toContain('status: 503');
+    expect(refusal).toContain('Nothing was deleted');
   });
 
   it('negative control: the recorder sees the old shape start child deletes before the RPC settles', async () => {

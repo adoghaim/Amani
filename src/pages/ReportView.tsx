@@ -54,6 +54,9 @@ import {
 import { ReportHeaderActions } from '../features/report/header/ReportHeaderActions';
 import type { ReportHeaderContext } from '../features/report/header';
 import { ReportNotices } from '../features/report/notices/ReportNotices';
+import { ReportProblemFlow } from '../features/report/problem/ReportProblemFlow';
+import { INTERPRETATION_FEEDBACK_FLAG } from '../features/report/problem/problemReport';
+import { isFeatureEnabled } from '../lib/runtimeConfig';
 import { shownExplanationOf, UNIDENTIFIED_EXPLANATION, type ShownExplanation } from '../features/report/notices';
 import { isAiPausedError, isAiPausedResponse, noteAiPaused, readAiPaused, subscribeAiPaused } from '../lib/aiPause';
 import type { LabSource } from '../types';
@@ -400,6 +403,8 @@ export function ReportView() {
     stay null there.
   */
   const [shownExplanation, setShownExplanation] = useState<ShownExplanation | null>(null);
+  // "Report a problem" (PK-HARM-01, D20), offered in More only while features.interpretation_feedback is on.
+  const [reportProblemOpen, setReportProblemOpen] = useState(false);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   // The report is deleted but its stored file is not removed yet (retryable).
@@ -1378,6 +1383,7 @@ export function ReportView() {
     deleteReport: () => { void handleDelete(); },
     deleting,
     deleteFilePending,
+    reportProblem: isFeatureEnabled(INTERPRETATION_FEEDBACK_FLAG) ? () => setReportProblemOpen(true) : undefined,
   };
 
   const freemiumPanel = freemium ? (
@@ -2026,6 +2032,13 @@ export function ReportView() {
 
         </div>
       </div>
+      {/* PK-HARM-01 (D20): opened from More; renders nothing while closed. */}
+      <ReportProblemFlow
+        open={reportProblemOpen}
+        onClose={() => setReportProblemOpen(false)}
+        reportId={report.id}
+        interpretationId={interpretation ? shownExplanation?.id ?? null : null}
+      />
     </Layout>
   );
 }
