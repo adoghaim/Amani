@@ -11,5 +11,7 @@ CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
 WHERE n.nspname = 'public'
   AND c.relname IN ('interpretation_visibility_config', 'interpretations',
                     'interpretations_private', 'introductory_deep_access_claims',
-                    'users', 'rate_limits')
+                    'users', 'rate_limits',
+                    -- PK-FIX-04 (20261015110000): service-only; expect every row false.
+                    'lab_file_cleanup')
 ORDER BY c.relname, r.role_name, p.privilege;

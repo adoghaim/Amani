@@ -20,6 +20,7 @@ import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
+import { requestReportDeletion } from '../lib/reportDeletion';
 import { useAuth } from '../contexts/AuthContext';
 import type { LabReport } from '../types';
 
@@ -103,9 +104,11 @@ interface DeleteModalProps {
   onCancel: () => void;
   deleting: boolean;
   error?: string | null;
+  /** The report is deleted but its uploaded file is not removed yet: confirm retries the file. */
+  filePending?: boolean;
 }
 
-function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteModalProps) {
+function DeleteModal({ report, onConfirm, onCancel, deleting, error, filePending = false }: DeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -115,17 +118,23 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
               <AlertTriangle className="w-5 h-5 text-theme-flag-low" />
             </div>
             <div>
-              <h2 className="text-base text-theme-text">Delete report?</h2>
-              <p className="text-sm text-theme-muted-text mt-0.5">This cannot be undone.</p>
+              <h2 className="text-base text-theme-text">
+                {filePending ? 'Uploaded file not removed yet' : 'Delete report?'}
+              </h2>
+              <p className="text-sm text-theme-muted-text mt-0.5">
+                {filePending ? 'The report and its results are deleted.' : 'This cannot be undone.'}
+              </p>
             </div>
           </div>
         </div>
         <div className="px-6 py-4">
-          <p className="text-sm text-theme-text-body">
-            You are about to permanently delete the report from{' '}
-            <span className="font-semibold text-theme-text">{formatDate(report.report_date)}</span>
-            , including all biomarkers and AI insights. This action cannot be reversed.
-          </p>
+          {!filePending && (
+            <p className="text-sm text-theme-text-body">
+              You are about to permanently delete the report from{' '}
+              <span className="font-semibold text-theme-text">{formatDate(report.report_date)}</span>
+              , including all biomarkers, AI insights and any uploaded lab file. This action cannot be reversed.
+            </p>
+          )}
           {error && (
             <div className="mt-3 px-3 py-2 rounded-lg bg-theme-flag-low-bg border border-theme-flag-low-border text-sm text-theme-flag-low">
               {error}
@@ -138,7 +147,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
             disabled={deleting}
             className="px-4 py-2 text-sm font-medium text-theme-text-body bg-theme-surface border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
           >
-            Cancel
+            {filePending ? 'Close' : 'Cancel'}
           </button>
           <button
             onClick={onConfirm}
@@ -148,11 +157,11 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error }: DeleteMod
             {deleting ? (
               <>
                 <span className="w-3.5 h-3.5 border-2 border-theme-surface/40 border-t-white rounded-full animate-spin" />
-                Deleting...
+                {filePending ? 'Removing...' : 'Deleting...'}
               </>
             ) : (
               <>
-                <Trash2 className="w-3.5 h-3.5" /> Delete report
+                <Trash2 className="w-3.5 h-3.5" /> {filePending ? 'Try again' : 'Delete report'}
               </>
             )}
           </button>
@@ -176,6 +185,8 @@ export function Reports() {
   const [deleteTarget, setDeleteTarget] = useState<LabReport | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The report is deleted but its stored file is not removed yet (retryable).
+  const [deleteFilePending, setDeleteFilePending] = useState(false);
 
   useEffect(() => {
     if (user) fetchData();
@@ -227,18 +238,37 @@ export function Reports() {
     }
   };
 
+  // Server-side deletion: the delete-report function erases the report graph
+  // and removes the uploaded file, so success is shown only when both are gone.
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    const target = deleteTarget;
     setDeleting(true);
     setDeleteError(null);
-    const { error } = await supabase.from('lab_reports').delete().eq('id', deleteTarget.id);
+    const outcome = await requestReportDeletion(
+      (name, options) => supabase.functions.invoke(name, options),
+      target.id,
+    );
     setDeleting(false);
-    if (error) {
-      setDeleteError(errorMessage(error, 'Failed to delete this report. Please try again.'));
+    if (outcome.kind === 'failed') {
+      setDeleteError(outcome.message);
       return;
     }
-    setReports(prev => prev.filter(r => r.id !== deleteTarget.id));
+    // The report rows are gone in both remaining outcomes.
+    setReports(prev => prev.filter(r => r.id !== target.id));
+    if (outcome.kind === 'file_pending') {
+      setDeleteFilePending(true);
+      setDeleteError(outcome.message);
+      return;
+    }
+    setDeleteFilePending(false);
     setDeleteTarget(null);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null);
+    setDeleteError(null);
+    setDeleteFilePending(false);
   };
 
   const cycleSort = (key: SortKey) => {
@@ -288,9 +318,10 @@ export function Reports() {
         <DeleteModal
           report={deleteTarget}
           onConfirm={handleDelete}
-          onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
+          onCancel={closeDeleteModal}
           deleting={deleting}
           error={deleteError}
+          filePending={deleteFilePending}
         />
       )}
 
