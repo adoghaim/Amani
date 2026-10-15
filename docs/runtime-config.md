@@ -94,6 +94,7 @@ them needs a migration, and no migration may add one (D5).
 | `first_party_events` | first-party product events (EXP-5) |
 | `sample_report` | "See a sample report" (D26) |
 | `visit_summary` | the visit summary (EXP-2) |
+| `ai_assistant_connector` | the AI-assistant connector prototype, not deployed (PK-AIDIST-01, `docs/ai-distribution/design.md`) |
 
 A packet that adds a flag adds its row here, in the same PR.
 
