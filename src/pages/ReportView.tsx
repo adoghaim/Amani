@@ -57,6 +57,9 @@ import { handle402 } from '../utils/subscription';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
+import { PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
+import { CycleRule } from '../components/CycleRule';
+import { ReportCycleLine } from '../components/ReportCycleLine';
 import {
   fetchInterpretationAccess,
   type InterpretationAccessResult,
@@ -1389,12 +1392,14 @@ export function ReportView() {
                 </span>
               )}
             </p>
+            {/*
+              PK-FIX-06-EXT (D10): the cycle day comes first, and any phase is
+              labelled as the estimate it is. It replaces the phase pill, which
+              wore a status tint (DESIGN.md: phase tints are never status). The
+              same ReportCycleLine is on the dashboard and the Reports list.
+            */}
+            <ReportCycleLine report={report} as="p" className="text-sm text-theme-text mt-1" />
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              {cyclePhase && (
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low capitalize">
-                  {cyclePhase.replace(/_/g, ' ')} phase
-                </span>
-              )}
               <span className="text-xs text-theme-muted-text-3">{biomarkers.length} core biomarkers</span>
               {reportAnalytes.length > 0 && (
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
@@ -1440,6 +1445,9 @@ export function ReportView() {
             </Button>
           </div>
         </div>
+
+        {/* ── Cycle rule (DESIGN.md, D10): the draw day on her cycle ── */}
+        <CycleRule report={report} />
 
         {error && (
           <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-xl mb-6 text-sm">
@@ -1832,20 +1840,39 @@ export function ReportView() {
                     </span>
                   )}
                 </div>
+                {/* D10: the cycle day first; a phase is labelled as an estimate. */}
                 <div className="flex gap-4 mb-3">
-                  <div>
-                    <p className="text-xs text-theme-muted-text-3">Phase</p>
-                    <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
-                      {card.phase.replace(/_/g, ' ')}
-                    </p>
-                  </div>
                   {card.day && (
                     <div>
                       <p className="text-xs text-theme-muted-text-3">Cycle day</p>
                       <p className="text-sm font-semibold text-theme-text mt-0.5">{card.day}</p>
                     </div>
                   )}
+                  {card.phase && (
+                    <div>
+                      <p className="text-xs text-theme-muted-text-3">Phase</p>
+                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                        {card.phase}
+                      </p>
+                      <p className="text-xs text-theme-muted-text-2 mt-0.5" data-cycle-phase-estimate>{PHASE_ESTIMATE_LABEL}</p>
+                    </div>
+                  )}
+                  {/* A stored phase the cycle rule does not draw: the report's own record, never an estimate (Q13). */}
+                  {card.recordedPhase && (
+                    <div data-cycle-phase-recorded>
+                      <p className="text-xs text-theme-muted-text-3">Phase recorded with this report</p>
+                      <p className="text-sm font-semibold text-theme-text capitalize mt-0.5">
+                        {card.recordedPhase.replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                  )}
                 </div>
+                {/* PK-FIX-06: a cycle day shown without a phase says why, neutrally. */}
+                {card.phaseNote && (
+                  <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-cycle-phase-note>
+                    {card.phaseNote}
+                  </p>
+                )}
                 {card.explanation && (
                   <p className="text-xs text-theme-muted-text-2 leading-relaxed" data-model-surface="cycle_context">
                     <ModelProse prose={card.explanation} />

@@ -1,4 +1,5 @@
 import { CyclePhase, CyclePrediction, PeriodLog, User } from '../types';
+import { cycleDayOn, phaseForCycleDay } from '../lib/cycleDayRule';
 
 const DEFAULT_CYCLE_LENGTH = 28;
 const DEFAULT_PERIOD_LENGTH = 5;
@@ -33,8 +34,27 @@ export function diffDays(a: Date, b: Date): number {
   return Math.round((toDateOnly(a).getTime() - toDateOnly(b).getTime()) / msPerDay);
 }
 
-function inferCycleLength(sortedLogs: PeriodLog[]): number {
-  if (sortedLogs.length < 2) return DEFAULT_CYCLE_LENGTH;
+/** Start-to-start intervals outside these bounds are not counted as a cycle. */
+export const MIN_INFERRED_CYCLE_LENGTH = 15;
+export const MAX_INFERRED_CYCLE_LENGTH = 60;
+
+/**
+ * The average cycle length in the user's logged period starts, by the rule this
+ * predictor has always used: the rounded mean of the start-to-start intervals
+ * between consecutive starts, counting only intervals within the bounds above.
+ *
+ * Null when the logs do not establish a length (fewer than two starts, or no
+ * interval within the bounds). It never falls back to 28: a caller that must
+ * tell a known length from an unknown one (PK-FIX-06) gets null, not a default.
+ */
+export function averageCycleLengthFromLogs(periodLogs: readonly Pick<PeriodLog, 'start_date'>[]): number | null {
+  return averageOfSortedStarts([...periodLogs].sort(
+    (a, b) => keyToDate(a.start_date).getTime() - keyToDate(b.start_date).getTime()
+  ));
+}
+
+function averageOfSortedStarts(sortedLogs: readonly Pick<PeriodLog, 'start_date'>[]): number | null {
+  if (sortedLogs.length < 2) return null;
   const lengths: number[] = [];
   for (let i = 0; i < sortedLogs.length - 1; i++) {
     const cur = sortedLogs[i];
@@ -43,12 +63,16 @@ function inferCycleLength(sortedLogs: PeriodLog[]): number {
     const a = keyToDate(cur.start_date);
     const b = keyToDate(nxt.start_date);
     const diff = diffDays(b, a);
-    if (diff >= 15 && diff <= 60) {
+    if (diff >= MIN_INFERRED_CYCLE_LENGTH && diff <= MAX_INFERRED_CYCLE_LENGTH) {
       lengths.push(diff);
     }
   }
-  if (lengths.length === 0) return DEFAULT_CYCLE_LENGTH;
+  if (lengths.length === 0) return null;
   return Math.round(lengths.reduce((s, v) => s + v, 0) / lengths.length);
+}
+
+function inferCycleLength(sortedLogs: PeriodLog[]): number {
+  return averageOfSortedStarts(sortedLogs) ?? DEFAULT_CYCLE_LENGTH;
 }
 
 function inferPeriodLength(sortedLogs: PeriodLog[], fallback: number): number {
@@ -61,46 +85,49 @@ function inferPeriodLength(sortedLogs: PeriodLog[], fallback: number): number {
   return Math.round(lengths.reduce((s, v) => s + v, 0) / lengths.length);
 }
 
+/**
+ * Today's cycle day and phase, and the calendar's forecast.
+ *
+ * PK-FIX-06-EXT (owner decision D10): today's day and phase follow the same
+ * rule as the report (src/lib/cycleDayRule.ts), with today as the draw date and
+ * her logged average as the typical length:
+ * - no period logged: no prediction at all (null), so no day and no phase;
+ * - the day never wraps past the cycle length: day 37 stays day 37;
+ * - the phase is the report's: the day map for an unknown or 28-day length on
+ *   days 1-35, otherwise 'unknown'. The old proportional boundaries are gone.
+ *
+ * `knownCycleLength` is her logged average, or null when her logs establish
+ * none. `cycleLength` is only the forecast length for the calendar (her
+ * average, else her profile default, else 28) and is never shown as hers.
+ */
 export function computeCyclePrediction(
   periodLogs: PeriodLog[],
   userProfile: User | null
 ): CyclePrediction | null {
+  const sorted = [...periodLogs].sort(
+    (a, b) => keyToDate(a.start_date).getTime() - keyToDate(b.start_date).getTime()
+  );
+  const lastPeriod = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
+  // D10: no phase, and no guessed day, when no period is logged.
+  if (!lastPeriod) return null;
+
   const today = toDateOnly(new Date());
   const defaultCycleLen = userProfile?.default_cycle_length ?? DEFAULT_CYCLE_LENGTH;
   const defaultPeriodLen = userProfile?.default_period_length ?? DEFAULT_PERIOD_LENGTH;
 
-  const sorted = [...periodLogs].sort(
-    (a, b) => keyToDate(a.start_date).getTime() - keyToDate(b.start_date).getTime()
-  );
-
+  const knownCycleLength = averageOfSortedStarts(sorted);
   const cycleLength = sorted.length >= 2 ? inferCycleLength(sorted) : defaultCycleLen;
   const periodLength = inferPeriodLength(sorted, defaultPeriodLen);
 
-  const lastPeriod = sorted.length > 0 ? sorted[sorted.length - 1] : null;
+  const lastPeriodStart = keyToDate(lastPeriod.start_date);
+  const day = cycleDayOn(dateToKey(today), lastPeriod.start_date);
+  // A last period logged after today places no day.
+  const currentCycleDay = day !== null && day >= 1 ? day : null;
+  const currentPhase = phaseForCycleDay(currentCycleDay, knownCycleLength);
 
-  let lastPeriodStart: Date;
-  if (lastPeriod) {
-    lastPeriodStart = keyToDate(lastPeriod.start_date);
-  } else {
-    lastPeriodStart = addDays(today, -(defaultCycleLen / 2));
-  }
-
-  const daysSinceLast = diffDays(today, lastPeriodStart);
-  const currentCycleDay = Math.max(1, (daysSinceLast % cycleLength) + 1);
-
-  let currentPhase: CyclePhase;
-  if (currentCycleDay <= periodLength) {
-    currentPhase = 'menstrual';
-  } else if (currentCycleDay <= Math.floor(cycleLength * 0.43)) {
-    currentPhase = 'follicular';
-  } else if (currentCycleDay <= Math.floor(cycleLength * 0.57)) {
-    currentPhase = 'ovulatory';
-  } else {
-    currentPhase = 'luteal';
-  }
-
-  const cyclesPassed = Math.floor(daysSinceLast / cycleLength);
-  const nextPeriodStart = addDays(lastPeriodStart, (cyclesPassed + 1) * cycleLength);
+  // No wrap: the next period is forecast from the last logged start only. When
+  // she is past it, the forecast is in the past and the calendar marks nothing.
+  const nextPeriodStart = addDays(lastPeriodStart, cycleLength);
   const nextPeriodEnd = addDays(nextPeriodStart, periodLength - 1);
 
   const ovulationDay = addDays(nextPeriodStart, -14);
@@ -116,6 +143,7 @@ export function computeCyclePrediction(
     currentCycleDay,
     currentPhase,
     cycleLength,
+    knownCycleLength,
     periodLength,
   };
 }
