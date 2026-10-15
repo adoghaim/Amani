@@ -27,7 +27,9 @@ jobs:
     # Keep this name stable: it is the status-check name branch protection uses.
     name: Browser smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 183 specs across three browsers on two workers ran past 15 minutes once the
+    # 2026-10-15 merge train landed (124 passed, none failed, when it was cut off).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
