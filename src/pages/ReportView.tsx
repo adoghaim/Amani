@@ -53,6 +53,7 @@ import { ReportHeaderActions } from '../features/report/header/ReportHeaderActio
 import type { ReportHeaderContext } from '../features/report/header';
 import { ReportNotices } from '../features/report/notices/ReportNotices';
 import { shownExplanationOf, UNIDENTIFIED_EXPLANATION, type ShownExplanation } from '../features/report/notices';
+import { isAiPausedError, isAiPausedResponse, noteAiPaused, readAiPaused, subscribeAiPaused } from '../lib/aiPause';
 import type { LabSource } from '../types';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { createRegenerationRequests } from '../lib/regenerationRequest';
@@ -455,10 +456,19 @@ export function ReportView() {
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
+  // PK-FIX-01b (DT9, D12): the last generation answered that the AI is paused.
+  const [aiPaused, setAiPaused] = useState(() => readAiPaused(reportId));
   const interpPollingActive = useRef(false);
   const interpRetryFired = useRef(false);
 
   useEffect(() => { fetchReport(); }, [reportId]);
+
+  // NewReport notes the pause when generate-interpretation answers, which can
+  // be after it has navigated here.
+  useEffect(() => {
+    setAiPaused(readAiPaused(reportId));
+    return subscribeAiPaused(reportId, setAiPaused);
+  }, [reportId]);
 
   useEffect(() => {
     if (!report || report.status !== 'processing') return;
@@ -553,10 +563,11 @@ export function ReportView() {
         }
 
         interpRetryFired.current = true;
-        const { error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
+        const { data: retryData, error: invokeErr } = await supabase.functions.invoke('generate-interpretation', {
           body: { reportId },
         });
         if (cancelled) return;
+        if (!invokeErr) noteAiPaused(reportId, isAiPausedResponse(retryData));
         if (invokeErr) {
           const redirect = await handle402(invokeErr);
           if (redirect && !cancelled) { navigate(redirect, { replace: true }); return; }
@@ -1226,7 +1237,18 @@ export function ReportView() {
           request_id: requestId,
         },
       });
-      if (interpError || !fnData?.success) {
+      if (!interpError) noteAiPaused(reportId, isAiPausedResponse(fnData));
+      if (interpError && await isAiPausedError(interpError)) {
+        // PK-FIX-01b (D12): the AI is paused, so nothing was generated and the
+        // explanation she has stands. Put back the status and the attempt spent
+        // above, and say so calmly (DT9) instead of a failure notice.
+        await supabase.from('lab_reports').update({
+          status: priorStatus,
+          regeneration_count: report.regeneration_count,
+        }).eq('id', reportId);
+        noteAiPaused(reportId, true);
+        await fetchReport();
+      } else if (interpError || !fnData?.success) {
         failure = { error: interpError };
       } else {
         regenerationRequests.settle();
@@ -1277,6 +1299,7 @@ export function ReportView() {
         },
       });
       if (requestId && !invokeErr && data?.success) regenerationRequests.settle();
+      if (!invokeErr) noteAiPaused(reportId, isAiPausedResponse(data));
       if (invokeErr && generateFailureKind(httpStatus(invokeErr)) === 'premium_required') {
         refresh = false;
         setGeneratePremiumRequired(true);
@@ -1601,7 +1624,7 @@ export function ReportView() {
           {!isProcessing && (
             <ReportNotices
               report={report}
-              versions={{ shown: interpretation ? shownExplanation ?? UNIDENTIFIED_EXPLANATION : null }}
+              versions={{ shown: interpretation ? shownExplanation ?? UNIDENTIFIED_EXPLANATION : null, aiPaused }}
             />
           )}
 

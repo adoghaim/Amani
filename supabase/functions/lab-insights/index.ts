@@ -9,6 +9,13 @@ import { parseLabInsightsCompletion } from "../_shared/lab-insights-output.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { compareBiomarkerValues, isSignificantChange, topChanges, type BiomarkerChange } from "../_shared/trend-evidence.ts";
+import { aiPausedBody } from "../_shared/ai-pause.ts";
+import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+
+// PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
+// AI cost ledger, and the kill switch. Once per isolate.
+const reporter = edgeErrorReporter("lab-insights");
+const costLedger = edgeAiCostLedger("lab-insights");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,6 +93,14 @@ Deno.serve(async (req: Request) => {
 
     if (!openaiApiKey) {
       throw new Error("OpenAI API key not configured");
+    }
+
+    // PK-FIX-01b (D12): while the owner's kill switch is on, no model call: 503
+    // with the calm paused body. Before the rate limit, so it spends no quota.
+    if (await aiPausedNow()) {
+      return new Response(JSON.stringify(aiPausedBody()), {
+        status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -259,6 +274,12 @@ Remember:
     }
 
     const openaiData = await openaiResponse.json();
+    inBackground(costLedger.record({
+      functionName: "lab-insights",
+      userId,
+      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-5-mini",
+      usage: openaiData?.usage,
+    }));
 
     /*
       Previously: `JSON.parse(openaiData.choices[0].message.content)` straight
@@ -301,6 +322,7 @@ Remember:
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    inBackground(reporter.captureException(error, { stage: "insights" }));
     const message = errorMessage(error, "Failed to generate insights");
     return new Response(
       JSON.stringify({

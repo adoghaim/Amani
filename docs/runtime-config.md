@@ -61,9 +61,20 @@ D5.1, as a pure module behind an actions port:
   function instance per 30 seconds. A read that takes more than 3 seconds counts as failed.
 - The budget is **alert-only** (D5.2, D7.6). Only the manual kill switch turns AI off.
 
-No function calls it yet. Wiring the kill switch into the AI functions (the deterministic
-fallback interpretation, OCR paused) and the budget alerts is PK-FIX-01b. That packet deploys
-functions, so it waits for the V2 backend GO. The module header shows the wiring.
+PK-FIX-01b wires it into the four AI functions (`_shared/edge-ai-guards.ts`, policy in
+`_shared/ai-pause.ts`). While `ai_kill_switch` is `true`:
+
+| Function | What happens | What the app shows |
+|---|---|---|
+| `generate-interpretation` | no model call; serves `generateFallbackInterpretation`, the same path as an OpenAI failure; answers `ai_paused: true` | the basic explanation, with the D7 calm notice in the report's notices slot (DT9) |
+| `parse-lab-report-ocr` | no model call; 200 `{ paused: true, code: "ai_paused", message, items: [] }`, before the rate limit | a calm notice on the upload screen; manual entry still works |
+| `extract-biomarkers` | no model call; 200 with the paused body and no items | nothing: the app keeps its own parse |
+| `lab-insights` | no model call; 503 with the paused body | the comparison's existing error line (a calm version is a follow-up) |
+
+No model output means `interpretationGenerated` stays false, so `commitDeepAccess` charges no
+introductory claim (D12, DT9; `_shared/ai-pause.test.ts`). The pause stays server-only (D12):
+the app learns of it only from these answers. The code marks this with
+`gstack-shortcut(dec-a6243129)`.
 
 ## Flag names (all off; none seeded)
 
@@ -173,3 +184,81 @@ without naming its keys as plain literals. A migration may still add a new key, 
    `factory/sql/verify-triggers-enable-always.sql`.
 3. The web app picks up the read with its next Netlify deploy. Native apps pick it up with the
    next store build. Until the push, every launch fails open.
+
+## AI cost ledger and budget alerts (PK-FIX-01b)
+
+Migration: `supabase/migrations/20261013050000_ai_cost_ledger.sql`. Owner decisions D5.1, D5.2
+and D7.6: the budget is **alert only**. Nothing turns AI off except the manual kill switch.
+
+- `ai_call_costs`: one row per model call from the four AI functions (function name, model,
+  input and output tokens, `est_cost_usd`, `created_at`, and the caller's `user_id`).
+  `est_cost_usd` is an estimate from the list prices in `_shared/ai-cost-ledger.ts`
+  (`MODEL_PRICES`); a model not in that table is priced at the most expensive listed rate, so
+  an unknown model can only make an alert fire early. Service role only.
+- Account deletion: `user_id` references `auth.users` `ON DELETE SET NULL`, so the deletion's
+  last step nulls it and the spend history stays (registered in `user-data-registry.ts`).
+- `ai_budget_alerts`: one row per month and crossed threshold, with `notified_at` once the
+  Sentry message went out. Service role only. No user data.
+- `ai_spend_for_month(date)`: this UTC month's estimated spend, summed in SQL.
+
+### The scheduled check (`ai-budget-check`)
+
+Each run reads `ai_monthly_budget_usd` and `ai_budget_alert_thresholds`, sums the month's
+spend, records each newly crossed threshold once, and sends a Sentry message for every alert
+not yet notified (level `warning`, `error` at 100%), tagged `stage: ai_budget_alert`,
+`ai_budget_threshold`, `ai_spend_usd`, `ai_budget_usd`. A failed send is retried by the next
+run. A run with any failure answers 500, so the scheduler's run history shows it.
+
+It authenticates the caller itself: header `x-amani-scheduler-secret` must equal the function
+secret `AI_BUDGET_CHECK_SECRET` (at least 16 characters). With the secret unset, every call is
+refused. Alerts need `SENTRY_DSN` set as a function secret; without it a run records the
+alert and answers 500 until the DSN exists.
+
+**Schedule it (owner, after the functions deploy; outside migrations):** hourly is enough.
+Either an external scheduler (a GitHub Actions `schedule`, or any cron service) that POSTs:
+
+```sh
+curl -fsS -X POST "https://<project-ref>.supabase.co/functions/v1/ai-budget-check" \
+  -H "x-amani-scheduler-secret: $AI_BUDGET_CHECK_SECRET"
+```
+
+or, in the Supabase SQL editor with the `pg_cron` and `pg_net` extensions enabled, keeping the
+secret in Vault rather than in the job text:
+
+```sql
+select vault.create_secret('<the AI_BUDGET_CHECK_SECRET value>', 'ai_budget_check_secret');
+select cron.schedule('ai-budget-check', '7 * * * *', $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/ai-budget-check',
+    headers := jsonb_build_object('x-amani-scheduler-secret',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'ai_budget_check_secret'))
+  );
+$$);
+```
+
+**Where alerts go (owner input):** to Sentry. The owner adds a Sentry alert rule on
+`stage:ai_budget_alert` that emails or messages a human. PK-OPS-02 (T1) adds a heartbeat on the
+job's last run.
+
+**Owner SQL:**
+
+```sql
+-- This month's estimated spend.
+select public.ai_spend_for_month(current_date);
+-- Spend by function this month.
+select function_name, count(*), sum(est_cost_usd) from ai_call_costs
+ where created_at >= date_trunc('month', now() at time zone 'utc') at time zone 'utc'
+ group by 1 order by 3 desc;
+-- Alerts so far.
+select month, threshold, spend_usd, budget_usd, created_at, notified_at
+  from ai_budget_alerts order by id desc limit 20;
+```
+
+### Error reporting from edge functions
+
+The four AI functions and `ai-budget-check` report unexpected errors to Sentry through
+`_shared/error-reporter.ts` when the function secret `SENTRY_DSN` is set (names only; optional
+`SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`). What is sent is the error type, a message scrubbed by
+`_shared/phi-scrub.ts` (no identifiers, numbers, lab values, quoted text or echoed report
+text), the function name and a fixed stage label: never a body, a header, a user or an IP. A
+send gets one try and 3 seconds, runs after the response, and its failure is swallowed.

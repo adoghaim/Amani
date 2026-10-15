@@ -13,5 +13,7 @@ WHERE n.nspname = 'public'
                     'interpretations_private', 'introductory_deep_access_claims',
                     'users', 'rate_limits',
                     -- PK-FIX-04 (20261015110000): service-only; expect every row false.
-                    'lab_file_cleanup')
+                    'lab_file_cleanup',
+                    -- PK-FIX-01b: expected granted = false for every row.
+                    'ai_call_costs', 'ai_budget_alerts')
 ORDER BY c.relname, r.role_name, p.privilege;

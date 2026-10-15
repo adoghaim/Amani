@@ -45,9 +45,11 @@ async function render(notices?: readonly ReportNotice[], v: ReportVersions = ver
 const titles = () => Array.from(app.querySelectorAll('[role="status"]')).map(n => n.querySelector('p')!.textContent);
 
 describe('report notices slot (R22)', () => {
-  it('ships empty: the page is exactly as it was', async () => {
-    expect(REPORT_NOTICES).toEqual([]);
+  it('ships only the DT9 pause notice, and with nothing to say the page is exactly as it was', async () => {
+    expect(REPORT_NOTICES.map(n => n.id)).toEqual(['ai-paused']);
     await render();
+    expect(app.innerHTML).toBe('');
+    await render(undefined, { shown: null });
     expect(app.innerHTML).toBe('');
   });
 
