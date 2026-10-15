@@ -6,6 +6,7 @@ import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAllRows';
 import { BiomarkerCard } from '../components/BiomarkerCard';
 import { ResultRow } from '../components/ResultRow';
 import { DerivedMetricsPanel } from '../components/DerivedMetricsPanel';
@@ -164,6 +165,16 @@ const CONFIDENCE_STYLE: Record<string, string> = {
   resolve to the report's own measured-change claims, in neutral ink; the
   title, the badge and the model's choice of related markers do not render.
 */
+
+/** The columns the all-history read selects for baselines and trends. */
+interface HistoricalBiomarkerRow {
+  name: string;
+  value: number;
+  unit: string;
+  reference_min: number | null;
+  reference_max: number | null;
+  lab_report_id: string;
+}
 
 interface OpeningContext {
   primaryIsImproving: boolean;
@@ -702,10 +713,13 @@ export function ReportView() {
         }
 
         const allHistoricalIds = allReportsData.map(r => r.id);
-        const { data: allHistoricalBiomarkers } = await supabase
-          .from('biomarkers')
-          .select('name, value, unit, reference_min, reference_max, lab_report_id')
-          .in('lab_report_id', allHistoricalIds);
+        // R27: every prior report's values can pass PostgREST's 1,000-row cap.
+        const { data: allHistoricalBiomarkers } = await fetchAllRows<HistoricalBiomarkerRow>(() =>
+          supabase
+            .from('biomarkers')
+            .select('name, value, unit, reference_min, reference_max, lab_report_id')
+            .in('lab_report_id', allHistoricalIds)
+            .order('id'));
 
         if (allHistoricalBiomarkers) {
           const histMap = new Map<string, { reportDate: string; value: number }[]>();
