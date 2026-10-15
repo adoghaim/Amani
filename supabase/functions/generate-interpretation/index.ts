@@ -7,6 +7,8 @@ import {
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { buildBasicProjection } from "../_shared/interpretation-visibility.ts";
 import { entitlementUnavailable, generationVisibilityMode } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -1689,6 +1691,16 @@ Deno.serve(async (req: Request) => {
     }
 
     callerId = user.id;
+
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabase).check(user.id));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     await enforceRateLimit(createRateLimitStore(supabase), {
       userId: user.id,
       endpoint: "generate-interpretation",

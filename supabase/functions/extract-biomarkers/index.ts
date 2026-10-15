@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { ExtractBiomarkersRequestSchema } from "../_shared/schemas/requests.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -275,6 +277,15 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabaseAdmin).check(user.id));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // PK-FIX-01b (D12): while the owner's kill switch is on, no model call. No
     // items, so the app keeps its own parse; before the rate limit, so a paused

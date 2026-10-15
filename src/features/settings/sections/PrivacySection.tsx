@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card } from '../../../components/Card';
 import { ShieldCheck, Lock } from 'lucide-react';
+import { ConsentSettings } from '../../consent/ConsentSettings';
 
 export function PrivacySection() {
   return (
@@ -41,6 +42,8 @@ export function PrivacySection() {
               See exactly what each company receives in the Privacy Policy
             </Link>
           </div>
+          {/* PK-CONSENT-01 (D25): consent status and withdrawal. Nothing while features.consent_gate is off. */}
+          <ConsentSettings />
         </div>
       </div>
     </Card>

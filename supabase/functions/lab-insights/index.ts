@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
+import { consentRefusal } from "../_shared/consent.ts";
+import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { LabInsightsRequestSchema } from "../_shared/schemas/requests.ts";
 import { entitlementUnavailable, premiumRequired } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -105,6 +107,15 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // PK-CONSENT-01: while features.consent_gate is on, uploads and AI processing
+    // need her current consent (_shared/consent.ts). Off, this always allows.
+    const consentRefused = consentRefusal(await consentGateFor(supabase).check(userId));
+    if (consentRefused) {
+      return new Response(JSON.stringify(consentRefused.body), {
+        status: consentRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     await enforceRateLimit(createRateLimitStore(supabase), {
       userId,

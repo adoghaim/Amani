@@ -14,6 +14,10 @@ import { decideDeepGeneration } from './regeneration-availability';
 import { deriveBloodDrawIdentity, hashDrawKey } from './blood-draw-identity';
 import * as versionWrite from './interpretation-version-write';
 import { callModelUnlessPaused } from './ai-pause';
+import { consentRefusal, createConsentGate } from './consent';
+// PK-CONSENT-01: features.consent_gate off (the seed), as before the gate existed; a consent read would throw.
+const consentGateOff = () => createConsentGate({ readPublicConfig: async () => [{ key: 'features', value: {} }],
+  readCurrentConsents: async () => { throw new Error('flag off: consent is never read'); }, now: () => 0 });
 
 /**
  * TASK-048 turns 10 and 11: executes the real generate-interpretation handler,
@@ -166,6 +170,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
     Deno: { env: { get: (name: string) => name === 'OPENAI_API_KEY' ? 'test-key' : undefined },
       serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => client, corsHeaders: {}, debugLog: () => {}, enforceRateLimit: async () => {}, createRateLimitStore: () => ({}),
+    consentRefusal, consentGateFor: consentGateOff,
     GenerateInterpretationRequestSchema: { safeParse: (body: { reportId: string; request_id?: string }) =>
       ({ success: true, data: { reportId: body.reportId, request_id: body.request_id } }) },
     checkUserSubscription: async () => !flagOn
