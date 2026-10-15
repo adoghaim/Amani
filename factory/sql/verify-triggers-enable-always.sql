@@ -34,13 +34,38 @@
 --       ALWAYS would re-create profile rows during a replica-mode load of auth.users.
 -- Made ALWAYS by 20261010000000 (the six V2 guards) and 20261013000000 (the six
 -- pre-V2 safety triggers).
---   safety ('A'), expected once its migration has created its queue table
+-- Expected once their migration has run. Each row below is listed only when the
+-- table its migration creates exists (the last column of the conditional list),
+-- so a database before that migration does not report it missing; once applied,
+-- a missing trigger or a wrong mode is a FAIL like any other listed row. Each
+-- migration creates these triggers itself, in the mode shown.
+--   safety ('A')
+--     app_public_config                  app_public_config_stamp / _audit / _no_truncate    20261013040000  PK-CFG-01: server
+--     app_server_config                  app_server_config_stamp / _audit / _no_truncate    20261013040000    stamps, audit,
+--     app_config_audit                   app_config_audit_append_only / _no_truncate        20261013040000    append-only audit
+--       Listed when public.app_config_audit exists. Harness: cases/180-runtime-config.sh.
+--     app_events                         app_events_stamp_created_at / _refuse_update       20261015010000  PK-EXP5: server
+--     user_attribution                   user_attribution_stamp_captured_at / _refuse_update 20261015010000   stamps, append-only
+--       Listed when public.app_events exists. Harness: cases/200-first-party-events.sh.
+--     interpretation_feedback            interpretation_feedback_before_insert / _update    20261015020000  PK-HARM-01: the named
+--       explanation is the report's own, server-stamped status, sent text never
+--       rewritten. Listed when public.interpretation_feedback exists.
+--       Harness: cases/210-interpretation-feedback.sh.
+--     consent_records                    consent_records_append_only / _no_truncate         20261015040000  PK-CONSENT-01:
+--       append-only consent ledger. Listed when public.consent_records exists.
+--       Harness: cases/220-consent-records.sh.
 --     lab_reports                        zz_record_lab_file_cleanup                         20261015110000  PK-FIX-04: records a
---       deleted report's stored file. Created ENABLE ALWAYS by its own migration. The
---       row is listed only when public.lab_file_cleanup exists, so a database before
---       20261015110000 does not report it missing; once applied, a missing or
---       non-'A' recorder is a FAIL like any other safety trigger. The harness checks
---       it after applying the migration (cases/230-lab-file-cleanup.sh).
+--       deleted report's stored file. Listed when public.lab_file_cleanup exists.
+--       Harness: cases/230-lab-file-cleanup.sh.
+--   upload gate, ORIGIN as shipped ('O'; missing or any other mode is a FAIL)
+--     lab_reports                        lab_reports_require_consent                        20261015040000  PK-CONSENT-01: refuses
+--       an upload without current consent while features.consent_gate is on. Created
+--       by plain CREATE TRIGGER, and its harness pins ORIGIN. ORIGIN means a
+--       replica-mode load of lab_reports is not refused by the gate, which a restore
+--       needs; ALWAYS would make the gate also hold under replica. Listed as shipped,
+--       not decided here: the owner rules which mode the gate keeps, and a change is
+--       a reviewed forward migration plus this row. Listed when public.consent_records
+--       exists.
 --
 -- Any other non-internal trigger in schema public is 'FAIL: unclassified trigger':
 -- a new trigger cannot ship until it is classified here and in the harness.
@@ -67,8 +92,28 @@ WITH expected(schema_name, table_name, trigger_name, class, expected_mode, sourc
     ('public', 'iap_subscriptions',                 'iap_subscriptions_set_updated_at',         'origin-by-design',   'O', '20260821000000'),
     ('auth',   'users',                             'on_auth_user_created',                     'origin-by-design',   'O', '20260308131250')
   UNION ALL
-  SELECT 'public', 'lab_reports', 'zz_record_lab_file_cleanup', 'safety', 'A', '20261015110000'
-  WHERE to_regclass('public.lab_file_cleanup') IS NOT NULL
+  SELECT 'public', c.table_name, c.trigger_name, c.class, c.expected_mode, c.source_migration
+  FROM (VALUES
+    ('app_public_config',       'app_public_config_stamp',               'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_public_config',       'app_public_config_audit',               'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_public_config',       'app_public_config_no_truncate',         'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_server_config',       'app_server_config_stamp',               'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_server_config',       'app_server_config_audit',               'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_server_config',       'app_server_config_no_truncate',         'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_config_audit',        'app_config_audit_append_only',          'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_config_audit',        'app_config_audit_no_truncate',          'safety',      'A', '20261013040000', 'app_config_audit'),
+    ('app_events',              'app_events_stamp_created_at',           'safety',      'A', '20261015010000', 'app_events'),
+    ('app_events',              'app_events_refuse_update',              'safety',      'A', '20261015010000', 'app_events'),
+    ('user_attribution',        'user_attribution_stamp_captured_at',    'safety',      'A', '20261015010000', 'app_events'),
+    ('user_attribution',        'user_attribution_refuse_update',        'safety',      'A', '20261015010000', 'app_events'),
+    ('interpretation_feedback', 'interpretation_feedback_before_insert', 'safety',      'A', '20261015020000', 'interpretation_feedback'),
+    ('interpretation_feedback', 'interpretation_feedback_before_update', 'safety',      'A', '20261015020000', 'interpretation_feedback'),
+    ('consent_records',         'consent_records_append_only',           'safety',      'A', '20261015040000', 'consent_records'),
+    ('consent_records',         'consent_records_no_truncate',           'safety',      'A', '20261015040000', 'consent_records'),
+    ('lab_reports',             'lab_reports_require_consent',           'origin-gate', 'O', '20261015040000', 'consent_records'),
+    ('lab_reports',             'zz_record_lab_file_cleanup',            'safety',      'A', '20261015110000', 'lab_file_cleanup')
+  ) AS c(table_name, trigger_name, class, expected_mode, source_migration, created_with)
+  WHERE to_regclass('public.' || c.created_with) IS NOT NULL
 ),
 actual AS (
   SELECT n.nspname::text AS schema_name, c.relname::text AS table_name,

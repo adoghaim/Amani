@@ -182,3 +182,41 @@ test "$(psql_f -tA -c "$tea_modes")" = "$tea_after" \
   || { echo "FAIL TEA-CONTROLS leaked into the catalog" >&2; exit 1; }
 rm -f "$tea_log"
 echo "PASS: safety triggers are ENABLE ALWAYS, verified by the post-deploy query, by replica-mode behaviour and by mutation."
+
+# tea_check_classified LABEL PSQL_FN ROW...: the cases for later migrations
+# (180, 200, 210, 220) call this in their own databases, where the migration
+# under test is applied, since that migration never reaches the amani database
+# checked above. Each ROW is the exact line the post-deploy query must print for
+# one trigger the migration creates (schema|table|trigger|class|expected|actual|
+# status|migration). No trigger in that database may be unclassified, and the
+# query must FAIL each listed trigger flipped to the other mode or dropped. The
+# twelve base safety rows report 'trigger missing' there; this case owns them.
+tea_check_classified() {
+  local label=$1 psql_fn=$2 report got row probe table trigger class mode migration flip_mode flip_status flip
+  shift 2
+  report=$("$psql_fn" -q -tA -F'|' -f /tmp/verify-triggers-enable-always.sql </dev/null)
+  got=$(grep '|FAIL: unclassified trigger|' <<<"$report" || true)
+  if [ -n "$got" ]; then
+    echo "FAIL TEA-CLASSIFIED-$label: unclassified triggers:" >&2; echo "$got" >&2; exit 1
+  fi
+  for row in "$@"; do
+    if ! grep -qxF "$row" <<<"$report"; then
+      echo "FAIL TEA-CLASSIFIED-$label: expected the row '$row', got:" >&2; echo "$report" >&2; exit 1
+    fi
+    IFS='|' read -r _ table trigger class mode _ _ migration <<<"$row"
+    if [ "$mode" = A ]; then
+      flip="ALTER TABLE public.$table ENABLE TRIGGER $trigger"; flip_mode=O; flip_status=$TEA_NOT_A
+    else
+      flip="ALTER TABLE public.$table ENABLE ALWAYS TRIGGER $trigger"; flip_mode=A; flip_status='FAIL: mode differs from expected ORIGIN'
+    fi
+    for probe in "$flip|$flip_mode|$flip_status" "DROP TRIGGER $trigger ON public.$table|MISSING|FAIL: trigger missing"; do
+      IFS='|' read -r flip flip_mode flip_status <<<"$probe"
+      got=$("$psql_fn" -q -tA -F'|' -c 'BEGIN' -c "$flip" -f /tmp/verify-triggers-enable-always.sql -c 'ROLLBACK' </dev/null \
+        | grep "^public|$table|$trigger|" || true)
+      if [ "$got" != "public|$table|$trigger|$class|$mode|$flip_mode|$flip_status|$migration" ]; then
+        echo "FAIL TEA-CLASSIFIED-$label: after '$flip' expected '$flip_status', got '$got'" >&2; exit 1
+      fi
+    done
+  done
+  echo "PASS TEA-CLASSIFIED-$label: the post-deploy query reports $# trigger(s) ok in their listed mode, none unclassified, and FAILs each flipped or dropped."
+}

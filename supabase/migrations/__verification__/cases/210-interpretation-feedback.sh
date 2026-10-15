@@ -89,6 +89,13 @@ echo "    refused without its prerequisites"
 
 psql_fb -q -f /tmp/interpretation-feedback.verify.sql
 
+# factory/gates.md G3: every trigger this migration creates is classified in the
+# post-deploy query factory/sql/verify-triggers-enable-always.sql, checked here where
+# the migration is applied (tea_check_classified: trigger-enable-always.run.sh, case 170).
+tea_check_classified INTERPRETATION-FEEDBACK psql_fb \
+  'public|interpretation_feedback|interpretation_feedback_before_insert|safety|A|A|ok|20261015020000' \
+  'public|interpretation_feedback|interpretation_feedback_before_update|safety|A|A|ok|20261015020000'
+
 # Deploy order (PK-HARM-01 review): the owner's read-only preflight,
 # factory/sql/verify-account-deletion-tables.sql, run here for real. This
 # database holds only the prelude's stubs, so the tables it lacks are first

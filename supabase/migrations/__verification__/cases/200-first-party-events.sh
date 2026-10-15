@@ -84,5 +84,14 @@ echo "    replay refused at the one-shot guard; catalog unchanged"
 
 psql_fpe -q -f /tmp/first-party-events.verify.sql
 
+# factory/gates.md G3: every trigger this migration creates is classified in the
+# post-deploy query factory/sql/verify-triggers-enable-always.sql, checked here where
+# the migration is applied (tea_check_classified: trigger-enable-always.run.sh, case 170).
+tea_check_classified FIRST-PARTY-EVENTS psql_fpe \
+  'public|app_events|app_events_stamp_created_at|safety|A|A|ok|20261015010000' \
+  'public|app_events|app_events_refuse_update|safety|A|A|ok|20261015010000' \
+  'public|user_attribution|user_attribution_stamp_captured_at|safety|A|A|ok|20261015010000' \
+  'public|user_attribution|user_attribution_refuse_update|safety|A|A|ok|20261015010000'
+
 echo
 echo "PASS: first-party events: one-shot replay, RLS and grants by role, no client select or insert, stamped user, allow-lists, rate limit, attribution once, append-only ENABLE ALWAYS triggers under replica, hashed counters, funnel view, indexes, erasure."

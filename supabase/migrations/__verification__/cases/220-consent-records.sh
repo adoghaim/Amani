@@ -76,5 +76,13 @@ echo "    replay refused at the one-shot guard; catalog unchanged"
 
 psql_cr -q -f /tmp/consent-records.verify.sql
 
+# factory/gates.md G3: every trigger this migration creates is classified in the
+# post-deploy query factory/sql/verify-triggers-enable-always.sql, checked here where
+# the migration is applied (tea_check_classified: trigger-enable-always.run.sh, case 170).
+tea_check_classified CONSENT-RECORDS psql_cr \
+  'public|consent_records|consent_records_append_only|safety|A|A|ok|20261015040000' \
+  'public|consent_records|consent_records_no_truncate|safety|A|A|ok|20261015040000' \
+  'public|lab_reports|lab_reports_require_consent|origin-gate|O|O|ok|20261015040000'
+
 echo
 echo "PASS: consent ledger: one-shot replay, RLS and grants by role, record_consent as the only writer, append-only under replica, withdrawal, upload gate on and off, erasure by service_role and the auth.users cascade."

@@ -61,5 +61,18 @@ echo "    replay refused at the one-shot guard; catalog and rows unchanged"
 
 psql_rc -q -f /tmp/runtime-config.verify.sql
 
+# factory/gates.md G3: every trigger this migration creates is classified in the
+# post-deploy query factory/sql/verify-triggers-enable-always.sql, checked here where
+# the migration is applied (tea_check_classified: trigger-enable-always.run.sh, case 170).
+tea_check_classified RUNTIME-CONFIG psql_rc \
+  'public|app_public_config|app_public_config_stamp|safety|A|A|ok|20261013040000' \
+  'public|app_public_config|app_public_config_audit|safety|A|A|ok|20261013040000' \
+  'public|app_public_config|app_public_config_no_truncate|safety|A|A|ok|20261013040000' \
+  'public|app_server_config|app_server_config_stamp|safety|A|A|ok|20261013040000' \
+  'public|app_server_config|app_server_config_audit|safety|A|A|ok|20261013040000' \
+  'public|app_server_config|app_server_config_no_truncate|safety|A|A|ok|20261013040000' \
+  'public|app_config_audit|app_config_audit_append_only|safety|A|A|ok|20261013040000' \
+  'public|app_config_audit|app_config_audit_no_truncate|safety|A|A|ok|20261013040000'
+
 echo
 echo "PASS: runtime config: seeds, one-shot replay, RLS and grants by role, audit of who and when, server-stamped updated_at, append-only audit, ENABLE ALWAYS triggers under replica, value shapes."
