@@ -12,6 +12,9 @@ Existing workflow `.github/workflows/ci.yml` (seen in the source snapshot; verif
 | `Edge function typecheck` | `bash docs/check-functions.sh deno` (local: `npm run check:functions`). Baseline exclusions may only shrink. |
 | `Migration behaviour (Postgres)` | `./supabase/migrations/__verification__/run.sh` (Docker). It runs every case in `__verification__/cases/` in lexical order; how to add one is in the header of `run.sh`. |
 | `Migration order (D6)` | `.github/workflows/migration-order.yml`, on PRs into `main`: `node tools/ci/migration-order.mjs`. See "Migration order (D6)" below. |
+| `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. |
+
+**Owner action (GitHub settings, not code):** PR #93 ruled that browser smoke becomes a required check once the CI upgrade (PR #96) is online. In *Settings → Branches → main* (or the ruleset that protects `main`), add **`Browser smoke`** to the required status checks, keeping `Lint, typecheck, build`, `Edge function typecheck`, `Migration behaviour (Postgres)` and every other check already required. Confirm the exact name from a recent PR's checks list first. The factory cannot and must not change repository settings.
 
 Plus: Netlify deploy preview builds and loads. The `Vercel` check is ignored (expected failure).
 
@@ -83,6 +86,14 @@ For any packet that adds or changes `supabase/migrations/`:
 5. Attach the query output to the ledger entry for the deploy or restore.
 
 The migration harness runs the same file. `trigger-enable-always.run.sh` (sourced by `__verification__/cases/170-trigger-enable-always.sh`, the last case `run.sh` runs) fails when any listed trigger's mode differs from expected, when one is missing, or when a trigger in `public` is unclassified. It also proves that with `session_replication_role = replica` a forbidden overwrite (claim ledger, privileged user columns, `content_hash`) is still rejected, with one killing mutation per pre-V2 safety trigger.
+
+**V2 post-deploy smoke (PR #93 runbook step 8).** After steps 1-7, the owner runs `node scripts/smoke/v2-post-deploy.mjs --i-understand-this-hits-production` with `SMOKE_SUPABASE_URL`, `SMOKE_SUPABASE_ANON_KEY`, `SMOKE_TEST_EMAIL` and `SMOKE_TEST_PASSWORD` set (names only here; the email must contain `smoke`). Prepare the disposable account first: one synthetic report with no interpretation, entitled to a deep AI generation. It checks first generation, regeneration, returned version identity, old interpretation not overwritten, and account deletion, then deletes the account and prints a pass/fail table (exit 0 only if every row is PASS). Agents never run it against production.
+
+**Prepared, not applied (PR #93 "Later").** These live outside `supabase/migrations` so no `db push` can apply them early. Each header holds its own runbook, and `supabase/migrations/__verification__/factory-prepared.run.sh` (sourced by `__verification__/cases/250-factory-prepared.sh`) rehearses both on a disposable clone of the fully migrated harness database.
+- `factory/sql/post-deploy/retire-delete-interpretations.sql`: makes `delete_interpretations` raise. Move it into `supabase/migrations` with a fresh timestamp **only after** the V2 `delete-user-data` is confirmed live (runbook step 5 plus a passing step-8 deletion). Applying it earlier breaks account deletion for everyone, because the deployed function still calls the old name.
+- `factory/sql/rollback/20261011000003-revoke-commit-deep-access-version.sql`: the forward-only rollback for `20261011000003`, which revokes service `EXECUTE` on `commit_deep_access_version`. It never relaxes the history guard. Free anchored regeneration then fails closed, and Plus regeneration and readers are unaffected.
+
+**Data-only restore caveat (ops).** Source: `docs/clinical/TASK-048/turn-5-replica-hardening.md`, never executed. A **data-only** restore into an already-migrated schema fires the history recorder (`remember_interpretation_history`) as `interpretations_private` rows load, before `interpretation_history_protection`'s own data loads. The protection rows then conflict on their primary key. A full `pg_dump`/`pg_restore` is not affected, because triggers are created post-data. So for ops: restore with a full dump. Do not do a data-only restore into a migrated schema, and do not disable or re-mode the history triggers to make one work (they are `ENABLE ALWAYS` on purpose). If a data-only restore ever becomes necessary, it needs its own rehearsed procedure and owner GO first. After any restore, run `factory/sql/verify-triggers-enable-always.sql`.
 
 ## G4 — Clinical authority
 

@@ -194,7 +194,11 @@ interaction advantage. No MCP server configuration was added.
 
 ## Separate CI and promotion to a required check
 
-`.github/workflows/e2e.yml` runs on pull requests to main and manual dispatch.
+`.github/workflows/e2e.yml` runs on pull requests to main, pushes to main and
+manual dispatch (push to main added by PK-PL-C after PR #96 brought the CI
+upgrade online; runs on main are never cancelled by a newer push). Browser
+binaries are cached on the lockfile hash, so a hit is always the locked
+Playwright revision; OS dependencies are installed on every run.
 It uses Node 20, `npm ci`, matching browser/OS-dependency installation, and the
 same isolated smoke command. It requests no repository secrets. Assertions fail
 the job. On failure it uploads `playwright-report/` and `test-results/` with
@@ -208,6 +212,11 @@ the owner can require the emitted `Browser smoke` status check in branch
 protection. First confirm its displayed check name and account for any existing
 rulesets that automatically require new checks. Preserve the existing release
 checks. Workflow syntax checks alone do not prove a hosted CI run.
+
+PR #93 later ruled that browser smoke becomes a required automated check once
+the CI upgrade is online. The remaining step is the owner's alone: add
+`Browser smoke` to the required status checks protecting `main` in GitHub
+settings (see `factory/gates.md`, G0). No repository file can do this.
 
 ## Context7 provisioning and boundaries
 

@@ -1,7 +1,15 @@
 name: E2E smoke
 
+# Owner ruling (PR #93, pre-launch): "browser smoke becomes a required automated
+# check when the CI upgrade is online". PR #96 brought that upgrade online, so
+# this job now runs on every PR into main AND on every push to main, which is
+# what lets the owner mark the emitted `Browser smoke` check as required in
+# branch protection. Changing branch protection is an owner action in GitHub
+# settings; nothing in this repository can (or should) change it.
 on:
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -10,10 +18,13 @@ permissions:
 
 concurrency:
   group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded PR pushes are cancelled to save minutes; runs on main are never
+  # cancelled, so every merge commit keeps its own Browser smoke result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   smoke:
+    # Keep this name stable: it is the status-check name branch protection uses.
     name: Browser smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -25,8 +36,21 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      # Browser binaries are keyed on the lockfile, so a cache hit is always the
+      # exact revision the locked Playwright 1.62.1 expects. OS packages are not
+      # cacheable and are installed on every run.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install matching browsers and OS dependencies
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx --no-install playwright install --with-deps chromium webkit firefox
+      - name: Install OS dependencies for cached browsers
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx --no-install playwright install-deps chromium webkit firefox
       - name: Verify E2E environment isolation
         run: npm run test:e2e:isolation
       - name: Run isolated synthetic smoke tests
