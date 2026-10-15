@@ -211,6 +211,11 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
                           {current.value} {current.unit}
                         </div>
                       </div>
+                      {/*
+                        Direction is not valence (PK-FIX-02): both directions use
+                        the same neutral ink, never amber for up and green for
+                        down. The arrow and the sign carry the direction.
+                      */}
                       {delta && (
                         <div className="flex items-center gap-2">
                           {delta.value === 0 ? (
@@ -219,14 +224,14 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
                               <span className="text-sm">No change</span>
                             </div>
                           ) : delta.value > 0 ? (
-                            <div className="flex items-center gap-1 text-theme-warning">
+                            <div className="flex items-center gap-1 text-theme-text">
                               <ArrowUp className="w-4 h-4" />
                               <span className="text-sm font-medium">
                                 +{delta.value.toFixed(1)} ({delta.percent.toFixed(0)}%)
                               </span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1 text-theme-success">
+                            <div className="flex items-center gap-1 text-theme-text">
                               <ArrowDown className="w-4 h-4" />
                               <span className="text-sm font-medium">
                                 {delta.value.toFixed(1)} ({delta.percent.toFixed(0)}%)

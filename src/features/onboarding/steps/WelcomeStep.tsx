@@ -15,7 +15,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         Welcome to Amani
       </h1>
       <p className="text-base text-theme-muted-text leading-relaxed mb-8 max-w-sm">
-        Amani helps you understand your lab results in plain language, track changes over time, and prepare better questions for your doctor.
+        Amani helps you understand your lab results in plain language, track changes over time, and prepare questions you could bring to your clinician.
       </p>
       <Button
         variant="primary"

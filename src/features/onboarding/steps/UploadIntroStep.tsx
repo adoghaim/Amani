@@ -17,7 +17,7 @@ export function UploadIntroStep({ onUpload, onSkip, isSubmitting }: UploadIntroS
         Upload your first lab report
       </h1>
       <p className="text-base text-theme-muted-text leading-relaxed mb-8 max-w-sm">
-        You can upload a PDF, screenshot, or photo of your lab results. Amani will extract the markers, explain what they mean, and show what may need attention.
+        You can upload a PDF, screenshot, or photo of your lab results. Amani will extract the markers, explain what they mean, and prepare questions you could bring to your clinician.
       </p>
 
       <Button
