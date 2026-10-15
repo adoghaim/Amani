@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { parseServerConfig } from "../_shared/runtime-config.ts";
 import { isScheduledCaller, runAiBudgetCheck, type PendingBudgetAlert } from "../_shared/ai-budget.ts";
 import { edgeErrorReporter, guardServiceClient } from "../_shared/edge-ai-guards.ts";

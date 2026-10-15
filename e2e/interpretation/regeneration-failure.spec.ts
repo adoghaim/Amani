@@ -69,6 +69,8 @@ test.describe('PK-PL-A: a failed regenerate, flag off', () => {
       await expect(summary(page)).toContainText(ferritinDecreased);
 
       const generated = page.waitForResponse(r => r.url().endsWith('/functions/v1/generate-interpretation'));
+      // PK-INT-01 (D19): Regenerate is in the header's More menu.
+      await page.locator('[data-report-header-actions]').getByRole('button', { name: 'More', exact: true }).click();
       await page.getByRole('button', { name: /^Regenerate \(3 left\)$/ }).click();
       expect((await generated).status()).toBe(outcome.status);
 
@@ -87,6 +89,8 @@ test.describe('PK-PL-A: a failed regenerate, flag off', () => {
       // The analysis on screen is intact and no failure card replaces it.
       await expect(summary(page)).toContainText(ferritinDecreased);
       await expect(page.getByText('AI summary failed')).toHaveCount(0);
+      // No attempt was spent: More still offers all three.
+      await page.locator('[data-report-header-actions]').getByRole('button', { name: 'More', exact: true }).click();
       await expect(page.getByRole('button', { name: /^Regenerate \(3 left\)$/ })).toBeVisible();
     });
   }

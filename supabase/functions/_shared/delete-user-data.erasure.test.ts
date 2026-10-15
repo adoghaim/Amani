@@ -244,6 +244,9 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
     const requests: Array<{ method: string; table: string; select: string | null }> = [];
     const realClient = (absent: string) => createClient('http://postgrest.stub', 'service-role-key', {
       auth: { persistSession: false, autoRefreshToken: false },
+      // CI runs Node 20, which has no global WebSocket, and realtime-js refuses
+      // to construct without one. This check never opens a socket.
+      realtime: { transport: class {} as unknown as typeof WebSocket },
       global: {
         fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
           const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);

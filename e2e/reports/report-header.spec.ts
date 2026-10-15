@@ -46,12 +46,13 @@ test.describe('report header slot (D19)', () => {
     await expect(more).toHaveAttribute('aria-expanded', 'false');
     await expect(more).toBeFocused();
 
-    // Delete report keeps its confirmation: dismissing it leaves the report in place.
+    // Delete report keeps its confirmation (PK-FIX-04 wording: the file goes too);
+    // dismissing it leaves the report in place.
     const dialogs: string[] = [];
     page.on('dialog', dialog => { dialogs.push(dialog.message()); void dialog.dismiss(); });
     await more.click();
     await list.getByRole('button', { name: 'Delete report' }).click();
-    await expect.poll(() => dialogs).toEqual(['Delete this report? This cannot be undone.']);
+    await expect.poll(() => dialogs).toEqual(['Delete this report and any uploaded lab file? This cannot be undone.']);
     await expect(page).toHaveURL(new RegExp(`/app/reports/${reportId}$`));
   });
 });

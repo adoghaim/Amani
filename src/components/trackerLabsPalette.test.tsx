@@ -4,6 +4,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Biomarker, LabReport } from '../types';
+// PK-EXP5 wired CompareView to the first-party events client, which needs the
+// Supabase env at import; these tests are about colour, not the events.
+vi.mock('../lib/firstPartyEventsClient', () => ({ firstPartyEvents: { track: vi.fn(async () => true) } }));
 import { CompareView } from './CompareView';
 import { LabsTimeline } from './LabsTimeline';
 
