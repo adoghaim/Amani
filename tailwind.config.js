@@ -42,6 +42,13 @@ export default {
           'muted-text-2': '#606377',
           'muted-text-3': '#716F82',
 
+          /*
+            Pen: only what she wrote, kept or corrected — corrected values,
+            her notes, kept questions, dates she entered (DESIGN.md). Never
+            Amani's or the lab's words. 7.5:1 on the ground.
+          */
+          pen: '#2A44B8',
+
           border: '#D2C6CF',
           'border-subtle': '#E3DBE0',
           'border-inner': '#EDE8EB',

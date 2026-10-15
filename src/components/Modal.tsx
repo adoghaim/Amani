@@ -126,10 +126,11 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border flex-shrink-0">
           <h2 className="text-base text-theme-text">{title}</h2>
+          {/* 44px tap area (D23); the negative margin keeps the header row its old height. */}
           <button
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
+            className="w-11 h-11 -my-1.5 -mr-1.5 flex shrink-0 items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
           >
             <X className="w-4 h-4 text-theme-muted-text" />
           </button>

@@ -36,7 +36,8 @@
  *      `stripe_subscriptions`, `stripe_orders` rows for this customer +
  *      user. Idempotent (rows may already be gone on retry).
  *   6. `deleteStorageFiles` — remove uploaded lab PDFs/images.
- *   7. `deleteDataTables` — remove all app data rows keyed on user_id.
+ *   7. `deleteDataTables` — remove all app data rows keyed on user_id:
+ *      `deleteUserDataTables` below, driven by user-data-registry.ts.
  *   8. `deleteRevenueCatSubscriber` — delete the RevenueCat customer record.
  *      Deliberately the last step before auth, for the same reason
  *      `iap_subscriptions` rides the auth cascade: RevenueCat is what
@@ -53,6 +54,8 @@
  * A resource-already-gone response from Stripe, Google or RevenueCat is
  * treated as success — idempotency, not failure.
  */
+
+import { orderedDeletes, USER_DATA_REGISTRY, type UserDataRegistryEntry } from "./user-data-registry.ts";
 
 /**
  * An `iap_subscriptions` row as the deletion flow needs to read it.
@@ -223,6 +226,43 @@ export interface AccountDeletionActions {
   deleteRevenueCatSubscriber(userId: string): Promise<void>;
   /** Delete the auth.users row. LAST — after this the user can't retry. */
   deleteAuthUser(userId: string): Promise<void>;
+}
+
+/**
+ * The I/O behind `deleteDataTables`. Each method throws on failure, with a
+ * message that names what failed, so the handler answers non-2xx.
+ */
+export interface UserDataTablesPort {
+  /** Ids of every lab_reports row the user owns. */
+  listReportIds(userId: string): Promise<readonly string[]>;
+  /** The erase_reports RPC: deletes those reports in id lock order; their graph cascades. */
+  eraseReports(reportIds: readonly string[]): Promise<void>;
+  /** `DELETE FROM table WHERE ownerColumn = userId`. */
+  deleteOwnedRows(table: string, ownerColumn: string, userId: string): Promise<void>;
+}
+
+/**
+ * Erases the user's data tables, strictly one awaited call at a time:
+ *
+ *   1. The report graphs, in ONE awaited erase_reports call. Nothing else
+ *      touches that graph while it runs; the old concurrent child deletes are
+ *      what deadlocked against it. A user with no reports makes no call.
+ *   2. The registry's `ordered_delete` entries, in registry order, each by its
+ *      owner column (the users profile row last, by id).
+ *
+ * The first failure stops everything after it. Which tables are in step 2,
+ * and why the others are not, is user-data-registry.ts.
+ */
+export async function deleteUserDataTables(
+  port: UserDataTablesPort,
+  userId: string,
+  registry: readonly UserDataRegistryEntry[] = USER_DATA_REGISTRY,
+): Promise<void> {
+  const reportIds = await port.listReportIds(userId);
+  if (reportIds.length > 0) await port.eraseReports(reportIds);
+  for (const { table, ownerColumn } of orderedDeletes(registry)) {
+    await port.deleteOwnedRows(table, ownerColumn, userId);
+  }
 }
 
 export async function deleteUserAccount(

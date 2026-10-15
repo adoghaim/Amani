@@ -6,6 +6,7 @@ import { basicCycleContext, basicFindingArray, basicHeadline, basicSafetyValue, 
 import { FLOOR_FINDING_KEYS, FLOOR_REQUIRED_KEYS, findFloorViolations } from './response-shaping';
 import type { CatalogFinding } from './preview-selector';
 import { addFindingMetadata } from './finding-metadata';
+import { harnessText } from '../../migrations/__verification__/harness-cases';
 
 const full = { headline: 'headline', cycle_context: {}, questions_for_doctor: ['doctor'], disclaimer: 'disclaimer',
   key_findings: [{ status: 'attention', title: 'visible abnormal' }],
@@ -297,7 +298,8 @@ describe('findings confidentiality (one shared SQL fixture)', () => {
     expect(cycleMigration).toContain('public.interpretation_basic_findings(p_full->k,p_source)');
     expect(cycleMigration).toContain('public.interpretation_basic_safety_value(k,p_full->k,p_source)');
     expect(cycleMigration).toContain("'safety_findings',public.interpretation_basic_findings(safety,p_source)");
-    const harness = readFileSync(new URL('../../migrations/__verification__/run.sh', import.meta.url), 'utf8');
+    // run.sh plus its cases/ files, in run order (PK-INT-01 moved the cases out of run.sh).
+    const harness = harnessText();
     expect(harness).toContain('BASIC=20260927000001_basic_cycle_context.sql');
     expect(harness.match(/psql_f -v ON_ERROR_STOP=1 -q -f "\/tmp\/\$BASIC"/g)).toHaveLength(2);
   });

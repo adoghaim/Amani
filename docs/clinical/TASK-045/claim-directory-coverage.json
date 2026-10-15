@@ -45,7 +45,27 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/features/report",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/report/header",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/report/notices",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
     "directory": "src/features/settings",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/features/settings/sections",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
@@ -81,6 +101,11 @@
   },
   {
     "directory": "src/lib/insights",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/native",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },

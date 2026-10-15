@@ -10,11 +10,32 @@ Existing workflow `.github/workflows/ci.yml` (seen in the source snapshot; verif
 |---|---|
 | `Lint, typecheck, build` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run validate:contrast`, `npm test`, `npm run build` |
 | `Edge function typecheck` | `bash docs/check-functions.sh deno` (local: `npm run check:functions`). Baseline exclusions may only shrink. |
-| `Migration behaviour (Postgres)` | `./supabase/migrations/__verification__/run.sh` (Docker) |
+| `Migration behaviour (Postgres)` | `./supabase/migrations/__verification__/run.sh` (Docker). It runs every case in `__verification__/cases/` in lexical order; how to add one is in the header of `run.sh`. |
+| `Migration order (D6)` | `.github/workflows/migration-order.yml`, on PRs into `main`: `node tools/ci/migration-order.mjs`. See "Migration order (D6)" below. |
 
 Plus: Netlify deploy preview builds and loads. The `Vercel` check is ignored (expected failure).
 
 Rules: no skipped or deleted tests to get green; snapshot updates must explain each diff; `npm test` count does not drop.
+
+## Merge protocol (D4)
+
+Foundation PRs carry the extension points other packets build on (PK-INT-01, PK-CFG-01). Packets that need them are stacked: their PR's base is the foundation branch, not `main`.
+
+- **Foundation PRs merge first**, in the order of the pinned queue issue (#104), **with a merge commit, not squash**, and **with delete-branch-on-merge**. The first line of a foundation PR body says so: `Foundation PR: merge first, with a merge commit (not squash) and delete-branch-on-merge.`
+- Why a merge commit: the stacked children are built on the foundation branch's own commits. A merge commit puts those commits on `main`, so when the foundation branch is deleted GitHub retargets each child to `main` and the child shows only its own changes. A squash merge puts a different commit on `main`: every child then carries the whole foundation diff again, in its review and in its merge, and conflicts wherever the foundation changed after the child branched.
+- A stacked PR's body starts: `Stacked: blocked until <base packet> merges (foundation PRs merge with a merge commit, not squash, with delete-branch-on-merge).` It is not merged before its base.
+- **The factory rebases the children**, never the owner: when a foundation PR changes in review, and after it merges, the factory rebases each stacked child onto the new base and re-runs its gates.
+
+## Migration order (D6)
+
+- Every migration a PR adds must have a version **newer than `main`'s newest migration**, and its own version: no two added files share one.
+- CI enforces it at merge: the `Migration order (D6)` job fails a PR into `main` whose added migration is not newer than the newest on `main` as `main` is when the job runs. When `main` gains a migration after the job last ran, re-run the job (or update the branch) before merging.
+- On a failure, renumber the PR's own migration to a version after `main`'s newest (rename the file; keep its contents). The factory renumbers on request. Never edit, rename or renumber a migration that is already on `main`, and never reuse a version that production has recorded.
+- Stacked PRs are checked when GitHub retargets them to `main`.
+
+## Integration preview (D11)
+
+`.github/workflows/integration-preview.yml` runs daily (and on demand): it merges every open `wave:*` PR in queue order (#104) onto a scratch commit of `main`, runs lint, typecheck, test, build, `check:functions` and the migration harness on the result, and comments conflicts and failing gates on #104. It never pushes. It is an early warning, not a merge gate: each PR's own G0 checks still decide.
 
 ## G1 — Web end-to-end in three browsers
 
@@ -33,7 +54,7 @@ Rules: no skipped or deleted tests to get green; snapshot updates must explain e
 
 For any packet that adds or changes `supabase/migrations/`:
 
-1. Harness fixtures added to `supabase/migrations/__verification__/` covering: cross-user RLS denial, column grants, trigger behaviour, idempotency/race where relevant.
+1. Harness fixtures added to `supabase/migrations/__verification__/`, run by a new case file in `__verification__/cases/` (see the header of `run.sh`), covering: cross-user RLS denial, column grants, trigger behaviour, idempotency/race where relevant. A new user-owned table is also registered in `supabase/functions/_shared/user-data-registry.ts`; `account-deletion-sweep.test.ts` fails until it is.
 2. `factory/sql/verify-privileges.sql` expectations updated for new tables.
 3. **Trigger mode:** every safety trigger is `ENABLE ALWAYS` (`pg_trigger.tgenabled = 'A'`), asserted in the harness and checked after deploy with `factory/sql/verify-triggers-enable-always.sql`. Reason: triggers in the default mode (`O`) do not fire when `session_replication_role = replica`, which restore tooling uses.
 4. No blanket `supabase db push` across an owner-GO boundary (see `docs/interpretation-visibility-rollout.md`). Never hand-reapply a migration (replay hazard documented there).
