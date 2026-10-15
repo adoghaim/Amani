@@ -19,7 +19,7 @@ import {
 import { detectReportSource } from './sourceDetection';
 import { getAdapter } from './adapters';
 import { splitIntoLines, isSectionHeader } from './textUtils';
-import { detectReferenceRange } from './rangeDetection';
+import { bindReferenceRange, firstNumericToken, intervalNumbers, isReferenceSubLabel } from './rangeDetection';
 import { matchBiomarkerLabel } from './labelMatching';
 import { extractValueFromWindow, parseValueWithPrefix } from './valueExtraction';
 import { resolveAlias, getEntry } from '../../lib/biomarkers/dictionary';
@@ -92,8 +92,13 @@ export function computeParseStatus(params: {
    * rows are always saved as extended (non-scored) items.
    */
   value_text?: string | null;
+  /**
+   * The marker's block printed several intervals (or one tied to a cycle
+   * phase, menopause or pregnancy) and none was bound: the user confirms.
+   */
+  reference_ambiguous?: boolean;
 }): ParseStatus {
-  const { canonical_slug, parse_confidence, physBoundsError, value_numeric, unit, raw_reference_range, is_core_biomarker, value_text } = params;
+  const { canonical_slug, parse_confidence, physBoundsError, value_numeric, unit, raw_reference_range, is_core_biomarker, value_text, reference_ambiguous } = params;
 
   // Qualitative results: skip numeric/range checks, accept as extended.
   if (value_text && value_text.trim().length > 0) {
@@ -102,6 +107,7 @@ export function computeParseStatus(params: {
 
   if (physBoundsError !== null) return 'parse_error';
   if (value_numeric <= 0)       return 'parse_error';
+  if (reference_ambiguous)      return 'needs_review';
   if (canonical_slug === null)  return 'unmapped';
 
     const UNITLESS_SLUGS = new Set(['free_thyroxine_index', 'chol_hdl_ratio', 'albumin_globulin_ratio', 'bun_creatinine_ratio', 't3_uptake']);
@@ -177,6 +183,7 @@ export function layeredParse(
     }
 
     const ref          = parsed.referenceResult;
+    const ambiguity    = parsed.referenceAmbiguity;
     const hasMinMax    = ref?.min !== undefined && ref?.max !== undefined;
     const hasComparator = !!ref?.comparator;
 
@@ -189,7 +196,7 @@ export function layeredParse(
       matchedLabel: line,
       chosenValue: parsed.value,
       chosenUnit: parsed.unit,
-      referenceRangeText: ref?.raw ?? null,
+      referenceRangeText: ref?.raw ?? ambiguity?.printed ?? null,
       sourceSnippet: snippetText,
     } : undefined;
 
@@ -198,7 +205,7 @@ export function layeredParse(
         blockIndex: blockIndex++, lineIndex: i, rawLabel: line, canonical,
         blockSnippet: snippetText, parsedValue: parsed.value,
         parsedRawValue: parsed.rawValue ?? null, parsedUnit: parsed.unit,
-        parsedRefRaw: ref?.raw ?? null,
+        parsedRefRaw: ref?.raw ?? ambiguity?.printed ?? null,
         parsedRefMin: ref?.min ?? null, parsedRefMax: ref?.max ?? null,
         parsedRefOperator: ref?.comparator?.operator ?? null,
         parsedRefOperatorValue: ref?.comparator?.value ?? null,
@@ -212,7 +219,8 @@ export function layeredParse(
         name: canonical, value: parsed.value, rawValue: parsed.rawValue,
         value_text: parsed.value_text,
         unit: parsed.unit, reference_min: ref?.min, reference_max: ref?.max,
-        reference_comparator: ref?.comparator, reference_text_raw: ref?.raw,
+        reference_comparator: ref?.comparator, reference_text_raw: ref?.raw ?? ambiguity?.printed,
+        ...(ambiguity ? { reference_ambiguity: ambiguity } : {}),
         confidence, rawText: snippetText, debugInfo,
       });
       if (debug) {
@@ -230,60 +238,91 @@ export function layeredParse(
   return Array.from(results.values());
 }
 
+/** Start offsets of the lines in `text` that open a marker (matchBiomarkerLabel), computed once per parse. */
+function labelLineOffsets(text: string, adapter?: SourceAdapter): number[] {
+  const offsets: number[] = [];
+  for (let start = 0; start <= text.length;) {
+    const newline = text.indexOf('\n', start);
+    const end = newline === -1 ? text.length : newline;
+    const line = text.substring(start, end).trim();
+    if (line.length > 0 && matchBiomarkerLabel(line, adapter) !== null) offsets.push(start);
+    start = end + 1;
+  }
+  return offsets;
+}
+
+/*
+  The text a marker printed after its label: the rest of the label's line and
+  the lines under it, up to the next line that opens another marker, and never
+  more than 500 characters past the label (the old window's reach). The
+  fallback reads value, unit and interval only from the label and this text
+  (PK-FIX-05). The old window also began 20 characters before the label, which
+  is how Progesterone picked up the "30-400" printed on Estradiol's line.
+*/
+function textAfterLabel(text: string, labelStart: number, labelEnd: number, labelLines: readonly number[]): string {
+  const limit = Math.min(text.length, labelStart + 500);
+  const ownLineEnd = text.indexOf('\n', labelEnd);
+  const next = ownLineEnd === -1 ? undefined : labelLines.find(offset => offset > ownLineEnd);
+  const end = next !== undefined && next < limit ? next : limit;
+  return text.substring(labelEnd, Math.max(labelEnd, end));
+}
+
 function extractBiomarkerFromContext(
-  contextText: string,
+  label: string,
+  afterLabel: string,
   name: string,
   commonUnits: string[],
+  adapter?: SourceAdapter,
 ): ExtractedBiomarker | null {
+  const contextText = label + afterLabel;
   let value: number | null = null;
   let rawValue: string | undefined;
-  let unit: string | null = null;
-  let referenceMin: number | undefined;
-  let referenceMax: number | undefined;
-  let referenceComparator: import('./types').ComparatorRange | undefined;
-  let referenceTextRaw: string | undefined;
   let confidence: 'high' | 'medium' | 'low' = 'low';
 
   const unitMatch = commonUnits.find(u => {
     const escapedUnit = u.toLowerCase().replace(/[/()[\].+*?^${}|\\]/g, '\\$&');
     return new RegExp(escapedUnit, 'i').test(contextText);
   });
-  unit = unitMatch ?? commonUnits[0] ?? null;
+  const unit = unitMatch ?? commonUnits[0] ?? null;
   if (unitMatch) confidence = 'medium';
 
-  const ref = detectReferenceRange(contextText);
-  if (ref) {
-    referenceMin = ref.min;
-    referenceMax = ref.max;
-    referenceComparator = ref.comparator;
-    referenceTextRaw = ref.raw;
+  // Only intervals printed for this marker; several (or one tied to a cycle
+  // phase, menopause or pregnancy) bind nothing and travel as an ambiguity.
+  const lines = afterLabel.split(/\r?\n/);
+  const binding = bindReferenceRange(lines, adapter);
+  const ref = binding.range;
+  const ambiguity = binding.ambiguous;
+  const rangeNums = intervalNumbers(binding.candidates);
+
+  // A comparator printed as part of one of the marker's intervals is not its
+  // result. The label line's own leading "<0.5" still is, as before.
+  const lead = firstNumericToken(lines[0] ?? '');
+  let prefixToken: string | undefined;
+  for (const m of afterLabel.matchAll(/<\s*(\d+\.?\d*)|>\s*(\d+\.?\d*)/g)) {
+    const leadsLabelLine = lead !== null && m.index === lead.start;
+    if (leadsLabelLine || !rangeNums.has(parseFloat(m[1] ?? m[2] ?? ''))) {
+      prefixToken = m[0];
+      break;
+    }
   }
 
-  const prefixRe    = /<\s*(\d+\.?\d*)|>\s*(\d+\.?\d*)/;
-  const prefixMatch = contextText.match(prefixRe);
-
-  if (prefixMatch) {
-    const parsed = parseValueWithPrefix(prefixMatch[0]);
+  if (prefixToken !== undefined) {
+    const parsed = parseValueWithPrefix(prefixToken);
     if (parsed) {
       value = parsed.value;
       rawValue = parsed.rawValue;
       confidence = ref ? 'high' : 'medium';
     }
   } else {
-    const numbers = [...contextText.matchAll(/(\d+\.?\d*)/g)]
+    const numbers = [...afterLabel.matchAll(/(\d+\.?\d*)/g)]
       .map(m => m[1])
       .filter((s): s is string => s !== undefined)
       .map(s => parseFloat(s));
     if (numbers.length === 0) return null;
 
-    const knownRangeNums = new Set<number>();
-    if (referenceMin !== undefined) knownRangeNums.add(referenceMin);
-    if (referenceMax !== undefined) knownRangeNums.add(referenceMax);
-    if (referenceComparator) knownRangeNums.add(referenceComparator.value);
-
-    if (ref) {
-      confidence = 'high';
-      const outside = numbers.filter(n => !knownRangeNums.has(n));
+    if (ref) confidence = 'high';
+    if (binding.candidates.length > 0) {
+      const outside = numbers.filter(n => !rangeNums.has(n));
       value = (outside.length > 0 ? outside[0] : numbers[0]) ?? null;
     } else {
       value = numbers[0] ?? null;
@@ -298,10 +337,11 @@ function extractBiomarkerFromContext(
     value,
     rawValue,
     unit,
-    reference_min: referenceMin,
-    reference_max: referenceMax,
-    reference_comparator: referenceComparator,
-    reference_text_raw: referenceTextRaw,
+    reference_min: ref?.min,
+    reference_max: ref?.max,
+    reference_comparator: ref?.comparator,
+    reference_text_raw: ref?.raw ?? ambiguity?.printed,
+    ...(ambiguity ? { reference_ambiguity: ambiguity } : {}),
     confidence,
     rawText: contextText.substring(0, 100),
   };
@@ -317,6 +357,7 @@ export function parseBiomarkersFromText(
 
   const extractedBiomarkers: ExtractedBiomarker[] = [];
   const textLower = text.toLowerCase();
+  const labelLines = labelLineOffsets(text, adapter);
 
   for (const pattern of BIOMARKER_PATTERNS) {
     const sortedPatterns = [...pattern.patterns].sort((a, b) => b.length - a.length);
@@ -326,8 +367,14 @@ export function parseBiomarkersFromText(
       while (true) {
         const foundIndex = textLower.indexOf(patternLower, searchIndex);
         if (foundIndex === -1) break;
-        const contextText = text.substring(Math.max(0, foundIndex - 20), Math.min(text.length, foundIndex + 500));
-        const extracted = extractBiomarkerFromContext(contextText, pattern.canonical, pattern.commonUnits);
+        const labelEnd = foundIndex + patternLower.length;
+        const extracted = extractBiomarkerFromContext(
+          text.substring(foundIndex, labelEnd),
+          textAfterLabel(text, foundIndex, labelEnd, labelLines),
+          pattern.canonical,
+          pattern.commonUnits,
+          adapter,
+        );
         if (extracted) {
           const catalogSlug = normalizeToCatalogSlug(extracted.name);
           extracted.name = catalogSlug;
@@ -378,6 +425,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
     const parseError = checkPhysiologicalBounds(slug, b.value);
     const rawRef  = b.reference_text_raw ?? null;
     const confidence = parseError ? 'low' as const : b.confidence;
+    const ambiguity = b.reference_ambiguity;
 
     const parseStatus = computeParseStatus({
       canonical_slug: isCore ? slug : null,
@@ -387,6 +435,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       unit: b.unit,
       raw_reference_range: rawRef,
       is_core_biomarker: isCore,
+      reference_ambiguous: ambiguity !== undefined,
     });
 
     // Telemetry: explain why this item was (or was not) included as a core biomarker.
@@ -412,6 +461,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       source_snippet: b.rawText ?? null,
       parse_error: parseError,
       parse_status: parseStatus,
+      ...(ambiguity ? { reference_candidates: ambiguity.candidates } : {}),
 
       // Phase 4A Telemetry
       source_format: 'text',
@@ -486,6 +536,9 @@ function buildExtendedItems(
     const rawUnit    = m[3]?.trim() ?? null;
     if (coreRawNames.has(rawName.toLowerCase())) continue;
     if (rawName.split(' ').length > 8) continue;
+    // "Follicular Phase   2.1-11.1" is an interval printed under a marker, not
+    // an analyte of its own: its numbers are not a result (PK-FIX-05).
+    if (isReferenceSubLabel(rawName)) continue;
 
     let valueNumeric: number;
     let valueText: string | null = null;
@@ -509,7 +562,10 @@ function buildExtendedItems(
     const category = resolved?.category ?? null;
     if (slug && coreRawNames.has(slug)) continue;
 
-    const ref = detectReferenceRange(line);
+    // The row's own line only; several intervals on it bind none (PK-FIX-05).
+    const binding = bindReferenceRange([line]);
+    const ref = binding.range;
+    const ambiguity = binding.ambiguous;
     const UNITLESS_EXTENDED = new Set(['chol_hdl_ratio', 'bun_creatinine_ratio', 'albumin_globulin_ratio', 'free_thyroxine_index', 't3_uptake']);
     const isUnitlessExtended = slug ? UNITLESS_EXTENDED.has(slug) : /ratio|index/i.test(rawName.toLowerCase());
     const confidence: 'high' | 'medium' | 'low' =
@@ -525,8 +581,9 @@ function buildExtendedItems(
       physBoundsError,
       value_numeric: valueNumeric,
       unit: rawUnit,
-      raw_reference_range: ref?.raw ?? null,
+      raw_reference_range: ref?.raw ?? ambiguity?.printed ?? null,
       is_core_biomarker: isCore,
+      reference_ambiguous: ambiguity !== undefined,
     });
 
     // Telemetry: explain why this extended-pass item was (or was not) treated as core.
@@ -539,7 +596,7 @@ function buildExtendedItems(
     extendedItems.push({
       raw_name: rawName, canonical_slug: slug, category,
       value_numeric: valueNumeric, value_text: valueText, unit: rawUnit,
-      raw_reference_range: ref?.raw ?? null,
+      raw_reference_range: ref?.raw ?? ambiguity?.printed ?? null,
       normalized_reference_min: ref?.min ?? null,
       normalized_reference_max: ref?.max ?? null,
       reference_operator: ref?.comparator?.operator ?? null,
@@ -550,6 +607,7 @@ function buildExtendedItems(
       source_snippet: line.substring(0, 120),
       parse_error: physBoundsError,
       parse_status: parseStatus,
+      ...(ambiguity ? { reference_candidates: ambiguity.candidates } : {}),
 
       source_format: 'text',
       parser_version: 'v1_text_extended',
@@ -635,6 +693,7 @@ export function parseAllReportItemsWithDebug(
       }
 
       const ref           = parsed.referenceResult;
+      const ambiguity     = parsed.referenceAmbiguity;
       const hasMinMax     = ref?.min !== undefined && ref?.max !== undefined;
       const hasComparator = !!ref?.comparator;
       const confidence: 'high' | 'medium' | 'low' =
@@ -645,7 +704,7 @@ export function parseAllReportItemsWithDebug(
         blockIndex: blockIndex++, lineIndex: i, rawLabel: line, canonical,
         blockSnippet: snippetText, parsedValue: parsed.value,
         parsedRawValue: parsed.rawValue ?? null, parsedUnit: parsed.unit,
-        parsedRefRaw: ref?.raw ?? null,
+        parsedRefRaw: ref?.raw ?? ambiguity?.printed ?? null,
         parsedRefMin: ref?.min ?? null, parsedRefMax: ref?.max ?? null,
         parsedRefOperator: ref?.comparator?.operator ?? null,
         parsedRefOperatorValue: ref?.comparator?.value ?? null,
@@ -658,7 +717,8 @@ export function parseAllReportItemsWithDebug(
           name: canonical, value: parsed.value, rawValue: parsed.rawValue,
           value_text: parsed.value_text,
           unit: parsed.unit, reference_min: ref?.min, reference_max: ref?.max,
-          reference_comparator: ref?.comparator, reference_text_raw: ref?.raw,
+          reference_comparator: ref?.comparator, reference_text_raw: ref?.raw ?? ambiguity?.printed,
+          ...(ambiguity ? { reference_ambiguity: ambiguity } : {}),
           confidence, rawText: snippetText,
         });
       }
