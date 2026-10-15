@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   deleteUserAccount,
   selectBillingStoreSubscriptions,
+  selectPlaySubscriptionsToCancel,
   StoreSubscriptionAcknowledgementRequiredError,
   type AccountDeletionActions,
   type StoreSubscriptionRecord,
@@ -12,11 +13,21 @@ const storeRecord = (
 ): StoreSubscriptionRecord => ({
   platform: 'ios',
   product_id: 'com.amani.health.premium.monthly',
+  store_subscription_id: '2000000000000001',
   status: 'active',
   expires_at: '2026-09-23T00:00:00.000Z',
   environment: 'production',
   ...overrides,
 });
+
+// A Play row as RevenueCat reports it: keyed on the Google order id.
+const playRecord = (overrides: Partial<StoreSubscriptionRecord> = {}) =>
+  storeRecord({
+    platform: 'android',
+    product_id: 'amani_premium:monthly',
+    store_subscription_id: 'GPA.1234-5678-9012-34567',
+    ...overrides,
+  });
 
 function makeActions(overrides: Partial<AccountDeletionActions> = {}): {
   actions: AccountDeletionActions;
@@ -32,6 +43,7 @@ function makeActions(overrides: Partial<AccountDeletionActions> = {}): {
       calls.push('listStoreSubscriptions');
       return [] as StoreSubscriptionRecord[];
     }),
+    cancelPlaySubscriptions: vi.fn(track('cancelPlaySubscriptions')),
     getStripeCustomerId: vi.fn(async (_userId: string) => {
       calls.push('getStripeCustomerId');
       return 'cus_test_123';
@@ -41,6 +53,7 @@ function makeActions(overrides: Partial<AccountDeletionActions> = {}): {
     deleteLocalStripeRecords: vi.fn(track('deleteLocalStripeRecords')),
     deleteStorageFiles: vi.fn(track('deleteStorageFiles')),
     deleteDataTables: vi.fn(track('deleteDataTables')),
+    deleteRevenueCatSubscriber: vi.fn(track('deleteRevenueCatSubscriber')),
     deleteAuthUser: vi.fn(track('deleteAuthUser')),
     ...overrides,
   };
@@ -62,6 +75,7 @@ describe('deleteUserAccount', () => {
       'deleteLocalStripeRecords',
       'deleteStorageFiles',
       'deleteDataTables',
+      'deleteRevenueCatSubscriber',
       'deleteAuthUser',
     ]);
   });
@@ -81,6 +95,7 @@ describe('deleteUserAccount', () => {
       'getStripeCustomerId',
       'deleteStorageFiles',
       'deleteDataTables',
+      'deleteRevenueCatSubscriber',
       'deleteAuthUser',
     ]);
     expect(actions.cancelStripeSubscriptions).not.toHaveBeenCalled();
@@ -144,9 +159,134 @@ describe('deleteUserAccount', () => {
       'getStripeCustomerId',
       'deleteStorageFiles',
       'deleteDataTables',
+      'deleteRevenueCatSubscriber',
       'deleteAuthUser',
     ]);
     expect(actions.deleteAuthUser).toHaveBeenCalledOnce();
+  });
+});
+
+describe('deleteUserAccount — store teardown (PK-STORE-01)', () => {
+  const withStoreSubs = (records: StoreSubscriptionRecord[], overrides: Partial<AccountDeletionActions> = {}) => {
+    const made = makeActions(overrides);
+    made.actions.listStoreSubscriptions = vi.fn(async () => {
+      made.calls.push('listStoreSubscriptions');
+      return records;
+    });
+    return made;
+  };
+
+  it('cancels Play after the acknowledgement and before anything else; RevenueCat goes last before auth', async () => {
+    const { actions, calls } = withStoreSubs([playRecord()]);
+
+    await deleteUserAccount(actions, 'user-20', { acknowledgedStoreSubscriptions: true });
+
+    expect(calls).toEqual([
+      'listStoreSubscriptions',
+      'cancelPlaySubscriptions',
+      'getStripeCustomerId',
+      'cancelStripeSubscriptions',
+      'deleteStripeCustomer',
+      'deleteLocalStripeRecords',
+      'deleteStorageFiles',
+      'deleteDataTables',
+      'deleteRevenueCatSubscriber',
+      'deleteAuthUser',
+    ]);
+    expect(actions.cancelPlaySubscriptions).toHaveBeenCalledWith('user-20', [
+      { productId: 'amani_premium:monthly', storeSubscriptionId: 'GPA.1234-5678-9012-34567' },
+    ]);
+    expect(actions.deleteRevenueCatSubscriber).toHaveBeenCalledWith('user-20');
+  });
+
+  it('tears nothing down while the acknowledgement is missing — the Apple and Google gate is unchanged', async () => {
+    const { actions } = withStoreSubs([playRecord(), storeRecord({ platform: 'ios' })]);
+
+    await expect(deleteUserAccount(actions, 'user-21')).rejects.toBeInstanceOf(
+      StoreSubscriptionAcknowledgementRequiredError,
+    );
+
+    expect(actions.cancelPlaySubscriptions).not.toHaveBeenCalled();
+    expect(actions.deleteRevenueCatSubscriber).not.toHaveBeenCalled();
+    expect(actions.deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('a failed Play cancellation stops deletion before Stripe, storage, data, RevenueCat or auth', async () => {
+    const { actions } = withStoreSubs([playRecord()], {
+      cancelPlaySubscriptions: vi.fn(async () => {
+        throw new Error('Google Play cancellation failed (HTTP 503).');
+      }),
+    });
+
+    await expect(
+      deleteUserAccount(actions, 'user-22', { acknowledgedStoreSubscriptions: true }),
+    ).rejects.toThrow('Google Play cancellation failed (HTTP 503).');
+
+    expect(actions.getStripeCustomerId).not.toHaveBeenCalled();
+    expect(actions.deleteStorageFiles).not.toHaveBeenCalled();
+    expect(actions.deleteDataTables).not.toHaveBeenCalled();
+    expect(actions.deleteRevenueCatSubscriber).not.toHaveBeenCalled();
+    expect(actions.deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('a failed RevenueCat deletion surfaces and leaves the auth identity in place for a retry', async () => {
+    const { actions } = makeActions({
+      deleteRevenueCatSubscriber: vi.fn(async () => {
+        throw new Error('RevenueCat customer deletion failed (HTTP 500).');
+      }),
+    });
+
+    await expect(deleteUserAccount(actions, 'user-23')).rejects.toThrow(
+      'RevenueCat customer deletion failed (HTTP 500).',
+    );
+    expect(actions.deleteDataTables).toHaveBeenCalledOnce();
+    expect(actions.deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('an App Store subscription is never sent to the Play cancel — Apple has no server cancel', async () => {
+    const { actions, calls } = withStoreSubs([storeRecord({ platform: 'ios' })]);
+
+    await deleteUserAccount(actions, 'user-24', { acknowledgedStoreSubscriptions: true });
+
+    expect(actions.cancelPlaySubscriptions).not.toHaveBeenCalled();
+    expect(calls).toContain('deleteRevenueCatSubscriber');
+    expect(actions.deleteAuthUser).toHaveBeenCalledOnce();
+  });
+
+  it('does not ask Google to cancel Play rows that never bill or already stopped billing', async () => {
+    const { actions } = withStoreSubs([
+      playRecord({ environment: 'sandbox' }),
+      playRecord({ status: 'expired', store_subscription_id: 'GPA.0000-0000-0000-00001' }),
+      playRecord({ status: 'revoked', store_subscription_id: 'GPA.0000-0000-0000-00002' }),
+    ]);
+
+    await deleteUserAccount(actions, 'user-25');
+
+    expect(actions.cancelPlaySubscriptions).not.toHaveBeenCalled();
+    expect(actions.deleteAuthUser).toHaveBeenCalledOnce();
+  });
+
+  it('a retry after a partial deletion runs the store steps again (each is idempotent) and finishes', async () => {
+    // Everything but auth already ran once: Stripe is gone, the Play row is still
+    // there (it rides the auth cascade), and the user re-acknowledges.
+    const { actions, calls } = withStoreSubs([playRecord()], {
+      getStripeCustomerId: vi.fn(async () => {
+        calls.push('getStripeCustomerId');
+        return null;
+      }),
+    });
+
+    await deleteUserAccount(actions, 'user-26', { acknowledgedStoreSubscriptions: true });
+
+    expect(calls).toEqual([
+      'listStoreSubscriptions',
+      'cancelPlaySubscriptions',
+      'getStripeCustomerId',
+      'deleteStorageFiles',
+      'deleteDataTables',
+      'deleteRevenueCatSubscriber',
+      'deleteAuthUser',
+    ]);
   });
 });
 
@@ -280,5 +420,50 @@ describe('selectBillingStoreSubscriptions', () => {
 
   it('handles an empty list', () => {
     expect(selectBillingStoreSubscriptions([])).toEqual([]);
+  });
+
+  it('never exposes the store subscription id in what the 409 carries', () => {
+    expect(selectBillingStoreSubscriptions([playRecord()])).toEqual([
+      { platform: 'android', productId: 'amani_premium:monthly', expiresAt: '2026-09-23T00:00:00.000Z' },
+    ]);
+  });
+});
+
+describe('selectPlaySubscriptionsToCancel', () => {
+  it('selects exactly the Play rows the acknowledgement treats as still billing', () => {
+    const records = [
+      playRecord({ status: 'active', store_subscription_id: 'GPA.1111-1111-1111-11111' }),
+      playRecord({ status: 'in_grace_period', store_subscription_id: 'GPA.2222-2222-2222-22222' }),
+      playRecord({ status: 'billing_retry', store_subscription_id: 'GPA.3333-3333-3333-33333' }),
+      // Paused Play subscriptions resume and bill on their own.
+      playRecord({ status: 'paused', store_subscription_id: 'GPA.4444-4444-4444-44444' }),
+      playRecord({ status: 'expired', store_subscription_id: 'GPA.5555-5555-5555-55555' }),
+      playRecord({ status: 'revoked', store_subscription_id: 'GPA.6666-6666-6666-66666' }),
+      playRecord({ environment: 'sandbox', store_subscription_id: 'GPA.7777-7777-7777-77777' }),
+      storeRecord({ platform: 'ios', store_subscription_id: '2000000000000009' }),
+    ];
+
+    expect(selectPlaySubscriptionsToCancel(records).map((s) => s.storeSubscriptionId)).toEqual([
+      'GPA.1111-1111-1111-11111',
+      'GPA.2222-2222-2222-22222',
+      'GPA.3333-3333-3333-33333',
+      'GPA.4444-4444-4444-44444',
+    ]);
+    const androidBilling = selectBillingStoreSubscriptions(records).filter((s) => s.platform === 'android');
+    expect(selectPlaySubscriptionsToCancel(records)).toHaveLength(androidBilling.length);
+  });
+
+  it('carries the product and store id Google needs', () => {
+    expect(selectPlaySubscriptionsToCancel([playRecord()])).toEqual([
+      { productId: 'amani_premium:monthly', storeSubscriptionId: 'GPA.1234-5678-9012-34567' },
+    ]);
+  });
+
+  it('asks once per store subscription even if two rows share an id', () => {
+    expect(selectPlaySubscriptionsToCancel([playRecord(), playRecord()])).toHaveLength(1);
+  });
+
+  it('handles an empty list', () => {
+    expect(selectPlaySubscriptionsToCancel([])).toEqual([]);
   });
 });
