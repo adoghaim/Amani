@@ -399,6 +399,15 @@ describe('the current exceptions and the auth cascade are what their reasons say
     expect(orderedDeletes().at(-1)).toEqual(expect.objectContaining({ table: 'users', ownerColumn: 'id' }));
   });
 
+  it('lab_file_cleanup (PK-FIX-04) goes with the users row, and account deletion never sweeps it', () => {
+    expect(userOwnedTables(schema).has('lab_file_cleanup')).toBe(true);
+    // Its only foreign key: user_id cascades from public.users, the last ordered delete.
+    expect(schema.get('lab_file_cleanup')!.fks.map(f => [f.target, f.columns, f.onDelete])).toEqual([['users', ['user_id'], 'cascade']]);
+    expect(orderedDeletes().map(e => e.table)).not.toContain('lab_file_cleanup');
+    expect(orderedDeletes().at(-1)).toEqual(expect.objectContaining({ table: 'users', ownerColumn: 'id' }));
+    expect(reasonOf('lab_file_cleanup')).toContain('20261015110000_lab_file_cleanup.sql');
+  });
+
   it('the Stripe step deletes exactly the Stripe exceptions, by the column the registry names', () => {
     const handler = readFileSync(new URL('../delete-user-data/index.ts', import.meta.url), 'utf8');
     const start = handler.indexOf('async deleteLocalStripeRecords(');
@@ -474,8 +483,8 @@ describe('the current exceptions and the auth cascade are what their reasons say
     expect(statements).not.toMatch(/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|call|do)\b/i);
   });
 
-  it('every exception is one of the five reviewed here', () => {
+  it('every exception is one of the six reviewed here', () => {
     expect(USER_DATA_REGISTRY.filter(e => e.mechanism === 'exception').map(e => e.table).sort())
-      .toEqual(['ai_call_costs', 'interpretation_generation_costs', 'stripe_customers', 'stripe_orders', 'stripe_subscriptions']);
+      .toEqual(['ai_call_costs', 'interpretation_generation_costs', 'lab_file_cleanup', 'stripe_customers', 'stripe_orders', 'stripe_subscriptions']);
   });
 });

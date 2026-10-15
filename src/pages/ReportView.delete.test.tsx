@@ -84,11 +84,20 @@ async function renderReport() {
   ));
 }
 const button = (text: string) => Array.from(app.querySelectorAll('button')).find(b => b.textContent?.trim() === text);
+// PK-INT-01 (#107): delete lives in the report header's labelled More menu as the
+// 'delete-report' action ("Delete report", or "Retry file removal" while the
+// file is pending). Open More, then choose the action, as a person would.
+const moreAction = (text: string) =>
+  Array.from(app.querySelectorAll<HTMLButtonElement>('[data-more-item]')).find(b => b.textContent?.trim() === text);
+async function chooseMore(text: string) {
+  await act(async () => button('More')!.click());
+  await act(async () => moreAction(text)!.click());
+}
 const deleteCalls = () => fixture.invoke.mock.calls.filter(([name]) => name === 'delete-report');
 
 it('deletes through delete-report, never a direct lab_reports delete, and leaves on success', async () => {
   await renderReport();
-  await act(async () => button('Delete')!.click());
+  await chooseMore('Delete report');
   expect(confirmSpy).toHaveBeenCalledOnce();
   expect(deleteCalls()).toEqual([['delete-report', { body: { report_id: 'report-1' } }]]);
   expect(fixture.tableDelete).not.toHaveBeenCalled();
@@ -98,7 +107,7 @@ it('deletes through delete-report, never a direct lab_reports delete, and leaves
 it('does nothing when the confirmation is declined', async () => {
   confirmSpy.mockReturnValue(false);
   await renderReport();
-  await act(async () => button('Delete')!.click());
+  await chooseMore('Delete report');
   expect(deleteCalls()).toEqual([]);
   expect(app.textContent).not.toContain('dashboard home');
 });
@@ -106,12 +115,12 @@ it('does nothing when the confirmation is declined', async () => {
 it('file removal pending: stays, says the file is not removed, and retries without asking again', async () => {
   fixture.deleteReply = pending;
   await renderReport();
-  await act(async () => button('Delete')!.click());
+  await chooseMore('Delete report');
   expect(app.textContent).not.toContain('dashboard home');
   expect(app.textContent).toContain(REPORT_FILE_PENDING_MESSAGE);
-  expect(button('Retry file removal')).toBeDefined();
+  expect(moreAction('Retry file removal')).toBeDefined();
   fixture.deleteReply = () => ({ data: { success: true, status: 'already_deleted' }, error: null });
-  await act(async () => button('Retry file removal')!.click());
+  await chooseMore('Retry file removal');
   expect(confirmSpy).toHaveBeenCalledOnce();
   expect(deleteCalls()).toHaveLength(2);
   expect(app.textContent).toContain('dashboard home');
@@ -120,8 +129,8 @@ it('file removal pending: stays, says the file is not removed, and retries witho
 it('a failed deletion is shown, never treated as success', async () => {
   fixture.deleteReply = failure;
   await renderReport();
-  await act(async () => button('Delete')!.click());
+  await chooseMore('Delete report');
   expect(app.textContent).toContain(REPORT_DELETE_FAILED_MESSAGE);
   expect(app.textContent).not.toContain('dashboard home');
-  expect(button('Delete')).toBeDefined();
+  expect(moreAction('Delete report')).toBeDefined();
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
+import { deleteUserDataTables, isMissingTableError, MissingTableError } from './account-deletion.ts';
 
 /**
  * PK-FIX-04 adds one user-owned table, `lab_file_cleanup`. Account deletion must
@@ -25,7 +26,13 @@ function deleteDataTablesFromSource() {
   expect(end).toBeGreaterThan(start);
   const { code } = transformSync(`const o = {\n${deleteUserData.slice(start, end)}\n};\nreturn o.deleteDataTables;`,
     { loader: 'ts', target: 'es2022' });
-  return (supabase: unknown) => new Function('supabase', code)(supabase) as (userId: string) => Promise<void>;
+  // PK-INT-01: the handler's method delegates to deleteUserDataTables, imported
+  // from ../_shared/account-deletion.ts; PK-EXP5 adds isMissingTableError and
+  // MissingTableError. The real ones are injected under those names (as in
+  // delete-user-data.erasure.test.ts), so this still runs the handler's own code
+  // and the shared deletion order.
+  return (supabase: unknown) => new Function('supabase', 'deleteUserDataTables', 'isMissingTableError', 'MissingTableError', code)(
+    supabase, deleteUserDataTables, isMissingTableError, MissingTableError) as (userId: string) => Promise<void>;
 }
 
 function recordingSupabase(reportIds: string[]) {

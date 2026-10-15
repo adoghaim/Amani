@@ -1,4 +1,4 @@
-# Sourced by cases/165-trigger-enable-always.sh (PK-03e-F, V2-03e-10), after interpretation-versions.run.sh
+# Sourced by cases/185-trigger-enable-always.sh (PK-03e-F, V2-03e-10), after interpretation-versions.run.sh
 # has brought the amani database through V2's 20261011000003. Proves:
 #   1. factory/sql/verify-triggers-enable-always.sql, the post-deploy query,
 #      flags exactly the six pre-V2 safety triggers before 20261013000000;

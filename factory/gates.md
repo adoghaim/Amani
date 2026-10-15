@@ -93,7 +93,7 @@ For any packet that adds or changes `supabase/migrations/`:
 4. Restores: run a data load as `postgres`. `protect_report_content_hash` exempts only `postgres` and `service_role`, so a replica-mode load run as another role that writes `content_hash` fails loudly with `42501`; that is intended. Never use `ALTER TABLE ... DISABLE TRIGGER` to get past a safety trigger: it disables even `ENABLE ALWAYS` triggers. Run step 1 again after any restore.
 5. Attach the query output to the ledger entry for the deploy or restore.
 
-The migration harness runs the same file. `trigger-enable-always.run.sh` (`cases/165-trigger-enable-always.sh`) fails when any listed trigger's mode differs from expected, when one is missing, or when a trigger in `public` is unclassified. It also proves that with `session_replication_role = replica` a forbidden overwrite (claim ledger, privileged user columns, `content_hash`) is still rejected, with one killing mutation per pre-V2 safety trigger.
+The migration harness runs the same file. `trigger-enable-always.run.sh` (`cases/185-trigger-enable-always.sh`) fails when any listed trigger's mode differs from expected, when one is missing, or when a trigger in `public` is unclassified. It also proves that with `session_replication_role = replica` a forbidden overwrite (claim ledger, privileged user columns, `content_hash`) is still rejected, with one killing mutation per pre-V2 safety trigger.
 
 ## G4 — Clinical authority
 

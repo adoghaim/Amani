@@ -202,14 +202,16 @@ describe('redactLabText: identifiers are removed', () => {
 });
 
 /*
- * Pre-existing client-parser defects, found by this suite and reported in the
- * PR, not fixed here (parser scope). On the Hone layout the parser's lookahead
- * window reaches the header block: it reads Estradiol as 481, the digits of
- * "Member ID: HM-00481", and it emits an "alt" item from the "Hone Health"
- * header ("Health" contains "alt"). Those two items are drawn from the
- * identifier block, so redaction legitimately changes them, and for Estradiol it
- * corrects the value to the printed 145. Every other item must be identical.
- * source_snippet is a raw window of the surrounding text and is compared apart.
+ * Client-parser defects on the Hone layout, found by this suite. Originally the
+ * parser's lookahead window reached the header block: it read Estradiol as 481,
+ * the digits of "Member ID: HM-00481", and emitted an "alt" item from the
+ * "Hone Health" header ("Health" contains "alt"). PK-FIX-05 (#109, range
+ * binding) fixed the Estradiol half: Estradiol now reads the printed 145 with or
+ * without redaction. The "alt" item remains and now takes its value, 481, from
+ * the Member ID, so once the Member ID is redacted that spurious item vanishes.
+ * Those items are drawn from the identifier block, so redaction legitimately
+ * changes them. Every other item must be identical. source_snippet is a raw
+ * window of the surrounding text and is compared apart.
  */
 const IDENTIFIER_CONTAMINATED_ON_HONE = new Set(['estradiol', 'alt']);
 const isHone = (text: string) => text.includes('Hone Health');
@@ -221,15 +223,22 @@ function parsedResults(text: string) {
 describe('redactLabText: biomarker names, values, units and ranges are untouched', () => {
   it('Hone layout: the parser stops reading Estradiol from the Member ID once it is redacted', () => {
     const value = (t: string) => parseAllReportItems(t).find((i) => i.canonical_slug === 'estradiol')?.value_numeric;
-    expect(value(honeFixture)).toBe(481);
+    const alt = (t: string) => parseAllReportItems(t).filter((i) => i.canonical_slug === 'alt');
+    expect(value(honeFixture)).toBe(145);
     expect(value(redactLabText(honeFixture).text)).toBe(145);
+    expect(alt(honeFixture).map((i) => i.value_numeric)).toEqual([481]);
+    expect(alt(redactLabText(honeFixture).text)).toEqual([]);
     for (const t of [questFixture, labcorpFixture, genericFixture, edgeCasesFixture]) expect(isHone(t)).toBe(false);
   });
 
   it('source snippets differ only where they include a redacted identifier', () => {
     for (const t of [questFixture, labcorpFixture, genericFixture, edgeCasesFixture, ...FIXTURES.map((f) => f.text)]) {
-      const before = parseAllReportItems(t);
-      const after = parseAllReportItems(redactLabText(t).text);
+      // On Hone the identifier-sourced "alt" item disappears with the Member ID
+      // (asserted above); every other item must line up one to one.
+      const keep = (items: ReturnType<typeof parseAllReportItems>) =>
+        isHone(t) ? items.filter((i) => i.canonical_slug !== 'alt') : items;
+      const before = keep(parseAllReportItems(t));
+      const after = keep(parseAllReportItems(redactLabText(t).text));
       expect(after.length).toBe(before.length);
       before.forEach((item, i) => {
         if (item.source_snippet !== after[i].source_snippet) expect(after[i].source_snippet).toContain('[REDACTED-');

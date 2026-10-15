@@ -193,6 +193,8 @@ describe('deleteUserAccount — store teardown (PK-STORE-01)', () => {
     await deleteUserAccount(actions, 'user-20', { acknowledgedStoreSubscriptions: true });
 
     expect(calls).toEqual([
+      // PK-HARM-01: the read-only deploy-order guard runs before anything.
+      'checkDataTablesReady',
       'listStoreSubscriptions',
       'cancelPlaySubscriptions',
       'getStripeCustomerId',
@@ -290,6 +292,8 @@ describe('deleteUserAccount — store teardown (PK-STORE-01)', () => {
     await deleteUserAccount(actions, 'user-26', { acknowledgedStoreSubscriptions: true });
 
     expect(calls).toEqual([
+      // PK-HARM-01: the read-only deploy-order guard runs before anything.
+      'checkDataTablesReady',
       'listStoreSubscriptions',
       'cancelPlaySubscriptions',
       'getStripeCustomerId',
@@ -626,9 +630,15 @@ describe('deploy order: a table delete-user-data deletes from is missing (PK-HAR
   it('probes every ordered_delete table, and only those', async () => {
     const probe = missing([]);
     await checkUserDataTablesReady(probe);
+    // A mayBeUndeployed table (PK-EXP5) that is missing holds nothing to erase
+    // and deleteUserDataTables skips it, so it is never probed.
     expect(probe.mock.calls.map(([t, c]) => `${t}.${c}`))
-      .toEqual(orderedDeletes().map(e => `${e.table}.${e.ownerColumn}`));
+      .toEqual(orderedDeletes().filter(e => !e.mayBeUndeployed).map(e => `${e.table}.${e.ownerColumn}`));
     expect(probe.mock.calls.map(([t]) => t)).toContain('interpretation_feedback');
+    expect(probe.mock.calls.map(([t]) => t)).toContain('users');
+    const undeployable = orderedDeletes().filter(e => e.mayBeUndeployed).map(e => e.table);
+    expect(undeployable).toEqual(expect.arrayContaining(['app_events', 'user_attribution']));
+    for (const table of undeployable) expect(probe.mock.calls.map(([t]) => t)).not.toContain(table);
   });
 
   it('names the missing table and the migration to push, with every unready table', async () => {

@@ -264,8 +264,13 @@ describe('delete-user-data report-graph erasure (executed from source)', () => {
 
     const handlerCheck = checkFrom(check);
     await expect(handlerCheck(realClient('none'))).resolves.toBeUndefined();
+    // PK-EXP5: a mayBeUndeployed table (app_events, user_attribution) is not
+    // probed — if missing it holds nothing to erase and the sweep skips it —
+    // so it never makes deletion unready. Every other swept table is probed.
+    expect(orderedDeletes().filter(e => e.mayBeUndeployed).map(e => e.table))
+      .toEqual(['app_events', 'user_attribution']);
     expect(requests.map(r => `${r.method} ${r.table}.${r.select}`))
-      .toEqual(orderedDeletes().map(e => `GET ${e.table}.${e.ownerColumn}`));
+      .toEqual(orderedDeletes().filter(e => !e.mayBeUndeployed).map(e => `GET ${e.table}.${e.ownerColumn}`));
 
     const error = await handlerCheck(realClient('interpretation_feedback')).catch(e => e);
     expect(error).toBeInstanceOf(AccountDeletionNotReadyError);

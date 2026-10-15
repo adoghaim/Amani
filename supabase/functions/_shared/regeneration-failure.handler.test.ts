@@ -15,6 +15,11 @@ import { decideDeepGeneration } from './regeneration-availability';
 import { readInterpretation } from './interpretation-read';
 import * as versionWrite from './interpretation-version-write';
 import { classifyRegenerationFailure } from '../../../src/lib/regenerationFailure';
+import { callModelUnlessPaused } from './ai-pause';
+import { consentRefusal, createConsentGate } from './consent';
+// PK-CONSENT-01: features.consent_gate off (the seed), as before the gate existed; a consent read would throw.
+const consentGateOff = () => createConsentGate({ readPublicConfig: async () => [{ key: 'features', value: {} }],
+  readCurrentConsents: async () => { throw new Error('flag off: consent is never read'); }, now: () => 0 });
 
 /**
  * PK-PL-A, Adell's pre-launch rulings (b) and (c), proved against the real
@@ -154,7 +159,7 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
     UserProfileContextSchema: { safeParse: () => ({ success: false, error: { flatten: () => ({}) } }) },
     formatUserContextBlock: () => null, buildTrendEvidence, withClaimAuthority, projectBasic, buildBasicProjection,
     findFloorViolations, shapeInterpretation, shouldRequestDeepInterpretation, formatPrimarySummary: () => '',
-    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI,
+    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI, callModelUnlessPaused,
     ...(sink.a as object), ...(sink.c as object),
   });
   evaluate(slice(source, '// ─── Version store', '// ─── Handler')
@@ -166,6 +171,9 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
       : name === 'FREEMIUM_POST_LIMIT_GENERATION' ? s.postLimit : undefined },
     serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => client, corsHeaders: {}, debugLog: () => {}, enforceRateLimit: async () => {}, createRateLimitStore: () => ({}),
+    consentRefusal, consentGateFor: consentGateOff,
+    // PK-EXP5: the funnel event is a no-op here; app-events.test.ts covers it.
+    logServerEvent: async () => true, createAppEventSink: () => ({}),
     GenerateInterpretationRequestSchema: { safeParse: (body: { reportId: string; request_id?: string }) =>
       ({ success: true, data: { reportId: body.reportId, request_id: body.request_id } }) },
     checkUserSubscription: async () => !flagOn
@@ -177,6 +185,9 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
     shouldGenerateDeepInterpretation, decideDeepGeneration, decideIntroductoryAccess, commitGeneratedInterpretation,
     deriveBloodDrawIdentity, hashDrawKey, recordGenerationCosts: vi.fn(async () => {}),
     isRateLimitExceeded: () => false, errorMessage: String, servedBasic, visibleClaimProjection,
+    // PK-FIX-01b guards: kill switch off; telemetry is inert here.
+    aiPausedNow: async () => false, inBackground: (p: Promise<unknown>) => { void p; },
+    costLedger: { record: async () => {} }, reporter: { captureException: async () => false },
     ...versionWrite, ...(sink.p as object), ...(sink.v as object),
   });
   return { handler, tryOpenAI };

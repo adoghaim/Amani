@@ -3,7 +3,16 @@ import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
 import { errorMessage } from './errors.ts';
 import { fetchWithBackoff as realFetchWithBackoff } from './fetchWithBackoff.ts';
-import { deleteUserAccount, StoreSubscriptionAcknowledgementRequiredError } from './account-deletion.ts';
+import {
+  AccountDeletionNotReadyError,
+  checkUserDataTablesReady,
+  deleteUserAccount,
+  deleteUserDataTables,
+  isMissingTableError,
+  MissingTableError,
+  StoreSubscriptionAcknowledgementRequiredError,
+} from './account-deletion.ts';
+import { createAppEventSink, logServerEvent } from './app-events.ts';
 import {
   ANDROID_PUBLISHER_API,
   GOOGLE_TOKEN_URL,
@@ -109,6 +118,9 @@ function runHandler(world: {
   const log: string[] = [];
   // `options` is what the handler asked fetchWithBackoff for (fake helper only).
   const requests: Array<{ url: string; init: RequestInit; options?: unknown }> = [];
+  // PK-EXP5's account_deleted row, written after the deletion; kept out of `log`
+  // so the deletion's own last step stays `log.at(-1)`.
+  const events: Row[] = [];
 
   const from = (table: string) => {
     let op = `select:${table}`;
@@ -121,6 +133,8 @@ function runHandler(world: {
         return { data: iapRows.map((row) => Object.fromEntries(wanted.map((c) => [c, row[c]]))), error: null };
       }
       if (op === 'select:lab_reports') return { data: [], error: null };
+      // PK-HARM-01 readiness probe (select(owner).limit(1)): the table exists.
+      if (op.startsWith('probe:')) return { data: [], error: null, status: 200 };
       return { data: null, error: null };
     };
     const query: Record<string, unknown> = {};
@@ -135,6 +149,14 @@ function runHandler(world: {
     query.update = () => {
       op = `update:${table}`;
       return query;
+    };
+    query.limit = () => {
+      op = `probe:${table}`;
+      return query;
+    };
+    query.insert = async (row: Row) => {
+      events.push({ table, ...row });
+      return { data: null, error: null };
     };
     query.eq = () => query;
     query.in = () => query;
@@ -219,11 +241,15 @@ function runHandler(world: {
   const { code } = transformSync(source.slice(start), { loader: 'ts', target: 'es2022' });
   new Function(
     'Deno', 'createClient', 'Stripe', 'errorMessage', 'fetchWithBackoff',
-    'deleteUserAccount', 'StoreSubscriptionAcknowledgementRequiredError', 'createStoreTeardownActions',
+    'AccountDeletionNotReadyError', 'checkUserDataTablesReady', 'deleteUserAccount', 'deleteUserDataTables',
+    'isMissingTableError', 'MissingTableError', 'StoreSubscriptionAcknowledgementRequiredError',
+    'createStoreTeardownActions', 'createAppEventSink', 'logServerEvent',
     code,
   )(
     Deno, createClient, Stripe, errorMessage, fetchWithBackoff,
-    deleteUserAccount, StoreSubscriptionAcknowledgementRequiredError, createStoreTeardownActions,
+    AccountDeletionNotReadyError, checkUserDataTablesReady, deleteUserAccount, deleteUserDataTables,
+    isMissingTableError, MissingTableError, StoreSubscriptionAcknowledgementRequiredError,
+    createStoreTeardownActions, createAppEventSink, logServerEvent,
   );
   expect(handler).toBeTypeOf('function');
 
@@ -237,7 +263,7 @@ function runHandler(world: {
     );
     return { status: response.status, body: await response.json() };
   };
-  return { call, log, requests };
+  return { call, log, requests, events };
 }
 
 let serviceAccountJson: string;
@@ -265,6 +291,18 @@ afterEach(() => {
 
 const bothEnabled = () => ({ [REVENUECAT_SECRET_ENV]: RC_KEY, [PLAY_SERVICE_ACCOUNT_ENV]: serviceAccountJson });
 const outbound = (log: string[]) => log.filter((entry) => entry.startsWith('http:'));
+/**
+ * PK-HARM-01 put a read-only readiness probe of every swept table ahead of
+ * everything else. Checks the probes ran, all of them first, and returns what
+ * the handler did after them.
+ */
+const afterProbes = (log: string[]) => {
+  const probes = log.findIndex((entry) => !entry.startsWith('probe:'));
+  expect(probes).toBeGreaterThan(0);
+  const rest = log.slice(probes);
+  expect(rest.some((entry) => entry.startsWith('probe:'))).toBe(false);
+  return rest;
+};
 
 describe('delete-user-data handler — store teardown, executed from source', () => {
   it('with neither store secret set: deletes the account and makes no outbound request', async () => {
@@ -322,7 +360,7 @@ describe('delete-user-data handler — store teardown, executed from source', ()
 
     await expect(call(true)).resolves.toEqual({ status: 200, body: { success: true } });
 
-    expect(log.slice(0, 5)).toEqual([
+    expect(afterProbes(log).slice(0, 5)).toEqual([
       'select:iap_subscriptions',
       'http:google:token',
       'http:google:order',
@@ -384,7 +422,7 @@ describe('delete-user-data handler — store teardown, executed from source', ()
     ]);
     // The store ids stay server-side.
     expect(JSON.stringify(body)).not.toContain(ORDER);
-    expect(log).toEqual(['select:iap_subscriptions']);
+    expect(afterProbes(log)).toEqual(['select:iap_subscriptions']);
   });
 
   it('an acknowledged App Store subscription gets no Google request; the RevenueCat customer still goes', async () => {
