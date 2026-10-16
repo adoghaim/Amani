@@ -53,15 +53,15 @@ function makeFake(faults: Faults = {}) {
   const state = {
     deleted: false,
     reports: [
-      { id: REPORT_NEW, user_id: USER, created_at: '2026-10-02T00:00:00Z' },
-      { id: REPORT_OLD, user_id: USER, created_at: '2026-10-01T00:00:00Z' },
-    ] as Array<{ id: string; user_id: string; created_at: string }>,
+      { id: REPORT_NEW, user_id: USER, upload_date: '2026-10-02T00:00:00Z' },
+      { id: REPORT_OLD, user_id: USER, upload_date: '2026-10-01T00:00:00Z' },
+    ] as Array<{ id: string; user_id: string; upload_date: string }>,
     // report id -> served interpretation id (anchor, or selected version)
     served: new Map<string, string>([[REPORT_OLD, 'eeeeeeee-0000-4000-8000-000000000000']]),
     versions: new Map<string, string>(), // request id -> version id
   };
   if (faults.allInterpreted) state.served.set(REPORT_NEW, ANCHOR);
-  if (faults.foreignReport) state.reports.push({ id: 'ffffffff-0000-4000-8000-000000000000', user_id: OTHER_USER, created_at: '2026-10-03T00:00:00Z' });
+  if (faults.foreignReport) state.reports.push({ id: 'ffffffff-0000-4000-8000-000000000000', user_id: OTHER_USER, upload_date: '2026-10-03T00:00:00Z' });
 
   const reply = (status: number, json: unknown) => ({ status, json: async () => json });
 
@@ -82,6 +82,8 @@ function makeFake(faults: Faults = {}) {
     if (!authed) return reply(401, { code: 'unauthorized' });
 
     if (route === 'GET /rest/v1/lab_reports') {
+      expect(url.searchParams.get('select')).toBe(state.deleted ? 'id' : 'id,user_id,upload_date');
+      expect(url.searchParams.get('order')).toBe(state.deleted ? null : 'upload_date.desc');
       if (state.deleted) return reply(200, []);
       return reply(200, state.reports);
     }
