@@ -185,7 +185,7 @@ export async function runSmoke(config, deps = {}) {
     }
 
     // Target: the newest of this user's reports that has no interpretation yet.
-    const reports = await call('GET', `/rest/v1/lab_reports?select=id,user_id,created_at&user_id=eq.${userId}&order=created_at.desc&limit=50`, { token });
+    const reports = await call('GET', `/rest/v1/lab_reports?select=id,user_id,upload_date&user_id=eq.${userId}&order=upload_date.desc&limit=50`, { token });
     if (reports.status !== 200 || !Array.isArray(reports.json)) {
       set(CHECKS[0], 'FAIL', `could not list the test account's reports: ${describe(reports)}`);
       return;
