@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "repo": "adoghaim/Amani",
-  "generated": "2026-10-15",
+  "generated": "2026-10-16",
   "status_values": [
     "todo",
     "in-progress",
@@ -244,16 +244,17 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
       "evidence": [
-        "Merged with the 2026-10-15 merge train. Migration 20261013000000 not pushed. Harness case 185-trigger-enable-always.sh."
+        "Merged with the 2026-10-15 merge train. Migration 20261013000000 not pushed. Harness case 185-trigger-enable-always.sh.",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-04-A",
@@ -1323,17 +1324,18 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
-        "Functions to deploy: delete-user-data"
+        "Functions to deploy: delete-user-data",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-FIX-04",
@@ -1351,7 +1353,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1359,10 +1361,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261015110000",
-        "Functions to deploy: delete-report"
+        "Functions to deploy: delete-report",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-PL-A",
@@ -1380,17 +1383,18 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
-        "Functions to deploy: generate-interpretation get-interpretation"
+        "Functions to deploy: generate-interpretation get-interpretation",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-FIX-06",
@@ -1435,17 +1439,18 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
-        "Functions to deploy: delete-user-data"
+        "Functions to deploy: delete-user-data",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-FIX-05",
@@ -1517,7 +1522,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1525,10 +1530,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261013040000",
-        "Functions to deploy: delete-user-data"
+        "Functions to deploy: delete-user-data",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-MINVER-01",
@@ -1546,7 +1552,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1554,10 +1560,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261013040000",
-        "Functions to deploy: delete-user-data"
+        "Functions to deploy: delete-user-data",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-FIX-03",
@@ -1575,17 +1582,18 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
-        "Functions to deploy: stripe-checkout"
+        "Functions to deploy: stripe-checkout",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-FIX-07",
@@ -1630,7 +1638,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1638,10 +1646,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261013040000 20261013050000",
-        "Functions to deploy: ai-budget-check delete-user-data extract-biomarkers generate-interpretation lab-insights parse-lab-report-ocr"
+        "Functions to deploy: ai-budget-check delete-user-data extract-biomarkers generate-interpretation lab-insights parse-lab-report-ocr",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-DS-01",
@@ -1686,17 +1695,18 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
-        "Functions to deploy: create-portal-session delete-user-data extract-biomarkers generate-interpretation get-interpretation iap-webhook lab-insights parse-lab-report-ocr stripe-checkout stripe-webhook verify-iap-purchase"
+        "Functions to deploy: create-portal-session delete-user-data extract-biomarkers generate-interpretation get-interpretation iap-webhook lab-insights parse-lab-report-ocr stripe-checkout stripe-webhook verify-iap-purchase",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-PRIV-01",
@@ -1714,17 +1724,18 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
       "blocked_reason": null,
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
-        "Functions to deploy: extract-biomarkers generate-interpretation lab-insights"
+        "Functions to deploy: extract-biomarkers generate-interpretation lab-insights",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-CONSENT-01",
@@ -1742,7 +1753,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1750,10 +1761,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261013040000 20261015040000",
-        "Functions to deploy: delete-user-data extract-biomarkers generate-interpretation lab-insights parse-lab-report-ocr"
+        "Functions to deploy: delete-user-data extract-biomarkers generate-interpretation lab-insights parse-lab-report-ocr",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-EXP5",
@@ -1771,7 +1783,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1779,10 +1791,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261013040000 20261015010000",
-        "Functions to deploy: delete-user-data generate-interpretation iap-webhook log-anon-event stripe-webhook"
+        "Functions to deploy: delete-user-data generate-interpretation iap-webhook log-anon-event stripe-webhook",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-PL-C",
@@ -1854,7 +1867,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1862,10 +1875,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261013040000",
-        "Functions to deploy: delete-user-data"
+        "Functions to deploy: delete-user-data",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     },
     {
       "id": "PK-HARM-01",
@@ -1883,7 +1897,7 @@
       "owner_approval": "2026-10-15 Mohammed (merge train)",
       "deployed": {
         "web": false,
-        "supabase": "pending",
+        "supabase": "deployed 2026-10-16",
         "ios": false,
         "android": false
       },
@@ -1891,10 +1905,11 @@
       "evidence": [
         "Merged with the 2026-10-15 merge train.",
         "Migrations to push: 20261013040000 20261015020000",
-        "Functions to deploy: delete-user-data"
+        "Functions to deploy: delete-user-data",
+        "Backend live 2026-10-16: migrations pushed 2026-10-15 (supabase db push, 16 migrations in sync), functions deployed from main f4a3ccf on 2026-10-16; read-only checks clean (verify-triggers-enable-always.sql all ok, verify-account-deletion-tables.sql zero rows)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-15"
+      "updated": "2026-10-16"
     }
   ],
   "tickets": [
@@ -2316,9 +2331,9 @@
       "PK-05-B"
     ],
     "owner_actions": [
-      "Netlify: approve mawadSur as a Git contributor or upgrade the plan; until then only a commit authored by adoghaim publishes main",
-      "Backend deploy (owner GO): supabase db push (V2 migrations 20261006-20261011000003, then 20261013000000, 20261013040000, 20261013050000, 20261015010000, 20261015020000, 20261015040000, 20261015110000), then deploy the edge functions listed per packet; run factory/sql/verify-account-deletion-tables.sql before deploying delete-user-data",
-      "Run factory/sql/verify-triggers-enable-always.sql after the push (runbook in factory/gates.md)",
+      "Netlify: approve mawadSur as a Git contributor or upgrade the plan; production web is still 948dc95 until a commit authored by adoghaim lands on main (the backend it needs is live)",
+      "Set secrets to enable the dark backend guards: AI_BUDGET_CHECK_SECRET (budget alerts), ANON_EVENT_IP_SALT_SECRET (pre-signup events), Sentry DSN, Google Play credentials (Play cancel on deletion)",
+      "Run node scripts/smoke/v2-post-deploy.mjs --i-understand-this-hits-production with a test account; only after it passes apply factory/sql/post-deploy/retire-delete-interpretations.sql (header runbook)",
       "Xcode Cloud: set workflow variables in App Store Connect (docs/xcode-cloud.md)",
       "Add \"Browser smoke\" to required checks on main (factory/gates.md)",
       "Answer [Pending] items in brain/open-questions.md (clinical reviewer for PK-05-A/C)"
