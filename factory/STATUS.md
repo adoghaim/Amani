@@ -1,6 +1,6 @@
 # Factory status
 
-Human-readable view of `status.json` (regenerate from it; the JSON is the record). As of 2026-10-15.
+Human-readable view of `status.json` (regenerate from it; the JSON is the record). As of 2026-10-16.
 
 | Packet | Phase | Wave | Status | Depends on | PR |
 |---|---|---|---|---|---|
@@ -65,16 +65,16 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 
 **Superseded by owner rulings:** PK-03e-A, PK-03e-B, PK-03e-C, PK-03e-D, PK-03e-E (V2-03e turn 10 removed the remediation flow; V2 `erase_reports` replaced PK-03e-E, PR #92 closed).
 
-**Merged 2026-10-15 (merge train), backend deploy awaiting owner GO:** PK-03e-F, PK-STORE-01, PK-FIX-04, PK-PL-A, PK-INT-01, PK-CFG-01, PK-MINVER-01, PK-FIX-03, PK-FIX-01b, PK-SUPPLY-01, PK-PRIV-01, PK-CONSENT-01, PK-EXP5, PK-AIDIST-01, PK-HARM-01. Web publishes only when a commit authored by adoghaim lands on main (Netlify contributor limit).
+**Merged 2026-10-15 (merge train #128); backend deployed 2026-10-16:** PK-03e-F, PK-STORE-01, PK-FIX-04, PK-PL-A, PK-INT-01, PK-CFG-01, PK-MINVER-01, PK-FIX-03, PK-FIX-01b, PK-SUPPLY-01, PK-PRIV-01, PK-CONSENT-01, PK-EXP5, PK-AIDIST-01, PK-HARM-01. Web publishes only when a commit authored by adoghaim lands on main (Netlify contributor limit).
 
 **Blocked:** PK-05-A (Clinical rule content needs an approved clinical reviewer [Pending]); PK-05-C (Clinical rule content needs an approved clinical reviewer [Pending])
 
 **Next suggested (dependencies met):** PK-04-A, PK-05-B
 
 **Owner actions:**
-- Netlify: approve mawadSur as a Git contributor or upgrade the plan; until then only a commit authored by adoghaim publishes main
-- Backend deploy (owner GO): supabase db push (V2 migrations 20261006-20261011000003, then 20261013000000, 20261013040000, 20261013050000, 20261015010000, 20261015020000, 20261015040000, 20261015110000), then deploy the edge functions listed per packet; run factory/sql/verify-account-deletion-tables.sql before deploying delete-user-data
-- Run factory/sql/verify-triggers-enable-always.sql after the push (runbook in factory/gates.md)
+- Netlify: approve mawadSur as a Git contributor or upgrade the plan; production web is still 948dc95 until a commit authored by adoghaim lands on main (the backend it needs is live)
+- Set secrets to enable the dark backend guards: AI_BUDGET_CHECK_SECRET (budget alerts), ANON_EVENT_IP_SALT_SECRET (pre-signup events), Sentry DSN, Google Play credentials (Play cancel on deletion)
+- Run node scripts/smoke/v2-post-deploy.mjs --i-understand-this-hits-production with a test account; only after it passes apply factory/sql/post-deploy/retire-delete-interpretations.sql (header runbook)
 - Xcode Cloud: set workflow variables in App Store Connect (docs/xcode-cloud.md)
 - Add "Browser smoke" to required checks on main (factory/gates.md)
 - Answer [Pending] items in brain/open-questions.md (clinical reviewer for PK-05-A/C)
