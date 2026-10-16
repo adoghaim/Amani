@@ -92,7 +92,7 @@
       },
       "steps": [
         {
-          "uses": "actions/checkout@v4",
+          "uses": "actions/checkout@v7",
           "with": {
             "ref": "${{ github.sha }}",
             "path": "automation",
@@ -101,7 +101,7 @@
           }
         },
         {
-          "uses": "actions/checkout@v4",
+          "uses": "actions/checkout@v7",
           "with": {
             "ref": "main",
             "path": "source",
@@ -139,7 +139,7 @@
       },
       "steps": [
         {
-          "uses": "actions/checkout@v4",
+          "uses": "actions/checkout@v7",
           "with": {
             "ref": "${{ github.sha }}",
             "path": "automation",
@@ -148,7 +148,7 @@
           }
         },
         {
-          "uses": "actions/checkout@v4",
+          "uses": "actions/checkout@v7",
           "with": {
             "ref": "main",
             "path": "source",

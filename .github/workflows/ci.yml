@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Supabase resolves npm:/jsr:/https: imports at deploy time, so a range
       # or bare major would let production code change without a commit.
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -85,7 +85,7 @@ jobs:
     # even start those sections.
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The harness runs the live SQL->TypeScript parity checks through Vitest
       # (legacy-quarantine.run.sh, interpretation-versions.run.sh). Without the
       # workspace dependencies it exits silently at `test -x node_modules/.bin/vitest`
