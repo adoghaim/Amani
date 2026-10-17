@@ -298,8 +298,16 @@ describe('the Hone fixture: the cross-marker capture that motivated PK-FIX-05', 
     });
   });
 
-  it('gives the spurious ALT match (the "alt" inside "Hone Health") no interval and sends it to review', () => {
-    expect(item(items, 'alt')).toMatchObject({ raw_reference_range: null, needs_review: true, confidence_score: 'low' });
+  // The only number after the "alt" inside "Hone Health" is the member ID
+  // "HM-00481": part of a word, so it is no result and no ALT row is invented.
+  it('invents no ALT row from the "alt" inside "Hone Health" and the member ID "HM-00481"', () => {
+    expect(items.find(i => i.canonical_slug === 'alt' || i.raw_name === 'alt')).toBeUndefined();
+  });
+
+  it('gives a spurious ALT match (the "alt" inside "Hone Health") no interval and sends it to review', () => {
+    // A bare member number still reads as a value after that "alt".
+    const spurious = item(parseAllReportItems(honeFixture.replace('HM-00481', '00481')), 'alt');
+    expect(spurious).toMatchObject({ value_numeric: 481, raw_reference_range: null, needs_review: true, confidence_score: 'low' });
   });
 });
 

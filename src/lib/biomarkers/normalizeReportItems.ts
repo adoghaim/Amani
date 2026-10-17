@@ -66,6 +66,16 @@ function resolveEntry(item: ReportItem) {
   return null;
 }
 
+/**
+ * The name the report shows for an item: its catalogue display name ("Vitamin
+ * D", "HbA1c") when it resolves to an entry, else its printed label. It is the
+ * `_display_name` normalizeReportItems saves as report_analytes.display_name,
+ * so the upload's confirm step names each marker the way the report will.
+ */
+export function reportItemDisplayName(item: ReportItem): string {
+  return resolveEntry(item)?.displayName ?? item.raw_name;
+}
+
 export function normalizeReportItems(items: ReportItem[]): NormalizedReportItem[] {
   return items.map(item => {
     const rawName = item.raw_biomarker_name ?? item.raw_name;

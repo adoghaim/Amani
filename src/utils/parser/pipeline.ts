@@ -18,11 +18,12 @@ import {
 } from './patterns';
 import { detectReportSource } from './sourceDetection';
 import { getAdapter } from './adapters';
-import { splitIntoLines, isSectionHeader } from './textUtils';
+import { splitIntoLines, isSectionHeader, isPartOfWord } from './textUtils';
 import { bindReferenceRange, firstNumericToken, intervalNumbers, isReferenceSubLabel } from './rangeDetection';
-import { matchBiomarkerLabel } from './labelMatching';
+import { matchBiomarkerLabel, matchLabelLine } from './labelMatching';
 import { extractValueFromWindow, parseValueWithPrefix } from './valueExtraction';
-import { resolveAlias, getEntry } from '../../lib/biomarkers/dictionary';
+import { resolveAlias, getEntry, getDisplayName } from '../../lib/biomarkers/dictionary';
+import type { BiomarkerName } from '../../types';
 
 export { normalizeToCatalogSlug } from './patterns';
 export { CATALOG_SLUG_ALIASES };
@@ -70,11 +71,13 @@ export function confidenceRank(c: 'high' | 'medium' | 'low'): number {
   return c === 'high' ? 2 : c === 'medium' ? 1 : 0;
 }
 
+// The message is shown on the upload's confirm step, so it names the marker as the report does.
 export function checkPhysiologicalBounds(slug: string, value: number): string | null {
   const bounds = PHYSIOLOGICAL_BOUNDS[slug];
   if (!bounds) return null;
-  if (value < bounds.min) return `Value ${value} is below physiological minimum ${bounds.min} for ${slug} — likely a parse error`;
-  if (value > bounds.max) return `Value ${value} exceeds physiological maximum ${bounds.max} for ${slug} — likely a parse error`;
+  const name = getDisplayName(slug as BiomarkerName);
+  if (value < bounds.min) return `Value ${value} is below physiological minimum ${bounds.min} for ${name} — likely a parse error`;
+  if (value > bounds.max) return `Value ${value} exceeds physiological maximum ${bounds.max} for ${name} — likely a parse error`;
   return null;
 }
 
@@ -135,14 +138,15 @@ export function layeredParse(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line === undefined) continue;
-    const bp = matchBiomarkerLabel(line, adapter);
-    if (!bp && isSectionHeader(line)) continue;
-    if (!bp) continue;
+    const match = matchLabelLine(line, adapter);
+    if (!match && isSectionHeader(line)) continue;
+    if (!match) continue;
+    const bp = match.pattern;
 
     const rawWindow = lines.slice(i, Math.min(i + windowSize, lines.length));
     const nextAnalyteOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l, adapter) !== null);
     const windowLines = nextAnalyteOffset >= 0 ? rawWindow.slice(0, nextAnalyteOffset + 1) : rawWindow;
-    const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter);
+    const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter, match.nameEnd);
 
     const canonical      = normalizeToCatalogSlug(bp.canonical);
     const snippetText    = windowLines.join(' ').substring(0, 200);
@@ -295,8 +299,10 @@ function extractBiomarkerFromContext(
   const rangeNums = intervalNumbers(binding.candidates);
 
   // A comparator printed as part of one of the marker's intervals is not its
-  // result. The label line's own leading "<0.5" still is, as before.
-  const lead = firstNumericToken(lines[0] ?? '');
+  // result. The label line's own leading "<0.5" still is, as before. The label
+  // is read along with its line so a number glued to it ("D3") stays part of it.
+  const leadToken = firstNumericToken(label + (lines[0] ?? ''), label.length);
+  const lead = leadToken && { start: leadToken.start - label.length, end: leadToken.end - label.length };
   let prefixToken: string | undefined;
   for (const m of afterLabel.matchAll(/<\s*(\d+\.?\d*)|>\s*(\d+\.?\d*)/g)) {
     const leadsLabelLine = lead !== null && m.index === lead.start;
@@ -314,7 +320,12 @@ function extractBiomarkerFromContext(
       confidence = ref ? 'high' : 'medium';
     }
   } else {
+    // A number that is part of a word ("25-OH", "D3") is part of the name, not the result.
     const numbers = [...afterLabel.matchAll(/(\d+\.?\d*)/g)]
+      .filter(m => {
+        const start = label.length + (m.index ?? 0);
+        return !isPartOfWord(contextText, start, start + m[0].length);
+      })
       .map(m => m[1])
       .filter((s): s is string => s !== undefined)
       .map(s => parseFloat(s));
@@ -652,15 +663,16 @@ export function parseAllReportItemsWithDebug(
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (line === undefined) continue;
-      const bp   = matchBiomarkerLabel(line, adapter);
-      if (!bp && isSectionHeader(line)) continue;
-      if (!bp) continue;
+      const match = matchLabelLine(line, adapter);
+      if (!match && isSectionHeader(line)) continue;
+      if (!match) continue;
+      const bp = match.pattern;
 
       const windowSize = adapter?.windowSize ?? 10;
       const rawWindow  = lines.slice(i, Math.min(i + windowSize, lines.length));
       const nextOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l, adapter) !== null);
       const windowLines = nextOffset >= 0 ? rawWindow.slice(0, nextOffset + 1) : rawWindow;
-      const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter);
+      const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter, match.nameEnd);
       const canonical      = normalizeToCatalogSlug(bp.canonical);
       const snippetText    = windowLines.join(' ').substring(0, 200);
       const matchedPattern = bp.patterns.find(p => line.toLowerCase().includes(p)) ?? bp.patterns[0] ?? null;

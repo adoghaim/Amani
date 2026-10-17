@@ -3,6 +3,7 @@ import { AlertCircle, AlertTriangle, ChevronDown, ChevronRight, FlaskConical, Mi
 import { Button } from './Button';
 import type { ReportItem } from '../utils/biomarkerParser';
 import { useBiomarkerCatalog } from '../hooks/useBiomarkerCatalog';
+import { reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
 
 interface ReviewBiomarkersProps {
   items: ReportItem[];
@@ -59,11 +60,8 @@ function ItemCard({
         <div className="flex items-center gap-3 min-w-0">
           {expanded ? <ChevronDown className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" />}
           <span className="font-medium text-theme-neutral-900 truncate">
-            {item.raw_name || <span className="text-theme-neutral-400 italic">Unnamed</span>}
+            {reportItemDisplayName(item) || <span className="text-theme-neutral-400 italic">Unnamed</span>}
           </span>
-          {item.canonical_slug && (
-            <span className="hidden sm:inline text-xs text-theme-neutral-400">({item.canonical_slug})</span>
-          )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0 ml-3">
           <span className="font-semibold text-theme-neutral-900 tabular-nums">

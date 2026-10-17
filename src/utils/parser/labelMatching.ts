@@ -122,8 +122,35 @@ ALL_ALIASES.sort((a, b) => {
   return a.pattern.canonical.localeCompare(b.pattern.canonical);
 });
 
+/** A label line the matcher recognised: the analyte, and where its name ends. */
+export interface LabelMatch {
+  pattern: BiomarkerPattern;
+  /**
+   * Offset in the line just past the name the matcher recognised (0 when it
+   * cannot be located). Every number before it is part of the name, never the
+   * result: "25 Hydroxy Vitamin D", "Free T 4", "E 2".
+   */
+  nameEnd: number;
+}
+
+/** End of the first occurrence of `normAlias` in the raw line, read the way the matcher reads it (any case, '-' for ' '); 0 if absent. */
+function nameEndOf(line: string, normAlias: string): number {
+  const source = normAlias
+    .split(' ')
+    .map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[\\s-]');
+  const m = new RegExp(source, 'i').exec(line);
+  return m ? m.index + m[0].length : 0;
+}
+
+/** Resolves a raw extracted line to its `BiomarkerPattern`; see `matchLabelLine`. */
+export function matchBiomarkerLabel(line: string, adapter?: SourceAdapter): BiomarkerPattern | null {
+  return matchLabelLine(line, adapter)?.pattern ?? null;
+}
+
 /**
- * Resolves a raw extracted line to its `BiomarkerPattern`.
+ * Resolves a raw extracted line to its `BiomarkerPattern`, and where the name
+ * it matched ends on the line.
  *
  * Matching is GLOBAL longest-first across all aliases (not array order, not
  * per-pattern). This prevents short generic aliases from hijacking compound
@@ -146,7 +173,7 @@ ALL_ALIASES.sort((a, b) => {
  *   "Albumin 4.3 g/dL"                     → albumin
  *   "Absolute Lymphocytes 2015 cells/uL"   → lymphocytes_absolute
  */
-export function matchBiomarkerLabel(line: string, adapter?: SourceAdapter): BiomarkerPattern | null {
+export function matchLabelLine(line: string, adapter?: SourceAdapter): LabelMatch | null {
   let normalizedLine = line;
   if (adapter?.labelMatch.labelStripPattern) {
     normalizedLine = normalizedLine.replace(adapter.labelMatch.labelStripPattern, '');
@@ -172,7 +199,7 @@ export function matchBiomarkerLabel(line: string, adapter?: SourceAdapter): Biom
       lineLower.startsWith(normAlias + ' ') ||
       lineLower.startsWith(normAlias + ',')
     ) {
-      return reroute(bp);
+      return { pattern: reroute(bp), nameEnd: nameEndOf(line, normAlias) };
     }
   }
 
@@ -180,25 +207,28 @@ export function matchBiomarkerLabel(line: string, adapter?: SourceAdapter): Biom
   // tiny substrings (e.g. "lh", "fsh") accidentally matching unrelated lines.
   for (const { normAlias, pattern: bp } of ALL_ALIASES) {
     if (normAlias.length > 5 && lineLower.includes(normAlias)) {
-      return reroute(bp);
+      return { pattern: reroute(bp), nameEnd: nameEndOf(line, normAlias) };
     }
   }
 
-  // PASS 3 — dictionary alias fallback (unchanged behavior).
+  // PASS 3 — dictionary alias fallback (unchanged behavior). The whole line is the alias.
   const resolved = resolveAlias(lineLower);
   if (resolved) {
     const reroutedSlug = disambiguateCBCFromLine(resolved, line) as BiomarkerName;
     const finalSlug = reroutedSlug !== resolved ? reroutedSlug : resolved;
 
     const existingPattern = BIOMARKER_PATTERNS.find(p => p.canonical === finalSlug);
-    if (existingPattern) return existingPattern;
+    if (existingPattern) return { pattern: existingPattern, nameEnd: line.length };
 
     const entry = getEntry(finalSlug);
     if (entry) {
       return {
-        canonical: finalSlug,
-        patterns: [finalSlug, ...entry.aliases],
-        commonUnits: [entry.defaultUnit],
+        pattern: {
+          canonical: finalSlug,
+          patterns: [finalSlug, ...entry.aliases],
+          commonUnits: [entry.defaultUnit],
+        },
+        nameEnd: line.length,
       };
     }
   }
