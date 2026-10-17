@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Amani</string>
-    <string name="title_activity_main">Amani</string>
-    <string name="package_name">com.amani.health</string>
-    <string name="custom_url_scheme">com.amani.health</string>
-</resources>
