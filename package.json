@@ -4,6 +4,8 @@
   "version": "1.0.6",
   "type": "module",
   "scripts": {
+    "test:e2e:journey": "playwright test -c e2e/journey/playwright.config.ts",
+    "test:e2e:journey:guard": "node --test e2e/journey/real-stack-guard.test.mjs",
     "clinical:generate": "node tools/clinical/generate.mjs && node tools/clinical/audit-queue.mjs && node tools/clinical/language-policy.mjs",
     "clinical:check": "node tools/clinical/generate.mjs --check && node tools/clinical/audit-queue.mjs --check && node tools/clinical/language-policy.mjs --check",
     "clinical:test": "node --test --test-concurrency=1 tools/clinical/catalog.test.mjs tools/clinical/convergence.test.mjs tools/clinical/sql-parse-guard.test.mjs tools/clinical/value-identity.test.mjs tools/clinical/audit.test.mjs tools/clinical/audit-amendment.test.mjs tools/clinical/review-status.test.mjs tools/clinical/language-policy.test.mjs",

@@ -8,6 +8,7 @@ The factory's earlier proposal (a new Playwright config plus a real-backend CI j
 - `e2e/server.mjs` serves the app with no env files and no inherited `VITE_*` values. `npm run test:e2e:isolation` (`e2e/env-isolation.test.mjs`) proves it, so specs use synthetic data and mocked network and never reach a backend.
 - Locally: `npm run test:e2e` (or `npx playwright test --project=<browser>`).
 - CI: `.github/workflows/e2e.yml`, job "Browser smoke", on every PR to main: the isolation check, then the whole suite in all three browsers.
+- CI: **Fresh-user journey**, a separate parallel job in `.github/workflows/e2e.yml`: `npm run test:e2e:journey:guard`, then `npm run test:e2e:journey` (production build, three engines, deterministic Supabase stand-in). See [the journey proof and limits](../../docs/factory/fresh-user-e2e.md).
 - Native builds are `.github/workflows/native-build.yml`, not part of web e2e.
 
 ## Real-backend e2e (not set up) [Pending]
