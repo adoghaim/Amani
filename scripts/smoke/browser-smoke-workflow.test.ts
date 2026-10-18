@@ -29,6 +29,7 @@ describe('Browser smoke workflow', () => {
   it('runs the isolation canary and the synthetic smoke suite, with a bounded timeout', () => {
     expect(workflow).toContain('run: npm run test:e2e:isolation');
     expect(workflow).toContain('run: npm run test:e2e\n');
+    expect(workflow).toContain('run: npx --no-install playwright test --config e2e/freemium/playwright.config.ts\n');
     expect(workflow).toMatch(/timeout-minutes: 30\n/);
     expect(workflow).not.toMatch(/secrets\./);
   });

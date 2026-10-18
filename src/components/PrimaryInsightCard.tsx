@@ -3,6 +3,7 @@ import { AlertTriangle, TrendingUp, TrendingDown, ArrowDownRight, ArrowUpRight, 
 import type { TopFinding, BiggestChange } from '../lib/insights/buildInsightSummary';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 import { withoutOptimalClaims } from '../lib/scoring/insightCopy';
+import { formatDateOrNull } from '../utils/formatters';
 
 interface Props {
   finding: TopFinding;
@@ -56,9 +57,8 @@ export function PrimaryInsightCard({ finding, aiExplanation, delta }: Props) {
   }
 
   const formatPriorDate = (date: string): string => {
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return 'your prior report';
-    return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+    const month = formatDateOrNull(date, { year: 'numeric', month: 'long' });
+    return month ? `your ${month} report` : 'your prior report';
   };
   const priorReference = delta?.priorIsOlderThanImmediatePrior && delta.priorReportDate
     ? formatPriorDate(delta.priorReportDate)

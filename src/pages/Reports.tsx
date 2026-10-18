@@ -25,21 +25,10 @@ import { useAuth } from '../contexts/AuthContext';
 import type { LabReport } from '../types';
 import { ReportCycleLine } from '../components/ReportCycleLine';
 import { reportCycleLine } from '../lib/reportCycleLine';
+import { formatDate, formatDateLong } from '../utils/formatters';
 
 type SortKey = 'report_date' | 'upload_date' | 'status';
 type SortDir = 'asc' | 'desc';
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-function formatDateShort(dateStr: string) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 function timeAgo(dateStr: string) {
   const d = new Date(dateStr);
@@ -52,7 +41,7 @@ function timeAgo(dateStr: string) {
   const diffMonths = Math.floor(diffDays / 30);
   if (diffMonths === 1) return '1 month ago';
   if (diffMonths < 12) return `${diffMonths} months ago`;
-  return formatDateShort(dateStr);
+  return formatDate(dateStr);
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -117,7 +106,7 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error, filePending
           {!filePending && (
             <p className="text-sm text-theme-text-body">
               You are about to permanently delete the report from{' '}
-              <span className="font-semibold text-theme-text">{formatDate(report.report_date)}</span>
+              <span className="font-semibold text-theme-text">{formatDateLong(report.report_date)}</span>
               , including all biomarkers, AI insights and any uploaded lab file. This action cannot be reversed.
             </p>
           )}
@@ -271,7 +260,7 @@ export function Reports() {
       if (statusFilter !== 'all' && r.status !== statusFilter) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
-        const dateStr = formatDate(r.report_date).toLowerCase();
+        const dateStr = formatDateLong(r.report_date).toLowerCase();
         // Search the phase only where it is shown (D10), never a hidden stored one.
         const phase = reportCycleLine(r)?.phase ?? '';
         if (!dateStr.includes(q) && !phase.includes(q)) return false;
@@ -436,7 +425,7 @@ export function Reports() {
                           </div>
                           <div className="min-w-0">
                             <div className="font-semibold text-sm text-theme-text truncate">
-                              {formatDate(report.report_date)}
+                              {formatDateLong(report.report_date)}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs text-theme-muted-text-3">Uploaded {timeAgo(report.upload_date)}</span>
@@ -455,7 +444,7 @@ export function Reports() {
                             {timeAgo(report.upload_date)}
                           </div>
                           <div className="text-xs text-theme-muted-text-3 mt-0.5">
-                            {formatDateShort(report.upload_date.slice(0, 10))}
+                            {formatDate(report.upload_date)}
                           </div>
                         </Link>
 

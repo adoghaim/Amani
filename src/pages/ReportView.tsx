@@ -65,6 +65,7 @@ import { createRegenerationRequests } from '../lib/regenerationRequest';
 import { requestReportDeletion } from '../lib/reportDeletion';
 import { REGENERATION_COPY, regenerationFailureOf, type RegenerationNoticeKind } from '../lib/regenerationFailure';
 import { handle402 } from '../utils/subscription';
+import { formatDateLong } from '../utils/formatters';
 import { useSubscription } from '../hooks/useSubscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
@@ -1310,12 +1311,6 @@ export function ReportView() {
     setError(outcome.message);
   };
 
-  const formatDate = (d: string) => {
-    if (!d) return '—';
-    const base = d.length === 10 ? d + 'T12:00:00' : d;
-    return new Date(base).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  };
-
   if (loading) {
     return (
       <Layout>
@@ -1422,13 +1417,13 @@ export function ReportView() {
         <div className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-2xl text-theme-text tracking-tight">
-              Lab Report: {formatDate(report.report_date)}
+              Lab Report: {formatDateLong(report.report_date)}
             </h1>
             <p className="text-sm text-theme-muted-text-3 mt-1">
-              <span className="font-medium text-theme-muted-text-2">Lab date:</span> {formatDate(report.report_date)}
+              <span className="font-medium text-theme-muted-text-2">Lab date:</span> {formatDateLong(report.report_date)}
               {report.upload_date && report.upload_date.split('T')[0] !== report.report_date && (
                 <span className="ml-2 text-theme-muted-text-3">
-                  (uploaded {formatDate(report.upload_date)})
+                  (uploaded {formatDateLong(report.upload_date)})
                 </span>
               )}
             </p>

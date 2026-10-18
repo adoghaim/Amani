@@ -5,6 +5,7 @@ import {
   authorizeModelProse, COMPARISON_CHANGES_EMPTY, COMPARISON_CHANGES_HEADING, describeMeasuredMovement, PRODUCT_DISCLAIMERS,
   type MovementClaim,
 } from '../lib/scoring/insightCopy';
+import { formatDate } from '../utils/formatters';
 
 interface Insight {
   summary: string;
@@ -33,12 +34,6 @@ interface InsightsModalProps {
    * model's text renders only where it resolves to one of these (owner R1).
    */
   claims?: readonly MovementClaim[];
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  });
 }
 
 /*

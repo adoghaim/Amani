@@ -7,7 +7,7 @@ import { CycleDial } from './CycleDial';
 import { axeViolations } from './axe.testkit';
 import { computeCyclePrediction } from '../utils/cyclePredictor';
 import { daysBefore, DRAW, trackerLogs, type TypicalLength } from '../lib/cycleR10Table';
-import type { CyclePrediction, PeriodLog } from '../types';
+import type { CyclePrediction, LabReport, PeriodLog } from '../types';
 
 /*
   PK-FIX-06-EXT (owner decision D10): the Today card and the cycle ring follow
@@ -116,6 +116,39 @@ describe('Today card: the report\'s cycle rule (D10)', () => {
   ])('axe finds no violations: %s', async (_name, length, day) => {
     await renderCard(length, day);
     expect(await axeViolations(app)).toEqual([]);
+  });
+});
+
+/*
+  2026-10-17 production smoke test: report_date 2026-10-10 read "Last panel
+  Oct 9" on the Tracker, because the card read the calendar day as midnight
+  UTC, the evening before anywhere west of it. Both facts are calendar days and
+  read as stored in every zone (the formatter itself: src/utils/formatters.test.ts).
+*/
+describe('Today card: last panel and last period are the stored days in every zone', () => {
+  const zone = process.env.TZ;
+  afterEach(() => {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  });
+  const fact = (label: string) =>
+    [...app.querySelectorAll('dt')].find(dt => dt.textContent === label)?.nextElementSibling?.textContent;
+
+  it.each(['UTC', 'America/Los_Angeles', 'Pacific/Honolulu', 'Asia/Tokyo', 'Pacific/Kiritimati'])('%s', async tz => {
+    process.env.TZ = tz;
+    await act(async () => root.render(
+      <TodayCard
+        prediction={null}
+        lastReport={{ id: 'synthetic-report', report_date: '2026-10-10' } as LabReport}
+        activeInterventions={[]}
+        lastPeriodLog={asLogs([{ start_date: '2026-10-01' }])[0] ?? null}
+        onLogPeriod={() => {}}
+        onAddSymptom={() => {}}
+        onUploadLabs={() => {}}
+      />,
+    ));
+    expect(fact('Last panel')).toBe('Oct 10');
+    expect(fact('Last period')).toBe('Oct 1');
   });
 });
 

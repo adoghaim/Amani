@@ -8,6 +8,7 @@ import {
   authorizedLanguage, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, WATCH_SIGNALS,
   type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
 } from '../scoring/insightCopy';
+import { formatDateOrNull } from '../../utils/formatters';
 
 export interface TopFinding {
   key: BiomarkerName;
@@ -193,9 +194,8 @@ function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerNam
 }
 
 export function formatPriorReportDate(date: string): string {
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return 'your prior report';
-  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+  const month = formatDateOrNull(date, { year: 'numeric', month: 'long' });
+  return month ? `your ${month} report` : 'your prior report';
 }
 
 function deltaToChange(d: BiomarkerDelta, immediatePriorReportDate: string | null): BiggestChange {
