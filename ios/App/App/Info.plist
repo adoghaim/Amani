@@ -43,6 +43,8 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Amani uses Face ID to unlock the app when you turn on the app lock in Settings.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Amani uses the camera to capture photos of your lab results so they can be analyzed and turned into personalized health insights.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

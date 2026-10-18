@@ -12,7 +12,14 @@ const auth = vi.hoisted(() => ({
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('../features/settings/PersonalContextCard', () => ({ PersonalContextCard: () => null }));
-vi.mock('../lib/native', () => ({ openExternalUrl: vi.fn() }));
+vi.mock('../lib/native', () => ({
+  openExternalUrl: vi.fn(),
+  isNative: () => false,
+  platform: () => 'web',
+  checkBiometrics: async () => ({ available: false, kind: null, deviceSecure: false }),
+  authenticateWithBiometrics: async () => ({ ok: false, reason: 'unavailable' }),
+  setScreenshotsBlocked: async () => false,
+}));
 vi.mock('../lib/iap', () => ({ storeSubscriptionsUrl: vi.fn() }));
 vi.mock('../lib/supabase', () => ({
   supabase: {

@@ -15,6 +15,8 @@ vi.mock('../../contexts/AuthContext', () => ({
 // PK-EXP5 wired onboarding to the first-party events client, which needs the
 // Supabase env at import; these tests are about the flow, not the events.
 vi.mock('../../lib/firstPartyEventsClient', () => ({ firstPartyEvents: { track: vi.fn(async () => true) } }));
+vi.mock('../../lib/runtimeConfig', () => ({ loadRuntimeConfig: async () => {}, isFeatureEnabled: () => false }));
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { OnboardingFlow } from './OnboardingFlow';
 import { isUnder18AgeRange } from './contextOptions';
 

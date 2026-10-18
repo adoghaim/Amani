@@ -25,8 +25,8 @@ interface ConsentGateProps {
  *
  * Gate order at launch: the update block (PK-MINVER-01), the lock
  * (PK-DEVICE-01), this consent gate, then onboarding (OnboardingGate and the
- * /onboarding route). Those earlier gates mount before this one in
- * ProtectedRoute when their packets land.
+ * /onboarding route). UpdateGate wraps DeviceLockGate around AppRoutes in App,
+ * before this gate in ProtectedRoute.
  *
  * features.consent_gate off (the default; a missing key is off): renders its
  * children and reads nothing, exactly today's behaviour. On: her current

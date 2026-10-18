@@ -1,5 +1,6 @@
 package com.amani.health;
 
+import android.os.Build;
 import android.os.Bundle;
 
 import androidx.core.view.WindowCompat;
@@ -41,8 +42,27 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // PK-DEVICE-01 (R15): Amani's local AmaniPrivacy plugin, which sets
+        // FLAG_SECURE while the biometric lock is on. Local plugins are
+        // registered before super.onCreate starts the bridge.
+        registerPlugin(PrivacyPlugin.class);
         super.onCreate(savedInstanceState);
+        hideFromRecentsScreenshots();
         applyLightSystemBars();
+    }
+
+    /**
+     * PK-DEVICE-01 (R15): on Android 13 (API 33) and later, every user's app
+     * switcher shows a blank card instead of a snapshot of Amani, while
+     * screenshots keep working. Older versions have no such switch; there the
+     * preview is hidden only while the biometric lock is on (FLAG_SECURE,
+     * PrivacyPlugin). Lock-off users on Android 7-12 keep a preview: the
+     * accepted gap.
+     */
+    private void hideFromRecentsScreenshots() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            setRecentsScreenshotEnabled(false);
+        }
     }
 
     @Override
