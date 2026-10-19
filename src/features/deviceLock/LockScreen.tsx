@@ -33,11 +33,12 @@ const PROBLEM_TITLE: Record<UnlockProblem, string | null> = {
 export interface LockScreenProps {
   unlocking: boolean;
   problem: UnlockProblem | null;
+  signOutFailed?: boolean;
   onUnlock: () => void;
   onSignOut: () => void;
 }
 
-export function LockScreen({ unlocking, problem, onUnlock, onSignOut }: LockScreenProps) {
+export function LockScreen({ unlocking, problem, signOutFailed = false, onUnlock, onSignOut }: LockScreenProps) {
   // Ask straight away when the lock screen opens. The controller ignores a
   // second request while the sheet is up (StrictMode runs this twice in dev).
   useEffect(() => {
@@ -45,7 +46,7 @@ export function LockScreen({ unlocking, problem, onUnlock, onSignOut }: LockScre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const title = problem ? PROBLEM_TITLE[problem] : null;
+  const title = signOutFailed ? "Amani couldn't sign out. Try again." : problem ? PROBLEM_TITLE[problem] : null;
 
   return (
     <FullScreenGate

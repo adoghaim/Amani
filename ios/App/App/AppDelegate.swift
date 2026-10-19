@@ -13,6 +13,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private var privacyCover: UIView?
 
     private func showPrivacyCover() {
+        guard DevicePrivacyRelease.isActive(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) else { return }
         guard privacyCover == nil, let window = window else { return }
         let storyboard = UIStoryboard(name: "LaunchScreen", bundle: nil)
         guard let cover = storyboard.instantiateInitialViewController()?.view else { return }

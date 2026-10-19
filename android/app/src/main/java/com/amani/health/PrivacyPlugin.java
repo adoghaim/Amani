@@ -17,7 +17,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * screen recording and screen sharing, so it is on only while the biometric
  * lock is on. Settings says so next to the lock toggle.
  *
- * Every user on Android 13+ is hidden in the app switcher regardless, by
+ * From native release 1.0.7, every user on Android 13+ is hidden in the app switcher regardless, by
  * setRecentsScreenshotEnabled(false) in MainActivity.
  */
 @CapacitorPlugin(name = "AmaniPrivacy")
@@ -25,6 +25,12 @@ public class PrivacyPlugin extends Plugin {
 
     @PluginMethod
     public void setSecure(PluginCall call) {
+        if (!(getActivity() instanceof MainActivity) || !((MainActivity) getActivity()).isDevicePrivacyActive()) {
+            JSObject result = new JSObject();
+            result.put("secure", false);
+            call.resolve(result);
+            return;
+        }
         final boolean secure = Boolean.TRUE.equals(call.getBoolean("secure", false));
         getActivity().runOnUiThread(() -> {
             if (secure) {

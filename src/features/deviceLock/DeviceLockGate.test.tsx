@@ -16,6 +16,7 @@ const env = vi.hoisted(() => ({
   authCalls: 0,
   lifecycle: null as null | { onPause: () => void; onResume: () => void },
   signOuts: [] as unknown[],
+  signOut: null as null | (() => Promise<{ error: unknown }>),
   auth: { user: { id: 'user-1' } as { id: string } | null, loading: false },
 }));
 vi.mock('../../lib/native', () => ({
@@ -28,7 +29,7 @@ vi.mock('../../lib/native', () => ({
 }));
 vi.mock('../../lib/runtimeConfig', () => ({ loadRuntimeConfig: async () => {}, isFeatureEnabled: () => true }));
 vi.mock('../../lib/supabase', () => ({
-  supabase: { auth: { signOut: async (options: unknown) => { env.signOuts.push(options); env.auth.user = null; } } },
+  supabase: { auth: { signOut: async (options: unknown) => { env.signOuts.push(options); if (env.signOut) return env.signOut(); return { error: null }; } } },
 }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => env.auth }));
 
@@ -43,6 +44,7 @@ beforeEach(() => {
   env.results = [];
   env.authCalls = 0;
   env.signOuts = [];
+  env.signOut = null;
   env.auth = { user: { id: 'user-1' }, loading: false };
   app = document.createElement('div');
   document.body.append(app);
@@ -104,11 +106,45 @@ describe('DeviceLockGate', () => {
     expect(text()).toContain('Ferritin');
   });
 
-  it('Sign out is always there: a local sign-out that never needs the server, and no lock after it', async () => {
+  it('Sign out uses local scope and releases the lock after authentication confirms sign-out', async () => {
     env.results = [{ ok: false, reason: 'failed' }];
     const lock = await mount({ enabled: true });
     await act(async () => button('Sign out')!.click());
     expect(env.signOuts).toEqual([{ scope: 'local' }]);
+    // Model the AuthContext update delivered by SIGNED_OUT.
+    env.auth = { user: null, loading: false };
+    await mount(null);
+    expect(lock.getState().locked).toBe(false);
+  });
+
+  it.each(['rejected', 'returned-error'] as const)('Sign out %s preserves the authenticated lock without exposing errors', async mode => {
+    env.results = [{ ok: false, reason: 'failed' }];
+    env.signOut = async () => {
+      if (mode === 'rejected') throw new Error('synthetic secret storage failure');
+      return { error: new Error('synthetic secret storage failure') };
+    };
+    const lock = await mount({ enabled: true });
+    await act(async () => button('Sign out')!.click());
+    expect(env.auth.user).not.toBeNull();
+    expect(lock.getState().locked).toBe(true);
+    expect(text()).not.toContain('Ferritin');
+    expect(text()).not.toContain('synthetic secret');
+    expect(text()).toContain("Amani couldn't sign out. Try again.");
+  });
+
+  it('pending sign-out and successful completion cannot unlock before the auth event', async () => {
+    env.results = [{ ok: false, reason: 'failed' }];
+    let finish!: (value: { error: null }) => void;
+    env.signOut = () => new Promise(resolve => { finish = resolve; });
+    const lock = await mount({ enabled: true });
+    await act(async () => button('Sign out')!.click());
+    expect(lock.getState().locked).toBe(true);
+    expect(text()).not.toContain('Ferritin');
+    await act(async () => finish({ error: null }));
+    expect(lock.getState().locked).toBe(true);
+    expect(text()).not.toContain('Ferritin');
+    env.auth = { user: null, loading: false };
+    await mount(null);
     expect(lock.getState().locked).toBe(false);
   });
 

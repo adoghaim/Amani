@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { deviceLock, useDeviceLock } from '../../lib/deviceLock';
 import { isDeviceLockActive } from '../../lib/deviceLock/release';
@@ -17,6 +17,24 @@ import { LockScreen } from './LockScreen';
 export function DeviceLockGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const lock = useDeviceLock();
+  const signingOut = useRef(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
+
+  async function signOut() {
+    if (signingOut.current) return;
+    signingOut.current = true;
+    setSignOutFailed(false);
+    try {
+      // Local scope still attempts server revocation. Storage removal or that
+      // request can fail; only AuthContext confirming no user may open the gate.
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) setSignOutFailed(true);
+    } catch {
+      setSignOutFailed(true);
+    } finally {
+      signingOut.current = false;
+    }
+  }
 
   useEffect(() => {
     if (!isDeviceLockActive(isNative())) return;
@@ -37,11 +55,9 @@ export function DeviceLockGate({ children }: { children: ReactNode }) {
       <LockScreen
         unlocking={lock.unlocking}
         problem={lock.problem}
+        signOutFailed={signOutFailed}
         onUnlock={() => void deviceLock.unlock()}
-        onSignOut={() => {
-          // Local sign-out: it works offline and never depends on the server.
-          void supabase.auth.signOut({ scope: 'local' }).finally(() => deviceLock.noSession());
-        }}
+        onSignOut={() => { void signOut(); }}
       />
     );
   }

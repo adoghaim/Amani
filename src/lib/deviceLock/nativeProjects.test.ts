@@ -3,9 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /*
-  PK-DEVICE-01, R15: the native halves of the app-switcher cover. There is no
-  toolchain in CI, so these pin the source the owner's native build compiles.
-  The native build itself is PENDING (an owner action, with a store release).
+  PK-DEVICE-01, R15: the native halves of the app-switcher cover. These pin native wiring; tools/device-lock/native-boundary.test.mjs executes
+  the actual Java and Swift release helpers. Native builds are separate gates.
 */
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
@@ -30,9 +29,9 @@ function body(source: string, signature: string): string {
 }
 
 describe('Android (R15)', () => {
-  it('every user on Android 13+ (API 33): setRecentsScreenshotEnabled(false), behind the API-level guard', () => {
+  it('active native releases on Android 13+ (API 33): setRecentsScreenshotEnabled(false), behind the API-level guard', () => {
     const guard = body(mainActivity, 'private void hideFromRecentsScreenshots()');
-    expect(guard).toMatch(/if \(Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.TIRAMISU\) \{\s*setRecentsScreenshotEnabled\(false\);\s*\}/);
+    expect(guard).toMatch(/if \(isDevicePrivacyActive\(\) && Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.TIRAMISU\) \{\s*setRecentsScreenshotEnabled\(false\);\s*\}/);
     expect(body(mainActivity, 'public void onCreate(Bundle savedInstanceState)')).toContain('hideFromRecentsScreenshots();');
     // Exactly one call, and only inside the guard.
     expect(mainActivity.match(/setRecentsScreenshotEnabled\(/g)).toHaveLength(1);
@@ -42,6 +41,8 @@ describe('Android (R15)', () => {
     expect(mainActivity).not.toMatch(/(addFlags|setFlags)\([^)]*FLAG_SECURE/);
     expect(privacyPlugin).toContain('@CapacitorPlugin(name = "AmaniPrivacy")');
     const method = body(privacyPlugin, 'public void setSecure(PluginCall call)');
+    expect(method).toContain('isDevicePrivacyActive()');
+    expect(body(mainActivity, 'boolean isDevicePrivacyActive()')).toContain('getPackageInfo(getPackageName(), 0).versionName');
     expect(method).toContain('addFlags(WindowManager.LayoutParams.FLAG_SECURE)');
     expect(method).toContain('clearFlags(WindowManager.LayoutParams.FLAG_SECURE)');
   });
@@ -69,6 +70,7 @@ describe('iOS (D16, D24, R15)', () => {
   it('shows the launch screen as soon as the app resigns active, and removes it when active again', () => {
     expect(body(appDelegate, 'func applicationWillResignActive')).toContain('showPrivacyCover()');
     expect(body(appDelegate, 'func applicationDidBecomeActive')).toContain('hidePrivacyCover()');
+    expect(body(appDelegate, 'private func showPrivacyCover()')).toContain('DevicePrivacyRelease.isActive(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)');
     expect(body(appDelegate, 'private func showPrivacyCover()')).toContain('UIStoryboard(name: "LaunchScreen", bundle: nil)');
   });
 
