@@ -1,6 +1,6 @@
 # PK-03e-I fresh-user journey on main
 
-Rebuilt from only the journey files of `9255a04`, on `96f636d5050b4633e9b2fabfa81100f19673ae41`. Tests, CI and documentation only; no product, migration, Edge Function, secret or lockfile change. The historical branch's V2 stack is not part of this packet.
+Rebuilt from only the journey files of `9255a04`, originally on `96f636d5050b4633e9b2fabfa81100f19673ae41`, reconciled onto `7430a5fc27d007ba15f700633534e413965677bc`. Tests, CI and documentation only; no product, migration, Edge Function, secret or lockfile change. The historical branch's V2 stack is not part of this packet.
 
 ## Run
 
@@ -22,7 +22,7 @@ The journey has a provisional 300-second per-test timeout for five uploads, a re
 
 CI runtime: recorded in the PR body and ledger after the first run
 
-Additional pure stand-in contract tests (no port or browser):
+Additional pure stand-in contract tests (no port or browser), also executed by the journey CI job using esbuild then `node --test` for Node 20 compatibility:
 
 ```sh
 npx --no-install esbuild e2e/journey/server-model.test.ts --bundle --platform=node --format=esm --outfile=/tmp/task053-server-model.test.mjs
@@ -49,11 +49,11 @@ Visibility true and the client flag true: **Owner Ruling 9 activation record, 20
 
 ## Step proof
 
-Browser interactions themselves are implemented in `e2e/journey/fresh-user.spec.ts`. The supporting base files below all exist at `96f636d`; SQL proof remains separate from the stand-in.
+Browser interactions themselves are implemented in `e2e/journey/fresh-user.spec.ts`. The supporting base files below all exist at the reconciled base `7430a5f`; SQL proof remains separate from the stand-in.
 
 | Step | Browser proof | Server proof at base |
 |---|---|---|
-| 1 Signup/onboarding | One trigger profile, form 409/23505, completed onboarding, trial set, `/app/new`; re-enter onboarding | `src/components/auth/SignupForm.tsx:58`; `src/contexts/AuthContext.tsx`; `_shared/consent.test.ts`, `_shared/runtime-config.test.ts` |
+| 1 Signup/onboarding | One trigger profile, refreshed without a duplicate insert, completed onboarding, trial set, `/app/new`; re-enter onboarding | `src/components/auth/SignupForm.tsx:55-60`; `src/contexts/AuthContext.tsx`; `_shared/consent.test.ts`, `_shared/runtime-config.test.ts` |
 | 2 A | First included Premium analysis; first TSH measurement; stored canary absent from rendered page | `_shared/introductory-access.test.ts`; `_shared/claim-authority.test.ts`; `_shared/interpretation-read.test.ts` |
 | 3 B | Second included analysis; TSH 6→9; stored prior date/direction | `_shared/trend-evidence.test.ts`; `src/pages/ReportView.language.test.tsx` |
 | 4 C | Third included analysis; third claim and deep Plus anchor | `_shared/introductory-access.test.ts` |
@@ -68,16 +68,16 @@ Browser interactions themselves are implemented in `e2e/journey/fresh-user.spec.
 
 ## Assertion map summary (reviewer sign-off pending)
 
-The implementer report enumerates every original `expect` in `9255a04:e2e/journey/fresh-user.spec.ts` by line. Unchanged signup, extraction, claim authority, first/second/third analysis, version identity and deletion assertions remain. Strengthened checks add page readiness before canary/offer absence, opened More with Delete as its control, exact anchor preservation, deletion preconditions, Stripe keys, event counts and PATCH recording.
+The implementer report enumerates every original `expect` in `9255a04:e2e/journey/fresh-user.spec.ts` by line. Signup now proves the trigger profile and completed onboarding without waiting for a duplicate INSERT removed on main (`src/components/auth/SignupForm.tsx:55-60`). Extraction, claim authority, first/second/third analysis, version identity and deletion assertions remain. Strengthened checks add page readiness before canary/offer absence, opened More with Delete as its control, exact anchor preservation, deletion preconditions, Stripe keys, event counts and PATCH recording.
 
-Changed because main differs: original lines 127/136 now assert D is ai/deep with Free metadata (generation default, `_shared/response-shaping.ts:32`); 147/148 now assert D becomes full/deep without another generation and move fallback/full-offer proof to the new E upload (`_shared/interpretation-read.ts:111`). Lines 130/131 follow the actual read's `locked.cross_report` and `preview`, not hard-coded counts. Line 180 opens More (`src/components/MoreMenu.tsx:143`). Line 181 now checks E's 9→6 downward movement, while the original 6→9 upward check remains in step 3 (`src/lib/scoring/insightCopy.ts:323`). Original test-2 line 236 becomes a Premium fallback `generation_needed` setup; lines 242–244 are strengthened into positive keyed generation/version/read/count assertions (`src/pages/ReportView.tsx:1256`). There is no expected-failure marker and no removed server proof without replacement.
+Changed because main differs: original lines 127/136 now assert D is ai/deep with Free metadata (generation default, `_shared/response-shaping.ts:32`); 147/148 now assert D becomes full/deep without another generation and move fallback/full-offer proof to the new E upload (`_shared/interpretation-read.ts:111`). Lines 130/131 follow the actual read: the cross-report label requires `access === 'basic' && locked.cross_report > 0`; Preview requires `access === 'basic' && preview !== null`. Full access renders neither (`src/components/freemium/FreemiumReportPanel.tsx:100-114,140-163`). Line 180 opens More (`src/components/MoreMenu.tsx:143`). Line 181 now checks E's 9→6 downward movement, while the original 6→9 upward check remains in step 3 (`src/lib/scoring/insightCopy.ts:323`). Original test-2 line 236 becomes a Premium fallback `generation_needed` setup; lines 242–244 are strengthened into positive keyed generation/version/read/count assertions (`src/pages/ReportView.tsx:1256`). There is no expected-failure marker and no removed server proof without replacement.
 
 ## Defects and boundaries
 
 1. Fixed on main: PK-PL-A `bd01008` added the panel's anchored `request_id` (`ReportView.tsx:1256-1263`). Test 2 now requires successful versioning and zero spent regeneration attempts.
 2. Still present: OCR returns `raw_value_text`, `normalized_min`, `normalized_max` (`parse-lab-report-ocr/index.ts:444-449`), while `NewReport.tsx:688-691,724-729` reads `value_text`, `normalized_reference_min`, `normalized_reference_max`. No assertion pins the wrong raw value/interval as correct. Any product fix belongs to an owner-approved packet.
-3. Still quarantined: signup→onboarding redirect race (`e2e/smoke.spec.ts:27`, `@quarantine`); re-enter `/onboarding` by URL.
-4. Outside scope: `e2e/freemium` and `e2e/interpretation` opt-in configurations have no dedicated workflow jobs (some interpretation specs are selected by Browser smoke). `regeneration-availability.freemium.spec.ts:66` checks Regenerate without opening More, inferred stale after D19, not executed here.
+3. Still quarantined: signup→onboarding redirect race (`e2e/smoke.spec.ts:27`, `@quarantine`); re-enter `/onboarding` by URL, retrying only interrupted navigations up to three attempts with URL/load readiness and no sleeps.
+4. The `e2e/freemium` regressions now run within Browser smoke on main; `e2e/interpretation` remains opt-in (some interpretation specs are selected by Browser smoke). `regeneration-availability.freemium.spec.ts:66` checks Regenerate without opening More, inferred stale after D19, not executed here.
 
 Main's current header regeneration still PATCHes `regeneration_count`; step 8 records `{status:'processing', regeneration_count:1}`. The panel spends no attempt. PK-REGEN-01 must update this stand-in alongside its server-owned count change. Required checks, CI minutes, opt-in suite rollout and a handler-hash tripwire remain owner decisions.
 

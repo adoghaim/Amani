@@ -53,21 +53,22 @@ export async function signUpFreshUser(page: Page, email: string) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill('synthetic-password-1');
   await page.getByLabel('Confirm password').fill('synthetic-password-1');
-  const duplicate = REAL_SUPABASE ? null : page.waitForResponse(r => new URL(r.url()).pathname === '/rest/v1/users' && r.request().method() === 'POST');
   const created = page.waitForResponse(r => r.url().endsWith('/auth/v1/signup'));
   await page.getByRole('button', { name: 'Create account' }).click();
   expect((await created).status()).toBe(200);
-  if (duplicate) {
-    const response = await duplicate;
-    expect(response.status()).toBe(409);
-    expect(await response.json()).toMatchObject({ code: '23505' });
-  }
   await page.waitForURL(/\/(app|onboarding)$/);
-  // The signup -> /app -> /onboarding hand-off is the quarantined redirect race
-  // (e2e/smoke.spec.ts @quarantine, specs/BACKLOG-1.0.7.md item 11): it can
-  // strand the page blank. Not fixed here (no product change); the journey
-  // re-enters onboarding by URL, restoring the stored session as a reload does.
-  await page.goto('/onboarding');
+  // The app can issue another redirect while onboarding is re-entered. Retry
+  // only navigation interruptions, bounded and driven by URL/load events.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await page.goto('/onboarding');
+      break;
+    } catch (error) {
+      if (attempt === 2 || !(error instanceof Error) || !/interrupted by another navigation/.test(error.message)) throw error;
+      await page.waitForURL(/\/(app|onboarding)$/);
+      await page.waitForLoadState('domcontentloaded');
+    }
+  }
   await page.getByRole('button', { name: 'Get Started' }).click();
   await page.getByRole('button', { name: 'I Understand' }).click();
   await page.locator('button[aria-pressed]').first().click();

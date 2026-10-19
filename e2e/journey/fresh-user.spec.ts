@@ -60,10 +60,10 @@ async function expectProjection(page: Page, body: Record<string, unknown>) {
   await expect(page.getByText(/^Lab Report: /).first()).toBeVisible();
   const locked = body.locked as { cross_report: number };
   const cross = page.getByText('Cross-report relationship available', { exact: true });
-  if (locked.cross_report > 0) await expect(cross).toBeVisible();
+  if (body.access === 'basic' && locked.cross_report > 0) await expect(cross).toBeVisible();
   else await expect(cross).toHaveCount(0);
   const preview = page.getByText('PREMIUM PREVIEW', { exact: false }).first();
-  if (body.preview !== null) await expect(preview).toBeVisible();
+  if (body.access === 'basic' && body.preview !== null) await expect(preview).toBeVisible();
   else await expect(preview).toHaveCount(0);
 }
 
@@ -92,8 +92,10 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
       expect(backend.db.authUsers.size).toBe(1);
       uid = [...backend.db.authUsers.keys()][0];
       const profile = backend.db.tables.users.filter(r => r.id === uid);
-      // One row: the trigger's; the form's own insert is refused as a duplicate.
+      // One server-owned profile: signup refreshes it without a duplicate insert.
       expect(profile).toHaveLength(1);
+      expect(backend.db.served).toContain('POST /auth/v1/signup');
+      expect(backend.db.served).not.toContain('POST /rest/v1/users');
       expect(profile[0]).toMatchObject({ email, onboarding_completed: true });
       expect(profile[0].trial_start_date).toEqual(expect.any(String));
     }
