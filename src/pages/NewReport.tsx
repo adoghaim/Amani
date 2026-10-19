@@ -28,6 +28,7 @@ import {
 import { normalizeReportItems, reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { detectLabSource } from '../utils/detectLabSource';
+import { extractDateFromText } from '../utils/extractDateFromText';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
 import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 import {
@@ -331,32 +332,6 @@ export function NewReport() {
     } finally {
       setCameraCapturing(false);
     }
-  };
-
-  const extractDateFromText = (text: string): string | null => {
-    const patterns = [
-      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
-      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+(\d{4}-\d{2}-\d{2})/i,
-      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+([A-Z][a-z]+ \d{1,2},? \d{4})/i,
-      /(?:collection|collected|report|specimen|date of service|test date|draw date|lab date)[:\s]+(\d{1,2}-[A-Z][a-z]+-\d{4})/i,
-      /\bDate(?:\s+of(?:\s+Service)?)?[:\s]+(\d{1,2}\/\d{1,2}\/\d{2,4})/,
-      /\bDate[:\s]+(\d{4}-\d{2}-\d{2})/,
-    ];
-
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1] !== undefined) {
-        const raw = match[1];
-        const parsed = new Date(raw);
-        if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= new Date().getFullYear() + 1) {
-          const y = parsed.getFullYear();
-          const m = String(parsed.getMonth() + 1).padStart(2, '0');
-          const d = String(parsed.getDate()).padStart(2, '0');
-          return `${y}-${m}-${d}`;
-        }
-      }
-    }
-    return null;
   };
 
   const handleProceedFromStep1 = async () => {

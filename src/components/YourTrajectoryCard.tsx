@@ -4,6 +4,7 @@ import type { BiomarkerName } from '../types';
 import { authorizedLanguage, crossingObservation, type AuthorizedLanguage, valuesChangeObservation } from '../lib/scoring/insightCopy';
 import { describeMeasuredMovement, describeComparisonBand, type ClinicalLanguage } from '../lib/scoring/insightCopy';
 import { ClinicalObservation } from './ClinicalObservation';
+import { formatDateOrNull } from '../utils/formatters';
 
 /*
   'changed' is a movement toward a band (V2-03 amendment 4, R1): neutral words,
@@ -37,9 +38,8 @@ function conjugate(name: string) {
 }
 
 function formatPriorDate(date: string): string {
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return 'your prior report';
-  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+  const month = formatDateOrNull(date, { year: 'numeric', month: 'long' });
+  return month ? `your ${month} report` : 'your prior report';
 }
 
 function bulletForChange(change: BiggestChange, isPrimary: boolean, language: AuthorizedLanguage): TrajectoryBullet | null {

@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { Input } from './Input';
 import { Card } from './Card';
 import { Intervention, InterventionCategory } from '../types';
+import { formatDate } from '../utils/formatters';
 
 interface InterventionsProps {
   interventions: Intervention[];
@@ -108,14 +109,6 @@ export function Interventions({ interventions, onAdd, onUpdate, onDelete }: Inte
     if (window.confirm('Delete this intervention?')) {
       await onDelete(id);
     }
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
   };
 
   const sortedInterventions = [...interventions].sort(

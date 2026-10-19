@@ -261,11 +261,3 @@ export function phaseLabel(phase: CyclePhase): string {
     default: return 'Unknown Phase';
   }
 }
-
-export function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-}
-
-export function formatDateShort(date: Date): string {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}

@@ -52,17 +52,9 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
       if (error) {
         setError(error.message)
       } else {
-        // Create user profile
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          await supabase.from('users').insert({
-            id: user.id,
-            email: user.email!
-          })
-        }
-        // Re-fetch the profile to close a race where AuthContext's SIGNED_IN
-        // listener queried the users table before this insert completed,
-        // leaving userProfile null and OnboardingGate stuck on Loading.
+        // handle_new_user creates public.users in the signup transaction.
+        // A second INSERT conflicts with that row; refresh it instead so the
+        // onboarding/profile UPDATE paths keep using the server-owned profile.
         await refreshUserProfile()
         onSuccess?.()
       }

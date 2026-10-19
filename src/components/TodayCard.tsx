@@ -1,6 +1,6 @@
 import { Upload, Plus, Droplets, FlaskConical, Activity, Zap } from 'lucide-react';
 import { CyclePrediction, LabReport, Intervention, PeriodLog, SymptomLog } from '../types';
-import { formatDateShort } from '../utils/cyclePredictor';
+import { formatDate } from '../utils/formatters';
 import { CycleDial } from './CycleDial';
 import { phaseLabel, phaseStyle } from '../lib/cyclePhase';
 import { isEstimatedPhase, PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
@@ -43,6 +43,9 @@ interface TodayCardProps {
 function daysUntil(date: Date): number {
   return Math.ceil((date.getTime() - Date.now()) / 86_400_000);
 }
+
+// Both are calendar days ('YYYY-MM-DD'), shown as the day stored in every time zone.
+const shortDay = (day: string) => formatDate(day, { month: 'short', day: 'numeric' });
 
 export function TodayCard({
   prediction,
@@ -112,12 +115,12 @@ export function TodayCard({
           <Fact
             icon={<Droplets className="w-3.5 h-3.5 text-theme-phase-menstrual" />}
             label="Last period"
-            value={lastPeriodLog ? formatDateShort(new Date(lastPeriodLog.start_date)) : 'Not logged'}
+            value={lastPeriodLog ? shortDay(lastPeriodLog.start_date) : 'Not logged'}
           />
           <Fact
             icon={<FlaskConical className="w-3.5 h-3.5 text-theme-primary" />}
             label="Last panel"
-            value={lastReport ? formatDateShort(new Date(lastReport.report_date)) : 'None yet'}
+            value={lastReport ? shortDay(lastReport.report_date) : 'None yet'}
           />
           <Fact
             icon={<Activity className="w-3.5 h-3.5 text-theme-flag-ok" />}

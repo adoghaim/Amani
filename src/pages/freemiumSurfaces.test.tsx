@@ -40,6 +40,9 @@ import { SignupPage } from './SignupPage';
 import { LoginPage } from './LoginPage';
 import { PricingPage } from './PricingPage';
 import { Terms } from './Terms';
+import { AccountSection } from '../features/settings/sections/AccountSection';
+import type { SettingsSectionProps } from '../features/settings/sections/types';
+import { complimentaryCounterCopy } from '../lib/freemium/copy';
 import { Billing } from './Billing';
 import { SuccessPage } from './SuccessPage';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
@@ -237,5 +240,38 @@ describe('Landing pricing anchors', () => {
     expect(html).toContain('$99.99');
     expect(html).toContain('Best value');
     expect(html).not.toMatch(/line-through|Save \$20|\$19\.99|\$199\.99/);
+  });
+});
+
+
+describe('Settings and Billing agree with resolved entitlement, not the legacy profile status', () => {
+  const account = () => <AccountSection {...state.auth as unknown as SettingsSectionProps} />;
+  it.each([0, 1, 2, 3])('Free with %i claims used', used => {
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    signedIn(); subscription('free', { complimentary: { used, total: 3, remaining: 3 - used } });
+    for (const surface of [account(), <Billing />, <SubscriptionStatus />]) {
+      const out = text(surface);
+      expect(out).toContain('Plan: Free');
+      expect(out).toContain(complimentaryCounterCopy(used).status);
+      expect(out).not.toMatch(/trial/i);
+    }
+  });
+  it.each(['stripe', 'ios', 'android', 'complimentary'])('Settings shows Premium for %s', source => {
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    signedIn(); subscription('premium', { source });
+    expect(text(account())).toContain('Plan: Premium');
+    expect(text(account())).not.toMatch(/trial|analyses remaining/i);
+  });
+  it.each([{ loading: true }, { error: new Error('unavailable') }, {}])('unresolved plan never claims Free or Trial: %o', extra => {
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    signedIn(); subscription(undefined, extra);
+    expect(text(account())).not.toMatch(/Plan: Free|trial|complimentary/i);
+    expect(text(account())).toMatch(extra.loading ? /Loading/ : /Try again/);
+  });
+  it('keeps legacy wording only with the flag off', () => {
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'false');
+    signedIn(); subscription('free');
+    expect(text(account())).toContain('trial');
+    expect(text(account())).not.toContain('complimentary');
   });
 });

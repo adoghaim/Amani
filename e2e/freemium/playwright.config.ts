@@ -8,7 +8,7 @@ export default defineConfig({
   outputDir: fileURLToPath(new URL('../../test-results', import.meta.url)),
   reporter: [['list'], ['html', { open: 'never', outputFolder: fileURLToPath(new URL('../../playwright-report', import.meta.url)) }]],
   testDir: '.',
-  testMatch: '**/claim-projection.spec.ts',
+  testMatch: ['**/claim-projection.spec.ts', '**/smoke-regressions.spec.ts'],
   webServer: {
     command: 'node e2e/server.mjs --freemium',
     cwd: fileURLToPath(new URL('../../', import.meta.url)),

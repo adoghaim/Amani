@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Card } from './Card';
 import { LabReport, Biomarker } from '../types';
+import { formatDate } from '../utils/formatters';
 import { COMPARE_SHIFTS_NOTE } from '../lib/scoring/insightCopy';
 import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 
@@ -40,14 +41,6 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
   useEffect(() => {
     if (comparing) void firstPartyEvents.track('compare_viewed');
   }, [comparing, baselineId, followupId]);
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
 
   const comparison = useMemo(() => {
     if (!baselineId || !followupId) return null;

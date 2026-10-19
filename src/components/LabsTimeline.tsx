@@ -1,6 +1,7 @@
 
 import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
 import { LabReport, Biomarker, Intervention } from '../types';
+import { formatDate } from '../utils/formatters';
 import { Card } from './Card';
 import { Button } from './Button';
 
@@ -64,14 +65,6 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
       const d = i.delta!;
       const dir = d.value === 0 ? 'no change' : d.value > 0 ? 'up' : 'down';
       return `${i.biomarkerName}: ${dir} ${d.value > 0 ? '+' : ''}${d.value.toFixed(1)} (${d.percent.toFixed(0)}%)`;
-    });
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
     });
   };
 

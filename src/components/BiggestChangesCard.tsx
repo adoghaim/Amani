@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, Minus, ArrowRight, AlertCircle, Activity } from 'lucide-react';
 import type { BiggestChange } from '../lib/insights/buildInsightSummary';
 import { boundaryBucketLabel, type TrajectoryStatus } from '../lib/scoring/compareReports';
+import { formatDateOrNull } from '../utils/formatters';
 
 const BOUNDARY_CROSSING_STYLE: Record<string, {
   bg: string; border: string; text: string; badge: string; label: string;
@@ -76,9 +77,8 @@ function getChangeStyle(change: BiggestChange): ChangeStyle {
 }
 
 function formatPriorDate(date: string): string {
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return 'your prior report';
-  return `your ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} report`;
+  const month = formatDateOrNull(date, { year: 'numeric', month: 'long' });
+  return month ? `your ${month} report` : 'your prior report';
 }
 
 function getSubtitle(change: BiggestChange): string | null {
