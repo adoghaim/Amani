@@ -7,6 +7,7 @@ import type {
   SourceAdapter,
 } from './types';
 import { KNOWN_UNITS } from './labelMatching';
+import { isPartOfWord } from './textUtils';
 
 export function detectComparatorRange(text: string): ComparatorRange | null {
   const patterns: Array<{ re: RegExp; op: ComparatorRange['operator'] }> = [
@@ -247,15 +248,19 @@ export function splitPrintedIntervals(text: string, adapter?: SourceAdapter): Pr
 }
 
 /**
- * The first number on a line that is not part of a word ("T3", "A1c") or an
- * ordinal ("1st"), with any comparator glued to it. Without lookbehind, for
- * older WebViews.
+ * The first number on a line, at or after `from`, that is not part of a word
+ * ("T3", "A1c", "25-OH", "Omega-3") or an ordinal ("1st"), with any comparator
+ * glued to it. Without lookbehind, for older WebViews.
  */
-export function firstNumericToken(line: string): { start: number; end: number } | null {
-  const m = /(^|[^A-Za-z0-9.])((?:[<>]=?\s*)?\d+(?:\.\d+)?)(?!\d|\.\d|\s*(?:st|nd|rd|th)\b)/i.exec(line);
-  if (!m || m[1] === undefined || m[2] === undefined) return null;
-  const start = m.index + m[1].length;
-  return { start, end: start + m[2].length };
+export function firstNumericToken(line: string, from = 0): { start: number; end: number } | null {
+  const re = /(^|[^A-Za-z0-9.])((?:[<>]=?\s*)?\d+(?:\.\d+)?)(?!\d|\.\d|\s*(?:st|nd|rd|th)\b)/gi;
+  for (const m of line.matchAll(re)) {
+    if (m[1] === undefined || m[2] === undefined) continue;
+    const start = (m.index ?? 0) + m[1].length;
+    const end = start + m[2].length;
+    if (start >= from && !isPartOfWord(line, start, end)) return { start, end };
+  }
+  return null;
 }
 
 /** Intervals on one line after `from`, labelled; `printWholeLine` keeps the line's own heading words. */
@@ -287,7 +292,7 @@ function candidatesIn(
  * the line's interval; a comparator labelled by reference words ("Postmenopausal
  * <=31") counts as well.
  */
-function labelLineCandidates(line: string, adapter?: SourceAdapter): Candidate[] {
+function labelLineCandidates(line: string, adapter?: SourceAdapter, nameEnd = 0): Candidate[] {
   const intervals = findIntervals(line, adapter);
   if (intervals.length === 0) return [];
   const hasMinMax = intervals.some(iv => iv.range.min !== undefined);
@@ -305,7 +310,7 @@ function labelLineCandidates(line: string, adapter?: SourceAdapter): Candidate[]
   });
   const firstKept = kept[0];
   if (firstKept === undefined) return [];
-  const result = firstNumericToken(line);
+  const result = firstNumericToken(line, nameEnd);
   const printed = line.slice(firstKept.printedStart).trim().replace(/\s+/g, ' ');
   return kept.map(({ iv, label }) => ({
     range: own && iv.key === ownKey ? { comparator: own, raw: own.raw } : iv.range,
@@ -390,12 +395,12 @@ function decide(found: Candidate[]): RangeBinding {
  * Binds the reference interval printed for one marker. `lines` are the
  * marker's label line followed by the lines under it (the parser's window, or
  * the text after the label in the fallback); only the lines that belong to the
- * marker are read.
+ * marker are read. `nameEnd` is where the marker's name ends on the label line.
  */
-export function bindReferenceRange(lines: readonly string[], adapter?: SourceAdapter): RangeBinding {
+export function bindReferenceRange(lines: readonly string[], adapter?: SourceAdapter, nameEnd = 0): RangeBinding {
   const [labelLine, ...rest] = lines;
   if (labelLine === undefined) return { candidates: [] };
-  return decide([...labelLineCandidates(labelLine, adapter), ...continuationCandidates(rest, adapter)]);
+  return decide([...labelLineCandidates(labelLine, adapter, nameEnd), ...continuationCandidates(rest, adapter)]);
 }
 
 /** Every number printed as part of an interval: never a result. */

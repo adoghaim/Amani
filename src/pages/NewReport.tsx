@@ -25,7 +25,7 @@ import { extractCycleContextFromText, type ExtractedCycleContext } from '../util
 import {
   cycleContextAtDraw, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
 } from '../lib/drawCycleContext';
-import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
+import { normalizeReportItems, reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { detectLabSource } from '../utils/detectLabSource';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
@@ -1322,7 +1322,7 @@ export function NewReport() {
                     <div className="divide-y divide-theme-neutral-100 max-h-64 overflow-y-auto">
                       {reportItems.map((item, i) => (
                         <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-theme-neutral-50">
-                          <span className="text-sm text-theme-neutral-800 font-medium truncate max-w-[60%]">{item.raw_name}</span>
+                          <span className="text-sm text-theme-neutral-800 font-medium truncate max-w-[60%]">{reportItemDisplayName(item)}</span>
                           <span className="text-sm text-theme-neutral-500 ml-2 flex-shrink-0">
                             {item.value_text && (item.value_numeric == null || item.value_numeric === 0)
                               ? item.value_text

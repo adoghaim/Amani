@@ -1,5 +1,5 @@
 import type { ParsedResult, SourceAdapter } from './types';
-import { isNoiseLine } from './textUtils';
+import { isNoiseLine, isPartOfWord } from './textUtils';
 import { bindReferenceRange } from './rangeDetection';
 import { detectUnit } from './labelMatching';
 
@@ -24,16 +24,23 @@ export function parseValueWithPrefix(text: string): { value: number; rawValue: s
   return null;
 }
 
+/**
+ * `nameEnd` is where the analyte's name ends on `lines[0]` (matchLabelLine):
+ * no number before it is the result. Numbers that are part of a word
+ * ("25-OH", "Omega-3", "A1c") are never the result either, wherever they are.
+ */
 export function extractValueFromWindow(
   lines: string[],
   preferredUnits: string[],
   adapter?: SourceAdapter,
+  nameEnd = 0,
 ): ParsedResult | null {
   const cleanLines = lines.filter(l => !isNoiseLine(l.trim(), adapter));
   if (cleanLines.length === 0) return null;
 
   const labelLine = cleanLines[0];
   if (labelLine === undefined) return null;
+  const labelNameEnd = labelLine === lines[0] ? nameEnd : 0;
   let valueLines = cleanLines.slice(1);
 
   if (adapter?.historyLine.historyLinePattern) {
@@ -59,7 +66,7 @@ export function extractValueFromWindow(
   // the first interval in the block or window bound a neighbour's interval, or
   // the first of several cycle-phase intervals. When the block prints more than
   // one, nothing is bound and the ambiguity travels with the result.
-  const binding = bindReferenceRange(cleanLines, adapter);
+  const binding = bindReferenceRange(cleanLines, adapter, labelNameEnd);
   const referenceResult = binding.range;
   const ambiguity = binding.ambiguous ? { referenceAmbiguity: binding.ambiguous } : {};
 
@@ -123,7 +130,8 @@ export function extractValueFromWindow(
 
   function collectCandidates(
     sourceLines: string[],
-    skipLetterPrefixedDigits = false,
+    skipWordDigits = false,
+    from = 0,
   ): { value: number; rawValue: string }[] {
     const candidates: { value: number; rawValue: string }[] = [];
     for (const line of sourceLines) {
@@ -133,8 +141,9 @@ export function extractValueFromWindow(
       let m: RegExpExecArray | null;
       while ((m = tokenRe.exec(searchLine)) !== null) {
         const tok = m[0];
+        if (m.index < from) continue;
         if (knownRangeNumbers.has(tok) || knownRangeNumbers.has(String(parseFloat(tok)))) continue;
-        if (skipLetterPrefixedDigits && m.index > 0 && /[A-Za-z]/.test(searchLine[m.index - 1] ?? '')) continue;
+        if (skipWordDigits && isPartOfWord(searchLine, m.index, m.index + tok.length)) continue;
         const after  = searchLine[m.index + tok.length] ?? '';
         const before = m.index > 0 ? (searchLine[m.index - 1] ?? '') : '';
         if (before === '/' || after === '/') continue;
@@ -194,7 +203,7 @@ export function extractValueFromWindow(
   // The label line in most Quest/LabCorp/Hone formats carries the current patient result
   // directly next to the analyte name (e.g. "CHOLESTEROL, TOTAL 157 Reference Range: <200").
   // Value lines after the label often only carry reference annotations or history columns.
-  const labelCandidates = collectCandidates([labelLine], true);
+  const labelCandidates = collectCandidates([labelLine], true, labelNameEnd);
 
   // PRIORITY 1a: comparator prefix on the label line takes highest precedence.
   // e.g. "PROGESTERONE <0.5 ng/mL <0.5 8.4 14.2 22.3 Reference Ranges..."
@@ -238,9 +247,9 @@ export function extractValueFromWindow(
       const raw = m[0];
       const parsed = parseValueWithPrefix(raw);
       if (!parsed) continue;
-      // Skip digits immediately preceded by a letter — they are part of the analyte
-      // name itself (e.g. the "1" in "A1c", "T3", "B12") and not the patient result.
-      if (m.index > 0 && /[A-Za-z]/.test(labelLine[m.index - 1] ?? '')) continue;
+      // Skip digits that are part of the analyte name itself (the "1" in "A1c",
+      // the "25" in "25-OH", the "3" in "Omega-3") and not the patient result.
+      if (m.index < labelNameEnd || isPartOfWord(labelLine, m.index, m.index + raw.length)) continue;
       // Skip year-like tokens unless the line has date context (matches Patch A logic).
       if (/^(?:19|20)\d{2}$/.test(parsed.rawValue ?? raw) &&
           /\d{1,2}\/\d{1,2}\/|\bdob\b|\bdate\b|\bcollected?\b|\breport(?:ed)?\b|\baccession\b/i.test(labelLine)) {
