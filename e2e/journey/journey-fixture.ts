@@ -55,20 +55,23 @@ export async function signUpFreshUser(page: Page, email: string) {
   await page.getByLabel('Confirm password').fill('synthetic-password-1');
   const created = page.waitForResponse(r => r.url().endsWith('/auth/v1/signup'));
   await page.getByRole('button', { name: 'Create account' }).click();
-  expect((await created).status()).toBe(200);
+  const response = await created;
+  expect(response.status()).toBe(200);
+  const signup = await response.json() as { user: { id: string } };
+  expect(signup.user.id).toEqual(expect.any(String));
   await page.waitForURL(/\/(app|onboarding)$/);
-  // The app can issue another redirect while onboarding is re-entered. Retry
-  // only navigation interruptions, bounded and driven by URL/load events.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      await page.goto('/onboarding');
-      break;
-    } catch (error) {
-      if (attempt === 2 || !(error instanceof Error) || !/interrupted by another navigation|NS_BINDING_ABORTED/.test(error.message)) throw error;
-      await page.waitForURL(/\/(app|onboarding)$/);
-      await page.waitForLoadState('domcontentloaded');
-    }
-  }
+  const persistedUserIds = () => page.evaluate(() => Object.keys(localStorage)
+    .filter(key => /^sb-.*-auth-token$/.test(key))
+    .map(key => (JSON.parse(localStorage.getItem(key)!) as { user?: { id?: string } }).user?.id));
+  expect(await persistedUserIds()).toEqual([signup.user.id]);
+  // The signup document can still redirect after its first URL change. Commit
+  // a blank document to dispose its router before re-entering onboarding.
+  // Keep the same browser context: auth must survive via the app's own storage.
+  // The redirect race remains quarantined in smoke.spec.ts; no errors are caught.
+  await page.goto('about:blank', { waitUntil: 'commit' });
+  await expect(page).toHaveURL('about:blank');
+  await page.goto('/onboarding');
+  expect(await persistedUserIds()).toEqual([signup.user.id]);
   await page.getByRole('button', { name: 'Get Started' }).click();
   await page.getByRole('button', { name: 'I Understand' }).click();
   await page.locator('button[aria-pressed]').first().click();
