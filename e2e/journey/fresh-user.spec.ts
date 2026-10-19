@@ -235,7 +235,9 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     await expect(page.getByText('A fuller analysis is available for this report')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Generate full Amani analysis' })).toHaveCount(0);
     await expectRegenerate(page, false);
-    await expect(page.getByText('TSH has dropped from 9 to 6 uIU/mL.', { exact: false })).toBeVisible();
+    await expect(page.getByText("TSH changed from 9 to 6 uIU/mL. Amani's comparison band for this result has not yet completed clinical review.", { exact: true })).toBeVisible();
+    expect(version.full.trend_evidence).toEqual(expect.arrayContaining([expect.objectContaining({
+      biomarker_slug: 'tsh', previous_value: 9, current_value: 6, previous_date: UPLOADS[3].reportDate, direction: 'decreased' })]));
     // The new version's model prose is stored but, like every body, never rendered.
     expect(JSON.stringify(version.full)).toContain(MODEL_CANARY);
     await expectNoModelProse(page);

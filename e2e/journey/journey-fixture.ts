@@ -64,7 +64,7 @@ export async function signUpFreshUser(page: Page, email: string) {
       await page.goto('/onboarding');
       break;
     } catch (error) {
-      if (attempt === 2 || !(error instanceof Error) || !/interrupted by another navigation/.test(error.message)) throw error;
+      if (attempt === 2 || !(error instanceof Error) || !/interrupted by another navigation|NS_BINDING_ABORTED/.test(error.message)) throw error;
       await page.waitForURL(/\/(app|onboarding)$/);
       await page.waitForLoadState('domcontentloaded');
     }
