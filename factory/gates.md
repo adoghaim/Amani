@@ -14,6 +14,8 @@ Existing workflow `.github/workflows/ci.yml` (seen in the source snapshot; verif
 | `Migration order (D6)` | `.github/workflows/migration-order.yml`, on PRs into `main`: `node tools/ci/migration-order.mjs`. See "Migration order (D6)" below. |
 | `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. |
 
+| `Fresh-user journey` (`.github/workflows/e2e.yml`) | `npm run test:e2e:journey:guard`, then `npm run test:e2e:journey` against the production build in Chromium, WebKit and Firefox. |
+
 **Owner action (GitHub settings, not code):** PR #93 ruled that browser smoke becomes a required check once the CI upgrade (PR #96) is online. In *Settings → Branches → main* (or the ruleset that protects `main`), add **`Browser smoke`** to the required status checks, keeping `Lint, typecheck, build`, `Edge function typecheck` and `Migration behaviour (Postgres)`. Confirm the exact name from a recent PR's checks list first. The factory cannot and must not change repository settings.
 
 Plus: Netlify deploy preview builds and loads. The `Vercel` check is ignored (expected failure).
@@ -47,6 +49,9 @@ Foundation PRs carry the extension points other packets build on (PK-INT-01, PK-
 `.github/workflows/integration-preview.yml` runs daily (and on demand): it merges every open `wave:*` PR in queue order (#104) onto a scratch commit of `main`, runs lint, typecheck, test, build, `check:functions` and the migration harness on the result, and comments conflicts and failing gates on #104. It never pushes. It is an early warning, not a merge gate: each PR's own G0 checks still decide.
 
 ## G1 — Web end-to-end in three browsers
+
+- **Fresh-user journey** passes `npm run test:e2e:journey:guard` and `npm run test:e2e:journey` (three engines, production build); `npm run test:e2e:journey -- --list` lists six tests.
+- A PR that changes `generate-interpretation`, `get-interpretation`, `delete-user-data`, a `_shared` module the stand-in mirrors, `NewReport`, `ReportView` or Settings keeps **Fresh-user journey** green and updates `e2e/journey/*` in the same PR.
 
 - Playwright specs for the packet's user flow pass in **Chromium, WebKit and Firefox** (`npm run test:e2e`; in CI, workflow `e2e.yml`, job "Browser smoke").
 - The suite is isolated: `e2e/server.mjs` serves the app with no env files and no inherited `VITE_*` values (`npm run test:e2e:isolation` proves it), so specs use synthetic data and mocked network and never reach a backend. Real-backend e2e needs a **non-production Supabase project**, which does not exist yet [Pending]; production is never used.

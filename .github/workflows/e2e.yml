@@ -69,3 +69,49 @@ jobs:
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  journey:
+    # PK-03e-I: the fresh-user journey against the production build (vite
+    # preview), flag on, three engines, in-memory Supabase stand-in. Its own
+    # status check, parallel to Browser smoke.
+    name: Fresh-user journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install matching browsers and OS dependencies
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx --no-install playwright install --with-deps chromium webkit firefox
+      - name: Install OS dependencies for cached browsers
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx --no-install playwright install-deps chromium webkit firefox
+      - name: Stand-in server contracts (Node 20)
+        run: |
+          npx --no-install esbuild e2e/journey/server-model.test.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/task053-server-model.test.mjs"
+          node --test "$RUNNER_TEMP/task053-server-model.test.mjs"
+      - name: Real-stack mode refuses a hosted project
+        run: npm run test:e2e:journey:guard
+      - name: Fresh-user journey (production build, three browsers)
+        run: npm run test:e2e:journey
+      - name: Preserve failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: journey-failure-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -80,3 +80,4 @@ artifacts/
 /test-results/
 /blob-report/
 /e2e/.auth/
+/e2e/.dist-preview/
