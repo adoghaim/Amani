@@ -2,7 +2,7 @@
 
 ## Shipping boundary
 
-This rebuild preserves the native packet from ea62cbf on main 96f636d. Web + backend now; native 1.0.7 next (Owner Ruling 10). No backend migration or deploy is included. `features.biometric_lock` remains absent/off; nothing here writes `app_public_config`.
+This rebuild preserves the native packet from ea62cbf on current main 7430a5fc27d007ba15f700633534e413965677bc (rebased from the original 96f636d rebuild). Web + backend now; native 1.0.7 next (Owner Ruling 10). No backend migration or deploy is included. `features.biometric_lock` remains absent/off; nothing here writes `app_public_config`.
 
 `src/lib/deviceLock/release.ts` is the single activation decision: native platform and a valid build release at least 1.0.7. It accepts `amani@major.minor.patch` with an optional seven-hex-digit commit suffix. Contrary to the brief's abbreviated description, `vite.config.ts:17` omits the suffix for local builds without COMMIT_REF/GITHUB_SHA. Four-part versions such as 1.0.6.1, prereleases, malformed releases and web are inactive. Main remains version 1.0.6. The release-prep version bump activates the packet; it is not part of this PR.
 
