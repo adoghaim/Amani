@@ -47,31 +47,31 @@ export const test = base.extend<{ backend: Backend | null }>({
 
 export { expect };
 
-/** /signup -> account -> onboarding (completed through the real flow) -> /app/new. */
-export async function signUpFreshUser(page: Page, email: string) {
-  await page.goto('/signup');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password', { exact: true }).fill('synthetic-password-1');
-  await page.getByLabel('Confirm password').fill('synthetic-password-1');
-  const created = page.waitForResponse(r => r.url().endsWith('/auth/v1/signup'));
-  await page.getByRole('button', { name: 'Create account' }).click();
+/** /signup -> persisted session -> onboarding in a new Page -> /app/new. Returns that Page. */
+export async function signUpFreshUser(signupPage: Page, email: string): Promise<Page> {
+  await signupPage.goto('/signup');
+  await signupPage.getByLabel('Email').fill(email);
+  await signupPage.getByLabel('Password', { exact: true }).fill('synthetic-password-1');
+  await signupPage.getByLabel('Confirm password').fill('synthetic-password-1');
+  const created = signupPage.waitForResponse(r => r.url().endsWith('/auth/v1/signup'));
+  await signupPage.getByRole('button', { name: 'Create account' }).click();
   const response = await created;
   expect(response.status()).toBe(200);
   const signup = await response.json() as { user: { id: string } };
   expect(signup.user.id).toEqual(expect.any(String));
-  await page.waitForURL(/\/(app|onboarding)$/);
-  const persistedUserIds = () => page.evaluate(() => Object.keys(localStorage)
+  await signupPage.waitForURL(/\/(app|onboarding)$/);
+  const persistedUserIds = (page: Page) => page.evaluate(() => Object.keys(localStorage)
     .filter(key => /^sb-.*-auth-token$/.test(key))
     .map(key => (JSON.parse(localStorage.getItem(key)!) as { user?: { id?: string } }).user?.id));
-  expect(await persistedUserIds()).toEqual([signup.user.id]);
-  // The signup document can still redirect after its first URL change. Commit
-  // a blank document to dispose its router before re-entering onboarding.
-  // Keep the same browser context: auth must survive via the app's own storage.
-  // The redirect race remains quarantined in smoke.spec.ts; no errors are caught.
-  await page.goto('about:blank', { waitUntil: 'commit' });
-  await expect(page).toHaveURL('about:blank');
+  expect(await persistedUserIds(signupPage)).toEqual([signup.user.id]);
+  // Close the signup Page to destroy its router without racing another navigation.
+  // The new Page shares the context's routes and app-managed localStorage only;
+  // no auth is seeded or rewritten. Automatic redirects remain quarantined.
+  const page = await signupPage.context().newPage();
+  await signupPage.close();
+  expect(signupPage.isClosed()).toBe(true);
   await page.goto('/onboarding');
-  expect(await persistedUserIds()).toEqual([signup.user.id]);
+  expect(await persistedUserIds(page)).toEqual([signup.user.id]);
   await page.getByRole('button', { name: 'Get Started' }).click();
   await page.getByRole('button', { name: 'I Understand' }).click();
   await page.locator('button[aria-pressed]').first().click();
@@ -79,6 +79,7 @@ export async function signUpFreshUser(page: Page, email: string) {
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Upload Lab Report' }).click();
   await expect(page).toHaveURL(/\/app\/new$/);
+  return page;
 }
 
 /** /app/new: choose the image -> server OCR -> review -> confirm -> save. Returns the report id. */

@@ -87,7 +87,7 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
   let uid = '';
 
   await test.step('1. new user: signup through /signup and the onboarding flow', async () => {
-    await signUpFreshUser(page, email);
+    page = await signUpFreshUser(page, email);
     if (backend) {
       expect(backend.db.authUsers.size).toBe(1);
       uid = [...backend.db.authUsers.keys()][0];
@@ -294,7 +294,7 @@ test('Premium panel: Generate full Amani analysis appends a version without spen
   test.skip(REAL_SUPABASE, 'PENDING real stack: needs a Premium grant and model failure');
   test.setTimeout(300_000);
   const b = only(backend);
-  await signUpFreshUser(page, `pk03ei-panel-${testInfo.project.name}-${Date.now()}@example.invalid`);
+  page = await signUpFreshUser(page, `pk03ei-panel-${testInfo.project.name}-${Date.now()}@example.invalid`);
   const uid = [...b.db.authUsers.keys()][0];
   b.server.grantStripeSubscription(uid);
   b.server.failNextModelCall();
