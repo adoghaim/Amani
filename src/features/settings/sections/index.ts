@@ -1,6 +1,7 @@
 import { PersonalContextCard } from '../PersonalContextCard';
 import { AccountSection } from './AccountSection';
 import { DeleteAccountSection } from './DeleteAccountSection';
+import { DeviceLockSection } from './DeviceLockSection';
 import { PrivacySection } from './PrivacySection';
 import { RemindersSection } from './RemindersSection';
 import { SETTINGS_SECTION_ORDER, type SettingsSection } from './types';
@@ -32,7 +33,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'account', title: 'Account', entries: [{ id: 'account-information', Component: AccountSection }] },
   { id: 'health-profile', title: 'Health profile', entries: [{ id: 'personal-context', Component: PersonalContextCard }] },
   { id: 'reminders', title: 'Reminders', entries: [{ id: 'reminder-preferences', Component: RemindersSection }] },
-  { id: 'privacy-security', title: 'Privacy & security', entries: [{ id: 'data-privacy', Component: PrivacySection }] },
+  { id: 'privacy-security', title: 'Privacy & security', entries: [
+    { id: 'data-privacy', Component: PrivacySection },
+    // PK-DEVICE-01: the Face ID / fingerprint lock and re-lock timing (D16). Phones only.
+    { id: 'device-lock', Component: DeviceLockSection },
+  ] },
   { id: 'your-data', title: 'Your data', entries: [{ id: DELETE_MY_DATA_ENTRY_ID, Component: DeleteAccountSection }] },
 ];
 

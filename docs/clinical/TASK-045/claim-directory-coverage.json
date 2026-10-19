@@ -40,6 +40,11 @@
     "reason": "PK-CONSENT-01 launch consent: production literals are scanned like every other directory; consent copy is DRAFT for the lawyer and carries no clinical claim. Tests are excluded."
   },
   {
+    "directory": "src/features/deviceLock",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
     "directory": "src/features/onboarding",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
@@ -108,6 +113,11 @@
     "directory": "src/lib/consent",
     "mode": "scanned",
     "reason": "PK-CONSENT-01 launch consent: production literals are scanned like every other directory; consent copy is DRAFT for the lawyer and carries no clinical claim. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/deviceLock",
+    "mode": "scanned",
+    "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
     "directory": "src/lib/freemium",

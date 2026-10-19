@@ -14,6 +14,8 @@ import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 import { safeRedirectTarget } from './lib/redirect'
 import { CampaignLinkRedirect, FirstPartyEventsLifecycle } from './components/FirstPartyEventsLifecycle'
+import { deviceLock } from './lib/deviceLock'
+import { DeviceLockGate } from './features/deviceLock/DeviceLockGate'
 
 // Eagerly loaded — tiny pages used immediately on arrival
 import { Landing } from './pages/Landing'
@@ -46,8 +48,8 @@ const enableParserDebugger = import.meta.env.DEV
 
 /*
   Every signed-in route. Gate order at launch: the update block (PK-MINVER-01)
-  and the lock (PK-DEVICE-01) mount here before ConsentGate when their packets
-  land; then consent (PK-CONSENT-01, behind features.consent_gate); then
+  wraps DeviceLockGate (PK-DEVICE-01) around AppRoutes in App; then consent
+  (PK-CONSENT-01, behind features.consent_gate); then
   onboarding (OnboardingGate inside the route, or the /onboarding route).
   `consentExempt` is for Settings only (withdrawal and deletion stay reachable).
 */
@@ -161,6 +163,11 @@ function AndroidBackHandler() {
 
     import('@capacitor/app').then(({ App: CapApp }) => {
       CapApp.addListener('backButton', ({ canGoBack }) => {
+        // Locked (PK-DEVICE-01): back closes the app, never the page under the lock.
+        if (deviceLock.getState().locked) {
+          CapApp.exitApp();
+          return;
+        }
         // At root routes — exit the app rather than navigating back to a blank state
         const rootRoutes = ['/app', '/login', '/signup', '/', '/pricing', '/success', '/reset-password'];
         if (rootRoutes.includes(location.pathname) || !canGoBack) {
@@ -186,9 +193,11 @@ function App() {
       <ErrorBoundary>
         {/* PK-MINVER-01 (D8): native only, and first in the launch gate order:
             the update block, then the biometric lock, then consent and the
-            rest of onboarding. On web it renders AppRoutes and nothing else. */}
+            rest of onboarding. The lock mounts inside UpdateGate; both pass through on web. */}
         <UpdateGate>
-          <AppRoutes />
+          <DeviceLockGate>
+            <AppRoutes />
+          </DeviceLockGate>
         </UpdateGate>
       </ErrorBoundary>
     </Router>

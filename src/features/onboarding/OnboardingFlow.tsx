@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import { useAuth, type OnboardingAnswers } from '../../contexts/AuthContext';
@@ -8,8 +8,12 @@ import { HealthGoalsStep } from './steps/HealthGoalsStep';
 import { PersonalContextStep } from './steps/PersonalContextStep';
 import { UploadIntroStep } from './steps/UploadIntroStep';
 import { firstPartyEvents } from '../../lib/firstPartyEventsClient';
+import { LockOfferStep } from './steps/LockOfferStep';
+import { deviceLock, lockMethodName } from '../../lib/deviceLock';
+import type { BiometricKind } from '../../lib/native';
 
-const TOTAL_STEPS = 5;
+/** The steps before the lock offer: welcome, safety, goals, profile. */
+const STEPS_BEFORE_LOCK_OFFER = 4;
 
 export function OnboardingFlow() {
   const navigate = useNavigate();
@@ -28,6 +32,24 @@ export function OnboardingFlow() {
   }));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // D15 (PK-DEVICE-01): the lock offer is a step after the profile, only on a
+  // phone with Face ID or a fingerprint and with features.biometric_lock on.
+  // An answer that arrives after she has already reached the last step is
+  // ignored, so the step never appears under her.
+  const [lockOffer, setLockOffer] = useState<{ kind: BiometricKind | null } | null>(null);
+  const stepRef = useRef(step);
+  useEffect(() => { stepRef.current = step; }, [step]);
+  useEffect(() => {
+    let live = true;
+    void deviceLock.offerEligible().then(({ eligible, kind }) => {
+      if (live && eligible && stepRef.current < STEPS_BEFORE_LOCK_OFFER) setLockOffer({ kind });
+    });
+    return () => { live = false; };
+  }, []);
+  const LOCK_STEP = lockOffer ? STEPS_BEFORE_LOCK_OFFER : -1;
+  const UPLOAD_STEP = lockOffer ? STEPS_BEFORE_LOCK_OFFER + 1 : STEPS_BEFORE_LOCK_OFFER;
+  const TOTAL_STEPS = UPLOAD_STEP + 1;
 
   const goNext = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
@@ -119,7 +141,16 @@ export function OnboardingFlow() {
           />
         )}
 
-        {step === 4 && (
+        {step === LOCK_STEP && lockOffer && (
+          <LockOfferStep
+            method={lockMethodName(lockOffer.kind)}
+            onTurnOn={() => deviceLock.turnOn()}
+            onNotNow={() => deviceLock.declineOffer()}
+            onDone={goNext}
+          />
+        )}
+
+        {step === UPLOAD_STEP && (
           <div>
             {error && (
               <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-xl bg-theme-danger/10 border border-theme-danger/30 text-theme-danger">

@@ -16,6 +16,15 @@ export { isNative, platform } from './native/platform';
 export { openExternalUrl } from './native/browser';
 export { captureLabPhoto, type CameraResult } from './native/camera';
 export { getNetworkStatus, onNetworkChange, type NetworkStatus } from './native/network';
-export { onAppUrlOpen } from './native/app';
 export { getInstalledAppInfo, openStoreListing, exitAppOnBackButton, type InstalledAppInfo } from './native/appUpdate';
-export { secureStorage } from './native/secureStorage';
+export { onAppUrlOpen, onAppLifecycle, type AppLifecycleHandlers } from './native/app';
+export { secureStorage, SECURE_STORAGE_PREFIX } from './native/secureStorage';
+export {
+  authSessionStorage, createAuthSessionStorage, INSTALL_MARKER_KEY,
+  type AuthSessionStorage, type AuthStoragePorts,
+} from './native/authStorage';
+export {
+  checkBiometrics, authenticateWithBiometrics,
+  type BiometricKind, type BiometricStatus, type BiometricUnlockResult,
+} from './native/biometric';
+export { setScreenshotsBlocked } from './native/privacyScreen';

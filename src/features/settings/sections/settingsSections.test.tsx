@@ -25,7 +25,15 @@ const auth = vi.hoisted(() => ({
 vi.mock('../../../contexts/AuthContext', () => ({ useAuth: () => auth }));
 vi.mock('../../../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('../PersonalContextCard', () => ({ PersonalContextCard: () => <div data-testid="personal-context" /> }));
-vi.mock('../../../lib/native', () => ({ openExternalUrl: vi.fn(async (url: string) => { state.opened.push(url); }) }));
+vi.mock('../../../lib/native', () => ({
+  openExternalUrl: vi.fn(async (url: string) => { state.opened.push(url); }),
+  // PK-DEVICE-01's lock section: this page renders as the web, where it shows nothing.
+  isNative: () => false,
+  platform: () => 'web',
+  checkBiometrics: async () => ({ available: false, kind: null, deviceSecure: false }),
+  authenticateWithBiometrics: async () => ({ ok: false, reason: 'unavailable' }),
+  setScreenshotsBlocked: async () => false,
+}));
 vi.mock('../../../lib/iap', () => ({ storeSubscriptionsUrl: (platform: string, product: string) => `store:${platform}:${product}` }));
 vi.mock('../../../lib/supabase', () => ({
   supabase: {
@@ -105,6 +113,7 @@ describe('Settings sections (PK-INT-01)', () => {
         {
           "entries": [
             "data-privacy",
+            "device-lock",
           ],
           "section": "privacy-security",
           "title": "Privacy & security",
@@ -132,14 +141,24 @@ describe('Settings sections (PK-INT-01)', () => {
     );
     for (const [index, { id, entries }] of SETTINGS_SECTIONS.entries()) {
       const children = Array.from(sections[index]!.children).map(child => child.outerHTML);
-      expect(children, id).toHaveLength(entries.length);
-      for (const [position, entry] of entries.entries()) {
+      const empty: string[] = [];
+      let position = 0;
+      for (const entry of entries) {
         const holder = document.createElement('div');
         const alone = createRoot(holder);
         await render(<entry.Component {...props} />, alone);
-        expect(children[position], entry.id).toBe(holder.innerHTML);
+        if (entry.id === 'device-lock' && id === 'privacy-security') {
+          expect(holder.innerHTML, entry.id).toBe('');
+        } else {
+          expect(holder.innerHTML, entry.id).not.toBe('');
+          expect(children[position], entry.id).toBe(holder.innerHTML);
+          position += 1;
+        }
+        if (holder.innerHTML === '') empty.push(entry.id);
         await act(async () => alone.unmount());
       }
+      expect(empty, id).toEqual(id === 'privacy-security' ? ['device-lock'] : []);
+      expect(children, id).toHaveLength(entries.length - empty.length);
     }
     // The cards and their headings are unchanged, in the same order.
     expect(Array.from(list.querySelectorAll('h2')).map(h => h.textContent?.trim()))

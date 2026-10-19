@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { authSessionStorage } from './native'
 
 /*
   No fallback to the production project. The anon key is public by design, so
@@ -24,11 +25,15 @@ function requireEnv(name: string, value: string | undefined): string {
 const supabaseUrl = requireEnv('VITE_SUPABASE_URL', import.meta.env.VITE_SUPABASE_URL)
 const supabaseAnonKey = requireEnv('VITE_SUPABASE_ANON_KEY', import.meta.env.VITE_SUPABASE_ANON_KEY)
 
+const sessionStorage = authSessionStorage()
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    // Web and pre-1.0.7 native retain exactly the default auth options.
+    ...(sessionStorage ? { storage: sessionStorage } : {})
   }
 })
 
