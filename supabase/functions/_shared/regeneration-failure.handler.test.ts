@@ -1,3 +1,4 @@
+import * as generationOutcome from './generation-outcome';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
@@ -159,7 +160,7 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
     UserProfileContextSchema: { safeParse: () => ({ success: false, error: { flatten: () => ({}) } }) },
     formatUserContextBlock: () => null, buildTrendEvidence, withClaimAuthority, projectBasic, buildBasicProjection,
     findFloorViolations, shapeInterpretation, shouldRequestDeepInterpretation, formatPrimarySummary: () => '',
-    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI, callModelUnlessPaused,
+    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI, callModelUnlessPaused, ...generationOutcome,
     ...(sink.a as object), ...(sink.c as object),
   });
   evaluate(slice(source, '// ─── Version store', '// ─── Handler')
@@ -188,7 +189,7 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
     // PK-FIX-01b guards: kill switch off; telemetry is inert here.
     aiPausedNow: async () => false, inBackground: (p: Promise<unknown>) => { void p; },
     costLedger: { record: async () => {} }, reporter: { captureException: async () => false },
-    ...versionWrite, ...(sink.p as object), ...(sink.v as object),
+    ...versionWrite, ...generationOutcome, ...(sink.p as object), ...(sink.v as object),
   });
   return { handler, tryOpenAI };
 }
@@ -231,7 +232,7 @@ describe('PK-PL-A (b): a regeneration that fails writes nothing and never brands
   it.each(PLANS)('503 retryable: the model failed, nothing written, no claim settled (%s)', async plan => {
     const result = await regenerate({ plan, model: null, claim: false, claimCount: 1 });
     expect(result.status).toBe(503);
-    expect(result.body).toEqual({ error: 'regeneration_failed', retryable: true });
+    expect(result.body).toEqual({ error: 'regeneration_failed', reason: 'model_failed', retryable: true });
     expectNothingWritten(result);
   });
 
@@ -239,7 +240,7 @@ describe('PK-PL-A (b): a regeneration that fails writes nothing and never brands
     const { questions_for_doctor: _dropped, ...violating } = generated();
     const result = await regenerate({ plan, model: violating, claim: true });
     expect(result.status).toBe(503);
-    expect(result.body).toEqual({ error: 'regeneration_failed', retryable: true });
+    expect(result.body).toEqual({ error: 'regeneration_failed', reason: 'floor_violation', retryable: true });
     expectNothingWritten(result);
   });
 
@@ -260,14 +261,14 @@ describe('PK-PL-A (b): a regeneration that fails writes nothing and never brands
   it('503 retryable: the last credit went to another request at commit (limit_reached), nothing written', async () => {
     const result = await regenerate({ plan: 'free', claim: false, claimCount: 2, ledgerOutcome: 'limit_reached' });
     expect(result.status).toBe(503);
-    expect(result.body).toEqual({ error: 'regeneration_failed', retryable: true });
+    expect(result.body).toEqual({ error: 'regeneration_failed', reason: 'introductory_limit_reached', retryable: true });
     expectNothingWritten(result, ['commit_deep_access_version']);
   });
 
   it('503 not retryable: Free, introductory access used up, post-limit generation on demand — no model spend, nothing written', async () => {
     const result = await regenerate({ plan: 'free', claim: false, claimCount: 3, postLimit: 'on_demand' });
     expect(result.status).toBe(503);
-    expect(result.body).toEqual({ error: 'regeneration_failed', retryable: false });
+    expect(result.body).toEqual({ error: 'regeneration_failed', reason: 'introductory_access_exhausted', retryable: false });
     expect(result.tryOpenAI).not.toHaveBeenCalled();
     expectNothingWritten(result);
   });
@@ -362,7 +363,7 @@ describe('PK-PL-A (c): get-interpretation says a regeneration is unavailable exa
       } else {
         expect(availability!.reason, label).toBe('introductory_access_exhausted');
         expect(result.status, label).toBe(503);
-        expect(result.body, label).toEqual({ error: 'regeneration_failed', retryable: false });
+        expect(result.body, label).toEqual({ error: 'regeneration_failed', reason: 'introductory_access_exhausted', retryable: false });
         expectNothingWritten(result);
       }
       outcomes.push(availability!.available ? 'available' : 'unavailable');

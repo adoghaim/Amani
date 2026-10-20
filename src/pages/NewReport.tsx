@@ -27,6 +27,7 @@ import {
 } from '../lib/drawCycleContext';
 import { normalizeReportItems } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
+import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { detectLabSource } from '../utils/detectLabSource';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
 import { firstPartyEvents } from '../lib/firstPartyEventsClient';
@@ -670,6 +671,7 @@ export function NewReport() {
       const scorableItemsToSave = allItemsToSave.filter(
         i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000
       );
+      let primaryCanonicalSlug: BiomarkerName | null = null;
 
       if (allItemsToSave.length > 0) {
         const coreItems = scorableItemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
@@ -692,6 +694,13 @@ export function NewReport() {
               flagged,
             };
           });
+          // Use the report page's primary selection on the first generation,
+          // too. Previously only manual regenerations sent this pin, so the
+          // model could lead with a different marker before the page opened.
+          primaryCanonicalSlug = buildInsightSummary(biomarkerInserts.map(b => ({
+            key: b.name, value: b.value!, unit: b.unit,
+            labRefMin: b.reference_min, labRefMax: b.reference_max,
+          })), null, cyclePhase).primaryFinding?.key ?? null;
 
           const { error: biomarkerError } = await supabase
             .from('biomarkers')
@@ -796,7 +805,7 @@ export function NewReport() {
       setSubmitStep('interpreting');
       void firstPartyEvents.track('report_parsed');
       supabase.functions.invoke('generate-interpretation', {
-        body: { reportId: createdReportId },
+        body: { reportId: createdReportId, primary_canonical_slug: primaryCanonicalSlug },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },

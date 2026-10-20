@@ -214,7 +214,7 @@ describe('the comparison-band pill: placement and review state, never Normal, Bo
     expect(swept).toBeGreaterThan(5000);
   });
 
-  it('HDL above its upper bound produces the unmounted FocusAreas empty state, not a flag', () => {
+  it('HDL above the lab bound retains its neutral lab finding even inside the Amani band', () => {
     const input = { key: 'hdl_cholesterol' as const, value: 95, unit: 'mg/dL', labRefMin: 40, labRefMax: 60 };
     const summary = buildInsightSummary([input], null);
     const scored = scoreBiomarker(input.key, input.value, input.unit, input.labRefMin, input.labRefMax);
@@ -224,9 +224,10 @@ describe('the comparison-band pill: placement and review state, never Normal, Bo
     expect(scored.concern).toBe(0);
     expect(summary.systemSummaries[0]?.flaggedCount).toBe(0);
     const areas = buildFocusAreas(summary, summary.watchSignals, [scored]);
-    expect(areas).toEqual([]);
+    expect(areas).toHaveLength(1);
+    expect(summary.primaryFinding?.labPlacement).toBe('above');
     const html = renderToStaticMarkup(<FocusAreas focusAreas={areas} />);
-    expect(html).toContain("No scored marker on this report is outside Amani&#x27;s comparison bands.");
+    expect(html).toContain("HDL is above your lab&#x27;s reference range at 95 mg/dL.");
     expect(html).not.toContain('Outside Amani band');
   });
 

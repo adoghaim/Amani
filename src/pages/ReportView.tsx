@@ -1634,6 +1634,11 @@ export function ReportView() {
                       // is not authority for clinical meaning ("because the LLM
                       // generated it" is inadmissible), and it could read "all within
                       // range" while a card says otherwise (Phase 8B, kept).
+                      const labFindings = insightSummary.labFindings ?? [];
+                      if (labFindings.length > 0) {
+                        const ordered = [...labFindings].sort((a, b) => Number(b.key === insightSummary.primaryFinding?.key) - Number(a.key === insightSummary.primaryFinding?.key));
+                        return ordered.map(f => f.labLanguage ? <ClinicalObservation key={f.key} language={{ ...f.labLanguage, text: `${f.labLanguage.text} ` }} /> : null);
+                      }
                       const outside = scoredBiomarkers
                         .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
                         .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));

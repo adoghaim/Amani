@@ -209,13 +209,15 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
 
     expect(card?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent)
       .toBe(value > 60 ? "Above your lab's range" : "Within your lab's range");
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toContain(outside ? "outside Amani's current comparison band" : "All scored values are within Amani's context bands");
+    if (value > 60) {
+      expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent).toContain("above your lab's reference range");
+      expect(app.textContent).toContain('Focus areas');
+    } else {
+      expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
+        .toContain(outside ? "outside Amani's current comparison band" : "All scored values are within Amani's context bands");
+      if (!outside) expect(app.textContent).not.toContain('Focus areas');
+    }
     expect(app.textContent).toContain(outside ? '1 outside Amani band' : 'Scored markers within Amani bands');
-    const empty = "No scored marker on this report is outside Amani's comparison bands.";
-    expect((app.textContent ?? '').split(empty).length - 1).toBe(outside ? 0 : 1);
-    // ReportView intentionally does not mount FocusAreas when empty.
-    if (!outside) expect(app.textContent).not.toContain('Focus areas');
     if (!outside) {
       expect(app.textContent).not.toContain('Outside Amani band');
       expect(app.querySelectorAll('[data-language-category="comparison_band"][data-language-cue="attention"]').length).toBe(0);
@@ -230,9 +232,9 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     await renderAndOpenAll();
     const primary = app.querySelector('[data-testid="primary-finding"]');
     expect(primary?.textContent).toContain('Primary finding');
-    expect(primary?.textContent).toContain("TSH is above the Amani band at 9 uIU/mL. Amani's context bands are still under review.");
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toMatch(/is outside Amani's current comparison band|are outside Amani's current comparison bands/);
+    expect(primary?.textContent).toContain("TSH is above your lab's reference range at 9 uIU/mL.");
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("TSH is above your lab's reference range");
     // No movement may be claimed without a prior report (a first-recorded placeholder is not a prior value).
     expect(app.textContent).not.toMatch(/since your prior report/);
     expect(forbiddenHits(pageText())).toEqual([]);

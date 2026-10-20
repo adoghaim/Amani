@@ -15,7 +15,9 @@ const cases: { name: string; previous: number; current: number; status: BiggestC
   { name: 'worsened crossing', previous: 2, current: 6, status: 'newly_abnormal', crossing: { from: 'within_band', to: 'out_of_range', direction: 'worsened' } },
 ];
 const assess = context.assessAmaniContext;
-const tsh = (value: number) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5 });
+// Isolate band-authority language here. Lab-flag sentences have independent
+// patient-interval authority (including when the Amani band is DISPUTED).
+const tsh = (value: number) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: null, labRefMax: null });
 
 afterEach(() => vi.restoreAllMocks());
 

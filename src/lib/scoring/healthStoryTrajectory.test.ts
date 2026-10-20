@@ -109,7 +109,7 @@ describe('amendment 5 — the health story states only what is true', () => {
     expect(primaryTrajectory(change(null, 'improved', 9, 6), AUTHORIZED)).toBe('improving');
     for (const language of LANGUAGES) {
       const { text } = storyText(change('improving_still_high', undefined, 9, 6), language);
-      expect(text, String(language.reviewStatus)).toContain('which has changed since your prior report.');
+      expect(text, String(language.reviewStatus)).toContain('and has changed since your prior report.');
       expect(text, String(language.reviewStatus)).not.toMatch(/right direction|wrong direction|improv|follow-up|worse/i);
     }
   });
@@ -130,7 +130,7 @@ describe('amendment 5 — the health story states only what is true', () => {
     const language = summary.deltaMap.get('tsh')!.bandLanguage;
     const { trajectory, text } = storyText(c, language);
     expect(trajectory).toBe('changed');
-    expect(text).toContain('This report is mainly about thyroid function, which has changed since your prior report.');
+    expect(text).toContain('TSH is the primary finding shown above and has changed since your prior report.');
     expect(text).toContain(reviewStatement(language));
     expect(text).not.toMatch(/unchanged|improv/i);
   });

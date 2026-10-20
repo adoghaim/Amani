@@ -1,3 +1,4 @@
+import * as generationOutcome from './generation-outcome';
 import { describe, expect, it, vi } from 'vitest';
 import { entitlementUnavailable, generationVisibilityMode, premiumRequired } from './entitlement-response';
 
@@ -91,7 +92,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
     buildTrendEvidence: noCall, slug: noCall, classifyAnalyte: noCall, withClaimAuthority: noCall, projectBasic: noCall,
     generateFallbackInterpretation: noCall, formatPrimarySummary: noCall,
     tryOpenAI: async () => generated, shouldRequestDeepInterpretation, shapeInterpretation, buildBasicProjection,
-    findFloorViolations, callModelUnlessPaused, ...sink.helpers,
+    findFloorViolations, callModelUnlessPaused, ...generationOutcome, ...sink.helpers,
   });
   try {
     evaluate(source.slice(source.indexOf('Deno.serve(')), {
@@ -110,7 +111,7 @@ it.each([false, true])('handler inactive/mismatch (%s): unchanged payload, no fi
       tryOpenAI: async () => generated, addFindingMetadata: noCall, buildBasicProjection,
       findFloorViolations, commitGeneratedInterpretation: noCall, recordGenerationCosts: noCall,
       isRateLimitExceeded: () => false, errorMessage: String, ...sink.helpers, ...sink.pipeline,
-      ...versionWrite, readAnchor: async () => null, findRequestVersion: noCall, appendVersion: noCall,
+      ...versionWrite, ...generationOutcome, readAnchor: async () => null, findRequestVersion: noCall, appendVersion: noCall,
       commitLedgerVersion: noCall,
       // PK-FIX-01b guards: AI on; the stubbed model reports no usage, so no cost row; no error to report.
       aiPausedNow: async () => false, inBackground: (p: Promise<unknown>) => { void p; },
@@ -141,7 +142,7 @@ it('actual OpenAI call records one null-usage sample on a non-OK response', asyn
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   try {
     const call = evaluate(source.slice(start, end) + '\nreturn callOpenAIOnce;', {
-      fetchWithBackoff: async () => new Response('synthetic failure', { status: 503 }),
+      ...generationOutcome, fetchWithBackoff: async () => new Response('synthetic failure', { status: 503 }),
       generationSample, errorMessage: String,
     }) as (key: string, prompt: string, callback: typeof sample) => Promise<unknown>;
     expect(await call('fake-key', 'synthetic prompt', sample)).toBeNull();

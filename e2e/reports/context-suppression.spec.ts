@@ -45,8 +45,10 @@ test.describe('cycle phase missing from the report', () => {
 
   test.beforeEach(async ({ page }) => {
     await openReport(page, missingPhaseReport.report.id);
-    // Nothing is scored outside the Amani band here, so there is no primary finding.
-    await expandSystem(page, 'Hormones & Reproductive', false);
+    // LH is outside its supplied lab interval: the neutral floor makes it
+    // primary even though its Amani interpretation is withheld without phase.
+    await expect(page.getByTestId('primary-finding')).toContainText("LH is above your lab's reference range at 30 mIU/mL.");
+    await expandSystem(page, 'Hormones & Reproductive', true);
     await expandSystem(page, 'Thyroid', false);
   });
 
@@ -110,7 +112,8 @@ test.describe('cycle phase recorded on the report', () => {
 
   test('6. valid context enables the context path, qualified by review state', async ({ page }) => {
     await openReport(page, lutealPhaseReport.report.id);
-    // With the phase known, the low luteal progesterone becomes the primary finding.
+    // The lab-flagged LH remains primary. Phase still enables the separate
+    // Amani comparison for progesterone without granting clinical authority.
     await expandSystem(page, 'Hormones & Reproductive', true);
     const progesterone = card(page, 'Progesterone');
     await expect(progesterone.getByRole('note')).toHaveCount(0);
@@ -123,26 +126,23 @@ test.describe('cycle phase recorded on the report', () => {
     const lh = card(page, 'LH');
     await expect(lh.getByRole('note')).toHaveCount(0);
     await expect(lh.getByRole('term').filter({ hasText: 'Amani context band (luteal phase):' })).toBeVisible();
-    // Amendment 3. The fixture has no AI primary_concern, so Top Priority takes
-    // its deterministic fallback, which used to echo TopFinding.fact verbatim:
-    // "Progesterone is below the optimal range at 2 ng/mL".
-    // V2-03b Stage 2: the luteal band is DISPUTED, so this sentence now
-    // withholds placement as every other sentence does (it said "below the
-    // Amani band"), and the label is "Primary finding", not "Top Priority".
+    // Owner Ruling 7: observable lab placement is retained even when another
+    // marker's Amani band is disputed. No Amani clinical meaning is inferred.
     const primary = page.getByTestId('primary-finding');
     await expect(primary.getByText(
-      'Progesterone was measured at 2 ng/mL. Interpretation unavailable pending clinical review.',
+      "LH is above your lab's reference range at 30 mIU/mL.",
       { exact: true },
     )).toBeVisible();
     await expect(primary).toContainText('Primary finding');
-    await expect(primary).not.toContainText(/below|above|outside|Top Priority|Main Focus/);
+    await expect(primary).not.toContainText(/Top Priority|Main Focus|optimal|elevated|low\b/i);
     // The persistent half: the cycle_hormones focus area said "Reproductive-hormone
     // markers are outside the optimal range" for the life of the report.
     // V2-03b Stage 2: the area is now the policy's statement for its bands; a
-    // DISPUTED band withholds placement, so it states no placement at all.
+    // DISPUTED band withholds Amani placement; the laboratory's independently
+    // supplied LH interval remains a factual observation, not an Amani claim.
     const focus = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Cycle hormones', exact: true }) });
-    await expect(focus.getByText('Interpretation unavailable pending clinical review.', { exact: true })).toBeVisible();
-    await expect(focus).not.toContainText(/borderline|outside|within|above|below/i);
+    await expect(focus.getByText("LH is above your lab's reference range at 30 mIU/mL. Interpretation unavailable pending clinical review.", { exact: true })).toBeVisible();
+    await expect(focus).not.toContainText(/borderline|(?:outside|within|above|below) Amani/i);
     // Any casing, any position, anywhere on the page.
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
     // Amendment 4 (R2). The luteal-insufficiency card is legitimately shown
@@ -254,9 +254,9 @@ test.describe('health story for an out-of-band marker that moved', () => {
     const story = page.locator('section')
       .filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) })
       .locator('p')
-      .filter({ hasText: /^This report is mainly about/ });
+      .filter({ hasText: /^TSH is the primary finding shown above/ });
     await expect(story).toHaveCount(1);
-    await expect(story).toContainText('which has changed since your prior report.');
+    await expect(story).toContainText('and has changed since your prior report.');
     await expect(story).toContainText("Amani's comparison band for this result has not yet completed clinical review.");
     await expect(story).not.toContainText(/unchanged/i);
     await expect(story).not.toContainText(/improv|right direction/i);
@@ -301,7 +301,7 @@ for (const [label, previous, current, sentence] of [
         }
       }
       const story = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) })
-        .locator('p').filter({ hasText: /^This report is mainly about/ });
+        .locator('p').filter({ hasText: /^TSH is the primary finding shown above/ });
       await expect(story).toHaveCount(1);
       await expect(story).not.toContainText(/unchanged|wrong direction|worsen|improv/i);
       await expect(page.getByRole('heading', { name: sentence, exact: true })).toBeVisible();

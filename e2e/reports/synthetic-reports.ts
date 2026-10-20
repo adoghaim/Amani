@@ -198,3 +198,11 @@ export const modelProseCurrentReport: SyntheticReport = {
 export const higherIsBetterReport = report(1, 'unknown', [['hdl_cholesterol', 95, '95', 'mg/dL', 40, 60]]);
 
 export const egfrHigherIsBetterReport = report(1, 'unknown', [['egfr', 205, '205', 'mL/min/1.73m²', 40, 60]]);
+
+// October smoke regression, entirely synthetic; the reported panel, not a patient row.
+export const smokePanelReport = report(1, 'unknown', [
+  ['ferritin', 18, '18', 'ng/mL', 16, 154],
+  ['tsh', 2.85, '2.85', 'uIU/mL', 0.4, 4.5],
+  ['vitamin_d_25_oh', 24, '24 L', 'ng/mL', 30, 100],
+  ['ldl_cholesterol', 112, '112 H', 'mg/dL', null, 100],
+]);

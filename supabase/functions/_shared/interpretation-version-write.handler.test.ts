@@ -1,3 +1,4 @@
+import * as generationOutcome from './generation-outcome';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
@@ -159,7 +160,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
     UserProfileContextSchema: { safeParse: () => ({ success: false, error: { flatten: () => ({}) } }) },
     formatUserContextBlock: () => null, buildTrendEvidence, withClaimAuthority, projectBasic, buildBasicProjection,
     findFloorViolations, shapeInterpretation, shouldRequestDeepInterpretation, formatPrimarySummary: () => '',
-    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI, callModelUnlessPaused,
+    generateFallbackInterpretation: () => ({ headline: 'deterministic fallback' }), tryOpenAI, callModelUnlessPaused, ...generationOutcome,
     ...(sink.a as object), ...(sink.c as object),
   });
   evaluate(slice(source, '// ─── Version store', '// ─── Handler')
@@ -188,7 +189,7 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
     // PK-FIX-01b guards: the kill switch as the scenario sets it; telemetry is inert here.
     aiPausedNow: async () => aiPaused, inBackground: (p: Promise<unknown>) => { void p; },
     costLedger: { record: async () => {} }, reporter: { captureException: async () => false },
-    ...versionWrite, ...(sink.p as object), ...(sink.v as object),
+    ...versionWrite, ...generationOutcome, ...(sink.p as object), ...(sink.v as object),
   });
   return { handler, tryOpenAI };
 }
@@ -270,7 +271,7 @@ describe('generate-interpretation V2 version cutover (executed from source)', ()
   it('a failed model persists nothing and never falls back to stored or deterministic prose', async () => {
     const result = await run({ anchor: true, model: null });
     expect(result.response.status).toBe(503);
-    expect(result.body).toEqual({ error: 'regeneration_failed', retryable: true });
+    expect(result.body).toEqual({ error: 'regeneration_failed', reason: 'model_failed', retryable: true });
     expect(names(result.rpcs)).toEqual(['read_interpretation_for_server']);
     expect(result.writes).toEqual([]);
     expect(JSON.stringify(result.body)).not.toContain('deterministic fallback');
@@ -350,7 +351,7 @@ describe('generate-interpretation Free ledger on an anchored report (turn 11, ex
   it('limit_reached at commit persists nothing and is not appended as a Free version', async () => {
     const result = await run({ anchor: true, free: true, claim: false, claimCount: 2, ledgerOutcome: 'limit_reached' });
     expect(result.response.status).toBe(503);
-    expect(result.body).toEqual({ error: 'regeneration_failed', retryable: true });
+    expect(result.body).toEqual({ error: 'regeneration_failed', reason: 'introductory_limit_reached', retryable: true });
     expect(persisting(result.rpcs)).toEqual(['commit_deep_access_version']);
     expect(result.writes).toEqual([]);
   });

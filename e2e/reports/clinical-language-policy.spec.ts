@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
   egfrHigherIsBetterReport, ferritinDecreased, higherIsBetterReport, modelCanaries, modelProseCurrentReport,
-  stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport, tshIncreased,
+  smokePanelReport, stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport, tshIncreased,
 } from './synthetic-reports';
 
 /*
@@ -281,12 +281,37 @@ for (const { report, name, min, max, unit } of [
     await expect(bandPills.nth(0)).toBeVisible();
     await expect(bandPills.nth(1)).toBeVisible();
     await expect(card.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Above your lab's range");
-    await expect(page.locator('h2 [data-language-category="comparison_band"]')).toContainText("All scored values are within Amani's context bands");
+    await expect(page.locator('h2 [data-language-source="patient_lab_interval"]')).toContainText("above your lab's reference range");
     await expect(page.getByText('Scored markers within Amani bands', { exact: true })).toBeVisible();
-    await expect(page.getByText("No scored marker on this report is outside Amani's comparison bands.", { exact: true })).toHaveCount(1);
-    await expect(page.getByRole('heading', { name: 'Focus areas', exact: true })).toHaveCount(0);
+    await expect(page.getByText("No scored marker on this report is outside Amani's comparison bands.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Focus areas', exact: true })).toBeVisible();
     await expect(page.getByText('Outside Amani band', { exact: true })).toHaveCount(0);
     await expect(page.locator('[data-language-category="comparison_band"][data-language-cue="attention"], [data-language-cue="warning"], [data-language-cue="critical"]')).toHaveCount(0);
     expect(hits(await pageText(page))).toEqual([]);
+  });
+});
+
+
+test.describe('October smoke panel consistency', () => {
+  test.use({ authenticated: true, syntheticReports: [[smokePanelReport], { scope: 'test' }] });
+  test('lab facts, primary finding, story and comparison bands agree', async ({ page }, testInfo) => {
+    await page.goto(`/app/reports/${smokePanelReport.report.id}`);
+    await expect(page.getByTestId('primary-finding')).toContainText("Vitamin D is below your lab's reference range at 24 ng/mL.");
+    await expect(page.getByText(/^Vitamin D is the primary finding shown above\./)).toBeVisible();
+    await expect(page.locator('h2 [data-language-source="patient_lab_interval"]')).toHaveText([
+      "Vitamin D is below your lab's reference range at 24 ng/mL. ",
+      "LDL is above your lab's reference range at 112 mg/dL. ",
+    ]);
+    await expect(page.getByText(/mainly about iron/)).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('summary.png') });
+    for (const label of [/^Thyroid\b/, /^Lipids & Cardiovascular\b/]) {
+      await page.getByRole('button', { name: label }).and(page.locator('[aria-expanded="false"]')).click();
+    }
+    for (const name of ['Ferritin', 'TSH']) {
+      const card = page.getByRole('article', { name: `${name} result`, exact: true });
+      await expect(card).toContainText("Within your lab's range");
+      await expect(card).toContainText("Amani's comparison band is separate from your lab's range and is still under clinical review.");
+    }
+    await page.screenshot({ path: testInfo.outputPath('smoke-panel-consistency.png'), fullPage: true });
   });
 });

@@ -45,13 +45,15 @@ describe('withoutOptimalClaims', () => {
   });
 });
 
-describe('Top Priority fallback (ReportView branch 3) — the luteal progesterone of 2', () => {
+describe('retained Amani finding — the luteal progesterone of 2', () => {
   const summary = buildInsightSummary(panel, null, 'luteal');
-  const pf = summary.primaryFinding!;
+  const pf = summary.topFindings.find(f => f.key === 'progesterone')!;
 
   // V2-03b Stage 2 replaces "the builder still emits the optimality claim": the
   // builder's fact is now the policy's own sentence, so nothing is left to qualify.
   it('the builder no longer emits the optimality claim; its fact is the policy sentence', () => {
+    expect(summary.primaryFinding?.key).toBe('lh');
+    expect(summary.primaryFinding?.fact).toBe("LH is above your lab's reference range at 30 mIU/mL.");
     expect(pf.key).toBe('progesterone');
     expect(pf.fact).toBe("Progesterone is below the Amani band at 2 ng/mL. Amani's context bands are still under review.");
   });
@@ -87,12 +89,14 @@ describe('Focus areas — the persistent half of the breach', () => {
     const scored = panel.map(b => scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, 'luteal'));
     const area = buildFocusAreas(summary, summary.watchSignals, scored).find(a => a.id === 'hormones_cycle_hormones');
     expect(summary.bandLanguage?.get('progesterone')?.reviewStatus).toBe('DISPUTED');
-    expect(area?.whyItMatters).toBe('Interpretation unavailable pending clinical review.');
-    expect(area?.whyItMatters).not.toMatch(/optimal|borderline|reference range|outside|within|elevated|low\b/i);
+    expect(area?.whyItMatters).toBe("LH is above your lab's reference range at 30 mIU/mL. Interpretation unavailable pending clinical review.");
+    expect(area?.whyItMatters).not.toMatch(/optimal|borderline|outside|within|elevated|low\b/i);
   });
 
   it('an UNKNOWN band states placement with its review state, and never the lab\'s "reference range"', () => {
-    const tsh = [{ key: 'tsh' as const, value: 6, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5 }];
+    // No supplied lab interval: this isolates comparison-band language from
+    // the independently tested lab-flag floor.
+    const tsh = [{ key: 'tsh' as const, value: 6, unit: 'uIU/mL', labRefMin: null, labRefMax: null }];
     const summary = buildInsightSummary(tsh, null, null);
     const [area] = buildFocusAreas(summary, [], tsh.map(b => scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, null)));
     expect(area!.whyItMatters).toBe("TSH is outside Amani's current comparison band. This band has not yet completed clinical review.");

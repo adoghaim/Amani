@@ -5,11 +5,14 @@ import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
 import { assessAmaniContext, contextFromReport } from '../scoring/amaniContext';
 import {
-  authorizedLanguage, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, WATCH_SIGNALS,
-  type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
+  authorizedLanguage, labFindingSentence, labIntervalObservation, labIntervalPlacement, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, WATCH_SIGNALS,
+  type FactualLanguage, type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
 } from '../scoring/insightCopy';
 
 export interface TopFinding {
+  /** Neutral observation of the supplied lab interval; no Amani authority. */
+  labPlacement?: 'below' | 'above';
+  labLanguage?: FactualLanguage;
   key: BiomarkerName;
   displayName: string;
   value: number;
@@ -69,6 +72,7 @@ export interface ReportConfidence {
 
 export interface InsightSummary {
   primaryFinding: TopFinding | null;
+  labFindings?: TopFinding[];
   topFindings: TopFinding[];
   biggestChanges: BiggestChange[];
   deltaMap: Map<BiomarkerName, BiomarkerDelta>;
@@ -525,7 +529,19 @@ export function buildInsightSummary(
     biggestChanges = buildBiggestChanges(deltas, immediatePriorReportDate ?? null);
   }
 
-  const topFindings = buildTopFindings(scored, deltaMap);
+  // Owner Ruling 7: preserve the observable lab flag even when Amani
+  // withholds interpretation. Printed bounds only; do not alter concern scores.
+  const labFindings = current.flatMap(b => {
+    const placement = labIntervalPlacement(b.value, b.labRefMin, b.labRefMax);
+    if (placement !== 'below' && placement !== 'above') return [];
+    const score = scored.find(s => s.key === b.key)!;
+    const finding = toTopFinding(score, null, deltaMap.get(b.key));
+    const fact = labFindingSentence(finding.displayName, placement, b.value, b.unit);
+    const observation = labIntervalObservation(finding.displayName, b.value, b.labRefMin, b.labRefMax)!;
+    return [{ ...finding, labPlacement: placement, fact, labLanguage: { ...observation, text: fact } }];
+  }).sort((a, b) => b.severity - a.severity);
+  const topFindings = [...labFindings, ...buildTopFindings(scored, deltaMap)
+    .filter(f => !labFindings.some(l => l.key === f.key))];
 
   const primaryKey = topFindings[0]?.status === 'out_of_range'
     ? topFindings[0].key
@@ -672,6 +688,12 @@ export function buildInsightSummary(
     }
   }
 
+  // All lab flags remain visible, including withheld markers. Among them keep
+  // the established primary when possible; otherwise use existing severity.
+  if (labFindings.length > 0) {
+    primaryFinding = labFindings.find(f => f.key === primaryFinding?.key) ?? labFindings[0]!;
+  }
+
   const secondaryFindings = primaryFinding
     ? topFindings.filter(f => f.key !== primaryFinding!.key)
     : topFindings;
@@ -680,6 +702,7 @@ export function buildInsightSummary(
 
   return {
     primaryFinding,
+    labFindings,
     topFindings: secondaryFindings,
     biggestChanges,
     deltaMap,
