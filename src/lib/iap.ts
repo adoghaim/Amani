@@ -40,6 +40,7 @@ import {
 } from './iap-config';
 import { supabase } from './supabase';
 import { errorMessage } from './errors';
+import { currentRcAttributes } from './rcAttributes';
 
 // ─── Configuration ────────────────────────────────────────────────────────
 
@@ -159,6 +160,12 @@ export async function initIap(userId: string): Promise<IapInitResult> {
     }
 
     configuredUserId = userId;
+
+    // Same ref/promo/utm attributes the web SDK sends (rcAttributes.ts).
+    const attrs = await currentRcAttributes();
+    if (Object.keys(attrs).length > 0) {
+      await Purchases.setAttributes(attrs).catch((e: unknown) => console.warn('[iap] setAttributes failed', e));
+    }
     return { ok: true };
   } catch (err: unknown) {
     console.error('[iap] configure failed:', err);

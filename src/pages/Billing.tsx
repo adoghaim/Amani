@@ -10,6 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { CreditCard, Calendar, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { isNative, openExternalUrl } from '../lib/native';
+import { RcWebManageLink } from '../components/pricing/WebBillingPaywall';
+import { isRcWebEnabled } from '../lib/rcWeb';
 import { initIap, restoreIapPurchases, storeSubscriptionsUrl, syncIapEntitlement } from '../lib/iap';
 import { clientFreemiumActive } from '../lib/tier';
 import { FREEMIUM_COPY } from '../lib/freemium/copy';
@@ -251,6 +253,7 @@ export function Billing() {
         <PageHeader title="Billing" description="Your plan, payment method and invoices." />
 
         <div className="space-y-6">
+          {isRcWebEnabled() && <RcWebManageLink />}
           <Card>
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-theme-primary/10 rounded-full flex items-center justify-center">

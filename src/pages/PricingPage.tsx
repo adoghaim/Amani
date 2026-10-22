@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { PricingCard } from '../components/pricing/PricingCard'
 import { IapPaywall } from '../components/pricing/IapPaywall'
+import { WebBillingPaywall } from '../components/pricing/WebBillingPaywall'
+import { isRcWebEnabled } from '../lib/rcWeb'
 import { stripeProducts } from '../stripe-config'
 import { isNative } from '../lib/native'
 import { clientFreemiumActive } from '../lib/tier'
@@ -81,6 +83,8 @@ export function PricingPage() {
 
         {native ? (
           <IapPaywall onEntitled={() => navigate('/app')} />
+        ) : isRcWebEnabled() ? (
+          <WebBillingPaywall onEntitled={() => navigate('/app')} />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {ordered.map((product, index) => (

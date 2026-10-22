@@ -1,6 +1,8 @@
 import { Modal } from '../Modal';
 import { PricingCard } from '../pricing/PricingCard';
 import { IapPaywall } from '../pricing/IapPaywall';
+import { WebBillingPaywall } from '../pricing/WebBillingPaywall';
+import { isRcWebEnabled } from '../../lib/rcWeb';
 import { stripeProducts } from '../../stripe-config';
 import { isNative } from '../../lib/native';
 import { FREEMIUM_COPY } from '../../lib/freemium/copy';
@@ -35,6 +37,8 @@ export function PremiumPaywall({ open, onClose, onEntitled, reason }: PremiumPay
         <p className="text-sm text-theme-muted-text-2">{FREEMIUM_COPY.paywall.intro}</p>
         {isNative() ? (
           <IapPaywall onEntitled={() => { onClose(); onEntitled?.(); }} />
+        ) : isRcWebEnabled() ? (
+          <WebBillingPaywall onEntitled={() => { onClose(); onEntitled?.(); }} />
         ) : (
           <div className="grid grid-cols-1 gap-6">
             {ordered.map((product, index) => (
