@@ -216,10 +216,16 @@ describe('normalizeRevenueCatEvent — ignored deliveries', () => {
     expect(ignoredReason(event({ app_user_id: '$RCAnonymousID:abc123' }))).toContain('not an Amani account');
   });
 
-  it.each(['STRIPE', 'AMAZON', 'PROMOTIONAL', 'RC_BILLING'])(
+  it('normalises an RC_BILLING (Web Billing) event onto platform web', () => {
+    const r = normalizeRevenueCatEvent(event({ store: 'RC_BILLING' }), NOW);
+    expect(r.kind).toBe('subscription');
+    if (r.kind === 'subscription') expect(r.subscription.platform).toBe('web');
+  });
+
+  it.each(['STRIPE', 'AMAZON', 'PROMOTIONAL'])(
     'ignores the %s storefront, which the platform CHECK cannot hold',
     (store) => {
-      expect(ignoredReason(event({ store }))).toContain('not a native storefront');
+      expect(ignoredReason(event({ store }))).toContain('not a supported storefront');
     },
   );
 
@@ -276,6 +282,11 @@ describe('normalizeSubscriberPayload', () => {
       expiresAt: futureIso,
       environment: 'production',
     });
+  });
+
+  it('maps an rc_billing (Web Billing) subscription to platform web', () => {
+    const { subscriptions } = normalizeSubscriberPayload(USER, subscriber({ store: 'rc_billing' }), NOW);
+    expect(subscriptions[0]?.platform).toBe('web');
   });
 
   it('maps a lapsed subscription to expired', () => {
@@ -346,7 +357,7 @@ describe('normalizeSubscriberPayload', () => {
   it('ignores a Stripe entry, which belongs to the web subscription table', () => {
     const result = normalizeSubscriberPayload(USER, subscriber({ store: 'stripe' }), NOW);
     expect(result.subscriptions).toHaveLength(0);
-    expect(result.ignored[0]).toContain('not a native storefront');
+    expect(result.ignored[0]).toContain('not a supported storefront');
   });
 
   it('ignores an entry with no store transaction id', () => {
@@ -632,6 +643,8 @@ describe('storeToPlatform', () => {
     expect(storeToPlatform('app_store')).toBe('ios');
     expect(storeToPlatform('PLAY_STORE')).toBe('android');
     expect(storeToPlatform('play_store')).toBe('android');
+    expect(storeToPlatform('RC_BILLING')).toBe('web');
+    expect(storeToPlatform('rc_billing')).toBe('web');
   });
 
   it.each(['stripe', 'amazon', 'promotional', '', null, undefined])('returns null for %o', (store) => {

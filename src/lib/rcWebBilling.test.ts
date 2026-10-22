@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hasPremiumEntitlement, revenueCatEntitlementId, webBillingProvider } from './billingProvider'
 import { buildRcAttributes } from './rcAttributes'
+import { webPurchaseBlockReason } from './rcWeb'
 
 describe('webBillingProvider', () => {
   it('defaults to stripe', () => expect(webBillingProvider({})).toBe('stripe'))
@@ -28,5 +29,20 @@ describe('buildRcAttributes', () => {
   it('saved promo wins and invalid codes drop', () => {
     expect(buildRcAttributes({ promo: 'A', ref: 'bad code!' }, 'SAVED')).toEqual({ promo_code: 'SAVED' })
     expect(buildRcAttributes(undefined, undefined)).toEqual({})
+  })
+})
+
+describe('webPurchaseBlockReason', () => {
+  it('blocks a second purchase for any active entitlement', () => {
+    expect(webPurchaseBlockReason('ios', false)).toBe('native')
+    expect(webPurchaseBlockReason('android', false)).toBe('native')
+    expect(webPurchaseBlockReason('stripe', false)).toBe('stripe')
+    expect(webPurchaseBlockReason('web', false)).toBe('web')
+    expect(webPurchaseBlockReason('none', true)).toBe('web')
+  })
+  it('allows purchase with no entitlement', () => {
+    expect(webPurchaseBlockReason('none', false)).toBeNull()
+    expect(webPurchaseBlockReason('trial', false)).toBeNull()
+    expect(webPurchaseBlockReason('complimentary', false)).toBeNull()
   })
 })

@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Package } from '@revenuecat/purchases-js'
 import { AlertCircle } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { getRcWebPackages, initRcWeb, purchaseRcWebPackage, rcWebManagementUrl } from '../../lib/rcWeb'
+import {
+  getRcWebPackages,
+  initRcWeb,
+  purchaseRcWebPackage,
+  rcWebIsEntitled,
+  rcWebManagementUrl,
+  webPurchaseBlockReason,
+} from '../../lib/rcWeb'
+import { useSubscription } from '../../hooks/useSubscription'
 import { readSavedPromoCode } from '../../lib/savedPromoCode'
 
 interface WebBillingPaywallProps {
@@ -13,6 +21,13 @@ type State =
   | { phase: 'loading' }
   | { phase: 'error'; message: string }
   | { phase: 'ready'; packages: Package[] }
+  | { phase: 'blocked'; reason: 'native' | 'stripe' | 'web' }
+
+const BLOCKED_COPY = {
+  native: 'You already have Premium through the App Store or Google Play. Manage it from your phone’s subscription settings.',
+  stripe: 'You already have an active Premium subscription. Manage it from Billing.',
+  web: 'You already have Premium. Manage it from Billing.',
+} as const
 
 /**
  * Web paywall backed by RevenueCat Web Billing (flag VITE_WEB_BILLING_PROVIDER
@@ -21,16 +36,25 @@ type State =
  */
 export function WebBillingPaywall({ onEntitled }: WebBillingPaywallProps) {
   const { user } = useAuth()
+  const { source, loading: subLoading } = useSubscription()
   const [state, setState] = useState<State>({ phase: 'loading' })
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [manageUrl, setManageUrl] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user || subLoading) return
     const init = await initRcWeb(user.id)
     if (!init.ok) {
       setState({ phase: 'error', message: init.error })
+      return
+    }
+    // One RevenueCat customer spans iOS, Android and web, so an App Store /
+    // Play entitlement shows up here too. Never sell a second subscription.
+    const blocked = webPurchaseBlockReason(source, await rcWebIsEntitled())
+    if (blocked) {
+      setState({ phase: 'blocked', reason: blocked })
+      setManageUrl(blocked === 'web' ? await rcWebManagementUrl() : null)
       return
     }
     const res = await getRcWebPackages()
@@ -44,7 +68,7 @@ export function WebBillingPaywall({ onEntitled }: WebBillingPaywallProps) {
     }
     setState({ phase: 'ready', packages: res.packages })
     setManageUrl(await rcWebManagementUrl())
-  }, [user])
+  }, [user, source, subLoading])
 
   useEffect(() => {
     void load()
@@ -67,6 +91,18 @@ export function WebBillingPaywall({ onEntitled }: WebBillingPaywallProps) {
   }
 
   if (state.phase === 'loading') return <p className="text-center text-theme-muted-text">Loading plans…</p>
+  if (state.phase === 'blocked') {
+    return (
+      <div role="status" className="p-4 bg-theme-surface-2 border border-theme-border rounded-lg space-y-2">
+        <p className="text-sm text-theme-text">{BLOCKED_COPY[state.reason]}</p>
+        {manageUrl && (
+          <a href={manageUrl} target="_blank" rel="noopener noreferrer" className="text-sm underline">
+            Manage your web subscription
+          </a>
+        )}
+      </div>
+    )
+  }
   if (state.phase === 'error') {
     return (
       <div role="alert" className="flex items-start gap-3 p-4 bg-theme-surface-2 border border-theme-border rounded-lg">

@@ -27,6 +27,7 @@ export type SubscriptionSource =
   | 'stripe'
   | 'ios'
   | 'android'
+  | 'web'
   | 'complimentary'
   | 'trial'
   | 'none'
@@ -70,6 +71,7 @@ export function sourceIsActive(source: SubscriptionSource): boolean {
     source === 'stripe' ||
     source === 'ios' ||
     source === 'android' ||
+    source === 'web' ||
     source === 'complimentary'
   )
 }
@@ -80,7 +82,7 @@ export function sourceIsActive(source: SubscriptionSource): boolean {
  * either error or show an unrelated account.
  */
 export function sourceHasManageablePurchase(source: SubscriptionSource): boolean {
-  return source === 'stripe' || source === 'ios' || source === 'android'
+  return source === 'stripe' || source === 'ios' || source === 'android' || source === 'web'
 }
 
 /** Read-only lifetime claim usage, scoped by both user id and RLS. */

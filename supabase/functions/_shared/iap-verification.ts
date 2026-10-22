@@ -23,7 +23,7 @@
 // ─── Domain types ─────────────────────────────────────────────────────────
 
 /** Matches the `platform` CHECK on `iap_subscriptions`. */
-export type IapPlatform = "ios" | "android";
+export type IapPlatform = "ios" | "android" | "web";
 
 /** Matches the `status` CHECK on `iap_subscriptions`. All six, exactly. */
 export type IapStatus =
@@ -144,7 +144,7 @@ export function isAppUserId(value: unknown): value is string {
 /**
  * Maps a RevenueCat `store` to our two-storefront column.
  *
- * Stripe, Amazon, promotional and web-billing purchases are deliberately not
+ * RevenueCat Web Billing maps to 'web'. Stripe, Amazon and promotional purchases are deliberately not
  * representable: Stripe entitlement already comes from `stripe_user_subscriptions`,
  * and the others would violate the `platform` CHECK. They are ignored, not
  * coerced.
@@ -158,6 +158,9 @@ export function storeToPlatform(store: unknown): IapPlatform | null {
       return "ios";
     case "PLAY_STORE":
       return "android";
+    // RevenueCat Web Billing (purchases-js). Same app_user_id contract.
+    case "RC_BILLING":
+      return "web";
     default:
       return null;
   }
@@ -304,7 +307,7 @@ export function normalizeRevenueCatEvent(body: unknown, now: number): WebhookNor
 
   const platform = storeToPlatform(event.store);
   if (!platform) {
-    return { kind: "ignored", reason: `store "${str(event.store) ?? "missing"}" is not a native storefront` };
+    return { kind: "ignored", reason: `store "${str(event.store) ?? "missing"}" is not a supported storefront` };
   }
 
   const productId = str(event.product_id);
@@ -413,7 +416,7 @@ export function normalizeSubscriberPayload(
 
     const platform = storeToPlatform(value.store);
     if (!platform) {
-      ignored.push(`${productId}: store "${str(value.store) ?? "missing"}" is not a native storefront`);
+      ignored.push(`${productId}: store "${str(value.store) ?? "missing"}" is not a supported storefront`);
       continue;
     }
 

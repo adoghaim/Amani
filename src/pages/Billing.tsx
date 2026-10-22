@@ -11,7 +11,7 @@ import { CreditCard, Calendar, CheckCircle, AlertCircle, RefreshCw } from 'lucid
 import { useState } from 'react';
 import { isNative, openExternalUrl } from '../lib/native';
 import { RcWebManageLink } from '../components/pricing/WebBillingPaywall';
-import { isRcWebEnabled } from '../lib/rcWeb';
+import { initRcWeb, isRcWebEnabled, rcWebManagementUrl } from '../lib/rcWeb';
 import { initIap, restoreIapPurchases, storeSubscriptionsUrl, syncIapEntitlement } from '../lib/iap';
 import { clientFreemiumActive } from '../lib/tier';
 import { FREEMIUM_COPY } from '../lib/freemium/copy';
@@ -109,6 +109,7 @@ export function Billing() {
     if (!active) return freemium ? FREEMIUM_COPY.plan.upgrade : 'Subscribe Now';
     if (source === 'ios') return 'Manage in the App Store';
     if (source === 'android') return 'Manage in Google Play';
+    if (source === 'web') return 'Manage web subscription';
     return 'Manage via Stripe';
   };
 
@@ -132,6 +133,14 @@ export function Billing() {
       through IAP, and there is no API that lets the app do it — so the correct
       behaviour is a deep link to the right settings screen.
     */
+    if (source === 'web') {
+      // RevenueCat Web Billing portal (magic link). Not Stripe's portal.
+      const url = user ? ((await initRcWeb(user.id)).ok ? await rcWebManagementUrl() : null) : null;
+      if (url) await openExternalUrl(url);
+      else setError('Could not open subscription management. Please try again.');
+      return;
+    }
+
     if (nativeSource) {
       await openExternalUrl(storeSubscriptionsUrl(nativeSource, activeIap?.product_id ?? null));
       return;

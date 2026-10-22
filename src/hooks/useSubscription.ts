@@ -51,7 +51,7 @@ export interface Subscription {
 
 /** One `iap_subscriptions` row, as the client is allowed to read it. */
 export interface IapSubscription {
-  platform: 'ios' | 'android'
+  platform: 'ios' | 'android' | 'web'
   product_id: string
   status: string
   expires_at: string | null

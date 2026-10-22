@@ -102,3 +102,14 @@ export async function rcWebIsEntitled(): Promise<boolean> {
     return false;
   }
 }
+
+/** Pure: why a web purchase must not be offered, or null when it may be. */
+export function webPurchaseBlockReason(
+  serverSource: string | null | undefined,
+  rcEntitled: boolean,
+): 'native' | 'stripe' | 'web' | null {
+  if (serverSource === 'ios' || serverSource === 'android') return 'native';
+  if (serverSource === 'stripe') return 'stripe';
+  if (serverSource === 'web' || rcEntitled) return 'web';
+  return null;
+}
