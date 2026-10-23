@@ -1,0 +1,1193 @@
+diff --git a/e2e/extraction/confirm-misread.spec.ts b/e2e/extraction/confirm-misread.spec.ts
+new file mode 100644
+index 0000000..f0362e9
+--- /dev/null
++++ b/e2e/extraction/confirm-misread.spec.ts
+@@ -0,0 +1,58 @@
++import { test, expect } from '../fixtures';
++
++test.use({ authenticated: true });
++
++/*
++  F022: a value Amani has probably misread (outside physiological bounds, here
++  from the photo reader) keeps "Save and analyze" closed until she marks it
++  correct, fixes it or removes it. The OCR reply and account reads are
++  synthetic; the spec stops before saving, so the network guard still rejects
++  any write.
++*/
++const OCR_ITEMS = [
++  ['TSH', 'tsh', 0.0008, 'mIU/L', 0.4, 4.5],
++  ['Ferritin', 'ferritin', 40, 'ng/mL', 16, 154],
++].map(([name, slug, value, unit, min, max]) => ({
++  raw_name: name, canonical_slug: slug, value_numeric: value, value_text: String(value), unit,
++  raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
++  reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
++  needs_review: false, source_snippet: `${name} ${value} ${unit}`, source_format: 'ocr', review_status: 'pending',
++}));
++
++test('a probably misread value keeps Save closed until she confirms it', async ({ page }, testInfo) => {
++  await page.route('https://amani-e2e.invalid/rest/v1/*', async route => {
++    const request = route.request();
++    const url = new URL(request.url());
++    if (request.method() !== 'GET') return route.fallback();
++    const table = url.pathname.split('/').pop();
++    if (table === 'stripe_user_subscriptions') return route.fulfill({ json: [{ subscription_status: 'active' }] });
++    if (['iap_subscriptions', 'iap_beta_testers', 'complimentary_entitlements', 'biomarker_catalog'].includes(table ?? '')) {
++      return route.fulfill({ json: [] });
++    }
++    if (table === 'users' && url.searchParams.get('select') === 'id,trial_start_date') return route.fulfill({ json: [] });
++    return route.fallback();
++  });
++  await page.route('https://amani-e2e.invalid/functions/v1/parse-lab-report-ocr', async route => {
++    if (route.request().method() !== 'POST') return route.fallback();
++    await route.fulfill({ json: { items: OCR_ITEMS } });
++  });
++
++  await page.goto('/app/new');
++  await page.locator('#file-upload').setInputFiles({ name: 'synthetic-lab.png', mimeType: 'image/png', buffer: Buffer.from('synthetic') });
++  await page.getByRole('button', { name: 'Next', exact: true }).click();
++  await expect(page.getByRole('heading', { name: 'Review your report' })).toBeVisible();
++  await expect(page.getByText("a value we may have misread isn't used for your main finding or trends until you confirm it.", { exact: false })).toBeVisible();
++  await page.getByRole('button', { name: 'Next', exact: true }).click();
++  await expect(page.getByRole('heading', { name: 'Confirm your markers' })).toBeVisible();
++
++  const save = page.getByRole('button', { name: 'Save and analyze' });
++  await expect(save).toBeDisabled();
++  await expect(page.getByTestId('confirm-misread')).toHaveText('Amani may have misread 1 value. Mark it as correct, fix it, or remove it to save.');
++  const tsh = page.locator('div.border.rounded-lg').filter({ has: page.locator('span.truncate', { hasText: /^TSH$/ }) });
++  await expect(tsh).toContainText('below physiological minimum 0.001 for TSH');
++  await testInfo.attach('confirm-misread-blocked', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
++
++  await tsh.getByRole('button', { name: 'Mark as Correct' }).click();
++  await expect(save).toBeEnabled();
++  await expect(page.getByTestId('confirm-misread')).toHaveCount(0);
++});
+diff --git a/e2e/fixtures.ts b/e2e/fixtures.ts
+index 73e2838..fb0173f 100644
+--- a/e2e/fixtures.ts
++++ b/e2e/fixtures.ts
+@@ -176,6 +176,21 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
+             return;
+           }
+         }
++        // F022: with it, the flagged rows of the same reports (READING_REVIEW_COLUMNS), so
++        // ReportView leaves a value she never confirmed out of her trends.
++        const reviewColumns = ['id', 'lab_report_id', 'canonical_slug', 'value_numeric', 'raw_value_text',
++          'confidence_score', 'needs_review', 'reviewed_by_user'] as const;
++        if (url.pathname === '/rest/v1/report_analytes' && select === reviewColumns.join(',')
++          && url.searchParams.get('needs_review') === 'eq.true') {
++          const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];
++          const matches = ids.map(id => syntheticReports.find(r => r.report.id === id));
++          if (ids.length > 0 && matches.every(m => m !== undefined)) {
++            await route.fulfill({ json: matches.flatMap(m => (m!.analytes ?? [])
++              .filter(a => a['needs_review'] === true)
++              .map(a => Object.fromEntries(reviewColumns.map(c => [c, a[c] ?? null])))) });
++            return;
++          }
++        }
+         // This existing view is read without a user filter by useSubscription.
+         // An empty response grants no subscription; no real backend is involved.
+         if (url.pathname === '/rest/v1/stripe_user_subscriptions' && url.searchParams.get('select') === '*') {
+diff --git a/playwright.config.ts b/playwright.config.ts
+index 039717a..5419e77 100644
+--- a/playwright.config.ts
++++ b/playwright.config.ts
+@@ -6,7 +6,7 @@ export default defineConfig({
+     ? '**/artifact-probe.spec.ts'
+     : ['**/smoke.spec.ts', '**/network-guard.spec.ts', '**/reports/context-suppression.spec.ts',
+       '**/reports/clinical-language-policy.spec.ts', '**/interpretation/version-regeneration.spec.ts',
+-      '**/interpretation/regeneration-failure.spec.ts', '**/reports/report-header.spec.ts', '**/runtime-config.spec.ts', '**/update-gate.spec.ts', '**/device-lock.spec.ts', '**/billing/checkout-promo-code.spec.ts', '**/consent/consent-gate.spec.ts', '**/signup/first-party-events.spec.ts', '**/reports/report-problem.spec.ts', '**/extraction/confirm-markers.spec.ts'],
++      '**/interpretation/regeneration-failure.spec.ts', '**/reports/report-header.spec.ts', '**/runtime-config.spec.ts', '**/update-gate.spec.ts', '**/device-lock.spec.ts', '**/billing/checkout-promo-code.spec.ts', '**/consent/consent-gate.spec.ts', '**/signup/first-party-events.spec.ts', '**/reports/report-problem.spec.ts', '**/extraction/confirm-markers.spec.ts', '**/extraction/confirm-misread.spec.ts'],
+   // The redirect race is an explicit diagnostic opt-in, excluded from the CI gate.
+   ...(process.env.E2E_QUARANTINE === '1'
+     ? { grep: /@quarantine/ }
+diff --git a/src/components/ReviewBiomarkers.test.tsx b/src/components/ReviewBiomarkers.test.tsx
+index a2eedab..b4dd9c7 100644
+--- a/src/components/ReviewBiomarkers.test.tsx
++++ b/src/components/ReviewBiomarkers.test.tsx
+@@ -59,3 +59,35 @@ describe('ReviewBiomarkers card names', () => {
+     expect(names(render([row('', { needs_review: true, confidence_score: 'low', source_format: 'manual' })]))).toEqual(['Unnamed']);
+   });
+ });
++
++// F022: a parse-error row is saved only once she has confirmed it.
++describe('ReviewBiomarkers confirming a flagged value', () => {
++  const parseError = (over: Partial<ReportItem> = {}) => row('TSH', {
++    canonical_slug: 'tsh', is_core_biomarker: true, value_numeric: 0.0008, needs_review: true, confidence_score: 'low',
++    parse_error: 'Value 0.0008 is below physiological minimum 0.001 for TSH — likely a parse error', ...over,
++  });
++  const markCorrect = () => Array.from(host.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Mark as Correct');
++
++  it('typing her value records it as confirmed by her', async () => {
++    const onUpdate = vi.fn();
++    act(() => root.render(<ReviewBiomarkers items={[parseError()]} onUpdate={onUpdate} onRemove={vi.fn()} onAddNew={vi.fn()} />));
++    const input = host.querySelector<HTMLInputElement>('input[type="number"]')!;
++    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
++    await act(async () => {
++      setValue.call(input, '0.8');
++      input.dispatchEvent(new Event('input', { bubbles: true }));
++    });
++    expect(onUpdate).toHaveBeenCalledWith(0, 'value_numeric', 0.8);
++    expect(onUpdate).toHaveBeenCalledWith(0, 'reviewed_by_user', true);
++  });
++
++  it('still offers "Mark as Correct" after she maps the row to another marker', () => {
++    render([parseError({ review_status: 'edited_by_user', reviewed_by_user: false })]);
++    expect(markCorrect()).toBeDefined();
++  });
++
++  it('no longer offers it once she has confirmed the value', () => {
++    render([parseError({ review_status: 'edited_by_user', reviewed_by_user: true })]);
++    expect(markCorrect()).toBeUndefined();
++  });
++});
+diff --git a/src/components/ReviewBiomarkers.tsx b/src/components/ReviewBiomarkers.tsx
+index 8b04236..df85d87 100644
+--- a/src/components/ReviewBiomarkers.tsx
++++ b/src/components/ReviewBiomarkers.tsx
+@@ -138,6 +138,8 @@ function ItemCard({
+                 onChange={e => {
+                   onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value));
+                   onUpdate(globalIndex, 'review_status', 'edited_by_user');
++                  // F022: the value she typed is hers, so it counts as confirmed.
++                  onUpdate(globalIndex, 'reviewed_by_user', true);
+                 }}
+                 className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border ${item.parse_error ? 'border-theme-flag-low-border bg-theme-flag-low-bg' : 'border-theme-neutral-300'}`}
+               />
+@@ -167,7 +169,7 @@ function ItemCard({
+           </div>
+ 
+           <div className="mt-6 flex justify-end gap-3 border-t border-theme-neutral-100 pt-4">
+-            {item.needs_review && item.review_status !== 'reviewed' && item.review_status !== 'edited_by_user' && (
++            {item.needs_review && item.reviewed_by_user !== true && (
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+diff --git a/src/components/SafetyWarnings.tsx b/src/components/SafetyWarnings.tsx
+index b65fe7d..da7d778 100644
+--- a/src/components/SafetyWarnings.tsx
++++ b/src/components/SafetyWarnings.tsx
+@@ -6,9 +6,10 @@ import { CUE_STYLE, type SafetyWarning } from '../lib/scoring/insightCopy';
+   It takes only SafetyWarning values, which only an approved deterministic
+   rule can produce (insightCopy.evaluateSafetyRules), and renders their text
+   untouched: no band filter, review state or neutralizer is applied here.
+-  With no approved rule today it renders nothing.
++  With no approved rule today it renders nothing. A warning about a value she
++  has not confirmed (F022) still renders, with one added line saying so.
+ */
+-export function SafetyWarnings({ warnings }: { warnings: readonly SafetyWarning[] }) {
++export function SafetyWarnings({ warnings }: { warnings: readonly (SafetyWarning & { unconfirmed?: boolean })[] }) {
+   if (warnings.length === 0) return null;
+   return (
+     <section aria-label="Safety warnings" className="space-y-2">
+@@ -20,7 +21,12 @@ export function SafetyWarnings({ warnings }: { warnings: readonly SafetyWarning[
+             data-safety-rule={w.authority.ruleId}
+             className={`rounded-2xl border px-5 py-4 flex items-start gap-3 ${style.bg} ${style.border}`}>
+             <AlertTriangle aria-hidden="true" className={`w-5 h-5 shrink-0 mt-0.5 ${style.text}`} />
+-            <p className={`text-sm font-semibold leading-relaxed ${style.text}`}>{w.text}</p>
++            <div className="min-w-0">
++              <p className={`text-sm font-semibold leading-relaxed ${style.text}`}>{w.text}</p>
++              {w.unconfirmed && (
++                <p className={`mt-1 text-xs ${style.text}`}>You haven't confirmed this value. Check it against your report.</p>
++              )}
++            </div>
+           </div>
+         );
+       })}
+diff --git a/src/lib/biomarkers/confirmation.test.ts b/src/lib/biomarkers/confirmation.test.ts
+new file mode 100644
+index 0000000..0e94745
+--- /dev/null
++++ b/src/lib/biomarkers/confirmation.test.ts
+@@ -0,0 +1,58 @@
++import { describe, expect, it } from 'vitest';
++import { isUnconfirmedReading, unconfirmedReadingKeys, isUnconfirmedBiomarker, withoutUnconfirmed } from './confirmation';
++
++// Synthetic rows only.
++const analyte = (over: Record<string, unknown> = {}) => ({
++  lab_report_id: 'r1', canonical_slug: 'tsh', value_numeric: 0.0008, raw_value_text: '0.0008',
++  confidence_score: 'low', needs_review: true, reviewed_by_user: false, ...over,
++});
++
++describe('isUnconfirmedReading (F022)', () => {
++  it('a value read with low confidence that she has not confirmed', () => {
++    expect(isUnconfirmedReading(analyte())).toBe(true);
++  });
++
++  it('a result printed below a limit, read with high confidence, that she has not confirmed', () => {
++    expect(isUnconfirmedReading(analyte({ canonical_slug: 'vitamin_b12', value_numeric: 75, raw_value_text: '<150', confidence_score: 'high' }))).toBe(true);
++  });
++
++  it.each([
++    ['she marked it correct', { needs_review: false, reviewed_by_user: true, confidence_score: 'high' }],
++    ['she corrected the value', { needs_review: false, reviewed_by_user: true }],
++    ['she confirmed it but the flag was kept', { reviewed_by_user: true }],
++    ['it was never flagged', { needs_review: false }],
++    // PK-FIX-05: several printed intervals; the value itself was read cleanly.
++    ['its lab printed several intervals', { canonical_slug: 'progesterone', value_numeric: 8.2, raw_value_text: '8.2', confidence_score: 'medium' }],
++    ['the review columns are absent', { needs_review: undefined, reviewed_by_user: undefined }],
++  ])('not when %s', (_, over) => {
++    expect(isUnconfirmedReading(analyte(over))).toBe(false);
++  });
++});
++
++describe('matching a scored value to its report_analytes row', () => {
++  const keys = unconfirmedReadingKeys([
++    analyte(),
++    analyte({ lab_report_id: 'r2', canonical_slug: 'ferritin', value_numeric: 8, raw_value_text: '8', confidence_score: 'high' }),
++  ]);
++
++  it('by report, name and value', () => {
++    expect(isUnconfirmedBiomarker({ lab_report_id: 'r1', name: 'tsh', value: 0.0008 }, keys)).toBe(true);
++    expect(isUnconfirmedBiomarker({ lab_report_id: 'r2', name: 'tsh', value: 0.0008 }, keys)).toBe(false);
++    expect(isUnconfirmedBiomarker({ lab_report_id: 'r1', name: 'tsh', value: 0.8 }, keys)).toBe(false);
++    expect(isUnconfirmedBiomarker({ lab_report_id: 'r1', name: 'free_t4', value: 0.0008 }, keys)).toBe(false);
++  });
++
++  it('a confirmed or cleanly read row marks nothing', () => {
++    expect(isUnconfirmedBiomarker({ lab_report_id: 'r2', name: 'ferritin', value: 8 }, keys)).toBe(false);
++  });
++
++  it('withoutUnconfirmed drops only the unconfirmed values, in order', () => {
++    const rows = [
++      { id: 'a', lab_report_id: 'r1', name: 'ferritin', value: 8 },
++      { id: 'b', lab_report_id: 'r1', name: 'tsh', value: 0.0008 },
++      { id: 'c', lab_report_id: 'r2', name: 'tsh', value: 0.0008 },
++    ];
++    expect(withoutUnconfirmed(rows, [analyte()]).map(r => r.id)).toEqual(['a', 'c']);
++    expect(withoutUnconfirmed(rows, [])).toEqual(rows);
++  });
++});
+diff --git a/src/lib/biomarkers/confirmation.ts b/src/lib/biomarkers/confirmation.ts
+new file mode 100644
+index 0000000..a8939ee
+--- /dev/null
++++ b/src/lib/biomarkers/confirmation.ts
+@@ -0,0 +1,63 @@
++import { isBelowLimitResult } from '../../utils/parser/valueExtraction';
++
++/** The report_analytes columns that say whether she confirmed a value. Each exists in production today. */
++export const READING_REVIEW_COLUMNS = [
++  'id', 'lab_report_id', 'canonical_slug', 'value_numeric', 'raw_value_text', 'confidence_score', 'needs_review', 'reviewed_by_user',
++].join(',');
++
++export interface ReadingReview {
++  lab_report_id: string;
++  canonical_slug: string | null;
++  value_numeric: number | null;
++  raw_value_text?: string | null;
++  confidence_score?: string | null;
++  needs_review?: boolean | null;
++  reviewed_by_user?: boolean | null;
++}
++
++/**
++ * A value Amani may have misread that she has not confirmed (F022): flagged
++ * for her review, not marked correct or corrected by her, and either read with
++ * low confidence (a physiological-bounds parse error, a model sanity check, an
++ * unclear photo) or printed below a limit, so its number is half that limit
++ * (F098). It never picks her primary finding and is never a trend point.
++ *
++ * A row flagged only because its lab printed several intervals (PK-FIX-05)
++ * is not one: its value was read cleanly.
++ */
++export function isUnconfirmedReading(row: ReadingReview): boolean {
++  return row.needs_review === true && row.reviewed_by_user !== true
++    && (row.confidence_score === 'low' || isBelowLimitResult(row.raw_value_text));
++}
++
++interface ScoredValue {
++  lab_report_id: string;
++  name: string;
++  value: number;
++}
++
++const keyOf = (reportId: string, slug: string, value: number) => `${reportId}|${slug}|${Number(value)}`;
++
++/*
++  biomarkers rows carry no review columns. NewReport writes each one from the
++  same item as its report_analytes row, so a scored value is matched to its
++  review by report, slug and value.
++*/
++export function unconfirmedReadingKeys(analytes: readonly ReadingReview[]): ReadonlySet<string> {
++  const keys = new Set<string>();
++  for (const a of analytes) {
++    if (a.canonical_slug && a.value_numeric != null && isUnconfirmedReading(a)) {
++      keys.add(keyOf(a.lab_report_id, a.canonical_slug, a.value_numeric));
++    }
++  }
++  return keys;
++}
++
++export function isUnconfirmedBiomarker(b: ScoredValue, keys: ReadonlySet<string>): boolean {
++  return keys.has(keyOf(b.lab_report_id, b.name, b.value));
++}
++
++export function withoutUnconfirmed<T extends ScoredValue>(rows: readonly T[], analytes: readonly ReadingReview[]): T[] {
++  const keys = unconfirmedReadingKeys(analytes);
++  return rows.filter(b => !isUnconfirmedBiomarker(b, keys));
++}
+diff --git a/src/pages/NewReport.confirm.test.tsx b/src/pages/NewReport.confirm.test.tsx
+new file mode 100644
+index 0000000..9ad7066
+--- /dev/null
++++ b/src/pages/NewReport.confirm.test.tsx
+@@ -0,0 +1,192 @@
++// @vitest-environment jsdom
++import { act, type ReactNode } from 'react';
++import { createRoot, type Root } from 'react-dom/client';
++import { MemoryRouter, Route, Routes } from 'react-router-dom';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++
++/*
++  F022 on the real upload page: a value Amani has probably misread (outside
++  physiological bounds) cannot be saved until she marks it correct, corrects
++  it or removes it, and what she confirmed is what report_analytes records.
++  Jsdom and a mocked Supabase client; synthetic text and values only.
++*/
++const fixture = vi.hoisted(() => ({
++  user: { id: '00000000-0000-4000-8000-0000000f0022' },
++  inserts: [] as { table: string; values: unknown }[],
++  pdfText: '',
++  ocrItems: [] as Record<string, unknown>[],
++}));
++
++vi.mock('../lib/supabase', () => {
++  type Row = Record<string, unknown>;
++  const query = (table: string) => {
++    const builder = {
++      select: () => builder, eq: () => builder, order: () => builder, limit: () => builder, in: () => builder,
++      lte: () => builder, update: () => builder,
++      insert: (values: unknown) => { fixture.inserts.push({ table, values }); return builder; },
++      single: async () => ({ data: table === 'lab_reports' ? { id: 'report-f022' } : null, error: null }),
++      maybeSingle: async () => ({ data: null, error: null }),
++      then: (resolve: (value: { data: Row[]; error: null }) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
++    };
++    return builder;
++  };
++  return { supabase: {
++    from: query,
++    auth: { getSession: async () => ({ data: { session: { access_token: 'synthetic-token' } } }) },
++    storage: { from: () => ({ upload: async () => ({ error: null }) }) },
++    functions: { invoke: async (name: string) => (name === 'parse-lab-report-ocr'
++      ? { data: { items: fixture.ocrItems }, error: null } : { data: null, error: null }) },
++  } };
++});
++vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user }) }));
++vi.mock('../lib/native', () => ({
++  isNative: () => false,
++  captureLabPhoto: vi.fn(),
++  getNetworkStatus: async () => ({ connected: true, connectionType: 'wifi' }),
++  onNetworkChange: () => () => {},
++}));
++vi.mock('../utils/pdfExtractor', () => ({
++  extractTextFromPDF: vi.fn(async () => fixture.pdfText),
++  convertPDFToImages: vi.fn(async () => []),
++}));
++vi.mock('../utils/subscription', () => ({ checkSubscriptionLive: vi.fn(), handle402: async () => null }));
++vi.mock('../lib/freemium/gates', () => ({ uploadRequiresSubscription: () => false }));
++vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
++import { NewReport } from './NewReport';
++import { edgeCasesFixture } from '../utils/parser/__fixtures__/edgeCases';
++
++let root: Root;
++let app: HTMLDivElement;
++beforeEach(() => {
++  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
++  fixture.inserts = [];
++  fixture.pdfText = '';
++  fixture.ocrItems = [];
++  app = document.createElement('div');
++  document.body.append(app);
++  root = createRoot(app);
++});
++afterEach(async () => {
++  await act(async () => root.unmount());
++  app.remove();
++  sessionStorage.clear();
++  vi.unstubAllGlobals();
++});
++
++async function settle(rounds = 8) {
++  for (let i = 0; i < rounds; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); });
++}
++const button = (label: string, within: ParentNode = app) =>
++  Array.from(within.querySelectorAll('button')).find(b => b.textContent?.trim() === label) ?? null;
++async function click(el: Element | null) {
++  expect(el).not.toBeNull();
++  await act(async () => { (el as HTMLElement).click(); });
++  await settle();
++}
++/** The confirm step's card for one marker, by the name it shows. */
++function card(name: string): HTMLElement {
++  const header = Array.from(app.querySelectorAll('div.cursor-pointer'))
++    .find(h => h.querySelector('span.truncate')?.textContent === name);
++  expect(header, name).toBeDefined();
++  return header!.parentElement!;
++}
++async function typeValue(input: HTMLInputElement, value: string) {
++  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
++  await act(async () => {
++    setValue.call(input, value);
++    input.dispatchEvent(new Event('input', { bubbles: true }));
++  });
++  await settle();
++}
++
++/** Upload `file`, read it, and stop on step 2 ("Review your report"). */
++async function upload(file: File) {
++  await act(async () => root.render(
++    <MemoryRouter initialEntries={['/app/new']}>
++      <Routes>
++        <Route path="/app/new" element={<NewReport />} />
++        <Route path="/app/reports/:id" element={null} />
++      </Routes>
++    </MemoryRouter>,
++  ));
++  await settle();
++  const fileInput = app.querySelector<HTMLInputElement>('#file-upload')!;
++  Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] });
++  await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
++  await click(button('Next'));
++  await settle(20);
++  expect(app.textContent).toContain('Review your report');
++}
++const pdf = () => new File(['%PDF-1.3 synthetic'], 'synthetic-edge-cases.pdf', { type: 'application/pdf' });
++const photo = () => new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' });
++
++const saveButton = () => button('Save and analyze') as HTMLButtonElement | null;
++const savedAnalytes = () => (fixture.inserts.find(i => i.table === 'report_analytes')?.values ?? []) as Record<string, unknown>[];
++
++describe('NewReport confirm step: a probably misread value needs her confirmation (F022)', () => {
++  it('step 2 no longer says Amani will use what it could not read', async () => {
++    fixture.pdfText = edgeCasesFixture;
++    await upload(pdf());
++    expect(app.textContent).not.toContain('Amani will use what it understood');
++    expect(app.textContent).toContain('a value we may have misread isn\'t used for your main finding or trends until you confirm it.');
++  });
++
++  it('the parser\'s parse-error row keeps Save closed until she marks it correct', async () => {
++    fixture.pdfText = edgeCasesFixture;
++    await upload(pdf());
++    await click(button('Next'));
++    expect(app.textContent).toContain('Confirm your markers');
++
++    expect(saveButton()?.disabled).toBe(true);
++    expect(app.querySelector('[data-testid="confirm-misread"]')?.textContent)
++      .toBe('Amani may have misread 1 value. Mark it as correct, fix it, or remove it to save.');
++    await click(saveButton());
++    expect(fixture.inserts.find(i => i.table === 'lab_reports')).toBeUndefined();
++
++    await click(button('Mark as Correct', card('TSH')));
++    expect(saveButton()?.disabled).toBe(false);
++    expect(app.querySelector('[data-testid="confirm-misread"]')).toBeNull();
++
++    await click(saveButton());
++    await settle(20);
++    const byName = Object.fromEntries(savedAnalytes().map(a => [a['raw_name'], a]));
++    // What she confirmed is recorded as confirmed; the "<150" she left is saved as unconfirmed (F098).
++    expect(byName['tsh']).toMatchObject({ needs_review: false, reviewed_by_user: true, review_status: 'reviewed' });
++    expect(byName['vitamin_b12']).toMatchObject({ raw_value_text: '<150', needs_review: true, reviewed_by_user: false });
++  });
++
++  it('a photo read by OCR is held to the same bounds; typing her value releases Save', async () => {
++    fixture.ocrItems = [
++      ['tsh', 'TSH', 0.0008, '0.0008', 'mIU/L', 0.4, 4.5],
++      ['ferritin', 'Ferritin', 18, '18', 'ng/mL', 16, 154],
++    ].map(([slug, name, value, text, unit, min, max]) => ({
++      raw_name: name, canonical_slug: slug, value_numeric: value, value_text: text, unit,
++      raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
++      reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
++      needs_review: false, source_snippet: `${name} ${text}`, source_format: 'ocr', review_status: 'pending',
++    }));
++    await upload(photo());
++    await click(button('Next'));
++
++    expect(saveButton()?.disabled).toBe(true);
++    expect(card('TSH').textContent).toContain('below physiological minimum 0.001 for TSH');
++    await typeValue(card('TSH').querySelector<HTMLInputElement>('input[type="number"]')!, '0.8');
++    expect(saveButton()?.disabled).toBe(false);
++
++    await click(saveButton());
++    await settle(20);
++    const tsh = savedAnalytes().find(a => a['canonical_slug'] === 'tsh');
++    expect(tsh).toMatchObject({ value_numeric: 0.8, needs_review: false, reviewed_by_user: true, review_status: 'edited_by_user' });
++    const biomarkers = (fixture.inserts.find(i => i.table === 'biomarkers')?.values ?? []) as Record<string, unknown>[];
++    expect(biomarkers.find(b => b['name'] === 'tsh')).toMatchObject({ value: 0.8 });
++  });
++
++  it('removing the row also releases Save', async () => {
++    fixture.pdfText = edgeCasesFixture;
++    await upload(pdf());
++    await click(button('Next'));
++    expect(saveButton()?.disabled).toBe(true);
++    await click(button('Remove Item', card('TSH')));
++    expect(saveButton()?.disabled).toBe(false);
++  });
++});
+diff --git a/src/pages/NewReport.tsx b/src/pages/NewReport.tsx
+index 962497d..9293b9e 100644
+--- a/src/pages/NewReport.tsx
++++ b/src/pages/NewReport.tsx
+@@ -21,6 +21,7 @@ import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
+ import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
+ import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
+ import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
++import { awaitsHerConfirmation, withReviewFlags } from '../utils/parser/reviewFlags';
+ import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
+ import {
+   cycleContextAtDraw, cycleContextToStore, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
+@@ -220,12 +221,14 @@ export function NewReport() {
+   const applyExtractedItems = (items: ReportItem[], runId: number) => {
+     if (runId !== extractionRunRef.current || !items || items.length === 0 || userEditedReportItemsRef.current) return;
+ 
+-    setReportItems(items);
++    // F022: the parser's review rules hold for model and OCR rows too.
++    const flagged = items.map(withReviewFlags);
++    setReportItems(flagged);
+     setCoverage({
+-      total_detected: items.length,
+-      total_core: items.filter(i => i.is_core_biomarker).length,
+-      total_extended: items.filter(i => !i.is_core_biomarker).length,
+-      needs_review: items.filter(i => i.needs_review).length,
++      total_detected: flagged.length,
++      total_core: flagged.filter(i => i.is_core_biomarker).length,
++      total_extended: flagged.filter(i => !i.is_core_biomarker).length,
++      needs_review: flagged.filter(i => i.needs_review).length,
+     });
+   };
+ 
+@@ -525,6 +528,8 @@ export function NewReport() {
+ 
+   // A typed length that is not a whole number of days within the bounds.
+   const cycleLengthInvalid = cycleLengthInput.trim() !== '' && parseCycleLengthDays(cycleLengthInput) === null;
++  // F022: probably misread values she has not yet marked correct, corrected or removed.
++  const awaitingConfirmation = reportItems.filter(awaitsHerConfirmation).length;
+ 
+   const handleSubmit = async () => {
+     if (submittingRef.current) return;
+@@ -707,7 +712,8 @@ export function NewReport() {
+             canonical_analyte_id: canonicalAnalyteId,
+             canonical_slug: slug,
+             parse_status: isMapped ? (canonicalAnalyteId ? 'mapped' : 'partial') : 'unmapped',
+-            needs_review: item.needs_review ?? false,
++            // F022: still flagged and not confirmed by her (marked correct or corrected).
++            needs_review: (item.needs_review ?? false) && item.reviewed_by_user !== true,
+             is_core: item.is_core_biomarker ?? false,
+             display_name: item._display_name ?? null,
+             system_category: item._system_category ?? null,
+@@ -1273,7 +1279,7 @@ export function NewReport() {
+                 <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mb-5">
+                   <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                   <p className="text-xs text-theme-flag-watch">
+-                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''} — you can still continue, Amani will use what it understood
++                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''}. Check them on the next step — a value we may have misread isn't used for your main finding or trends until you confirm it.
+                   </p>
+                 </div>
+               )}
+@@ -1525,11 +1531,20 @@ export function NewReport() {
+               />
+             )}
+ 
++            {awaitingConfirmation > 0 && (
++              <div role="status" data-testid="confirm-misread" className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mt-6">
++                <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
++                <p className="text-sm text-theme-flag-watch">
++                  Amani may have misread {awaitingConfirmation} value{awaitingConfirmation !== 1 ? 's' : ''}. Mark {awaitingConfirmation !== 1 ? 'each' : 'it'} as correct, fix it, or remove it to save.
++                </p>
++              </div>
++            )}
++
+             <div className="flex justify-between pt-6">
+               <Button variant="secondary" onClick={() => setStep(2)}>
+                 <ArrowLeft className="w-5 h-5 mr-2" />Back
+               </Button>
+-              <Button onClick={handleSubmit} disabled={loading || extracting}>
++              <Button onClick={handleSubmit} disabled={loading || extracting || awaitingConfirmation > 0}>
+                 {loading ? 'Processing...' : extracting ? 'Reading report...' : 'Save and analyze'}
+               </Button>
+             </div>
+diff --git a/src/pages/ReportView.tsx b/src/pages/ReportView.tsx
+index f0e52e2..daa8f8c 100644
+--- a/src/pages/ReportView.tsx
++++ b/src/pages/ReportView.tsx
+@@ -35,6 +35,9 @@ import { SafetyWarnings } from '../components/SafetyWarnings';
+ import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
+ import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
+ import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
++import {
++  isUnconfirmedBiomarker, READING_REVIEW_COLUMNS, unconfirmedReadingKeys, withoutUnconfirmed, type ReadingReview,
++} from '../lib/biomarkers/confirmation';
+ import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
+ import { computeBaseline } from '../lib/personalization/baseline';
+ import { analyzeTrend } from '../lib/personalization/trendAnalysis';
+@@ -715,17 +718,27 @@ export function ReportView() {
+ 
+         const allHistoricalIds = allReportsData.map(r => r.id);
+         // R27: every prior report's values can pass PostgREST's 1,000-row cap.
+-        const { data: allHistoricalBiomarkers } = await fetchAllRows<HistoricalBiomarkerRow>(() =>
+-          supabase
+-            .from('biomarkers')
+-            .select('name, value, unit, reference_min, reference_max, lab_report_id')
+-            .in('lab_report_id', allHistoricalIds)
+-            .order('id'));
++        const [{ data: allHistoricalBiomarkers }, { data: flaggedHistory }] = await Promise.all([
++          fetchAllRows<HistoricalBiomarkerRow>(() =>
++            supabase
++              .from('biomarkers')
++              .select('name, value, unit, reference_min, reference_max, lab_report_id')
++              .in('lab_report_id', allHistoricalIds)
++              .order('id')),
++          // F022: a value she never confirmed is no trend point.
++          fetchAllRows<ReadingReview>(() =>
++            supabase
++              .from('report_analytes')
++              .select(READING_REVIEW_COLUMNS)
++              .in('lab_report_id', allHistoricalIds)
++              .eq('needs_review', true)
++              .order('id')),
++        ]);
+ 
+         if (allHistoricalBiomarkers) {
+           const histMap = new Map<string, { reportDate: string; value: number }[]>();
+           const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
+-          for (const b of allHistoricalBiomarkers) {
++          for (const b of withoutUnconfirmed(allHistoricalBiomarkers, flaggedHistory ?? [])) {
+             const reportDate = reportDateMap.get(b.lab_report_id);
+             if (!reportDate) continue;
+             if (!histMap.has(b.name)) histMap.set(b.name, []);
+@@ -770,6 +783,9 @@ export function ReportView() {
+     [biomarkers, report]
+   );
+ 
++  // F022: values on this report Amani may have misread and she has not confirmed.
++  const unconfirmedKeys = useMemo(() => unconfirmedReadingKeys(reportAnalytes), [reportAnalytes]);
++
+   const analyteTelemetryMap = useMemo(() => {
+     const CONFIDENCE_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+     const NORM_RANK: Record<string, number> = { mapped: 3, partial: 2, unmapped: 1 };
+@@ -824,6 +840,7 @@ export function ReportView() {
+     if (historicalReportCount < PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) return map;
+ 
+     for (const b of biomarkers) {
++      if (isUnconfirmedBiomarker(b, unconfirmedKeys)) continue;
+       const history = historicalBiomarkers.get(b.name);
+       if (!history || history.length === 0) continue;
+ 
+@@ -869,7 +886,7 @@ export function ReportView() {
+     }
+ 
+     return map;
+-  }, [biomarkers, historicalBiomarkers, historicalReportCount, report?.report_date]);
++  }, [biomarkers, historicalBiomarkers, historicalReportCount, report?.report_date, unconfirmedKeys]);
+ 
+   const insightSummary = useMemo(() => {
+     if (biomarkers.length === 0) return null;
+@@ -896,8 +913,18 @@ export function ReportView() {
+           reportDate: occ.reportDate,
+         }))
+       : null;
+-    return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
+-  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap]);
++    const summary = buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
++    /*
++      F022: a value she has not confirmed never picks the primary finding and
++      is no trend point, so the primary, the changes and the questions come
++      from her confirmed values. The systems, the band language and the
++      report's confidence still describe every value she has.
++    */
++    const confirmed = current.filter((_, i) => !isUnconfirmedBiomarker(biomarkers[i]!, unconfirmedKeys));
++    if (confirmed.length === current.length) return summary;
++    const fromConfirmed = buildInsightSummary(confirmed, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
++    return { ...fromConfirmed, bandLanguage: summary.bandLanguage, systemSummaries: summary.systemSummaries, confidence: summary.confidence };
++  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap, unconfirmedKeys]);
+ 
+   // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
+   // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
+@@ -928,10 +955,15 @@ export function ReportView() {
+     }
+     return map;
+   }, [biomarkers, report]);
+-  const safetyWarnings = useMemo(
+-    () => evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
+-    [biomarkers],
+-  );
++  // F022: no warning is dropped; one about a value she has not confirmed is marked so.
++  const safetyWarnings = useMemo(() => {
++    const measured = (rows: Biomarker[]) => rows.map(b => ({ name: b.name, value: b.value, unit: b.unit }));
++    const unconfirmed = biomarkers.filter(b => isUnconfirmedBiomarker(b, unconfirmedKeys));
++    return [
++      ...evaluateSafetyRules(measured(biomarkers.filter(b => !unconfirmed.includes(b)))),
++      ...evaluateSafetyRules(measured(unconfirmed)).map(w => ({ ...w, unconfirmed: true })),
++    ];
++  }, [biomarkers, unconfirmedKeys]);
+ 
+   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
+   // server's interpretation already carries one but it's not surfaced to the
+diff --git a/src/pages/ReportView.unconfirmed.test.tsx b/src/pages/ReportView.unconfirmed.test.tsx
+new file mode 100644
+index 0000000..7474e81
+--- /dev/null
++++ b/src/pages/ReportView.unconfirmed.test.tsx
+@@ -0,0 +1,185 @@
++// @vitest-environment jsdom
++/**
++ * F022 on the report page: a value Amani may have misread that she has not
++ * confirmed (report_analytes.needs_review, low confidence or printed below a
++ * limit, not reviewed_by_user) never picks her primary finding, is no trend
++ * point and asks no question about a change, in this report or as history.
++ * Safety copy still shows for it, marked unconfirmed. Synthetic rows only.
++ */
++import { act, type ReactNode } from 'react';
++import { createRoot, type Root } from 'react-dom/client';
++import { MemoryRouter, Route, Routes } from 'react-router-dom';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { createFakeDb, type FakeDb, type Row } from '../lib/fetchAllRows.fake';
++import type { SafetyRule } from '../lib/scoring/insightCopy';
++
++const fixture = vi.hoisted(() => ({
++  db: null as unknown as FakeDb,
++  auth: { user: { id: 'user-1' }, userProfile: null },
++  subscription: {
++    entitled: true, source: 'trial', loading: false, plan: 'premium',
++    complimentary: { used: 0, total: 3, remaining: 3 }, refetch: () => {},
++  },
++  trajectory: [] as { changes: { key: string; previousValue: number }[]; primaryFinding: { key: string } | null }[],
++  baselineCalls: [] as { entries: unknown[]; current: unknown }[],
++}));
++
++vi.mock('../lib/supabase', () => ({ supabase: {
++  from: (table: string) => {
++    const query = fixture.db.from(table) as unknown as Record<string, unknown>;
++    const inert = () => ({ eq: async () => ({ data: null, error: null }) });
++    return Object.assign(query, { update: inert, delete: inert, insert: async () => ({ data: null, error: null }) });
++  },
++  functions: { invoke: async () => ({ data: null, error: new Error('offline') }) },
++  auth: { getSession: async () => ({ data: { session: null } }) },
++} }));
++vi.mock('../contexts/AuthContext', () => ({ useAuth: () => fixture.auth }));
++vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => fixture.subscription }));
++vi.mock('../components/SubscriptionStatus', () => ({ SubscriptionStatus: () => null }));
++vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
++vi.mock('../components/freemium/PremiumPaywall', () => ({ PremiumPaywall: () => null }));
++vi.mock('../components/YourTrajectoryCard', () => ({
++  YourTrajectoryCard: (props: { changes: { key: string; previousValue: number }[]; primaryFinding: { key: string } | null }) => {
++    fixture.trajectory.push(props);
++    return null;
++  },
++}));
++vi.mock('../lib/personalization/baseline', async (importOriginal) => {
++  const actual = await importOriginal<typeof import('../lib/personalization/baseline')>();
++  return {
++    ...actual,
++    computeBaseline: ((entries: unknown[], current: unknown, ...rest: unknown[]) => {
++      fixture.baselineCalls.push({ entries, current });
++      return (actual.computeBaseline as (...a: unknown[]) => unknown)(entries, current, ...rest);
++    }) as typeof actual.computeBaseline,
++  };
++});
++// No safety rule is approved today; one synthetic rule shows how the channel treats her unconfirmed value.
++vi.mock('../lib/scoring/insightCopy', async (importOriginal) => {
++  const actual = await importOriginal<typeof import('../lib/scoring/insightCopy')>();
++  const rule: SafetyRule = {
++    ruleId: 'synthetic-tsh', version: '1', analyte: 'tsh',
++    approval: { approvedBy: 'synthetic fixture', approvedAt: '2026-10-23', evidenceId: 'SYNTHETIC-ONLY' },
++    evaluate: value => value < 0.01 ? { cue: 'critical', text: 'Synthetic safety text for a test.' } : null,
++  };
++  return { ...actual, evaluateSafetyRules: (measured: Parameters<typeof actual.evaluateSafetyRules>[0]) => actual.evaluateSafetyRules(measured, [rule]) };
++});
++
++import { ReportView } from './ReportView';
++
++const report = (id: string, report_date: string) => ({
++  id, user_id: 'user-1', report_date, status: 'complete', estimated_cycle_phase: 'unknown',
++  lab_name: 'Synthetic lab', created_at: `${report_date}T00:00:00Z`, regeneration_count: 0,
++});
++type Value = [reportId: string, slug: string, value: number, unit: string, min: number, max: number];
++const biomarker = ([reportId, name, value, unit, min, max]: Value, i: number): Row => ({
++  id: `${reportId}-${i}`, lab_report_id: reportId, name, value, raw_value_text: String(value), unit,
++  reference_min: min, reference_max: max, flagged: 'in_range',
++});
++const analyte = ([reportId, slug, value, unit, min, max]: Value, i: number, review: Row): Row => ({
++  id: `a-${reportId}-${i}`, lab_report_id: reportId, raw_name: slug, raw_value_text: String(value), value_numeric: value, unit,
++  raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max, normalized_operator: null,
++  normalized_operator_value: null, source_snippet: null, canonical_analyte_id: null, canonical_slug: slug,
++  parse_status: 'mapped', is_core: true, normalization_status: 'mapped', source_format: 'text',
++  confidence_score: 'high', needs_review: false, reviewed_by_user: false, review_status: 'pending', ...review,
++});
++/** Each value is saved twice, as NewReport saves it; `unconfirmed` marks the analytes rows she never confirmed. */
++function account(reports: Row[], values: Value[], unconfirmed: (v: Value) => boolean) {
++  return createFakeDb({
++    lab_reports: reports,
++    biomarkers: values.map(biomarker),
++    report_analytes: values.map((v, i) => analyte(v, i, unconfirmed(v) ? { needs_review: true, confidence_score: 'low' } : {})),
++    interpretations: [],
++  });
++}
++
++let root: Root;
++let app: HTMLDivElement;
++beforeEach(() => {
++  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
++  vi.stubEnv('VITE_FREEMIUM_ACTIVE', '');
++  fixture.trajectory = [];
++  fixture.baselineCalls = [];
++  app = document.createElement('div');
++  document.body.append(app);
++  root = createRoot(app);
++});
++afterEach(async () => {
++  await act(async () => root.unmount());
++  app.remove();
++  sessionStorage.clear();
++  vi.unstubAllGlobals();
++  vi.unstubAllEnvs();
++});
++
++async function open(reportId: string) {
++  await act(async () => root.render(
++    <MemoryRouter initialEntries={[`/app/reports/${reportId}`]}>
++      <Routes><Route path="/app/reports/:id" element={<ReportView />} /></Routes>
++    </MemoryRouter>,
++  ));
++  for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); });
++}
++const latestTrajectory = () => fixture.trajectory[fixture.trajectory.length - 1];
++const baselinesFor = (value: number) => fixture.baselineCalls.filter(c => c.current === value);
++
++describe('ReportView with a value she has not confirmed (F022)', () => {
++  // TSH 0.0008 is the most deviated value, so it would lead; Ferritin 8 is below its lab interval too.
++  const current: Value[] = [['current', 'tsh', 0.0008, 'mIU/L', 0.4, 4.5], ['current', 'ferritin', 8, 'ng/mL', 16, 154]];
++  const isTsh0008 = ([, slug, value]: Value) => slug === 'tsh' && value === 0.0008;
++
++  it('the primary finding is a confirmed value, not her unconfirmed one', async () => {
++    fixture.db = account([report('current', '2026-09-01')], current, isTsh0008);
++    await open('current');
++    expect(latestTrajectory()?.primaryFinding?.key).toBe('ferritin');
++    expect(app.querySelector('[data-testid="primary-finding"]')?.textContent).toContain('Ferritin');
++  });
++
++  it('control: once she has confirmed it, that value may lead', async () => {
++    fixture.db = account([report('current', '2026-09-01')], current, () => false);
++    await open('current');
++    expect(latestTrajectory()?.primaryFinding?.key).toBe('tsh');
++  });
++
++  it('her unconfirmed value is no trend point in this report: no change, no baseline', async () => {
++    fixture.db = account(
++      [report('p1', '2026-03-01'), report('p2', '2026-06-01'), report('current', '2026-09-01')],
++      [['p1', 'tsh', 2.2, 'mIU/L', 0.4, 4.5], ['p2', 'tsh', 2.4, 'mIU/L', 0.4, 4.5], ...current],
++      isTsh0008,
++    );
++    await open('current');
++    expect(latestTrajectory()?.changes.map(c => c.key)).not.toContain('tsh');
++    expect(baselinesFor(0.0008)).toEqual([]);
++  });
++
++  it('an unconfirmed value in an earlier report is no trend point either', async () => {
++    fixture.db = account(
++      [report('p1', '2026-03-01'), report('p2', '2026-05-01'), report('p3', '2026-07-01'), report('current', '2026-09-01')],
++      [
++        ['p1', 'tsh', 2.2, 'mIU/L', 0.4, 4.5], ['p2', 'tsh', 2.6, 'mIU/L', 0.4, 4.5],
++        ['p3', 'tsh', 0.0008, 'mIU/L', 0.4, 4.5], ['current', 'tsh', 2, 'mIU/L', 0.4, 4.5],
++      ],
++      isTsh0008,
++    );
++    await open('current');
++    // The baseline sees her two confirmed readings; any change is measured from May's, not from 0.0008.
++    expect(baselinesFor(2).map(c => c.entries)).toEqual([[{ date: '2026-03-01', value: 2.2 }, { date: '2026-05-01', value: 2.6 }]]);
++    expect(latestTrajectory()?.changes.find(c => c.key === 'tsh')?.previousValue).not.toBe(0.0008);
++  });
++
++  it('safety copy still shows for her unconfirmed value, marked as unconfirmed', async () => {
++    fixture.db = account([report('current', '2026-09-01')], current, isTsh0008);
++    await open('current');
++    const alert = app.querySelector('[data-safety-rule="synthetic-tsh"]');
++    expect(alert?.textContent).toContain('Synthetic safety text for a test.');
++    expect(alert?.textContent).toContain("You haven't confirmed this value. Check it against your report.");
++  });
++
++  it('control: a confirmed value\'s safety copy carries no such mark', async () => {
++    fixture.db = account([report('current', '2026-09-01')], current, () => false);
++    await open('current');
++    const alert = app.querySelector('[data-safety-rule="synthetic-tsh"]');
++    expect(alert?.textContent).toContain('Synthetic safety text for a test.');
++    expect(alert?.textContent).not.toContain("You haven't confirmed this value.");
++  });
++});
+diff --git a/src/pages/Tracker.tsx b/src/pages/Tracker.tsx
+index 67e9533..bd4f72d 100644
+--- a/src/pages/Tracker.tsx
++++ b/src/pages/Tracker.tsx
+@@ -13,6 +13,7 @@ import {
+ import { useAuth } from '../contexts/AuthContext';
+ import { supabase } from '../lib/supabase';
+ import { fetchAllRows } from '../lib/fetchAllRows';
++import { READING_REVIEW_COLUMNS, withoutUnconfirmed, type ReadingReview } from '../lib/biomarkers/confirmation';
+ import { FunctionsHttpError } from '@supabase/supabase-js';
+ import { handle402 } from '../utils/subscription';
+ import { clientFreemiumActive } from '../lib/tier';
+@@ -161,14 +162,24 @@ export function Tracker() {
+       if (fetchedReports.length > 0) {
+         const ids = fetchedReports.map((r) => r.id);
+         // R27: a user's values across every report can pass PostgREST's 1,000-row cap.
+-        const { data: bm } = await fetchAllRows<Biomarker>(() =>
+-          supabase
+-            .from('biomarkers')
+-            .select('*')
+-            .in('lab_report_id', ids)
+-            .order('id'));
++        const [{ data: bm }, { data: flagged }] = await Promise.all([
++          fetchAllRows<Biomarker>(() =>
++            supabase
++              .from('biomarkers')
++              .select('*')
++              .in('lab_report_id', ids)
++              .order('id')),
++          // F022: Compare labs and the timeline measure changes; a value she never confirmed is not one.
++          fetchAllRows<ReadingReview>(() =>
++            supabase
++              .from('report_analytes')
++              .select(READING_REVIEW_COLUMNS)
++              .in('lab_report_id', ids)
++              .eq('needs_review', true)
++              .order('id')),
++        ]);
+         if (bm) {
+-          const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
++          const grouped = withoutUnconfirmed(bm as Biomarker[], flagged ?? []).reduce<Record<string, Biomarker[]>>((acc, b) => {
+             const bucket = acc[b.lab_report_id] ?? [];
+             bucket.push(b);
+             acc[b.lab_report_id] = bucket;
+diff --git a/src/pages/Tracker.unconfirmed.test.tsx b/src/pages/Tracker.unconfirmed.test.tsx
+new file mode 100644
+index 0000000..612b829
+--- /dev/null
++++ b/src/pages/Tracker.unconfirmed.test.tsx
+@@ -0,0 +1,121 @@
++// @vitest-environment jsdom
++/**
++ * F022 on the tracker: Compare labs and the labs timeline measure changes
++ * between reports, so a value Amani may have misread that she has not
++ * confirmed is not one of their values. Synthetic rows only.
++ */
++import { act, type ReactNode } from 'react';
++import { createRoot, type Root } from 'react-dom/client';
++import { MemoryRouter } from 'react-router-dom';
++import { afterEach, beforeEach, expect, it, vi } from 'vitest';
++import { createFakeDb, type FakeDb } from '../lib/fetchAllRows.fake';
++
++const fixture = vi.hoisted(() => ({
++  db: null as unknown as FakeDb,
++  auth: { user: { id: 'user-1' }, userProfile: null },
++  subscription: {
++    entitled: true, source: 'trial', loading: false, plan: 'premium',
++    complimentary: { used: 0, total: 3, remaining: 3 }, refetch: () => {},
++  },
++  compareViewProps: [] as Record<string, { id: string }[]>[],
++  timelineProps: [] as Record<string, { id: string }[]>[],
++}));
++
++vi.mock('../lib/supabase', () => ({ supabase: {
++  from: (table: string) => {
++    const query = fixture.db.from(table) as unknown as Record<string, unknown>;
++    const inert = () => ({ eq: async () => ({ data: null, error: null }) });
++    return Object.assign(query, { update: inert, delete: inert, insert: async () => ({ data: null, error: null }) });
++  },
++  functions: { invoke: async () => ({ data: null, error: new Error('offline') }) },
++  auth: { getSession: async () => ({ data: { session: null } }) },
++} }));
++vi.mock('../contexts/AuthContext', () => ({ useAuth: () => fixture.auth }));
++vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => fixture.subscription }));
++vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
++vi.mock('../components/freemium/PremiumPaywall', () => ({ PremiumPaywall: () => null }));
++vi.mock('../components/CompareView', () => ({
++  CompareView: ({ biomarkersByReport }: { biomarkersByReport: Record<string, { id: string }[]> }) => {
++    fixture.compareViewProps.push(biomarkersByReport);
++    return null;
++  },
++}));
++vi.mock('../components/LabsTimeline', () => ({
++  LabsTimeline: ({ biomarkersByReport }: { biomarkersByReport: Record<string, { id: string }[]> }) => {
++    fixture.timelineProps.push(biomarkersByReport);
++    return null;
++  },
++}));
++
++import { Tracker } from './Tracker';
++
++const report = (id: string, report_date: string) => ({
++  id, user_id: 'user-1', report_date, status: 'complete', estimated_cycle_phase: 'unknown',
++  lab_name: 'Synthetic lab', created_at: `${report_date}T00:00:00Z`, regeneration_count: 0,
++});
++const biomarker = (id: string, lab_report_id: string, name: string, value: number) => ({
++  id, lab_report_id, name, value, raw_value_text: String(value), unit: 'mIU/L', reference_min: 0.4, reference_max: 4.5, flagged: 'in_range',
++});
++const analyte = (id: string, lab_report_id: string, slug: string, value: number, review: Record<string, unknown>) => ({
++  id, lab_report_id, raw_name: slug, canonical_slug: slug, value_numeric: value, raw_value_text: String(value),
++  is_core: true, parse_status: 'mapped', confidence_score: 'high', needs_review: false, reviewed_by_user: false, ...review,
++});
++
++let root: Root;
++let app: HTMLDivElement;
++beforeEach(() => {
++  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
++  vi.stubEnv('VITE_FREEMIUM_ACTIVE', '');
++  fixture.compareViewProps = [];
++  fixture.timelineProps = [];
++  app = document.createElement('div');
++  document.body.append(app);
++  root = createRoot(app);
++});
++afterEach(async () => {
++  await act(async () => root.unmount());
++  app.remove();
++  vi.unstubAllGlobals();
++  vi.unstubAllEnvs();
++});
++
++async function openLabs() {
++  await act(async () => root.render(<MemoryRouter><Tracker /></MemoryRouter>));
++  await act(async () => { await new Promise(r => setTimeout(r, 0)); });
++  const labsTab = Array.from(app.querySelectorAll('button')).find(b => b.textContent === 'labs');
++  expect(labsTab).toBeTruthy();
++  await act(async () => { labsTab!.click(); });
++}
++const ids = (byReport: Record<string, { id: string }[]> | undefined) =>
++  Object.fromEntries(Object.entries(byReport ?? {}).map(([reportId, rows]) => [reportId, rows.map(r => r.id)]));
++
++it('Compare labs and the timeline leave out her unconfirmed value and keep everything else', async () => {
++  fixture.db = createFakeDb({
++    lab_reports: [report('r1', '2026-03-01'), report('r2', '2026-06-01')],
++    biomarkers: [
++      biomarker('b1', 'r1', 'tsh', 2.2), biomarker('b2', 'r2', 'tsh', 0.0008), biomarker('b3', 'r2', 'ferritin', 40),
++    ],
++    report_analytes: [
++      analyte('a1', 'r1', 'tsh', 2.2, {}),
++      analyte('a2', 'r2', 'tsh', 0.0008, { needs_review: true, confidence_score: 'low' }),
++      analyte('a3', 'r2', 'ferritin', 40, {}),
++    ],
++  });
++  await openLabs();
++  const expected = { r1: ['b1'], r2: ['b3'] };
++  expect(ids(fixture.compareViewProps[fixture.compareViewProps.length - 1])).toEqual(expected);
++  expect(ids(fixture.timelineProps[fixture.timelineProps.length - 1])).toEqual(expected);
++});
++
++it('control: once she has confirmed it, the value is compared like any other', async () => {
++  fixture.db = createFakeDb({
++    lab_reports: [report('r1', '2026-03-01'), report('r2', '2026-06-01')],
++    biomarkers: [biomarker('b1', 'r1', 'tsh', 2.2), biomarker('b2', 'r2', 'tsh', 0.0008)],
++    report_analytes: [
++      analyte('a1', 'r1', 'tsh', 2.2, {}),
++      analyte('a2', 'r2', 'tsh', 0.0008, { needs_review: false, reviewed_by_user: true, confidence_score: 'high' }),
++    ],
++  });
++  await openLabs();
++  expect(ids(fixture.compareViewProps[fixture.compareViewProps.length - 1])).toEqual({ r1: ['b1'], r2: ['b2'] });
++});
+diff --git a/src/utils/parser/reviewFlags.test.ts b/src/utils/parser/reviewFlags.test.ts
+new file mode 100644
+index 0000000..f4c099f
+--- /dev/null
++++ b/src/utils/parser/reviewFlags.test.ts
+@@ -0,0 +1,59 @@
++import { describe, expect, it } from 'vitest';
++import { awaitsHerConfirmation, withReviewFlags } from './reviewFlags';
++import type { ReportItem } from './types';
++
++// Rows as extract-biomarkers or OCR return them: no parse_error field. Synthetic values.
++const modelRow = (over: Partial<ReportItem> = {}): ReportItem => ({
++  raw_name: 'TSH', canonical_slug: 'tsh', category: 'thyroid', value_numeric: 0.0008, value_text: '0.0008', unit: 'mIU/L',
++  raw_reference_range: '0.40-4.50', normalized_reference_min: 0.4, normalized_reference_max: 4.5,
++  reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
++  needs_review: false, source_snippet: null, ...over,
++});
++
++describe('withReviewFlags: the parser\'s review rules on every row of the confirm step (F022, F098)', () => {
++  it('a model row outside physiological bounds gets the parser\'s parse error and needs her review', () => {
++    expect(withReviewFlags(modelRow())).toMatchObject({
++      parse_error: 'Value 0.0008 is below physiological minimum 0.001 for TSH — likely a parse error',
++      needs_review: true,
++    });
++  });
++
++  it('a model row printed below a limit needs her review; its number is unchanged', () => {
++    const row = withReviewFlags(modelRow({ canonical_slug: 'vitamin_b12', value_numeric: 75, value_text: '<150', unit: 'pg/mL' }));
++    expect(row).toMatchObject({ needs_review: true, parse_error: null, value_numeric: 75 });
++  });
++
++  it('a cleanly read row is unchanged', () => {
++    const clean = modelRow({ value_numeric: 2.1, value_text: '2.1' });
++    expect(withReviewFlags(clean)).toEqual({ ...clean, parse_error: null });
++  });
++
++  it('keeps the parser\'s own verdict and flag', () => {
++    expect(withReviewFlags(modelRow({ parse_error: 'kept as the parser wrote it', needs_review: true }))).toMatchObject({
++      parse_error: 'kept as the parser wrote it', needs_review: true,
++    });
++    expect(withReviewFlags(modelRow({ value_numeric: 2.1, value_text: '2.1', needs_review: true })).needs_review).toBe(true);
++  });
++
++  it.each([
++    ['a qualitative result', { value_numeric: 0, value_text: 'Negative' }],
++    ['a row with no catalog slug', { canonical_slug: null }],
++    ['a slug with no physiological bounds', { canonical_slug: 'estradiol', value_numeric: 0.0008 }],
++  ])('checks no bounds for %s', (_, over) => {
++    expect(withReviewFlags(modelRow(over)).parse_error).toBeNull();
++  });
++});
++
++describe('awaitsHerConfirmation: what keeps "Save and analyze" closed', () => {
++  it('a parse-error row she has not confirmed, corrected or removed', () => {
++    expect(awaitsHerConfirmation(withReviewFlags(modelRow()))).toBe(true);
++  });
++
++  it('not once she marks it correct or types her value', () => {
++    expect(awaitsHerConfirmation({ ...withReviewFlags(modelRow()), reviewed_by_user: true })).toBe(false);
++  });
++
++  it('not for a row flagged for another reason', () => {
++    expect(awaitsHerConfirmation(withReviewFlags(modelRow({ value_numeric: 75, value_text: '<150', canonical_slug: 'vitamin_b12' })))).toBe(false);
++  });
++});
+diff --git a/src/utils/parser/reviewFlags.ts b/src/utils/parser/reviewFlags.ts
+new file mode 100644
+index 0000000..3cceeed
+--- /dev/null
++++ b/src/utils/parser/reviewFlags.ts
+@@ -0,0 +1,34 @@
++import type { ReportItem } from './types';
++import { checkPhysiologicalBounds } from './pipeline';
++import { isBelowLimitResult } from './valueExtraction';
++
++const DIGIT_RE = /\d/;
++
++/*
++  The parser's review rules, applied to every row the confirm step shows,
++  whichever reader produced it (F022, F098). AI refinement replaces the
++  parser's rows and OCR has none, and neither carries a parse_error, so the
++  parser's physiological bounds and its below-limit rule are applied again
++  here. A row keeps any verdict the parser already gave it.
++*/
++export function withReviewFlags<T extends ReportItem>(item: T): T {
++  const qualitative = item.value_text != null && !DIGIT_RE.test(item.value_text);
++  const boundsError = item.canonical_slug && Number.isFinite(item.value_numeric) && !qualitative
++    ? checkPhysiologicalBounds(item.canonical_slug, item.value_numeric)
++    : null;
++  const parse_error = item.parse_error ?? boundsError;
++  return {
++    ...item,
++    parse_error,
++    needs_review: item.needs_review || parse_error != null || isBelowLimitResult(item.value_text),
++  };
++}
++
++/**
++ * A value outside physiological bounds, which Amani has probably misread,
++ * that she has not marked correct or corrected. Until she does, or removes
++ * the row, it cannot be saved (F022).
++ */
++export function awaitsHerConfirmation(item: Pick<ReportItem, 'parse_error' | 'reviewed_by_user'>): boolean {
++  return !!item.parse_error && item.reviewed_by_user !== true;
++}
