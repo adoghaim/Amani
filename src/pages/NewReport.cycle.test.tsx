@@ -72,6 +72,10 @@ import {
   DAYS, daysBefore, DRAW, EXPECTED, EXPECTED_STORED_LENGTH, expectedNote, LENGTHS, PHASE_SYMBOL, trackerLogs,
   type TypicalLength,
 } from '../lib/cycleR10Table';
+import { extractTextFromPDF } from '../utils/pdfExtractor';
+import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
+import { questHormoneFixture } from '../utils/parser/__fixtures__/questHormones';
+import { labcorpHormoneFixture } from '../utils/parser/__fixtures__/labcorpHormones';
 
 
 let root: Root;
@@ -123,8 +127,8 @@ const lengthHint = () => app.querySelector('#typical-cycle-length-hint')?.textCo
 const lengthError = () => app.querySelector('#typical-cycle-length-error')?.textContent ?? null;
 const autoFilledBadges = () => app.textContent?.match(/Auto-filled from your tracker/g)?.length ?? 0;
 
-/** Renders the page, chooses a synthetic photo and continues to the cycle-context step. */
-async function openCycleStep() {
+/** Renders the page, chooses a synthetic photo (or `file`) and continues to the cycle-context step. */
+async function openCycleStep(file = new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' })) {
   await act(async () => root.render(
     <MemoryRouter initialEntries={['/app/new']}>
       <Routes>
@@ -136,9 +140,7 @@ async function openCycleStep() {
   ));
   await settle();
   const fileInput = app.querySelector<HTMLInputElement>('#file-upload')!;
-  Object.defineProperty(fileInput, 'files', {
-    configurable: true, value: [new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' })],
-  });
+  Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] });
   await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
   await click(button('Next'));
   await settle(20);
@@ -406,28 +408,106 @@ describe('PK-FIX-06: the typical cycle length field on the upload page', () => {
 });
 
 /*
-  Unchanged precedence: a cycle day or phase printed on the lab report (here
-  from the OCR function's metadata) still wins over the calculated value, field
-  by field. That can pair a printed day with a phase from the dates, as before;
-  the PR asks the owner about it rather than changing it.
+  F010 (owner decision): her dates win. A cycle day or phase printed on the lab
+  report (here from the OCR function's metadata) fills in only when her last
+  period start gives no cycle day, and a printed phase never overrides D13 (b).
+  Until F010 the printed value won field by field, even on a known 35-day
+  cycle. The first two cases pinned that precedence; they now pin the decision.
 */
-describe('PK-FIX-06: lab-printed cycle facts still win, field by field, as before', () => {
-  it('a printed cycle day wins over the calculated day; the phase still comes from the dates', async () => {
+describe('F010: her dates win over cycle facts printed on the lab report', () => {
+  it('a printed cycle day does not replace the day from her dates (was day 3 with a luteal phase)', async () => {
     fixture.ocrMetadata = { cycle_day: 3, cycle_phase: null };
     await openCycleStep();
     await type(lastPeriodInput(), '2026-04-10');
     expect((await save()).cycle).toEqual({
-      last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 3, estimated_cycle_phase: 'luteal',
+      last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
     });
   }, 30_000);
 
-  it('a printed phase wins, even with a known length other than 28; the day still comes from the dates', async () => {
+  it('a printed phase neither replaces her phase nor overrides D13 (b) on a known 35-day cycle (was follicular)', async () => {
     fixture.ocrMetadata = { cycle_day: null, cycle_phase: 'follicular' };
     await openCycleStep();
     await type(lastPeriodInput(), '2026-04-10');
     await type(lengthInput(), '35');
-    expect((await save()).cycle).toEqual({
-      last_period_start_date: '2026-04-10', average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'follicular',
+    expect(await save()).toMatchObject({
+      cycle: { last_period_start_date: '2026-04-10', average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'unknown' },
+      estradiolFlag: 'unknown',
     });
+  }, 30_000);
+
+  it('without her last period start, a printed day and phase fill in, as before', async () => {
+    fixture.ocrMetadata = { cycle_day: 21, cycle_phase: 'luteal' };
+    await openCycleStep();
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: null, average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+  }, 30_000);
+
+  it('without her dates, a printed phase still never overrides D13 (b) (was luteal)', async () => {
+    fixture.ocrMetadata = { cycle_day: 21, cycle_phase: 'luteal' };
+    await openCycleStep();
+    await type(lengthInput(), '35');
+    expect(await save()).toMatchObject({
+      cycle: { last_period_start_date: null, average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'unknown' },
+      estradiolFlag: 'unknown',
+    });
+  }, 30_000);
+});
+
+/*
+  F010 on the PDF path. The Quest and LabCorp hormone panels print phase-labelled
+  reference intervals and no line about her cycle. The page saved their first
+  label, follicular, over the luteal day 21 from her dates, and flagged
+  progesterone 8.2 ng/mL against the follicular band.
+*/
+describe("F010: phase labels on a PDF's reference intervals never set her cycle", () => {
+  const pdf = () => new File(['synthetic'], 'synthetic-lab.pdf', { type: 'application/pdf' });
+  const flagged = (name: string) => (fixture.inserts.find(i => i.table === 'biomarkers')?.values as
+    Record<string, unknown>[] | undefined)?.find(b => b['name'] === name)?.['flagged'];
+  // NewReport's status-to-flag mapping, for the flag V2 gives progesterone in a phase.
+  const flagIn = (phase: string) => {
+    const status = computeAmaniStatus('progesterone', 8.2, phase);
+    if (status === 'unknown') return 'unknown';
+    if (status === 'borderline_low' || status === 'borderline_high') return 'borderline';
+    return status === 'out_of_range_low' || status === 'out_of_range_high' ? 'out_of_range' : 'in_range';
+  };
+
+  for (const [lab, text] of [['Quest', questHormoneFixture], ['LabCorp', labcorpHormoneFixture]] as const) {
+    it(`${lab} hormone panel, day 21 from her dates: luteal is saved and scores progesterone (was follicular)`, async () => {
+      vi.mocked(extractTextFromPDF).mockResolvedValueOnce(text);
+      await openCycleStep(pdf());
+      await type(lastPeriodInput(), '2026-04-10');
+      expect((await save()).cycle).toEqual({
+        last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+      });
+      expect(flagged('progesterone')).toBe(flagIn('luteal'));
+    }, 30_000);
+
+    it(`${lab} hormone panel without her dates: no phase is saved and progesterone is withheld (was follicular)`, async () => {
+      vi.mocked(extractTextFromPDF).mockResolvedValueOnce(text);
+      await openCycleStep(pdf());
+      expect((await save()).cycle).toEqual({
+        last_period_start_date: null, average_cycle_length: null, estimated_cycle_day: null, estimated_cycle_phase: 'unknown',
+      });
+      expect(flagged('progesterone')).toBe(flagIn('unknown'));
+    }, 30_000);
+  }
+
+  it('a CD4 count is never saved as cycle day 4', async () => {
+    vi.mocked(extractTextFromPDF).mockResolvedValueOnce('CD4 Count 812 cells/uL\nCD8 Count 401 cells/uL');
+    await openCycleStep(pdf());
+    expect((await save()).cycle).toMatchObject({ estimated_cycle_day: null, estimated_cycle_phase: 'unknown' });
+  }, 30_000);
+
+  it('her own labelled line on the report still fills in without her dates', async () => {
+    const header = 'Reporting Physician: Dr. Synthetic\n';
+    vi.mocked(extractTextFromPDF).mockResolvedValueOnce(
+      questHormoneFixture.replace(header, `${header}Cycle Day: 21\nPhase: Luteal\n`),
+    );
+    await openCycleStep(pdf());
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: null, average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+    expect(flagged('progesterone')).toBe(flagIn('luteal'));
   }, 30_000);
 });
