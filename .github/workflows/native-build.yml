@@ -59,8 +59,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          # The Capacitor 8 CLI requires Node >= 22.
-          node-version: 24
+          # The Node every workflow uses; the Capacitor 8 CLI requires >= 22.
+          node-version-file: .nvmrc
           cache: npm
       - uses: actions/setup-java@v6
         with:
@@ -68,7 +68,7 @@ jobs:
           java-version: '21'
       # v4 installs only platform-tools by default. v3 also asked for the
       # retired 'tools' package, which current runner images no longer have.
-      - uses: android-actions/setup-android@v4
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - run: npm ci
       # javac comes from setup-java; the Ubuntu runner image ships swiftc.
       - name: Device-lock native release boundary
@@ -100,7 +100,7 @@ jobs:
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@v2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           arch: x86_64
@@ -168,8 +168,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          # The Capacitor 8 CLI requires Node >= 22.
-          node-version: 24
+          # The Node every workflow uses; the Capacitor 8 CLI requires >= 22.
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # The macOS runner image ships a JDK and Xcode's swiftc.

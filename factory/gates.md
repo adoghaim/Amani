@@ -12,7 +12,7 @@ Existing workflow `.github/workflows/ci.yml` (seen in the source snapshot; verif
 | `Edge function typecheck` | `bash docs/check-functions.sh deno` (local: `npm run check:functions`). Baseline exclusions may only shrink. |
 | `Migration behaviour (Postgres)` | `./supabase/migrations/__verification__/run.sh` (Docker). It runs every case in `__verification__/cases/` in lexical order; how to add one is in the header of `run.sh`. |
 | `Migration order (D6)` | `.github/workflows/migration-order.yml`, on PRs into `main`: `node tools/ci/migration-order.mjs`. See "Migration order (D6)" below. |
-| `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. |
+| `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. Each browser runs in its own job, `Browser smoke (chromium)`, `(webkit)` and `(firefox)`; the `Browser smoke` job passes only when all three pass, and it is the check to require. |
 
 | `Fresh-user journey` (`.github/workflows/e2e.yml`) | `npm run test:e2e:journey:guard`, then `npm run test:e2e:journey` against the production build in Chromium, WebKit and Firefox. |
 
