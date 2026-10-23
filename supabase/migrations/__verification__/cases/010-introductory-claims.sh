@@ -16,6 +16,12 @@
 # race. Every later case that uses amani builds on what this one leaves.
 # MIGRATION, USER_1 and USER_3 were top-level variables in run.sh; only this
 # case uses them.
+#
+# DB1 (review F100, F125): its two verify files used to let psql carry on
+# past errors and only print, so every "must be refused" step passed whether
+# or not the write failed. Each refusal is now asserted with its SQLSTATE and
+# the constraint or trigger that must raise it, and complimentary_entitlements
+# gets its RLS probe.
 
 MIGRATION="$HERE/../20260903000000_introductory_deep_access_claims.sql"
 USER_1='11111111-1111-4111-8111-111111111111'
@@ -25,6 +31,7 @@ echo "==> schema stubs + migration"
 docker cp "$HERE/prelude.sql" "$CONTAINER:/tmp/prelude.sql" >/dev/null
 docker cp "$MIGRATION" "$CONTAINER:/tmp/migration.sql" >/dev/null
 docker cp "$HERE/introductory-claims.verify.sql" "$CONTAINER:/tmp/verify.sql" >/dev/null
+docker cp "$HERE/interpretation-versions.helpers.sql" "$CONTAINER:/tmp/interpretation-versions.helpers.sql" >/dev/null
 docker cp "$HERE/concurrency-a.sql" "$CONTAINER:/tmp/txA.sql" >/dev/null
 docker cp "$HERE/concurrency-b.sql" "$CONTAINER:/tmp/txB.sql" >/dev/null
 
@@ -32,7 +39,7 @@ psql_f -v ON_ERROR_STOP=1 -q -f /tmp/prelude.sql
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/migration.sql >/dev/null
 
 echo "==> constraint + trigger behaviour"
-psql_f -f /tmp/verify.sql 2>&1 | grep -v '^$'
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/verify.sql
 
 echo
 echo "==> account erasure must remove the ledger (GDPR)"
@@ -49,13 +56,12 @@ psql_f -q -c "INSERT INTO users (id) VALUES ('44444444-4444-4444-8444-4444444444
               INSERT INTO lab_reports (id, user_id) VALUES ('cccccccc-1111-4111-8111-111111111111','44444444-4444-4444-8444-444444444444');" >/dev/null
 # NULL tier (a row written before Free/Plus existed) must be accepted.
 psql_f -q -c "INSERT INTO interpretations (lab_report_id, json_output) VALUES ('cccccccc-1111-4111-8111-111111111111','{}'::jsonb);" >/dev/null
-# 'free' and 'plus' accepted, anything else refused.
+# 'free' and 'plus' accepted, anything else refused by interpretations_tier_check.
 psql_f -q -c "UPDATE interpretations SET tier='free' WHERE lab_report_id='cccccccc-1111-4111-8111-111111111111';" >/dev/null
 psql_f -q -c "UPDATE interpretations SET tier='plus' WHERE lab_report_id='cccccccc-1111-4111-8111-111111111111';" >/dev/null
-if psql_f -q -c "UPDATE interpretations SET tier='enterprise' WHERE lab_report_id='cccccccc-1111-4111-8111-111111111111';" >/dev/null 2>&1; then
-  echo "FAIL: interpretations_tier_check accepted an unknown tier" >&2
-  exit 1
-fi
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/interpretation-versions.helpers.sql -c "SELECT pg_temp.refused(
+  \$\$UPDATE interpretations SET tier='enterprise' WHERE lab_report_id='cccccccc-1111-4111-8111-111111111111'\$\$,
+  '23514', 'interpretations_tier_check', 'TIER-UNKNOWN-REFUSED');" >/dev/null
 # Applying twice must be a no-op, not an error.
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/tier.sql >/dev/null
 echo "    NULL/free/plus accepted, unknown tier refused, migration is idempotent"
@@ -64,7 +70,7 @@ echo "==> complimentary_entitlements: shape, constraints and locks"
 docker cp "$HERE/../20260914000000_complimentary_entitlements.sql" "$CONTAINER:/tmp/comp.sql" >/dev/null
 docker cp "$HERE/complimentary-entitlements.verify.sql" "$CONTAINER:/tmp/comp-verify.sql" >/dev/null
 psql_f -v ON_ERROR_STOP=1 -q -f /tmp/comp.sql >/dev/null
-psql_f -f /tmp/comp-verify.sql 2>&1 | grep -v '^$'
+psql_f -v ON_ERROR_STOP=1 -q -f /tmp/comp-verify.sql
 
 # The property the whole design rests on: a user session cannot write this table.
 for priv in INSERT UPDATE DELETE; do
@@ -111,4 +117,4 @@ if [ "$final" != "2" ]; then
 fi
 
 echo
-echo "PASS: ledger holds at 2 claims under concurrency, and every constraint fired."
+echo "PASS: claim ledger and complimentary entitlements: every refusal raised its SQLSTATE from the constraint or trigger meant to raise it; each signed-in user reads only her own grant and writes none; erasure removes both; the ledger holds at 2 claims under concurrency."

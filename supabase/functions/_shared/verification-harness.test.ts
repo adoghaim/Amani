@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { harnessCaseNames, harnessText } from '../../migrations/__verification__/harness-cases';
+import { USER_DATA_REGISTRY } from './user-data-registry';
 
 /*
   PK-INT-01 (D3): the migration harness runs its cases from
@@ -191,5 +192,159 @@ describe('the split moved every case of the old run.sh, in its order', () => {
       // `exit 0` in a sourced case would end the whole run and skip every later case.
       expect(text, name).not.toMatch(/^\s*exit\s+0\b/m);
     }
+  });
+});
+
+/*
+  DB1 (review F127, F100, F125, F124, F095, F035). The harness behaviour is
+  proven by running it; these pin what keeps it honest.
+*/
+
+const MIGRATIONS = join(DIR, '..');
+const harnessFile = (name: string) => readFileSync(join(DIR, name), 'utf8');
+
+describe('run.sh tests the Postgres major production runs (F127)', () => {
+  it('names the image from one PG_MAJOR, equal to the linked project\'s major, and stops on any other server', () => {
+    const pins = [...runSh.matchAll(/^PG_MAJOR=(\d+)$/gm)];
+    expect(pins).toHaveLength(1);
+    // supabase/.temp/postgres-version is what the Supabase CLI recorded for the linked project.
+    const production = readFileSync(join(MIGRATIONS, '../.temp/postgres-version'), 'utf8').trim();
+    expect(production.split('.')[0]).toBe(pins[0]![1]);
+    expect(runSh).toContain('"postgres:$PG_MAJOR-alpine"');
+    expect(runSh).not.toMatch(/postgres:\d/);
+    // Checked once the server accepts connections, before any case or the clinical-only run.
+    const check = runSh.indexOf("show server_version_num");
+    expect(check).toBeGreaterThan(runSh.indexOf('docker run -d'));
+    expect(check).toBeLessThan(runSh.indexOf('CLINICAL_ONLY:-0'));
+    expect(runSh).toMatch(/if \[ "\$\(\(server_version_num \/ 10000\)\)" != "\$PG_MAJOR" \]; then\n\s*echo "FAIL: [^\n]*" >&2\n\s*exit 1\nfi/);
+  });
+});
+
+describe('a harness step that must be refused fails the run when it is not (F100, F125)', () => {
+  it('no harness file turns ON_ERROR_STOP off', () => {
+    const files = readdirSync(DIR).filter(name => /\.(sql|sh)$/.test(name)).map(name => [name, harnessFile(name)] as const);
+    for (const name of harnessCaseNames()) files.push([`cases/${name}`, caseText(name)]);
+    for (const [name, text] of files) expect(text, name).not.toMatch(/ON_ERROR_STOP[ =]+(0|off)\b/i);
+  });
+
+  it('case 010 runs both verify files so that an error stops it, and filters neither through grep', () => {
+    const text = caseText('010-introductory-claims.sh');
+    for (const file of ['/tmp/verify.sql', '/tmp/comp-verify.sql']) {
+      expect(text).toContain(`psql_f -v ON_ERROR_STOP=1 -q -f ${file}\n`);
+    }
+    expect(text).not.toMatch(/\|\s*grep\b/);
+    for (const name of ['introductory-claims.verify.sql', 'complimentary-entitlements.verify.sql']) {
+      expect(harnessFile(name).startsWith('\\set ON_ERROR_STOP 1\n'), name).toBe(true);
+      // Refusals are asserted by SQLSTATE and cause, not printed.
+      expect(harnessFile(name), name).toMatch(/pg_temp\.refused\(/);
+      expect(harnessFile(name), name).not.toMatch(/^\\echo /m);
+    }
+  });
+});
+
+describe('the whole migration chain replays from empty (F124, F095, F035)', () => {
+  const replay = caseText('240-full-chain-replay.sh');
+  const migrations = readdirSync(MIGRATIONS).filter(name => name.endsWith('.sql')).sort();
+
+  // Shipped before the harness had a case for every migration: covered only by
+  // the full-chain replay and its across-the-board assertions. Frozen; it may
+  // only shrink. A newer migration needs a case of its own (G3).
+  const FULL_CHAIN_ONLY = [
+    '20260115202339_add_interpretation_source.sql',
+    '20260126021208_add_cycle_events.sql',
+    '20260126030815_add_interventions.sql',
+    '20260216193045_initial_schema.sql',
+    '20260216194325_20260126021208_add_cycle_events.sql',
+    '20260216194328_20260126030815_add_interventions.sql',
+    '20260216195036_add_lab_files_storage_bucket.sql',
+    '20260217130956_wispy_sky.sql',
+    '20260221194201_add_foreign_key_indexes.sql',
+    '20260224062147_security_hardening_rls_audit_storage_rate_limits.sql',
+    '20260307054419_add_period_logs_symptom_logs_notifications.sql',
+    '20260308131250_auto_create_user_profile_on_signup.sql',
+    '20260310051744_add_biomarker_definitions_and_derived_metrics.sql',
+    '20260310054519_full_44_biomarker_panel_schema_v3.sql',
+    '20260310055655_create_biomarker_catalog.sql',
+    '20260310071546_add_report_items_full_ingestion.sql',
+    '20260312070949_add_interpretation_source_and_unique_constraint.sql',
+    '20260312182252_add_rate_limits_rls_policies.sql',
+    '20260312194342_add_canonical_analytes_and_report_analytes.sql',
+    '20260312194513_seed_canonical_analytes_and_synonyms.sql',
+    '20260313061510_add_parser_debug_table.sql',
+    '20260314200025_add_raw_value_text_to_biomarkers.sql',
+    '20260402000000_intelligent_data_pipeline_schema.sql',
+    '20260402000001_report_analytes_telemetry.sql',
+    '20260406055443_add_normalization_and_telemetry_columns_to_report_analytes.sql',
+    '20260414122512_add_lab_source_and_import_method.sql',
+    '20260430000000_add_stripe_idempotency.sql',
+    '20260501000000_lock_lab_reports_user_write_columns.sql',
+    '20260502000000_add_onboarding_fields_to_users.sql',
+    '20260519000000_add_full_name_to_users.sql',
+    '20260521000000_defer_trial_start_until_onboarding.sql',
+    '20260811000000_stripe_event_claim_lease.sql',
+    '20260821000000_add_iap_subscriptions.sql',
+    '20260821010000_lock_iap_subscriptions_writes.sql',
+    '20260823000000_lock_users_privileged_columns.sql',
+  ];
+
+  it('applies every top-level migration by listing the directory, never a list of its own', () => {
+    expect(replay).toContain(`find . -mindepth 1 -maxdepth 1 -name '*.sql'`);
+    expect(replay).toMatch(/for chain_name in "\$\{chain_files\[@\]\}"; do\n\s*chain_deferred=''/);
+    expect(migrations.length).toBeGreaterThanOrEqual(70);
+  });
+
+  it('defers only migrations that exist, each to a later one, and nothing newer than the baseline', () => {
+    const block = /^CHAIN_DEFERRED='([^']*)'$/m.exec(replay);
+    expect(block).not.toBeNull();
+    const rows = block![1]!.split('\n').map(line => line.split('|'));
+    expect(rows.map(([file]) => file)).toEqual(['20260115202339_add_interpretation_source.sql', '20260126021208_add_cycle_events.sql']);
+    for (const [file, anchor, error] of rows) {
+      expect(migrations, file).toContain(file);
+      expect(migrations, anchor).toContain(anchor);
+      expect(anchor! > file!, file).toBe(true);
+      expect(error, file).toMatch(/^relation "[a-z_.]+" does not exist$/);
+      expect(file! < '20260216193045', file).toBe(true);
+    }
+  });
+
+  it('each migration is named by a case of its own or a sub-harness, or is one of the frozen pre-harness files', () => {
+    const dedicated = [
+      ...harnessCaseNames().filter(name => name !== '240-full-chain-replay.sh').map(caseText),
+      ...readdirSync(DIR).filter(name => name.endsWith('.run.sh')).map(harnessFile),
+    ].join('\n');
+    expect(migrations.filter(name => !dedicated.includes(name))).toEqual(FULL_CHAIN_ONLY);
+    for (const name of FULL_CHAIN_ONLY) expect(name < '20260823010000', name).toBe(true);
+  });
+
+  it('probes cross-user denial on every user-owned table in USER_DATA_REGISTRY, and on the views clients read', () => {
+    const probes = harnessFile('full-chain.probes.sql');
+    const targets = (kind: string) => [...probes.matchAll(new RegExp(`pg_temp\\.fc_${kind}\\('([a-z_]+)'`, 'g'))].map(m => m[1]!);
+    const crossUser = targets('cross_user');
+    const probed = [...crossUser, ...targets('no_client_access')];
+    expect(new Set(probed).size).toBe(probed.length);
+    // Every user-owned table is probed under its registered name (a renamed
+    // table's client view is probed under the old name, its table under the new).
+    const registry = USER_DATA_REGISTRY.map(entry => entry.table);
+    for (const table of registry) expect(probed, table).toContain(table);
+    // The views clients read, the audit's client views, each get the cross-user
+    // read probes, and are the only cross-user targets beyond the registry.
+    const clientViews = /client_view\(relname\) AS \(([\s\S]*?)\n\),/.exec(
+      readFileSync(join(MIGRATIONS, '../../factory/sql/verify-privileges.sql'), 'utf8'));
+    expect(clientViews).not.toBeNull();
+    const designed = [...clientViews![1]!.matchAll(/'([a-z_]+)'/g)].map(m => m[1]!);
+    expect(designed).toHaveLength(4);
+    for (const view of designed) expect(crossUser, view).toContain(view);
+    expect(crossUser.filter(name => !registry.includes(name)).sort())
+      .toEqual(designed.filter(name => !registry.includes(name)).sort());
+  });
+
+  it('its files are where the case copies them from', () => {
+    for (const file of ['full-chain.prelude.sql', 'full-chain.verify.sql', 'full-chain.probes.sql', 'pgtap-standin.sql',
+      'interpretation-versions.helpers.sql']) {
+      expect(existsSync(join(DIR, file)), file).toBe(true);
+      expect(replay, file).toContain(file);
+    }
+    expect(replay).toContain('"$HERE/../../tests/privileged_columns_test.sql"');
+    expect(existsSync(join(MIGRATIONS, '../tests/privileged_columns_test.sql'))).toBe(true);
   });
 });

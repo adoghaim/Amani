@@ -37,6 +37,10 @@ set -euo pipefail
 
 CONTAINER=amani-pgtest-verify
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Production's Postgres major (17.6, supabase/.temp/postgres-version). The one
+# place it is set: the image is named from it, and the run stops if the server
+# that starts is any other major.
+PG_MAJOR=17
 
 # The cases, in run order, listed before anything starts so that a misnamed
 # case file stops the run here (list-cases.sh says which) instead of being
@@ -50,7 +54,7 @@ echo "==> starting throwaway postgres"
 cleanup
 docker run -d --name "$CONTAINER" \
   -e POSTGRES_PASSWORD=test -e POSTGRES_DB=amani \
-  postgres:15-alpine >/dev/null
+  "postgres:$PG_MAJOR-alpine" >/dev/null
 
 # Two waits, not one. The official image runs a TEMPORARY server during initdb,
 # on the same unix socket, and `pg_isready` answers yes to it — connect during
@@ -83,6 +87,13 @@ if [ "$ready" != 1 ]; then
   docker logs "$CONTAINER" 2>&1 | tail -20 >&2
   exit 1
 fi
+
+server_version_num=$(docker exec "$CONTAINER" psql -U postgres -d amani -qtAc 'show server_version_num')
+if [ "$((server_version_num / 10000))" != "$PG_MAJOR" ]; then
+  echo "FAIL: the harness server is Postgres $server_version_num, not major $PG_MAJOR (production); fix PG_MAJOR or the image" >&2
+  exit 1
+fi
+echo "    Postgres $(docker exec "$CONTAINER" psql -U postgres -d amani -qtAc 'show server_version'), production major $PG_MAJOR"
 
 psql_f() { docker exec -i "$CONTAINER" psql -U postgres -d amani "$@"; }
 

@@ -1,21 +1,87 @@
--- Effective privileges for anon/authenticated on sensitive relations. Read-only.
--- Extends the check in docs/interpretation-visibility-rollout.md to new tables.
--- TO-VERIFY / extend the relname list as packets add tables (for example the
--- V2-04 female context table and V2-05 safety audit table).
-SELECT c.relname, c.relkind, r.role_name, p.privilege,
-       has_table_privilege(r.role_name, c.oid, p.privilege) AS granted
-FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
-CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
-                   ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(privilege)
-WHERE n.nspname = 'public'
-  AND c.relname IN ('interpretation_visibility_config', 'interpretations',
-                    'interpretations_private', 'introductory_deep_access_claims',
-                    'users', 'rate_limits',
-                    -- PK-FIX-04 (20261015110000): service-only; expect every row false.
-                    'lab_file_cleanup',
-                    -- PK-FIX-01b: expected granted = false for every row.
-                    'ai_call_costs', 'ai_budget_alerts',
-                    -- PK-EXP5: expect granted = false for every row of these four.
-                    'app_events', 'user_attribution', 'anon_event_counters', 'funnel_daily')
-ORDER BY c.relname, r.role_name, p.privilege;
+-- Grant audit of the public schema for the API roles. Read-only: one SELECT,
+-- writes nothing. Run it after every `supabase db push` (G3 post-deploy
+-- checklist, factory/gates.md). EVERY ROW IS A PROBLEM; ZERO ROWS = PASS.
+--
+-- It covers every table, view, materialized view and foreign table in public,
+-- not a fixed list (review F035, F095: the old fixed list left out the three
+-- tables that had no row level security). Effective privileges, so PUBLIC,
+-- inherited and default-privilege grants count, and a column grant counts as
+-- the command. A row says one of:
+--   row level security is disabled             a public table without RLS
+--                                              (role and privileges '-'), and
+--                                              each anon/authenticated grant
+--                                              on it, which nothing filters
+--   no policy serves it                         anon or authenticated holds
+--                                              SELECT/INSERT/UPDATE/DELETE on
+--                                              a table where no permissive
+--                                              policy for that command applies
+--                                              to the role (a policy whose
+--                                              USING or WITH CHECK is just
+--                                              `false` serves nothing)
+--   TRUNCATE is not subject to row level security
+--                                              any TRUNCATE held by anon or
+--                                              authenticated
+--   not a grant a client view is designed for  any grant on a view other than
+--                                              authenticated SELECT on the
+--                                              four views clients read
+--                                              (client_view below)
+-- REFERENCES, TRIGGER and (Postgres 17) MAINTAIN are not data access and are
+-- not judged here.
+--
+-- The migration harness runs this same file over the whole replayed chain
+-- (supabase/migrations/__verification__/cases/240-full-chain-replay.sh) and
+-- fails unless its rows are exactly that case's CHAIN_KNOWN_VIOLATIONS: the
+-- violations the chain still ships, which the db-security track's next
+-- packet (DB2) removes. Until that packet's migration is pushed, a database
+-- built from this chain returns exactly those rows; any other row is new.
+WITH rel AS (
+  SELECT c.oid, c.relname, c.relkind, c.relrowsecurity
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+),
+client_view(relname) AS (
+  VALUES ('interpretations'), ('consent_current'),
+         ('stripe_user_subscriptions'), ('stripe_user_orders')
+),
+held AS (
+  SELECT rel.oid, rel.relname, rel.relkind, rel.relrowsecurity,
+         r.role_name, p.privilege, p.polcmd
+  FROM rel
+  CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
+  CROSS JOIN (VALUES ('SELECT', 'r'), ('INSERT', 'a'), ('UPDATE', 'w'),
+                     ('DELETE', 'd'), ('TRUNCATE', NULL)) AS p(privilege, polcmd)
+  WHERE has_table_privilege(r.role_name, rel.oid, p.privilege)
+     OR (p.privilege IN ('SELECT', 'INSERT', 'UPDATE')
+         AND has_any_column_privilege(r.role_name, rel.oid, p.privilege))
+),
+judged AS (
+  SELECT h.relname, h.role_name, h.privilege,
+    CASE
+      WHEN h.privilege = 'TRUNCATE' THEN 'TRUNCATE is not subject to row level security'
+      WHEN h.relkind NOT IN ('r', 'p') THEN
+        CASE WHEN h.role_name = 'authenticated' AND h.privilege = 'SELECT'
+                  AND h.relname IN (SELECT relname FROM client_view) THEN NULL
+             ELSE 'not a grant a client view is designed for' END
+      WHEN NOT h.relrowsecurity THEN 'row level security is disabled'
+      WHEN NOT EXISTS (
+        SELECT 1 FROM pg_policy pol
+        WHERE pol.polrelid = h.oid
+          AND pol.polpermissive
+          AND pol.polcmd IN ('*', h.polcmd::"char")
+          AND (pol.polroles @> ARRAY[0::oid]
+               OR pol.polroles @> ARRAY[(SELECT oid FROM pg_roles WHERE rolname = h.role_name)])
+          AND coalesce(pg_get_expr(pol.polqual, pol.polrelid), '') <> 'false'
+          AND coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '') <> 'false'
+      ) THEN 'no policy serves it'
+    END AS problem
+  FROM held h
+)
+SELECT relname, role_name, string_agg(privilege, ',' ORDER BY privilege) AS privileges, problem
+FROM judged
+WHERE problem IS NOT NULL
+GROUP BY relname, role_name, problem
+UNION ALL
+SELECT relname, '-', '-', 'row level security is disabled'
+FROM rel
+WHERE relkind IN ('r', 'p') AND NOT relrowsecurity
+ORDER BY 1, 2, 4;
