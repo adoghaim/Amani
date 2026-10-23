@@ -21,6 +21,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
 
 # Android release signing secrets
 android/app/*.jks
@@ -37,6 +39,15 @@ ios/Pods/
 **/*.ipa
 **/*.keystore
 **/*.jks
+
+# Supabase CLI local state (what `supabase init` writes to supabase/.gitignore)
+supabase/.temp/
+supabase/.branches/
+
+# Per-machine tool output and stale dumps
+graphify-out/
+**/.expo/
+logs.txt
 
 # Host CLI local state (Netlify is the web host; Vercel dir is a leftover)
 .netlify/
