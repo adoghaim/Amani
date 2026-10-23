@@ -16,6 +16,7 @@ import { safeRedirectTarget } from './lib/redirect'
 import { CampaignLinkRedirect, FirstPartyEventsLifecycle } from './components/FirstPartyEventsLifecycle'
 import { deviceLock } from './lib/deviceLock'
 import { DeviceLockGate } from './features/deviceLock/DeviceLockGate'
+import { Ga4Analytics } from './components/analytics/Ga4Analytics'
 
 // Eagerly loaded — tiny pages used immediately on arrival
 import { Landing } from './pages/Landing'
@@ -190,6 +191,8 @@ function App() {
       <AndroidBackHandler />
       <DeepLinkHandler />
       <FirstPartyEventsLifecycle />
+      {/* GA4: off unless VITE_GA4_ID is set; public marketing pages only, after analytics consent. */}
+      <Ga4Analytics />
       <ErrorBoundary>
         {/* PK-MINVER-01 (D8): native only, and first in the launch gate order:
             the update block, then the biometric lock, then consent and the
