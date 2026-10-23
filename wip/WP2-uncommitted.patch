@@ -1,0 +1,650 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 80ccf8d..dc1e476 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,17 +1,15 @@
+-import { ReactNode, Suspense, useCallback, useEffect, useRef, useState } from 'react'
++import { ReactNode, Suspense, useEffect } from 'react'
+ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+ import { useAuth } from './contexts/AuthContext'
+ import { Loading } from './components/Loading'
+-import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary'
+-import { FullScreenGate } from './components/FullScreenGate'
+-import { UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from './components/CalmNotice'
++import { ErrorBoundary } from './components/ErrorBoundary'
+ import { OnboardingGate } from './components/OnboardingGate'
+ import { UpdateGate } from './components/UpdateGate'
+ import { UploadGate } from './components/freemium/UploadGate'
+ import { ConsentGate } from './features/consent/ConsentGate'
+ import { AdultsOnlyExit } from './features/consent/AdultsOnlyExit'
+ import { ADULTS_ONLY_PATH } from './features/consent/ConsentSteps'
+-import { isNative, onAppLifecycle, onAppUrlOpen, onNetworkChange } from './lib/native'
++import { isNative, onAppUrlOpen } from './lib/native'
+ import { deepLinkTarget } from './lib/deepLinks'
+ import { lazyWithRetry } from './lib/lazyWithRetry'
+ import { safeRedirectTarget } from './lib/redirect'
+@@ -56,7 +54,7 @@ const DesignGallery = import.meta.env.DEV ? lazyWithRetry(() => import('./pages/
+   `consentExempt` is for Settings only (withdrawal and deletion stay reachable).
+ */
+ function ProtectedRoute({ children, consentExempt = false }: { children: ReactNode; consentExempt?: boolean }) {
+-  const { user, userProfile, profileLoadFailed, loading } = useAuth()
++  const { user, loading } = useAuth()
+ 
+   if (loading) {
+     return <Loading />
+@@ -67,54 +65,9 @@ function ProtectedRoute({ children, consentExempt = false }: { children: ReactNo
+     return <Navigate to={`/login?redirect=${redirect}`} replace />
+   }
+ 
+-  // Every gate below waits for her profile; when it could not be read, say so.
+-  if (!userProfile && profileLoadFailed) {
+-    return <ProfileUnreachable />
+-  }
+-
+   return <ConsentGate exempt={consentExempt}>{children}</ConsentGate>
+ }
+ 
+-/*
+-  F065: her profile could not be read (offline, or the request failed). It
+-  used to leave an endless spinner. Try again here, and again by itself when
+-  the connection comes back or she returns to the app.
+-*/
+-function ProfileUnreachable() {
+-  const { refreshUserProfile } = useAuth()
+-  const [busy, setBusy] = useState(false)
+-  const latestRefresh = useRef(refreshUserProfile)
+-  useEffect(() => { latestRefresh.current = refreshUserProfile })
+-  const inFlight = useRef(false)
+-
+-  const retry = useCallback(() => {
+-    if (inFlight.current) return
+-    inFlight.current = true
+-    setBusy(true)
+-    void latestRefresh.current().catch(() => {}).finally(() => {
+-      inFlight.current = false
+-      setBusy(false)
+-    })
+-  }, [])
+-
+-  useEffect(() => {
+-    const stopNetwork = onNetworkChange(status => { if (status.connected) retry() })
+-    const stopLifecycle = onAppLifecycle({ onPause: () => {}, onResume: retry })
+-    return () => {
+-      stopNetwork()
+-      stopLifecycle()
+-    }
+-  }, [retry])
+-
+-  return (
+-    <FullScreenGate
+-      heading={UNREACHABLE_TITLE}
+-      sentence={UNREACHABLE_SAFE_LINE}
+-      primary={{ label: 'Try again', onClick: retry, busy }}
+-    />
+-  )
+-}
+-
+ function AppRoutes() {
+   const { loading, user } = useAuth()
+ 
+@@ -126,57 +79,53 @@ function AppRoutes() {
+ 
+   return (
+     <Suspense fallback={<Loading />}>
+-      {/* F072: one error boundary per screen, keyed by its path. Inside Suspense,
+-          so a navigation keeps the current screen while the next one loads. */}
+-      <RouteErrorBoundary>
+-        <Routes>
+-          <Route path="/" element={<Landing />} />
+-          <Route path="/login" element={user ? <Navigate to={redirectTarget} replace /> : <LoginPage />} />
+-          <Route path="/signup" element={user ? <Navigate to={redirectTarget} replace /> : <SignupPage />} />
+-          {/* PK-EXP5 campaign link (D17, D29): captures the key when first-party events are on, then signup. */}
+-          <Route path="/go/:key" element={<CampaignLinkRedirect />} />
+-          <Route path="/pricing" element={<PricingPage />} />
+-          <Route path="/success" element={<SuccessPage />} />
+-          <Route path="/reset-password" element={<ResetPassword />} />
+-
+-          {/* Public and unauthenticated on purpose: App Store Review 3.1.2(a)
+-              requires the Privacy and Terms links in the binary to resolve, and
+-              they have to work for someone deciding whether to sign up at all. */}
+-          <Route path="/privacy" element={<Privacy />} />
+-          <Route path="/terms" element={<Terms />} />
+-          <Route path="/contact" element={<Contact />} />
+-          {/* Google Play requires the account-deletion URL to be readable without
+-              signing in — a reviewer, or someone locked out of their account, has
+-              to be able to reach it. Linking to /app/settings instead would
+-              bounce a signed-out visitor to the login screen. */}
+-          <Route path="/delete-account" element={<DeleteAccount />} />
+-          {/* D13: the under-18 exit, shown after the account is erased and signed out. Local state only. */}
+-          <Route path={ADULTS_ONLY_PATH} element={<AdultsOnlyExit />} />
+-
+-          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+-
+-          <Route path="/app" element={<ProtectedRoute><OnboardingGate><Dashboard /></OnboardingGate></ProtectedRoute>} />
+-          <Route path="/app/pricing" element={<ProtectedRoute><OnboardingGate><PricingPage /></OnboardingGate></ProtectedRoute>} />
+-          {/* Flag on, uploading is part of Free: auth + onboarding only. See lib/freemium/gates.ts. */}
+-          <Route path="/app/new" element={<ProtectedRoute><OnboardingGate><UploadGate><NewReport /></UploadGate></OnboardingGate></ProtectedRoute>} />
+-          <Route path="/app/reports" element={<ProtectedRoute><OnboardingGate><Reports /></OnboardingGate></ProtectedRoute>} />
+-          <Route path="/app/reports/:id" element={<ProtectedRoute><OnboardingGate><ReportView /></OnboardingGate></ProtectedRoute>} />
+-          <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
+-          <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
+-          <Route path="/app/settings" element={<ProtectedRoute consentExempt><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
+-          {DesignGallery && (
+-            <Route path="/dev/design" element={<DesignGallery />} />
+-          )}
+-          {ParserDebugger && (
+-            <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
+-          )}
+-
+-          {/* Last, so it only catches what no other route matched. Without it an
+-              unmatched path rendered null — a typo under /app/* sat on an empty
+-              Suspense boundary forever, with no way back. Keep this last. */}
+-          <Route path="*" element={<NotFound />} />
+-        </Routes>
+-      </RouteErrorBoundary>
++      <Routes>
++        <Route path="/" element={<Landing />} />
++        <Route path="/login" element={user ? <Navigate to={redirectTarget} replace /> : <LoginPage />} />
++        <Route path="/signup" element={user ? <Navigate to={redirectTarget} replace /> : <SignupPage />} />
++        {/* PK-EXP5 campaign link (D17, D29): captures the key when first-party events are on, then signup. */}
++        <Route path="/go/:key" element={<CampaignLinkRedirect />} />
++        <Route path="/pricing" element={<PricingPage />} />
++        <Route path="/success" element={<SuccessPage />} />
++        <Route path="/reset-password" element={<ResetPassword />} />
++
++        {/* Public and unauthenticated on purpose: App Store Review 3.1.2(a)
++            requires the Privacy and Terms links in the binary to resolve, and
++            they have to work for someone deciding whether to sign up at all. */}
++        <Route path="/privacy" element={<Privacy />} />
++        <Route path="/terms" element={<Terms />} />
++        <Route path="/contact" element={<Contact />} />
++        {/* Google Play requires the account-deletion URL to be readable without
++            signing in — a reviewer, or someone locked out of their account, has
++            to be able to reach it. Linking to /app/settings instead would
++            bounce a signed-out visitor to the login screen. */}
++        <Route path="/delete-account" element={<DeleteAccount />} />
++        {/* D13: the under-18 exit, shown after the account is erased and signed out. Local state only. */}
++        <Route path={ADULTS_ONLY_PATH} element={<AdultsOnlyExit />} />
++
++        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
++
++        <Route path="/app" element={<ProtectedRoute><OnboardingGate><Dashboard /></OnboardingGate></ProtectedRoute>} />
++        <Route path="/app/pricing" element={<ProtectedRoute><OnboardingGate><PricingPage /></OnboardingGate></ProtectedRoute>} />
++        {/* Flag on, uploading is part of Free: auth + onboarding only. See lib/freemium/gates.ts. */}
++        <Route path="/app/new" element={<ProtectedRoute><OnboardingGate><UploadGate><NewReport /></UploadGate></OnboardingGate></ProtectedRoute>} />
++        <Route path="/app/reports" element={<ProtectedRoute><OnboardingGate><Reports /></OnboardingGate></ProtectedRoute>} />
++        <Route path="/app/reports/:id" element={<ProtectedRoute><OnboardingGate><ReportView /></OnboardingGate></ProtectedRoute>} />
++        <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
++        <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
++        <Route path="/app/settings" element={<ProtectedRoute consentExempt><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
++        {DesignGallery && (
++          <Route path="/dev/design" element={<DesignGallery />} />
++        )}
++        {ParserDebugger && (
++          <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
++        )}
++
++        {/* Last, so it only catches what no other route matched. Without it an
++            unmatched path rendered null — a typo under /app/* sat on an empty
++            Suspense boundary forever, with no way back. Keep this last. */}
++        <Route path="*" element={<NotFound />} />
++      </Routes>
+     </Suspense>
+   )
+ }
+diff --git a/src/components/CalmNotice.tsx b/src/components/CalmNotice.tsx
+index 97a5d24..27fcdef 100644
+--- a/src/components/CalmNotice.tsx
++++ b/src/components/CalmNotice.tsx
+@@ -21,13 +21,6 @@ import { Button } from './Button';
+ 
+ export const CALM_NOTICE_SAFE_LINE = 'Your reports and results are saved.';
+ 
+-/**
+- * A read that could not reach Amani: offline, or the request failed (F065).
+- * That is a failed load, never an empty account or a missing report.
+- */
+-export const UNREACHABLE_TITLE = "We couldn't reach Amani";
+-export const UNREACHABLE_SAFE_LINE = 'Your reports are safe.';
+-
+ export interface CalmNoticeAction {
+   label: string;
+   onClick: () => void;
+diff --git a/src/components/ErrorBoundary.tsx b/src/components/ErrorBoundary.tsx
+index 09d6600..0750ab6 100644
+--- a/src/components/ErrorBoundary.tsx
++++ b/src/components/ErrorBoundary.tsx
+@@ -1,20 +1,9 @@
+ import { Component, ErrorInfo, ReactNode } from 'react'
+-import { useLocation, useNavigate } from 'react-router-dom'
+ import * as Sentry from '@sentry/react'
+-import { FullScreenGate, type GateSecondaryLink } from './FullScreenGate'
+-import { CalmNotice } from './CalmNotice'
+-import { isChunkLoadError, pageReload } from '../lib/lazyWithRetry'
+-
+-export interface ErrorFallbackProps {
+-  error: Error
+-  /** Clears the error, so the children render again. */
+-  reset: () => void
+-}
+ 
+ interface Props {
+   children: ReactNode
+-  /** Shown instead of the children. As a function it also gets the error and `reset`. */
+-  fallback?: ReactNode | ((props: ErrorFallbackProps) => ReactNode)
++  fallback?: ReactNode
+ }
+ 
+ interface State {
+@@ -39,59 +28,26 @@ export class ErrorBoundary extends Component<Props, State> {
+     })
+   }
+ 
+-  reset = (): void => {
+-    this.setState({ error: null })
+-  }
+-
+   render(): ReactNode {
+-    const { error } = this.state
+-    if (!error) return this.props.children
+-    const { fallback } = this.props
+-    if (typeof fallback === 'function') return fallback({ error, reset: this.reset })
+-    if (fallback) return fallback
+-
+-    // Outside any screen there may be no router: the link loads the dashboard afresh.
+-    return <ErrorScreen error={error} onRetry={this.reset} home={{ label: 'Go to dashboard', href: '/app' }} />
++    if (!this.state.error) return this.props.children
++    if (this.props.fallback) return this.props.fallback
++
++    return (
++      <div className="flex flex-col items-center justify-center min-h-dvh px-6 text-center safe-top safe-bottom">
++        <h1 className="text-xl text-theme-neutral-900 mb-2">
++          Something went wrong
++        </h1>
++        <p className="text-sm text-theme-neutral-600 mb-6 max-w-sm">
++          We hit an unexpected error. Reloading usually fixes it. If it keeps
++          happening, please reach out.
++        </p>
++        <button
++          onClick={() => window.location.reload()}
++          className="px-4 py-2 rounded-md bg-theme-primary text-white text-sm font-medium hover:opacity-90"
++        >
++          Reload
++        </button>
++      </div>
++    )
+   }
+ }
+-
+-/**
+- * Where a screen that failed to render leaves her (F072; DESIGN.md
+- * full-screen-gate and calm-notice): Try again, or the dashboard. When the
+- * screen's code failed to load, React keeps that error, so Try again reloads.
+- */
+-function ErrorScreen({ error, onRetry, home }: { error: Error; onRetry: () => void; home: GateSecondaryLink }) {
+-  return (
+-    <FullScreenGate
+-      heading="We couldn't show this screen"
+-      sentence="Try again, or go to your dashboard."
+-      notice={<CalmNotice title="Something went wrong while opening it." />}
+-      primary={{ label: 'Try again', onClick: () => (isChunkLoadError(error) ? pageReload.reload() : onRetry()) }}
+-      secondary={home}
+-    />
+-  )
+-}
+-
+-/**
+- * One boundary per screen (F072). Keyed by the path, so leaving the screen
+- * (a link, or Android back) clears its error.
+- */
+-export function RouteErrorBoundary({ children }: { children: ReactNode }) {
+-  const { pathname } = useLocation()
+-  const navigate = useNavigate()
+-  return (
+-    <ErrorBoundary
+-      key={pathname}
+-      fallback={({ error, reset }) => (
+-        <ErrorScreen
+-          error={error}
+-          onRetry={reset}
+-          // On the dashboard itself the path does not change, so reset as well.
+-          home={{ label: 'Go to dashboard', onClick: () => { navigate('/app'); reset() } }}
+-        />
+-      )}
+-    >
+-      {children}
+-    </ErrorBoundary>
+-  )
+-}
+diff --git a/src/contexts/AuthContext.tsx b/src/contexts/AuthContext.tsx
+index 3a58007..1aa34a1 100644
+--- a/src/contexts/AuthContext.tsx
++++ b/src/contexts/AuthContext.tsx
+@@ -18,8 +18,6 @@ export interface OnboardingAnswers {
+ interface AuthContextType {
+   user: SupabaseUser | null;
+   userProfile: User | null;
+-  /** The last profile read failed (offline, or the request failed), as opposed to still loading. */
+-  profileLoadFailed: boolean;
+   loading: boolean;
+   isPasswordRecovery: boolean;
+   signUp: (email: string, password: string) => Promise<void>;
+@@ -38,7 +36,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
+ export function AuthProvider({ children }: { children: React.ReactNode }) {
+   const [user, setUser] = useState<SupabaseUser | null>(null);
+   const [userProfile, setUserProfile] = useState<User | null>(null);
+-  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
+   const [loading, setLoading] = useState(true);
+   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+ 
+@@ -49,9 +46,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
+       .eq('id', userId)
+       .maybeSingle();
+ 
+-    // F065: a failed read resolves with `error` rather than throwing. Record
+-    // it, so the route gate offers Try again instead of waiting for ever.
+-    setProfileLoadFailed(Boolean(error));
+     if (!error && data) {
+       setUserProfile(data as User);
+       return data as User;
+@@ -130,7 +124,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
+         if (event === 'SIGNED_OUT') {
+           setUser(null);
+           setUserProfile(null);
+-          setProfileLoadFailed(false);
+           setLoading(false);
+           return;
+         }
+@@ -290,7 +283,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
+   const value = {
+     user,
+     userProfile,
+-    profileLoadFailed,
+     loading,
+     isPasswordRecovery,
+     signUp,
+diff --git a/src/lib/lazyWithRetry.ts b/src/lib/lazyWithRetry.ts
+index 0a97409..14b3839 100644
+--- a/src/lib/lazyWithRetry.ts
++++ b/src/lib/lazyWithRetry.ts
+@@ -2,32 +2,6 @@ import React from 'react'
+ 
+ const RELOAD_KEY = 'amani:chunk-reload-attempted'
+ 
+-/** The page reload, as a property so tests can watch it. */
+-export const pageReload = { reload: () => window.location.reload() }
+-
+-const chunkLoadErrors = new WeakSet<object>()
+-
+-/**
+- * The error is a lazy route's code failing to load. React.lazy keeps that
+- * rejection for the rest of the page's life, so only a reload can try again.
+- */
+-export function isChunkLoadError(error: unknown): boolean {
+-  return typeof error === 'object' && error !== null && chunkLoadErrors.has(error)
+-}
+-
+-// Session storage can throw on any access (site data blocked). Without the
+-// flag we cannot know the reload already happened, so we never reload: one
+-// that could repeat forever is worse than the error screen.
+-function claimReload(): boolean {
+-  try {
+-    if (sessionStorage.getItem(RELOAD_KEY) === '1') return false
+-    sessionStorage.setItem(RELOAD_KEY, '1')
+-    return true
+-  } catch {
+-    return false
+-  }
+-}
+-
+ // Wrap React.lazy so a single chunk-load failure (e.g. user has the old
+ // bundle and a deploy just shipped new chunk hashes) triggers one
+ // page reload instead of a permanent stuck-Suspense state. The
+@@ -38,19 +12,16 @@ export function lazyWithRetry<T extends React.ComponentType<any>>(
+   factory: () => Promise<{ default: T }>,
+ ): React.LazyExoticComponent<T> {
+   return React.lazy(async () => {
+-    let mod: { default: T }
+     try {
+-      mod = await factory()
++      const mod = await factory()
++      sessionStorage.removeItem(RELOAD_KEY)
++      return mod
+     } catch (err) {
+-      if (typeof err === 'object' && err !== null) chunkLoadErrors.add(err)
+-      if (import.meta.env.PROD && claimReload()) pageReload.reload()
++      const alreadyTried = sessionStorage.getItem(RELOAD_KEY) === '1'
++      if (!import.meta.env.PROD || alreadyTried) throw err
++      sessionStorage.setItem(RELOAD_KEY, '1')
++      window.location.reload()
+       throw err
+     }
+-    try {
+-      sessionStorage.removeItem(RELOAD_KEY)
+-    } catch {
+-      // Storage blocked: there is no flag to clear.
+-    }
+-    return mod
+   })
+ }
+diff --git a/src/pages/Dashboard.tsx b/src/pages/Dashboard.tsx
+index d09ed42..7855e06 100644
+--- a/src/pages/Dashboard.tsx
++++ b/src/pages/Dashboard.tsx
+@@ -16,7 +16,6 @@ import {
+ } from 'lucide-react';
+ import { Layout } from '../components/Layout';
+ import { Loading } from '../components/Loading';
+-import { CalmNotice, UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from '../components/CalmNotice';
+ import { errorMessage } from '../lib/errors';
+ import { TodayCard } from '../components/TodayCard';
+ import { TrackerCalendar } from '../components/TrackerCalendar';
+@@ -51,8 +50,6 @@ export function Dashboard() {
+ 
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
+-  // The reads failed (F065): shown as such, never as an empty account.
+-  const [loadFailed, setLoadFailed] = useState(false);
+   const [reports, setReports] = useState<LabReport[]>([]);
+   const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
+   const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
+@@ -84,19 +81,12 @@ export function Dashboard() {
+     try {
+       setLoading(true);
+       setError(null);
+-      setLoadFailed(false);
+       const [reportsRes, periodRes, symptomRes, interventionRes] = await Promise.all([
+         supabase.from('lab_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false }),
+         supabase.from('period_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
+         supabase.from('symptom_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }),
+         supabase.from('interventions').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
+       ]);
+-      // A read that fails resolves with `error` (postgrest-js does not throw).
+-      // Offline, that used to become [] and the first-run "No lab reports yet".
+-      if ([reportsRes, periodRes, symptomRes, interventionRes].some(res => res.error)) {
+-        setLoadFailed(true);
+-        return;
+-      }
+ 
+       const fetchedReports = (!reportsRes.error && reportsRes.data) ? reportsRes.data as LabReport[] : [];
+       setReports(fetchedReports);
+@@ -349,20 +339,6 @@ export function Dashboard() {
+     return <Layout><Loading /></Layout>;
+   }
+ 
+-  if (loadFailed) {
+-    return (
+-      <Layout>
+-        <div className="max-w-5xl mx-auto">
+-          <CalmNotice
+-            title={UNREACHABLE_TITLE}
+-            safe={UNREACHABLE_SAFE_LINE}
+-            action={{ label: 'Try again', onClick: () => { void fetchData(); } }}
+-          />
+-        </div>
+-      </Layout>
+-    );
+-  }
+-
+   return (
+     <Layout>
+       <div className="max-w-5xl mx-auto">
+diff --git a/src/pages/NewReport.tsx b/src/pages/NewReport.tsx
+index 1469aa1..44fbe7a 100644
+--- a/src/pages/NewReport.tsx
++++ b/src/pages/NewReport.tsx
+@@ -528,11 +528,6 @@ export function NewReport() {
+ 
+   const handleSubmit = async () => {
+     if (submittingRef.current) return;
+-    // F065: offline nothing can be saved, so send nothing and say so.
+-    if (isOffline) {
+-      setError("You're offline, so your report hasn't been saved yet. Connect to the internet, then try again.");
+-      return;
+-    }
+     submittingRef.current = true;
+ 
+     const { data: { session } } = await supabase.auth.getSession();
+@@ -589,7 +584,7 @@ export function NewReport() {
+         submission_mode: 'standard',
+       };
+ 
+-      const { data: reportData, error: reportError, status: reportStatus } = await supabase
++      const { data: reportData, error: reportError } = await supabase
+         .from('lab_reports')
+         .insert({
+           user_id: user.id,
+@@ -609,12 +604,6 @@ export function NewReport() {
+         .single();
+ 
+       if (reportError) {
+-        // F065: a 4xx means the server refused the row, so nothing will ever
+-        // point at the file just stored: remove it. With no answer, or a 5xx
+-        // from a gateway, the row may exist after all, so the file stays.
+-        if (fileUrl && reportStatus >= 400 && reportStatus < 500) {
+-          void supabase.storage.from('lab-files').remove([fileUrl]);
+-        }
+         throw new Error(`Failed to create report record: ${reportError.message}`);
+       }
+       createdReportId = reportData.id;
+@@ -822,10 +811,9 @@ export function NewReport() {
+       }
+       setPendingNavigation(`/app/reports/${createdReportId}`);
+ 
+-    } catch {
+-      // F065: plain words. The raw message ("File upload failed: Failed to
+-      // fetch") tells her nothing she can act on.
+-      setError("We couldn't save your report. Check your connection, then try again.");
++    } catch (err) {
++      const msg = errorMessage(err, 'An error occurred');
++      setError(msg);
+       setLoading(false);
+       setStep(3);
+       setSubmitStep(null);
+diff --git a/src/pages/ReportView.tsx b/src/pages/ReportView.tsx
+index f894670..f0e52e2 100644
+--- a/src/pages/ReportView.tsx
++++ b/src/pages/ReportView.tsx
+@@ -5,7 +5,6 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
+ import { firstPartyEvents } from '../lib/firstPartyEventsClient';
+ import { Layout } from '../components/Layout';
+ import { Button } from '../components/Button';
+-import { CalmNotice, UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from '../components/CalmNotice';
+ import { supabase } from '../lib/supabase';
+ import { fetchAllRows } from '../lib/fetchAllRows';
+ import { BiomarkerCard } from '../components/BiomarkerCard';
+@@ -390,8 +389,6 @@ export function ReportView() {
+   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
+   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
+   const [loading, setLoading] = useState(true);
+-  // The last read of the report could not reach Amani (F065): not "not found".
+-  const [loadFailed, setLoadFailed] = useState(false);
+   const [regenerating, setRegenerating] = useState(false);
+   /*
+     Which tier the STORED row was written at. Null means it predates Free/Plus,
+@@ -637,43 +634,28 @@ export function ReportView() {
+   }, [freemium, accessState]);
+ 
+   const fetchReport = async (isRetry = false) => {
+-    /*
+-      F065: a read that cannot reach Amani resolves with `error` (postgrest-js
+-      does not throw). That is a failed load, with Try again: offline it used to
+-      read "Report not found". Nothing is replaced until every read below has
+-      answered, so a first load never shows a report without its values, and a
+-      failed re-read leaves the report on screen.
+-    */
+-    const failLoad = () => { setLoadFailed(true); setLoading(false); };
+     const { data: reportData, error: reportError } = await supabase
+       .from('lab_reports').select('*').eq('id', reportId).maybeSingle();
+-    if (reportError) { failLoad(); return; }
++    if (reportError) { setError(`Failed to load: ${reportError.message}`); setLoading(false); return; }
+     if (!reportData) {
+       if (!isRetry) {
+         await new Promise(r => setTimeout(r, 1200));
+         return fetchReport(true);
+       }
+-      setLoadFailed(false);
+       setError('Report not found');
+       setLoading(false);
+       return;
+     }
++    setReport(reportData as LabReport);
+ 
+-    const [
+-      { data: biomarkersData, error: biomarkersError },
+-      { data: analytesData, error: analytesError },
+-      { data: interpretationData, error: interpretationError },
+-    ] = await Promise.all([
++    const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
+       supabase.from('biomarkers').select('*').eq('lab_report_id', reportId),
+       supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
+       // Flag on, the body is read only through get-interpretation.
+       freemium
+-        ? Promise.resolve({ data: null, error: null })
++        ? Promise.resolve({ data: null })
+         : supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
+     ]);
+-    if (biomarkersError || analytesError || interpretationError) { failLoad(); return; }
+-    setLoadFailed(false);
+-    setReport(reportData as LabReport);
+ 
+     if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
+     if (analytesData) setReportAnalytes(analytesData as ReportAnalyte[]);
+@@ -1339,20 +1321,6 @@ export function ReportView() {
+     );
+   }
+ 
+-  if (!report && loadFailed) {
+-    return (
+-      <Layout>
+-        <div className="max-w-3xl mx-auto">
+-          <CalmNotice
+-            title={UNREACHABLE_TITLE}
+-            safe={UNREACHABLE_SAFE_LINE}
+-            action={{ label: 'Try again', onClick: () => { setLoading(true); void fetchReport(); } }}
+-          />
+-        </div>
+-      </Layout>
+-    );
+-  }
+-
+   if (!report) {
+     return (
+       <Layout>
+@@ -1495,16 +1463,6 @@ export function ReportView() {
+         {/* ── Cycle rule (DESIGN.md, D10): the draw day on her cycle ── */}
+         <CycleRule report={report} />
+ 
+-        {/* A re-read failed (F065): what is on screen stays, with Try again. */}
+-        {loadFailed && (
+-          <CalmNotice
+-            title={UNREACHABLE_TITLE}
+-            safe={UNREACHABLE_SAFE_LINE}
+-            className="mb-6"
+-            action={{ label: 'Try again', onClick: () => { void fetchReport(); } }}
+-          />
+-        )}
+-
+         {error && (
+           <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-xl mb-6 text-sm">
+             {error}
