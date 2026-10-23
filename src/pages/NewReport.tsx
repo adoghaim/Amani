@@ -528,6 +528,11 @@ export function NewReport() {
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
+    // F065: offline nothing can be saved, so send nothing and say so.
+    if (isOffline) {
+      setError("You're offline, so your report hasn't been saved yet. Connect to the internet, then try again.");
+      return;
+    }
     submittingRef.current = true;
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -584,7 +589,7 @@ export function NewReport() {
         submission_mode: 'standard',
       };
 
-      const { data: reportData, error: reportError } = await supabase
+      const { data: reportData, error: reportError, status: reportStatus } = await supabase
         .from('lab_reports')
         .insert({
           user_id: user.id,
@@ -604,6 +609,12 @@ export function NewReport() {
         .single();
 
       if (reportError) {
+        // F065: a 4xx means the server refused the row, so nothing will ever
+        // point at the file just stored: remove it. With no answer, or a 5xx
+        // from a gateway, the row may exist after all, so the file stays.
+        if (fileUrl && reportStatus >= 400 && reportStatus < 500) {
+          void supabase.storage.from('lab-files').remove([fileUrl]);
+        }
         throw new Error(`Failed to create report record: ${reportError.message}`);
       }
       createdReportId = reportData.id;
@@ -811,9 +822,10 @@ export function NewReport() {
       }
       setPendingNavigation(`/app/reports/${createdReportId}`);
 
-    } catch (err) {
-      const msg = errorMessage(err, 'An error occurred');
-      setError(msg);
+    } catch {
+      // F065: plain words. The raw message ("File upload failed: Failed to
+      // fetch") tells her nothing she can act on.
+      setError("We couldn't save your report. Check your connection, then try again.");
       setLoading(false);
       setStep(3);
       setSubmitStep(null);

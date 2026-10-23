@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
+import { CalmNotice, UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from '../components/CalmNotice';
 import { errorMessage } from '../lib/errors';
 import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
@@ -50,6 +51,8 @@ export function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The reads failed (F065): shown as such, never as an empty account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [reports, setReports] = useState<LabReport[]>([]);
   const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
   const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
@@ -81,12 +84,19 @@ export function Dashboard() {
     try {
       setLoading(true);
       setError(null);
+      setLoadFailed(false);
       const [reportsRes, periodRes, symptomRes, interventionRes] = await Promise.all([
         supabase.from('lab_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false }),
         supabase.from('period_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
         supabase.from('symptom_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }),
         supabase.from('interventions').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
       ]);
+      // A read that fails resolves with `error` (postgrest-js does not throw).
+      // Offline, that used to become [] and the first-run "No lab reports yet".
+      if ([reportsRes, periodRes, symptomRes, interventionRes].some(res => res.error)) {
+        setLoadFailed(true);
+        return;
+      }
 
       const fetchedReports = (!reportsRes.error && reportsRes.data) ? reportsRes.data as LabReport[] : [];
       setReports(fetchedReports);
@@ -337,6 +347,20 @@ export function Dashboard() {
 
   if (loading) {
     return <Layout><Loading /></Layout>;
+  }
+
+  if (loadFailed) {
+    return (
+      <Layout>
+        <div className="max-w-5xl mx-auto">
+          <CalmNotice
+            title={UNREACHABLE_TITLE}
+            safe={UNREACHABLE_SAFE_LINE}
+            action={{ label: 'Try again', onClick: () => { void fetchData(); } }}
+          />
+        </div>
+      </Layout>
+    );
   }
 
   return (
