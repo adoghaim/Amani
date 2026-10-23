@@ -252,7 +252,7 @@ describe('Basic abnormal changes', () => {
   vocabulary guard cannot see.
 */
 const delta = (key: string, previousValue: number, currentValue: number) => ({
-  key, displayName: key === 'tsh' ? 'TSH' : key, previousValue, currentValue, unit: 'uIU/mL', significance: 'significant',
+  key, displayName: key === 'tsh' ? 'TSH' : key, previousValue, currentValue, unit: 'mIU/L', significance: 'significant',
 }) as unknown as BiomarkerDelta;
 const floorWithDeltas = (deltas: BiomarkerDelta[]): InsightSummary => ({
   ...floorWith([]), deltaMap: new Map(deltas.map(d => [d.key as BiomarkerName, d])),
@@ -271,14 +271,14 @@ function mount(state: InterpretationAccessResult) {
 }
 const CHROME = [FREEMIUM_COPY.report.basicHeading, FREEMIUM_COPY.report.previewLabel];
 const trendPreview = (current: number) => ({ kind: 'trend', content: {
-  biomarker_slug: 'tsh', marker: MODEL_CANARIES[6], previous_value: 6, current_value: current, unit: 'uIU/mL',
+  biomarker_slug: 'tsh', marker: MODEL_CANARIES[6], previous_value: 6, current_value: current, unit: 'mIU/L',
   direction: 'increased', summary: MODEL_CANARIES[4] } });
 
 describe('Basic wording through the policy (owner R1)', () => {
   it('a trend preview that agrees with her measured change is stated as that claim, never as its stored text', () => {
     const host = mount(withBasic({}, trendPreview(9)));
     const card = host.querySelector('[data-model-surface="preview"]');
-    expect(card?.textContent).toContain('TSH increased from 6 to 9 uIU/mL.');
+    expect(card?.textContent).toContain('TSH increased from 6 to 9 mIU/L.');
     expect(card?.querySelectorAll('[data-language-claim="measured_movement"]')).toHaveLength(1);
     expect(host.textContent).not.toContain(MODEL_CANARIES[4]);
     expect(host.textContent).not.toContain(MODEL_CANARIES[6]);
@@ -334,7 +334,7 @@ describe('real server projection to rendered Basic panel', () => {
     expect(state.locked).toEqual(visible.locked);
     const host = mount(state);
     const card = host.querySelector('[data-model-surface="preview"]');
-    expect(card?.textContent).toContain('TSH increased from 6 to 9 uIU/mL.');
+    expect(card?.textContent).toContain('TSH increased from 6 to 9 mIU/L.');
     expect(card?.querySelector('[data-language-claim="measured_movement"]')).not.toBeNull();
     expect(host.textContent).toContain('Cross-report relationship available');
     expect(host.textContent).not.toContain('additional pattern');

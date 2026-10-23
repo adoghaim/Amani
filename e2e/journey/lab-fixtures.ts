@@ -3,7 +3,7 @@ import { deflateSync } from 'node:zlib';
 /*
   Synthetic lab uploads for the PK-03e-I journey. Never real patient files.
   Values, units and printed intervals mirror the claim-authority testkit
-  (supabase/functions/_shared/claim-authority.testkit.ts: TSH 6 -> 9 uIU/mL,
+  (supabase/functions/_shared/claim-authority.testkit.ts: TSH 6 -> 9 mIU/L,
   ferritin 25 -> 30 ng/mL, synthetic 0-100 printed intervals), whose trend and
   claim behaviour is already proven by Vitest; nothing clinical is authored here.
 */
@@ -71,5 +71,5 @@ export function ocrItems(u: SyntheticUpload) {
     canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped', needs_review: false,
     is_core: true, category: null,
   });
-  return [row('TSH', 'tsh', u.tsh, 'uIU/mL'), row('Ferritin', 'ferritin', u.ferritin, 'ng/mL')];
+  return [row('TSH', 'tsh', u.tsh, 'mIU/L'), row('Ferritin', 'ferritin', u.ferritin, 'ng/mL')];
 }

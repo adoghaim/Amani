@@ -71,7 +71,7 @@ test.describe('Free reader of a regenerated report', () => {
     expect(await (await response).json()).toEqual(JSON.parse(JSON.stringify(served.body)));
     // Positive readiness: the Basic answer rendered (its locked cross-report count).
     await expect(page.getByText('Cross-report relationship available', { exact: true })).toBeVisible();
-    await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 uIU/mL');
+    await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 mIU/L');
     await expect(page.locator('body')).not.toContainText(projectionCanary);
   });
 });

@@ -57,14 +57,14 @@ for (const disagree of [false, true]) {
       await page.goto(`/app/reports/${current.report.id}`);
       // Positive readiness independent of preview: the endpoint response has rendered.
       await expect(page.getByText('Cross-report relationship available', { exact: true })).toBeVisible();
-      await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 uIU/mL');
+      await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 mIU/L');
       const card = page.locator('[data-model-surface="preview"]');
       if (disagree) {
         await expect(card).toHaveCount(0);
       } else {
         await expect(card).toBeVisible();
         await expect(card.locator('[data-language-claim="measured_movement"]'))
-          .toHaveText('TSH increased from 6 to 9 uIU/mL.');
+          .toHaveText('TSH increased from 6 to 9 mIU/L.');
       }
       await expect(page.locator('body')).not.toContainText(projectionCanary);
       await expect(page.getByText(/additional patterns? found/)).toHaveCount(0);
