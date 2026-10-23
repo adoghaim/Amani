@@ -270,7 +270,8 @@ describe('Settings and Billing agree with resolved entitlement, not the legacy p
   });
   it('keeps legacy wording only with the flag off', () => {
     vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'false');
-    signedIn(); subscription('free');
+    // Source 'trial' is what resolves the trial; the profile column is not read (F047).
+    signedIn(); subscription('free', { source: 'trial', entitled: true });
     expect(text(account())).toContain('trial');
     expect(text(account())).not.toContain('complimentary');
   });

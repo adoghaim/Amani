@@ -7,6 +7,10 @@ import { errorMessage } from '../../../lib/errors';
 import { Trash2, AlertTriangle } from 'lucide-react';
 import { openExternalUrl } from '../../../lib/native';
 import { storeSubscriptionsUrl } from '../../../lib/iap';
+import { useSubscription } from '../../../hooks/useSubscription';
+
+/** The Stripe statuses delete-user-data cancels (cancelStripeSubscriptions). */
+const STRIPE_LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid']);
 
 /**
  * A store subscription the server refused to delete the account around.
@@ -16,6 +20,15 @@ interface StoreSubscriptionWarning {
   platform: 'ios' | 'android';
   product_id: string;
   expires_at: string | null;
+}
+
+/*
+  The 409 body may say whether the server stops Google Play billing as part of
+  the deletion (`play_cancellation_enabled`). Servers that do not send it, which
+  is every deployed one today, leave the answer "no": deletion does not cancel.
+*/
+function cancelledByDeletion(sub: StoreSubscriptionWarning, playCancels: boolean) {
+  return sub.platform === 'android' && playCancels;
 }
 
 export function DeleteAccountSection() {
@@ -31,6 +44,13 @@ export function DeleteAccountSection() {
     sure nobody deletes their way into paying for an app they can't log into.
   */
   const [storeSubs, setStoreSubs] = useState<StoreSubscriptionWarning[] | null>(null);
+  const [playCancels, setPlayCancels] = useState(false);
+  /*
+    A live web (Stripe) subscription is cancelled on the spot by delete-user-data,
+    with no proration or refund — the same statuses it cancels.
+  */
+  const { subscription } = useSubscription();
+  const stripeLive = STRIPE_LIVE_STATUSES.has(subscription?.subscription_status ?? '');
 
   const handleDeleteData = async (acknowledgeStoreSubscriptions = false) => {
     if (deleteConfirmText !== 'DELETE') {
@@ -78,6 +98,7 @@ export function DeleteAccountSection() {
           data.code === 'store_subscription_acknowledgement_required'
         ) {
           setStoreSubs((data.store_subscriptions ?? []) as StoreSubscriptionWarning[]);
+          setPlayCancels(data.play_cancellation_enabled === true);
           setDeleting(false);
           return;
         }
@@ -95,6 +116,9 @@ export function DeleteAccountSection() {
       setDeleting(false);
     }
   };
+
+  const keepsBilling = (storeSubs ?? []).filter((sub) => !cancelledByDeletion(sub, playCancels));
+  const cancelledNow = (storeSubs ?? []).filter((sub) => cancelledByDeletion(sub, playCancels));
 
   return (
     <Card className="border-theme-flag-low-border">
@@ -127,6 +151,12 @@ export function DeleteAccountSection() {
                       <li>Delete all biomarker data and interpretations</li>
                       <li>Delete all cycle events and interventions</li>
                       <li>Remove your account and email from our system</li>
+                      {stripeLive && (
+                        <li>
+                          Cancel your web subscription immediately. The rest of the period you
+                          have paid for is not refunded.
+                        </li>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -138,18 +168,31 @@ export function DeleteAccountSection() {
                     <AlertTriangle className="w-5 h-5 text-theme-flag-watch mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                       <h3 className="font-semibold text-theme-flag-watch mb-1">
-                        Your subscription will keep billing
+                        {keepsBilling.length > 0
+                          ? 'Your subscription will keep billing'
+                          : 'Your subscription will be cancelled'}
                       </h3>
-                      <p className="text-sm text-theme-flag-watch">
-                        This account has an active subscription billed by{' '}
-                        {storeSubs[0]?.platform === 'ios' ? 'Apple' : 'Google'}.{' '}
-                        <strong>Deleting your account does not cancel it.</strong> Only you
-                        can cancel it, from your store account settings — and once the
-                        account is gone, this app can no longer help you find it.
-                      </p>
-                      <p className="text-sm text-theme-flag-watch mt-2">
-                        Cancel it first, then come back and delete.
-                      </p>
+                      {keepsBilling.length > 0 && (
+                        <>
+                          <p className="text-sm text-theme-flag-watch">
+                            This account has an active subscription billed by{' '}
+                            {keepsBilling[0]?.platform === 'ios' ? 'Apple' : 'Google'}.{' '}
+                            <strong>Deleting your account does not cancel it.</strong> Only you
+                            can cancel it, from your store account settings — and once the
+                            account is gone, this app can no longer help you find it.
+                          </p>
+                          <p className="text-sm text-theme-flag-watch mt-2">
+                            Cancel it first, then come back and delete.
+                          </p>
+                        </>
+                      )}
+                      {cancelledNow.length > 0 && (
+                        <p className={`text-sm text-theme-flag-watch${keepsBilling.length > 0 ? ' mt-2' : ''}`}>
+                          This account has an active subscription billed by Google.{' '}
+                          <strong>Deleting your account will cancel it right away.</strong> A
+                          cancelled Google Play subscription cannot be restored.
+                        </p>
+                      )}
                       <div className="mt-3 flex flex-wrap gap-2">
                         {storeSubs.map((sub) => (
                           <Button
@@ -204,7 +247,9 @@ export function DeleteAccountSection() {
                   {deleting
                     ? 'Deleting...'
                     : storeSubs !== null
-                      ? 'Delete anyway — I’ll cancel my subscription myself'
+                      ? keepsBilling.length > 0
+                        ? 'Delete anyway — I’ll cancel my subscription myself'
+                        : 'Delete and cancel my subscription'
                       : 'Yes, Delete My Data'}
                 </Button>
                 <Button
@@ -214,6 +259,7 @@ export function DeleteAccountSection() {
                     setDeleteConfirmText('');
                     setError('');
                     setStoreSubs(null);
+                    setPlayCancels(false);
                   }}
                 >
                   Cancel
