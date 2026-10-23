@@ -35,16 +35,16 @@ const ReportView     = lazyWithRetry(() => import('./pages/ReportView').then(m =
 const Tracker        = lazyWithRetry(() => import('./pages/Tracker').then(m => ({ default: m.Tracker })))
 const Billing        = lazyWithRetry(() => import('./pages/Billing').then(m => ({ default: m.Billing })))
 const Settings       = lazyWithRetry(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
-const ParserDebugger = lazyWithRetry(() => import('./pages/ParserDebugger').then(m => ({ default: m.ParserDebugger })))
+// Dev-only pages exist only under import.meta.env.DEV: a lazy() declared
+// unconditionally still ships its chunk, even with its route left unregistered.
+const ParserDebugger = import.meta.env.DEV ? lazyWithRetry(() => import('./pages/ParserDebugger').then(m => ({ default: m.ParserDebugger }))) : null
 const Onboarding    = lazyWithRetry(() => import('./pages/Onboarding'))
 const Privacy        = lazyWithRetry(() => import('./pages/Privacy').then(m => ({ default: m.Privacy })))
 const Terms          = lazyWithRetry(() => import('./pages/Terms').then(m => ({ default: m.Terms })))
 const DeleteAccount  = lazyWithRetry(() => import('./pages/DeleteAccount').then(m => ({ default: m.DeleteAccount })))
 const Contact        = lazyWithRetry(() => import('./pages/Contact').then(m => ({ default: m.Contact })))
 const NotFound       = lazyWithRetry(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })))
-const DesignGallery = lazyWithRetry(() => import('./pages/DesignGallery').then(m => ({ default: m.DesignGallery })))
-
-const enableParserDebugger = import.meta.env.DEV
+const DesignGallery = import.meta.env.DEV ? lazyWithRetry(() => import('./pages/DesignGallery').then(m => ({ default: m.DesignGallery }))) : null
 
 /*
   Every signed-in route. Gate order at launch: the update block (PK-MINVER-01)
@@ -114,10 +114,10 @@ function AppRoutes() {
         <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
         <Route path="/app/settings" element={<ProtectedRoute consentExempt><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
-        {enableParserDebugger && (
+        {DesignGallery && (
           <Route path="/dev/design" element={<DesignGallery />} />
         )}
-        {enableParserDebugger && (
+        {ParserDebugger && (
           <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
         )}
 

@@ -19,10 +19,9 @@ android {
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            // '!*.map' keeps Vite's source maps out of the shipped app. vite.config.ts
-            // uses sourcemap: 'hidden', so no bundle references them — inside the APK
-            // they are dead weight (~5 MB raw) that also hands the original TypeScript
-            // to anyone who unzips the binary. The web deploy still emits them.
+            // '!*.map' keeps source maps out of the shipped app. It is a backstop now:
+            // vite.config.ts emits none and deletes any left in dist, because a map
+            // hands the original TypeScript to anyone who unzips the binary.
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:!*.map'
         }
     }
