@@ -1,4 +1,5 @@
 import type { LabSource, ReportItem } from './types';
+import { isBelowLimitResult } from './valueExtraction';
 
 /*
   Should we spend an OpenAI call refining this parse?
@@ -25,7 +26,17 @@ const MAX_LOW_CONFIDENCE_RATIO = 0.25;
 type GateItem = Pick<
   ReportItem,
   'canonical_slug' | 'confidence_score' | 'needs_review' | 'parse_error'
->;
+> & Partial<Pick<ReportItem, 'parse_status' | 'value_text'>>;
+
+/*
+  Flagged only because its result was printed below a limit ("<10"): the parser
+  read the row cleanly and asks her to confirm it (F098). Any other flag shows
+  in parse_status, and a row without one counts as flagged.
+*/
+function flaggedOnlyBelowLimit(item: GateItem): boolean {
+  return isBelowLimitResult(item.value_text) && item.parse_status !== undefined
+    && item.parse_status !== 'needs_review' && item.parse_status !== 'parse_error';
+}
 
 export interface AiRefinementInput {
   items: GateItem[];
@@ -58,7 +69,7 @@ export function decideAiRefinement({
     return { refine: true, reason: `${errored} item(s) reported a parse error` };
   }
 
-  const flagged = items.filter((i) => i.needs_review).length;
+  const flagged = items.filter((i) => i.needs_review && !flaggedOnlyBelowLimit(i)).length;
   if (flagged > 0) {
     return { refine: true, reason: `${flagged} item(s) flagged needs_review` };
   }

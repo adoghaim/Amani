@@ -53,3 +53,72 @@ describe('parser pipeline (regression snapshots)', () => {
     expect(parseAllReportItems(labcorpHormoneFixture)).toMatchSnapshot();
   });
 });
+
+/*
+  What the snapshots above only pin, asserted (review F098). The edge-case
+  fixture's third row is an analyte with no catalog entry; it must come out
+  unmapped, not as Vitamin B12 because its name ends in "cobalamin". And a
+  result printed below a limit ("<150") is stored as half the limit by the
+  shared convention, which no lab measured: it waits for her confirmation.
+*/
+describe('parser pipeline (semantic assertions)', () => {
+  const lab = (row: string) => `Lab Report\n\n${row}\n`;
+
+  it.each([
+    'Holotranscobalamin           42        pmol/L    50-150',
+    'Holotranscobalamin           80        pmol/L    50-150',
+    'Holotranscobalamin 80 pmol/L 50-150',
+    'Transcobalamin II            950       pmol/L    700-1500',
+    'Holotranscobalamin           <10       pmol/L    50-150',
+  ])('a *cobalamin analyte is never read as Vitamin B12: %s', row => {
+    expect(parseAllReportItems(lab(row)).filter(i => i.canonical_slug === 'vitamin_b12')).toEqual([]);
+  });
+
+  it('the edge-case fixture keeps Holotranscobalamin as its own unmapped row beside Vitamin B12', () => {
+    const items = parseAllReportItems(edgeCasesFixture);
+    expect(items.find(i => i.raw_name === 'Holotranscobalamin')).toMatchObject({
+      canonical_slug: null, normalization_status: 'unmapped', excluded_reason: 'no_canonical_match',
+      value_numeric: 42, unit: 'pmol/L',
+    });
+    const b12 = items.filter(i => i.canonical_slug === 'vitamin_b12');
+    expect(b12).toHaveLength(1);
+    expect(b12[0]?.source_snippet).toMatch(/^Vitamin B12\s+<150/);
+  });
+
+  it.each([
+    ['Vitamin B12                  2000      pg/mL     232-1245', 2000],
+    ['Vitamin B12                  150       pg/mL     232-1245', 150],
+    ['Vitamin B12 2000 H 200-1100 pg/mL', 2000],
+  ])('a Holotranscobalamin row still ends the B12 block above it: %s', (b12, value) => {
+    const items = parseAllReportItems(lab(`${b12}\nHolotranscobalamin           42        pmol/L    50-150`));
+    expect(items.filter(i => i.canonical_slug === 'vitamin_b12').map(i => i.value_numeric)).toEqual([value]);
+  });
+
+  it.each([
+    ['Cobalamin                    410       pg/mL     232-1245', 'vitamin_b12'],
+    ['Cyanocobalamin               410       pg/mL     232-1245', 'vitamin_b12'],
+    ['Vitamin B12, Serum           410       pg/mL     232-1245', 'vitamin_b12'],
+    ['B12                          410       pg/mL     232-1245', 'vitamin_b12'],
+  ])('a whole B12 name still reads as Vitamin B12: %s', (row, slug) => {
+    expect(parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug)).toMatchObject({ value_numeric: 410 });
+  });
+
+  const fixtures = {
+    quest: questFixture, labcorp: labcorpFixture, hone: honeFixture, generic: genericFixture,
+    edgeCases: edgeCasesFixture, questHormones: questHormoneFixture, labcorpHormones: labcorpHormoneFixture,
+  };
+  it.each(Object.entries(fixtures))('%s: every "<X" result needs her review or carries no number', (_, text) => {
+    for (const item of parseAllReportItems(text).filter(i => /^\s*</.test(i.value_text ?? ''))) {
+      expect(item.needs_review || item.value_numeric == null, item.source_snippet ?? item.raw_name).toBe(true);
+    }
+  });
+
+  it.each([
+    ['a core row', edgeCasesFixture, 'vitamin_b12'],
+    ['an unmapped extended row', lab('Holotranscobalamin           <10       pmol/L    50-150'), null],
+  ])('%s printed below a limit needs her review', (_, text, slug) => {
+    const below = parseAllReportItems(text).filter(i => i.canonical_slug === slug && /^</.test(i.value_text ?? ''));
+    expect(below).toHaveLength(1);
+    expect(below[0]).toMatchObject({ needs_review: true });
+  });
+});

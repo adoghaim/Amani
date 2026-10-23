@@ -45,7 +45,8 @@ function row(raw_name: string, over: Partial<ReportItem> = {}): ReportItem {
 describe('ReviewBiomarkers card names', () => {
   it('names a parse-error row and its notice by display name, never by slug', () => {
     const cards = render(parseAllReportItemsWithDebug(edgeCasesFixture).items);
-    expect(names(cards)).toEqual(['TSH', 'Vitamin B12']);
+    // F098: Holotranscobalamin is its own unmapped row, by its printed label; it was dropped as a second Vitamin B12.
+    expect(names(cards)).toEqual(['TSH', 'Vitamin B12', 'Holotranscobalamin']);
     expect(host.textContent).toContain('below physiological minimum 0.001 for TSH — likely a parse error — please correct the value below.');
     expect(host.textContent).not.toMatch(/\btsh\b|vitamin_b12/);
   });

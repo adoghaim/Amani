@@ -8,6 +8,15 @@ const NUM_RE = /(\d+\.\d+|\d+)/g;
 const PHASE_LINE_RE = /\b(?:phase|trimester|menopausal|menopaus|pregnancy|pregnant|follicular|luteal|ovulatory|peak|male|female|adult|child|infant)\b/i;
 const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|primary|prevention|factor|method|equation|accuracy)\b/i;
 
+/**
+ * A result printed below a limit ("<150"). Its number is half the limit by the
+ * convention every reader shares (here, extract-biomarkers, OCR), so no lab
+ * measured it: the row needs her review (F098).
+ */
+export function isBelowLimitResult(valueText: string | null | undefined): boolean {
+  return /^\s*</.test(valueText ?? '');
+}
+
 export function parseValueWithPrefix(text: string): { value: number; rawValue: string } | null {
   const ltMatch = text.match(/^<\s*(\d+\.?\d*)/);
   if (ltMatch && ltMatch[1] !== undefined) {
