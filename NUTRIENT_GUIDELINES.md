@@ -31,11 +31,13 @@ Five extra spellings resolve to an entry above (`b12`, `cobalamin`, `vitamin d3`
 
 ### 1. Banned Herbal/Alternative Supplements
 
-These are a violation on bare mention, with no supplementation context required. The list is `BANNED_SUPPLEMENTS` (26 terms) plus `BANNED_SUPPLEMENT_ABBREVIATIONS` (2) in `_shared/nutrient-policy.ts`:
+These are a violation on bare mention, with no supplementation context required. The list is `BANNED_SUPPLEMENTS` (30 terms) plus `BANNED_SUPPLEMENT_ABBREVIATIONS` (2) in `_shared/nutrient-policy.ts`:
 
-ashwagandha, maca, vitex, chasteberry, chaste tree, diindolylmethane, evening primrose, black cohosh, rhodiola, ginseng, saw palmetto, berberine, inositol, n-acetylcysteine, n-acetyl cysteine, red clover, dong quai, licorice root, milk thistle, st john's wort, st. john's wort, tribulus, fenugreek, melatonin, adaptogen, 5-htp.
+ashwagandha, maca, vitex, chasteberry, chaste tree, diindolylmethane, evening primrose, black cohosh, rhodiola, ginseng, saw palmetto, berberine, inositol, n-acetylcysteine, n-acetyl cysteine, red clover, dong quai, licorice root, milk thistle, st john's wort, st. john's wort, saint john's wort, tribulus, fenugreek, melatonin, adaptogen, 5-htp, valerian, kava, shatavari.
 
-Abbreviations are matched separately and **case-sensitively** with word boundaries, so the supplement `DIM` is caught without flagging the ordinary adjective "dim": `DIM`, `NAC`.
+Valerian, kava and shatavari were added in October 2026 (review F096), with "saint john's wort" as one more spelling of an existing entry, because a model names herbs without the word "supplement", so the allow-list rule never sees them. The clinical owner has not yet reviewed which herbs belong on this list.
+
+Abbreviations are matched separately: `NAC` in any case, since it is not an English word; `DIM` in capitals anywhere, and in sentence or lower case only where it reads as the supplement ("Dim is…", "a dim supplement", "take dim"), so the ordinary adjective ("dim the lights") is not flagged.
 
 The deny-list is the second layer, not the first. Anything nobody thought to list is caught by the allow-list rule above, which fails closed on supplementation language that names no allow-listed nutrient.
 
@@ -45,14 +47,17 @@ The following are forbidden when aimed at something ingestible: "take", "start t
 
 These fire only when the same string also carries substance context — a supplement/vitamin/mineral/pill/capsule/tablet/dose word, a dosage unit, or a named nutrient. Without that guard the validator flags ordinary English ("energy and focus are the first things to **take a** hit") and sends a clean report to the non-AI fallback for no reason.
 
+**Directives aimed at a substance are forbidden too.** An imperative or recommending verb — take/taking, start/starting, begin, add, try, use, increase, continue, consider, stop, discontinue, resume, boost, switch to, supplement with — followed within three filler words by a nutrient, a banned supplement or a dosage form is a violation: "Consider taking vitamin D", "Start a magnesium supplement", "You should supplement with iron", "Try taking iron every other day". The verb has to sit where it instructs the reader: at the start of a clause, after "you (should/could/may want to…)", after a lead-in such as "make sure to", or after "recommend/suggest/advise". So consultative phrasing still passes — "Ask your provider whether you should take iron", "If you take iron already, mention it" — as does a nutrient named as a lab measurement ("Consider a vitamin D level check", "iron studies", "iron-rich foods").
+
 ### 3. Banned Dosage/Timing Language
 
 Never include:
 
-- Specific dosage units (IU, mg, mcg, µg/ug, g, mL, grams, milligrams, micrograms) adjacent to a number
-- Frequency terms (daily, twice a/per day, once a day, per day, every day/morning/night/evening)
-- Timing instructions (with food, on an empty stomach)
-- Brand names or product recommendations
+- Specific dosage units (IU, international units, mg, mcg, µg/μg/ug, g, mL, grams, milligrams, micrograms, singular or plural, hyphenated or not) adjacent to a number, whether the number is digits ("2,000") or words ("two thousand")
+- A counted dosage form ("two capsules", "3 tablets")
+- Frequency terms (daily, nightly, twice a/per day, once/twice/three times a day or week, once a day, per day, every day/morning/night/evening, every other day, each day/morning/night/evening)
+- Timing instructions (with food, with meals, with your largest meal, between meals, on an empty stomach, at bedtime, before bed)
+- Brand names or product recommendations. The validator catches a trademark sign (®, ™, ℠) anywhere, and, in substance context, the words "brand", "brand-name", "branded" and quality-seal endorsements ("third-party tested", "USP verified", "NSF certified", "pharmaceutical grade"). A bare brand name with no mark is not detected: there is no brand list yet, and the clinical owner decides what goes on one.
 
 **Lab concentrations are not dosages.** `95 mg/dL`, `13.2 g/dL` and `45 µg/dL` are measurements the interpretation is supposed to quote, so the dosage pattern exempts a volume denominator (`/dL`, `/L`, `/mL`). A per-mass dosing expression such as `5 mg/kg` is still flagged. Frequency terms, like prescriptive verbs, require substance context in the same string — "track your energy daily" is not a dosing instruction.
 
@@ -111,7 +116,7 @@ The validator lives in `supabase/functions/_shared/nutrient-policy.ts` and is in
 - `validateInterpretationOutput(parsed)` → `{ valid, violations }`, checked per string across a recursive walk of the whole object.
 - `sanitizeViolations(parsed)` → `Record<string, unknown> | null`. See the fail-closed contract below.
 
-`_shared/nutrient-policy.test.ts` is the regression net for all of the above. Run `npm test` after any change to this module.
+`_shared/nutrient-policy.test.ts` and `_shared/nutrient-policy.adversarial.test.ts` are the regression net for all of the above. Run `npm test` after any change to this module.
 
 Any change to the allow-list, banned patterns, or phrasing rules goes in `_shared/nutrient-policy.ts` only — and the edge function must be redeployed.
 
@@ -128,13 +133,24 @@ Any change to the allow-list, banned patterns, or phrasing rules goes in `_share
 
 ### Banned patterns
 
-The validator walks every freeform string in the parsed output and checks each one independently (so a match cannot be assembled across two unrelated fields). Per string:
+The validator walks every freeform string in the parsed output and checks each one independently (so a match cannot be assembled across two unrelated fields).
 
-1. **Dosage units** — `IU`, `mg`, `mcg`, `µg`/`ug`, `g`, `mL`/`ml`, `grams`, `milligrams`, `micrograms` adjacent to a number, except when followed by a volume denominator (`/dL`, `/L`, `/mL`), which makes it a lab concentration rather than a dose. Unconditional.
-2. **Banned supplements** — the 26 terms and 2 abbreviations listed above. Unconditional.
-3. **Prescriptive verb patterns** — `take`, `start taking`, `begin taking`, `consume`, `swallow`, `prescribe(d)` followed by an article or a digit. Requires substance context in the same string.
-4. **Dosing frequency** — `daily`, `twice a/per day`, `every day/morning/night/evening`, `once a day`, `per day`, `with food`, `on an empty stomach`. Requires substance context in the same string.
-5. **Unlisted nutrient** — supplementation language (`supplement`/`supplements`/`supplementing`/`supplementation`) in a string that names no allow-listed nutrient. This is the allow-list rule, and it is what makes the policy fail closed on berberine, inositol, red clover, dong quai and everything else nobody enumerated.
+Each string is **normalized first** (`normalizePolicyText`): typographic apostrophes become `'`, Unicode is NFKD-decomposed (fullwidth letters, ligatures, non-breaking spaces), invisible format characters (zero-width spaces and joiners, soft hyphens, word joiners) are deleted, accents are stripped, dash variants become `-`, and Cyrillic/Greek lookalike letters are folded to Latin. So "St John’s wort", "ashwa​gandha" with a zero-width space, "ber­berine" with a soft hyphen and "аshwagandha" with a Cyrillic `а` all match. Then, per string:
+
+1. **Dosage units** (`dosage_unit`) — `IU`/`IUs`/`I.U.`, `international units`, `mg`, `mcg`, `µg`/`μg`/`ug`, `g`, `mL`/`ml`, `grams`, `milligrams`, `micrograms`, singular or plural, adjacent (or hyphenated) to a number in digits or words, except when followed by a lab denominator (`/dL`, `/L`, `/mL`, `/g`, `/min`, `/24h`…), which makes it a lab concentration rather than a dose. Unconditional.
+2. **Counted dosage forms** (`dosage_amount`) — a number followed by capsules, tablets, pills, softgels, gummies, lozenges, drops, scoops, sachets or doses. Unconditional.
+3. **Banned supplements** (`banned_supplement`) — the 30 terms and 2 abbreviations listed above. Unconditional.
+4. **Prescriptive verb patterns** (`prescriptive_verb`) — `take`, `start taking`, `begin taking`, `consume`, `swallow`, `prescribe(d)` followed by an article or a digit, which requires substance context in the same string; or a directive aimed at a named substance (see "Banned Prescriptive Language" above), which names its own substance and so needs no separate context.
+5. **Dosing frequency** (`dosing_frequency`) — the frequency and timing terms listed above. Requires substance context in the same string.
+6. **Brand names** (`brand_name`) — a trademark sign anywhere; brand and quality-seal words in substance context.
+7. **Unlisted nutrient** (`unlisted_nutrient`) — supplementation language (`supplement`/`supplements`/`supplementing`/`supplementation`) in a string that names no allow-listed nutrient. This is the allow-list rule, and it is what makes the policy fail closed on berberine, inositol, red clover, dong quai and everything else nobody enumerated.
+8. **General wellness** (`general_wellness`) — supplementation language next to "overall/general health", "overall wellness", "immune support", "preventive" or "for prevention". Nutrients may not be offered as general wellness advice.
+
+Substance context means a supplement/vitamin/mineral/pill/capsule/tablet/dose/medication word, a tea, root, leaf, tonic or remedy ("root cause" does not count), or a named nutrient or banned supplement.
+
+**Known gaps.** A medication named without a medication word ("Discuss starting metformin or levothyroxine") and a brand named without a trademark sign are not detected; both need a list that the clinical owner has not yet provided. Whether a nutrient mention is tied to a specific lab value is semantic and stays with the prompt.
+
+`_shared/nutrient-policy.adversarial.test.ts` pins every list literally and holds the adversarial corpus (obfuscated spellings, number words, plural and hyphenated units, recommending verbs, herbs, brands) plus a corpus of consultative and lifestyle sentences that must keep passing.
 
 Violations are reported as `code:match` strings, deduplicated across the object.
 
@@ -155,7 +171,7 @@ Tied to a flagged lab value, consultative framing, no dosage, no prescriptive ve
 | "Take 2000 IU of vitamin D daily" | dosage unit (`IU`) + frequency (`daily`) + prescriptive verb (`take`) |
 | "You should start taking a vitamin D supplement" | prescriptive verb (`start taking`) |
 | "Consider an ashwagandha or rhodiola stack for stress" | banned supplements |
-| "Magnesium is important for overall health, ask your provider about a supplement" | **passes the validator.** `magnesium` is allow-listed; "not tied to a specific lab value" is semantic, not regex, so only the prompt rejects this |
+| "Magnesium is important for overall health, ask your provider about a supplement" | general-wellness supplementation (`overall health` beside the word "supplement"). Whether a nutrient is tied to a specific lab value is semantic, not regex, so the prompt still carries most of that rule |
 | "Some clinicians discuss berberine supplementation" | banned supplement, and supplementation naming no allow-listed nutrient |
 | "Ask your provider about calcium supplementation" | `calcium` is not in the allow-list, so the supplementation rule fails closed |
 
@@ -164,7 +180,7 @@ Tied to a flagged lab value, consultative framing, no dosage, no prescriptive ve
 - **Policy module (single source of truth)**: `/supabase/functions/_shared/nutrient-policy.ts`
   - Exports `ALLOWED_NUTRIENTS` (enforced), `ALLOWED_NUTRIENTS_PROMPT_LIST` (derived from it), `BANNED_SUPPLEMENTS`, `BANNED_SUPPLEMENT_ABBREVIATIONS`, banned-pattern regexes
   - Exports `findTextViolations()`, `validateInterpretationOutput()` and `sanitizeViolations()`
-- **Tests**: `/supabase/functions/_shared/nutrient-policy.test.ts`
+- **Tests**: `/supabase/functions/_shared/nutrient-policy.test.ts`, `/supabase/functions/_shared/nutrient-policy.adversarial.test.ts`
 - **Edge function (consumer)**: `/supabase/functions/generate-interpretation/index.ts`
   - Imports from the policy module above
   - Interpolates `ALLOWED_NUTRIENTS_PROMPT_LIST` into the system prompt
@@ -193,7 +209,7 @@ Food and nutrient discussion is owned by the **Support Plan** card (`src/compone
 To modify these guidelines:
 
 1. Edit `ALLOWED_NUTRIENTS` / `BANNED_SUPPLEMENTS` / the regexes in `supabase/functions/_shared/nutrient-policy.ts`. That module is the only place policy lives; the prompt list derives from it.
-2. Update `supabase/functions/_shared/nutrient-policy.test.ts` and run `npm test`.
+2. Update `supabase/functions/_shared/nutrient-policy.test.ts` and the pinned lists in `nutrient-policy.adversarial.test.ts`, then run `npm test`.
 3. Update this document to match.
 4. Deploy the edge function: `supabase functions deploy generate-interpretation`. The policy module is bundled with it, so a policy change is inert until this runs.
 
