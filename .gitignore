@@ -45,7 +45,6 @@ supabase/.temp/
 supabase/.branches/
 
 # Per-machine tool output and stale dumps
-graphify-out/
 **/.expo/
 logs.txt
 

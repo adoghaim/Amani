@@ -22,7 +22,8 @@ describe('ignored local state (F080, F081)', () => {
     '.env.production',
     '.env.development',
     '.env.staging',
-    'graphify-out/graph.json',
+    'graphify-out/cache/ast/x.json',
+    'graphify-out/cost.json',
     'apps/mobile/.expo/devices.json',
     '.expo/devices.json',
     'logs.txt',
@@ -30,7 +31,7 @@ describe('ignored local state (F080, F081)', () => {
     expect(isIgnored(path)).toBe(true);
   });
 
-  it.each(['.env.example', 'jarvis/.env.example', 'e2e/no-env/.gitkeep'])(
+  it.each(['.env.example', 'jarvis/.env.example', 'e2e/no-env/.gitkeep', 'graphify-out/graph.json'])(
     '%s stays visible (tracked on purpose)',
     (path) => {
       expect(isIgnored(path)).toBe(false);
