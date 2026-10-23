@@ -256,11 +256,12 @@ describe('headline, focus areas and derived metrics: placement only where the ba
   });
 
   it('every derived metric reads as a comparison against an unreviewed band, with no interpretation', () => {
+    // Each in its catalog unit: no metric is calculated from another unit (F011).
     const metrics = computeDerivedMetrics([
       { name: 'fasting_glucose', value: 95 }, { name: 'fasting_insulin', value: 12 }, { name: 'triglycerides', value: 150 },
       { name: 'hdl_cholesterol', value: 40 }, { name: 'total_cholesterol', value: 220 }, { name: 'total_testosterone', value: 80 },
       { name: 'shbg', value: 30 }, { name: 'free_t3', value: 2.5 }, { name: 'free_t4', value: 1 },
-    ] as Biomarker[]);
+    ].map(b => ({ ...b, unit: getEntry(b.name as BiomarkerName)!.defaultUnit })) as Biomarker[]);
     expect(metrics).toHaveLength(5);
     for (const m of metrics) {
       expect(Object.keys(m)).not.toContain('interpretation');

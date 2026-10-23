@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Biomarker, BiomarkerName } from '../../types';
-import { evaluateInsightRules } from '../../utils/derivedMetrics';
+import { computeDerivedMetrics, evaluateInsightRules } from '../../utils/derivedMetrics';
+import { getEntry } from '../biomarkers/dictionary';
 import { buildInsightSummary } from '../insights/buildInsightSummary';
 import { assessAmaniContext, contextFromReport } from './amaniContext';
 import { compareReports } from './compareReports';
@@ -111,6 +112,24 @@ describe('F011 — a value in another unit gets no Amani band', () => {
     const sameUnits = panel.map(b => (b.name === 'tsh' ? b : { ...b, unit: b.name === 'free_t4' ? 'ng/dL' : 'pg/mL' }));
     expect(gateInsightMatches(evaluateInsightRules(sameUnits, null), sameUnits, NO_CONTEXT).map(m => m.rule_id))
       .toContain('thyroid_conversion_concern');
+  });
+
+  it('no derived metric is calculated from an input in another unit', () => {
+    // Each formula and its Amani band are written for the catalog units: glucose
+    // 5.2 mmol/L read as mg/dL gives HOMA-IR 0.08, "within" its band.
+    const si = [
+      ['fasting_glucose', 5.2, 'mmol/L'], ['fasting_insulin', 36, 'pmol/L'], ['triglycerides', 1.1, 'mmol/L'],
+      ['hdl_cholesterol', 1.5, 'mmol/L'], ['total_cholesterol', 5.0, 'mmol/L'], ['total_testosterone', 1.0, 'nmol/L'],
+      ['shbg', 50, 'nmol/L'], ['free_t3', 4.5, 'pmol/L'], ['free_t4', 15, 'pmol/L'],
+    ].map(([name, value, unit]) => ({ name, value, unit }) as Biomarker);
+    expect(computeDerivedMetrics(si)).toEqual([]);
+    const catalogUnits = si.map(b => ({ ...b, unit: getEntry(b.name as BiomarkerName)!.defaultUnit }));
+    expect(computeDerivedMetrics(catalogUnits).map(m => m.name))
+      .toEqual(['HOMA_IR', 'TG_HDL_RATIO', 'NON_HDL', 'FREE_ANDROGEN_INDEX', 'FT3_FT4_RATIO']);
+    // One input in another unit removes only the metrics that use it.
+    const glucoseSi = catalogUnits.map(b => (b.name === 'fasting_glucose' ? { ...b, unit: 'mmol/L' } : b));
+    expect(computeDerivedMetrics(glucoseSi).map(m => m.name)).not.toContain('HOMA_IR');
+    expect(computeDerivedMetrics(glucoseSi)).toHaveLength(4);
   });
 });
 

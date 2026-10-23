@@ -744,4 +744,15 @@ describe('F011 — a value in another unit is never placed against an Amani band
     expect(app.textContent).not.toMatch(/outside Amani bands?|within Amani bands?|outside Amani's current comparison band|the Amani band at|All scored values are within/i);
     expect(app.querySelectorAll('[data-language-category="comparison_band"][data-language-cue="attention"]').length).toBe(0);
   }, 30_000);
+
+  it('glucose 5.2 mmol/L and insulin 36 pmol/L: no derived metric, so no HOMA-IR against its band', async () => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
+    fixture.tables.biomarkers = rows(CURRENT, [['fasting_glucose', 5.2, 'mmol/L', 3.9, 5.5], ['fasting_insulin', 36, 'pmol/L', 13, 139]]);
+    fixture.tables.report_analytes = [];
+    await renderAndOpenAll();
+    expect(app.querySelectorAll('article[aria-label$=" result"]').length).toBe(2);
+    expect(app.textContent).not.toMatch(/Derived metrics|HOMA-IR/);
+    expect(app.textContent).not.toMatch(/outside Amani bands?|within Amani bands?|outside Amani's current comparison band|the Amani band at/i);
+  }, 30_000);
 });
