@@ -36,6 +36,17 @@ async function readAfter(page: Page, action: () => Promise<unknown>) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
+/** A result card shows her lab's printed interval and places the value against it. */
+async function expectLabInterval(page: Page, system: string, marker: string, interval: string) {
+  const toggle = page.getByRole('button', { name: new RegExp(`^${system}\\b`) }).and(page.locator('[aria-expanded]'));
+  // Systems start collapsed unless they hold the primary finding, which is not under test here.
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  const card = page.getByRole('article', { name: `${marker} result`, exact: true });
+  await expect(card.getByRole('definition').first()).toHaveText(interval);
+  await card.locator('button[aria-expanded]').first().click();
+  await expect(card.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Within your lab's range");
+}
+
 async function expectNoModelProse(page: Page) {
   await expect(page.getByText(/^Lab Report: /).first()).toBeVisible();
   await expect(page.locator('body'), 'unauthorized model prose must never reach the DOM').not.toContainText(MODEL_CANARY);
@@ -108,6 +119,10 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     await expect(page.getByText('Premium Analysis 1 of 3 included')).toBeVisible();
     await expect(page.getByText('TSH is measured for the first time at 6 uIU/mL.')).toBeVisible();
     await expectNoModelProse(page);
+    // Review F093, F114: the OCR rows' printed intervals reached the report. They
+    // were saved as null, so each card said "Not provided on your report".
+    await expectLabInterval(page, 'Thyroid', 'TSH', '0–100 uIU/mL');
+    await expectLabInterval(page, 'Nutrients', 'Ferritin', '0–100 ng/mL');
     if (backend) {
       const [reportId] = reportIds;
       const report = backend.db.tables.lab_reports.find(r => r.id === reportId)!;
@@ -117,6 +132,12 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
       // Extraction: the OCR rows were saved as this report's analytes.
       const analytes = backend.db.tables.report_analytes.filter(r => r.lab_report_id === reportId);
       expect(analytes.map(a => [a.canonical_slug, a.value_numeric]).sort()).toEqual([['ferritin', 25], ['tsh', 6]]);
+      // ...with the lab's printed value text and interval (review F093, F114).
+      expect(analytes.map(a => [a.canonical_slug, a.raw_value_text, a.raw_reference_range, a.normalized_min, a.normalized_max]).sort())
+        .toEqual([['ferritin', '25', '0-100', 0, 100], ['tsh', '6', '0-100', 0, 100]]);
+      const biomarkers = backend.db.tables.biomarkers.filter(r => r.lab_report_id === reportId);
+      expect(biomarkers.map(b => [b.name, b.raw_value_text, b.reference_min, b.reference_max]).sort())
+        .toEqual([['ferritin', '25', 0, 100], ['tsh', '6', 0, 100]]);
       // Generation: one first-generation request, no request_id (not a regeneration).
       expect(backend.server.generateRequests).toEqual([expect.objectContaining({ reportId })]);
       expect(backend.server.generateRequests[0]).not.toHaveProperty('request_id');

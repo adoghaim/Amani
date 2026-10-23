@@ -18,6 +18,7 @@ import { isAiPausedResponse, noteAiPaused } from '../lib/aiPause';
 import { OcrPausedNotice } from '../components/OcrPausedNotice';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
+import { toExtractedItem, type ExtractedAnalyte, type ExtractedItem } from '../../supabase/functions/_shared/lab-extraction';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
@@ -453,7 +454,9 @@ export function NewReport() {
         return;
       }
 
-      if (data.items && data.items.length > 0) applyExtractedItems(data.items, runId);
+      // OCR rows are named like report_analytes; the save reads ReportItem names (F093, F114).
+      const items: ExtractedAnalyte[] = data.items ?? [];
+      if (items.length > 0) applyExtractedItems(items.map(toExtractedItem), runId);
 
       // Capture cycle metadata from OCR if the text-path didn't already find any.
       // OCR returns metadata.cycle_day / metadata.cycle_phase per the edge function contract.
@@ -500,8 +503,10 @@ export function NewReport() {
         console.warn('[NewReport] AI extraction background warning:', invokeError.message);
         return;
       }
-      if (runId === extractionRunRef.current && data?.items && data.items.length > 0) {
-        applyExtractedItems(data.items, runId);
+      // extract-biomarkers maps its rows with the same toExtractedItem before answering.
+      const items: ExtractedItem[] = data?.items ?? [];
+      if (runId === extractionRunRef.current && items.length > 0) {
+        applyExtractedItems(items, runId);
       }
     }).catch(err => {
       console.error('[NewReport] AI extraction background network error:', err);

@@ -5,6 +5,7 @@ import { errorMessage } from "../_shared/errors.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
+import { toExtractedItem, type ExtractedAnalyte as ReportAnalyte } from "../_shared/lab-extraction.ts";
 import { ExtractBiomarkersRequestSchema } from "../_shared/schemas/requests.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -35,26 +36,6 @@ interface CanonicalAnalyte {
   is_ratio: boolean;
   affects_scoring: boolean;
   affects_recommendations: boolean;
-}
-
-interface ReportAnalyte {
-  raw_name: string;
-  raw_value_text: string | null;
-  value_numeric: number;
-  unit: string | null;
-  raw_reference_range: string | null;
-  normalized_min: number | null;
-  normalized_max: number | null;
-  normalized_operator: string | null;
-  normalized_operator_value: number | null;
-  source_snippet: string | null;
-  confidence_score: "high" | "medium" | "low";
-  canonical_analyte_id: string | null;
-  canonical_slug: string | null;
-  parse_status: "mapped" | "partial" | "unmapped";
-  needs_review: boolean;
-  is_core: boolean;
-  category: string | null;
 }
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -584,23 +565,7 @@ CONFIDENCE:
       metadata: { ...coverage },
     }).then(() => {});
 
-    const legacyItems = validatedAnalytes.map(a => ({
-      raw_name: a.raw_name,
-      canonical_slug: a.canonical_slug,
-      category: a.category,
-      value_numeric: a.value_numeric,
-      value_text: a.raw_value_text,
-      unit: a.unit,
-      raw_reference_range: a.raw_reference_range,
-      normalized_reference_min: a.normalized_min,
-      normalized_reference_max: a.normalized_max,
-      reference_operator: a.normalized_operator,
-      reference_operator_value: a.normalized_operator_value,
-      confidence_score: a.confidence_score,
-      needs_review: a.needs_review,
-      is_core_biomarker: a.is_core,
-      source_snippet: a.source_snippet,
-    }));
+    const legacyItems = validatedAnalytes.map(toExtractedItem);
 
     return new Response(
       JSON.stringify({ items: legacyItems, analytes: validatedAnalytes, coverage }),
