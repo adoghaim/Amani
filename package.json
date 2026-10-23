@@ -17,6 +17,7 @@
     "check:functions": "bash docs/check-functions.sh npx --yes deno@2",
     "check:pinned-imports": "node tools/supply-chain/check-pinned-imports.mjs",
     "test:supply-chain": "node --test tools/supply-chain/pinned-imports.test.mjs",
+    "test:device-lock": "node --test tools/device-lock/native-boundary.test.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "cap:sync": "BUILD_TARGET=native vite build && npx cap sync",

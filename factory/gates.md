@@ -61,7 +61,7 @@ Foundation PRs carry the extension points other packets build on (PK-INT-01, PK-
 
 - `npm run cap:sync` (runs `BUILD_TARGET=native vite build && npx cap sync`).
 - **Android:** `cd android && ./gradlew assembleDebug` succeeds (JDK 21, SDK 36, as in `native-grade.md`); CI runs it on every PR (workflow `native-build.yml`). Optional: emulator smoke (app launches, login screen renders, packet screen reachable) via the `android-emulator` job.
-- **iOS:** `xcodebuild` simulator build with signing disabled succeeds (macOS runner; opt-in because of cost). Signed archives and store uploads are **owner-only** and outside the factory.
+- **iOS:** Swift packages resolve from the committed `Package.resolved` with automatic resolution disabled, and the `xcodebuild` simulator build with signing disabled succeeds (macOS runner; CI runs it on PRs that change `ios/**`, `package.json`, `package-lock.json` or `capacitor.config.ts`, or with the `factory:ios` label). Signed archives and store uploads are **owner-only** and outside the factory.
 - Device-only checks (edge-to-edge on Android 15+, purchases, App Links) stay on the release QA checklist; the factory reports them as pending.
 
 ## G3 — Database: migrations, RLS, grants, triggers

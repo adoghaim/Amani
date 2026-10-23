@@ -40,7 +40,7 @@ tester agent adds/extends e2e + native proof     reviewer agent (adversarial)
 | `factory/sql/` | Read-only verification queries (privileges, trigger mode). |
 | `factory/scripts/report.mjs` | Prints the daily report from `status.json` (no network). |
 | `factory/e2e/` | Where web e2e runs and what real-backend e2e would still need. |
-| `.github/workflows/native-build.yml` | Android build on every PR to main (+ optional emulator smoke), iOS simulator build (opt-in, macOS cost). Web e2e is `e2e.yml`. |
+| `.github/workflows/native-build.yml` | Android build on every PR to main (+ optional emulator smoke); iOS simulator build on PRs that change `ios/**`, `package.json`, `package-lock.json` or `capacitor.config.ts` (or with the `factory:ios` label). Both run `npm run test:device-lock`. Web e2e is `e2e.yml`. |
 
 ## Rules every agent follows
 
