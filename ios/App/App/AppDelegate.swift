@@ -1,4 +1,5 @@
 import UIKit
+import WebKit
 import Capacitor
 
 @UIApplicationMain
@@ -11,6 +12,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// takes for the app switcher is the splash, never her results. It is
     /// removed when the app is active again.
     private var privacyCover: UIView?
+
+    /// Review F002: after a return from the background the cover stays up until
+    /// the page has drawn the lock screen (or decided not to lock), so her last
+    /// page never shows first. The page signals that by resolving
+    /// window.amaniPrivacyCoverReady (src/lib/deviceLock/privacyCover.ts). A
+    /// fallback removes the cover anyway, so it can never stay up.
+    private var enteredBackground = false
+    private var coverGeneration = 0
+    private static let coverFallbackSeconds: TimeInterval = 1.5
+    private static let coverReadyScript =
+        "return typeof window.amaniPrivacyCoverReady === 'function' ? await window.amaniPrivacyCoverReady() : true;"
 
     private func showPrivacyCover() {
         guard DevicePrivacyRelease.isActive(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) else { return }
@@ -28,6 +40,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         privacyCover = nil
     }
 
+    /// Removes the cover once the page is ready, or after the fallback delay,
+    /// unless the app has resigned active again in the meantime.
+    private func hidePrivacyCoverWhenPageReady() {
+        let generation = coverGeneration
+        let hide: () -> Void = { [weak self] in
+            guard let self = self, self.coverGeneration == generation else { return }
+            self.hidePrivacyCover()
+        }
+        guard let webView = (window?.rootViewController as? CAPBridgeViewController)?.webView else {
+            hide()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + AppDelegate.coverFallbackSeconds, execute: hide)
+        webView.callAsyncJavaScript(AppDelegate.coverReadyScript, arguments: [:], in: nil, in: .page) { _ in
+            DispatchQueue.main.async(execute: hide)
+        }
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         return true
@@ -36,12 +66,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
         // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
+        coverGeneration += 1
         showPrivacyCover()
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
         // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
         // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+        enteredBackground = true
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
@@ -50,7 +82,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-        hidePrivacyCover()
+        coverGeneration += 1
+        let returningFromBackground = enteredBackground
+        enteredBackground = false
+        // Control Center, a call or the Face ID sheet never left the app: the page is as she left it.
+        guard returningFromBackground, privacyCover != nil else {
+            hidePrivacyCover()
+            return
+        }
+        hidePrivacyCoverWhenPageReady()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

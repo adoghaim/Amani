@@ -13,8 +13,9 @@ import type { UnlockProblem } from '../../lib/deviceLock';
  * never locks her out: she signs back in with her email and password.
  *
  * Back behaviour (D23): Android's back button closes the app while it is
- * locked (App.tsx, AndroidBackHandler). It never reveals the page underneath,
- * which is not in the document at all.
+ * locked (App.tsx, AndroidBackHandler). It never reveals the page underneath:
+ * on a cold start that page is not in the document at all, and after a
+ * re-lock it stays mounted but invisible and inert (DeviceLockGate, review F001).
  */
 
 const LOCK_HEADING = 'Amani is locked';
