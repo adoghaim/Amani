@@ -2151,9 +2151,13 @@
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1",
+        "G4"
+      ],
       "branch": "factory/rv-ingest-cycle-parser",
-      "pr": null,
+      "pr": "#156",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2164,7 +2168,10 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ingest-cycle-parser; findings F010. Head 352804d. Built. Clinical and correctness reviews: recommend merge."
+        "Track ingest-cycle-parser; finding F010. Fix 352804d; merged with main 2c3d21d at 5cf7d10.",
+        "Independent reviews at 352804d: correctness recommend merge; clinical recommend merge, \"G4 clinical authority: pass\".",
+        "Gates at 5cf7d10 (run locally; GitHub Actions jobs do not start): lint, typecheck, full test (174 files, 3,350 tests), build, clinical; fresh-user journey 2/2 and browser smoke 4/4 in Chromium, WebKit and Firefox.",
+        "Awaiting owner: confirm PK-FIX-06 [Pending] Q9 (her dates win over the lab-printed cycle day/phase) in PR #156."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
