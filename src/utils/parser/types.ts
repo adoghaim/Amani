@@ -141,6 +141,11 @@ export interface BiomarkerPattern {
   canonical: string;
   patterns: string[];
   commonUnits: string[];
+  /**
+   * The aliases match only as whole words, never inside a longer one:
+   * "cobalamin" is not read inside "Holotranscobalamin", another analyte.
+   */
+  wholeWord?: boolean;
 }
 
 export interface ParsedResult {

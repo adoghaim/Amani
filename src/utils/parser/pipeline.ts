@@ -18,10 +18,10 @@ import {
 } from './patterns';
 import { detectReportSource } from './sourceDetection';
 import { getAdapter } from './adapters';
-import { splitIntoLines, isSectionHeader, isPartOfWord } from './textUtils';
+import { splitIntoLines, isSectionHeader, isPartOfWord, indexOfWord } from './textUtils';
 import { bindReferenceRange, firstNumericToken, intervalNumbers, isReferenceSubLabel } from './rangeDetection';
-import { matchBiomarkerLabel, matchLabelLine } from './labelMatching';
-import { extractValueFromWindow, parseValueWithPrefix } from './valueExtraction';
+import { matchLabelLine, opensAnalyteRow } from './labelMatching';
+import { extractValueFromWindow, isBelowLimitResult, parseValueWithPrefix } from './valueExtraction';
 import { resolveAlias, getEntry, getDisplayName } from '../../lib/biomarkers/dictionary';
 import type { BiomarkerName } from '../../types';
 
@@ -144,7 +144,7 @@ export function layeredParse(
     const bp = match.pattern;
 
     const rawWindow = lines.slice(i, Math.min(i + windowSize, lines.length));
-    const nextAnalyteOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l, adapter) !== null);
+    const nextAnalyteOffset = rawWindow.slice(1).findIndex(l => opensAnalyteRow(l, adapter));
     const windowLines = nextAnalyteOffset >= 0 ? rawWindow.slice(0, nextAnalyteOffset + 1) : rawWindow;
     const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter, match.nameEnd);
 
@@ -242,14 +242,14 @@ export function layeredParse(
   return Array.from(results.values());
 }
 
-/** Start offsets of the lines in `text` that open a marker (matchBiomarkerLabel), computed once per parse. */
+/** Start offsets of the lines in `text` that open a marker (opensAnalyteRow), computed once per parse. */
 function labelLineOffsets(text: string, adapter?: SourceAdapter): number[] {
   const offsets: number[] = [];
   for (let start = 0; start <= text.length;) {
     const newline = text.indexOf('\n', start);
     const end = newline === -1 ? text.length : newline;
     const line = text.substring(start, end).trim();
-    if (line.length > 0 && matchBiomarkerLabel(line, adapter) !== null) offsets.push(start);
+    if (line.length > 0 && opensAnalyteRow(line, adapter)) offsets.push(start);
     start = end + 1;
   }
   return offsets;
@@ -376,7 +376,9 @@ export function parseBiomarkersFromText(
       const patternLower = patternStr.toLowerCase();
       let searchIndex = 0;
       while (true) {
-        const foundIndex = textLower.indexOf(patternLower, searchIndex);
+        const foundIndex = pattern.wholeWord
+          ? indexOfWord(textLower, patternLower, searchIndex)
+          : textLower.indexOf(patternLower, searchIndex);
         if (foundIndex === -1) break;
         const labelEnd = foundIndex + patternLower.length;
         const extracted = extractBiomarkerFromContext(
@@ -468,7 +470,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       reference_operator_value: ref?.value ?? null,
       confidence_score: confidence,
       is_core_biomarker: isCore,
-      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error',
+      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || isBelowLimitResult(b.rawValue),
       source_snippet: b.rawText ?? null,
       parse_error: parseError,
       parse_status: parseStatus,
@@ -507,7 +509,7 @@ function tryResolveExtendedSlug(rawName: string): { slug: string; category: stri
   }
   for (const bp of BIOMARKER_PATTERNS) {
     for (const p of bp.patterns) {
-      if (p === lower || lower.includes(p)) {
+      if (p === lower || (bp.wholeWord ? indexOfWord(lower, p) !== -1 : lower.includes(p))) {
         const canonical = normalizeToCatalogSlug(bp.canonical);
         return { slug: canonical, category: CORE_CATEGORIES[canonical] ?? null, isCore: CORE_SLUGS.has(canonical) };
       }
@@ -614,7 +616,7 @@ function buildExtendedItems(
       reference_operator_value: ref?.comparator?.value ?? null,
       confidence_score: physBoundsError ? 'low' : confidence,
       is_core_biomarker: isCore,
-      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error',
+      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || isBelowLimitResult(valueText),
       source_snippet: line.substring(0, 120),
       parse_error: physBoundsError,
       parse_status: parseStatus,
@@ -670,7 +672,7 @@ export function parseAllReportItemsWithDebug(
 
       const windowSize = adapter?.windowSize ?? 10;
       const rawWindow  = lines.slice(i, Math.min(i + windowSize, lines.length));
-      const nextOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l, adapter) !== null);
+      const nextOffset = rawWindow.slice(1).findIndex(l => opensAnalyteRow(l, adapter));
       const windowLines = nextOffset >= 0 ? rawWindow.slice(0, nextOffset + 1) : rawWindow;
       const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter, match.nameEnd);
       const canonical      = normalizeToCatalogSlug(bp.canonical);
