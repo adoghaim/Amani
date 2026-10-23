@@ -35,6 +35,7 @@ import { SafetyWarnings } from '../components/SafetyWarnings';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
 import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
+import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
@@ -416,7 +417,7 @@ export function ReportView() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [, setPreviousBiomarkers] = useState<Biomarker[]>([]);
-  const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
+  const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number; unit: string }[]>>(new Map());
   const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>>(new Map());
   const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
@@ -723,13 +724,13 @@ export function ReportView() {
             .order('id'));
 
         if (allHistoricalBiomarkers) {
-          const histMap = new Map<string, { reportDate: string; value: number }[]>();
+          const histMap = new Map<string, { reportDate: string; value: number; unit: string }[]>();
           const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
           for (const b of allHistoricalBiomarkers) {
             const reportDate = reportDateMap.get(b.lab_report_id);
             if (!reportDate) continue;
             if (!histMap.has(b.name)) histMap.set(b.name, []);
-            histMap.get(b.name)!.push({ reportDate, value: b.value });
+            histMap.get(b.name)!.push({ reportDate, value: b.value, unit: b.unit });
             if (!occurrences.has(b.name)) occurrences.set(b.name, []);
             occurrences.get(b.name)!.push({
               reportDate,
@@ -824,7 +825,8 @@ export function ReportView() {
     if (historicalReportCount < PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) return map;
 
     for (const b of biomarkers) {
-      const history = historicalBiomarkers.get(b.name);
+      // F013: a value in another unit is not comparable with this one, so it is not her history here.
+      const history = historicalBiomarkers.get(b.name)?.filter(h => sameUnit(h.unit, b.unit));
       if (!history || history.length === 0) continue;
 
       const orderedEntries = history
@@ -923,7 +925,7 @@ export function ReportView() {
     const context = contextFromReport(report?.estimated_cycle_phase);
     const map = new Map<string, AuthorizedLanguage>();
     for (const b of biomarkers) {
-      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context);
+      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context, b.unit);
       if (assessment.kind === 'scored') map.set(b.name, authorizedLanguage(assessment.band));
     }
     return map;
@@ -976,7 +978,7 @@ export function ReportView() {
   }, [insightSummary]);
 
   const flaggedSlugs = useMemo<BiomarkerName[]>(
-    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside').map(s => s.key),
+    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit) === 'outside').map(s => s.key),
     [scoredBiomarkers, report?.estimated_cycle_phase],
   );
 
@@ -990,7 +992,7 @@ export function ReportView() {
     return buildFocusAreas(
       insightSummary,
       insightSummary.watchSignals,
-      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside'),
+      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit) === 'outside'),
       null,
       primaryCategory,
     );
@@ -1630,7 +1632,7 @@ export function ReportView() {
                       // generated it" is inadmissible), and it could read "all within
                       // range" while a card says otherwise (Phase 8B, kept).
                       const outside = scoredBiomarkers
-                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
+                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit) === 'outside')
                         .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
@@ -1944,7 +1946,7 @@ export function ReportView() {
                 {filteredCategories.map(({ category, items }) => {
                   // Counted live, not from the persisted upload-time flag: a flag stored
                   // before V2-03 may have come from a fallback band Amani now withholds.
-                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase) === 'outside').length;
+                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase, b.unit) === 'outside').length;
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {

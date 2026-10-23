@@ -37,6 +37,22 @@ function normalizeUnit(raw: string | null): string | null {
   return UNIT_ALIASES[lower] ?? raw.trim();
 }
 
+function unitSpelling(raw: string | null | undefined): string {
+  return (raw ?? '').toLowerCase().replace(/\s+/g, '').replace(/[µμ]/g, 'u').replace(/(^|\/)mc(?=[a-z])/g, '$1u')
+    .replace(/²/g, '2').replace(/³/g, '3');
+}
+
+/**
+ * Whether two unit strings name the same unit. Only spelling is ignored: case,
+ * spacing, superscript digits (m², m2) and how the micro prefix is written (µ,
+ * μ, mc, u). Different units never match, however they relate (mmol/L and
+ * mg/dL, uIU/mL and mIU/L): the catalog approves no unit conversions (review
+ * F011, PK-05-B V2-05-03).
+ */
+export function sameUnit(a: string | null | undefined, b: string | null | undefined): boolean {
+  return unitSpelling(a) === unitSpelling(b);
+}
+
 export interface NormalizedReportItem extends ReportItem {
   _normalized: true;
   _display_name: string;
@@ -86,6 +102,9 @@ export function normalizeReportItems(items: ReportItem[]): NormalizedReportItem[
       const unitMatches =
         unitNorm !== null &&
         unitNorm.toLowerCase() === entry.defaultUnit.toLowerCase();
+      // Amani's bands are in the catalog unit and no conversion is approved: an
+      // item in another unit keeps its lab interval but is not scored (F011).
+      const catalogUnit = sameUnit(unitNorm, entry.defaultUnit);
 
       return {
         ...item,
@@ -93,8 +112,8 @@ export function normalizeReportItems(items: ReportItem[]): NormalizedReportItem[
         canonical_slug: entry.key,
         canonical_biomarker_name: entry.key,
         category: entry.category,
-        is_core_biomarker: true,
-        normalization_status: 'mapped' as const,
+        is_core_biomarker: catalogUnit,
+        normalization_status: catalogUnit ? 'mapped' as const : 'partial' as const,
         unit_original: item.unit,
         unit_normalized: unitMatches ? entry.defaultUnit : unitNorm,
         _normalized: true as const,

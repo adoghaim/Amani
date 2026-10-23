@@ -222,7 +222,7 @@ export function BiomarkerCard({
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase));
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase), unit);
   const pillLanguage = comparisonBandLabel(assessment, value);
   const pill = CUE_STYLE[pillLanguage.cue];
   const band = assessment.kind === 'scored' ? assessment.band : null;

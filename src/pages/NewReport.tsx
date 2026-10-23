@@ -651,7 +651,7 @@ export function NewReport() {
         if (coreItems.length > 0) {
           const biomarkerInserts = coreItems.map(item => {
             const slug = item.canonical_slug! as BiomarkerName;
-            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase);
+            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, null, item._normalized_unit ?? item.unit ?? '');
             let flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown' = 'in_range';
             if (status === 'borderline_low' || status === 'borderline_high') flagged = 'borderline';
             else if (status === 'out_of_range_low' || status === 'out_of_range_high') flagged = 'out_of_range';
@@ -708,7 +708,8 @@ export function NewReport() {
             confidence_score: item.confidence_score ?? 'low',
             canonical_analyte_id: canonicalAnalyteId,
             canonical_slug: slug,
-            parse_status: isMapped ? (canonicalAnalyteId ? 'mapped' : 'partial') : 'unmapped',
+            // A unit-mismatch item is partial, not unmapped: its name resolved (F011).
+            parse_status: isMapped ? (canonicalAnalyteId ? 'mapped' : 'partial') : (item.normalization_status === 'partial' ? 'partial' : 'unmapped'),
             needs_review: item.needs_review ?? false,
             is_core: item.is_core_biomarker ?? false,
             display_name: item._display_name ?? null,

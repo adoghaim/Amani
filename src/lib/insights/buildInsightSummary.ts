@@ -508,7 +508,7 @@ export function buildInsightSummary(
   const systemSummaries = groupBySystem(scored, cyclePhase);
   const bandLanguage = new Map<BiomarkerName, AuthorizedLanguage>();
   for (const b of current) {
-    const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase));
+    const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase), b.unit);
     if (assessment.kind === 'scored') bandLanguage.set(b.key, authorizedLanguage(assessment.band));
   }
   let biggestChanges: BiggestChange[] = [];
@@ -559,8 +559,9 @@ export function buildInsightSummary(
 
     if (!alreadyIncluded && primaryDelta) {
       guaranteeInsert(deltaToChange(primaryDelta, immediatePriorReportDate ?? null));
-    } else if (!alreadyIncluded && !primaryDelta) {
+    } else if (!alreadyIncluded && !primaryDelta && !previous?.some(p => p.key === primaryKey)) {
       // Primary marker exists in current report but has no previous value — first recorded result.
+      // A previous value in another unit pairs with nothing (F013), but it is not a first result.
       // Always surface it so users see their most critical out-of-range marker.
       const primaryScored = scored.find(s => s.key === primaryKey);
       if (primaryScored) {

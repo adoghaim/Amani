@@ -4,6 +4,7 @@ import {
   type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
 import { assessAmaniContext, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
+import { sameUnit } from '../biomarkers/normalizeReportItems';
 import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../../types';
 
 /*
@@ -449,11 +450,15 @@ export function authorizeModelProse(
 /**
  * One claim per measured change the application computed (compareReports),
  * keyed as the caller keys its markers. A change that cannot be a claim is left
- * out, so nothing about it can be authorized.
+ * out, so nothing about it can be authorized: that includes a change whose
+ * previous value was in another unit (F013).
  */
-export function movementClaimsByKey<K>(changes: Iterable<readonly [K, MeasuredMovement]>): Map<K, MovementClaim> {
+export function movementClaimsByKey<K>(
+  changes: Iterable<readonly [K, MeasuredMovement & { previousUnit?: string | null }]>,
+): Map<K, MovementClaim> {
   const claims = new Map<K, MovementClaim>();
   for (const [key, change] of changes) {
+    if (change.previousUnit !== undefined && !sameUnit(change.previousUnit, change.unit)) continue;
     try {
       claims.set(key, createMovementClaim({
         displayName: change.displayName, previousValue: change.previousValue,
@@ -564,8 +569,8 @@ export function bandPlacement(assessment: AmaniAssessment, value: number): Place
 }
 
 /** Shared selection for count-based surfaces; never derive placement from concern. */
-export function markerBandPlacement(key: BiomarkerName, value: number, cyclePhase?: string | null): Placement {
-  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase)), value);
+export function markerBandPlacement(key: BiomarkerName, value: number, cyclePhase?: string | null, unit?: string | null): Placement {
+  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase), unit), value);
 }
 
 /** Short, user-facing review state carried beside every Amani band. */

@@ -1,5 +1,6 @@
 import type { AmaniStatus, BiomarkerName } from '../../types';
 import { getEntry, type ClinicalRange, type OptimalRange } from '../biomarkers/dictionary';
+import { sameUnit } from '../biomarkers/normalizeReportItems';
 import {
   canDescribeAsOptimal, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
@@ -156,14 +157,22 @@ export function classifyAgainstBand(
   return 'normal';
 }
 
+/**
+ * `unit` is the value's own unit. Bands are written in the catalog unit and the
+ * catalog approves no unit conversions, so a value in any other unit, or with
+ * none, has no band (review F011). Omit `unit` only for a value already in the
+ * catalog unit.
+ */
 export function assessAmaniContext(
   key: BiomarkerName,
   value: number,
   context: PhysiologicalContext,
+  unit?: string | null,
 ): AmaniAssessment {
   const entry = getEntry(key);
   const analyte = CONTEXT_BY_KEY.get(key);
   if (!entry || !analyte) return { kind: 'unavailable' };
+  if (unit !== undefined && !sameUnit(unit, entry.defaultUnit)) return { kind: 'unavailable' };
 
   if (context.state && stateRequiresContext(analyte, context.state).length > 0) {
     return { kind: 'withheld', reason: 'non_cycling_state', state: context.state, phase: null };

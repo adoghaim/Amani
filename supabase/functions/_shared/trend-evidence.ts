@@ -25,6 +25,16 @@ export interface ComparableValue {
   unit: string;
 }
 
+/**
+ * Whether a prior value may be compared with a current one: only in the same
+ * unit, a missing unit being "". This is the pairing rule trend evidence uses;
+ * a prior in another unit is no prior (no trajectory, change or "improved").
+ * Review F013: generate-interpretation's buildPrimaryContext must apply it too.
+ */
+export function sameTrendUnit(current: string | null | undefined, previous: string | null | undefined): boolean {
+  return (current ?? "") === (previous ?? "");
+}
+
 export function compareBiomarkerValues(
   current: readonly ComparableValue[],
   previous: readonly ComparableValue[],
@@ -32,7 +42,7 @@ export function compareBiomarkerValues(
   return current
     .map(value => {
       const prior = previous.find(p => p.key === value.key);
-      if (!prior || prior.unit !== value.unit) return null;
+      if (!prior || !sameTrendUnit(value.unit, prior.unit)) return null;
       const delta = value.value - prior.value;
       return {
         key: value.key,

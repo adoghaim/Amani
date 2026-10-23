@@ -122,7 +122,7 @@ describe('amendment 5 — the health story states only what is true', () => {
   });
 
   it('the Lead\'s case through the real pipeline: TSH 9 -> 6', () => {
-    const tsh = (value: number, reportDate?: string) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5, reportDate });
+    const tsh = (value: number, reportDate?: string) => ({ key: 'tsh' as const, value, unit: 'mIU/L', labRefMin: 0.45, labRefMax: 4.5, reportDate });
     const summary = buildInsightSummary([tsh(6)], [tsh(9, '2025-12-01')], null, '2025-12-01');
     expect(summary.primaryFinding?.key).toBe('tsh');
     const c = summary.biggestChanges.find(b => b.key === 'tsh');

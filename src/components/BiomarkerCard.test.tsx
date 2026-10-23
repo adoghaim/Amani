@@ -25,11 +25,25 @@ const amaniRow = () => [...host.querySelectorAll('dt')].find(dt => dt.textConten
 
 describe('BiomarkerCard — lab range and Amani context band are separate (invariants 1, 2, 5)', () => {
   it('shows the report interval under its own label and the Amani band with its review state', () => {
-    const text = render({ name: 'tsh', value: 2.1, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5, cyclePhase: null });
-    expect(labRow()).toBe('0.45–4.5 uIU/mL');
+    const text = render({ name: 'tsh', value: 2.1, unit: 'mIU/L', labRefMin: 0.45, labRefMax: 4.5, cyclePhase: null });
+    expect(labRow()).toBe('0.45–4.5 mIU/L');
     expect(amaniRow()?.textContent).toBe('Amani context band:');
-    expect(amaniRow()?.nextElementSibling?.textContent).toBe('1–2.5 uIU/mL · Not yet reviewed');
+    expect(amaniRow()?.nextElementSibling?.textContent).toBe('1–2.5 mIU/L · Not yet reviewed');
     expect(text).toContain('2.1');
+  });
+
+  // Review F011: the band is in the catalog unit and no conversion is approved,
+  // so a value in another unit shows only her lab's interval, never a band.
+  it.each([
+    ['ldl_cholesterol', 4.9, 'mmol/L', 0, 3, '0–3 mmol/L'],
+    ['tsh', 2.1, 'uIU/mL', 0.45, 4.5, '0.45–4.5 uIU/mL'],
+  ] as const)('%s %s %s: no Amani band, only the lab range', (name, value, unit, labRefMin, labRefMax, interval) => {
+    const text = render({ name, value, unit, labRefMin, labRefMax, cyclePhase: null });
+    expect(labRow()).toBe(interval);
+    expect(amaniRow()).toBeUndefined();
+    expect(host.querySelector('[role="note"]')).toBeNull();
+    expect(text).toContain('No Amani band');
+    expect(text).not.toMatch(/Within Amani band|Outside Amani band/);
   });
 
   it('never presents the catalog lab_reference row as the patient\'s lab range', () => {
@@ -84,7 +98,7 @@ describe('BiomarkerCard — withheld context (invariants 3, 4, 5)', () => {
   });
 
   it('an in-band value on an unreviewed band never reads "Optimal"', () => {
-    const text = render({ name: 'tsh', value: 2, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5, cyclePhase: null });
+    const text = render({ name: 'tsh', value: 2, unit: 'mIU/L', labRefMin: 0.45, labRefMax: 4.5, cyclePhase: null });
     expect(text).toContain('Within Amani band');
     expect(text).not.toMatch(/\bOptimal\b/);
     act(() => host.querySelector('button')!.click());

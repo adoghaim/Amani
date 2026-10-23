@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTrendEvidence, compareBiomarkerValues, formatTrendEvidencePrompt, isSignificantChange,
-  MAX_TREND_EVIDENCE, topChanges, type TrendInputValue,
+  MAX_TREND_EVIDENCE, sameTrendUnit, topChanges, type TrendInputValue,
 } from './trend-evidence';
 import { addFindingMetadata } from './finding-metadata';
 import { buildBasicProjection } from './interpretation-visibility';
@@ -89,6 +89,22 @@ describe('lab-insights comparison rules (moved verbatim)', () => {
     expect(changes.map(isSignificantChange)).toEqual([true, true]);
     expect(isSignificantChange({ ...changes[0], percent_change: 9.9 })).toBe(false);
     expect(topChanges([{ ...changes[0], percent_change: -50 }, changes[0]], 1)[0].percent_change).toBe(-50);
+  });
+});
+
+// Review F013: the rule buildPrimaryContext must share with trend evidence.
+describe('sameTrendUnit', () => {
+  it('pairs only the same unit; a missing unit is ""', () => {
+    expect(sameTrendUnit('mmol/L', 'mg/dL')).toBe(false);
+    expect(sameTrendUnit('mg/dL', 'mg/dL')).toBe(true);
+    expect(sameTrendUnit(null, '')).toBe(true);
+    expect(sameTrendUnit(undefined, 'mg/dL')).toBe(false);
+  });
+
+  it('LDL 190 mg/dL then 4.9 mmol/L is no trend', () => {
+    const ldl = (value: number, unit: string): TrendInputValue => ({ slug: 'ldl_cholesterol', name: 'LDL', value, unit });
+    expect(buildTrendEvidence([ldl(4.9, 'mmol/L')], [ldl(190, 'mg/dL')], '2026-01-01')).toEqual([]);
+    expect(buildTrendEvidence([ldl(160, 'mg/dL')], [ldl(190, 'mg/dL')], '2026-01-01').map(e => e.direction)).toEqual(['decreased']);
   });
 });
 

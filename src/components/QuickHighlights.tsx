@@ -97,7 +97,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
 
   const flagged = biomarkers
     .map(b => {
-      const status = computeAmaniStatus(b.name, b.value, cyclePhase);
+      const status = computeAmaniStatus(b.name, b.value, cyclePhase, null, b.unit);
       const variant = amaniStatusToVariant(status);
       let priority = 0;
       if (variant === 'out_of_range') priority = 3;

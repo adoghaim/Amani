@@ -373,3 +373,26 @@ describe('scoreBiomarker', () => {
     expect(result.weightedConcern).toBe(0);
   });
 });
+
+// ─── Unit sanity (review F011) ───────────────────────────────────────────────
+// Amani bands are written in the catalog unit and no conversion is approved, so
+// a value in another unit is never flagged against one. Before, LDL 4.9 mmol/L
+// (above her lab's interval) was flagged out_of_range_low.
+
+describe('scoreBiomarker — a value in another unit is not flagged against the Amani band', () => {
+  it.each([
+    ['ldl_cholesterol', 4.9, 'mmol/L', 'out_of_range_high', 0, 3.0],
+    ['fasting_glucose', 5.2, 'mmol/L', 'in_range', 3.9, 5.5],
+    ['creatinine', 80, 'µmol/L', 'in_range', 45, 90],
+  ] as const)('%s %s %s: no Amani status; the lab status stays %s', (key, value, unit, lab, min, max) => {
+    expect(scoreBiomarker(key, value, unit, min, max, null)).toMatchObject({
+      amaniStatus: 'unknown', labStatus: lab, concern: 0, weightedConcern: 0,
+    });
+    expect(computeAmaniStatus(key, value, null, null, unit)).toBe('unknown');
+  });
+
+  it('the same marker in the catalog unit is still flagged', () => {
+    expect(scoreBiomarker('ldl_cholesterol', 160, 'mg/dL', 0, 100, null).amaniStatus).toBe('out_of_range_high');
+    expect(computeAmaniStatus('ldl_cholesterol', 160, null, null, 'mg/dL')).toBe('out_of_range_high');
+  });
+});

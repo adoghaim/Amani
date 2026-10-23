@@ -20,15 +20,17 @@ export interface ScoredBiomarker {
  * Amani's context status for one value, or 'unknown' when Amani withholds.
  * A cycle-dependent marker with no usable phase, or any marker whose catalog
  * flags the reported non-cycling state, gets no Amani status at all: it is
- * never classified against a broad unphased fallback band (V2-03).
+ * never classified against a broad unphased fallback band (V2-03). Nor does a
+ * value whose `unit` is not the catalog unit (F011; see assessAmaniContext).
  */
 export function computeAmaniStatus(
   name: BiomarkerName,
   value: number,
   cyclePhase?: CyclePhase | string | null,
   state: NonCyclingState | null = null,
+  unit?: string | null,
 ): AmaniStatus {
-  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state));
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state), unit);
   return assessment.kind === 'scored' ? assessment.status : 'unknown';
 }
 
@@ -130,7 +132,7 @@ export function scoreBiomarker(
   labRefMax: number | null,
   cyclePhase?: CyclePhase | null,
 ): ScoredBiomarker {
-  const amaniStatus = computeAmaniStatus(name, value, cyclePhase);
+  const amaniStatus = computeAmaniStatus(name, value, cyclePhase, null, unit);
   const labStatus = computeLabStatus(value, labRefMin, labRefMax);
   const concern = statusToConcern(amaniStatus);
   const weight = getScoreWeight(name);

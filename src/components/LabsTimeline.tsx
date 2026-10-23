@@ -1,6 +1,7 @@
 
 import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
 import { LabReport, Biomarker, Intervention } from '../types';
+import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
 import { formatDate } from '../utils/formatters';
 import { Card } from './Card';
 import { Button } from './Button';
@@ -103,7 +104,8 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
           if (!current) return [];
 
           let delta = null;
-          if (previous) {
+          // F013: values in two units are not comparable, as in CompareView.
+          if (previous && sameUnit(previous.unit, current.unit)) {
             delta = calculateDelta(current.value, previous.value);
           }
 

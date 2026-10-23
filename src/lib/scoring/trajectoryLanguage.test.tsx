@@ -48,7 +48,8 @@ describe('R1 — the real catalog can never produce a favourable direction', () 
       for (const phase of [null, ...MENSTRUAL_PHASES] as (CyclePhase | null)[]) {
         for (const prev of values) {
           for (const curr of values) {
-            const [d] = compareReports([{ key: e.key, value: prev, unit: 'u' }], [{ key: e.key, value: curr, unit: 'u' }], phase);
+            // The catalog unit: a band applies to no other unit (F011).
+            const [d] = compareReports([{ key: e.key, value: prev, unit: e.defaultUnit }], [{ key: e.key, value: curr, unit: e.defaultUnit }], phase);
             if (!d) continue;
             expect(d.boundaryCrossing?.direction, `${e.key} ${phase} ${prev}->${curr}`).not.toBe('improved');
             expect(FAVOURABLE_STATUSES, `${e.key} ${phase} ${prev}->${curr}`).not.toContain(d.trajectoryStatus);
@@ -91,7 +92,7 @@ describe('R1 — the favourable path exists only behind authorized language', ()
   });
 
   it('neutral movements keep their rank in the biggest-changes selection', () => {
-    const [d] = compareReports([{ key: 'tsh', value: 9, unit: 'uIU/mL' }], [{ key: 'tsh', value: 6, unit: 'uIU/mL' }]);
+    const [d] = compareReports([{ key: 'tsh', value: 9, unit: 'mIU/L' }], [{ key: 'tsh', value: 6, unit: 'mIU/L' }]);
     expect(d?.trajectoryStatus).toBe('changed_still_high');
     expect(getBiggestChanges([d!])).toHaveLength(1);
   });

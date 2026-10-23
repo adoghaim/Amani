@@ -20,12 +20,18 @@ export const KNOWN_UNITS = [
   '%',
   'mEq/L', 'meq/l',
   'ratio',
+  // Appended last, so every unit detected before keeps its precedence. Without
+  // them a printed SI unit fell back to the marker's default unit (review F011).
+  'umol/L', 'umol/l', 'ug/L', 'ug/l', 'mmol/mol',
 ];
 
 export function detectUnit(text: string): string | null {
+  // \b cannot precede µ or μ (neither is a word character), so the micro prefix
+  // is matched as its u spelling: "80 µmol/L" is umol/L, not the default unit.
+  const spelled = text.replace(/[µμ]/g, 'u');
   for (const u of KNOWN_UNITS) {
     const escaped = u.replace(/[/()[\].+*?^${}|\\]/g, '\\$&');
-    if (new RegExp('\\b' + escaped + '\\b', 'i').test(text)) {
+    if (new RegExp('\\b' + escaped + '\\b', 'i').test(spelled)) {
       return u;
     }
   }
