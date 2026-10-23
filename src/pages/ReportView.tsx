@@ -27,11 +27,13 @@ import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insi
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
   authorizedLanguage, authorizeModelProse, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  markerBandPlacement, movementClaimsByKey, outsideBandCount, PRIMARY_FINDING_LABEL,
+  labCriticalFlagWarnings, markerBandPlacement, movementClaimsByKey, outsideBandCount, PRIMARY_FINDING_LABEL,
   primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
   type AuthorizedLanguage, type AuthorizedModelProse,
 } from '../lib/scoring/insightCopy';
 import { SafetyWarnings } from '../components/SafetyWarnings';
+import { findLabCriticalFlags } from '../lib/safety/labCriticalFlags';
+import { useLabCriticalFlagNotice } from '../hooks/useLabCriticalFlagNotice';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
 import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
@@ -928,9 +930,14 @@ export function ReportView() {
     }
     return map;
   }, [biomarkers, report]);
+  // Review F014 interim: the lab's own printed critical flag, read from the saved lab rows only, dark behind its flag.
+  const labCriticalNotice = useLabCriticalFlagNotice();
   const safetyWarnings = useMemo(
-    () => evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
-    [biomarkers],
+    () => [
+      ...evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
+      ...(labCriticalNotice ? labCriticalFlagWarnings(findLabCriticalFlags(reportAnalytes)) : []),
+    ],
+    [biomarkers, reportAnalytes, labCriticalNotice],
   );
 
   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
@@ -1578,8 +1585,8 @@ export function ReportView() {
             && (generating || accessState?.access === 'error' || accessState?.access === 'generation_needed')
             && freemiumPanel}
 
-          {/* ── A. Safety channel: approved deterministic rules only, never band-derived ── */}
-          {!isProcessing && <SafetyWarnings warnings={safetyWarnings} />}
+          {/* ── A. Safety channel: deterministic rules only, never band-derived; generating cannot hide it ── */}
+          <SafetyWarnings warnings={safetyWarnings} />
 
           {/* ── Notices slot (R22): calm notices about the explanation below, from src/features/report/notices ── */}
           {!isProcessing && (

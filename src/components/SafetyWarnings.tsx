@@ -3,10 +3,12 @@ import { CUE_STYLE, type SafetyWarning } from '../lib/scoring/insightCopy';
 
 /*
   The safety channel's renderer, separate from every observation renderer.
-  It takes only SafetyWarning values, which only an approved deterministic
-  rule can produce (insightCopy.evaluateSafetyRules), and renders their text
-  untouched: no band filter, review state or neutralizer is applied here.
-  With no approved rule today it renders nothing.
+  It takes only SafetyWarning values, which only a deterministic rule can
+  produce: an approved analyte rule (insightCopy.evaluateSafetyRules) or, while
+  features.lab_critical_flag_notice is on, the lab's own printed critical flag
+  (insightCopy.labCriticalFlagWarnings). It renders their text untouched: no
+  band filter, review state or neutralizer is applied here. With no approved
+  rule and the flag off, as today, it renders nothing.
 */
 export function SafetyWarnings({ warnings }: { warnings: readonly SafetyWarning[] }) {
   if (warnings.length === 0) return null;
