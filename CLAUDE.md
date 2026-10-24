@@ -157,3 +157,21 @@ Key routing rules:
 Read DESIGN.md before visual or UI work: it defines the fonts, colors, spacing, and
 aesthetic direction. Ask the user before departing from it. When reviewing or QA-ing
 UI, flag code that doesn't match DESIGN.md.
+
+## graphify
+
+`graphify-out/` holds a [graphify](https://github.com/Graphify-Labs/graphify) knowledge graph of this
+repository: code parsed locally with tree-sitter, plus a semantic pass over the docs. `.graphifyignore`
+lists what it leaves out. Install with `uv tool install graphifyy` (two y's), then `graphify install`.
+
+- If `graphify` is installed, start codebase questions with `graphify query "<question>"`,
+  `graphify path "<A>" "<B>"` or `graphify explain "<concept>"`, then read the files it points to.
+  `graphify-out/GRAPH_REPORT.md` is the architecture overview.
+- The graph is a map, not evidence: it can lag the code, and INFERRED/AMBIGUOUS edges are guesses, so
+  confirm behaviour in the source. It is never a source for clinical ranges, thresholds, units or
+  guidance — the Clinical Truth Layer is.
+- **Feature PRs do not include `graphify-out/` changes** — regenerated graph files conflict across
+  parallel PRs. A local `graphify update .` is fine; `git restore graphify-out` before committing.
+  Refresh the shared graph in its own PR after merges (`/graphify . --update` in Claude Code).
+- `graphify claude install` would replace this section with graphify's default (which tells agents to
+  rebuild and commit the graph on every change) and adds hooks; keep these rules if you run it.
