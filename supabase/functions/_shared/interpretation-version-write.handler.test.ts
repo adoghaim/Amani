@@ -148,12 +148,16 @@ const LEDGER_CUTOVER = 'if (appendsVersion) {\n          const settled = await c
 const VERSIONABLE_FIRST = 'if (appendsVersion && !isVersionable(';
 
 function buildHandler(handlerSource: string, model: Record<string, unknown> | null, flagOn: boolean, free: boolean, client: unknown,
-  aiPaused = false) {
+  aiPaused = false, modelFailure: string | null = null) {
   const sink: Record<string, unknown> = {};
   evaluate(slice(source, 'function classifyAnalyte(', 'function displayVal(') + '\nsink.a = { classifyAnalyte, slug };', { sink });
   evaluate(slice(source, 'function deterministicCycleFacts(', 'function generateFallbackInterpretation(')
     + '\nsink.c = { deterministicCycleFacts, modelCycleExplanation };', { sink });
-  const tryOpenAI = vi.fn(async () => (model === null ? null : structuredClone(model)));
+  // A failing model reports how through tryOpenAI's onModelFailure (its 9th parameter), as callOpenAIOnce does.
+  const tryOpenAI = vi.fn(async (...args: unknown[]) => {
+    if (model === null && modelFailure !== null) (args[8] as (failure: string) => void)(modelFailure);
+    return model === null ? null : structuredClone(model);
+  });
   evaluate(slice(source, '// ─── Shared generation pipeline', '// ─── Version store')
     + '\nsink.p = { loadGenerationContext, trendEvidenceFor, produceInterpretation };', {
     sink, sanitizeReportContext: () => undefined, buildPrimaryContext: () => null, debugLog: () => {}, errorMessage: String,
@@ -195,11 +199,12 @@ function buildHandler(handlerSource: string, model: Record<string, unknown> | nu
 }
 
 async function call(scenario: Scenario & { model?: Record<string, unknown> | null; flagOn?: boolean; requestId?: string | null;
-  handlerSource?: string; aiPaused?: boolean }) {
+  handlerSource?: string; aiPaused?: boolean; modelFailure?: string }) {
   const fake = fakeSupabase(scenario);
   const flagOn = !!scenario.flagOn || !!scenario.free;
   const { handler, tryOpenAI } = buildHandler(scenario.handlerSource ?? source,
-    scenario.model === undefined ? generated() : scenario.model, flagOn, !!scenario.free, fake.client, !!scenario.aiPaused);
+    scenario.model === undefined ? generated() : scenario.model, flagOn, !!scenario.free, fake.client, !!scenario.aiPaused,
+    scenario.modelFailure ?? null);
   const silence = [vi.spyOn(console, 'log'), vi.spyOn(console, 'warn'), vi.spyOn(console, 'error')]
     .map(spy => spy.mockImplementation(() => {}));
   try {
@@ -464,5 +469,71 @@ describe('generate-interpretation Free ledger on an anchored report (turn 11, ex
       expect(names(result.rpcs)).not.toContain('commit_deep_access_v2');
       expect(names(result.rpcs).filter(n => LEDGER_RPCS.includes(n) || n === 'append_interpretation_version').length).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+/*
+  #152 review (correctness): the 2026-10-17 smoke saw "200, source fallback" on
+  a first generation and "503 regeneration_failed" on its regeneration, with
+  nothing telling the causes apart. These execute the real handler and assert
+  the HTTP bodies themselves carry the diagnostics (generation-outcome.ts), not
+  just the pure helpers. The negative controls mutate the handler source in
+  memory and must turn each proof red.
+*/
+describe('generate-interpretation fallback and refusal diagnostics in the HTTP body (executed from source)', () => {
+  const run = call;
+  const FALLBACK_200 = '...fallbackDiagnostics(fallbackReason, modelFailure)';
+  const REFUSAL_503 = 'refusalDiagnostics(regenerationRefusalReason(fallbackReason), modelFailure)';
+
+  it('Free with one claim used, model fails: 200 fallback names model_failed; saved, no claim committed', async () => {
+    const result = await run({ anchor: false, free: true, claim: false, claimCount: 1, requestId: null, model: null });
+    expect(result.response.status).toBe(200);
+    expect(result.body).toMatchObject({ success: true, source: 'fallback', fallback_reason: 'model_failed' });
+    expect(result.body).not.toHaveProperty('model_failure');
+    expect(names(result.rpcs)).toContain('save_interpretation');
+    expect(names(result.rpcs)).not.toContain('commit_deep_access_v2');
+  });
+
+  it('flag off, model fails: the 200 body is exactly the fallback with its reason', async () => {
+    const result = await run({ anchor: false, requestId: null, model: null });
+    expect(result.response.status).toBe(200);
+    expect(result.body).toEqual({ success: true, source: 'fallback', fallback_reason: 'model_failed' });
+  });
+
+  it('flag off, kill switch on: the 200 body names ai_paused as the reason', async () => {
+    const result = await run({ anchor: false, requestId: null, aiPaused: true });
+    expect(result.tryOpenAI).not.toHaveBeenCalled();
+    expect(result.response.status).toBe(200);
+    expect(result.body).toEqual({ success: true, source: 'fallback', fallback_reason: 'ai_paused', ai_paused: true });
+  });
+
+  it('a model that answered http_401 is named on the 503 refusal and on the matching 200 fallback', async () => {
+    const refused = await run({ anchor: true, model: null, modelFailure: 'http_401' });
+    expect(refused.response.status).toBe(503);
+    expect(refused.body).toEqual({ error: 'regeneration_failed', reason: 'model_failed', model_failure: 'http_401', retryable: true });
+    const served = await run({ anchor: false, requestId: null, model: null, modelFailure: 'http_401' });
+    expect(served.response.status).toBe(200);
+    expect(served.body).toEqual({ success: true, source: 'fallback', fallback_reason: 'model_failed', model_failure: 'http_401' });
+    const free = await run({ anchor: false, free: true, claim: false, claimCount: 1, requestId: null, model: null, modelFailure: 'http_401' });
+    expect(free.body).toMatchObject({ source: 'fallback', fallback_reason: 'model_failed', model_failure: 'http_401' });
+  });
+
+  it('negative control: without the diagnostics spread the 200 fallback bodies lose their reason', async () => {
+    expect(source.split(FALLBACK_200)).toHaveLength(3);
+    const mutated = source.split(FALLBACK_200).join('...{}');
+    for (const scenario of [{ free: true, claim: false, claimCount: 1 }, {}]) {
+      const result = await run({ anchor: false, requestId: null, model: null, modelFailure: 'http_401', handlerSource: mutated, ...scenario });
+      expect(result.response.status).toBe(200);
+      expect(result.body).not.toHaveProperty('fallback_reason');
+      expect(result.body).not.toHaveProperty('model_failure');
+    }
+  });
+
+  it('negative control: a refusal that drops modelFailure loses model_failure from the 503 body', async () => {
+    expect(source.split(REFUSAL_503)).toHaveLength(2);
+    const mutated = source.replace(REFUSAL_503, 'refusalDiagnostics(regenerationRefusalReason(fallbackReason), null)');
+    const result = await run({ anchor: true, model: null, modelFailure: 'http_401', handlerSource: mutated });
+    expect(result.response.status).toBe(503);
+    expect(result.body).toEqual({ error: 'regeneration_failed', reason: 'model_failed', retryable: true });
   });
 });

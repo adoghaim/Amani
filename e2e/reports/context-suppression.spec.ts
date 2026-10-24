@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
-  lutealPhaseReport, missingPhaseReport, movedCurrentReport, movedPriorReport,
+  labFloorReport, lutealPhaseReport, missingPhaseReport, movedCurrentReport, movedPriorReport,
   patternFollicularReport, patternMissingPhaseReport, trajectoryCurrentReport, trajectoryPriorReport, vitaminDReport,
 } from './synthetic-reports';
 
@@ -45,8 +45,9 @@ test.describe('cycle phase missing from the report', () => {
 
   test.beforeEach(async ({ page }) => {
     await openReport(page, missingPhaseReport.report.id);
-    // LH is outside its supplied lab interval: the neutral floor makes it
-    // primary even though its Amani interpretation is withheld without phase.
+    // LH is outside its supplied lab interval. Nothing here is Amani-flagged
+    // (its interpretation is withheld without phase), so under Ruling 7's true
+    // floor the lab-only LH may take the Primary slot, as a neutral lab fact.
     await expect(page.getByTestId('primary-finding')).toContainText("LH is above your lab's reference range at 30 mIU/mL.");
     await expandSystem(page, 'Hormones & Reproductive', true);
     await expandSystem(page, 'Thyroid', false);
@@ -112,8 +113,9 @@ test.describe('cycle phase recorded on the report', () => {
 
   test('6. valid context enables the context path, qualified by review state', async ({ page }) => {
     await openReport(page, lutealPhaseReport.report.id);
-    // The lab-flagged LH remains primary. Phase still enables the separate
-    // Amani comparison for progesterone without granting clinical authority.
+    // With the phase known, the low luteal progesterone becomes the primary
+    // finding. Ruling 7 is a true floor (owner, 2026-10-23): the lab-flagged LH
+    // stays visible as a lab fact but never takes the slot from Amani's pick.
     await expandSystem(page, 'Hormones & Reproductive', true);
     const progesterone = card(page, 'Progesterone');
     await expect(progesterone.getByRole('note')).toHaveCount(0);
@@ -126,15 +128,18 @@ test.describe('cycle phase recorded on the report', () => {
     const lh = card(page, 'LH');
     await expect(lh.getByRole('note')).toHaveCount(0);
     await expect(lh.getByRole('term').filter({ hasText: 'Amani context band (luteal phase):' })).toBeVisible();
-    // Owner Ruling 7: observable lab placement is retained even when another
-    // marker's Amani band is disputed. No Amani clinical meaning is inferred.
+    // Amendment 3. The fixture has no AI primary_concern, so the primary finding
+    // is the deterministic one. V2-03b Stage 2: the luteal band is DISPUTED, so
+    // the sentence withholds placement, and the label is "Primary finding".
     const primary = page.getByTestId('primary-finding');
     await expect(primary.getByText(
-      "LH is above your lab's reference range at 30 mIU/mL.",
+      'Progesterone was measured at 2 ng/mL. Interpretation unavailable pending clinical review.',
       { exact: true },
     )).toBeVisible();
     await expect(primary).toContainText('Primary finding');
-    await expect(primary).not.toContainText(/Top Priority|Main Focus|optimal|elevated|low\b/i);
+    await expect(primary).not.toContainText(/below|above|outside|LH|Top Priority|Main Focus/);
+    // Owner Ruling 7: the observable lab placement is retained in the headline.
+    await expect(page.getByRole('heading', { level: 2 }).filter({ hasText: "LH is above your lab's reference range at 30 mIU/mL." })).toBeVisible();
     // The persistent half: the cycle_hormones focus area said "Reproductive-hormone
     // markers are outside the optimal range" for the life of the report.
     // V2-03b Stage 2: the area is now the policy's statement for its bands; a
@@ -308,3 +313,32 @@ for (const [label, previous, current, sentence] of [
     });
   });
 }
+
+// Owner ruling 2026-10-23: Ruling 7 is a true floor. A lab-only flag stays a
+// visible neutral lab fact (headline, focus areas) but ranks after every
+// Amani-flagged result and never takes the Primary finding from one.
+test.describe('a lab-only flag beside an Amani-flagged result', () => {
+  test.use({ authenticated: true, syntheticReports: [labFloorReport] });
+
+  test('12. the Amani-flagged ferritin keeps the Primary finding; the lab-only HDL stays visible after it', async ({ page }) => {
+    await openReport(page, labFloorReport.report.id);
+    const primary = page.getByTestId('primary-finding');
+    await expect(primary).toContainText('Primary finding');
+    await expect(primary.getByText(
+      "Ferritin is below the Amani band at 17 ng/mL. Amani's context bands are still under review.",
+      { exact: true },
+    )).toBeVisible();
+    await expect(primary).not.toContainText('HDL');
+    await expect(page.getByRole('heading', { level: 2 }).filter({ hasText: "HDL is above your lab's reference range at 61 mg/dL." })).toBeVisible();
+    const areas = page.getByRole('article').filter({ has: page.getByRole('heading', { level: 3 }) })
+      .filter({ hasText: 'Related markers' });
+    const hdl = areas.filter({ has: page.getByRole('heading', { name: 'HDL', exact: true }) });
+    await expect(hdl).toContainText("HDL is above your lab's reference range at 61 mg/dL.");
+    await expect(areas.last()).toContainText("HDL is above your lab's reference range at 61 mg/dL.");
+    await expect(areas.first()).toContainText('Ferritin');
+    const story = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) });
+    await expect(story).toContainText('Ferritin is the primary finding shown above.');
+    await expect(story).toContainText('HDL');
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
+  });
+});

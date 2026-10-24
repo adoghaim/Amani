@@ -117,13 +117,17 @@ Changes:
 - Apply Owner Ruling 7's neutral lab-flag floor in the client finding/focus ranking, using
   existing `labIntervalPlacement` and the laboratory's supplied bounds only. Every lab
   flag stays visible even for withheld Amani interpretation or a value inside its Amani band.
-  A lab-only finding can be primary. Within the lab-flagged set, preserve the previous primary
-  when eligible; otherwise use existing severity. Amani concern scores remain untouched.
-  This records the implementing choices A1–A3 in
-  [the owner's ruling](../../factory/lab-flag-floor-decision.md); it does not close the launch
-  item before merge/review.
-- For the specified synthetic panel, Vitamin D 24 and LDL 112 lead as below/above their
-  respective lab ranges. Ferritin 18 and TSH 2.85 are explicitly within their lab ranges.
+  The floor is a true floor (owner ruling, 2026-10-23; A1's first option in
+  [the owner's ruling](../../factory/lab-flag-floor-decision.md)): a lab-only finding ranks
+  after every Amani-flagged result in top findings and focus areas, and takes the Primary
+  finding slot only when nothing on the report is Amani-flagged. A lab flag on an
+  Amani-flagged result changes its wording, never its rank; a marker Amani withholds for
+  cycle or pregnancy context never lets its lab flag outrank an Amani-flagged one. Tied
+  lab-only findings are ordered by catalog position, then slug, so the upload-time pin and
+  the page agree whatever the row order. Amani concern scores remain untouched. This does
+  not close the launch item before merge/review.
+- For the specified synthetic panel, the headline names Vitamin D 24 and LDL 112 as
+  below/above their respective lab ranges, and Vitamin D (Amani-flagged too) is primary. Ferritin 18 and TSH 2.85 are explicitly within their lab ranges.
   Tests also cover Vitamin D 25, as visible in the supplied screenshot.
 - Show lab placement on collapsed biomarker cards beside the printed ranges. Explain that
   Amani's comparison band is separate and still under clinical review. System counts remain
@@ -162,7 +166,9 @@ test, with real fonts loaded from this worktree's own `npm ci` installation.
 Key proofs:
 
 - `src/lib/insights/smokePanel.test.ts`: both Vitamin D values, withheld primary, and a lab flag
-  inside an Amani band outranking a band-only finding, without changing concern scores.
+  inside an Amani band kept visible but ranked after an Amani-flagged finding, without changing
+  concern scores. `src/lib/insights/labFlagFloor.test.ts`: the true floor, its Primary-slot rule
+  and the deterministic tie order.
 - `supabase/functions/_shared/generation-pipeline.smoke.test.ts`: executes real source through
   prompt construction, response/schema/policy validation and shaping with a fake upstream.
   Tests missing key, pause, exhaustion, HTTP failures, timeout, network, truncation,
