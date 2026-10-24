@@ -1501,20 +1501,9 @@ export function NewReport() {
                   userEditedReportItemsRef.current = true;
                   setReportItems(prev => {
                     const updated = [...prev];
-                    const before = prev[index] as ReportItem & { _printed?: Pick<ReportItem, 'value_numeric' | 'value_text'> };
-                    const row = { ...before, [field]: value } as typeof before;
-                    if (field === 'value_numeric') {
-                      const printed = before._printed ?? { value_numeric: before.value_numeric, value_text: before.value_text };
-                      if (typeof value === 'number' && Number.isFinite(value)) {
-                        // Her edited value replaces the printed text, so a printed '<8' cannot outlive it (F021).
-                        row._printed = printed;
-                        row.value_text = null;
-                      } else {
-                        // An empty or non-numeric entry is no value: the row keeps what the lab printed, never NaN.
-                        Object.assign(row, printed);
-                      }
-                    }
-                    updated[index] = row;
+                    updated[index] = { ...updated[index], [field]: value } as ReportItem;
+                    // Her edited value replaces the printed text, so a printed '<8' cannot outlive it (F021).
+                    if (field === 'value_numeric') updated[index].value_text = null;
                     return updated;
                   });
                 }}

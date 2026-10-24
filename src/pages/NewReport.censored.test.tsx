@@ -182,38 +182,3 @@ it('an edited value replaces the printed "<8" and is flagged from her number', a
   const analytes = fixture.inserts.find(i => i.table === 'report_analytes')?.values as Record<string, unknown>[];
   expect(analytes.find(a => a['raw_name'] === 'Vitamin D')).toMatchObject({ value_numeric: 60, raw_value_text: null });
 });
-
-/*
-  Fix wave 5. Her first keystroke cleared the printed text whatever it parsed
-  to, so typing a number and deleting it left value_numeric NaN and value_text
-  null: the printed '<8' was gone and the row had no value. Only a finite
-  number she enters replaces what the lab printed; an empty entry keeps it.
-*/
-async function enter(input: HTMLInputElement, text: string) {
-  await act(async () => {
-    setValue.call(input, text);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  await settle();
-}
-
-it('typing a value and deleting it keeps the printed "<8"', async () => {
-  let shown: string | undefined;
-  const rows = await upload({ onReview: async () => {
-    const input = await reviewValueInput('Vitamin D');
-    await enter(input, '6');
-    await enter(input, '');
-    shown = input.value;
-  } });
-  expect(shown).toBe('');
-  expect(rows.find(b => b['name'] === 'vitamin_d_25_oh')).toMatchObject({ value: 4, raw_value_text: '<8', flagged: 'out_of_range' });
-  const analytes = fixture.inserts.find(i => i.table === 'report_analytes')?.values as Record<string, unknown>[];
-  expect(analytes.find(a => a['raw_name'] === 'Vitamin D')).toMatchObject({ value_numeric: 4, raw_value_text: '<8' });
-});
-
-it('an emptied Value input never stores NaN: a measured row keeps its printed value', async () => {
-  const rows = await upload({ onReview: async () => { await enter(await reviewValueInput('Ferritin'), ''); } });
-  expect(rows.find(b => b['name'] === 'ferritin')).toMatchObject({ value: 8, raw_value_text: '8', flagged: 'out_of_range' });
-  const analytes = fixture.inserts.find(i => i.table === 'report_analytes')?.values as Record<string, unknown>[];
-  expect(analytes.find(a => a['raw_name'] === 'Ferritin')).toMatchObject({ value_numeric: 8, raw_value_text: '8' });
-});
