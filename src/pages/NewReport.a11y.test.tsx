@@ -175,7 +175,8 @@ describe('NewReport: errors are announced', () => {
     await click(buttonByName(/^Save and analyze$/));
     await settle(20);
     const alert = app.querySelector<HTMLElement>('[role="alert"]');
-    expect(alert?.textContent).toContain('Failed to create report record');
+    // The save-failure copy is plain words, not the raw error (review F065).
+    expect(alert?.textContent).toContain("We couldn't save your report. Check your connection, then try again.");
     expect(document.activeElement).toBe(alert);
   });
 });
