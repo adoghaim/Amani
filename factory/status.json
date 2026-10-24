@@ -2543,15 +2543,18 @@
         "F045"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-ui",
-      "pr": null,
+      "pr": "#157",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2562,7 +2565,10 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-ui; findings F047, F045. Head e321bd3. Built, DONE_WITH_CONCERNS (F045 partial). Verifier was cut off: needs verification."
+        "Track billing-ui; findings F047, F045. Fix e321bd3; merged with main 25d09b7 at c62caf4.",
+        "Blind verifier (opus) at e321bd3: PASS_WITH_NOTES (four minor notes in PR #157).",
+        "Gates at c62caf4 (run locally; GitHub Actions jobs do not start): lint, typecheck, full test (3,371), build, contrast; CI e2e matrix (isolation, default 65/65, freemium 8/8, journey 2/2) in Chromium, WebKit and Firefox.",
+        "Owner action: approve Terms/Privacy wording for immediate Stripe cancellation on deletion."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
