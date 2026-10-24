@@ -8,6 +8,10 @@ import {
   bandPlacement, comparisonBandLabel, labIntervalObservation, labIntervalPlacement, markerBandPlacement, withheldCopy,
 } from './insightCopy';
 import { gateInsightMatches } from './insightGate';
+import { computeAmaniStatus } from './scoreBiomarker';
+import { buildInsightSummary } from '../insights/buildInsightSummary';
+import { normalizeReportItems } from '../biomarkers/normalizeReportItems';
+import { parseAllReportItems } from '../../utils/parser/pipeline';
 
 /*
   Review F021, wave 3. A result printed as a limit ('> OR = 60', '<8') is
@@ -174,5 +178,35 @@ describe('a decided censored status holds for every value the printed result all
     }
     expect(decided).toBeGreaterThan(500);
     expect(withheld).toBeGreaterThan(500);
+  });
+});
+
+/*
+  PX1 (#176, in #172) keeps Quest's printed "> OR = 60" as eGFR's value text in
+  the text parser; this packet withholds a placement that limit cannot decide.
+  Each alone left Quest's eGFR flagged as a measured 60 below its band. Through
+  the real parser and normalisation, as NewReport saves it, and the summary the
+  report page builds.
+*/
+describe('Quest eGFR "> OR = 60" through the real text parser is withheld (PX1 with CS3)', () => {
+  const egfrRow = (text: string) => normalizeReportItems(parseAllReportItems(text)).find(i => i.canonical_slug === 'egfr')!;
+  const unitOf = (row: ReturnType<typeof egfrRow>) => row._normalized_unit ?? row.unit ?? '';
+
+  it('read as a limit: no stored flag, no primary finding', () => {
+    const row = egfrRow('eGFR > OR = 60 > OR = 60 mL/min/1.73m2');
+    expect(row).toMatchObject({ value_text: '> OR = 60', value_numeric: 60 });
+    expect(computeAmaniStatus('egfr', row.value_numeric, null, null, unitOf(row), row.value_text)).toBe('unknown');
+    const summary = buildInsightSummary([{
+      key: 'egfr', value: row.value_numeric, unit: unitOf(row), valueText: row.value_text,
+      labRefMin: row.normalized_reference_min ?? null, labRefMax: row.normalized_reference_max ?? null,
+    }], null, null, null, null);
+    expect(summary.primaryFinding).toBeNull();
+    expect(summary.labFindings).toEqual([]);
+  });
+
+  it('a measured eGFR printed beside the same reference is still flagged (control)', () => {
+    const row = egfrRow('eGFR 45 L > OR = 60 mL/min/1.73m2');
+    expect(row).toMatchObject({ value_numeric: 45 });
+    expect(computeAmaniStatus('egfr', row.value_numeric, null, null, unitOf(row), row.value_text)).toBe('out_of_range_low');
   });
 });
