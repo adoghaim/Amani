@@ -395,7 +395,7 @@ describe('safety separation, direction 2: a band change never produces or resemb
       produced.push(...Object.values(patternRuleObservation('TSH', [{ name: 'TSH', value: 400, unit: 'uIU/mL' }], language)));
     }
     for (const [prev, curr] of [[6, 400], [400, 6], [6, 6.1]] as const) {
-      for (const significance of ['minor', 'moderate', 'significant'] as const) {
+      for (const significance of ['minor', 'moderate', 'significant', 'unassessed'] as const) {
         for (const format of ['values', 'direction', 'magnitude'] as const) {
           produced.push(describeMeasuredMovement({ displayName: 'TSH', previousValue: prev, currentValue: curr, unit: 'uIU/mL', significance }, format));
         }

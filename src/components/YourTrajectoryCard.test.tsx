@@ -29,7 +29,7 @@ const changes = [
 /** The base (610beef) ordering, restated independently: every bullet here is
  * worsened and none is primary, so only the paired significance decides. */
 function baseOrder(input: BiggestChange[]) {
-  const rank = { significant: 0, moderate: 1, minor: 2 };
+  const rank = { significant: 0, moderate: 1, minor: 2, unassessed: 2 };
   const withBullet = input.filter(c => c.trajectoryStatus !== 'stable_normal');
   return withBullet.map((c, i) => ({ key: c.key, significance: input[i]!.significance }))
     .sort((a, b) => rank[a.significance] - rank[b.significance])

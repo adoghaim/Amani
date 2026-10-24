@@ -876,3 +876,58 @@ describe('F011 — a value in another unit is never placed against an Amani band
     expect(app.textContent).not.toMatch(/outside Amani bands?|within Amani bands?|outside Amani's current comparison band|the Amani band at/i);
   }, 30_000);
 });
+
+/*
+  RV-NZ1 (REPORT-2026-10-24 §2.2). A prior TSH of 0.2 is under the near-zero
+  threshold, so the relative change is undefined and Amani cannot size it. The
+  page used to say "TSH has not changed significantly: 0.2 to 9 mIU/L." in the
+  headline and the primary observation. It now states the values, on every
+  surface, and asks about the change. Synthetic rows.
+*/
+describe('RV-NZ1: a change from a near-zero prior is stated by value, never as "not changed significantly"', () => {
+  const heading = (text: string) => Array.from(app.querySelectorAll('h2')).find(h => h.textContent === text) ?? null;
+
+  it('TSH 0.2 -> 9 mIU/L as the primary: values on every surface, no size or stability word', async () => {
+    seed(9, 0.2);
+    await renderAndOpenAll();
+    expect(app.textContent).not.toMatch(/not changed significantly/i);
+    const surfaces = {
+      trajectory: heading('Your trajectory')?.closest('div.rounded-2xl'),
+      focus: heading('Focus areas')?.parentElement?.parentElement,
+      story: heading('Your health story')?.closest('section'),
+      primary: app.querySelector('[data-testid="primary-finding"], [data-testid="primary-movement-observation"]'),
+      questions: app.querySelector('[data-testid="prep-questions"]'),
+    };
+    for (const [name, el] of Object.entries(surfaces)) {
+      expect(el, name).toBeTruthy();
+      expect(el!.textContent, name).not.toMatch(/unchanged|\bstable\b/i);
+    }
+    expect(surfaces.primary?.textContent).toContain('TSH');
+    // TSH is the primary. The page has no movement sentence for a changed_* status (existing
+    // design), so the headline and the primary block state her lab placement instead.
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')).toBeNull();
+    expect(app.querySelector('[data-testid="primary-finding"]')?.textContent).toContain("TSH is above your lab's reference range at 9 mIU/L.");
+    expect(app.querySelector('h2 [data-language-claim="measured_movement"]')).toBeNull();
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent).toContain("TSH is above your lab's reference range at 9 mIU/L.");
+    expect(surfaces.trajectory?.textContent).toContain('TSH changed from 0.2 to 9 mIU/L.');
+    expect(surfaces.focus?.textContent).toContain('TSH has changed since your prior report.');
+    // Her measured changes first, largest assessed one first; the near-zero change replaces TSH's lab-interval question.
+    expect(prepQuestions()).toEqual([
+      'My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
+      'My TSH changed from 0.2 to 9 mIU/L. What could explain this change, and is it clinically meaningful?',
+      "My HbA1c is 6 %, above my lab's reference interval of 4–5.6 %. What does this mean in the context of my overall labs?",
+      'Is there anything about my routine or history that matters for reading these results?',
+    ]);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('TSH 0.3 -> 0.1 mIU/L: the headline and the primary observation state the decrease', async () => {
+    seed(0.1, 0.3);
+    fixture.tables.biomarkers = fixture.tables.biomarkers!.filter(r => r['name'] === 'tsh');
+    await renderAndOpenAll();
+    expect(app.querySelector('h2 [data-language-claim="measured_movement"]')?.textContent).toBe('TSH decreased from 0.3 to 0.1 mIU/L.');
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')?.textContent).toContain('TSH decreased from 0.3 to 0.1 mIU/L.');
+    expect(app.textContent).not.toMatch(/not changed significantly/i);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+});

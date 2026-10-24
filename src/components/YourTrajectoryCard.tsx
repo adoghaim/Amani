@@ -86,10 +86,11 @@ const KIND_PRIORITY: Record<BulletKind, number> = {
   first: 3,
 };
 
-const SIGNIFICANCE_PRIORITY: Record<'significant' | 'moderate' | 'minor', number> = {
+const SIGNIFICANCE_PRIORITY: Record<'significant' | 'moderate' | 'minor' | 'unassessed', number> = {
   significant: 0,
   moderate: 1,
   minor: 2,
+  unassessed: 2,
 };
 
 interface Props {
