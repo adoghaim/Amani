@@ -133,6 +133,35 @@ export function cycleContextAtDraw(input: {
   return { cycleDay, phase: phaseForCycleDay(cycleDay, cycleLengthDays), cycleLengthDays };
 }
 
+/**
+ * A cycle day or phase printed on the lab report: her labelled line in the PDF
+ * text (src/utils/parser/cycleContext.ts), or the OCR function's metadata.
+ */
+export interface PrintedCycleFacts {
+  cycleDay: number | null;
+  cyclePhase: EstimatedPhase | null;
+}
+
+/**
+ * F010: the cycle day and phase a new report saves.
+ *
+ * - Her dates win. When her last period start gives a cycle day, the day and
+ *   the phase both come from cycleContextAtDraw, and a printed value replaces
+ *   neither. The upload steps never show her a printed value to confirm, so a
+ *   printed value cannot outrank her dates.
+ * - Without that cycle day, a printed day or phase fills in, as before.
+ * - A printed phase never overrides D13 (b): a known typical length other than
+ *   28 days saves no phase.
+ */
+export function cycleContextToStore(drawCycle: DrawCycleContext, printed: PrintedCycleFacts | null): {
+  cycleDay: number | null;
+  phase: EstimatedPhase | 'unknown';
+} {
+  if (drawCycle.cycleDay !== null || printed === null) return { cycleDay: drawCycle.cycleDay, phase: drawCycle.phase };
+  const noMethodForLength = drawCycle.cycleLengthDays !== null && drawCycle.cycleLengthDays !== DAY_MAP_CYCLE_LENGTH;
+  return { cycleDay: printed.cycleDay, phase: noMethodForLength ? 'unknown' : printed.cyclePhase ?? 'unknown' };
+}
+
 /** Why a cycle day is shown without a phase estimate. */
 export type PhaseNotEstimated =
   /** D13 (b): a known typical length other than 28 days, which no approved method covers. */
