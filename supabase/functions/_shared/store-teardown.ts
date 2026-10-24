@@ -255,6 +255,23 @@ export function parsePlayServiceAccount(raw: string | undefined): PlayServiceAcc
   return { clientEmail, privateKeyPem: privateKey };
 }
 
+/**
+ * Whether account deletion stops Google Play billing itself: true exactly when
+ * the credential parses, which is when `cancelPlaySubscriptions` cancels (or
+ * the deletion stops there instead of going on without it). The handler's
+ * store-subscription 409 reports it as `play_cancellation_enabled`, so what the
+ * user is told and what the cancel step does come from one parse. Unset is
+ * false, and so is set but unusable: that deletion fails at the cancel step
+ * rather than cancelling.
+ */
+export function playCancellationConfigured(raw: string | undefined): boolean {
+  try {
+    return parsePlayServiceAccount(raw) !== null;
+  } catch {
+    return false;
+  }
+}
+
 function base64UrlFromBytes(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);

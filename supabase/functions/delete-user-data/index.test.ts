@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as accountDeletion from '../_shared/account-deletion';
 import * as accountDeletionStorage from '../_shared/account-deletion-storage';
 import * as phiScrub from '../_shared/phi-scrub';
-import { StoreTeardownError } from '../_shared/store-teardown';
+import { PLAY_SERVICE_ACCOUNT_ENV, playCancellationConfigured, StoreTeardownError } from '../_shared/store-teardown';
+import { USER_DATA_REGISTRY } from '../_shared/user-data-registry';
 
 /*
   BS1 (review F029, F038, F036, F033 sites): runs the real Deno callback of
@@ -34,6 +35,12 @@ interface State {
   sticky?: string[];
   readError?: 'stripe_customers' | 'users';
   authDeleteError?: string;
+  /** Server secrets by name; a name not listed reads 'test'. */
+  env?: Record<string, string | undefined>;
+  /** Customers already deleted at Stripe: listing their subscriptions, or deleting them, is resource_missing. */
+  stripeGone?: string[];
+  /** Thrown by every subscriptions.list call for a customer not in stripeGone. */
+  listError?: unknown;
 }
 
 function harness(state: State = {}) {
@@ -80,10 +87,14 @@ function harness(state: State = {}) {
       return {
         list: async (prefix: string, opts: { limit?: number; offset?: number } = {}) => {
           listCalls.push({ prefix, ...opts });
-          const names = [...files].filter((p) => p.startsWith(`${prefix}/`)).map((p) => p.slice(prefix.length + 1)).sort();
+          // One level, as Storage lists: a folder is one entry with a null id, before the objects.
+          const under = [...files].filter((p) => p.startsWith(`${prefix}/`)).map((p) => p.slice(prefix.length + 1));
+          const folders = [...new Set(under.filter((n) => n.includes('/')).map((n) => n.split('/')[0]!))].sort();
+          const names = under.filter((n) => !n.includes('/')).sort();
+          const entries = [...folders.map((name) => ({ name, id: null })), ...names.map((name) => ({ name, id: name }))];
           const offset = opts.offset ?? 0;
           const limit = opts.limit ?? 100;
-          return { data: names.slice(offset, offset + limit).map((name) => ({ name, id: name })), error: null };
+          return { data: entries.slice(offset, offset + limit), error: null };
         },
         remove: async (paths: string[]) => {
           removeBatches.push(paths.length);
@@ -110,12 +121,23 @@ function harness(state: State = {}) {
     storage,
   };
 
+  const missing = (id: string) => Object.assign(new Error(`No such customer: '${id}'`), { code: 'resource_missing' });
   const stripe = {
     subscriptions: {
-      list: vi.fn(async ({ customer }: { customer: string }) => ({ data: state.subs?.[customer] ?? [] })),
+      list: vi.fn(async ({ customer }: { customer: string }) => {
+        if (state.stripeGone?.includes(customer)) throw missing(customer);
+        if (state.listError) throw state.listError;
+        return { data: state.subs?.[customer] ?? [] };
+      }),
       cancel: vi.fn(async (id: string) => { log.push(`stripe:cancel:${id}`); return { id }; }),
     },
-    customers: { del: vi.fn(async (id: string) => { log.push(`stripe:del:${id}`); return { id, deleted: true }; }) },
+    customers: {
+      del: vi.fn(async (id: string) => {
+        if (state.stripeGone?.includes(id)) throw missing(id);
+        log.push(`stripe:del:${id}`);
+        return { id, deleted: true };
+      }),
+    },
   };
   function Stripe() { return stripe; }
 
@@ -124,7 +146,12 @@ function harness(state: State = {}) {
     ...accountDeletionStorage,
     ...phiScrub,
     StoreTeardownError,
-    Deno: { env: { get: () => 'test' }, serve: (fn: typeof handler) => { handler = fn; } },
+    PLAY_SERVICE_ACCOUNT_ENV,
+    playCancellationConfigured,
+    Deno: {
+      env: { get: (name: string) => (state.env && name in state.env ? state.env[name] : 'test') },
+      serve: (fn: typeof handler) => { handler = fn; },
+    },
     createClient: () => client,
     Stripe,
     fetchWithBackoff: async () => { throw new Error('no network in tests'); },
@@ -213,6 +240,92 @@ describe('delete-user-data deletes every Stripe customer the account has (F029, 
   });
 });
 
+describe('delete-user-data 409 says whether the deletion cancels Google Play (RV-R3 AC1, F045 server half)', () => {
+  const playRow = {
+    platform: 'android', product_id: 'monthly', store_subscription_id: 'GPA.0000-0000-0000-00000',
+    status: 'active', expires_at: null, environment: 'production',
+  };
+  // Synthetic: parses as a service-account key file; it is not a usable key.
+  const parseableKey = JSON.stringify({
+    type: 'service_account',
+    client_email: 'deletion@synthetic-project.iam.gserviceaccount.com',
+    private_key: '-----BEGIN PRIVATE KEY-----\nc3ludGhldGlj\n-----END PRIVATE KEY-----\n',
+  });
+
+  it.each([
+    ['a Play credential that parses', true, parseableKey],
+    ['the Play credential unset', false, undefined],
+    ['a Play credential that is not JSON', false, 'not json'],
+    ['a Play credential that is not a service-account key', false, JSON.stringify({ type: 'authorized_user' })],
+  ])('%s: play_cancellation_enabled is %s, the rest of the body is unchanged, nothing is touched', async (_label, enabled, credential) => {
+    const { handler, log, stripe } = harness({ current: 'cus_checkout', iap: [playRow], env: { [PLAY_SERVICE_ACCOUNT_ENV]: credential } });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'This account has an active subscription billed by Google. Deleting the account does not cancel it — ' +
+        'you must cancel it in your store account settings or you will continue to be charged.',
+      code: accountDeletion.STORE_SUBSCRIPTION_ACK_CODE,
+      retry: false,
+      store_subscriptions: [{ platform: 'android', product_id: 'monthly', expires_at: null }],
+      play_cancellation_enabled: enabled,
+    });
+    expect(stripe.customers.del).not.toHaveBeenCalled();
+    expect(log).toEqual([]);
+  });
+});
+
+describe('delete-user-data finishes a retry whose Stripe customer is already gone (RV-R3 AC3, RES1 168-5)', () => {
+  it('a customer an earlier run deleted lists as resource_missing: nothing to cancel, and the deletion completes', async () => {
+    const { handler, log, stripe } = harness({ current: 'cus_already_deleted', stripeGone: ['cus_already_deleted'], files: ['1.pdf'] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(stripe.subscriptions.list).toHaveBeenCalledTimes(1);
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
+    expect(stripe.customers.del.mock.calls.map((c) => c[0])).toEqual(['cus_already_deleted']);
+    expect(log).toContain('delete:stripe_customers');
+    expect(log.at(-1)).toBe('auth:delete');
+  });
+
+  it('only that customer is skipped: another customer on the account is still cancelled and deleted first', async () => {
+    const { handler, log, stripe } = harness({
+      current: 'cus_already_deleted',
+      legacy: 'cus_portal_orphan',
+      stripeGone: ['cus_already_deleted'],
+      subs: { cus_portal_orphan: [{ id: 'sub_live', status: 'active' }] },
+    });
+
+    expect((await handler(request())).status).toBe(200);
+    expect(log).toContain('stripe:cancel:sub_live');
+    expect(stripe.customers.del.mock.calls.map((c) => c[0]).sort()).toEqual(['cus_already_deleted', 'cus_portal_orphan']);
+    expect(log.indexOf('stripe:del:cus_portal_orphan')).toBeLessThan(log.indexOf('delete:stripe_customers'));
+    expect(log.at(-1)).toBe('auth:delete');
+  });
+
+  it.each([
+    ['a Stripe error with another code', Object.assign(new Error('Too many requests'), { code: 'rate_limit' })],
+    ['an error with no code', new Error('fetch failed')],
+  ])('any other subscriptions.list failure (%s) still refuses with the fixed 500 body, deleting nothing', async (_label, failure) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { handler, log, stripe } = harness({ current: 'cus_checkout', listError: failure, files: ['1.pdf'] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: 'Failed to delete account. Please try again.',
+      code: 'account_deletion_failed',
+      retry: true,
+    });
+    expect(stripe.customers.del).not.toHaveBeenCalled();
+    expect(log.filter((e) => e.startsWith('storage:') || e.startsWith('delete:') || e.startsWith('update:') || e === 'auth:delete')).toEqual([]);
+  });
+});
+
 describe('delete-user-data removes every stored file before the auth identity (F036)', () => {
   const many = (n: number) => Array.from({ length: n }, (_, i) => `${String(i).padStart(5, '0')}.pdf`);
 
@@ -237,6 +350,43 @@ describe('delete-user-data removes every stored file before the auth identity (F
     expect(response.status).toBe(500);
     expect(log).not.toContain('auth:delete');
     expect(log.some((e) => e.startsWith('delete:'))).toBe(false);
+  });
+
+  it('removes an object inside a folder too, so a nested upload no longer refuses every retry (RV-R3 AC2)', async () => {
+    const { handler, files, listCalls, log } = harness({ files: ['a.pdf', 'x/y.pdf'] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(200);
+    expect(files.size).toBe(0);
+    expect(listCalls.map((c) => c.prefix)).toEqual([USER_ID, `${USER_ID}/x`, USER_ID]);
+    expect(log.indexOf('auth:delete')).toBeGreaterThan(log.lastIndexOf('storage:remove:2'));
+    expect(log.at(-1)).toBe('auth:delete');
+  });
+
+  it('still refuses to delete the auth user while an object inside a folder remains (RV-R3 AC2)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { handler, log } = harness({ files: ['a.pdf', 'x/y.pdf'], sticky: [`${USER_ID}/x/y.pdf`] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(500);
+    expect((await response.json()).code).toBe('account_deletion_failed');
+    expect(log).not.toContain('auth:delete');
+    expect(log.some((e) => e.startsWith('delete:'))).toBe(false);
+  });
+});
+
+describe("the registry's Stripe exceptions say what this handler does (RV-R3 AC5, RES1 168-8)", () => {
+  it('name the port it wires, getStripeCustomerIds, and both places that port reads', () => {
+    expect(source).toContain('async getStripeCustomerIds(userId) {');
+    for (const table of ['stripe_customers', 'stripe_subscriptions', 'stripe_orders']) {
+      const reason = USER_DATA_REGISTRY.find((entry) => entry.table === table)?.reason ?? '';
+      expect(reason, table).toMatch(/\bgetStripeCustomerIds\b/);
+      expect(reason, table).not.toMatch(/\bgetStripeCustomerId\b/);
+      expect(reason, table).toContain('users.stripe_customer_id');
+      expect(reason, table).not.toMatch(/\belse\b/);
+    }
   });
 });
 

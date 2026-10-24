@@ -17,6 +17,7 @@ import {
   deleteRevenueCatSubscriber,
   isPlayOrderId,
   parsePlayServiceAccount,
+  playCancellationConfigured,
   signServiceAccountAssertion,
   type HttpPort,
   type StoreRequestPolicy,
@@ -468,6 +469,38 @@ describe('service-account credentials', () => {
   it('treats an unset secret as off, not as an error', () => {
     expect(parsePlayServiceAccount(undefined)).toBeNull();
     expect(parsePlayServiceAccount('')).toBeNull();
+  });
+});
+
+// RV-R3 AC1 (F045 server half): what delete-user-data's 409 reports as play_cancellation_enabled.
+describe('playCancellationConfigured', () => {
+  it('is true for a credential that parses', () => {
+    expect(playCancellationConfigured(serviceAccountJson)).toBe(true);
+  });
+
+  it.each([undefined, '', '  '])('is false while the secret is %j', (secret) => {
+    expect(playCancellationConfigured(secret)).toBe(false);
+  });
+
+  it.each([
+    ['not JSON', 'not json'],
+    ['a file path', '/secrets/play-service-account.json'],
+    ['JSON that is not a key', JSON.stringify({ hello: 'world' })],
+    ['a non-service-account key', JSON.stringify({ type: 'authorized_user', client_email: 'x@y', private_key: 'k' })],
+  ])('is false, without throwing, when the secret is set but is %s', (_label, secret) => {
+    expect(() => parsePlayServiceAccount(secret)).toThrow(StoreTeardownError);
+    expect(playCancellationConfigured(secret)).toBe(false);
+  });
+
+  it.each([
+    ['a parseable key', () => serviceAccountJson, true],
+    ['the secret unset', () => undefined, false],
+    ['a secret that is not JSON', () => 'not json', false],
+  ])('agrees with the cancel step: with %s, true exactly when a cancel is sent', async (_label, secret, configured) => {
+    const { http, calls } = google();
+    await cancelPlaySubscriptions(deps(http), secret(), play()).catch(() => {});
+    expect(playCancellationConfigured(secret())).toBe(configured);
+    expect(calls.some((call) => stepOf(call) === 'cancel')).toBe(configured);
   });
 });
 

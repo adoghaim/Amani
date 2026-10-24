@@ -243,23 +243,26 @@ export const USER_DATA_REGISTRY: readonly UserDataRegistryEntry[] = [
     table: "stripe_customers",
     ownerColumn: "user_id",
     mechanism: "exception",
-    reason: "Deleted by the Stripe step (deleteLocalStripeRecords, by user_id), which runs when " +
-      "getStripeCustomerId returns a customer; it reads this row first. user_id references auth.users without " +
-      "ON DELETE CASCADE, so a row left behind makes deleteAuthUser fail rather than outlive the account.",
+    reason: "Deleted by the Stripe step (deleteLocalStripeRecords, by user_id), which runs for every customer " +
+      "getStripeCustomerIds returns: it reads this row and the legacy users.stripe_customer_id, both every time, " +
+      "and returns each distinct id. user_id references auth.users without ON DELETE CASCADE, so a row left " +
+      "behind makes deleteAuthUser fail rather than outlive the account.",
   },
   {
     table: "stripe_subscriptions",
     ownerColumn: "customer_id",
     mechanism: "exception",
     reason: "Keyed by Stripe customer_id, not user_id. Deleted by the Stripe step (deleteLocalStripeRecords) for " +
-      "the customer getStripeCustomerId finds (stripe_customers, else the legacy users.stripe_customer_id).",
+      "every customer getStripeCustomerIds returns (each distinct id in stripe_customers and the legacy " +
+      "users.stripe_customer_id, both read every time).",
   },
   {
     table: "stripe_orders",
     ownerColumn: "customer_id",
     mechanism: "exception",
     reason: "Keyed by Stripe customer_id, not user_id. Deleted by the Stripe step (deleteLocalStripeRecords) for " +
-      "the customer getStripeCustomerId finds (stripe_customers, else the legacy users.stripe_customer_id).",
+      "every customer getStripeCustomerIds returns (each distinct id in stripe_customers and the legacy " +
+      "users.stripe_customer_id, both read every time).",
   },
   {
     table: "interpretation_generation_costs",

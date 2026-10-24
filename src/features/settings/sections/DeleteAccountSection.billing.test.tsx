@@ -16,12 +16,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   subscriptionStatus: null as string | null,
+  subscriptionError: null as Error | null,
   fetchResponses: [] as Array<{ status: number; body: Record<string, unknown> }>,
   fetchBodies: [] as unknown[],
 }));
 vi.mock('../../../hooks/useSubscription', () => ({
   useSubscription: () => ({
     subscription: state.subscriptionStatus === null ? null : { subscription_status: state.subscriptionStatus },
+    error: state.subscriptionError,
   }),
 }));
 vi.mock('../../../lib/native', () => ({ openExternalUrl: vi.fn() }));
@@ -46,6 +48,7 @@ beforeEach(() => {
   document.body.append(app);
   root = createRoot(app);
   state.subscriptionStatus = null;
+  state.subscriptionError = null;
   state.fetchResponses = [];
   state.fetchBodies = [];
 });
@@ -92,6 +95,34 @@ describe('F045: the deletion warning states what happens to a live Stripe subscr
     state.subscriptionStatus = status;
     await openConfirm();
     expect(norm(app.textContent)).not.toMatch(/cancel your web subscription|not refunded/i);
+  });
+});
+
+describe('RV-R3 AC4: when the subscription read fails, the warning still says what happens to a web subscription', () => {
+  const CONDITIONAL = 'If you have a web subscription, it is cancelled immediately and the rest of the period you have paid for is not refunded.';
+
+  it('no subscription known because the read failed: the conditional line instead of nothing', async () => {
+    state.subscriptionError = new Error('Reading stripe_user_subscriptions failed');
+    await openConfirm();
+    const page = norm(app.textContent);
+    expect(page).toContain(CONDITIONAL);
+    expect(page).not.toContain('Cancel your web subscription immediately');
+  });
+
+  it.each(['active', 'trialing', 'past_due', 'unpaid'])("another read failed but the subscription is known %s: today's line, not the conditional one", async status => {
+    state.subscriptionStatus = status;
+    state.subscriptionError = new Error('Reading complimentary_entitlements failed');
+    await openConfirm();
+    const page = norm(app.textContent);
+    expect(page).toContain('Cancel your web subscription immediately');
+    expect(page).not.toContain('If you have a web subscription');
+  });
+
+  it.each(['canceled', 'incomplete_expired'])('another read failed but the subscription is known %s: no Stripe line', async status => {
+    state.subscriptionStatus = status;
+    state.subscriptionError = new Error('Reading iap_subscriptions failed');
+    await openConfirm();
+    expect(norm(app.textContent)).not.toMatch(/web subscription|not refunded/i);
   });
 });
 
