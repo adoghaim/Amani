@@ -21,7 +21,7 @@ import {
   type DeepAccessDecision,
   type IntroductoryAccessActions,
 } from "../_shared/introductory-access.ts";
-import { deriveBloodDrawIdentity, hashDrawKey } from "../_shared/blood-draw-identity.ts";
+import { resolveGenerationDrawIdentity } from "../_shared/generation-draw-identity.ts";
 import { projectBasic, servedBasic, visibleClaimProjection, withClaimAuthority } from "../_shared/claim-authority.ts";
 import { buildTrendEvidence, formatTrendEvidencePrompt, type TrendEvidence } from "../_shared/trend-evidence.ts";
 import { generationSample, recordGenerationCosts, type GenerationSample, type GenerationCostContext } from "../_shared/generation-cost.ts";
@@ -1892,15 +1892,20 @@ Deno.serve(async (req: Request) => {
     let ledgerLimitReached = false;
     const introActions: IntroductoryAccessActions = {
       async findClaim(userId, bloodDrawId) {
-        const { data, error } = await supabase
-          .from("introductory_deep_access_claims")
-          .select("user_id, blood_draw_id, report_id, evidence_tier, claimed_at")
-          .eq("user_id", userId)
-          .or(`blood_draw_id.eq.${bloodDrawId},report_id.eq.${reportId}`)
-          .limit(1)
-          .maybeSingle();
-        if (error) throw new Error(`Claim read failed: ${error.message}`);
-        return data as ClaimRecord | null;
+        // RV-GI2: the draw's own claim first; this report's only without one.
+        // Whether a report match covers is claimCoverage's decision.
+        for (const [column, value] of [["blood_draw_id", bloodDrawId], ["report_id", reportId]] as const) {
+          const { data, error } = await supabase
+            .from("introductory_deep_access_claims")
+            .select("user_id, blood_draw_id, report_id, evidence_tier, claimed_at")
+            .eq("user_id", userId)
+            .eq(column, value)
+            .limit(1)
+            .maybeSingle();
+          if (error) throw new Error(`Claim read failed: ${error.message}`);
+          if (data) return data as ClaimRecord;
+        }
+        return null;
       },
       async countClaims(userId) {
         const { count, error } = await supabase
@@ -1953,28 +1958,31 @@ Deno.serve(async (req: Request) => {
     };
     if (active && tierDecision.tier === "free") {
       // Raw accession/collection evidence is not retained in production. Hash
-      // the stored upload; never use client-editable report_date as identity.
-      let contentHash: string | null = null;
-      const { data: fileReport, error: fileError } = await supabase
-        .from("lab_reports").select("file_url, content_hash").eq("id", reportId).maybeSingle();
-      if (fileError) throw new Error(`Report identity read failed: ${fileError.message}`);
-      contentHash = fileReport?.content_hash ?? null;
-      if (contentHash === null && fileReport?.file_url) {
-        const { data: blob, error } = await supabase.storage.from("lab-files").download(fileReport.file_url);
-        if (error) throw new Error(`Report file read failed: ${error.message}`);
-        if (!blob) throw new Error("Report file missing");
-        const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-        contentHash = Array.from(new Uint8Array(digest))
-          .map(b => b.toString(16).padStart(2, "0")).join("");
-        const { error: hashError } = await supabase.from("lab_reports")
-          .update({ content_hash: contentHash }).eq("id", reportId).is("content_hash", null);
-        if (hashError) throw new Error(`Report hash save failed: ${hashError.message}`);
-      }
-      const identity = deriveBloodDrawIdentity(null, { reportId, contentHash });
-      const bloodDrawId = await hashDrawKey(identity.key);
-      claimRequest = { userId: user.id, reportId, bloodDrawId, evidenceTier: identity.tier };
+      // the stored upload, only from her own folder (F032), bound to the
+      // analytes generated from (F042); never use client-editable report_date.
+      const draw = await resolveGenerationDrawIdentity({
+        async readReportFile(id) {
+          const { data, error } = await supabase
+            .from("lab_reports").select("file_url, content_hash").eq("id", id).maybeSingle();
+          if (error) throw new Error(`Report identity read failed: ${error.message}`);
+          return data;
+        },
+        async downloadOwnedObject(path) {
+          const { data: blob, error } = await supabase.storage.from("lab-files").download(path);
+          if (error) throw new Error(`Report file read failed: ${error.message}`);
+          if (!blob) throw new Error("Report file missing");
+          return await blob.arrayBuffer();
+        },
+        async saveContentHash(id, contentHash) {
+          const { error } = await supabase.from("lab_reports")
+            .update({ content_hash: contentHash }).eq("id", id).is("content_hash", null);
+          if (error) throw new Error(`Report hash save failed: ${error.message}`);
+        },
+      }, { userId: user.id, reportId, analytes });
+      claimRequest = { userId: user.id, reportId, bloodDrawId: draw.bloodDrawId, evidenceTier: draw.evidenceTier };
       accessDecision = await decideIntroductoryAccess(introActions, {
-        tier: "free", userId: user.id, bloodDrawId,
+        tier: "free", userId: user.id, bloodDrawId: draw.bloodDrawId,
+        reportId, legacyBloodDrawId: draw.legacyBloodDrawId,
       });
     }
 

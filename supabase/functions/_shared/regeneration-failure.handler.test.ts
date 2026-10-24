@@ -12,6 +12,7 @@ import { resolveTier } from './tier';
 import { entitlementUnavailable, generationVisibilityMode } from './entitlement-response';
 import { commitGeneratedInterpretation, decideIntroductoryAccess } from './introductory-access';
 import { deriveBloodDrawIdentity, hashDrawKey } from './blood-draw-identity';
+import { resolveGenerationDrawIdentity } from './generation-draw-identity';
 import { decideDeepGeneration } from './regeneration-availability';
 import { readInterpretation } from './interpretation-read';
 import * as versionWrite from './interpretation-version-write';
@@ -66,6 +67,8 @@ const ANALYTE = {
   raw_reference_range: '0.4-4.0', normalized_min: 0.4, normalized_max: 4.0, normalized_operator: null,
   normalized_operator_value: null, is_core: true,
 };
+// RV-GI2: the claim this report holds, under the pre-binding key of its stored content hash.
+const REPORT_CLAIM_DRAW = await hashDrawKey(`sha256:${'c'.repeat(64)}`);
 
 type Plan = 'off' | 'premium' | 'free';
 interface Scenario {
@@ -93,7 +96,7 @@ const PERSISTING = ['append_interpretation_version', 'commit_deep_access_version
 function fakeSupabase(s: Scenario) {
   const rpcs: { name: string; args: Record<string, unknown> }[] = [];
   const writes: string[] = [];
-  const claimRow = { user_id: USER, blood_draw_id: 'd', report_id: REPORT, evidence_tier: 'content_hash', claimed_at: '2026-10-01T00:00:00Z' };
+  const claimRow = { user_id: USER, blood_draw_id: REPORT_CLAIM_DRAW, report_id: REPORT, evidence_tier: 'content_hash', claimed_at: '2026-10-01T00:00:00Z' };
   const reply = (table: string, selection: string) => {
     if (table === 'lab_reports') {
       if (selection === 'id, user_id') return { data: { id: REPORT, user_id: USER }, error: null };
@@ -184,7 +187,7 @@ function buildHandler(s: Scenario, client: unknown, handlerSource = source) {
         : { allowed: true, plan: 'premium', reason: 'active_subscription', source: 'active_subscription' },
     freemiumActive: () => flagOn, generationVisibilityMode, entitlementUnavailable, resolveTier,
     shouldGenerateDeepInterpretation, decideDeepGeneration, decideIntroductoryAccess, commitGeneratedInterpretation,
-    deriveBloodDrawIdentity, hashDrawKey, recordGenerationCosts: vi.fn(async () => {}),
+    deriveBloodDrawIdentity, hashDrawKey, resolveGenerationDrawIdentity, recordGenerationCosts: vi.fn(async () => {}),
     isRateLimitExceeded: () => false, errorMessage: String, servedBasic, visibleClaimProjection,
     // PK-FIX-01b guards: kill switch off; telemetry is inert here.
     aiPausedNow: async () => false, inBackground: (p: Promise<unknown>) => { void p; },
