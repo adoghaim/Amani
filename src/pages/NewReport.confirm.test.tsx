@@ -3,6 +3,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   F022 on the real upload page: a value Amani has probably misread (outside
@@ -14,7 +15,7 @@ const fixture = vi.hoisted(() => ({
   user: { id: '00000000-0000-4000-8000-0000000f0022' },
   inserts: [] as { table: string; values: unknown }[],
   pdfText: '',
-  ocrItems: [] as Record<string, unknown>[],
+  ocrItems: [] as ExtractedAnalyte[],
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -120,6 +121,16 @@ async function upload(file: File) {
 }
 const pdf = () => new File(['%PDF-1.3 synthetic'], 'synthetic-edge-cases.pdf', { type: 'application/pdf' });
 const photo = () => new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' });
+/** A row as parse-lab-report-ocr builds it (ExtractedAnalyte, review F093); synthetic intervals. */
+const ocrRow = (
+  slug: string, name: string, value: number, unit: string, min: number, max: number, category: string,
+): ExtractedAnalyte => ({
+  raw_name: name, raw_value_text: String(value), value_numeric: value, unit,
+  raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,
+  normalized_operator: null, normalized_operator_value: null, source_snippet: `${name} ${value}`,
+  confidence_score: 'high', canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped',
+  needs_review: false, is_core: true, category,
+});
 
 const saveButton = () => button('Save and analyze') as HTMLButtonElement | null;
 const savedAnalytes = () => (fixture.inserts.find(i => i.table === 'report_analytes')?.values ?? []) as Record<string, unknown>[];
@@ -174,14 +185,9 @@ describe('NewReport confirm step: a probably misread value needs her confirmatio
 
   it('a photo read by OCR is held to the same bounds; typing her value releases Save', async () => {
     fixture.ocrItems = [
-      ['tsh', 'TSH', 0.0008, '0.0008', 'mIU/L', 0.4, 4.5],
-      ['ferritin', 'Ferritin', 18, '18', 'ng/mL', 16, 154],
-    ].map(([slug, name, value, text, unit, min, max]) => ({
-      raw_name: name, canonical_slug: slug, value_numeric: value, value_text: text, unit,
-      raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
-      reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-      needs_review: false, source_snippet: `${name} ${text}`, source_format: 'ocr', review_status: 'pending',
-    }));
+      ocrRow('tsh', 'TSH', 0.0008, 'mIU/L', 0.4, 4.5, 'thyroid'),
+      ocrRow('ferritin', 'Ferritin', 18, 'ng/mL', 16, 154, 'nutrients'),
+    ];
     await upload(photo());
     await click(button('Next'));
 
@@ -193,7 +199,10 @@ describe('NewReport confirm step: a probably misread value needs her confirmatio
     await click(saveButton());
     await settle(20);
     const tsh = savedAnalytes().find(a => a['canonical_slug'] === 'tsh');
-    expect(tsh).toMatchObject({ value_numeric: 0.8, needs_review: false, reviewed_by_user: true, review_status: 'edited_by_user' });
+    // Her typed value replaces the printed '0.0008' (IB1's applyReviewEdit).
+    expect(tsh).toMatchObject({
+      value_numeric: 0.8, raw_value_text: null, needs_review: false, reviewed_by_user: true, review_status: 'edited_by_user',
+    });
     const biomarkers = (fixture.inserts.find(i => i.table === 'biomarkers')?.values ?? []) as Record<string, unknown>[];
     expect(biomarkers.find(b => b['name'] === 'tsh')).toMatchObject({ value: 0.8 });
   });
@@ -206,14 +215,9 @@ describe('NewReport confirm step: a probably misread value needs her confirmatio
   */
   it('a value in another unit outside the bounds does not block Save but is saved unconfirmed until she checks it', async () => {
     fixture.ocrItems = [
-      ['fasting_glucose', 'Glucose', 5.2, '5.2', 'mmol/L', 3.9, 5.5],
-      ['ferritin', 'Ferritin', 18, '18', 'ng/mL', 16, 154],
-    ].map(([slug, name, value, text, unit, min, max]) => ({
-      raw_name: name, canonical_slug: slug, value_numeric: value, value_text: text, unit,
-      raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
-      reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-      needs_review: false, source_snippet: `${name} ${text}`, source_format: 'ocr', review_status: 'pending',
-    }));
+      ocrRow('fasting_glucose', 'Glucose', 5.2, 'mmol/L', 3.9, 5.5, 'metabolic'),
+      ocrRow('ferritin', 'Ferritin', 18, 'ng/mL', 16, 154, 'nutrients'),
+    ];
     await upload(photo());
     await click(button('Next'));
 
@@ -226,19 +230,17 @@ describe('NewReport confirm step: a probably misread value needs her confirmatio
     await click(saveButton());
     await settle(20);
     const glucose = savedAnalytes().find(a => a['canonical_slug'] === 'fasting_glucose');
-    expect(glucose).toMatchObject({ value_numeric: 5.2, needs_review: true, confidence_score: 'low', reviewed_by_user: false });
+    expect(glucose).toMatchObject({
+      value_numeric: 5.2, raw_value_text: '5.2', normalized_min: 3.9, normalized_max: 5.5,
+      needs_review: true, confidence_score: 'low', reviewed_by_user: false,
+    });
     expect(isUnconfirmedReading(glucose as unknown as ReadingReview)).toBe(true);
     const ferritin = savedAnalytes().find(a => a['canonical_slug'] === 'ferritin');
     expect(isUnconfirmedReading(ferritin as unknown as ReadingReview)).toBe(false);
   });
 
   it('control: once she marks that value correct, the check line goes and it is saved confirmed', async () => {
-    fixture.ocrItems = [{
-      raw_name: 'Glucose', canonical_slug: 'fasting_glucose', value_numeric: 5.2, value_text: '5.2', unit: 'mmol/L',
-      raw_reference_range: '3.9-5.5', normalized_reference_min: 3.9, normalized_reference_max: 5.5,
-      reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-      needs_review: false, source_snippet: 'Glucose 5.2', source_format: 'ocr', review_status: 'pending',
-    }];
+    fixture.ocrItems = [ocrRow('fasting_glucose', 'Glucose', 5.2, 'mmol/L', 3.9, 5.5, 'metabolic')];
     await upload(photo());
     await click(button('Next'));
     await click(button('Mark as Correct', card('Fasting Glucose')));
