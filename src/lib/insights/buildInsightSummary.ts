@@ -42,7 +42,7 @@ export interface BiggestChange {
   unit: string;
   percentDelta: number | null;
   trendDirection: 'up' | 'down' | 'stable';
-  significance: 'minor' | 'moderate' | 'significant';
+  significance: 'minor' | 'moderate' | 'significant' | 'unassessed';
   boundaryCrossing: { from: string; to: string; direction: string } | null;
   trajectoryStatus: TrajectoryStatus;
   distanceToNormalImprovement: number | null;
@@ -269,7 +269,7 @@ function buildBiggestChanges(deltas: BiomarkerDelta[], immediatePriorReportDate:
   The context question assumes nothing, so it closes every list, and the card
   appears on any report rather than only on one Amani ranks as abnormal.
 */
-const SIGNIFICANCE_RANK = { significant: 2, moderate: 1, minor: 0 } as const;
+const SIGNIFICANCE_RANK = { significant: 2, moderate: 1, unassessed: 0, minor: 0 } as const;
 const MAX_QUESTIONS = 5;
 
 function buildDoctorQuestions(current: BiomarkerInput[], deltas: BiomarkerDelta[]): DiscussionPrepPrompt[] {

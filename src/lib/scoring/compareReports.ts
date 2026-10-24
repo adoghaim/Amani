@@ -7,7 +7,11 @@ import { authorizedLanguage, BOUNDARY_BUCKET_LABEL, type AuthorizedLanguage, typ
 import { isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 
 export type TrendDirection = 'up' | 'down' | 'stable';
-export type SignificanceTier = 'minor' | 'moderate' | 'significant';
+/**
+ * 'unassessed' (RV-NZ1): the two values differ but no relative change exists
+ * (a prior under NEAR_ZERO_THRESHOLD), so the change has no size to state.
+ */
+export type SignificanceTier = 'minor' | 'moderate' | 'significant' | 'unassessed';
 
 export type TrajectoryStatus =
   | 'improving_still_high'
@@ -123,6 +127,7 @@ function computeSignificance(
   key: BiomarkerName,
 ): SignificanceTier {
   const minAbs = MIN_ABSOLUTE_DELTA[key] ?? MIN_ABSOLUTE_DELTA.default ?? 0.5;
+  if (percentDelta === null && absoluteDelta > 0) return 'unassessed';
   if (absoluteDelta < minAbs) return 'minor';
   if (percentDelta === null) return 'minor';
   const absPct = Math.abs(percentDelta);
@@ -337,7 +342,7 @@ export function getBiggestChanges(deltas: BiomarkerDelta[], limit = 5): Biomarke
         return pctContrib + distContrib;
       };
 
-      const sigOrder: Record<SignificanceTier, number> = { significant: 3, moderate: 2, minor: 1 };
+      const sigOrder: Record<SignificanceTier, number> = { significant: 3, moderate: 2, minor: 1, unassessed: 1 };
       const scoreA = crossA + trajScore(a) + sigOrder[a.significance] + magnitudeScore(a);
       const scoreB = crossB + trajScore(b) + sigOrder[b.significance] + magnitudeScore(b);
       return scoreB - scoreA;

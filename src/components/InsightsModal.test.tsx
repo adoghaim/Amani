@@ -111,4 +111,19 @@ describe('InsightsModal (owner R1, R2, R4)', () => {
     host.append(forged);
     expect(unresolvedModelProse(host, TSH)).toEqual(['insights.summary: resolves to no claim: Your thyroid health has worsened.']);
   });
+
+  // RV-NZ1: a change from a near-zero prior has no relative size, so it is not
+  // minor: the modal lists it by value instead of saying there is none.
+  it('a change from a near-zero prior is listed as its measured values, never as no measured change', () => {
+    const claims = claimsFor([['tsh', 0.2]], [['tsh', 4.4]]);
+    expect(claims.map(c => c.fact.significance)).toEqual(['unassessed']);
+    const host = mount({ claims });
+    const surface = host.querySelector('[data-model-surface="comparison"]');
+    expect(surface?.querySelectorAll('[data-language-claim="measured_movement"]')).toHaveLength(1);
+    expect(surface?.textContent).toContain('TSH increased from 0.2 to 4.4 uIU/mL.');
+    expect(host.textContent).not.toContain(COMPARISON_CHANGES_EMPTY);
+    expect(host.textContent).not.toMatch(/not changed significantly/i);
+    expect(unprovenancedText(host, [COMPARISON_CHANGES_HEADING])).toEqual([]);
+    expect(unresolvedModelProse(host, claims)).toEqual([]);
+  });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { YourTrajectoryCard } from '../YourTrajectoryCard';
 import type { BiggestChange, InsightSummary } from '../../lib/insights/buildInsightSummary';
+import { buildInsightSummary } from '../../lib/insights/buildInsightSummary';
 import { FreemiumReportPanel } from './FreemiumReportPanel';
 import { parseInterpretationAccess, type InterpretationAccessResult } from '../../lib/freemium/interpretationAccess';
 import { FREEMIUM_COPY } from '../../lib/freemium/copy';
@@ -378,5 +379,42 @@ describe('Basic changes never state a censored placeholder (F021)', () => {
       return false;
     } });
     expect(asked).toEqual([null]);
+  });
+});
+
+/*
+  RV-NZ1 (REPORT-2026-10-24 §2.2). A prior under the near-zero threshold has no
+  relative change, so its change is not minor: Basic states it by value, never
+  "has not changed significantly". The floor is a real buildInsightSummary.
+*/
+describe('RV-NZ1: a change from a near-zero prior, through Basic', () => {
+  const marker = (key: 'hs_crp' | 'tsh', value: number, unit: string, reportDate?: string) => ({
+    key, value, unit, labRefMin: key === 'tsh' ? 0.45 : null, labRefMax: key === 'tsh' ? 4.5 : 3, reportDate,
+  });
+  const floorFor = (key: 'hs_crp' | 'tsh', previous: number, current: number, unit: string) =>
+    buildInsightSummary([marker(key, current, unit)], [marker(key, previous, unit, '2025-12-01')], null, '2025-12-01');
+
+  it('a trend preview that agrees with hs-CRP 0.3 -> 9 mg/L is stated as that claim, by value', () => {
+    const floor = floorFor('hs_crp', 0.3, 9, 'mg/L');
+    const preview = { kind: 'trend', content: { biomarker_slug: 'hs_crp', previous_value: 0.3, current_value: 9, unit: 'mg/L' } };
+    const host = document.createElement('div');
+    host.innerHTML = renderToStaticMarkup(<FreemiumReportPanel state={withBasic({}, preview)} generating={false} plan="premium"
+      complimentaryUsed={null} onRetry={noop} onGenerate={noop} onOpenPaywall={noop} floorSummary={floor} />);
+    const card = host.querySelector('[data-model-surface="preview"]');
+    expect(card?.textContent).toContain('hs-CRP increased from 0.3 to 9 mg/L.');
+    expect(card?.querySelectorAll('[data-language-claim="measured_movement"]')).toHaveLength(1);
+    expect(host.textContent).not.toMatch(/not changed significantly/i);
+    expect(unprovenancedText(host, CHROME)).toEqual([]);
+  });
+
+  it('the TSH 0.2 -> 4.4 uIU/mL Basic line dedupes against the trajectory bullet, which now carries both values', () => {
+    const floor = floorFor('tsh', 0.2, 4.4, 'uIU/mL');
+    const trajectory = text(renderToStaticMarkup(<YourTrajectoryCard changes={floor.biggestChanges} primaryFinding={floor.primaryFinding} reportCount={2} />));
+    expect(trajectory).toContain('TSH changed from 0.2 to 4.4 uIU/mL.');
+    const line = { ...trend('tsh', 'TSH'), previous_value: 0.2, current_value: 4.4, unit: 'uIU/mL' };
+    const out = render(withTrends([line, trend('ferritin', 'Ferritin')]), { floorSummary: floor });
+    expect(out).not.toContain('TSH: 0.2 → 4.4');
+    expect(out).toContain('Ferritin: 10 → 20 u · increased · 2026-03-01');
+    expect(out).not.toMatch(/not changed significantly/i);
   });
 });
