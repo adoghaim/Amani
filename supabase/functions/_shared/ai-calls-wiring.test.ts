@@ -28,6 +28,22 @@ describe.each(FUNCTIONS.map(fn => [fn]))('%s', fn => {
     expect(outsideHelper).not.toMatch(/\bmax_(?:completion_)?tokens:/);
   });
 
+  it('asks OpenAI not to store the completion, right after JSON mode (RV-MM1 AC3)', () => {
+    expect(text).toMatch(/\n {10}response_format: \{ type: "json_object" \},\n {10}store: false,\n/);
+    expect(text.match(/\bstore\s*:/g)).toEqual(['store:']);
+  });
+
+  it('spreads the reasoning-effort secret of the use it resolves the model for (RV-MM1 AC5)', () => {
+    const use = /resolveOpenAiModel\("(\w+)"/.exec(text)?.[1];
+    expect(use).toMatch(/^(?:ocr|extraction|labInsights)$/);
+    const imported = /^import \{ ([^}]*) \} from "\.\.\/_shared\/openai-models\.ts";$/m.exec(text)?.[1]?.split(', ') ?? [];
+    expect(imported).toContain('reasoningEffortParams');
+    expect(text).toMatch(new RegExp(
+      String.raw`\n {10}\.\.\.chatCompletionParams\(model, \{[^\n]*\}\),\n {10}response_format: \{ type: "json_object" \},\n` +
+      String.raw` {10}store: false,\n {10}\.\.\.reasoningEffortParams\("${use}", model, \(name\) => Deno\.env\.get\(name\)\),\n {8}\}\),\n`));
+    expect(text.match(/reasoningEffortParams\(/g)).toHaveLength(1);
+  });
+
   it('returns a fixed message to the client and logs scrubbed detail (F033)', () => {
     expect(text).not.toContain('errorMessage(');
     expect(text).not.toContain('_shared/errors.ts');
@@ -74,5 +90,44 @@ describe('lab-insights (F017, F131)', () => {
     const params = chatCompletionParams(DEFAULT_OPENAI_MODELS.labInsights, { maxOutputTokens: 3000, temperature: 0.7 });
     expect(Object.keys(params)).toEqual(['max_completion_tokens']);
     expect(text).toContain('chatCompletionParams(model, { maxOutputTokens: 3000, temperature: 0.7 })');
+  });
+});
+
+// RV-MM1 AC1. Kept apart from FUNCTIONS: that list also runs the F033 test,
+// which is not this handler's finding (it imports errorMessage).
+describe('generate-interpretation model call (RV-MM1 AC1)', () => {
+  const text = source('generate-interpretation');
+  const callOnce = text.slice(text.indexOf('async function callOpenAIOnce('), text.indexOf('// ─── Context sanitization'));
+
+  it('takes its model id and request limits from _shared/openai-models.ts', () => {
+    const imported = /^import \{ ([^}]*) \} from "\.\.\/_shared\/openai-models\.ts";$/m.exec(text)?.[1]?.split(', ') ?? [];
+    expect(imported).toEqual(expect.arrayContaining(['chatCompletionParams', 'resolveOpenAiModel']));
+    expect(callOnce).toContain('const requestedModel = resolveOpenAiModel("interpretation", (name) => Deno.env.get(name));');
+    expect(callOnce).toContain('let model = requestedModel;');
+    expect(callOnce).toContain('model: requestedModel,');
+    expect(callOnce).toContain('...chatCompletionParams(requestedModel, { maxOutputTokens: 2200, temperature: 0.25 }),');
+    // Resolved before the try, so a harness without the module fails loudly instead of on the catch path.
+    expect(callOnce.indexOf('const requestedModel = resolveOpenAiModel(')).toBeGreaterThan(0);
+    expect(callOnce.indexOf('const requestedModel = resolveOpenAiModel(')).toBeLessThan(callOnce.indexOf('\n  try {'));
+  });
+
+  it('carries no model literal and no hand-written limit or sampling field', () => {
+    expect(text).not.toMatch(/"gpt-/);
+    const outsideHelper = text.replace(/chatCompletionParams\([^)]*\)/g, '');
+    expect(outsideHelper).not.toMatch(/\btemperature:/);
+    expect(outsideHelper).not.toMatch(/\bmax_(?:completion_)?tokens:/);
+  });
+
+  it('asks OpenAI not to store the completion, right after JSON mode (RV-MM1 AC3)', () => {
+    expect(callOnce).toMatch(/\n {10}response_format: \{ type: "json_object" \},\n {10}store: false,\n/);
+    expect(text.match(/\bstore\s*:/g)).toEqual(['store:']);
+  });
+
+  it('spreads the interpretation reasoning-effort secret for the requested model (RV-MM1 AC5)', () => {
+    const imported = /^import \{ ([^}]*) \} from "\.\.\/_shared\/openai-models\.ts";$/m.exec(text)?.[1]?.split(', ') ?? [];
+    expect(imported).toContain('reasoningEffortParams');
+    expect(callOnce).toContain('\n          store: false,\n'
+      + '          ...reasoningEffortParams("interpretation", requestedModel, (name) => Deno.env.get(name)),\n        }),\n');
+    expect(text.match(/reasoningEffortParams\(/g)).toHaveLength(1);
   });
 });

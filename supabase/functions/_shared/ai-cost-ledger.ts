@@ -41,11 +41,19 @@ export interface ModelPrice {
  * functions call today. Matched by prefix against the model the API reports
  * (e.g. "gpt-4o-2024-08-06"), longest prefix first. The owner confirms or
  * updates these figures ([Pending] in the PK-FIX-01b PR).
+ *
+ * gpt-6-luna and gpt-5.6-terra are OpenAI's suggested replacements for the
+ * three ids above (OPENAI_MODEL_SHUTDOWNS in openai-models.ts), priced ahead of
+ * a swap so a switched use is estimated at its own rate rather than the unknown
+ * one. Source: https://developers.openai.com/api/docs/pricing, standard tier,
+ * read 2026-10-24. The owner confirms these too ([Pending]).
  */
 export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = Object.freeze({
   "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "gpt-5-mini": { inputPerMillion: 0.25, outputPerMillion: 2 },
+  "gpt-6-luna": { inputPerMillion: 0.1, outputPerMillion: 0.5 },
+  "gpt-5.6-terra": { inputPerMillion: 2, outputPerMillion: 12 },
 });
 
 /** The most expensive listed rate: what an unlisted model is priced at. */

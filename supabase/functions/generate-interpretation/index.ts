@@ -6,6 +6,7 @@ import {
   validateInterpretationOutput,
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
+import { chatCompletionParams, reasoningEffortParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { consentRefusal } from "../_shared/consent.ts";
@@ -1287,7 +1288,8 @@ async function callOpenAIOnce(
   const started = recordCost ? performance.now() : 0;
   let receivedResponse = false;
   let usage: unknown;
-  let model = "gpt-4o-mini";
+  const requestedModel = resolveOpenAiModel("interpretation", (name) => Deno.env.get(name));
+  let model = requestedModel;
   try {
     const res = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
@@ -1295,7 +1297,7 @@ async function callOpenAIOnce(
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: requestedModel,
           messages: [
             {
               role: "system",
@@ -1304,9 +1306,10 @@ async function callOpenAIOnce(
             // PK-PRIV-01: identifiers out before the prompt leaves for OpenAI.
             { role: "user", content: redactLabText(prompt).text },
           ],
-          max_tokens: 2200,
-          temperature: 0.25,
+          ...chatCompletionParams(requestedModel, { maxOutputTokens: 2200, temperature: 0.25 }),
           response_format: { type: "json_object" },
+          store: false,
+          ...reasoningEffortParams("interpretation", requestedModel, (name) => Deno.env.get(name)),
         }),
       },
       { attemptTimeoutMs: 18000 },

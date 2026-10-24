@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Amani is a women's health lab-interpretation app: users upload lab PDFs/photos, the app extracts biomarkers, scores them with menstrual-cycle context, and generates AI interpretations. The web app (Vite + React + TypeScript + Tailwind) is wrapped as iOS/Android via Capacitor. Supabase provides auth, Postgres, storage, and Edge Functions. Stripe handles subscriptions; OpenAI (`gpt-4o-2024-08-06`) generates interpretations server-side.
+Amani is a women's health lab-interpretation app: users upload lab PDFs/photos, the app extracts biomarkers, scores them with menstrual-cycle context, and generates AI interpretations. The web app (Vite + React + TypeScript + Tailwind) is wrapped as iOS/Android via Capacitor. Supabase provides auth, Postgres, storage, and Edge Functions. Stripe handles subscriptions; OpenAI generates interpretations server-side (model ids, per-function overrides and shutdown dates: `supabase/functions/_shared/openai-models.ts`).
 
 ## Common commands
 

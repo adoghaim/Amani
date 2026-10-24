@@ -31,8 +31,16 @@
  *
  *   OPENAI_MODEL_OCR              parse-lab-report-ocr  (vision)
  *   OPENAI_MODEL_EXTRACTION       extract-biomarkers
- *   OPENAI_MODEL_INTERPRETATION   generate-interpretation (wiring is a handoff)
+ *   OPENAI_MODEL_INTERPRETATION   generate-interpretation
  *   OPENAI_MODEL_LAB_INSIGHTS     lab-insights
+ *
+ * ## Reasoning effort
+ *
+ * A reasoning model's effort is set per use the same way, by
+ * OPENAI_REASONING_EFFORT_OCR, _EXTRACTION, _INTERPRETATION or _LAB_INSIGHTS
+ * holding one of REASONING_EFFORTS. Unset (the default) or invalid, no
+ * `reasoning_effort` is sent and the model's own default applies; a chat model
+ * never gets the field. Choosing an effort is the owner's, after the eval.
  *
  * Pure: no Deno, no network, so Vitest drives it directly.
  */
@@ -45,6 +53,26 @@ export const DEFAULT_OPENAI_MODELS: Readonly<Record<OpenAiModelUse, string>> = O
   extraction: "gpt-4o-mini",
   interpretation: "gpt-4o-mini",
   labInsights: "gpt-5-mini",
+});
+
+export interface OpenAiModelShutdown {
+  /** The day OpenAI stops serving the id (YYYY-MM-DD). */
+  shutdown: string;
+  /** OpenAI's suggested replacement. Not switched to: a switch needs the eval and owner sign-off. */
+  replacement: string;
+}
+
+/**
+ * OpenAI's shutdown date and suggested replacement for every default id, from
+ * https://developers.openai.com/api/docs/deprecations (read 2026-10-24). The
+ * handlers send the bare ids; nothing there says those are repointed, so they
+ * are treated as shutting down with their snapshots. Section 1a of
+ * docs/privacy/ai-processing.md states the same table (a test keeps them equal).
+ */
+export const OPENAI_MODEL_SHUTDOWNS: Readonly<Record<string, OpenAiModelShutdown>> = Object.freeze({
+  "gpt-4o": Object.freeze({ shutdown: "2027-01-14", replacement: "gpt-6-luna" }),
+  "gpt-4o-mini": Object.freeze({ shutdown: "2027-01-14", replacement: "gpt-6-luna" }),
+  "gpt-5-mini": Object.freeze({ shutdown: "2026-12-11", replacement: "gpt-5.6-terra" }),
 });
 
 /** The function secret that overrides each use. */
@@ -89,4 +117,29 @@ export function chatCompletionParams(model: string, limits: ChatLimits): Record<
   return limits.temperature === undefined
     ? { max_tokens: limits.maxOutputTokens }
     : { max_tokens: limits.maxOutputTokens, temperature: limits.temperature };
+}
+
+/** The function secret that sets each use's reasoning effort. */
+export const OPENAI_REASONING_EFFORT_ENV: Readonly<Record<OpenAiModelUse, string>> = Object.freeze({
+  ocr: "OPENAI_REASONING_EFFORT_OCR",
+  extraction: "OPENAI_REASONING_EFFORT_EXTRACTION",
+  interpretation: "OPENAI_REASONING_EFFORT_INTERPRETATION",
+  labInsights: "OPENAI_REASONING_EFFORT_LAB_INSIGHTS",
+});
+
+/** The `reasoning_effort` values Chat Completions documents; a given model may accept fewer. */
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+export type ReasoningEffort = typeof REASONING_EFFORTS[number];
+
+/** `{ reasoning_effort }` when the use's secret holds a listed value and the model reasons, else `{}`. */
+export function reasoningEffortParams(
+  use: OpenAiModelUse,
+  model: string,
+  getEnv: (name: string) => string | undefined = () => undefined,
+): { reasoning_effort?: ReasoningEffort } {
+  if (!isReasoningModel(model)) return {};
+  const value = getEnv(OPENAI_REASONING_EFFORT_ENV[use])?.trim().toLowerCase();
+  const effort = REASONING_EFFORTS.find(listed => listed === value);
+  return effort ? { reasoning_effort: effort } : {};
 }

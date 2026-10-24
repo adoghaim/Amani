@@ -35,6 +35,8 @@ import { buildBasicProjection } from './interpretation-visibility';
 import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretation, shouldRequestDeepInterpretation } from './response-shaping';
 import { decideDeepGeneration } from './regeneration-availability';
 import { generationSample } from './generation-cost';
+import { redactLabText } from './lab-text-redaction';
+import { chatCompletionParams, reasoningEffortParams, resolveOpenAiModel } from './openai-models';
 import * as versionWrite from './interpretation-version-write';
 import { callModelUnlessPaused } from './ai-pause';
 import { consentRefusal, createConsentGate } from './consent';
@@ -141,13 +143,17 @@ it('actual OpenAI call records one null-usage sample on a non-OK response', asyn
   const sample = vi.fn();
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   try {
+    // RV-MM1: the body really builds (redaction, model and limits in scope), so the 503 is what is tested.
+    const fetchWithBackoff = vi.fn(async () => new Response('synthetic failure', { status: 503 }));
     const call = evaluate(source.slice(start, end) + '\nreturn callOpenAIOnce;', {
-      ...generationOutcome, fetchWithBackoff: async () => new Response('synthetic failure', { status: 503 }),
+      ...generationOutcome, fetchWithBackoff, redactLabText,
+      resolveOpenAiModel, chatCompletionParams, reasoningEffortParams, Deno: { env: { get: () => undefined } },
       generationSample, errorMessage: String,
     }) as (key: string, prompt: string, callback: typeof sample) => Promise<unknown>;
     expect(await call('fake-key', 'synthetic prompt', sample)).toBeNull();
     expect(sample).toHaveBeenCalledOnce();
     expect(sample.mock.calls[0][0]).toMatchObject({ model: 'gpt-4o-mini', promptTokens: null, completionTokens: null, totalTokens: null });
+    expect(fetchWithBackoff).toHaveBeenCalledOnce();
   } finally { warn.mockRestore(); }
 });
 

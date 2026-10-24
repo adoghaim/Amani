@@ -11,6 +11,8 @@ import { buildBasicProjection } from './interpretation-visibility';
 import { callModelUnlessPaused } from './ai-pause';
 import { formatTrendEvidencePrompt } from './trend-evidence';
 import { redactLabText } from './lab-text-redaction';
+import { chatCompletionParams, REASONING_TOKEN_HEADROOM, reasoningEffortParams, resolveOpenAiModel } from './openai-models';
+import { generationSample, type GenerationSample } from './generation-cost';
 
 // Execute the actual handler's model and shaping functions, as the existing
 // handler suites do. All network I/O is replaced; no Deno isolate or credentials.
@@ -56,6 +58,8 @@ type Produced = {
   floorViolations: unknown[];
   interpretationJson: Record<string, unknown>;
 };
+// The function secrets callOpenAIOnce reads through Deno.env (RV-MM1). Empty unless a test sets one.
+const modelEnv: Record<string, string> = {};
 function harness() {
   const fetch = vi.fn(async (_url: string, _init: RequestInit) => answer());
   const api = evaluate(fragment('function classifyAnalyte(', '// ─── Context sanitization')
@@ -63,6 +67,8 @@ function harness() {
     + '\nreturn { buildPrimaryContext, generateFallbackInterpretation, produceInterpretation };', {
     ...outcome, ...placement, ...shaping, ...authority, ...nutrients, InterpretationSchema,
     fetchWithBackoff: fetch, redactLabText, formatTrendEvidencePrompt, buildBasicProjection, callModelUnlessPaused,
+    resolveOpenAiModel, chatCompletionParams, reasoningEffortParams, generationSample,
+    Deno: { env: { get: (name: string) => modelEnv[name] } },
   }) as {
     buildPrimaryContext: (analytes: typeof panel, prior: typeof panel, date: string | null, pinned: string) => Record<string, unknown>;
     generateFallbackInterpretation: (report: unknown, analytes: typeof panel, primary: unknown) => Record<string, unknown>;
@@ -158,5 +164,87 @@ describe('October smoke: the real model/fallback pipeline', () => {
     const fallback = h.api.generateFallbackInterpretation(h.report, values, primary);
     expect(fallback.overall_interpretation).toBe("TSH is above the lab's reference range at 4.51 uIU/mL.");
     expect(JSON.stringify(fallback)).not.toMatch(/borderline|near the edge|remains|improved|worsened/);
+  });
+});
+
+// RV-MM1 AC1: callOpenAIOnce takes its model id and limits from _shared/openai-models.ts.
+describe('interpretation model wiring: one secret drives both attempts', () => {
+  afterEach(() => { for (const name of Object.keys(modelEnv)) delete modelEnv[name]; });
+  const sentBodies = (h: ReturnType<typeof harness>) =>
+    h.fetch.mock.calls.map(([, init]) => JSON.parse(init.body as string) as Record<string, unknown>);
+  // A violating first answer forces the stricter retry, as in the output_rejected case above.
+  const violating = () => answer({ ...modelBody(), overall_interpretation: 'Take 5000 IU of vitamin D daily.' });
+
+  it("no secret: today's body, gpt-4o-mini with max_tokens 2200, temperature 0.25, JSON mode, not stored", async () => {
+    silence();
+    const h = harness();
+    await h.run();
+    const bodies = sentBodies(h);
+    expect(bodies).toHaveLength(1);
+    expect(Object.keys(bodies[0]!)).toEqual(['model', 'messages', 'max_tokens', 'temperature', 'response_format', 'store']);
+    expect(bodies[0]).toMatchObject({ model: 'gpt-4o-mini', max_tokens: 2200, temperature: 0.25,
+      response_format: { type: 'json_object' }, store: false });
+  });
+
+  it('OPENAI_MODEL_INTERPRETATION=gpt-6-luna: both attempts send it, with max_completion_tokens and no temperature', async () => {
+    silence();
+    modelEnv.OPENAI_MODEL_INTERPRETATION = 'gpt-6-luna';
+    const h = harness();
+    h.fetch.mockImplementationOnce(async () => violating());
+    const produced = await h.run();
+    const bodies = sentBodies(h);
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(Object.keys(body)).toEqual(['model', 'messages', 'max_completion_tokens', 'response_format', 'store']);
+      expect(body).toMatchObject({ model: 'gpt-6-luna', max_completion_tokens: 2200 + REASONING_TOKEN_HEADROOM,
+        response_format: { type: 'json_object' }, store: false });
+    }
+    expect(produced.shaped.source).toBe('ai');
+  });
+
+  it.each(['gpt-4o"; DROP', 'gpt 6', '../gpt-6-luna'])('a malformed secret %j keeps the default body', async bad => {
+    silence();
+    modelEnv.OPENAI_MODEL_INTERPRETATION = bad;
+    const h = harness();
+    await h.run();
+    expect(sentBodies(h)[0]).toMatchObject({ model: 'gpt-4o-mini', max_tokens: 2200, temperature: 0.25 });
+  });
+
+  it('records the model the API reports, else the one requested', async () => {
+    silence();
+    modelEnv.OPENAI_MODEL_INTERPRETATION = 'gpt-6-luna';
+    const h = harness();
+    h.fetch.mockImplementationOnce(async () => violating())
+      .mockImplementationOnce(async () => new Response(JSON.stringify({ model: 'gpt-6-luna-2026-11-01',
+        choices: [{ message: { content: JSON.stringify(modelBody()) }, finish_reason: 'stop' }] }), { status: 200 }));
+    const samples: GenerationSample[] = [];
+    await h.run({ recordCost: (sample: GenerationSample) => samples.push(sample) });
+    expect(samples.map(s => s.model)).toEqual(['gpt-6-luna', 'gpt-6-luna-2026-11-01']);
+  });
+
+  it('OPENAI_REASONING_EFFORT_INTERPRETATION reaches both attempts of a reasoning model, and only those', async () => {
+    silence();
+    modelEnv.OPENAI_MODEL_INTERPRETATION = 'gpt-6-luna';
+    modelEnv.OPENAI_REASONING_EFFORT_INTERPRETATION = ' LOW ';
+    const reasoning = harness();
+    reasoning.fetch.mockImplementationOnce(async () => violating());
+    await reasoning.run();
+    const bodies = sentBodies(reasoning);
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(Object.keys(body)).toEqual(['model', 'messages', 'max_completion_tokens', 'response_format', 'store', 'reasoning_effort']);
+      expect(body).toMatchObject({ model: 'gpt-6-luna', reasoning_effort: 'low' });
+    }
+
+    modelEnv.OPENAI_REASONING_EFFORT_INTERPRETATION = 'extreme';
+    const invalid = harness();
+    await invalid.run();
+    expect(sentBodies(invalid)[0]).not.toHaveProperty('reasoning_effort');
+
+    delete modelEnv.OPENAI_MODEL_INTERPRETATION;
+    modelEnv.OPENAI_REASONING_EFFORT_INTERPRETATION = 'low';
+    const chat = harness();
+    await chat.run();
+    expect(Object.keys(sentBodies(chat)[0]!)).toEqual(['model', 'messages', 'max_tokens', 'temperature', 'response_format', 'store']);
   });
 });

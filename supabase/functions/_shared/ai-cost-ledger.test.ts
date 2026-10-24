@@ -36,6 +36,23 @@ describe('priceFor', () => {
     }
   });
 
+  it("prices OpenAI's suggested replacements at their list rates, bare and dated (RV-MM1 AC2)", () => {
+    expect(priceFor('gpt-6-luna')).toEqual({ inputPerMillion: 0.1, outputPerMillion: 0.5 });
+    expect(priceFor('gpt-6-luna-2026-11-01')).toBe(MODEL_PRICES['gpt-6-luna']);
+    expect(priceFor('GPT-6-Luna')).toBe(MODEL_PRICES['gpt-6-luna']);
+    expect(priceFor('gpt-5.6-terra')).toEqual({ inputPerMillion: 2, outputPerMillion: 12 });
+    expect(priceFor('gpt-5.6-terra-2026-11-01')).toBe(MODEL_PRICES['gpt-5.6-terra']);
+    // gpt-5.6-terra is not a gpt-5-mini snapshot, nor the other way round.
+    expect(priceFor('gpt-5-mini')).toBe(MODEL_PRICES['gpt-5-mini']);
+    expect(priceFor('gpt-6-lunar')).toBe(UNKNOWN_MODEL_PRICE);
+    expect(estimateCostUsd('gpt-6-luna', 1_000_000, 1_000_000)).toBe(0.6);
+    expect(estimateCostUsd('gpt-5.6-terra', 1000, 1000)).toBe(0.014);
+  });
+
+  it('keeps the unknown-model rate at the highest listed input and output rates', () => {
+    expect(UNKNOWN_MODEL_PRICE).toEqual({ inputPerMillion: 2.5, outputPerMillion: 12 });
+  });
+
   it('prices every model the four functions request today', () => {
     // The ids live in _shared/openai-models.ts (AI1); a handler may still carry a literal.
     const requested = new Set<string>(Object.values(DEFAULT_OPENAI_MODELS));

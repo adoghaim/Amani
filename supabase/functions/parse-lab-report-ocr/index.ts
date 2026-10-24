@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi-scrub.ts";
-import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
+import { chatCompletionParams, reasoningEffortParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { ocrImagesRefusal, type ExtractedAnalyte as ReportAnalyte } from "../_shared/lab-extraction.ts";
@@ -297,7 +297,9 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
             { role: "user", content: userMessagesContent }
           ],
           ...chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }),
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          store: false,
+          ...reasoningEffortParams("ocr", model, (name) => Deno.env.get(name)),
         }),
       },
       { attemptTimeoutMs: 30000 },

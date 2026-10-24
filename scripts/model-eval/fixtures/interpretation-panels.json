@@ -1,0 +1,76 @@
+{
+  "about": "Synthetic interpretation panels for the model eval (RV-MM1 AC8), copied from the named cases of the fallback nutrient-policy suite: every analyte is that suite's lab(...) call verbatim, and report overrides, prior rows, prior date and pinned slug are its own. Nothing here is a clinical range.",
+  "panels": [
+    {
+      "id": "october-smoke",
+      "synthetic": true,
+      "copiedFrom": "supabase/functions/_shared/nutrient-policy.fallback.test.ts",
+      "caseName": "the October smoke panel, Vitamin D pinned, cycle unknown",
+      "reportOverrides": {},
+      "analytes": [
+        "lab('ferritin', 'Ferritin', 18, 'ng/mL', 16, 154)",
+        "lab('tsh', 'TSH', 2.85, 'uIU/mL', 0.4, 4.5)",
+        "lab('vitamin_d_25_oh', 'Vitamin D', 24, 'ng/mL', 30, 100)",
+        "lab('ldl_cholesterol', 'LDL', 112, 'mg/dL', null, null, { operator: '<', value: 100 })"
+      ],
+      "prior": [],
+      "priorDate": null,
+      "pinned": "vitamin_d_25_oh"
+    },
+    {
+      "id": "prior-report-trend",
+      "synthetic": true,
+      "copiedFrom": "supabase/functions/_shared/nutrient-policy.fallback.test.ts",
+      "caseName": "thyroid antibodies, glucose and lipids outside, TSH up since the prior report",
+      "reportOverrides": {},
+      "analytes": [
+        "lab('tpo_antibodies', 'TPO Antibodies', 120, 'IU/mL', 0, 34)",
+        "lab('tsh', 'TSH', 6.5, 'uIU/mL', 0.4, 4.5)",
+        "lab('fasting_glucose', 'Glucose', 112, 'mg/dL', 65, 99)",
+        "lab('hemoglobin_a1c', 'Hemoglobin A1c', 6.1, '%', 4, 5.6)",
+        "lab('fasting_insulin', 'Insulin', 30, 'uIU/mL', 2.6, 24.9)",
+        "lab('ldl_cholesterol', 'LDL', 160, 'mg/dL', 0, 99)",
+        "lab('total_cholesterol', 'Total Cholesterol', 250, 'mg/dL', 100, 199)"
+      ],
+      "prior": ["lab('tsh', 'TSH', 5, 'uIU/mL', 0.4, 4.5)"],
+      "priorDate": "2026-04-17",
+      "pinned": "tsh"
+    },
+    {
+      "id": "declared-pregnancy",
+      "synthetic": true,
+      "copiedFrom": "supabase/functions/_shared/nutrient-policy.fallback.test.ts",
+      "caseName": "thyroid function, one glucose result and nutrients outside, pregnant, ferritin down since the prior report",
+      "reportOverrides": { "context": { "pregnant": "yes" } },
+      "analytes": [
+        "lab('tsh', 'TSH', 0.05, 'uIU/mL', 0.4, 4.5)",
+        "lab('fasting_glucose', 'Glucose', 110, 'mg/dL', 65, 99)",
+        "lab('ferritin', 'Ferritin', 8, 'ng/mL', 16, 154)",
+        "lab('vitamin_d_25_oh', 'Vitamin D', 15, 'ng/mL', 30, 100)"
+      ],
+      "prior": ["lab('ferritin', 'Ferritin', 12, 'ng/mL', 16, 154)"],
+      "priorDate": "2026-04-17",
+      "pinned": "ferritin"
+    },
+    {
+      "id": "all-within-lab-range",
+      "synthetic": true,
+      "copiedFrom": "supabase/functions/_shared/nutrient-policy.fallback.test.ts",
+      "caseName": "every value within its printed range, luteal day 21, symptoms reported",
+      "reportOverrides": {
+        "estimated_cycle_day": 21,
+        "estimated_cycle_phase": "luteal",
+        "context": { "birth_control": "no", "pregnant": "no", "postpartum": "no", "top_symptoms": ["fatigue", "cramps"] }
+      },
+      "analytes": [
+        "lab('tsh', 'TSH', 2, 'uIU/mL', 0.4, 4.5)",
+        "lab('free_t4', 'Free T4', 1.2, 'ng/dL', 0.8, 1.8)",
+        "lab('vitamin_d_25_oh', 'Vitamin D', 45, 'ng/mL', 30, 100)",
+        "lab('hs_crp', 'hs-CRP', 0.5, 'mg/L', 0, 3)"
+      ],
+      "prior": [],
+      "priorDate": null,
+      "pinned": null
+    }
+  ]
+}

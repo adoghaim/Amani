@@ -1,0 +1,240 @@
+{
+  "about": "Synthetic lab report texts for the model eval (RV-MM1 AC8). Each text is copied verbatim from the parser fixture named in copiedFrom; each expected row lists the name, result, unit and printed interval exactly as that text prints them (phases: a cycle-phase interval list, not scored as one range). Nothing here is a clinical range.",
+  "texts": [
+    {
+      "id": "quest-smoke",
+      "synthetic": true,
+      "copiedFrom": "src/utils/parser/__fixtures__/questSmoke.ts",
+      "export": "questSmokeFixture",
+      "text": "Quest Diagnostics\nSYNTHETIC TEST REPORT - NOT A REAL PATIENT\nPatient: Test Smoke DOB: 01/15/1985 Sex: F\nCollected: 10/10/2026 Reported: 10/11/2026\nTest Name Result Flag Reference Range Units\nFerritin 18 L 16-154 ng/mL\nHemoglobin 12.1 11.7-15.5 g/dL\nTSH 2.85 0.40-4.50 mIU/L\nFree T4 1.1 0.8-1.8 ng/dL\nVitamin D, 25-OH, Total 24 L 30-100 ng/mL\nHemoglobin A1c 5.4 <5.7 %\nGlucose 88 65-99 mg/dL\nCholesterol, Total 192 <200 mg/dL\nHDL Cholesterol 61 > OR = 50 mg/dL\nLDL-Cholesterol 112 H <100 mg/dL\nTriglycerides 95 <150 mg/dL\nVitamin B12 410 200-1100 pg/mL",
+      "rows": [
+        {
+          "name": "Ferritin",
+          "value": "18",
+          "unit": "ng/mL",
+          "range": "16-154"
+        },
+        {
+          "name": "Hemoglobin",
+          "value": "12.1",
+          "unit": "g/dL",
+          "range": "11.7-15.5"
+        },
+        {
+          "name": "TSH",
+          "value": "2.85",
+          "unit": "mIU/L",
+          "range": "0.40-4.50"
+        },
+        {
+          "name": "Free T4",
+          "value": "1.1",
+          "unit": "ng/dL",
+          "range": "0.8-1.8"
+        },
+        {
+          "name": "Vitamin D, 25-OH, Total",
+          "value": "24",
+          "unit": "ng/mL",
+          "range": "30-100"
+        },
+        {
+          "name": "Hemoglobin A1c",
+          "value": "5.4",
+          "unit": "%",
+          "range": "<5.7"
+        },
+        {
+          "name": "Glucose",
+          "value": "88",
+          "unit": "mg/dL",
+          "range": "65-99"
+        },
+        {
+          "name": "Cholesterol, Total",
+          "value": "192",
+          "unit": "mg/dL",
+          "range": "<200"
+        },
+        {
+          "name": "HDL Cholesterol",
+          "value": "61",
+          "unit": "mg/dL",
+          "range": "> OR = 50"
+        },
+        {
+          "name": "LDL-Cholesterol",
+          "value": "112",
+          "unit": "mg/dL",
+          "range": "<100"
+        },
+        {
+          "name": "Triglycerides",
+          "value": "95",
+          "unit": "mg/dL",
+          "range": "<150"
+        },
+        {
+          "name": "Vitamin B12",
+          "value": "410",
+          "unit": "pg/mL",
+          "range": "200-1100"
+        }
+      ]
+    },
+    {
+      "id": "quest-hormones",
+      "synthetic": true,
+      "copiedFrom": "src/utils/parser/__fixtures__/questHormones.ts",
+      "export": "questHormoneFixture",
+      "text": "\nQuest Diagnostics\nSpecimen ID: QD00000917\nReporting Physician: Dr. Synthetic\n\nTest Name                         Result      Units       Reference Range\nFSH                               6.1         mIU/mL\n    Reference Range:\n    Follicular Phase              2.1-11.1\n    Mid-Cycle Peak                5.2-22.2\n    Luteal Phase                  1.3-8.8\n    Postmenopausal                22.2-133.3\nLH                                5.6         mIU/mL\n    Reference Range:\n    Follicular Phase              1.6-11.6\n    Mid-Cycle Peak                6.6-66.6\n    Luteal Phase                  0.6-12.6\n    Postmenopausal                12.6-56.6\nESTRADIOL                         145         pg/mL\n    Reference Range:\n    Follicular Phase              21-121\n    Mid-Cycle Phase               61-361\n    Luteal Phase                  51-251\n    Postmenopausal                <=31\nPROGESTERONE                      8.2         ng/mL\n    Reference Range:\n    Follicular Phase              <=1.1\n    Luteal Phase                  2.2-22.2\n    Postmenopausal                <=0.4\nPROLACTIN                         11.4        ng/mL       3.3-33.3\nSHBG                              62          nmol/L\nANDROSTENEDIONE                   88          ng/dL       33-333\nTESTOSTERONE, TOTAL, MS           31          ng/dL       2-45\nTSH                               1.9         mIU/L       0.44-4.44\n",
+      "rows": [
+        {
+          "name": "FSH",
+          "value": "6.1",
+          "unit": "mIU/mL",
+          "range": null,
+          "phases": true
+        },
+        {
+          "name": "LH",
+          "value": "5.6",
+          "unit": "mIU/mL",
+          "range": null,
+          "phases": true
+        },
+        {
+          "name": "ESTRADIOL",
+          "value": "145",
+          "unit": "pg/mL",
+          "range": null,
+          "phases": true
+        },
+        {
+          "name": "PROGESTERONE",
+          "value": "8.2",
+          "unit": "ng/mL",
+          "range": null,
+          "phases": true
+        },
+        {
+          "name": "PROLACTIN",
+          "value": "11.4",
+          "unit": "ng/mL",
+          "range": "3.3-33.3"
+        },
+        {
+          "name": "SHBG",
+          "value": "62",
+          "unit": "nmol/L",
+          "range": null
+        },
+        {
+          "name": "ANDROSTENEDIONE",
+          "value": "88",
+          "unit": "ng/dL",
+          "range": "33-333"
+        },
+        {
+          "name": "TESTOSTERONE, TOTAL, MS",
+          "value": "31",
+          "unit": "ng/dL",
+          "range": "2-45"
+        },
+        {
+          "name": "TSH",
+          "value": "1.9",
+          "unit": "mIU/L",
+          "range": "0.44-4.44"
+        }
+      ]
+    },
+    {
+      "id": "labcorp-hormones",
+      "synthetic": true,
+      "copiedFrom": "src/utils/parser/__fixtures__/labcorpHormones.ts",
+      "export": "labcorpHormoneFixture",
+      "text": "\nLabCorp\nLaboratory Corporation of America\nAccession Number: 0000000917\nLaboratory Director: Dr. Synthetic\n\nTest                          Result    Units     Ref. Interval\nEstradiol                     145       pg/mL\n    Adult Female:\n    Follicular phase          21.1 – 121.1\n    Ovulation phase           61.1 – 361.1\n    Luteal phase              51.1 – 251.1\n    Postmenopausal            <31.1\nProgesterone                  8.2       ng/mL     Follicular phase 0.1 – 1.1\n    Luteal phase              2.2 – 22.2\n    Ovulation phase           0.2 – 12.2\nFSH                           6.1       mIU/mL\n    Adult Female:\n    Follicular phase          2.5 – 10.5\n    Ovulation phase           3.5 – 20.5\n    Luteal phase              1.5 – 9.5\n    Postmenopausal            25.5 – 135.5\nDHEA-Sulfate                  210       ug/dL\n    Adult Female:             111.1 – 333.3\nProlactin                     11.4      ng/mL     4.4 – 44.4\nSHBG                          62        nmol/L\nEstrone                       88        pg/mL     33 – 333\nTestosterone, Total           31        ng/dL     3 – 41\n",
+      "rows": [
+        {
+          "name": "Estradiol",
+          "value": "145",
+          "unit": "pg/mL",
+          "range": null,
+          "phases": true
+        },
+        {
+          "name": "Progesterone",
+          "value": "8.2",
+          "unit": "ng/mL",
+          "range": null,
+          "phases": true
+        },
+        {
+          "name": "FSH",
+          "value": "6.1",
+          "unit": "mIU/mL",
+          "range": null,
+          "phases": true
+        },
+        {
+          "name": "DHEA-Sulfate",
+          "value": "210",
+          "unit": "ug/dL",
+          "range": "111.1 – 333.3"
+        },
+        {
+          "name": "Prolactin",
+          "value": "11.4",
+          "unit": "ng/mL",
+          "range": "4.4 – 44.4"
+        },
+        {
+          "name": "SHBG",
+          "value": "62",
+          "unit": "nmol/L",
+          "range": null
+        },
+        {
+          "name": "Estrone",
+          "value": "88",
+          "unit": "pg/mL",
+          "range": "33 – 333"
+        },
+        {
+          "name": "Testosterone, Total",
+          "value": "31",
+          "unit": "ng/dL",
+          "range": "3 – 41"
+        }
+      ]
+    },
+    {
+      "id": "edge-cases",
+      "synthetic": true,
+      "copiedFrom": "src/utils/parser/__fixtures__/edgeCases.ts",
+      "export": "edgeCasesFixture",
+      "text": "\nLab Report\n\nTSH                          0.0008    mIU/L     0.40-4.50\nVitamin B12                  <150      pg/mL     232-1245\nHolotranscobalamin           42        pmol/L    50-150\n",
+      "rows": [
+        {
+          "name": "TSH",
+          "value": "0.0008",
+          "unit": "mIU/L",
+          "range": "0.40-4.50"
+        },
+        {
+          "name": "Vitamin B12",
+          "value": "<150",
+          "unit": "pg/mL",
+          "range": "232-1245"
+        },
+        {
+          "name": "Holotranscobalamin",
+          "value": "42",
+          "unit": "pmol/L",
+          "range": "50-150"
+        }
+      ]
+    }
+  ]
+}
