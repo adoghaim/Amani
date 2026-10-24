@@ -165,10 +165,10 @@ DO $$ DECLARE
   rels text[] := ARRAY['stripe_customers', 'stripe_orders', 'stripe_subscriptions', 'stripe_user_orders', 'stripe_user_subscriptions'];
   held text[]; stmt text; status text; orders bigint;
 BEGIN
-  -- MAINTAIN (Postgres 17) is left for the follow-up that revokes it from
-  -- every locked table at once; nothing else besides SELECT.
+  -- Nothing besides SELECT, MAINTAIN (Postgres 17) included: RV-DB5
+  -- (20261024120000) revokes it.
   SELECT coalesce(array_agg(x ORDER BY x COLLATE "C"), '{}') INTO held
-    FROM unnest(pg_temp.db2_held('authenticated', rels)) x WHERE x NOT LIKE '% MAINTAIN';
+    FROM unnest(pg_temp.db2_held('authenticated', rels)) x;
   PERFORM pg_temp.vassert(held = ARRAY['stripe_customers SELECT', 'stripe_orders SELECT', 'stripe_subscriptions SELECT',
       'stripe_user_orders SELECT', 'stripe_user_subscriptions SELECT'],
     'DB2-STRIPE authenticated holds only SELECT, not: ' || array_to_string(held, ', '));

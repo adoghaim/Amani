@@ -39,7 +39,8 @@
 #      anon or authenticated grant a policy serves. Its rows must be exactly
 #      CHAIN_KNOWN_VIOLATIONS below. A new row fails (fix it; never list it to
 #      get green), and so does a listed row that is gone (remove it): the list
-#      only shrinks. DB2 (case 260) took out its first three groups.
+#      only shrinks. DB2 (case 260) took out its first three groups, and
+#      RV-DB5 (case 320) removed the rest: the list is empty.
 #   2. full-chain.verify.sql, from the catalog: the explicit allow-list of
 #      client writes and the column locks, no anon write a policy serves, and
 #      the SECURITY DEFINER functions clients may call. full-chain.probes.sql,
@@ -61,38 +62,10 @@ CHAIN_DEFERRED='20260115202339_add_interpretation_source.sql|20260312070949_add_
 # Lines starting with # are notes and are not compared.
 CHAIN_KNOWN_VIOLATIONS='# DB2 (20261023100000, case 260) removed the rows for lab_panels,
 # derived_metric_definitions and insight_rules (no row level security), every
-# anon grant, and the client writes on the Stripe tables and views. Left for
-# a later packet:
-# authenticated TRUNCATE, which row level security never filters.
-analyte_synonyms|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-audit_events|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-biomarker_catalog|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-biomarkers|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-canonical_analytes|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-cycle_events|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-derived_metric_results|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-health_scores|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-insight_rule_results|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-interventions|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-lab_reports|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-lab_results|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-notification_preferences|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-parser_debug|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-period_logs|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-reminders|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-report_analytes|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-report_items|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-symptom_logs|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-users|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-# authenticated writes no policy serves.
-analyte_synonyms|authenticated|DELETE,INSERT,UPDATE|no policy serves it
-audit_events|authenticated|DELETE,UPDATE|no policy serves it
-biomarker_catalog|authenticated|DELETE,INSERT,UPDATE|no policy serves it
-canonical_analytes|authenticated|DELETE,INSERT,UPDATE|no policy serves it
-derived_metric_results|authenticated|UPDATE|no policy serves it
-insight_rule_results|authenticated|UPDATE|no policy serves it
-parser_debug|authenticated|DELETE|no policy serves it
-users|authenticated|DELETE|no policy serves it'
+# anon grant, and the client writes on the Stripe tables and views. RV-DB5
+# (20261024120000, case 320) removed the rest: authenticated TRUNCATE and
+# MAINTAIN, the authenticated writes no policy serves, and the client grants
+# on identity sequences. No row is left, so any row is a new violation.'
 
 echo
 echo "==> full chain: every migration in version order on an empty database"
