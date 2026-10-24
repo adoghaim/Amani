@@ -5,15 +5,23 @@
   full-chain.verify.sql has pinned it from the catalog.
 
     FC-STORAGE      lab-files is private and one user cannot read, upload,
-                    move or delete another user's lab files
+                    move or delete another user's lab files, by filtered or
+                    unfiltered writes, nor move her own into another
+                    user's folder
     FC-PAID         Stripe, IAP and entitlement rows cannot be written by
                     their own user, nor by anon
     FC-CROSS-USER   for every user-owned table in USER_DATA_REGISTRY and the
                     views clients read: another user's rows cannot be read,
                     changed, deleted or inserted, by filtered or unfiltered
-                    writes; the owner still reads her own
+                    writes, whether the writer owns rows (A) or none (the
+                    stranger, anon); the owner cannot hand her own rows to
+                    another user; the owner still reads her own
                     (verification-harness.test.ts keeps this list equal to
                     the registry)
+
+  A's unfiltered writes run under a tripwire (fc_tripwire), which sees each
+  row the UPDATE or DELETE policy let through. An RLS WITH CHECK refusal
+  also means a row was reached: only 'permission denied' counts as no reach.
 
   Fixture rows are written as postgres. Everything is rolled back. Results go
   to /dev/null; each check reports through a PASS notice or fails the run.
@@ -86,8 +94,10 @@ CREATE FUNCTION pg_temp.fc_unact() RETURNS void LANGUAGE plpgsql AS $$ BEGIN
   EXECUTE 'RESET ROLE';
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
--- Rows a statement reached, as the current role: 0 when it is refused for
--- lack of privilege (42501) or when RLS hides every target row.
+-- Rows a statement reached, as the current role: 0 when it is refused with
+-- 42501 (lack of privilege, or an RLS WITH CHECK refusal) or when RLS hides
+-- every target row. Filtered writes also meet the SELECT policies (the read
+-- probes pin them); unfiltered ones use fc_reach_and_undo.
 CREATE FUNCTION pg_temp.fc_reached(statement text) RETURNS bigint LANGUAGE plpgsql AS $$
 DECLARE n bigint;
 BEGIN
@@ -100,7 +110,8 @@ BEGIN
 END $$;
 -- What an UPDATE or DELETE reaches, measured in a subtransaction that is
 -- always rolled back: 'none' (no row, or refused for lack of privilege), a
--- row count, or the error a reached row raised.
+-- row count, or the error a reached row raised, an RLS WITH CHECK refusal
+-- (42501 'new row violates ...') included.
 CREATE FUNCTION pg_temp.fc_reach_and_undo(statement text) RETURNS text LANGUAGE plpgsql AS $$
 DECLARE n bigint; code text; msg text;
 BEGIN
@@ -112,7 +123,9 @@ BEGIN
     WHEN SQLSTATE 'P0101' THEN
       GET STACKED DIAGNOSTICS msg = MESSAGE_TEXT;
       RETURN CASE msg WHEN '0' THEN 'none' ELSE msg || ' rows' END;
-    WHEN insufficient_privilege THEN RETURN 'none';
+    WHEN insufficient_privilege THEN
+      GET STACKED DIAGNOSTICS msg = MESSAGE_TEXT;
+      RETURN CASE WHEN starts_with(msg, 'permission denied') THEN 'none' ELSE 'a row raised 42501 ' || msg END;
     WHEN OTHERS THEN
       GET STACKED DIAGNOSTICS code = RETURNED_SQLSTATE, msg = MESSAGE_TEXT;
       RETURN 'a row raised ' || code || ' ' || msg;
@@ -126,6 +139,49 @@ BEGIN
   IF observed IS DISTINCT FROM '42501' THEN
     RAISE EXCEPTION 'FAIL %: expected 42501, observed %', label, coalesce(observed, 'SUCCESS');
   END IF;
+END $$;
+-- The tripwire: a BEFORE UPDATE OR DELETE row trigger, named to fire first.
+-- On another user's row it raises P0102; on A's own it returns NULL, so her
+-- rows are skipped and nothing changes. TG_ARGV[0] is the owner column, or
+-- '(folder)' for storage.objects (the first folder of name); TG_ARGV[1] the
+-- other users' owner values, as a text[] literal.
+CREATE FUNCTION pg_temp.fc_tripwire() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE owner text;
+BEGIN
+  owner := CASE TG_ARGV[0] WHEN '(folder)' THEN (storage.foldername(to_jsonb(OLD) ->> 'name'))[1]
+           ELSE to_jsonb(OLD) ->> TG_ARGV[0] END;
+  IF owner = ANY (TG_ARGV[1]::text[]) THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0102', MESSAGE = format('%s reached a row of %s', TG_OP, owner);
+  END IF;
+  RETURN NULL;
+END $$;
+-- As A (run as postgres; it acts as A): an unfiltered UPDATE (SET update_col
+-- = DEFAULT) and DELETE under the tripwire must reach none of theirs.
+CREATE FUNCTION pg_temp.fc_owner_unfiltered(rel regclass, owner_spec text, update_col text, theirs text[], label text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE reached text;
+BEGIN
+  EXECUTE format('CREATE TRIGGER "!fc_tripwire" BEFORE UPDATE OR DELETE ON %s FOR EACH ROW EXECUTE FUNCTION pg_temp.fc_tripwire(%L, %L)',
+    rel, owner_spec, theirs::text);
+  PERFORM pg_temp.fc_act('authenticated');
+  reached := pg_temp.fc_reach_and_undo(format('UPDATE %s SET %I = DEFAULT', rel, update_col));
+  PERFORM pg_temp.vassert(reached = 'none', format('%s-OWNER-UNFILTERED-UPDATE %s as authenticated reached %s', label, rel, reached));
+  reached := pg_temp.fc_reach_and_undo(format('DELETE FROM %s', rel));
+  PERFORM pg_temp.vassert(reached = 'none', format('%s-OWNER-UNFILTERED-DELETE %s as authenticated reached %s', label, rel, reached));
+  PERFORM pg_temp.fc_unact();
+  EXECUTE format('DROP TRIGGER "!fc_tripwire" ON %s', rel);
+END $$;
+-- As A: a statement that would hand her own rows to another user. It must
+-- reach nothing, or be refused by RLS WITH CHECK; a row count (rows moved)
+-- or any other error (a moved row meeting a constraint) fails.
+CREATE FUNCTION pg_temp.fc_reown_refused(statement text, label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE reached text;
+BEGIN
+  PERFORM pg_temp.fc_act('authenticated');
+  reached := pg_temp.fc_reach_and_undo(statement);
+  PERFORM pg_temp.fc_unact();
+  PERFORM pg_temp.vassert(reached = 'none' OR starts_with(reached, 'a row raised 42501 new row violates row-level security policy'),
+    format('%s reached %s', label, reached));
 END $$;
 
 -- ── FC-STORAGE ────────────────────────────────────────────────────────────
@@ -158,6 +214,11 @@ BEGIN
   PERFORM pg_temp.vassert(pg_temp.fc_reach_and_undo('UPDATE storage.buckets SET public = true') = 'none',
     'FC-STORAGE-UNFILTERED-BUCKET-UPDATE');
   PERFORM pg_temp.fc_unact();
+  -- A has files, so her unfiltered writes also meet policies that only ask
+  -- whether the caller owns something: none may reach B's object, and she
+  -- cannot rename her own into B's folder.
+  PERFORM pg_temp.fc_reown_refused(format($s$UPDATE storage.objects SET name = %L || '/' || name$s$, b), 'FC-STORAGE-REOWN');
+  PERFORM pg_temp.fc_owner_unfiltered('storage.objects', '(folder)', 'metadata', ARRAY[b], 'FC-STORAGE');
   PERFORM pg_temp.fc_act('authenticated');
   -- Not vacuous: the policies do let her upload to, and delete from, her own folder.
   EXECUTE format($s$INSERT INTO storage.objects (bucket_id, name) VALUES ('lab-files', %L)$s$, a || '/2.pdf');
@@ -172,7 +233,7 @@ BEGIN
   PERFORM pg_temp.vassert((SELECT public FROM storage.buckets WHERE id = 'lab-files') IS FALSE
       AND (SELECT count(*) FROM storage.objects WHERE bucket_id = 'lab-files') = 2,
     'FC-STORAGE-UNCHANGED');
-  RAISE NOTICE 'PASS FC-STORAGE (private bucket; own folder only, for read, upload and delete)';
+  RAISE NOTICE 'PASS FC-STORAGE (private bucket; own folder only, for read, upload, rename and delete, filtered or unfiltered, as an owner or a stranger)';
 END $$;
 
 -- ── FC-PAID ───────────────────────────────────────────────────────────────
@@ -243,7 +304,13 @@ END $$;
 -- apply to them too. An unfiltered UPDATE ... SET col = DEFAULT or DELETE
 -- reads none, and only the UPDATE or DELETE policy stands in its way, as in a
 -- PATCH or DELETE request with no filter. So the stranger (C, who owns
--- nothing) and anon run those, rolled back, and must reach no row at all.
+-- nothing) and anon run those, rolled back, and must reach no row at all;
+-- and A, who owns rows, runs them under the tripwire, which fails on any of
+-- B's rows (a policy keyed on 'the caller owns some row' lets A, not C,
+-- through). Last, A sets owner_col to B's on her own rows, unfiltered: RLS
+-- must refuse it. (users takes its own re-own check below: the update clamp
+-- of 20260826000000 rewrites id to the old one, so that UPDATE succeeds
+-- without moving anything, and the check is on the rows left.)
 CREATE FUNCTION pg_temp.fc_cross_user(rel text, owner_col text, update_col text,
   mine text[], theirs text[], insert_theirs text) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
@@ -291,6 +358,12 @@ BEGIN
       PERFORM pg_temp.vassert(reached = 'none', format('FC-CROSS-USER-UNFILTERED-DELETE %s as %s reached %s', rel, role_name, reached));
       PERFORM pg_temp.fc_unact();
     END LOOP;
+    PERFORM pg_temp.fc_owner_unfiltered(format('public.%I', rel)::regclass, owner_col, coalesce(update_col, owner_col), theirs,
+      'FC-CROSS-USER');
+    IF rel <> 'users' THEN
+      PERFORM pg_temp.fc_reown_refused(format('UPDATE public.%I SET %I = %L', rel, owner_col, theirs[1]),
+        format('FC-CROSS-USER-REOWN %s as authenticated', rel));
+    END IF;
   END IF;
   PERFORM pg_temp.vassert(pg_temp.fc_reached(select_theirs) > 0 OR NOT is_table, 'FC-CROSS-USER-UNCHANGED ' || rel);
   RAISE NOTICE 'PASS FC-CROSS-USER %', rel;
@@ -338,6 +411,20 @@ DO $$ DECLARE observed text; BEGIN
     'FC-CROSS-USER-INSERT users as anon');
   PERFORM pg_temp.fc_unact();
   RAISE NOTICE 'PASS FC-CROSS-USER-INSERT users (refused with %, no profile for anyone else)', observed;
+  -- Re-own: A's unfiltered UPDATE of her id to C's (C has an auth user and no
+  -- profile, so no primary key stops it). Clamped, refused by RLS or by a
+  -- foreign key to her id, it must leave A's profile hers and give C none.
+  observed := NULL;
+  PERFORM pg_temp.fc_act('authenticated');
+  BEGIN
+    UPDATE public.users SET id = 'fc000000-0000-4000-8000-00000000000c';
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS observed = RETURNED_SQLSTATE;
+  END;
+  PERFORM pg_temp.fc_unact();
+  PERFORM pg_temp.vassert((SELECT count(*) FROM public.users WHERE id = 'fc000000-0000-4000-8000-00000000000a') = 1
+      AND NOT EXISTS (SELECT 1 FROM public.users WHERE id = 'fc000000-0000-4000-8000-00000000000c'),
+    'FC-CROSS-USER-REOWN users as authenticated: ' || coalesce(observed, 'SUCCESS'));
+  RAISE NOTICE 'PASS FC-CROSS-USER-REOWN users (%, her profile stays hers)', coalesce(observed, 'clamped');
 END $$;
 SELECT pg_temp.fc_cross_user('lab_reports', 'user_id', 'status', ARRAY[:ua], ARRAY[:ub],
   $$INSERT INTO public.lab_reports (user_id, report_date) VALUES ('fc000000-0000-4000-8000-00000000000b', '2026-01-02')$$);
@@ -409,4 +496,4 @@ SELECT pg_temp.fc_no_client_access('app_events');
 SELECT pg_temp.fc_no_client_access('user_attribution');
 
 ROLLBACK;
-\echo 'PASS: full chain probes: private lab-files with own-folder storage, paid-access rows not client-writable, cross-user denial on every user-owned table and client view.'
+\echo 'PASS: full chain probes: private lab-files with own-folder storage, paid-access rows not client-writable, cross-user denial on every user-owned table and client view (reads; filtered and unfiltered writes by an owner, a stranger and anon; no re-owning).'

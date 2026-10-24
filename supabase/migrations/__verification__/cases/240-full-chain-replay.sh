@@ -40,10 +40,13 @@
 #      get green), and so does a listed row that is gone (remove it): the list
 #      only shrinks. The db-security track's next packet (DB2) empties it.
 #   2. full-chain.verify.sql, from the catalog: the explicit allow-list of
-#      client writes and the column locks, and the SECURITY DEFINER functions
-#      clients may call. full-chain.probes.sql, as each role: private lab-files
-#      and own-folder storage, paid-access rows not client-writable, and
-#      cross-user denial for every user-owned table (USER_DATA_REGISTRY).
+#      client writes and the column locks, no anon write a policy serves, and
+#      the SECURITY DEFINER functions clients may call. full-chain.probes.sql,
+#      as each role: private lab-files and own-folder storage, paid-access
+#      rows not client-writable, and cross-user denial for every user-owned
+#      table (USER_DATA_REGISTRY): reads, filtered and unfiltered writes by a
+#      user who owns rows, by one who owns none and by anon, and no handing
+#      one's own rows to another user.
 #   3. supabase/tests/privileged_columns_test.sql, the pgTAP file meant for
 #      `supabase test db` that nothing ran, run unmodified: pgtap-standin.sql
 #      is installed as this throwaway container's `pgtap` extension.
@@ -272,7 +275,7 @@ if [ "$chain_audit" != "$chain_known" ]; then
 fi
 echo "    $(grep -c . <<<"$chain_audit") rows, exactly the known violations"
 
-echo "==> full chain: client writes, definer RPCs, storage, paid access, cross-user denial"
+echo "==> full chain: client and anon writes, definer RPCs, storage, paid access, cross-user denial"
 docker cp "$HERE/interpretation-versions.helpers.sql" "$CONTAINER:/tmp/interpretation-versions.helpers.sql" >/dev/null
 docker exec "$CONTAINER" psql -X -U postgres -d full_chain -v ON_ERROR_STOP=1 -q -f /tmp/full-chain.verify.sql
 docker exec "$CONTAINER" psql -X -U postgres -d full_chain -v ON_ERROR_STOP=1 -q -f /tmp/full-chain.probes.sql
@@ -297,4 +300,4 @@ fi
 echo "    $(grep -c '^ok ' <<<"$chain_tap") pgTAP tests passed ($(grep -E '^# ran all' <<<"$chain_tap"))"
 
 echo
-echo "PASS: full chain: $chain_applied migrations replay from empty in version order (closed deferral list); grant audit equals the known violations; client writes, column locks and definer RPCs pinned; lab-files private with own-folder storage; paid-access rows not client-writable; cross-user denial on every user-owned table; privileged_columns_test.sql passes."
+echo "PASS: full chain: $chain_applied migrations replay from empty in version order (closed deferral list); grant audit equals the known violations; client writes, column locks and definer RPCs pinned, no policy-served anon write; lab-files private with own-folder storage; paid-access rows not client-writable; cross-user denial on every user-owned table, for reads and for filtered, unfiltered and re-owning writes; privileged_columns_test.sql passes."

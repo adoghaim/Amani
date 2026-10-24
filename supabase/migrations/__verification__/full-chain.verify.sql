@@ -11,6 +11,9 @@
                     production has it
     FC-CLIENT-WRITES  the explicit allow-list of commands authenticated may
                     run, each served by a policy
+    FC-ANON-WRITES  no policy serves any anon write (with the audit, which
+                    flags the unserved ones: anon holds no write grant
+                    outside CHAIN_KNOWN_VIOLATIONS)
     FC-CLIENT-COLUMNS the exact columns of the users, lab_reports and
                     interpretation_feedback column locks
     FC-DEFINER-RPC  the SECURITY DEFINER functions the API roles may execute
@@ -80,6 +83,30 @@ BEGIN
   RAISE NOTICE 'PASS FC-CLIENT-WRITES (% commands, each served by a policy)', cardinality(actual);
 END $$;
 
+-- ── FC-ANON-WRITES ────────────────────────────────────────────────────────
+-- anon holds no write the chain means it to have: there is no allow-list.
+-- An anon INSERT/UPDATE/DELETE (a column grant counts) that no policy serves
+-- is an audit row; one a permissive anon or PUBLIC policy serves, on a table
+-- with RLS on, is the rest, and must not exist.
+DO $$ DECLARE served text[];
+BEGIN
+  SELECT coalesce(array_agg(c.relname || ' ' || p.privilege ORDER BY c.relname, p.privilege), '{}') INTO served
+  FROM pg_class c
+  CROSS JOIN (VALUES ('INSERT', 'a'), ('UPDATE', 'w'), ('DELETE', 'd')) AS p(privilege, polcmd)
+  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p') AND c.relrowsecurity
+    AND (has_table_privilege('anon', c.oid, p.privilege)
+         OR (p.privilege <> 'DELETE' AND has_any_column_privilege('anon', c.oid, p.privilege)))
+    AND EXISTS (SELECT 1 FROM pg_policy pol
+      WHERE pol.polrelid = c.oid AND pol.polpermissive AND pol.polcmd IN ('*', p.polcmd::"char")
+        AND (pol.polroles @> ARRAY[0::oid] OR pol.polroles @> ARRAY['anon'::regrole::oid])
+        AND coalesce(pg_get_expr(pol.polqual, pol.polrelid), '') <> 'false'
+        AND coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '') <> 'false');
+  IF cardinality(served) > 0 THEN
+    RAISE EXCEPTION 'FAIL FC-ANON-WRITES anon may write, served by a policy: %', array_to_string(served, ', ');
+  END IF;
+  RAISE NOTICE 'PASS FC-ANON-WRITES (no policy serves an anon INSERT, UPDATE or DELETE)';
+END $$;
+
 -- The column locks: 20260501000000 (lab_reports), 20260823000000 and its
 -- client-compatibility successor 20260826000000 (users), and the feedback
 -- columns of 20261015020000. Exactly these columns, nothing else.
@@ -138,4 +165,4 @@ BEGIN
 END $$;
 
 ROLLBACK;
-\echo 'PASS: full chain catalog: interpretation_source as production has it, client write allow-list and column locks, client-callable definer functions.'
+\echo 'PASS: full chain catalog: interpretation_source as production has it, client write allow-list and column locks, no policy-served anon write, client-callable definer functions.'
