@@ -165,4 +165,19 @@ describe('deleteAllStorageObjects walks folders (RV-R3 AC2, RES1 168-4)', () => 
     expect(bucket.events).toEqual(['list:u@0', 'list:u/f1@0', 'list:u/f2@0']);
     expect(bucket.port.remove).not.toHaveBeenCalled();
   });
+
+  it('a folder entry with nothing under it (a prefix Storage has not cleaned up) holds no object and does not block', async () => {
+    const lists: string[] = [];
+    const port: StorageObjectsPort = {
+      list: vi.fn(async (prefix: string) => {
+        lists.push(prefix);
+        return prefix === 'u' ? [{ name: 'x', id: null }] : [];
+      }),
+      remove: vi.fn(async () => {}),
+    };
+
+    await expect(deleteAllStorageObjects(port, 'u')).resolves.toBeUndefined();
+    expect(lists).toEqual(['u', 'u/x', 'u', 'u/x']);
+    expect(port.remove).not.toHaveBeenCalled();
+  });
 });
