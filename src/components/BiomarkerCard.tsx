@@ -24,7 +24,10 @@ interface BiomarkerCardProps {
   value: number;
   rawValueText?: string | null;
   unit: string;
-  /** The patient's own laboratory interval, from biomarkers.reference_min/max. */
+  /**
+   * The patient's own laboratory interval: biomarkers.reference_min/max, or the
+   * one-sided range printed on its report_analytes row (labBoundsFor, RV-LF2).
+   */
   labRefMin?: number | null;
   labRefMax?: number | null;
   /** As recorded on the report. Never inferred here. */

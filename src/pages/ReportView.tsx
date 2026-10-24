@@ -42,6 +42,7 @@ import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import {
   isUnconfirmedBiomarker, keyOf, READING_REVIEW_COLUMNS, unconfirmedReadingKeys, withoutUnconfirmed, type ReadingReview,
 } from '../lib/biomarkers/confirmation';
+import { labBoundsFor } from '../lib/biomarkers/printedComparator';
 import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
@@ -820,6 +821,12 @@ export function ReportView() {
 
   // F022: values on this report Amani may have misread and she has not confirmed.
   const unconfirmedKeys = useMemo(() => unconfirmedReadingKeys(reportAnalytes), [reportAnalytes]);
+  // RV-LF2, Ruling 7: a range her lab printed on one side ("<100") is kept only on
+  // the value's report_analytes row, so every lab-range reader below takes it from there.
+  const labBounds = useMemo(
+    () => new Map(biomarkers.map(b => [b, labBoundsFor(b, reportAnalytes)])),
+    [biomarkers, reportAnalytes],
+  );
 
   const analyteTelemetryMap = useMemo(() => {
     const CONFIDENCE_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -931,13 +938,14 @@ export function ReportView() {
     if (biomarkers.length === 0) return null;
     const current = biomarkers.map(b => {
       const telemetry = analyteTelemetryMap.get(b.name);
+      const bounds = labBounds.get(b);
       return {
         key: b.name as BiomarkerName,
         value: b.value,
         unit: b.unit,
         valueText: b.raw_value_text,
-        labRefMin: b.reference_min,
-        labRefMax: b.reference_max,
+        labRefMin: bounds?.min ?? null,
+        labRefMax: bounds?.max ?? null,
         parserConfidence: telemetry?.parserConfidence ?? null,
         normalizationStatus: telemetry?.normalizationStatus ?? null,
         sourceFormat: telemetry?.sourceFormat ?? null,
@@ -965,7 +973,7 @@ export function ReportView() {
     if (confirmed.length === current.length) return summary;
     const fromConfirmed = buildInsightSummary(confirmed, previous, report?.estimated_cycle_phase, immediatePriorReportDate, declaredState);
     return { ...fromConfirmed, bandLanguage: summary.bandLanguage, systemSummaries: summary.systemSummaries, confidence: summary.confidence };
-  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap, unconfirmedKeys, declaredState]);
+  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap, unconfirmedKeys, declaredState, labBounds]);
 
   // F021: a Basic changes line through a result printed as a limit ('<8') states its placeholder.
   // Generation keys each report's analytes by canonical slug, else by raw name.
@@ -990,13 +998,13 @@ export function ReportView() {
       b.name as BiomarkerName,
       b.value,
       b.unit,
-      b.reference_min,
-      b.reference_max,
+      labBounds.get(b)?.min ?? null,
+      labBounds.get(b)?.max ?? null,
       report?.estimated_cycle_phase as Parameters<typeof scoreBiomarker>[5],
       declaredState,
       b.raw_value_text,
     ));
-  }, [biomarkers, report, declaredState]);
+  }, [biomarkers, report, declaredState, labBounds]);
   // F022: a value she has not confirmed opens no focus area or Support plan card and flags no lab.
   const confirmedScoredBiomarkers = useMemo(
     () => scoredBiomarkers.filter((_, i) => !isUnconfirmedBiomarker(biomarkers[i]!, unconfirmedKeys)),
@@ -1766,7 +1774,7 @@ export function ReportView() {
                       // whether it sits outside its Amani band or outside her lab's range (the lab
                       // headline above names only confirmed values).
                       const labFlagged = (b: Biomarker) => {
-                        const placement = labIntervalPlacement(b.value, b.reference_min, b.reference_max);
+                        const placement = labIntervalPlacement(b.value, labBounds.get(b)?.min, labBounds.get(b)?.max);
                         return placement === 'below' || placement === 'above';
                       };
                       if (outside.length === 0 && (scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState, s.valueText) === 'outside')
@@ -2123,8 +2131,8 @@ export function ReportView() {
                                 value={b.value}
                                 rawValueText={b.raw_value_text}
                                 unit={b.unit}
-                                labRefMin={b.reference_min}
-                                labRefMax={b.reference_max}
+                                labRefMin={labBounds.get(b)?.min}
+                                labRefMax={labBounds.get(b)?.max}
                                 cyclePhase={cyclePhase}
                                 state={declaredState}
                                 modelProse={markerProse.get(b.name)}
