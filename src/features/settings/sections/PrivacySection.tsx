@@ -33,8 +33,9 @@ export function PrivacySection() {
             RevenueCat handle payments, and Sentry receives error reports.
           </p>
           <p className="mt-2 text-sm text-theme-neutral-600 leading-relaxed">
-            We don&rsquo;t sell your data, run ads, or use advertising or analytics
-            trackers.
+            We don&rsquo;t sell your data, run ads, or use advertising trackers. There
+            are no analytics trackers inside your account or the app; Google Analytics
+            runs only on our public website pages, and only if you agree.
           </p>
           <div className="mt-3 flex items-center gap-2 text-xs text-theme-flag-ok font-medium">
             <Lock className="w-3.5 h-3.5" />

@@ -1,3 +1,4 @@
+import { ga4MeasurementId, openAnalyticsConsent } from '../lib/analytics/ga4'
 import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
@@ -229,6 +230,9 @@ export function Landing() {
             <Link to="/terms" className="hover:text-theme-text transition-colors">Terms</Link>
             <Link to="/contact" className="hover:text-theme-text transition-colors">Contact</Link>
             <Link to="/delete-account" className="hover:text-theme-text transition-colors">Delete account</Link>
+            {ga4MeasurementId() && (
+              <button type="button" onClick={openAnalyticsConsent} className="hover:text-theme-text transition-colors">Cookie settings</button>
+            )}
           </div>
         </div>
       </footer>
