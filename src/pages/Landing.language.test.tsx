@@ -72,6 +72,47 @@ describe('owner R3 — the landing page says nothing Amani may not say to a real
       + 'Amani asks for the missing context instead of guessing.');
   });
 
+  /*
+    F136 (review 2026-10-23, owner ruling D7.9): campaign cycle claims are limited to reviewed
+    panels, and no range is reviewed yet. The page and the share/search descriptions say what the
+    app does (it asks for cycle dates so results are read in context), never that it scores or
+    reads results against the cycle.
+  */
+  const CYCLE_CLAIM = /against (?:your cycle|where you are)|cycle[- ]phase[- ]aware|scores? .{0,40}cycle/i;
+  const indexHtml = readFileSync('index.html', 'utf8');
+  const descriptions = [
+    ['meta description', /<meta name="description" content="([^"]*)"/],
+    ['og:description', /<meta property="og:description" content="([^"]*)"/],
+    ['twitter:description', /<meta name="twitter:description" content="([^"]*)"/],
+  ] as const;
+
+  it('F136: index.html descriptions describe what the app does and make no cycle-scoring claim', () => {
+    for (const [name, pattern] of descriptions) {
+      const text = indexHtml.match(pattern)?.[1];
+      expect(text, name).toBeTruthy();
+      expect(text, name).not.toMatch(CYCLE_CLAIM);
+      expect(hits(text!), name).toEqual([]);
+      expect(text, name).toMatch(/asks for your cycle dates so results are read in context/i);
+    }
+    expect(indexHtml.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(CYCLE_CLAIM);
+  });
+
+  it('F136: the landing headline and feature list make no cycle-scoring claim', () => {
+    expect(app.querySelector('h1')?.textContent).toBe('Your labs, read in context.');
+    expect(marketingText()).not.toMatch(CYCLE_CLAIM);
+    expect(Array.from(app.querySelectorAll('li')).map(li => norm(li.textContent)))
+      .toContain('Asks for your cycle dates so results are read in context');
+  });
+
+  it('F136 negative control: the claim check sees the copy D7.9 removed', () => {
+    for (const old of [
+      'scores them against where you are in your cycle',
+      'read against your cycle and explained in plain language',
+      'Your labs, read against your cycle.',
+      'scores your results against cycle-phase-aware ranges',
+    ]) expect(old, old).toMatch(CYCLE_CLAIM);
+  });
+
   it('standing rule 5: every specimen statement and bar colour agrees with the value and interval the row prints', () => {
     const rows = Array.from(app.querySelectorAll('[data-specimen-row]'));
     expect(rows.length).toBe(3);

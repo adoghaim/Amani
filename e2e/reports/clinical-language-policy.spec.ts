@@ -227,7 +227,7 @@ const MARKETING_FORBIDDEN = new RegExp(`${FORBIDDEN.source}|worr\\w*|sits where 
 test.describe('R3: the landing page says nothing Amani may not say to a real user', () => {
   test('page-wide prohibition, context not judgement, and specimen statements that agree with their rows', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
     const legal = 'Amani is educational. It does not diagnose, prescribe, or replace your clinician — it helps you walk into the appointment knowing what to ask. Anything that concerns you belongs in front of a licensed provider.';
     const text = await page.evaluate(legalText => {
       const clone = document.body.cloneNode(true) as HTMLElement;

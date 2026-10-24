@@ -9,7 +9,7 @@ import { test, expect } from './fixtures';
 
 test('reads the runtime config once per launch, and not again on navigation', async ({ page, runtimeConfigReads }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
   await expect.poll(() => runtimeConfigReads.length).toBe(1);
   await page.getByRole('navigation').getByRole('link', { name: 'Log in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
@@ -31,7 +31,7 @@ test.describe('fails open when the read fails', () => {
 
       test('the public app and sign-in still load', async ({ page, runtimeConfigReads }) => {
         await page.goto('/');
-        await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
         await expect.poll(() => runtimeConfigReads.length).toBe(1);
         await page.goto('/login');
         await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();

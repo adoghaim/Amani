@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 
 test('public app loads', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
   await expect(page.getByRole('navigation').getByRole('link', { name: 'Log in', exact: true })).toBeVisible();
 });
 

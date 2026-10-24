@@ -83,7 +83,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-WP1 Private source maps, production-only routes, security headers | RV | 1 | review | - | - |
 | RV-WP2 Offline is not empty; error boundaries reset | RV | 1 | in-progress | RV-WP1 | - |
 | RV-WP3 Accessible overlays, safe areas, Android back closes sheets first | RV | 1 | todo | RV-WP2 | - |
-| RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | todo | - | - |
+| RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | review | - | [#170](https://github.com/adoghaim/Amani/pull/170) |
 | RV-DL1 Device lock hardening | RV | 1 | review | - | [#163](https://github.com/adoghaim/Amani/pull/163) |
 | RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | review | - | [#171](https://github.com/adoghaim/Amani/pull/171) |
 | RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | review | - | [#166](https://github.com/adoghaim/Amani/pull/166) |
