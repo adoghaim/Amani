@@ -2437,14 +2437,17 @@
         "F036"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-stripe",
-      "pr": null,
+      "pr": "#168",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2455,7 +2458,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-stripe; findings F038, F029, F094, F036. Not started."
+        "The billing portal now opens the stripe_customers customer and never creates one, account deletion cancels and deletes every distinct Stripe customer and pages storage until empty (F038, F029, F094, F036); blind verifier PASS_WITH_NOTES on 2026-10-23, nothing run against live Stripe or Supabase Storage.",
+        "Gates at 94221c2 (run locally): lint, typecheck, full test (3,541), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2477,14 +2481,17 @@
       "depends_on": [
         "RV-BS1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-stripe",
-      "pr": null,
+      "pr": "#168",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2495,7 +2502,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-stripe; findings F030, F031, F044, F099, F040, F090, F033. Not started."
+        "stripe-checkout sells only the two allow-listed prices as subscriptions on server-built APP_URL redirects and answers 409 for a second plan, and the webhook sync and checkout validation are tested and stored newest-entitling-first (F030, F031, F044, F099, F040 partial, F090 and F033 Stripe sites); blind verifier PASS_WITH_NOTES on 2026-10-23, with the webhook-lag double-pay path still open until an owner Stripe setting is applied and Android googleProductChangeInfo handed off.",
+        "Gates at 94221c2 (run locally): lint, typecheck, full test (3,541), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"

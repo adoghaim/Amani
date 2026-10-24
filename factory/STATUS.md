@@ -76,8 +76,8 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | todo | - | - |
 | RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | in-progress | - | - |
 | RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | todo | RV-RS1 | - |
-| RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | todo | - | - |
-| RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | todo | RV-BS1 | - |
+| RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | review | - | [#168](https://github.com/adoghaim/Amani/pull/168) |
+| RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | review | RV-BS1 | [#168](https://github.com/adoghaim/Amani/pull/168) |
 | RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | todo | - | - |
 | RV-BU1 Billing labels from the real entitlement; an honest deletion warning | RV | 1 | in-progress | - | - |
 | RV-WP1 Private source maps, production-only routes, security headers | RV | 1 | review | - | - |
