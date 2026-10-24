@@ -116,7 +116,7 @@ function ProfileUnreachable() {
   )
 }
 
-function AppRoutes() {
+export function AppRoutes() {
   const { loading, user } = useAuth()
 
   if (loading) {
