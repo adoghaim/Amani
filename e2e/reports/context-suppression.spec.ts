@@ -342,3 +342,24 @@ test.describe('a lab-only flag beside an Amani-flagged result', () => {
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
   });
 });
+
+// RV-NZ1 (REPORT-2026-10-24 §2.2). A prior TSH of 0.2 is under the near-zero
+// threshold, so there is no relative change to size. The page used to read
+// "TSH has not changed significantly: 0.2 to 9 mIU/L."; it now states the values.
+const nearZeroPrior = { ...movedPriorReport, biomarkers: movedPriorReport.biomarkers.map(b => ({ ...b, value: 0.2, raw_value_text: '0.2' })) };
+const nearZeroLatest = { ...movedCurrentReport, biomarkers: movedCurrentReport.biomarkers.map(b => ({ ...b, value: 9, raw_value_text: '9' })) };
+test.describe('RV-NZ1 a change from a near-zero prior', () => {
+  test.use({ authenticated: true, syntheticReports: [[nearZeroLatest, nearZeroPrior], { scope: 'test' }] });
+
+  test('13. is stated by value on every surface, never as "not changed significantly"', async ({ page }) => {
+    await openReport(page, nearZeroLatest.report.id);
+    const trajectory = page.locator('div').filter({ has: page.getByRole('heading', { name: 'Your trajectory', exact: true }) })
+      .filter({ has: page.getByRole('list') }).last();
+    await expect(trajectory).toContainText('TSH changed from 0.2 to 9 mIU/L.');
+    const focus = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Thyroid function', exact: true }) });
+    await expect(focus).toContainText('TSH has changed since your prior report.');
+    await expect(page.getByTestId('prep-questions')).toContainText('My TSH changed from 0.2 to 9 mIU/L.');
+    // Page-wide, once the surfaces above have rendered.
+    await expect(page.getByText(/not changed significantly/i)).toHaveCount(0);
+  });
+});
