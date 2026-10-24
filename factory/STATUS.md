@@ -87,8 +87,8 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-DL1 Device lock hardening | RV | 1 | in-progress | - | - |
 | RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | todo | - | - |
 | RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | todo | - | - |
-| RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | todo | - | - |
-| RV-DP2 Declared dependencies, an aligned test toolchain and a Node 22 pin | RV | 1 | todo | RV-DP1 | - |
+| RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | review | - | [#173](https://github.com/adoghaim/Amani/pull/173) |
+| RV-DP2 Declared dependencies, an aligned test toolchain and a Node 22 pin | RV | 1 | review | RV-DP1 | [#173](https://github.com/adoghaim/Amani/pull/173) |
 | RV-CI1 Native CI that can fail; the device-lock boundary test runs | RV | 1 | review | - | - |
 | RV-CI2 Workflow hardening and Node 22 everywhere | RV | 1 | in-progress | RV-CI1 | - |
 | RV-CI3 E2E configs tell the truth | RV | 1 | todo | RV-CI2 | - |

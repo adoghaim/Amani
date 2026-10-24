@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
+import { defineConfig, transformWithEsbuild, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 /*
@@ -16,6 +17,78 @@ const { version } = JSON.parse(
 const commit = process.env.COMMIT_REF ?? process.env.GITHUB_SHA;
 const appRelease = commit ? `amani@${version}+${commit.slice(0, 7)}` : `amani@${version}`;
 
+/*
+  `<file>?lowered-url` resolves to the URL of <file> after esbuild has lowered
+  it to `build.target`, with its ES exports intact. It exists for the pdf.js
+  worker (src/utils/pdfExtractor.ts), which must satisfy two things at once:
+
+  - Syntax: a bare `?url` copies the worker verbatim, and pdf.js 6's worker has
+    ES2022 syntax (class static blocks) that WebKit below 16.4 cannot parse.
+  - Exports: pdf.js falls back to a fake worker when a module Worker cannot
+    start (CSP worker-src, a custom-scheme WebView), and then does
+    `(await import(workerSrc)).WorkerMessageHandler`. Vite's `?worker&url`
+    bundler hard-codes preserveEntrySignatures:false, which strips that export,
+    so the fallback gets undefined and every getDocument() rejects.
+
+  A plain esbuild transform lowers the syntax and leaves the exports alone.
+  Guarded by src/utils/pdfWorkerTarget.test.ts. The asset goes through Vite's
+  own `__VITE_ASSET__` placeholder so `base` (absolute on web, './' on native)
+  is applied to the URL as for any other asset.
+
+  - Runtime APIs: lowering is syntax only. `prelude` (src/utils/pdfjsPolyfills.ts)
+    is compiled to an IIFE and put in front of the file, because the worker is
+    its own realm and does not see the main thread's polyfills.
+  - `import.meta` stays: esbuild would otherwise replace it below es2020 with an
+    empty object, and the worker's emscripten (JBig2/OpenJPEG) loaders read
+    `import.meta.url`. Every engine with module workers supports it.
+*/
+const LOWERED_URL = '?lowered-url';
+function loweredUrlAsset({ prelude }: { prelude: string }): Plugin {
+  let target: string | string[] | false = 'es2018';
+  let isBuild = false;
+  return {
+    name: 'amani:lowered-url',
+    enforce: 'pre',
+    configResolved(config) {
+      isBuild = config.command === 'build';
+      target = config.build.target as string | string[] | false;
+    },
+    async resolveId(source, importer, options) {
+      if (!source.endsWith(LOWERED_URL)) return null;
+      const resolved = await this.resolve(source.slice(0, -LOWERED_URL.length), importer, {
+        ...options,
+        skipSelf: true,
+      });
+      return resolved ? `${resolved.id}${LOWERED_URL}` : null;
+    },
+    async load(id) {
+      if (!id.endsWith(LOWERED_URL)) return null;
+      const file = id.slice(0, -LOWERED_URL.length);
+      this.addWatchFile(file);
+      // The dev server serves modern browsers unbundled; only a build lowers.
+      if (!isBuild) return `export default ${JSON.stringify(`/@fs/${file.replace(/^\//, '')}`)};`;
+      this.addWatchFile(prelude);
+      const esbuildTarget = target || 'es2018';
+      const polyfills = await transformWithEsbuild(readFileSync(prelude, 'utf-8'), prelude, {
+        format: 'iife',
+        target: esbuildTarget,
+        sourcemap: false,
+      });
+      const { code } = await transformWithEsbuild(`${polyfills.code}\n${readFileSync(file, 'utf-8')}`, file, {
+        format: 'esm',
+        target: esbuildTarget,
+        supported: { 'import-meta': true },
+        minify: true,
+        sourcemap: false,
+        legalComments: 'none',
+      });
+      const name = file.slice(file.lastIndexOf('/') + 1);
+      const ref = this.emitFile({ type: 'asset', name, source: code });
+      return `export default "__VITE_ASSET__${ref}__";`;
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 //
 // IMPORTANT: the `@capacitor/*` plugin aliases below are deliberately gated to
@@ -24,7 +97,10 @@ const appRelease = commit ? `amani@${version}+${commit.slice(0, 7)}` : `amani@${
 // native plugins to iOS/Android — otherwise camera capture, in-app browser,
 // network detection, and the Android back button silently no-op on device.
 export default defineConfig(({ command }) => ({
-  plugins: [react()],
+  plugins: [
+    loweredUrlAsset({ prelude: fileURLToPath(new URL('./src/utils/pdfjsPolyfills.ts', import.meta.url)) }),
+    react(),
+  ],
   /*
     Web needs an absolute base. With './', a nested route like /app/reports
     resolves its asset URLs against /app/, so the bundle 404s and the page
@@ -40,7 +116,9 @@ export default defineConfig(({ command }) => ({
     __APP_RELEASE__: JSON.stringify(appRelease),
   },
   optimizeDeps: {
-    exclude: ['lucide-react', '@capacitor/app', '@capacitor/browser', '@capacitor/camera', '@capacitor/network', '@capacitor/core'],
+    // The pdf.js worker is only ever imported as `?lowered-url`; pre-bundling it would hand that plugin an
+    // optimizer path instead of the package file.
+    exclude: ['lucide-react', '@capacitor/app', '@capacitor/browser', '@capacitor/camera', '@capacitor/network', '@capacitor/core', 'pdfjs-dist/legacy/build/pdf.worker.min.mjs'],
   },
   resolve: command === 'serve'
     ? {
