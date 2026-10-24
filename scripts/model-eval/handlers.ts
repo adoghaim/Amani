@@ -26,6 +26,7 @@ import {
 import { redactLabText } from '../../supabase/functions/_shared/lab-text-redaction';
 import { generationSample, type GenerationSample } from '../../supabase/functions/_shared/generation-cost';
 import { censoredPlaceholder } from '../../supabase/functions/_shared/censored-value';
+import { sourceSnippetFinder } from '../../supabase/functions/_shared/source-snippet';
 import {
   labInsightsPolicyPrompt, MAX_PROMPT_INTERVENTIONS, promptInterventionLabel,
 } from '../../supabase/functions/_shared/lab-insights-policy';
@@ -286,9 +287,15 @@ export async function insightsMessages(input: InsightsInput): Promise<unknown[]>
 
 export type RawItem = Record<string, unknown>;
 
-/** extract-biomarkers' own parse of the answer content: accepted shapes and its censored-value placeholder. */
+/**
+ * extract-biomarkers' own parse of the answer content: accepted shapes and its censored-value placeholder.
+ * The fragment ends with RV-SN1's `sourceSnippetFinder(labText)` setup; the eval scores rows, not snippets,
+ * so it runs the real finder over an empty text and never calls it.
+ */
 export function parseExtractionContent(content: unknown): RawItem[] {
-  return evaluate(markerFragment('extractionParse') + '\nreturn rawItems;', { content, censoredPlaceholder }) as RawItem[];
+  return evaluate(markerFragment('extractionParse') + '\nreturn rawItems;', {
+    content, censoredPlaceholder, sourceSnippetFinder, labText: '',
+  }) as RawItem[];
 }
 
 /** parse-lab-report-ocr's own parse: accepted shapes, its cycle-metadata validation and comparator fix-up. */
