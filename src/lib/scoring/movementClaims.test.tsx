@@ -78,6 +78,16 @@ describe('R1 structured movement claims', () => {
       expect(edge.validateMovementPhrase(serverClaim, 'Your thyroid health has worsened.')).toBeNull();
       expect(validateMovementPhrase(serverClaim, 'Your TSH increased from your previous result.')).toBeNull();
     }
+    // RV-NZ1: the unassessed tier (a change from a near-zero prior) too, in every format.
+    for (const currentValue of [9, 0.1, 0.2, 0.35]) {
+      const fact = { ...measurement, previousValue: 0.2, currentValue, significance: 'unassessed' as const };
+      for (const format of ['values', 'direction', 'magnitude'] as const) {
+        expect(edge.describeMeasuredMovement(fact, format)).toEqual(describeMeasuredMovement(fact, format));
+      }
+      const serverClaim = edge.createMovementClaim(fact);
+      expect(edge.validateMovementPhrase(serverClaim, 'Your thyroid health has worsened.')).toBeNull();
+      expect(validateMovementPhrase(serverClaim, describeMeasuredMovement(fact).text)).toBeNull();
+    }
   });
 
   it('the actual renderer rejects strengthened text and forged claim provenance', () => {

@@ -309,8 +309,11 @@ export interface MeasuredMovement {
   previousValue: number | null;
   currentValue: number;
   unit: string;
-  /** Comes from the existing deterministic magnitude calculation. */
-  significance: 'minor' | 'moderate' | 'significant';
+  /**
+   * Comes from the existing deterministic magnitude calculation. 'unassessed': it
+   * could not size an unequal pair (a near-zero prior), so no text states a size.
+   */
+  significance: 'minor' | 'moderate' | 'significant' | 'unassessed';
 }
 
 /** No status or band placement can authorize harm, benefit, or care advice. */
@@ -349,7 +352,7 @@ function movementLanguage(
 export function createMovementClaim(movement: MeasuredMovement): MovementClaim {
   if (!movement.displayName.trim() || !Number.isFinite(movement.currentValue)
     || (movement.previousValue !== null && !Number.isFinite(movement.previousValue))
-    || !['minor', 'moderate', 'significant'].includes(movement.significance)) {
+    || !['minor', 'moderate', 'significant', 'unassessed'].includes(movement.significance)) {
     throw new Error('Movement claim requires finite measurements and deterministic significance');
   }
   const fact = Object.freeze({ ...movement });
