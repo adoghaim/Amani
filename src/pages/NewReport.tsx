@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 import { checkSubscriptionLive, handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { uploadRequiresSubscription } from '../lib/freemium/gates';
@@ -28,7 +29,6 @@ import {
 } from '../lib/drawCycleContext';
 import { normalizeReportItems, reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
-import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 import { detectLabSource } from '../utils/detectLabSource';
 import { extractDateFromText } from '../utils/extractDateFromText';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
