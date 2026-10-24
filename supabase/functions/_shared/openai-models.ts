@@ -31,7 +31,7 @@
  *
  *   OPENAI_MODEL_OCR              parse-lab-report-ocr  (vision)
  *   OPENAI_MODEL_EXTRACTION       extract-biomarkers
- *   OPENAI_MODEL_INTERPRETATION   generate-interpretation (wiring is a handoff)
+ *   OPENAI_MODEL_INTERPRETATION   generate-interpretation
  *   OPENAI_MODEL_LAB_INSIGHTS     lab-insights
  *
  * ## Reasoning effort

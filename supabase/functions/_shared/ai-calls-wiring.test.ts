@@ -76,3 +76,29 @@ describe('lab-insights (F017, F131)', () => {
     expect(text).toContain('chatCompletionParams(model, { maxOutputTokens: 3000, temperature: 0.7 })');
   });
 });
+
+// RV-MM1 AC1. Kept apart from FUNCTIONS: that list also runs the F033 test,
+// which is not this handler's finding (it imports errorMessage).
+describe('generate-interpretation model call (RV-MM1 AC1)', () => {
+  const text = source('generate-interpretation');
+  const callOnce = text.slice(text.indexOf('async function callOpenAIOnce('), text.indexOf('// ─── Context sanitization'));
+
+  it('takes its model id and request limits from _shared/openai-models.ts', () => {
+    const imported = /^import \{ ([^}]*) \} from "\.\.\/_shared\/openai-models\.ts";$/m.exec(text)?.[1]?.split(', ') ?? [];
+    expect(imported).toEqual(expect.arrayContaining(['chatCompletionParams', 'resolveOpenAiModel']));
+    expect(callOnce).toContain('const requestedModel = resolveOpenAiModel("interpretation", (name) => Deno.env.get(name));');
+    expect(callOnce).toContain('let model = requestedModel;');
+    expect(callOnce).toContain('model: requestedModel,');
+    expect(callOnce).toContain('...chatCompletionParams(requestedModel, { maxOutputTokens: 2200, temperature: 0.25 }),');
+    // Resolved before the try, so a harness without the module fails loudly instead of on the catch path.
+    expect(callOnce.indexOf('const requestedModel = resolveOpenAiModel(')).toBeGreaterThan(0);
+    expect(callOnce.indexOf('const requestedModel = resolveOpenAiModel(')).toBeLessThan(callOnce.indexOf('\n  try {'));
+  });
+
+  it('carries no model literal and no hand-written limit or sampling field', () => {
+    expect(text).not.toMatch(/"gpt-/);
+    const outsideHelper = text.replace(/chatCompletionParams\([^)]*\)/g, '');
+    expect(outsideHelper).not.toMatch(/\btemperature:/);
+    expect(outsideHelper).not.toMatch(/\bmax_(?:completion_)?tokens:/);
+  });
+});
