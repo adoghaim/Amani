@@ -1763,7 +1763,7 @@ export function ReportView() {
                         const placement = labIntervalPlacement(b.value, b.reference_min, b.reference_max);
                         return placement === 'below' || placement === 'above';
                       };
-                      if (outside.length === 0 && (scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
+                      if (outside.length === 0 && (scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState, s.valueText) === 'outside')
                         || biomarkers.some(b => isUnconfirmedBiomarker(b, unconfirmedKeys) && labFlagged(b)))) return REPORT_TITLE;
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
