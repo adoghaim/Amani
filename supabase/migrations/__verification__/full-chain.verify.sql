@@ -11,7 +11,8 @@
                     production has it
     FC-CLIENT-WRITES  the explicit allow-list of commands authenticated may
                     run, each served by a policy
-    FC-ANON-WRITES  no policy serves any anon write (with the audit, which
+    FC-ANON-WRITES  no policy serves any anon write, in public or on the
+                    storage tables (with the audit, which
                     flags the unserved ones: anon holds no write grant
                     outside CHAIN_KNOWN_VIOLATIONS)
     FC-CLIENT-COLUMNS the exact columns of the users, lab_reports and
@@ -87,13 +88,16 @@ END $$;
 -- anon holds no write the chain means it to have: there is no allow-list.
 -- An anon INSERT/UPDATE/DELETE (a column grant counts) that no policy serves
 -- is an audit row; one a permissive anon or PUBLIC policy serves, on a table
--- with RLS on, is the rest, and must not exist.
+-- with RLS on, is the rest, and must not exist. storage.objects and
+-- storage.buckets too: Supabase grants anon every write on both, so only
+-- their policies keep a signed-out caller from the lab files.
 DO $$ DECLARE served text[];
 BEGIN
-  SELECT coalesce(array_agg(c.relname || ' ' || p.privilege ORDER BY c.relname, p.privilege), '{}') INTO served
+  SELECT coalesce(array_agg(c.oid::regclass::text || ' ' || p.privilege ORDER BY c.oid::regclass::text, p.privilege), '{}') INTO served
   FROM pg_class c
   CROSS JOIN (VALUES ('INSERT', 'a'), ('UPDATE', 'w'), ('DELETE', 'd')) AS p(privilege, polcmd)
-  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p') AND c.relrowsecurity
+  WHERE (c.relnamespace = 'public'::regnamespace OR c.oid IN ('storage.objects'::regclass, 'storage.buckets'::regclass))
+    AND c.relkind IN ('r', 'p') AND c.relrowsecurity
     AND (has_table_privilege('anon', c.oid, p.privilege)
          OR (p.privilege <> 'DELETE' AND has_any_column_privilege('anon', c.oid, p.privilege)))
     AND EXISTS (SELECT 1 FROM pg_policy pol
@@ -104,7 +108,7 @@ BEGIN
   IF cardinality(served) > 0 THEN
     RAISE EXCEPTION 'FAIL FC-ANON-WRITES anon may write, served by a policy: %', array_to_string(served, ', ');
   END IF;
-  RAISE NOTICE 'PASS FC-ANON-WRITES (no policy serves an anon INSERT, UPDATE or DELETE)';
+  RAISE NOTICE 'PASS FC-ANON-WRITES (no policy serves an anon INSERT, UPDATE or DELETE, in public or on storage.objects and storage.buckets)';
 END $$;
 
 -- The column locks: 20260501000000 (lab_reports), 20260823000000 and its

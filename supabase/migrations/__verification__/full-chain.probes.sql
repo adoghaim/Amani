@@ -7,7 +7,7 @@
     FC-STORAGE      lab-files is private and one user cannot read, upload,
                     move or delete another user's lab files, by filtered or
                     unfiltered writes, nor move her own into another
-                    user's folder
+                    user's folder; nor can anon, nor make a bucket public
     FC-PAID         Stripe, IAP and entitlement rows cannot be written by
                     their own user, nor by anon
     FC-CROSS-USER   for every user-owned table in USER_DATA_REGISTRY and the
@@ -187,6 +187,7 @@ END $$;
 -- ── FC-STORAGE ────────────────────────────────────────────────────────────
 DO $$ DECLARE
   a text := 'fc000000-0000-4000-8000-00000000000a'; b text := 'fc000000-0000-4000-8000-00000000000b';
+  role_name text; reached text;
 BEGIN
   PERFORM pg_temp.vassert((SELECT public FROM storage.buckets WHERE id = 'lab-files') IS FALSE, 'FC-STORAGE-BUCKET-PRIVATE');
   PERFORM pg_temp.fc_act('authenticated');
@@ -206,14 +207,18 @@ BEGIN
     'FC-STORAGE-BUCKET-STAYS-PRIVATE');
   PERFORM pg_temp.fc_unact();
   -- Unfiltered writes meet only the UPDATE/DELETE policies (see FC-CROSS-USER):
-  -- the stranger, who has no files, must reach no object and no bucket.
-  PERFORM pg_temp.fc_act('stranger');
-  PERFORM pg_temp.vassert(pg_temp.fc_reach_and_undo('UPDATE storage.objects SET metadata = DEFAULT') = 'none',
-    'FC-STORAGE-UNFILTERED-UPDATE');
-  PERFORM pg_temp.vassert(pg_temp.fc_reach_and_undo('DELETE FROM storage.objects') = 'none', 'FC-STORAGE-UNFILTERED-DELETE');
-  PERFORM pg_temp.vassert(pg_temp.fc_reach_and_undo('UPDATE storage.buckets SET public = true') = 'none',
-    'FC-STORAGE-UNFILTERED-BUCKET-UPDATE');
-  PERFORM pg_temp.fc_unact();
+  -- the stranger, who has no files, and anon must reach no object and no
+  -- bucket.
+  FOREACH role_name IN ARRAY ARRAY['stranger', 'anon'] LOOP
+    PERFORM pg_temp.fc_act(role_name);
+    reached := pg_temp.fc_reach_and_undo('UPDATE storage.objects SET metadata = DEFAULT');
+    PERFORM pg_temp.vassert(reached = 'none', format('FC-STORAGE-UNFILTERED-UPDATE as %s reached %s', role_name, reached));
+    reached := pg_temp.fc_reach_and_undo('DELETE FROM storage.objects');
+    PERFORM pg_temp.vassert(reached = 'none', format('FC-STORAGE-UNFILTERED-DELETE as %s reached %s', role_name, reached));
+    reached := pg_temp.fc_reach_and_undo('UPDATE storage.buckets SET public = true');
+    PERFORM pg_temp.vassert(reached = 'none', format('FC-STORAGE-UNFILTERED-BUCKET-UPDATE as %s reached %s', role_name, reached));
+    PERFORM pg_temp.fc_unact();
+  END LOOP;
   -- A has files, so her unfiltered writes also meet policies that only ask
   -- whether the caller owns something: none may reach B's object, and she
   -- cannot rename her own into B's folder.
@@ -229,11 +234,17 @@ BEGIN
   PERFORM pg_temp.vassert(pg_temp.fc_reached($s$SELECT count(*) FROM storage.objects$s$) = 0, 'FC-STORAGE-ANON-READ');
   PERFORM pg_temp.fc_insert_refused(format($s$INSERT INTO storage.objects (bucket_id, name) VALUES ('lab-files', %L)$s$, a || '/3.pdf'),
     'FC-STORAGE-ANON-UPLOAD');
+  PERFORM pg_temp.vassert(pg_temp.fc_reached(format($s$UPDATE storage.objects SET name = name WHERE name LIKE %L$s$, b || '/%')) = 0,
+    'FC-STORAGE-ANON-UPDATE');
+  PERFORM pg_temp.vassert(pg_temp.fc_reached(format($s$DELETE FROM storage.objects WHERE name LIKE %L$s$, b || '/%')) = 0,
+    'FC-STORAGE-ANON-DELETE');
+  PERFORM pg_temp.vassert(pg_temp.fc_reached($s$UPDATE storage.buckets SET public = true WHERE id = 'lab-files'$s$) = 0,
+    'FC-STORAGE-ANON-BUCKET-STAYS-PRIVATE');
   PERFORM pg_temp.fc_unact();
   PERFORM pg_temp.vassert((SELECT public FROM storage.buckets WHERE id = 'lab-files') IS FALSE
       AND (SELECT count(*) FROM storage.objects WHERE bucket_id = 'lab-files') = 2,
     'FC-STORAGE-UNCHANGED');
-  RAISE NOTICE 'PASS FC-STORAGE (private bucket; own folder only, for read, upload, rename and delete, filtered or unfiltered, as an owner or a stranger)';
+  RAISE NOTICE 'PASS FC-STORAGE (private bucket; own folder only, for read, upload, rename and delete, filtered or unfiltered, as an owner, a stranger or anon)';
 END $$;
 
 -- ── FC-PAID ───────────────────────────────────────────────────────────────
