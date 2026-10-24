@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -46,15 +46,46 @@ const header = (name: string) => {
   expect(values, name).toHaveLength(1);
   return values[0]!;
 };
+
+/** Whether one CSP host-source (exact origin or "https://*.host") allows this origin. */
+function sourceAllows(source: string, origin: string): boolean {
+  if (source === origin) return true;
+  const wildcard = /^(https?:\/\/)\*\.(.+)$/.exec(source);
+  if (!wildcard) return false;
+  const [scheme, host] = [wildcard[1]!, wildcard[2]!];
+  return origin.startsWith(scheme) && origin.slice(scheme.length).endsWith(`.${host}`);
+}
+
+/**
+ * Every https origin written in a non-test file under src/ that creates a
+ * script element, plus any external <script src> in index.html.
+ */
+function scriptLoaderOrigins(): string[] {
+  const origins = new Set<string>();
+  const collect = (text: string) => {
+    for (const match of text.matchAll(/https?:\/\/[^/\s'"`$<>)]+/g)) origins.add(match[0]);
+  };
+  for (const entry of readdirSync(join(process.cwd(), 'src'), { recursive: true }) as string[]) {
+    if (!/\.tsx?$/.test(entry) || /\.test\.tsx?$/.test(entry)) continue;
+    const text = read(join('src', entry));
+    if (/createElement\(\s*['"`]script['"`]/.test(text)) collect(text);
+  }
+  for (const tag of read('index.html').matchAll(/<script\b[^>]*\bsrc="(https?:\/\/[^"]+)"/g)) collect(tag[1]!);
+  return [...origins];
+}
+
 const projectRef = /^project_id = "([a-z0-9]+)"$/m.exec(read('supabase/config.toml'))?.[1];
+
+const GTM = 'https://www.googletagmanager.com';
+const GA = 'https://*.google-analytics.com';
 
 const REPORT_ONLY_POLICY = {
   'default-src': ["'self'"],
-  'script-src': ["'self'"],
+  'script-src': ["'self'", GTM],
   'style-src': ["'self'"],
-  'img-src': ["'self'"],
+  'img-src': ["'self'", GTM, GA],
   'font-src': ["'self'"],
-  'connect-src': ["'self'", `https://${projectRef}.supabase.co`, `wss://${projectRef}.supabase.co`],
+  'connect-src': ["'self'", `https://${projectRef}.supabase.co`, `wss://${projectRef}.supabase.co`, GTM, GA, 'https://*.google.com'],
   'worker-src': ["'self'"],
   'frame-src': ["'none'"],
   'form-action': ["'self'"],
@@ -70,12 +101,12 @@ describe('security headers on every response (F028, F113)', () => {
     expect(header('X-Frame-Options')).toBe('DENY');
   });
 
-  it('enforces a policy that names no host, so it holds in every Netlify deploy context', () => {
+  it('enforces a policy that names only the fixed GA4 hosts, so it holds in every Netlify deploy context', () => {
     const enforced = parsePolicy(header('Content-Security-Policy'));
     expect(Object.fromEntries(enforced)).toEqual({
-      'script-src': ["'self'"],
+      'script-src': ["'self'", GTM],
       'style-src': ["'self'"],
-      'img-src': ["'self'"],
+      'img-src': ["'self'", GTM, GA],
       'font-src': ["'self'"],
       'worker-src': ["'self'"],
       'form-action': ["'self'"],
@@ -84,7 +115,7 @@ describe('security headers on every response (F028, F113)', () => {
       'object-src': ["'none'"],
     });
     for (const sources of enforced.values()) {
-      for (const source of sources) expect(["'self'", "'none'"], source).toContain(source);
+      for (const source of sources) expect(["'self'", "'none'", GTM, GA], source).toContain(source);
     }
     // connect-src (or default-src, its fallback) depends on each context's VITE_SUPABASE_URL;
     // frame-src and child-src hide the deploy-preview Drawer. All stay report-only.
@@ -93,13 +124,45 @@ describe('security headers on every response (F028, F113)', () => {
     }
   });
 
-  it('reports against the full policy: self-hosted code, and this Supabase project as the only remote origin', () => {
+  it('reports against the full policy: self-hosted code, GA4, and this Supabase project as the only other origins', () => {
     expect(projectRef).toBeTruthy();
     const policy = parsePolicy(header('Content-Security-Policy-Report-Only'));
     expect(Object.fromEntries(policy)).toEqual(REPORT_ONLY_POLICY);
     // The full policy only adds to what is enforced, so enforcing it later loosens nothing.
     for (const [directive, sources] of parsePolicy(header('Content-Security-Policy'))) {
       expect(policy.get(directive), directive).toEqual(sources);
+    }
+  });
+
+  it('allows every external origin the source loads a script from, in both policies', () => {
+    // Read from the source, not restated: a feature that adds a runtime script
+    // loader fails here instead of being blocked silently in production.
+    const origins = scriptLoaderOrigins();
+    expect(origins, 'the scan must find the gtag.js loader in src/lib/analytics/ga4.ts').toContain('https://www.googletagmanager.com');
+    for (const name of ['Content-Security-Policy', 'Content-Security-Policy-Report-Only']) {
+      const policy = parsePolicy(header(name));
+      const scriptSources = policy.get('script-src-elem') ?? policy.get('script-src') ?? policy.get('default-src') ?? [];
+      for (const origin of origins) {
+        expect(scriptSources.some(source => sourceAllows(source, origin)), `${name} script policy blocks ${origin}`).toBe(true);
+      }
+    }
+  });
+
+  it('allows the GA4 hosts (without Ads features) for beacons, and nothing broader', () => {
+    // https://developers.google.com/tag-platform/security/guides/csp, "Google Analytics".
+    const [gtm, ga] = [GTM, GA];
+    const enforced = parsePolicy(header('Content-Security-Policy'));
+    expect(enforced.get('script-src')).toEqual(["'self'", gtm]);
+    expect(enforced.get('img-src')).toEqual(["'self'", gtm, ga]);
+    const reportOnly = parsePolicy(header('Content-Security-Policy-Report-Only'));
+    expect(reportOnly.get('connect-src')).toEqual(expect.arrayContaining([gtm, ga, 'https://*.google.com']));
+    for (const policy of [enforced, reportOnly]) {
+      for (const [directive, sources] of policy) {
+        for (const source of sources) {
+          expect(["'unsafe-inline'", "'unsafe-eval'", '*', 'https:', 'http:', 'data:'], `${directive} ${source}`).not.toContain(source);
+        }
+      }
+      for (const source of policy.get('script-src') ?? []) expect(source, 'no wildcard script host').not.toContain('*');
     }
   });
 
