@@ -13,6 +13,7 @@ import {
   comparatorAdversarialLayouts, comparatorExtraLayouts, comparatorLayouts, comparatorReviewLayouts,
 } from './__fixtures__/comparatorLayouts';
 import { BASE_ROWS, type BaseRow } from './__fixtures__/comparatorBaseline';
+import { PX2_HARNESS_ROWS } from './__fixtures__/parserResidualRows';
 
 /*
   Review F021, packet PX1: inclusive comparators in the text parser, annotate only.
@@ -137,9 +138,10 @@ describe('annotate only: every row reads as the base, or gains an inclusive comp
     ];
     expect(Object.keys(BASE_ROWS).sort()).toEqual(keys.sort());
     for (const key of Object.keys(ANNOTATED)) expect(BASE_ROWS).toHaveProperty([key]);
+    for (const key of Object.keys(PX2_HARNESS_ROWS)) expect(BASE_ROWS).toHaveProperty([key]);
   });
 
-  it.each(Object.keys(BASE_ROWS))('%s', key => {
+  it.each(Object.keys(BASE_ROWS).filter(key => !(key in PX2_HARNESS_ROWS)))('%s', key => {
     const base = BASE_ROWS[key] ?? [];
     const head = rowsOf(textOf(key));
     expect(head).toHaveLength(base.length);
@@ -167,6 +169,25 @@ describe('annotate only: every row reads as the base, or gains an inclusive comp
       ? [annotated[0], annotated[1], annotated[2], annotated[3], ...b.slice(4)]
       : b);
     expect(head).toEqual(expected);
+  });
+});
+
+/*
+  RV-PX2: the row sets that read differently from the base on purpose, each
+  pinned whole in PX2_HARNESS_ROWS. E: two comparators on her label line are
+  her result and her lab's reference, read by position. Every other set keeps
+  the invariant above.
+*/
+describe('RV-PX2: the row sets that read differently on purpose', () => {
+  it('are exactly the packet\'s E sets, and none is annotated above', () => {
+    expect(Object.keys(PX2_HARNESS_ROWS).sort()).toEqual([
+      'CA:l_b11', 'CR:q_c02', 'CR:q_c06', 'CR:l_c08',
+    ].sort());
+    for (const key of Object.keys(PX2_HARNESS_ROWS)) expect(ANNOTATED).not.toHaveProperty([key]);
+  });
+
+  it.each(Object.keys(PX2_HARNESS_ROWS))('%s', key => {
+    expect(rowsOf(textOf(key))).toEqual(PX2_HARNESS_ROWS[key]);
   });
 });
 

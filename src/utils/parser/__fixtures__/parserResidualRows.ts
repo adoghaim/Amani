@@ -5,7 +5,10 @@
 // control row, or bare). Each row pins what the packet reads on both entry
 // points; a control reads as the base (03f9a85) did, every other row did not.
 
+import type { BaseRow } from './comparatorBaseline';
+
 const QUEST = 'Quest Diagnostics\nSYNTHETIC TEST REPORT - NOT A REAL PATIENT\nTest Name Result Flag Reference Range Units\nTSH 2.85 0.40-4.50 mIU/L\n';
+const LABCORP = 'LabCorp\nLaboratory Corporation of America\nTest Result Units Ref. Interval\nTSH 2.850 uIU/mL 0.450-4.500\n';
 const EDGE = 'Lab Report\n\n';
 const BARE_QUEST = 'Quest Diagnostics\nSYNTHETIC TEST REPORT - NOT A REAL PATIENT\nTest Name Result Flag Reference Range Units\n';
 const BARE_LABCORP = 'LabCorp\nLaboratory Corporation of America\nTest Result Units Ref. Interval\n';
@@ -148,6 +151,54 @@ export const RESIDUAL_ROWS: readonly ResidualRow[] = [
   // The comparator is printed after her number, not before it: 35 stays.
   { rule: 'control', id: 'hdl_measured_ge_or_ref', marker: 'hdl_cholesterol', text: QUEST + 'HDL Cholesterol 35 L ≥ OR = 40 mg/dL',
     reads: ['35', 35, 'mg/dL', true, null, null, null, 'needs_review', null] },
+  { rule: 'E1', id: 'egfr_ge_then_gt_labcorp', marker: 'egfr', text: LABCORP + 'eGFR If NonAfricn Am >=60 mL/min/1.73 >59',
+    reads: ['>=60', 60, 'mL/min/1.73', false, '>59', '>', 59, 'mapped', null] },
+  { rule: 'E1', id: 'egfr_ge_then_gt_edge', marker: 'egfr', text: EDGE + 'eGFR If NonAfricn Am >=60 mL/min/1.73 >59',
+    reads: ['>=60', 60, 'mL/min/1.73', false, '>59', '>', 59, 'mapped', null] },
+  { rule: 'E1', id: 'egfr_or_then_gt_quest', marker: 'egfr', text: QUEST + 'eGFR > OR = 60 mL/min/1.73m2 >59',
+    reads: ['> OR = 60', 60, 'mL/min/1.73m2', false, '>59', '>', 59, 'mapped', null] },
+  { rule: 'E1', id: 'crp_le_then_lt', marker: 'hs_crp', text: BARE_QUEST + 'hs-CRP <=0.2 mg/L <1.0',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '<1.0', '<', 1, 'mapped', null] },
+  { rule: 'E1', id: 'crp_le_flag_then_lt', marker: 'hs_crp', text: BARE_QUEST + 'hs-CRP <=0.2 L mg/L <1.0',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '<1.0', '<', 1, 'mapped', null] },
+  { rule: 'E1', id: 'crp_named_le_then_lt', marker: 'hs_crp', text: BARE_GENERIC + 'CRP, High Sensitivity <=0.2 mg/L <1.0',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '<1.0', '<', 1, 'mapped', null] },
+  // It read 4.5 as a measured result.
+  { rule: 'E1', id: 'tsh_lt_then_lt', marker: 'tsh', text: BARE_QUEST + 'TSH <0.01 L <4.5 mIU/L',
+    reads: ['<0.01', 0.005, 'mIU/L', true, '<4.5', '<', 4.5, 'mapped', null] },
+  { rule: 'E1', id: 'e2_lt_then_lt', marker: 'estradiol', text: BARE_QUEST + 'Estradiol <15 pg/mL <39',
+    reads: ['<15', 7.5, 'pg/mL', true, '<39', '<', 39, 'mapped', null] },
+  { rule: 'E1', id: 'b12_gt_then_lt', marker: 'vitamin_b12', text: BARE_QUEST + 'Vitamin B12 >2000 H pg/mL <1245',
+    reads: ['>2000', 2000, 'pg/mL', false, '<1245', '<', 1245, 'mapped', null] },
+  // Still binds nothing and needs her review; the printed reference is the phase interval only.
+  { rule: 'E1', id: 'prog_lt_then_phase', marker: 'progesterone', text: BARE_QUEST + 'PROGESTERONE <0.5 ng/mL Follicular <1.0',
+    reads: ['<0.5', 0.25, 'ng/mL', true, 'Follicular <1.0', null, null, 'needs_review', null] },
+  { rule: 'E2', id: 'crp_ref_word_first', marker: 'hs_crp', text: BARE_GENERIC + 'hs-CRP Ref <1.0 <=0.2 mg/L',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '<1.0', '<', 1, 'mapped', null] },
+  { rule: 'E2', id: 'hdl_ref_word_first', marker: 'hdl_cholesterol', text: BARE_QUEST + 'HDL Cholesterol Normal >40 >=100 mg/dL',
+    reads: ['>=100', 100, 'mg/dL', false, '>40', '>', 40, 'mapped', null] },
+  // A second reference under it: two intervals, nothing bound, as at the base. The "<1.0" read as her result is the base's
+  // reading (only "<" and ">" lead a label-line result there); RV-PX2 does not change it.
+  { rule: 'E2', id: 'crp_ref_word_first_and_reference_line', marker: 'hs_crp', text: BARE_GENERIC + 'hs-CRP Ref <1.0 <=0.2 mg/L\nReference Range: <3.0',
+    reads: ['<1.0', 0.5, 'mg/L', true, 'hs-CRP Ref <1.0 <=0.2 mg/L; Reference Range: <3.0', null, null, 'needs_review', null] },
+  { rule: 'E3', id: 'egfr_bracketed_ref_then_gt', marker: 'egfr', text: BARE_GENERIC + 'eGFR (>=60) >59',
+    reads: ['>59', 59, 'mL/min/1.73m2', false, '>=60', '>=', 60, 'mapped', null] },
+  { rule: 'E3', id: 'egfr_quest_or_twice', marker: 'egfr', text: QUEST + 'eGFR NON-AFR. AMERICAN > OR = 60 > OR = 60 mL/min/1.73m2',
+    reads: ['> OR = 60', 60, 'mL/min/1.73m2', false, '> OR = 60', '> OR =', 60, 'mapped', null] },
+  { rule: 'E3', id: 'prog_lt_twice', marker: 'progesterone', text: BARE_QUEST + 'PROGESTERONE <0.5 ng/mL <0.5',
+    reads: ['<0.5', 0.25, 'ng/mL', true, '<0.5', '<', 0.5, 'mapped', null] },
+  { rule: 'E3', id: 'rf_lt_twice', marker: 'rheumatoid_factor', text: BARE_QUEST + 'Rheumatoid Factor <14 IU/mL <14 Normal',
+    reads: ['<14', 7, 'IU/mL', true, '<14', '<', 14, 'mapped', null] },
+  // Only the text search reads it, with no name end: it binds as at the base.
+  { rule: 'E3', id: 'egfr_glued_text_search', marker: 'egfr', text: BARE_QUEST + 'eGFR>=60 >59',
+    reads: ['>59', 59, 'mL/min/1.73m2', false, '>=60', '>=', 60, 'mapped', null], textSearchOnly: true },
+  // Her result is no comparator: unchanged (two references after a value are a later packet's, §9).
+  { rule: 'E3', id: 'egfr_measured_then_two', marker: 'egfr', text: QUEST + 'eGFR 45 L >=60 >59',
+    reads: ['>59', 59, 'mL/min/1.73m2', false, '>=60', '>=', 60, 'mapped', null] },
+  { rule: 'E3', id: 'vitd_gt_then_ge', marker: 'vitamin_d_25_oh', text: BARE_QUEST + 'Vitamin D, 25-OH, Total >150 H >=30 ng/mL',
+    reads: ['>150', 150, 'ng/mL', false, '>=30', '>=', 30, 'mapped', null] },
+  { rule: 'E3', id: 'ldl_two_reference_words', marker: 'ldl_cholesterol', text: BARE_QUEST + 'LDL-Cholesterol <100 Optimal <130 Near optimal mg/dL',
+    reads: ['<100', 50, 'mg/dL', true, '<130', '<', 130, 'mapped', null] },
 ];
 
 /** The unit of every row of the 8 parser fixtures (parseAllReportItems): as at the base, except SHBG's (B3). */
@@ -160,4 +211,18 @@ export const FIXTURE_UNITS: Readonly<Record<string, readonly (readonly [marker: 
   questHormones: [['fsh', 'mIU/mL'], ['lh', 'mIU/mL'], ['estradiol', 'pg/mL'], ['progesterone', 'ng/mL'], ['prolactin', 'ng/mL'], ['shbg', 'nmol/L'], ['total_testosterone', 'ng/dL'], ['tsh', 'mIU/L'], ['ANDROSTENEDIONE', 'ng/dL']],
   labcorpHormones: [['estradiol', 'pg/mL'], ['progesterone', 'ng/mL'], ['fsh', 'mIU/mL'], ['dheas', 'ug/dL'], ['prolactin', 'ng/mL'], ['shbg', 'nmol/L'], ['total_testosterone', 'ng/dL'], ['Estrone', 'pg/mL']],
   questSmoke: [['ferritin', 'ng/mL'], ['hemoglobin', 'g/dL'], ['tsh', 'mIU/L'], ['free_t4', 'ng/dL'], ['vitamin_d_25_oh', 'ng/mL'], ['hemoglobin_a1c', '%'], ['fasting_glucose', 'mg/dL'], ['total_cholesterol', 'mg/dL'], ['hdl_cholesterol', 'mg/dL'], ['ldl_cholesterol', 'mg/dL'], ['triglycerides', 'mg/dL'], ['vitamin_b12', 'pg/mL']],
+};
+
+/**
+ * The PX1 row sets (inclusiveComparators.test.ts) that RV-PX2 reads
+ * differently on purpose, exactly, in BASE_ROWS' row shape. Every other set
+ * keeps the PX1 invariant. E1: two comparators on the label line are her
+ * result and her lab's reference, read by position (#176 residual 2).
+ */
+export const PX2_HARNESS_ROWS: Readonly<Record<string, readonly BaseRow[]>> = {
+  // E1: her result printed in the first of two comparators, the reference in the second.
+  'CA:l_b11': [['tsh', '2.850', 2.85, false, '0.450-4.500', null, null, 0.45, 4.5], ['hdl_cholesterol', '>=100', 100, false, '>39', '>', 39, null, null]],
+  'CR:q_c02': [['tsh', '2.85', 2.85, false, '0.40-4.50', null, null, 0.4, 4.5], ['egfr', '> OR = 60', 60, false, '>59', '>', 59, null, null]],
+  'CR:q_c06': [['tsh', '2.85', 2.85, false, '0.40-4.50', null, null, 0.4, 4.5], ['hs_crp', '<=0.2', 0.1, true, '<1.0', '<', 1, null, null]],
+  'CR:l_c08': [['tsh', '2.850', 2.85, false, '0.450-4.500', null, null, 0.45, 4.5], ['egfr', '>=60', 60, false, '>59', '>', 59, null, null]],
 };

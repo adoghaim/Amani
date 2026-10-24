@@ -287,21 +287,48 @@ function candidatesIn(
 }
 
 /**
+ * RV-PX2 E (#176 residuals 2 and 4): a named label line that prints exactly two
+ * comparators and no min-max pair prints her result and her lab's reference.
+ * detectComparatorRange picks by operator, not position, so "hs-CRP <=0.2 mg/L
+ * <1.0" bound her "<=0.2". A comparator is marked as a reference when "(" or
+ * "[" is printed just before it, or the text between it and what precedes it
+ * starts with reference words. Returns the reference: the second comparator
+ * when her result (`result`) is printed in the first and the first is not
+ * marked (E1); the first when only it is marked (E2). Otherwise null, and the
+ * line binds as before (E3). The fallback passes no name end and never gets here.
+ */
+function referenceOfTwo(line: string, intervals: Interval[], nameEnd: number, result: { start: number } | null): Interval | null {
+  const [first, second] = intervals;
+  if (nameEnd <= 0 || result === null || intervals.length !== 2 || first === undefined || second === undefined) return null;
+  const marked = (iv: Interval, from: number) => {
+    const before = line.slice(from, iv.start);
+    return /[([]\s*$/.test(before) || startsWithReferenceWord(before.replace(/[[\]]/g, ' '));
+  };
+  const firstMarked = marked(first, nameEnd);
+  if (!firstMarked && result.start >= first.start && result.start < first.end) return second;
+  if (firstMarked && !marked(second, first.end)) return first;
+  return null;
+}
+
+/**
  * Intervals on the label line. As before, a min-max pair outranks a comparator
  * there, and without one the single comparator detectComparatorRange picks is
- * the line's interval; a comparator labelled by reference words ("Postmenopausal
- * <=31") counts as well.
+ * the line's interval (or the reference of two, referenceOfTwo); a comparator
+ * labelled by reference words ("Postmenopausal <=31") counts as well.
  */
 function labelLineCandidates(line: string, adapter?: SourceAdapter, nameEnd = 0): Candidate[] {
   const intervals = findIntervals(line, adapter);
   if (intervals.length === 0) return [];
   const hasMinMax = intervals.some(iv => iv.range.min !== undefined);
-  const own = hasMinMax ? null : detectComparatorRange(line);
+  const result = firstNumericToken(line, nameEnd);
+  const reference = hasMinMax ? null : referenceOfTwo(line, intervals, nameEnd, result);
+  const own = hasMinMax ? null : reference?.range.comparator ?? detectComparatorRange(line);
   const ownKey = own ? `${own.operator}${own.value}` : null;
   let ownTaken = false;
   const kept = labelIntervals(line, intervals, 0).filter(({ iv, label }) => {
     if (iv.range.min !== undefined) return true;
     if (label !== null && startsWithReferenceWord(label)) return true;
+    if (reference !== null) return iv === reference;
     if (!ownTaken && iv.key === ownKey) {
       ownTaken = true;
       return true;
@@ -310,14 +337,13 @@ function labelLineCandidates(line: string, adapter?: SourceAdapter, nameEnd = 0)
   });
   const firstKept = kept[0];
   if (firstKept === undefined) return [];
-  const result = firstNumericToken(line, nameEnd);
   const printed = line.slice(firstKept.printedStart).trim().replace(/\s+/g, ' ');
   return kept.map(({ iv, label }) => ({
     range: own && iv.key === ownKey ? { comparator: own, raw: own.raw } : iv.range,
     key: iv.key,
     label,
     conditional: isConditional(label),
-    valuePosition: iv.range.comparator !== undefined && result !== null && result.start === iv.start,
+    valuePosition: iv !== reference && iv.range.comparator !== undefined && result !== null && result.start === iv.start,
     printed,
   }));
 }

@@ -30,6 +30,7 @@ import type { ReportItem } from './types';
      equivalents as the catalog unit.
   D: "≥ OR =", "≤ OR =", "≥=" and "≤=" annotate her number like the other
      inclusive spellings.
+  E: two comparators on her label line are read by position.
 */
 
 const marker = (i: ReportItem) => i.canonical_slug ?? i.raw_name;
