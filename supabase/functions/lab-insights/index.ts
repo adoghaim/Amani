@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorType, scrubbedErrorMessage } from "../_shared/phi-scrub.ts";
-import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
+import { chatCompletionParams, reasoningEffortParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { enforceLabInsightsPolicy, labInsightsPolicyPrompt, MAX_PROMPT_INTERVENTIONS, promptInterventionLabel } from "../_shared/lab-insights-policy.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { consentRefusal } from "../_shared/consent.ts";
@@ -280,6 +280,7 @@ ${labInsightsPolicyPrompt()}`;
           ...chatCompletionParams(model, { maxOutputTokens: 3000, temperature: 0.7 }),
           response_format: { type: "json_object" },
           store: false,
+          ...reasoningEffortParams("labInsights", model, (name) => Deno.env.get(name)),
         }),
       },
       { attemptTimeoutMs: 18000 },

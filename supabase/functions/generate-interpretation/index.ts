@@ -6,7 +6,7 @@ import {
   validateInterpretationOutput,
 } from "../_shared/nutrient-policy.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
-import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
+import { chatCompletionParams, reasoningEffortParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 import { errorMessage } from "../_shared/errors.ts";
 import { consentRefusal } from "../_shared/consent.ts";
@@ -1309,6 +1309,7 @@ async function callOpenAIOnce(
           ...chatCompletionParams(requestedModel, { maxOutputTokens: 2200, temperature: 0.25 }),
           response_format: { type: "json_object" },
           store: false,
+          ...reasoningEffortParams("interpretation", requestedModel, (name) => Deno.env.get(name)),
         }),
       },
       { attemptTimeoutMs: 18000 },

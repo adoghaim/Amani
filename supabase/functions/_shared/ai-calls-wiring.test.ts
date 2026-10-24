@@ -33,6 +33,17 @@ describe.each(FUNCTIONS.map(fn => [fn]))('%s', fn => {
     expect(text.match(/\bstore\s*:/g)).toEqual(['store:']);
   });
 
+  it('spreads the reasoning-effort secret of the use it resolves the model for (RV-MM1 AC5)', () => {
+    const use = /resolveOpenAiModel\("(\w+)"/.exec(text)?.[1];
+    expect(use).toMatch(/^(?:ocr|extraction|labInsights)$/);
+    const imported = /^import \{ ([^}]*) \} from "\.\.\/_shared\/openai-models\.ts";$/m.exec(text)?.[1]?.split(', ') ?? [];
+    expect(imported).toContain('reasoningEffortParams');
+    expect(text).toMatch(new RegExp(
+      String.raw`\n {10}\.\.\.chatCompletionParams\(model, \{[^\n]*\}\),\n {10}response_format: \{ type: "json_object" \},\n` +
+      String.raw` {10}store: false,\n {10}\.\.\.reasoningEffortParams\("${use}", model, \(name\) => Deno\.env\.get\(name\)\),\n {8}\}\),\n`));
+    expect(text.match(/reasoningEffortParams\(/g)).toHaveLength(1);
+  });
+
   it('returns a fixed message to the client and logs scrubbed detail (F033)', () => {
     expect(text).not.toContain('errorMessage(');
     expect(text).not.toContain('_shared/errors.ts');
@@ -110,5 +121,13 @@ describe('generate-interpretation model call (RV-MM1 AC1)', () => {
   it('asks OpenAI not to store the completion, right after JSON mode (RV-MM1 AC3)', () => {
     expect(callOnce).toMatch(/\n {10}response_format: \{ type: "json_object" \},\n {10}store: false,\n/);
     expect(text.match(/\bstore\s*:/g)).toEqual(['store:']);
+  });
+
+  it('spreads the interpretation reasoning-effort secret for the requested model (RV-MM1 AC5)', () => {
+    const imported = /^import \{ ([^}]*) \} from "\.\.\/_shared\/openai-models\.ts";$/m.exec(text)?.[1]?.split(', ') ?? [];
+    expect(imported).toContain('reasoningEffortParams');
+    expect(callOnce).toContain('\n          store: false,\n'
+      + '          ...reasoningEffortParams("interpretation", requestedModel, (name) => Deno.env.get(name)),\n        }),\n');
+    expect(text.match(/reasoningEffortParams\(/g)).toHaveLength(1);
   });
 });

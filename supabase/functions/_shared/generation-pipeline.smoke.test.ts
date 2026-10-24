@@ -11,7 +11,7 @@ import { buildBasicProjection } from './interpretation-visibility';
 import { callModelUnlessPaused } from './ai-pause';
 import { formatTrendEvidencePrompt } from './trend-evidence';
 import { redactLabText } from './lab-text-redaction';
-import { chatCompletionParams, REASONING_TOKEN_HEADROOM, resolveOpenAiModel } from './openai-models';
+import { chatCompletionParams, REASONING_TOKEN_HEADROOM, reasoningEffortParams, resolveOpenAiModel } from './openai-models';
 import { generationSample, type GenerationSample } from './generation-cost';
 
 // Execute the actual handler's model and shaping functions, as the existing
@@ -67,7 +67,8 @@ function harness() {
     + '\nreturn { buildPrimaryContext, generateFallbackInterpretation, produceInterpretation };', {
     ...outcome, ...placement, ...shaping, ...authority, ...nutrients, InterpretationSchema,
     fetchWithBackoff: fetch, redactLabText, formatTrendEvidencePrompt, buildBasicProjection, callModelUnlessPaused,
-    resolveOpenAiModel, chatCompletionParams, generationSample, Deno: { env: { get: (name: string) => modelEnv[name] } },
+    resolveOpenAiModel, chatCompletionParams, reasoningEffortParams, generationSample,
+    Deno: { env: { get: (name: string) => modelEnv[name] } },
   }) as {
     buildPrimaryContext: (analytes: typeof panel, prior: typeof panel, date: string | null, pinned: string) => Record<string, unknown>;
     generateFallbackInterpretation: (report: unknown, analytes: typeof panel, primary: unknown) => Record<string, unknown>;
@@ -219,5 +220,31 @@ describe('interpretation model wiring: one secret drives both attempts', () => {
     const samples: GenerationSample[] = [];
     await h.run({ recordCost: (sample: GenerationSample) => samples.push(sample) });
     expect(samples.map(s => s.model)).toEqual(['gpt-6-luna', 'gpt-6-luna-2026-11-01']);
+  });
+
+  it('OPENAI_REASONING_EFFORT_INTERPRETATION reaches both attempts of a reasoning model, and only those', async () => {
+    silence();
+    modelEnv.OPENAI_MODEL_INTERPRETATION = 'gpt-6-luna';
+    modelEnv.OPENAI_REASONING_EFFORT_INTERPRETATION = ' LOW ';
+    const reasoning = harness();
+    reasoning.fetch.mockImplementationOnce(async () => violating());
+    await reasoning.run();
+    const bodies = sentBodies(reasoning);
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(Object.keys(body)).toEqual(['model', 'messages', 'max_completion_tokens', 'response_format', 'store', 'reasoning_effort']);
+      expect(body).toMatchObject({ model: 'gpt-6-luna', reasoning_effort: 'low' });
+    }
+
+    modelEnv.OPENAI_REASONING_EFFORT_INTERPRETATION = 'extreme';
+    const invalid = harness();
+    await invalid.run();
+    expect(sentBodies(invalid)[0]).not.toHaveProperty('reasoning_effort');
+
+    delete modelEnv.OPENAI_MODEL_INTERPRETATION;
+    modelEnv.OPENAI_REASONING_EFFORT_INTERPRETATION = 'low';
+    const chat = harness();
+    await chat.run();
+    expect(Object.keys(sentBodies(chat)[0]!)).toEqual(['model', 'messages', 'max_tokens', 'temperature', 'response_format', 'store']);
   });
 });

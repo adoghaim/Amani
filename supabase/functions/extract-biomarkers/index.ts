@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi-scrub.ts";
-import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
+import { chatCompletionParams, reasoningEffortParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
@@ -434,6 +434,7 @@ CONFIDENCE:
           ...chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }),
           response_format: { type: "json_object" },
           store: false,
+          ...reasoningEffortParams("extraction", model, (name) => Deno.env.get(name)),
         }),
       },
       { attemptTimeoutMs: 25000 },

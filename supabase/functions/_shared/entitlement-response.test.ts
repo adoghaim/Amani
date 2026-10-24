@@ -36,7 +36,7 @@ import { findFloorViolations, shapeInterpretation, shouldGenerateDeepInterpretat
 import { decideDeepGeneration } from './regeneration-availability';
 import { generationSample } from './generation-cost';
 import { redactLabText } from './lab-text-redaction';
-import { chatCompletionParams, resolveOpenAiModel } from './openai-models';
+import { chatCompletionParams, reasoningEffortParams, resolveOpenAiModel } from './openai-models';
 import * as versionWrite from './interpretation-version-write';
 import { callModelUnlessPaused } from './ai-pause';
 import { consentRefusal, createConsentGate } from './consent';
@@ -147,7 +147,7 @@ it('actual OpenAI call records one null-usage sample on a non-OK response', asyn
     const fetchWithBackoff = vi.fn(async () => new Response('synthetic failure', { status: 503 }));
     const call = evaluate(source.slice(start, end) + '\nreturn callOpenAIOnce;', {
       ...generationOutcome, fetchWithBackoff, redactLabText,
-      resolveOpenAiModel, chatCompletionParams, Deno: { env: { get: () => undefined } },
+      resolveOpenAiModel, chatCompletionParams, reasoningEffortParams, Deno: { env: { get: () => undefined } },
       generationSample, errorMessage: String,
     }) as (key: string, prompt: string, callback: typeof sample) => Promise<unknown>;
     expect(await call('fake-key', 'synthetic prompt', sample)).toBeNull();
