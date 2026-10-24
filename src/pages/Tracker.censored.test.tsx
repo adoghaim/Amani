@@ -85,8 +85,10 @@ async function openHealthStory(biomarkers: Row[]): Promise<string> {
   // Reports render newest first; the newest one compares with its predecessor.
   await act(async () => { insights[0]!.click(); });
   await settle();
-  expect(app.textContent).toContain('Your health story');
-  return app.querySelector('[data-model-surface="comparison"]')?.textContent ?? '';
+  // The modal is the shared Modal, which portals to <body>, outside `app`.
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+  expect(dialog?.textContent).toContain('Your health story');
+  return dialog?.querySelector('[data-model-surface="comparison"]')?.textContent ?? '';
 }
 
 describe('Tracker health story never states a censored placeholder (F021)', () => {
