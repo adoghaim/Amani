@@ -64,4 +64,17 @@ describe('synthetic October smoke panel: one primary, two distinct comparisons',
     expect(tshArea.whyItMatters).toBe("TSH is above your lab's reference range at 2 uIU/mL.");
     expect(tshArea.whyItMatters).not.toMatch(/outside.*Amani|elevated|optimal/i);
   });
+
+  // #174 (review F012) with Ruling 7: a declared pregnancy withholds the bands that
+  // need that context (ferritin, TSH, Vitamin D here). Both lab flags stay findings;
+  // LDL, whose band does not need it and which her lab also flags, takes the
+  // Primary slot ahead of the now lab-only Vitamin D.
+  it('with a declared pregnancy, both lab findings stay and the Amani-flagged LDL is primary', () => {
+    const summary = buildInsightSummary(panel, null, null, null, 'pregnancy');
+    expect([...(summary.bandLanguage?.keys() ?? [])]).toEqual(['ldl_cholesterol']);
+    expect(summary.labFindings?.map(f => f.key)).toEqual(['ldl_cholesterol', 'vitamin_d_25_oh']);
+    expect(summary.primaryFinding?.key).toBe('ldl_cholesterol');
+    expect(primaryFindingSentence(summary.primaryFinding!)).toBe("LDL is above your lab's reference range at 112 mg/dL.");
+    expect(summary.topFindings.map(f => f.key)).toEqual(['vitamin_d_25_oh']);
+  });
 });
