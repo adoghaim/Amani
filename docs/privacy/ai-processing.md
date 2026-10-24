@@ -35,6 +35,10 @@ caught, and the CEO plan records that as an accepted, tracked risk.
 - `extract-biomarkers` and `parse-lab-report-ocr` return result rows that are
   stored in `report_analytes` / `report_items`. The OCR answer includes a
   `source_snippet` copied from the image, which can contain identifiers.
+  `extract-biomarkers` rows carry a `source_snippet` the function reads from
+  the redacted text: one printed line from the result's label, at most 200
+  characters, or `null` unless exactly one line matches. The model does not
+  write it.
 - `generate-interpretation` output is validated by
   `_shared/nutrient-policy.ts`, regenerated once on violation, sanitised, and
   replaced by the deterministic fallback when sanitising fails closed. It is
