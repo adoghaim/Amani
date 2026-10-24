@@ -1,3 +1,4 @@
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 import { test, expect } from '../fixtures';
 
 test.use({ authenticated: true });
@@ -7,18 +8,20 @@ test.use({ authenticated: true });
   from the photo reader) keeps "Save and analyze" closed until she marks it
   correct, fixes it or removes it. The OCR reply and account reads are
   synthetic; the spec stops before saving, so the network guard still rejects
-  any write.
+  any write. The rows are in the OCR function's own shape (ExtractedAnalyte,
+  review F093), which the page maps before review.
 */
-const OCR_ITEMS = [
+const OCR_ITEMS: ExtractedAnalyte[] = ([
   ['TSH', 'tsh', 0.0008, 'mIU/L', 0.4, 4.5],
   ['Ferritin', 'ferritin', 40, 'ng/mL', 16, 154],
   // IA2 review wave 2: another unit, outside the bounds; held for her check, Save not blocked.
   ['Potassium', 'potassium', 45, 'mmol/L', 3.5, 5.1],
-].map(([name, slug, value, unit, min, max]) => ({
-  raw_name: name, canonical_slug: slug, value_numeric: value, value_text: String(value), unit,
-  raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
-  reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-  needs_review: false, source_snippet: `${name} ${value} ${unit}`, source_format: 'ocr', review_status: 'pending',
+] as const).map(([name, slug, value, unit, min, max]): ExtractedAnalyte => ({
+  raw_name: name, raw_value_text: String(value), value_numeric: value, unit,
+  raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,
+  normalized_operator: null, normalized_operator_value: null, source_snippet: `${name} ${value} ${unit}`,
+  confidence_score: 'high', canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped',
+  needs_review: false, is_core: true, category: null,
 }));
 
 test('a probably misread value keeps Save closed until she confirms it', async ({ page }, testInfo) => {
