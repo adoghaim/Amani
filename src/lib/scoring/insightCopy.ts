@@ -569,8 +569,10 @@ export function bandPlacement(assessment: AmaniAssessment, value: number): Place
 }
 
 /** Shared selection for count-based surfaces; never derive placement from concern. */
-export function markerBandPlacement(key: BiomarkerName, value: number, cyclePhase?: string | null, unit?: string | null): Placement {
-  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase), unit), value);
+export function markerBandPlacement(
+  key: BiomarkerName, value: number, cyclePhase?: string | null, unit?: string | null, state: NonCyclingState | null = null,
+): Placement {
+  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase, state), unit), value);
 }
 
 /** Short, user-facing review state carried beside every Amani band. */

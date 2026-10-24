@@ -40,6 +40,10 @@ export function computeLabStatus(
   refMax: number | null,
 ): LabStatus {
   if (refMin === null && refMax === null) return 'unknown';
+  // Review F097: no measurement or no usable interval places nothing.
+  const usable = (n: number | null) => n === null || (Number.isFinite(n) && n >= 0);
+  if (!usable(value) || !usable(refMin) || !usable(refMax)) return 'unknown';
+  if (refMin !== null && refMax !== null && refMin >= refMax) return 'unknown';
 
   /*
     The buffer is what separates "just outside the range" (borderline) from
@@ -131,8 +135,9 @@ export function scoreBiomarker(
   labRefMin: number | null,
   labRefMax: number | null,
   cyclePhase?: CyclePhase | null,
+  state: NonCyclingState | null = null,
 ): ScoredBiomarker {
-  const amaniStatus = computeAmaniStatus(name, value, cyclePhase, null, unit);
+  const amaniStatus = computeAmaniStatus(name, value, cyclePhase, state, unit);
   const labStatus = computeLabStatus(value, labRefMin, labRefMax);
   const concern = statusToConcern(amaniStatus);
   const weight = getScoreWeight(name);

@@ -207,19 +207,24 @@ describe('computeAmaniStatus — unknown paths', () => {
     expect(computeAmaniStatus('not_a_real_marker' as BiomarkerName, 5, phase)).toBe('unknown');
   });
 
-  // SUSPECTED BUG — pinned, not fixed. `ana_screen` is defined with all-null
-  // bounds, so `getRangesForPhase` returns a range object (not null) and the
-  // `if (!ranges) return 'unknown'` guard never fires. Every value falls
-  // through to 'normal', which `NewReport.tsx` persists as flagged: 'in_range'
-  // and `statusPill.ts` renders as a blue "Normal" pill instead of the grey
-  // "No Range" pill. Reported for a decision; see the accompanying report.
-  it('scores a marker with all-null bounds as normal (current behavior)', () => {
-    expect(computeAmaniStatus('ana_screen', 3.2)).toBe('normal');
-    expect(computeAmaniStatus('ana_screen', 0)).toBe('normal');
+  // Review F097: `ana_screen` has all-null bounds. It used to fall through to
+  // 'normal', which NewReport.tsx persisted as flagged: 'in_range'. A band
+  // with no bound places nothing, so it fails closed.
+  it('scores a marker with all-null bounds as unknown', () => {
+    expect(computeAmaniStatus('ana_screen', 3.2)).toBe('unknown');
+    expect(computeAmaniStatus('ana_screen', 0)).toBe('unknown');
+    expect(assessAmaniContext('ana_screen', 3.2, contextFromReport(null)).kind).toBe('unavailable');
   });
 
-  it.fails('SHOULD score a marker with all-null bounds as unknown', () => {
-    expect(computeAmaniStatus('ana_screen', 3.2)).toBe('unknown');
+  // Review F097: a value that is not a finite, non-negative number is no measurement.
+  it.each([NaN, Infinity, -Infinity, -1, -0.01])('returns unknown for the value %d', (value) => {
+    expect(computeAmaniStatus('ferritin', value)).toBe('unknown');
+    expect(computeAmaniStatus('tsh', value, 'luteal')).toBe('unknown');
+    expect(assessAmaniContext('ferritin', value, contextFromReport(null)).kind).toBe('unavailable');
+    const scored = scoreBiomarker('ferritin', value, 'ng/mL', 30, 150);
+    expect(scored.amaniStatus).toBe('unknown');
+    expect(scored.labStatus).toBe('unknown');
+    expect(scored.concern).toBe(0);
   });
 });
 
@@ -250,14 +255,10 @@ describe('computeLabStatus — no reference range', () => {
 });
 
 describe('computeLabStatus — one-sided lab reference range', () => {
-  // SUSPECTED BUG — pinned, not fixed. With one bound null the range width is
-  // Infinity, so the 8% buffer is Infinity and no value can ever clear it.
-  // One-sided ranges are common on real lab reports ("<100" for LDL, ">40" for
-  // HDL), and `ReportView.tsx` / `buildInsightSummary.ts` both test for
-  // labStatus === 'out_of_range_*' to decide whether a panel is clinically out
-  // of range. Reported for a decision; see the accompanying report.
-  // Buffer is 8% of the single bound, so for "<100" the borderline band is
-  // 100 < v <= 108, and anything above that is out of range.
+  // Fixed: with one bound null the range width used to be Infinity, so the 8%
+  // buffer was Infinity and a one-sided range could never be out of range.
+  // The buffer is now 8% of the single bound, so for "<100" the borderline
+  // band is 100 < v <= 108, and anything above that is out of range.
   it('treats a value just past a lone upper bound as borderline_high', () => {
     expect(computeLabStatus(105, null, 100)).toBe('borderline_high');
     expect(computeLabStatus(108, null, 100)).toBe('borderline_high');
@@ -278,6 +279,34 @@ describe('computeLabStatus — one-sided lab reference range', () => {
 
   it('reports out_of_range_low for 5 against a lower bound of 40', () => {
     expect(computeLabStatus(5, 40, null)).toBe('out_of_range_low');
+  });
+});
+
+// Review F097: inputs that are not a usable value and interval fail closed.
+describe('computeLabStatus — unusable inputs are unknown', () => {
+  it.each([NaN, Infinity, -Infinity, -1])('value %d against 30–150', (value) => {
+    expect(computeLabStatus(value, 30, 150)).toBe('unknown');
+    expect(computeLabStatus(value, null, 100)).toBe('unknown');
+    expect(computeLabStatus(value, 40, null)).toBe('unknown');
+  });
+
+  it.each([
+    [NaN, 150], [30, NaN], [-Infinity, 150], [30, Infinity], [NaN, null], [null, Infinity], [-5, 150], [null, -1],
+  ] as const)('bounds %s–%s', (min, max) => {
+    expect(computeLabStatus(90, min, max)).toBe('unknown');
+  });
+
+  it('an inverted interval (min > max) places nothing', () => {
+    for (const value of [10, 30, 90, 150, 200]) expect(computeLabStatus(value, 150, 30)).toBe('unknown');
+  });
+
+  it('an interval with equal bounds places nothing', () => {
+    for (const value of [29, 30, 31]) expect(computeLabStatus(value, 30, 30)).toBe('unknown');
+  });
+
+  it('a lower bound of zero is still an interval', () => {
+    expect(computeLabStatus(0, 0, 5)).toBe('in_range');
+    expect(computeLabStatus(5.2, 0, 5)).toBe('borderline_high');
   });
 });
 

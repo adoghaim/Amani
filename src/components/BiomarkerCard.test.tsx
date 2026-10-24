@@ -81,6 +81,20 @@ describe('BiomarkerCard — withheld context (invariants 3, 4, 5)', () => {
     expect(labRow()).toBe('Not provided on your report');
   });
 
+  // Review F012: her declared pregnancy withholds even when the report carries a menstrual phase.
+  it.each([
+    ['pregnancy', 'during pregnancy'],
+    ['postpartum', 'postpartum'],
+  ] as const)('withholds a phased TSH when she declared %s', (state, copy) => {
+    const text = render({ name: 'tsh', value: 2.1, unit: 'mIU/L', labRefMin: 0.45, labRefMax: 4.5, cyclePhase: 'luteal', state });
+    expect(labRow()).toBe('0.45–4.5 mIU/L');
+    expect(amaniRow()).toBeUndefined();
+    const note = host.querySelector('[role="note"]')?.textContent ?? '';
+    expect(note).toContain('Amani context score unavailable');
+    expect(note).toContain(copy);
+    expect(text).not.toMatch(/Within Amani band|Outside Amani band/);
+  });
+
   it('withholds in pregnancy with state-specific copy', () => {
     render({ name: 'progesterone', value: 30, unit: 'ng/mL', labRefMin: null, labRefMax: null, cyclePhase: 'pregnancy_t2' });
     const note = host.querySelector('[role="note"]')?.textContent ?? '';

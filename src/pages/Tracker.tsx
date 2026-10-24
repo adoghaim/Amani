@@ -27,6 +27,7 @@ import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
 import { InsightsModal } from '../components/InsightsModal';
 import { compareReports } from '../lib/scoring/compareReports';
+import { stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
 import { movementClaimsByKey } from '../lib/scoring/insightCopy';
 import { Interventions } from '../components/Interventions';
 import { CompareView } from '../components/CompareView';
@@ -107,9 +108,12 @@ export function Tracker() {
     const snapshot = (id: string) => (biomarkersByReport[id] ?? [])
       .map(b => ({ key: b.name as BiomarkerName, value: b.value, unit: b.unit }));
     const phase = reports.find(r => r.id === insightsPair.current)?.estimated_cycle_phase as CyclePhase | null | undefined;
-    const deltas = compareReports(snapshot(insightsPair.previous), snapshot(insightsPair.current), phase ?? null);
+    const deltas = compareReports(
+      snapshot(insightsPair.previous), snapshot(insightsPair.current), phase ?? null,
+      stateFromPregnancyStatus(userProfile?.pregnancy_status),
+    );
     return [...movementClaimsByKey(deltas.map(d => [d.key, d] as const)).values()];
-  }, [insightsPair, biomarkersByReport, reports]);
+  }, [insightsPair, biomarkersByReport, reports, userProfile?.pregnancy_status]);
 
   useEffect(() => {
     if (user) fetchData();

@@ -10,6 +10,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
+import { stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
 import { checkSubscriptionLive, handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { uploadRequiresSubscription } from '../lib/freemium/gates';
@@ -124,7 +125,7 @@ function noteInterpRateLimit(reportId: string, message: string): void {
 }
 
 export function NewReport() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const navigate = useNavigate();
   const submittingRef = useRef(false);
   const [step, setStep] = useState(1);
@@ -649,9 +650,11 @@ export function NewReport() {
       if (allItemsToSave.length > 0) {
         const coreItems = scorableItemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
+          // Review F012: her declared pregnancy withholds the stored flag too.
+          const declaredState = stateFromPregnancyStatus(userProfile?.pregnancy_status);
           const biomarkerInserts = coreItems.map(item => {
             const slug = item.canonical_slug! as BiomarkerName;
-            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, null, item._normalized_unit ?? item.unit ?? '');
+            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, declaredState, item._normalized_unit ?? item.unit ?? '');
             let flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown' = 'in_range';
             if (status === 'borderline_low' || status === 'borderline_high') flagged = 'borderline';
             else if (status === 'out_of_range_low' || status === 'out_of_range_high') flagged = 'out_of_range';

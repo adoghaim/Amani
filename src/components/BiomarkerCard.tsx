@@ -5,6 +5,7 @@ import {
   contextFromReport,
   formatInterval,
   type AmaniBand,
+  type NonCyclingState,
 } from '../lib/scoring/amaniContext';
 import { getDisplayName } from '../lib/biomarkers/dictionary';
 import type { BiomarkerName, CyclePhase, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
@@ -26,6 +27,8 @@ interface BiomarkerCardProps {
   labRefMax?: number | null;
   /** As recorded on the report. Never inferred here. */
   cyclePhase?: CyclePhase | string | null;
+  /** Her declared non-cycling state (stateFromPregnancyStatus); it withholds. */
+  state?: NonCyclingState | null;
   /**
    * Owner R1: the interpretation's per-marker prose, already reduced to the
    * sentences that resolve to this marker's own measured-change claim. Raw
@@ -213,6 +216,7 @@ export function BiomarkerCard({
   labRefMin,
   labRefMax,
   cyclePhase,
+  state = null,
   modelProse,
   historicalValues,
   baselineStatus,
@@ -222,7 +226,7 @@ export function BiomarkerCard({
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase), unit);
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state), unit);
   const pillLanguage = comparisonBandLabel(assessment, value);
   const pill = CUE_STYLE[pillLanguage.cue];
   const band = assessment.kind === 'scored' ? assessment.band : null;

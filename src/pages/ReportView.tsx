@@ -33,7 +33,7 @@ import {
 } from '../lib/scoring/insightCopy';
 import { SafetyWarnings } from '../components/SafetyWarnings';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
-import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
+import { assessAmaniContext, contextFromReport, stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
@@ -68,6 +68,7 @@ import { REGENERATION_COPY, regenerationFailureOf, type RegenerationNoticeKind }
 import { handle402 } from '../utils/subscription';
 import { formatDateLong } from '../utils/formatters';
 import { useSubscription } from '../hooks/useSubscription';
+import { useAuth } from '../contexts/AuthContext';
 import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
 import { PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
@@ -354,6 +355,10 @@ export function ReportView() {
   const {
     entitled, plan, complimentary, error: subscriptionError, refetch: refetchSubscription,
   } = useSubscription();
+  // Review F012: her declared pregnancy, postpartum or breastfeeding status
+  // withholds every Amani band that requires that context (interim, PK-04).
+  const { userProfile } = useAuth();
+  const declaredState = stateFromPregnancyStatus(userProfile?.pregnancy_status);
   const navigate = useNavigate();
   /*
     Build-time flag. Off: this page is the 1.0.5 page, reading the
@@ -763,12 +768,12 @@ export function ReportView() {
       gateInsightMatches(
         evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
         biomarkers,
-        contextFromReport(report?.estimated_cycle_phase),
+        contextFromReport(report?.estimated_cycle_phase, declaredState),
       ),
       biomarkers,
-      contextFromReport(report?.estimated_cycle_phase),
+      contextFromReport(report?.estimated_cycle_phase, declaredState),
     ),
-    [biomarkers, report]
+    [biomarkers, report, declaredState]
   );
 
   const analyteTelemetryMap = useMemo(() => {
@@ -898,8 +903,8 @@ export function ReportView() {
           reportDate: occ.reportDate,
         }))
       : null;
-    return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
-  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap]);
+    return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate, declaredState);
+  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap, declaredState]);
 
   // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
   // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
@@ -911,8 +916,9 @@ export function ReportView() {
       b.reference_min,
       b.reference_max,
       report?.estimated_cycle_phase as Parameters<typeof scoreBiomarker>[5],
+      declaredState,
     ));
-  }, [biomarkers, report]);
+  }, [biomarkers, report, declaredState]);
 
   /*
     V2-03b. "Top Priority" / "Main Focus" and the optimization-only headline
@@ -922,14 +928,14 @@ export function ReportView() {
     band language, with the report's own phase, decides what may be said.
   */
   const markerBandLanguage = useMemo(() => {
-    const context = contextFromReport(report?.estimated_cycle_phase);
+    const context = contextFromReport(report?.estimated_cycle_phase, declaredState);
     const map = new Map<string, AuthorizedLanguage>();
     for (const b of biomarkers) {
       const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context, b.unit);
       if (assessment.kind === 'scored') map.set(b.name, authorizedLanguage(assessment.band));
     }
     return map;
-  }, [biomarkers, report]);
+  }, [biomarkers, report, declaredState]);
   const safetyWarnings = useMemo(
     () => evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
     [biomarkers],
@@ -978,8 +984,8 @@ export function ReportView() {
   }, [insightSummary]);
 
   const flaggedSlugs = useMemo<BiomarkerName[]>(
-    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit) === 'outside').map(s => s.key),
-    [scoredBiomarkers, report?.estimated_cycle_phase],
+    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit, declaredState) === 'outside').map(s => s.key),
+    [scoredBiomarkers, report?.estimated_cycle_phase, declaredState],
   );
 
   const flaggedCategories = useMemo<BiomarkerCategory[]>(
@@ -992,11 +998,11 @@ export function ReportView() {
     return buildFocusAreas(
       insightSummary,
       insightSummary.watchSignals,
-      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit) === 'outside'),
+      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit, declaredState) === 'outside'),
       null,
       primaryCategory,
     );
-  }, [insightSummary, scoredBiomarkers, primaryCategory, report?.estimated_cycle_phase]);
+  }, [insightSummary, scoredBiomarkers, primaryCategory, report?.estimated_cycle_phase, declaredState]);
 
   const guidanceCards = useMemo(() => {
     const primaryFocusId = focusAreas.find((a) => a.isPrimaryAligned)?.id ?? null;
@@ -1632,7 +1638,7 @@ export function ReportView() {
                       // generated it" is inadmissible), and it could read "all within
                       // range" while a card says otherwise (Phase 8B, kept).
                       const outside = scoredBiomarkers
-                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit) === 'outside')
+                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState) === 'outside')
                         .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
@@ -1946,7 +1952,7 @@ export function ReportView() {
                 {filteredCategories.map(({ category, items }) => {
                   // Counted live, not from the persisted upload-time flag: a flag stored
                   // before V2-03 may have come from a fallback band Amani now withholds.
-                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase, b.unit) === 'outside').length;
+                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase, b.unit, declaredState) === 'outside').length;
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {
@@ -1995,6 +2001,7 @@ export function ReportView() {
                                 labRefMin={b.reference_min}
                                 labRefMax={b.reference_max}
                                 cyclePhase={cyclePhase}
+                                state={declaredState}
                                 modelProse={markerProse.get(b.name)}
                                 baselineStatus={personalization?.baselineStatus}
                                 baselineStaleness={personalization?.baselineStaleness}

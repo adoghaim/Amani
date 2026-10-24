@@ -25,8 +25,8 @@ export type MenstrualPhase = typeof MENSTRUAL_PHASES[number];
 /**
  * Physiological states that are not menstrual-phase cases. None has an
  * evidence-backed context rule yet, so each withholds. First-class sources
- * for these states arrive in V2-04; today only a report's pregnancy phase
- * reaches this module.
+ * for these states arrive in V2-04; today a report's pregnancy phase and the
+ * reproductive status she declared (stateFromPregnancyStatus) reach this module.
  */
 export type NonCyclingState =
   | 'pregnancy'
@@ -51,6 +51,24 @@ const STATE_MODIFIERS: Record<NonCyclingState, readonly ContextModifier[]> = {
   perimenopause: ['cycle', 'life_stage'],
   menopause: ['cycle', 'life_stage'],
 };
+
+// Review F012, interim before PK-04: users.pregnancy_status as onboarding and
+// Settings write it (PREGNANCY_OPTIONS). Breastfeeding has no state of its own;
+// postpartum's modifiers include pregnancy's, so it withholds at least as much.
+const DECLARED_STATE = new Map<string, NonCyclingState>([
+  ['pregnant', 'pregnancy'],
+  ['postpartum', 'postpartum'],
+  ['breastfeeding', 'postpartum'],
+]);
+
+/**
+ * The non-cycling state her declared reproductive status names, or null.
+ * Never infers: 'None', 'Prefer not to say', empty or unrecognised is no state.
+ */
+export function stateFromPregnancyStatus(status: string | null | undefined): NonCyclingState | null {
+  if (typeof status !== 'string') return null;
+  return DECLARED_STATE.get(status.trim().toLowerCase()) ?? null;
+}
 
 /**
  * Builds context from what a report recorded. Never infers: an absent,
@@ -173,6 +191,8 @@ export function assessAmaniContext(
   const analyte = CONTEXT_BY_KEY.get(key);
   if (!entry || !analyte) return { kind: 'unavailable' };
   if (unit !== undefined && !sameUnit(unit, entry.defaultUnit)) return { kind: 'unavailable' };
+  // Review F097: a value that is not a finite, non-negative number is no measurement.
+  if (!Number.isFinite(value) || value < 0) return { kind: 'unavailable' };
 
   if (context.state && stateRequiresContext(analyte, context.state).length > 0) {
     return { kind: 'withheld', reason: 'non_cycling_state', state: context.state, phase: null };
@@ -189,6 +209,10 @@ export function assessAmaniContext(
   }
 
   const values = phase ? entry.phaseRanges![phase]! : { optimal: entry.optimal, clinical: entry.clinical };
+  // Review F097: a band with no bound at all (ana_screen) places nothing.
+  if ([values.optimal.min, values.optimal.max, values.clinical.min, values.clinical.max].every(b => b === null)) {
+    return { kind: 'unavailable' };
+  }
   const provenance = bandProvenance(key, phase);
   const claims = bandClaims(key, phase);
   return {

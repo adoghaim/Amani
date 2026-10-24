@@ -1,6 +1,7 @@
 import type { BiomarkerCategory } from '../../types';
 import { CATEGORY_DISPLAY } from '../../types';
 import { getCategory } from '../biomarkers/dictionary';
+import type { NonCyclingState } from './amaniContext';
 import { markerBandPlacement } from './insightCopy';
 import type { ScoredBiomarker } from './scoreBiomarker';
 
@@ -30,6 +31,7 @@ function computeSystemLabel(weightedConcernAvg: number): SystemLabel {
 export function groupBySystem(
   scored: ScoredBiomarker[],
   cyclePhase?: string | null,
+  state: NonCyclingState | null = null,
 ): SystemGroup[] {
   const grouped = new Map<BiomarkerCategory, ScoredBiomarker[]>();
 
@@ -60,7 +62,7 @@ export function groupBySystem(
     }
 
     const flaggedCount = biomarkers.filter(
-      b => markerBandPlacement(b.key, b.value, cyclePhase, b.unit) === 'outside',
+      b => markerBandPlacement(b.key, b.value, cyclePhase, b.unit, state) === 'outside',
     ).length;
 
     const display = CATEGORY_DISPLAY[cat];

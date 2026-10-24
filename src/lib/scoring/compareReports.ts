@@ -2,7 +2,7 @@ import type { BiomarkerName, CyclePhase, AmaniStatus } from '../../types';
 import { getDisplayName, getRangesForPhase } from '../biomarkers/dictionary';
 import { sameUnit } from '../biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from './scoreBiomarker';
-import { assessAmaniContext, contextFromReport } from './amaniContext';
+import { assessAmaniContext, contextFromReport, type NonCyclingState } from './amaniContext';
 import { authorizedLanguage, BOUNDARY_BUCKET_LABEL, type AuthorizedLanguage, type ReviewStatus } from './insightCopy';
 
 export type TrendDirection = 'up' | 'down' | 'stable';
@@ -234,6 +234,7 @@ export function compareReports(
   previous: BiomarkerSnapshot[],
   current: BiomarkerSnapshot[],
   cyclePhase?: CyclePhase | null,
+  state: NonCyclingState | null = null,
 ): BiomarkerDelta[] {
   const prevMap = new Map(previous.map(b => [b.key, b]));
   const deltas: BiomarkerDelta[] = [];
@@ -251,14 +252,14 @@ export function compareReports(
     if (curr.value > prev.value) trendDirection = 'up';
     else if (curr.value < prev.value) trendDirection = 'down';
 
-    const prevStatus = computeAmaniStatus(curr.key, prev.value, cyclePhase, null, prev.unit);
-    const currStatus = computeAmaniStatus(curr.key, curr.value, cyclePhase, null, curr.unit);
+    const prevStatus = computeAmaniStatus(curr.key, prev.value, cyclePhase, state, prev.unit);
+    const currStatus = computeAmaniStatus(curr.key, curr.value, cyclePhase, state, curr.unit);
     const significance = computeSignificance(percentDelta, absoluteDelta, curr.key);
     // Withheld context (V2-03), or no band in this unit (F011): keep the
     // longitudinal values, but make no judgement about crossing, improving or
     // worsening against a band Amani is not applying. ('unknown' would
     // otherwise bucket as out_of_range.)
-    const assessment = assessAmaniContext(curr.key, curr.value, contextFromReport(cyclePhase), curr.unit);
+    const assessment = assessAmaniContext(curr.key, curr.value, contextFromReport(cyclePhase, state), curr.unit);
     const withheld = assessment.kind !== 'scored';
     // R1: the destination band's review state, threaded into every judgement
     // below. Unavailable or withheld means nothing is established.

@@ -2,6 +2,7 @@ import { AlertCircle } from 'lucide-react';
 import { getDisplayName, getEntry } from '../lib/biomarkers/dictionary';
 import type { AITopFinding, BiomarkerName, CyclePhase } from '../types';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
+import type { NonCyclingState } from '../lib/scoring/amaniContext';
 import { amaniStatusToVariant, STATUS_PILL_CONFIG } from '../lib/scoring/statusPill';
 
 interface BiomarkerEntry {
@@ -15,6 +16,8 @@ interface BiomarkerEntry {
 interface Props {
   biomarkers: BiomarkerEntry[];
   cyclePhase?: CyclePhase | null;
+  /** Her declared non-cycling state (stateFromPregnancyStatus); it withholds. */
+  state?: NonCyclingState | null;
   topFindings?: AITopFinding[];
 }
 
@@ -53,7 +56,7 @@ const FINDING_STATUS_STYLE = {
   },
 };
 
-export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) {
+export function QuickHighlights({ biomarkers, cyclePhase, state = null, topFindings }: Props) {
   if (topFindings && topFindings.length > 0) {
     const flagged = topFindings.filter(f => f.status !== 'reassuring');
     if (flagged.length === 0) return null;
@@ -97,7 +100,7 @@ export function QuickHighlights({ biomarkers, cyclePhase, topFindings }: Props) 
 
   const flagged = biomarkers
     .map(b => {
-      const status = computeAmaniStatus(b.name, b.value, cyclePhase, null, b.unit);
+      const status = computeAmaniStatus(b.name, b.value, cyclePhase, state, b.unit);
       const variant = amaniStatusToVariant(status);
       let priority = 0;
       if (variant === 'out_of_range') priority = 3;

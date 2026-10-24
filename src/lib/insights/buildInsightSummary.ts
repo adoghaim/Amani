@@ -1,5 +1,6 @@
 import type { BiomarkerName, CyclePhase } from '../../types';
 import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
+import type { NonCyclingState } from '../scoring/amaniContext';
 import { scoreBiomarker, type ScoredBiomarker } from '../scoring/scoreBiomarker';
 import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
@@ -500,15 +501,16 @@ export function buildInsightSummary(
   previous: BiomarkerInput[] | null,
   cyclePhase?: CyclePhase | null,
   immediatePriorReportDate?: string | null,
+  state: NonCyclingState | null = null,
 ): InsightSummary {
   const scored = current.map(b =>
-    scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
+    scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase, state),
   );
 
-  const systemSummaries = groupBySystem(scored, cyclePhase);
+  const systemSummaries = groupBySystem(scored, cyclePhase, state);
   const bandLanguage = new Map<BiomarkerName, AuthorizedLanguage>();
   for (const b of current) {
-    const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase), b.unit);
+    const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase, state), b.unit);
     if (assessment.kind === 'scored') bandLanguage.set(b.key, authorizedLanguage(assessment.band));
   }
   let biggestChanges: BiggestChange[] = [];
@@ -520,6 +522,7 @@ export function buildInsightSummary(
       previous.map(b => ({ key: b.key, value: b.value, unit: b.unit, reportDate: b.reportDate })),
       current.map(b => ({ key: b.key, value: b.value, unit: b.unit })),
       cyclePhase,
+      state,
     );
     deltaMap = new Map(deltas.map(d => [d.key, d]));
     biggestChanges = buildBiggestChanges(deltas, immediatePriorReportDate ?? null);
