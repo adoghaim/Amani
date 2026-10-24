@@ -43,6 +43,20 @@ describe('toExtractedItem: one row under the names the app saves (F093, F114)', 
     });
   });
 
+  it('coerces the renamed fields from untrusted model output: text to a string, bounds to finite numbers', () => {
+    // The model can type any JSON value; the app calls .trim() on value_text at save.
+    const loose = {
+      ...censored, raw_value_text: 5.2, normalized_min: '0.45', normalized_max: Number.NaN,
+      normalized_operator: 7, normalized_operator_value: '100',
+    } as unknown as ExtractedAnalyte;
+    expect(toExtractedItem(loose)).toMatchObject({
+      value_text: '5.2', normalized_reference_min: null, normalized_reference_max: null,
+      reference_operator: null, reference_operator_value: null,
+    });
+    const absent = { ...censored, raw_value_text: undefined, normalized_operator: undefined } as unknown as ExtractedAnalyte;
+    expect(toExtractedItem(absent)).toMatchObject({ value_text: null, reference_operator: null });
+  });
+
   it('keeps the key order extract-biomarkers answered with before it used this mapping', () => {
     expect(Object.keys(toExtractedItem(censored))).toEqual([
       'raw_name', 'canonical_slug', 'category', 'value_numeric', 'value_text', 'unit', 'raw_reference_range',

@@ -57,6 +57,16 @@ export interface ExtractedItem {
   source_snippet: string | null;
 }
 
+/*
+  Both functions copy these fields from the model's JSON as it typed them, so
+  a row can carry value_text 5.2 or a bound "0.45". The save calls .trim() on
+  value_text, and a bound that is not a finite number must not place a value.
+*/
+const textOrNull = (v: unknown): string | null =>
+  typeof v === "string" ? v : typeof v === "number" && Number.isFinite(v) ? String(v) : null;
+const finiteOrNull = (v: unknown): number | null =>
+  typeof v === "number" && Number.isFinite(v) ? v : null;
+
 /** The one mapping between the two names, field for field. */
 export function toExtractedItem(a: ExtractedAnalyte): ExtractedItem {
   return {
@@ -64,13 +74,13 @@ export function toExtractedItem(a: ExtractedAnalyte): ExtractedItem {
     canonical_slug: a.canonical_slug,
     category: a.category,
     value_numeric: a.value_numeric,
-    value_text: a.raw_value_text,
+    value_text: textOrNull(a.raw_value_text),
     unit: a.unit,
     raw_reference_range: a.raw_reference_range,
-    normalized_reference_min: a.normalized_min,
-    normalized_reference_max: a.normalized_max,
-    reference_operator: a.normalized_operator,
-    reference_operator_value: a.normalized_operator_value,
+    normalized_reference_min: finiteOrNull(a.normalized_min),
+    normalized_reference_max: finiteOrNull(a.normalized_max),
+    reference_operator: typeof a.normalized_operator === "string" ? a.normalized_operator : null,
+    reference_operator_value: finiteOrNull(a.normalized_operator_value),
     confidence_score: a.confidence_score,
     needs_review: a.needs_review,
     is_core_biomarker: a.is_core,

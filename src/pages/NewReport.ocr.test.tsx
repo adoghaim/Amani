@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
+import { ResultRow } from '../components/ResultRow';
 
 /*
   Review F093 and F114 (IB1) on the real upload page. A photo goes to
@@ -132,6 +133,31 @@ function confirmValues() {
   ]));
 }
 
+/** Type into one of the confirm step's real inputs, as she would. */
+async function type(input: HTMLInputElement | null | undefined, value: string) {
+  expect(input).not.toBeNull();
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  await act(async () => { setter.call(input, value); input!.dispatchEvent(new Event('input', { bubbles: true })); });
+  await settle();
+}
+const valueInput = () => app.querySelector<HTMLInputElement>('input[type="number"]');
+const rangeInput = () => app.querySelector<HTMLInputElement>('input[placeholder=\'e.g. "65-99"\']');
+
+/** What the report's ResultRow shows for one saved report_analytes row. */
+async function renderResult(saved: Record<string, unknown>) {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const r = createRoot(host);
+  await act(async () => r.render(<ResultRow analyte={{ ...saved, display_name: 'TSH' } as never} cyclePhase={null} />));
+  const out = {
+    value: host.querySelector('[data-testid="result-value"]')?.textContent,
+    status: host.querySelector('[data-testid="result-status"]')?.textContent,
+  };
+  await act(async () => r.unmount());
+  host.remove();
+  return out;
+}
+
 /** Save, and return the rows the page wrote, by raw name (report_analytes) and slug (biomarkers). */
 async function save() {
   await click(button('Save and analyze'));
@@ -171,5 +197,84 @@ describe('NewReport: an OCR upload keeps the lab\'s printed value text and range
       normalized_min: null, normalized_max: null, normalized_operator: '<', normalized_operator_value: 100,
     });
     expect(biomarkers['ldl_cholesterol']).toMatchObject({ value: 112, raw_value_text: '112', reference_min: null, reference_max: null });
+  });
+});
+
+/*
+  IB1 review (correctness): the confirm step's corrections must replace what
+  was read off the page. A low-confidence OCR card opens for editing; she
+  fixes a misread value or a misread range. The printed value text and the
+  interval read with it must not survive her correction, or the report shows
+  the misread value and places her value against an interval she corrected.
+*/
+const MISREAD: ExtractedAnalyte = {
+  ...TSH, raw_value_text: '21', value_numeric: 21, source_snippet: 'TSH 21 uIU/mL 0.45-4.5',
+  confidence_score: 'low', needs_review: true,
+};
+
+describe('NewReport: her confirm-step corrections to an OCR row reach the report', () => {
+  it('a corrected value replaces the printed value text (21 -> 2.1)', async () => {
+    fixture.ocrItems = [MISREAD];
+    await uploadPhoto();
+    await type(valueInput(), '2.1');
+    expect(confirmValues()).toEqual({ TSH: '2.1' });
+    const { analytes, biomarkers } = await save();
+    expect(analytes['TSH']).toMatchObject({ raw_value_text: null, value_numeric: 2.1, normalized_min: 0.45, normalized_max: 4.5 });
+    expect(biomarkers['tsh']).toMatchObject({ raw_value_text: null, value: 2.1 });
+    expect((await renderResult(analytes['TSH'])).value).toBe('2.1');
+  });
+
+  it('a corrected range replaces the interval read with it (0.45-45 -> 0.45-4.5, value 10)', async () => {
+    fixture.ocrItems = [{
+      ...MISREAD, raw_value_text: '10', value_numeric: 10, raw_reference_range: '0.45-45', normalized_max: 45,
+      source_snippet: 'TSH 10 uIU/mL 0.45-45',
+    }];
+    await uploadPhoto();
+    await type(rangeInput(), '0.45-4.5');
+    const { analytes, biomarkers } = await save();
+    expect(analytes['TSH']).toMatchObject({
+      raw_reference_range: '0.45-4.5', normalized_min: 0.45, normalized_max: 4.5,
+      normalized_operator: null, normalized_operator_value: null,
+    });
+    expect(biomarkers['tsh']).toMatchObject({ reference_min: 0.45, reference_max: 4.5 });
+    expect((await renderResult(analytes['TSH'])).status).not.toBe("Within your lab's range");
+  });
+
+  it('a range corrected to a comparator saves the operator and bound, not the old interval', async () => {
+    fixture.ocrItems = [MISREAD];
+    await uploadPhoto();
+    await type(rangeInput(), '<4.5');
+    const { analytes, biomarkers } = await save();
+    expect(analytes['TSH']).toMatchObject({
+      raw_reference_range: '<4.5', normalized_min: null, normalized_max: null,
+      normalized_operator: '<', normalized_operator_value: 4.5,
+    });
+    expect(biomarkers['tsh']).toMatchObject({ reference_min: null, reference_max: null });
+  });
+
+  it('a range she types that does not parse, or clears, leaves no interval behind', async () => {
+    fixture.ocrItems = [MISREAD, { ...LDL, confidence_score: 'low', needs_review: true }];
+    await uploadPhoto();
+    const ranges = app.querySelectorAll<HTMLInputElement>('input[placeholder=\'e.g. "65-99"\']');
+    expect(ranges).toHaveLength(2);
+    await type(ranges[0], 'see note');
+    await type(ranges[1], '');
+    const { analytes } = await save();
+    expect(analytes['TSH']).toMatchObject({
+      raw_reference_range: 'see note', normalized_min: null, normalized_max: null,
+      normalized_operator: null, normalized_operator_value: null,
+    });
+    expect(analytes['LDL Cholesterol']).toMatchObject({
+      raw_reference_range: null, normalized_min: null, normalized_max: null,
+      normalized_operator: null, normalized_operator_value: null,
+    });
+  });
+
+  it('a row whose value text the model sent as a JSON number still saves', async () => {
+    // Model output is untrusted: the deployed function passes value_text through as the model typed it.
+    fixture.ocrItems = [{ ...TSH, raw_value_text: 5.2 as unknown as string, value_numeric: 5.2 }];
+    await uploadPhoto();
+    const { analytes } = await save();
+    expect(analytes['TSH']).toMatchObject({ raw_value_text: '5.2', value_numeric: 5.2, normalized_min: 0.45, normalized_max: 4.5 });
   });
 });

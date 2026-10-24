@@ -22,6 +22,7 @@ import { toExtractedItem, type ExtractedAnalyte, type ExtractedItem } from '../.
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
+import { detectReferenceRange } from '../utils/parser/rangeDetection';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import {
   cycleContextAtDraw, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
@@ -52,6 +53,27 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
 ];
 
 type GuidedStep = 'choose' | 'instructions' | 'upload';
+
+/*
+  Her confirm-step edit replaces what was read off the page (IB1 review). The
+  printed value text and the interval read with the range would otherwise
+  outlive her correction: the report showed the misread value, and placed her
+  value against an interval she had corrected. A corrected value drops the
+  printed text; a corrected range is read again from what she typed, and
+  leaves no interval when it does not parse.
+*/
+function applyReviewEdit(item: ReportItem, field: keyof ReportItem, value: string | number | null | boolean): ReportItem {
+  const updated = { ...item, [field]: value } as ReportItem;
+  if (field === 'value_numeric') updated.value_text = null;
+  if (field === 'raw_reference_range') {
+    const range = typeof value === 'string' ? detectReferenceRange(value) : null;
+    updated.normalized_reference_min = range?.min ?? null;
+    updated.normalized_reference_max = range?.max ?? null;
+    updated.reference_operator = range?.comparator?.operator ?? null;
+    updated.reference_operator_value = range?.comparator?.value ?? null;
+  }
+  return updated;
+}
 
 /*
   Mark a report as terminally failed.
@@ -1499,7 +1521,8 @@ export function NewReport() {
                   userEditedReportItemsRef.current = true;
                   setReportItems(prev => {
                     const updated = [...prev];
-                    updated[index] = { ...updated[index], [field]: value } as ReportItem;
+                    const current = updated[index];
+                    if (current) updated[index] = applyReviewEdit(current, field, value);
                     return updated;
                   });
                 }}
