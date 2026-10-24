@@ -21,6 +21,7 @@ import {
   REVENUECAT_SECRET_ENV,
   REVENUECAT_SUBSCRIBERS_API,
   createStoreTeardownActions,
+  playCancellationConfigured,
   StoreTeardownError,
 } from './store-teardown.ts';
 
@@ -248,6 +249,8 @@ function runHandler(world: {
     'createStoreTeardownActions', 'createAppEventSink', 'logServerEvent',
     // BS1: the handler's storage step and its failure body and scrubbed log.
     'StoreTeardownError', 'deleteAllStorageObjects', 'errorType', 'scrubbedErrorMessage',
+    // RV-R3: the 409's play_cancellation_enabled.
+    'PLAY_SERVICE_ACCOUNT_ENV', 'playCancellationConfigured',
     code,
   )(
     Deno, createClient, Stripe, fetchWithBackoff,
@@ -255,6 +258,7 @@ function runHandler(world: {
     isMissingTableError, MissingTableError, StoreSubscriptionAcknowledgementRequiredError,
     createStoreTeardownActions, createAppEventSink, logServerEvent,
     StoreTeardownError, deleteAllStorageObjects, errorType, scrubbedErrorMessage,
+    PLAY_SERVICE_ACCOUNT_ENV, playCancellationConfigured,
   );
   expect(handler).toBeTypeOf('function');
 
