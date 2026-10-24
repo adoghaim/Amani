@@ -2224,15 +2224,18 @@
         "F026"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ingest-ocr-a11y",
-      "pr": null,
+      "pr": "#165",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2243,7 +2246,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ingest-ocr-a11y; findings F093, F114, F026. Head 4219016. Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet."
+        "OCR and AI-refined rows now keep the lab's printed value text and interval on save, ambiguous printed ranges bind none and open for review, and parse-lab-report-ocr accepts only PNG/JPEG base64 data URLs (F093, F114, F026 code minimum); two earlier verifier rounds returned FAIL and led to three fix waves, then the final blind verifier returned PASS_WITH_NOTES on 2026-10-23, with OpenAI ZDR and the photo-report backfill still owner decisions.",
+        "Gates at 909f307 (run locally): lint, typecheck, full test (3,412), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2259,15 +2263,18 @@
       "depends_on": [
         "RV-IB1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ingest-ocr-a11y",
-      "pr": null,
+      "pr": "#165",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2278,7 +2285,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ingest-ocr-a11y; findings F064. Not started."
+        "The upload drop zone, review rows, remove controls, labels, symptom chips and error alerts are keyboard- and screen-reader-usable, proven by axe and jsdom tests (19 of 20 red on base) and a keyboard Playwright spec in three browsers (F064); blind verifier PASS_WITH_NOTES on 2026-10-23, with no device or screen-reader run.",
+        "Gates at 909f307 (run locally): lint, typecheck, full test (3,412), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
