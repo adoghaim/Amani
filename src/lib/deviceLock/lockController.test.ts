@@ -46,7 +46,7 @@ describe('settings', () => {
     expect(parseLockSettings(null)).toEqual({ enabled: false, relockAfter: '1m', offerAnswered: false });
     expect(DEFAULT_RELOCK_AFTER).toBe('1m');
     const { lock } = setup();
-    expect(lock.getState()).toEqual({ settings: { enabled: false, relockAfter: '1m', offerAnswered: false }, locked: false, unlocking: false, problem: null });
+    expect(lock.getState()).toEqual({ settings: { enabled: false, relockAfter: '1m', offerAnswered: false }, locked: false, unlocking: false, problem: null, covered: false });
   });
 
   it('offers exactly Immediately, 1, 5 and 15 minutes (D16)', () => {
@@ -68,6 +68,8 @@ describe('settings', () => {
     expect(lockMethodName('faceId')).toBe('Face ID');
     expect(lockMethodName('touchId')).toBe('Touch ID');
     expect(lockMethodName('fingerprint')).toBe('your fingerprint');
+    // Review F007: Android cannot say which sensor she enrolled.
+    expect(lockMethodName('biometric')).toBe('biometric unlock');
   });
 });
 
@@ -281,5 +283,120 @@ describe('subscribers', () => {
     stop();
     lock.setRelockAfter('5m');
     expect(heard).toBe(before);
+  });
+});
+
+describe('review F005: a clock set back counts as time up', () => {
+  it.each(['1m', '5m', '15m'] as const)('re-lock %s: back with the clock an hour earlier -> locked', async relockAfter => {
+    const { lock, clock } = setup({ stored: { enabled: true, relockAfter } });
+    await lock.unlock();
+    lock.pause();
+    clock.now -= 3_600_000;
+    lock.resume();
+    expect(lock.getState().locked).toBe(true);
+  });
+
+  it('one millisecond back is still time up', async () => {
+    const { lock, clock } = setup({ stored: { enabled: true, relockAfter: '15m' } });
+    await lock.unlock();
+    lock.pause();
+    clock.now -= 1;
+    lock.resume();
+    expect(lock.getState().locked).toBe(true);
+  });
+});
+
+describe('review F002: the app is covered as soon as she leaves', () => {
+  it('lock on: covered on pause, uncovered on a return within the re-lock time', async () => {
+    const { lock, clock } = setup({ stored: { enabled: true, relockAfter: '1m' } });
+    await lock.unlock();
+    lock.pause();
+    expect(lock.getState()).toMatchObject({ covered: true, locked: false });
+    clock.now += 30_000;
+    lock.resume();
+    expect(lock.getState()).toMatchObject({ covered: false, locked: false });
+  });
+
+  it('lock on: a return after the re-lock time swaps the cover for the lock', async () => {
+    const { lock, clock } = setup({ stored: { enabled: true, relockAfter: '1m' } });
+    await lock.unlock();
+    lock.pause();
+    clock.now += 60_000;
+    lock.resume();
+    expect(lock.getState()).toMatchObject({ covered: false, locked: true });
+  });
+
+  it("'Immediately' locks on pause, and asks for Face ID only once she is back", async () => {
+    const { lock, calls } = setup({ stored: { enabled: true, relockAfter: 'immediately' } });
+    await lock.unlock();
+    calls.length = 0;
+    lock.pause();
+    expect(lock.getState()).toMatchObject({ covered: true, locked: true });
+    // The lock screen opens while she is away and asks to unlock: that waits.
+    await lock.unlock();
+    expect(calls).toEqual([]);
+    lock.resume();
+    await Promise.resolve();
+    expect(calls).toEqual(['authenticate:Unlock Amani']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(lock.getState()).toMatchObject({ covered: false, locked: false });
+  });
+
+  it('a return without an unlock request asks for nothing', async () => {
+    const { lock, calls } = setup({ stored: { enabled: true, relockAfter: 'immediately' } });
+    await lock.unlock();
+    calls.length = 0;
+    lock.pause();
+    lock.resume();
+    await Promise.resolve();
+    expect(calls).toEqual([]);
+    expect(lock.getState()).toMatchObject({ covered: false, locked: true });
+  });
+
+  it('lock off: never covered', () => {
+    const { lock } = setup();
+    lock.pause();
+    expect(lock.getState().covered).toBe(false);
+    lock.resume();
+    expect(lock.getState().covered).toBe(false);
+  });
+});
+
+describe('review F006: turning the lock off from Settings asks first', () => {
+  it('asks for one scan (or the passcode), then turns it off and clears FLAG_SECURE', async () => {
+    const { lock, calls, stored } = setup({ stored: { enabled: true } });
+    expect(await lock.confirmTurnOff()).toBe(true);
+    expect(calls).toEqual(['authenticate:Turn off the lock for Amani', 'FLAG_SECURE:false']);
+    expect(stored().enabled).toBe(false);
+  });
+
+  it.each(['cancelled', 'failed'] as const)('a %s scan leaves it on', async reason => {
+    const { lock, calls, stored } = setup({ stored: { enabled: true }, results: [{ ok: false, reason }] });
+    expect(await lock.confirmTurnOff()).toBe(false);
+    expect(stored().enabled).toBe(true);
+    expect(calls).toEqual(['authenticate:Turn off the lock for Amani']);
+  });
+
+  it('biometrics unavailable but the phone has a passcode: stays on', async () => {
+    const { lock, stored, setBiometrics } = setup({ stored: { enabled: true }, results: [{ ok: false, reason: 'unavailable' }] });
+    setBiometrics({ available: false, kind: null, deviceSecure: true });
+    expect(await lock.confirmTurnOff()).toBe(false);
+    expect(stored().enabled).toBe(true);
+  });
+
+  it('no passcode or biometrics left on the phone: turns off without one, never stuck', async () => {
+    const { lock, stored, setBiometrics } = setup({ stored: { enabled: true }, results: [{ ok: false, reason: 'unavailable' }] });
+    setBiometrics({ available: false, kind: null, deviceSecure: false });
+    expect(await lock.confirmTurnOff()).toBe(true);
+    expect(stored().enabled).toBe(false);
+  });
+
+  it('already off: nothing to ask; the web: does nothing', async () => {
+    const off = setup();
+    expect(await off.lock.confirmTurnOff()).toBe(true);
+    expect(off.calls).toEqual([]);
+    const web = setup({ native: false, stored: { enabled: true } });
+    expect(await web.lock.confirmTurnOff()).toBe(false);
+    expect(web.calls).toEqual([]);
   });
 });

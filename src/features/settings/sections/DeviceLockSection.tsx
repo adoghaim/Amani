@@ -50,8 +50,15 @@ export function DeviceLockSection() {
     setProblem(null);
     try {
       if (enabled) {
-        await deviceLock.turnOff();
-        setStatus('The lock is off.');
+        // Review F006: turning it off asks for Face ID, a fingerprint or the
+        // passcode first (never a lock-out: a phone with none of them left
+        // turns it off without asking).
+        if (await deviceLock.confirmTurnOff()) {
+          setStatus('The lock is off.');
+        } else {
+          setStatus('');
+          setProblem("The lock wasn't turned off.");
+        }
       } else if (await deviceLock.turnOn()) {
         setStatus('The lock is on.');
       } else {

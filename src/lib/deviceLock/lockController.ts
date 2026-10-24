@@ -22,7 +22,14 @@
  *   - Android: FLAG_SECURE is set while the lock is on, and cleared when it is
  *     turned off (R15).
  *   - A fresh sign-in is not locked: the lock applies to a session she already
- *     had when the app started or when she came back to it.
+ *     had when the app started or when she came back to it. The cold-start
+ *     lock is dropped only on a definite sign-out (DeviceLockGate), never
+ *     because a session could not be read yet (review F000).
+ *   - Leaving the app with the lock on covers it at once (`covered`), so the
+ *     last page is never what shows on return; 'Immediately' locks outright
+ *     at that moment (F002). A clock set back counts as time up (F005).
+ *   - Turning it off from Settings asks for Face ID, a fingerprint or the
+ *     passcode first, unless the phone has none of them left (F006).
  *
  * The settings are per phone, in localStorage, which the OS deletes with the
  * app. They are not health data and not a secret.
@@ -69,6 +76,11 @@ export interface LockState {
   unlocking: boolean;
   /** Why the last unlock did not open the app, for the calm notice. */
   problem: UnlockProblem | null;
+  /**
+   * She left the app with the lock on: the app is hidden behind an opaque
+   * cover until she is back and the re-lock decision is made (F002).
+   */
+  covered: boolean;
 }
 
 export interface DeviceLockPorts {
@@ -118,11 +130,14 @@ export function relockDelayMs(relockAfter: RelockAfter): number {
 export function lockMethodName(kind: BiometricKind | null): string {
   if (kind === 'faceId') return 'Face ID';
   if (kind === 'touchId') return 'Touch ID';
+  // F007: Android cannot say which of its sensors she enrolled.
+  if (kind === 'biometric') return 'biometric unlock';
   return 'your fingerprint';
 }
 
 export const UNLOCK_REASON = 'Unlock Amani';
 export const TURN_ON_REASON = 'Turn on the lock for Amani';
+export const TURN_OFF_REASON = 'Turn off the lock for Amani';
 
 export interface DeviceLockController {
   getState(): LockState;
@@ -137,6 +152,12 @@ export interface DeviceLockController {
   /** Turns the lock on after one successful scan. True when it is on. */
   turnOn(): Promise<boolean>;
   turnOff(): Promise<void>;
+  /**
+   * Settings: turns the lock off after one successful Face ID, fingerprint or
+   * passcode check (F006). If the phone has none of those left, it turns off
+   * without one, so she is never stuck with it. True when it is off.
+   */
+  confirmTurnOff(): Promise<boolean>;
   setRelockAfter(value: RelockAfter): void;
   /** "Not now" on the onboarding offer. */
   declineOffer(): void;
@@ -159,8 +180,10 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
 
   const initial = readSettings();
   // D16: a cold start always locks.
-  let state: LockState = { settings: initial, locked: ports.isNative() && initial.enabled, unlocking: false, problem: null };
+  let state: LockState = { settings: initial, locked: ports.isNative() && initial.enabled, unlocking: false, problem: null, covered: false };
   let pausedAt: number | null = null;
+  // An unlock asked for while the app is in the background waits for her return.
+  let unlockOnResume = false;
   // The system sheet is up. Android's passcode screen is its own activity, so
   // it pauses and resumes the app: those events must not re-lock it.
   let authInFlight = false;
@@ -200,8 +223,36 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
   async function turnOff() {
     if (!ports.isNative()) return;
     saveSettings({ ...state.settings, enabled: false });
-    set({ locked: false, problem: null });
+    set({ locked: false, problem: null, covered: false });
     await ports.setScreenshotsBlocked(false);
+  }
+
+  /** Nothing left on the phone can prove it is her (no biometrics, no passcode). */
+  async function nothingCanProveIt(): Promise<boolean> {
+    const biometrics = await ports.checkBiometrics();
+    return !biometrics.deviceSecure && !biometrics.available;
+  }
+
+  async function unlock() {
+    if (!state.locked || state.unlocking) return;
+    if (pausedAt !== null) {
+      // The lock screen opened while she is away ('Immediately'): ask on return.
+      unlockOnResume = true;
+      return;
+    }
+    set({ unlocking: true, problem: null });
+    const result = await authenticate(UNLOCK_REASON);
+    if (result.ok) {
+      set({ locked: false, unlocking: false, problem: null });
+      return;
+    }
+    if (result.reason === 'unavailable' && await nothingCanProveIt()) {
+      // Never a lock-out.
+      set({ unlocking: false });
+      await turnOff();
+      return;
+    }
+    set({ unlocking: false, problem: result.reason });
   }
 
   return {
@@ -221,34 +272,29 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
       if (!ports.isNative()) return;
       if (authInFlight) return;
       pausedAt = ports.now();
+      if (!state.settings.enabled) return;
+      // F002: cover the app now, not on return; 'Immediately' locks now.
+      if (relockDelayMs(state.settings.relockAfter) === 0 && !state.locked) set({ covered: true, locked: true, problem: null });
+      else set({ covered: true });
     },
     resume() {
       if (!ports.isNative()) return;
       if (authInFlight) return;
       const left = pausedAt;
       pausedAt = null;
-      if (!state.settings.enabled || left === null) return;
-      if (ports.now() - left >= relockDelayMs(state.settings.relockAfter)) set({ locked: true, problem: null });
-    },
-    async unlock() {
-      if (!state.locked || state.unlocking) return;
-      set({ unlocking: true, problem: null });
-      const result = await authenticate(UNLOCK_REASON);
-      if (result.ok) {
-        set({ locked: false, unlocking: false, problem: null });
+      const ask = unlockOnResume;
+      unlockOnResume = false;
+      if (!state.settings.enabled || left === null) {
+        if (state.covered) set({ covered: false });
         return;
       }
-      if (result.reason === 'unavailable') {
-        const biometrics = await ports.checkBiometrics();
-        if (!biometrics.deviceSecure && !biometrics.available) {
-          // Nothing left on the phone can prove it is her: never a lock-out.
-          set({ unlocking: false });
-          await turnOff();
-          return;
-        }
-      }
-      set({ unlocking: false, problem: result.reason });
+      const away = ports.now() - left;
+      // F005: a clock set back (negative time away) counts as time up.
+      const expired = away < 0 || away >= relockDelayMs(state.settings.relockAfter);
+      set(expired ? { covered: false, locked: true, problem: null } : { covered: false });
+      if (ask && state.locked) void unlock();
     },
+    unlock,
     async turnOn() {
       const { canTurnOn } = await availability();
       if (!canTurnOn) return false;
@@ -259,6 +305,14 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
       return true;
     },
     turnOff,
+    async confirmTurnOff() {
+      if (!ports.isNative()) return false;
+      if (!state.settings.enabled) return true;
+      const result = await authenticate(TURN_OFF_REASON);
+      if (!result.ok && !(result.reason === 'unavailable' && await nothingCanProveIt())) return false;
+      await turnOff();
+      return true;
+    },
     setRelockAfter(value) {
       if (!RELOCK_VALUES.has(value)) return;
       saveSettings({ ...state.settings, relockAfter: value });
