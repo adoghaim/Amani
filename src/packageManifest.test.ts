@@ -186,8 +186,9 @@ function candidateVersions(ranges: string[]): V[] {
 
 describe('package manifest: declared dependencies (F091, F106)', () => {
   it('does not declare packages that no Node or Vite code uses', () => {
-    // zod: only the Deno edge functions use it, through their own pinned npm:zod@x.y.z imports.
-    expect(declared).not.toHaveProperty('zod');
+    // zod: Deno edge functions use it through pinned npm:zod@x.y.z imports, and
+    // supabase/functions/stripe-webhook/index.test.ts (a Vitest test) needs it
+    // to evaluate _shared/schemas/stripe.ts against the same zod version.
     // react-router-dom 7 ships its own types; the v5 typings target a different API.
     expect(declared).not.toHaveProperty('@types/react-router-dom');
   });
