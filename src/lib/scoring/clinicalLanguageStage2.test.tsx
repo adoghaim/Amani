@@ -237,7 +237,7 @@ describe('the comparison-band pill: placement and review state, never Normal, Bo
     expect(systemSummaryLabel(3, 1)).toMatchObject({ text: '1 outside Amani band', cue: 'attention' });
     expect(systemSummaryLabel(9, 4)).toMatchObject({ text: '4 outside Amani bands', cue: 'attention' });
     const html = renderToStaticMarkup(<SystemSummaryCards activeCategory={null} onCategoryClick={() => {}}
-      systems={buildInsightSummary([{ key: 'tsh', value: 9, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5 }], null).systemSummaries} />);
+      systems={buildInsightSummary([{ key: 'tsh', value: 9, unit: 'mIU/L', labRefMin: 0.45, labRefMax: 4.5 }], null).systemSummaries} />);
     expect(html).toContain('1 outside Amani band');
     expect(html).not.toMatch(/Needs Attention|Mild Attention|flag-(?:ok|watch|low)/);
   });
@@ -257,11 +257,12 @@ describe('headline, focus areas and derived metrics: placement only where the ba
   });
 
   it('every derived metric reads as a comparison against an unreviewed band, with no interpretation', () => {
+    // Each in its catalog unit: no metric is calculated from another unit (F011).
     const metrics = computeDerivedMetrics([
       { name: 'fasting_glucose', value: 95 }, { name: 'fasting_insulin', value: 12 }, { name: 'triglycerides', value: 150 },
       { name: 'hdl_cholesterol', value: 40 }, { name: 'total_cholesterol', value: 220 }, { name: 'total_testosterone', value: 80 },
       { name: 'shbg', value: 30 }, { name: 'free_t3', value: 2.5 }, { name: 'free_t4', value: 1 },
-    ] as Biomarker[]);
+    ].map(b => ({ ...b, unit: getEntry(b.name as BiomarkerName)!.defaultUnit })) as Biomarker[]);
     expect(metrics).toHaveLength(5);
     for (const m of metrics) {
       expect(Object.keys(m)).not.toContain('interpretation');
@@ -300,7 +301,9 @@ describe('R2 — the derived-metric and pattern-rule advice, classified then rep
       free_t4: 1, free_t3: 2.5, ldl_cholesterol: 130, apob: 100, hs_crp: 2, lpa: 80, alt: 30, ast: 30, ggt: 30,
       vitamin_d_25_oh: 20, hemoglobin_a1c: 6,
     };
-    const biomarkers = Object.entries(everything).map(([name, value]) => ({ name, value, unit: 'u' } as Biomarker));
+    // Each in its catalog unit: a pattern built from another unit is gated out (F011).
+    const biomarkers = Object.entries(everything)
+      .map(([name, value]) => ({ name, value, unit: getEntry(name as BiomarkerName)!.defaultUnit } as Biomarker));
     const ctx = contextFromReport('follicular');
     const flags = authorizeInsightMatches(gateInsightMatches(evaluateInsightRules(biomarkers, 'follicular'), biomarkers, ctx), biomarkers, ctx);
     expect(flags.length).toBeGreaterThanOrEqual(8);

@@ -117,7 +117,7 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     expect(body).toMatchObject({ access: 'full', plan: 'free', stored_depth: 'deep', version: null,
       complimentary: { used: 1, total: 3, remaining: 2 } });
     await expect(page.getByText('Premium Analysis 1 of 3 included')).toBeVisible();
-    await expect(page.getByText('TSH is measured for the first time at 6 uIU/mL.')).toBeVisible();
+    await expect(page.getByText('TSH is measured for the first time at 6 mIU/L.')).toBeVisible();
     await expectNoModelProse(page);
     // Review F093, F114: the OCR rows' printed intervals reached the report. They
     // were saved as null, so each card said "Not provided on your report".
@@ -160,7 +160,7 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     const body = await readAfter(page, async () => { reportIds.push(await uploadLab(page, UPLOADS[1])); });
     expect(body).toMatchObject({ access: 'full', complimentary: { used: 2, remaining: 1 } });
     await expect(page.getByText('Premium Analysis 2 of 3 included')).toBeVisible();
-    await expect(page.getByText('TSH has risen from 6 to 9 uIU/mL.', { exact: false })).toBeVisible();
+    await expect(page.getByText('TSH has risen from 6 to 9 mIU/L.', { exact: false })).toBeVisible();
     await expectNoModelProse(page);
     if (backend) {
       // The server's trend evidence was computed from the prior report it found.
@@ -256,7 +256,7 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     await expect(page.getByText('A fuller analysis is available for this report')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Generate full Amani analysis' })).toHaveCount(0);
     await expectRegenerate(page, false);
-    await expect(page.getByText("TSH changed from 9 to 6 uIU/mL. Amani's comparison band for this result has not yet completed clinical review.", { exact: true })).toBeVisible();
+    await expect(page.getByText("TSH changed from 9 to 6 mIU/L. Amani's comparison band for this result has not yet completed clinical review.", { exact: true })).toBeVisible();
     expect(version.full.trend_evidence).toEqual(expect.arrayContaining([expect.objectContaining({
       biomarker_slug: 'tsh', previous_value: 9, current_value: 6, previous_date: UPLOADS[3].reportDate, direction: 'decreased' })]));
     // The new version's model prose is stored but, like every body, never rendered.

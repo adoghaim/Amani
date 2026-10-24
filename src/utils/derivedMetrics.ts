@@ -1,4 +1,6 @@
-import type { Biomarker, LabResult, DerivedMetricName, InsightSeverity } from '../types';
+import type { Biomarker, BiomarkerName, LabResult, DerivedMetricName, InsightSeverity } from '../types';
+import { getEntry } from '../lib/biomarkers/dictionary';
+import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
 
 type AnyBiomarker = Biomarker | LabResult;
 
@@ -9,6 +11,16 @@ function buildMap(biomarkers: AnyBiomarker[]): Record<string, number> {
     map[name] = b.value;
   }
   return map;
+}
+
+/*
+  Each formula and band below is written for its inputs' catalog units, and the
+  catalog approves no unit conversions: a value in another unit is not an input,
+  so no metric is calculated from it (review F011).
+*/
+function inCatalogUnit(b: AnyBiomarker): boolean {
+  const entry = getEntry(('biomarker_name' in b ? b.biomarker_name : b.name) as BiomarkerName);
+  return entry !== undefined && sameUnit(b.unit, entry.defaultUnit);
 }
 
 /*
@@ -36,7 +48,7 @@ export interface ComputedDerivedMetric {
 }
 
 export function computeDerivedMetrics(biomarkers: AnyBiomarker[]): ComputedDerivedMetric[] {
-  const m = buildMap(biomarkers);
+  const m = buildMap(biomarkers.filter(inCatalogUnit));
   const results: ComputedDerivedMetric[] = [];
 
   const glucose = m['fasting_glucose'];

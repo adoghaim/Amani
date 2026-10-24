@@ -58,6 +58,7 @@ vi.mock('../lib/supabase', () => {
 vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => ({
   entitled: true, plan: 'premium', complimentary: { used: 0, total: 0, remaining: 0 }, refetch: vi.fn(),
 }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ userProfile: null }) }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 import { ReportView } from './ReportView';
 
@@ -80,10 +81,10 @@ function seed(currentTsh: number, priorTsh: number) {
     ],
     biomarkers: [
       ...rows(CURRENT, [
-        ['tsh', currentTsh, 'uIU/mL', 0.45, 4.5], ['ferritin', 20, 'ng/mL', 15, 150], ['hemoglobin_a1c', 6, '%', 4, 5.6],
+        ['tsh', currentTsh, 'mIU/L', 0.45, 4.5], ['ferritin', 20, 'ng/mL', 15, 150], ['hemoglobin_a1c', 6, '%', 4, 5.6],
         ['fasting_glucose', 95, 'mg/dL', 70, 99], ['fasting_insulin', 12, 'uIU/mL', 2, 20],
       ]),
-      ...rows(PRIOR, [['tsh', priorTsh, 'uIU/mL', 0.45, 4.5], ['ferritin', 25, 'ng/mL', 15, 150]]),
+      ...rows(PRIOR, [['tsh', priorTsh, 'mIU/L', 0.45, 4.5], ['ferritin', 25, 'ng/mL', 15, 150]]),
     ],
     report_analytes: [{
       id: 'analyte-1', lab_report_id: CURRENT, raw_name: 'Sodium', display_name: 'Sodium', value_numeric: 145.5,
@@ -235,7 +236,7 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     await renderAndOpenAll();
     const primary = app.querySelector('[data-testid="primary-finding"]');
     expect(primary?.textContent).toContain('Primary finding');
-    expect(primary?.textContent).toContain("TSH is above your lab's reference range at 9 uIU/mL.");
+    expect(primary?.textContent).toContain("TSH is above your lab's reference range at 9 mIU/L.");
     expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
       .toContain("TSH is above your lab's reference range");
     // No movement may be claimed without a prior report (a first-recorded placeholder is not a prior value).
@@ -376,7 +377,7 @@ const prepQuestions = () => Array.from(app.querySelectorAll('[data-testid="prep-
   .map(el => el.textContent ?? '');
 // Measured change 6 -> 400, HbA1c above its lab interval, then the context question.
 const PREP_FOR_TSH_400 = [
-  'My TSH changed from 6 to 400 uIU/mL. What could explain this change, and is it clinically meaningful?',
+  'My TSH changed from 6 to 400 mIU/L. What could explain this change, and is it clinically meaningful?',
   // PK-FIX-02: the marker name reads in sentence case mid-sentence ("my ferritin", not "my Ferritin").
   'My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
   "My HbA1c is 6 %, above my lab's reference interval of 4–5.6 %. What does this mean in the context of my overall labs?",
@@ -415,9 +416,9 @@ describe('owner R2 — discussion preparation on the page: admissible premises, 
     await renderAndOpenAll();
     const [tshChange, ferritinChange, hba1cInterval] = prepQuestions();
     // TSH 6 -> 9: the primary movement and the trajectory state the same two values.
-    expect(tshChange).toContain('from 6 to 9 uIU/mL');
-    expect(app.querySelector('[data-testid="primary-movement-observation"]')?.textContent).toContain('from 6 to 9 uIU/mL');
-    expect(app.textContent).toContain('TSH has risen from 6 to 9 uIU/mL.');
+    expect(tshChange).toContain('from 6 to 9 mIU/L');
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')?.textContent).toContain('from 6 to 9 mIU/L');
+    expect(app.textContent).toContain('TSH has risen from 6 to 9 mIU/L.');
     expect(ferritinChange).toContain('from 25 to 20 ng/mL');
     expect(app.textContent).toContain('Ferritin has dropped from 25 to 20 ng/mL.');
     // HbA1c: the question's placement and interval are the HbA1c card's own.
@@ -841,5 +842,37 @@ describe('RS2: disclaimer with every clinical state; no outside-band counts', ()
     const chip = Array.from(app.querySelectorAll('span')).find(el => el.textContent === `Imported from ${name}`);
     expect(chip).toBeTruthy();
     expect(chip!.className).not.toMatch(/flag-(?:ok|watch|low)|theme-info/);
+  }, 30_000);
+});
+
+// Review F011: an Amani band is in the catalog unit and no conversion is
+// approved, so a value saved in another unit is placed only against her lab's
+// own interval, on every surface of the page.
+describe('F011 — a value in another unit is never placed against an Amani band', () => {
+  it('LDL 4.9 mmol/L, above her lab interval: lab range only, no band placement anywhere', async () => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
+    fixture.tables.biomarkers = rows(CURRENT, [['ldl_cholesterol', 4.9, 'mmol/L', 0, 3]]);
+    fixture.tables.report_analytes = [];
+    await renderAndOpenAll();
+    const card = app.querySelector('article[aria-label="LDL result"]');
+    expect(card?.textContent).toContain('No Amani band');
+    expect(card?.textContent).toContain("Your lab's range:0–3 mmol/L");
+    expect(card?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent).toBe("Above your lab's range");
+    expect(card?.querySelector('[data-testid="comparison-region"]')).toBeNull();
+    // Pill, system card, headline and primary-finding wording of a band placement.
+    expect(app.textContent).not.toMatch(/outside Amani bands?|within Amani bands?|outside Amani's current comparison band|the Amani band at|All scored values are within/i);
+    expect(app.querySelectorAll('[data-language-category="comparison_band"][data-language-cue="attention"]').length).toBe(0);
+  }, 30_000);
+
+  it('glucose 5.2 mmol/L and insulin 36 pmol/L: no derived metric, so no HOMA-IR against its band', async () => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
+    fixture.tables.biomarkers = rows(CURRENT, [['fasting_glucose', 5.2, 'mmol/L', 3.9, 5.5], ['fasting_insulin', 36, 'pmol/L', 13, 139]]);
+    fixture.tables.report_analytes = [];
+    await renderAndOpenAll();
+    expect(app.querySelectorAll('article[aria-label$=" result"]').length).toBe(2);
+    expect(app.textContent).not.toMatch(/Derived metrics|HOMA-IR/);
+    expect(app.textContent).not.toMatch(/outside Amani bands?|within Amani bands?|outside Amani's current comparison band|the Amani band at/i);
   }, 30_000);
 });

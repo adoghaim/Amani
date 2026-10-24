@@ -130,10 +130,10 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
       .flatMap(s => [`[data-testid="prep-questions"]${s}`, `[data-testid="prep-questions"] ${s}`]).join(', '))).toHaveCount(0);
     expect(await card.evaluate(el => el.outerHTML)).not.toMatch(/flag-(?:ok|watch|low)/);
     // Standing rule 5: the same facts, stated the same way elsewhere on the page.
-    await expect(items.nth(0)).toHaveText('My TSH changed from 6 to 9 uIU/mL. What could explain this change, and is it clinically meaningful?');
+    await expect(items.nth(0)).toHaveText('My TSH changed from 6 to 9 mIU/L. What could explain this change, and is it clinically meaningful?');
     // PK-FIX-02: a title-case display name reads in sentence case mid-sentence; acronyms keep their capitals.
     await expect(items.nth(1)).toHaveText('My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?');
-    await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 uIU/mL');
+    await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 mIU/L');
     await expect(items.nth(2)).toContainText("above my lab's reference interval of 4–5.6 %");
     const hba1c = page.getByRole('article', { name: 'HbA1c result', exact: true });
     await expect(hba1c.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Above your lab's range");

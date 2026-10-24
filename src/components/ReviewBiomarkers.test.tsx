@@ -91,3 +91,31 @@ describe('ReviewBiomarkers confirming a flagged value', () => {
     expect(markCorrect()).toBeUndefined();
   });
 });
+
+/*
+  Review F021, fix wave 4. A result printed as a limit ('<8') is stored with a
+  placeholder number (4). The Value input offered that placeholder as her
+  value; it now stays empty, with the printed result as its hint.
+*/
+describe('ReviewBiomarkers Value input for a result printed as a limit', () => {
+  function valueInput(items: ReportItem[]) {
+    const [card] = render(items);
+    act(() => (card as HTMLElement).click());
+    return host.querySelector<HTMLInputElement>('input[type="number"]')!;
+  }
+
+  it('never shows the placeholder 4 for a printed "<8": the input is empty and its hint states the printed result', () => {
+    const input = valueInput([row('Vitamin D', { value_numeric: 4, value_text: '<8', unit: 'ng/mL' })]);
+    expect(input.value).toBe('');
+    expect(input.value).not.toBe('4');
+    const hintId = input.getAttribute('aria-describedby');
+    expect(hintId).toBeTruthy();
+    expect(host.querySelector(`[id="${hintId}"]`)?.textContent).toContain('<8 ng/mL');
+  });
+
+  it('control: a measured value stays in the input, with no limit hint', () => {
+    const input = valueInput([row('Vitamin D', { value_numeric: 24, value_text: '24', unit: 'ng/mL' })]);
+    expect(input.value).toBe('24');
+    expect(input.getAttribute('aria-describedby')).toBeNull();
+  });
+});

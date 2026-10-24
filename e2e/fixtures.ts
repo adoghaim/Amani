@@ -166,7 +166,7 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
           if (match) { await route.fulfill({ json: byReport[url.pathname](match) }); return; }
         }
         // ReportView's historical read: one projection, an in-list of fixture ids only.
-        const historyColumns = ['name', 'value', 'unit', 'reference_min', 'reference_max', 'lab_report_id'] as const;
+        const historyColumns = ['name', 'value', 'unit', 'reference_min', 'reference_max', 'lab_report_id', 'raw_value_text'] as const;
         if (url.pathname === '/rest/v1/biomarkers' && select === historyColumns.join(',')) {
           const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];
           const matches = ids.map(id => syntheticReports.find(r => r.report.id === id));

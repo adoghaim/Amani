@@ -5,6 +5,7 @@ import { LabReport, Biomarker } from '../types';
 import { formatDate } from '../utils/formatters';
 import { COMPARE_SHIFTS_NOTE } from '../lib/scoring/insightCopy';
 import { firstPartyEvents } from '../lib/firstPartyEventsClient';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 
 interface CompareViewProps {
   reports: LabReport[];
@@ -60,6 +61,9 @@ export function CompareView({ reports, biomarkersByReport }: CompareViewProps) {
       const followupBiomarker = followupBiomarkers.find(
         (fb) => fb.name.toLowerCase().trim() === baseBiomarker.name.toLowerCase().trim()
       );
+
+      // F021: a censored result ('<8') holds a placeholder, not a measurement, so it is not compared.
+      if (isCensoredValue(baseBiomarker.raw_value_text) || isCensoredValue(followupBiomarker?.raw_value_text)) return;
 
       if (followupBiomarker && baseBiomarker.unit === followupBiomarker.unit) {
         const delta = followupBiomarker.value - baseBiomarker.value;

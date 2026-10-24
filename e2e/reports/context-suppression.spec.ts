@@ -56,9 +56,9 @@ test.describe('cycle phase missing from the report', () => {
   test('1. lab range and Amani context band render as separate concepts', async ({ page }) => {
     const tsh = card(page, 'TSH');
     await expect(tsh.getByRole('term').filter({ hasText: "Your lab's range:" })).toBeVisible();
-    await expect(tsh.getByRole('definition').filter({ hasText: '0.45–4.5 uIU/mL' })).toBeVisible();
+    await expect(tsh.getByRole('definition').filter({ hasText: '0.45–4.5 mIU/L' })).toBeVisible();
     await expect(tsh.getByRole('term').filter({ hasText: /^Amani context band:$/ })).toBeVisible();
-    await expect(tsh.getByRole('definition').filter({ hasText: '1–2.5 uIU/mL' })).toBeVisible();
+    await expect(tsh.getByRole('definition').filter({ hasText: '1–2.5 mIU/L' })).toBeVisible();
     // The catalog lab_reference row (0.4–4) is never shown as her lab's range.
     await expect(tsh.getByText('0.4–4', { exact: false })).toHaveCount(0);
   });
@@ -271,8 +271,8 @@ test.describe('health story for an out-of-band marker that moved', () => {
 // V2-03b: both reports are out of band, so headline, primary observation,
 // trajectory and health-story theme all render. No server safety fixture here.
 for (const [label, previous, current, sentence] of [
-  ['away', 6, 9, 'TSH increased from 6 to 9 uIU/mL.'],
-  ['minor', 6, 6.1, 'TSH has not changed significantly: 6 to 6.1 uIU/mL.'],
+  ['away', 6, 9, 'TSH increased from 6 to 9 mIU/L.'],
+  ['minor', 6, 6.1, 'TSH has not changed significantly: 6 to 6.1 mIU/L.'],
 ] as const) {
   const prior = { ...movedPriorReport, biomarkers: movedPriorReport.biomarkers.map(b => ({ ...b, value: previous, raw_value_text: String(previous) })) };
   const latest = { ...movedCurrentReport, biomarkers: movedCurrentReport.biomarkers.map(b => ({ ...b, value: current, raw_value_text: String(current) })) };
@@ -297,7 +297,7 @@ for (const [label, previous, current, sentence] of [
         .filter({ has: page.getByRole('list') }).last();
       await expect(trajectory).toBeVisible();
       await expect(trajectory).toContainText(label === 'away'
-        ? 'TSH has risen from 6 to 9 uIU/mL.' : 'TSH has not changed significantly.');
+        ? 'TSH has risen from 6 to 9 mIU/L.' : 'TSH has not changed significantly.');
       for (const surface of [primary, trajectory]) {
         await expect(surface).not.toContainText(/worsen|deteriorat|improv|better|worse|healthy|wrong direction|worth discussing|talk to your doctor|seek care|optimal|reassur/i);
         await expect(surface.locator('[class*="flag-watch"], [class*="flag-ok"], [class*="flag-low"]')).toHaveCount(0);

@@ -154,3 +154,27 @@ it('a value whose history rows sit past row 1,000 still reaches the trend baseli
     { date: '2026-03-01', value: 0 },
   ]);
 });
+
+// Review F013: values in two units are not comparable, so a prior LDL in mg/dL
+// is no baseline (and no trend) for an LDL in mmol/L. Synthetic values.
+it.each([
+  ['mmol/L', 4.9, []],
+  ['mg/dL', 160, [{ date: '2026-01-01', value: 190 }, { date: '2026-03-01', value: 185 }]],
+] as const)('an LDL in %s gets a baseline only from priors in the same unit', async (unit, value, entries) => {
+  const ldl = (reportId: string, id: string, v: number, u: string) =>
+    ({ ...seedBiomarkers(reportId, 1, id, () => 'ldl_cholesterol')[0]!, value: v, unit: u });
+  fixture.db = createFakeDb({
+    lab_reports: [report('p1', '2026-01-01'), report('p2', '2026-03-01'), report('current', '2026-09-01')],
+    biomarkers: [ldl('p1', 'a', 190, 'mg/dL'), ldl('p2', 'b', 185, 'mg/dL'), ldl('current', 'c', value, unit)],
+    report_analytes: [],
+    interpretations: [],
+  });
+  await act(async () => root.render(
+    <MemoryRouter initialEntries={['/app/reports/current']}>
+      <Routes><Route path="/app/reports/:id" element={<ReportView />} /></Routes>
+    </MemoryRouter>,
+  ));
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  expect(fixture.baselineCalls[fixture.baselineCalls.length - 1]?.entries ?? []).toEqual(entries);
+});

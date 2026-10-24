@@ -97,7 +97,7 @@ describe('Focus areas — the persistent half of the breach', () => {
   it('an UNKNOWN band states placement with its review state, and never the lab\'s "reference range"', () => {
     // No supplied lab interval: this isolates comparison-band language from
     // the independently tested lab-flag floor.
-    const tsh = [{ key: 'tsh' as const, value: 6, unit: 'uIU/mL', labRefMin: null, labRefMax: null }];
+    const tsh = [{ key: 'tsh' as const, value: 6, unit: 'mIU/L', labRefMin: null, labRefMax: null }];
     const summary = buildInsightSummary(tsh, null, null);
     const [area] = buildFocusAreas(summary, [], tsh.map(b => scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, null)));
     expect(area!.whyItMatters).toBe("TSH is outside Amani's current comparison band. This band has not yet completed clinical review.");

@@ -2037,16 +2037,19 @@
         "F013"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-clinical-scoring",
-      "pr": null,
+      "pr": "#174",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2057,10 +2060,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track clinical-scoring; findings F011, F013. Head db14fb2. Built (F013 partial: its server half is a generate-interpretation handoff). Reviews were cut off: needs verification."
+        "Amani bands are withheld when a result's unit is not the catalog unit (LDL 4.9 mmol/L, glucose 5.2 mmol/L, creatinine 80 umol/L get no band) and cross-unit pairs make no trend, with 8 owner-approved 1:1 equivalences (Na/K/Cl/CO2, TSH, ALT/AST/ALP) scored as before; F011 and the client half of F013, blind verifier PASS_WITH_NOTES on cedc073 and on the units commit dd3b179 on 2026-10-23 after two FAILs.",
+        "Gates at b542a1b (run locally): lint, typecheck, full test (3,539), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-CS2",
@@ -2074,16 +2078,19 @@
       "depends_on": [
         "RV-CS1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-clinical-scoring",
-      "pr": null,
+      "pr": "#174",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2094,10 +2101,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track clinical-scoring; findings F012, F097. Not started."
+        "A declared Pregnant, Postpartum or Breastfeeding status now reaches every client assessment call and withholds the 56 requires_context analytes, and scoring fails closed on NaN, infinite, negative, inverted and equal-bound inputs (F012, F097 non-decision parts, ana_screen fixed); blind verifier PASS_WITH_NOTES on 13eae31 on 2026-10-23, server half handed off.",
+        "Gates at b542a1b (run locally): lint, typecheck, full test (3,539), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-CS3",
@@ -2110,16 +2118,19 @@
       "depends_on": [
         "RV-CS2"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-clinical-scoring",
-      "pr": null,
+      "pr": "#175",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2130,10 +2141,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track clinical-scoring; findings F021. Not started."
+        "A censored result ('<8', '> OR = 60') is no longer compared, trended, percent-changed, classified, displayed or sent to lab-insights as its stored placeholder number on the client and in shared server logic; F021 is partial pending PX1 (inclusive comparators in the local PDF parser) and the post-#152 generate-interpretation packet; blind verifier verdict PASS_WITH_NOTES at 3c25fef on 2026-10-24 after seven rounds and two back-outs.",
+        "Gates at ed08e99 (run locally): lint, typecheck, full test (3,657), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-IA1",

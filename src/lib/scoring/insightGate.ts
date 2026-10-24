@@ -2,6 +2,7 @@ import type { BiomarkerName } from '../../types';
 import { INSIGHT_RULES } from '../../utils/derivedMetrics';
 import { getDisplayName } from '../biomarkers/dictionary';
 import { assessAmaniContext, type PhysiologicalContext } from './amaniContext';
+import { isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 import {
   authorizedLanguage, combineLanguage, patternRuleObservation,
   type AuthorizedLanguage, type ComparisonBandLanguage, type MeasuredValue, type Placement,
@@ -59,32 +60,40 @@ export function ruleDependency(
   return analyteFree ? UNESTABLISHED : { kind: 'analytes', analytes: declared };
 }
 
-/** Declared inputs present on the report that Amani withholds, or cannot assess, in this context. */
+/**
+ * Declared inputs present on the report that Amani withholds, or cannot assess, in this context.
+ * An input in a unit other than the catalog's cannot be assessed (F011).
+ */
 export function withheldInputs(
   match: GatedInsightMatch,
   values: ReadonlyMap<string, number>,
   context: PhysiologicalContext,
+  units?: ReadonlyMap<string, string | null | undefined>,
 ): string[] {
   const dependency = ruleDependency(match);
   if (dependency.kind !== 'analytes') return [];
   return dependency.analytes.filter(key => {
     const value = values.get(key);
     if (value === undefined) return false;
-    const kind = assessAmaniContext(key as BiomarkerName, value, context).kind;
+    const kind = assessAmaniContext(key as BiomarkerName, value, context, units?.get(key)).kind;
     return kind === 'withheld' || kind === 'unavailable';
   });
 }
 
 export function gateInsightMatches<T extends GatedInsightMatch>(
   matches: readonly T[],
-  biomarkers: readonly { name: string; value: number }[],
+  biomarkers: readonly { name: string; value: number; unit?: string | null; raw_value_text?: string | null }[],
   context: PhysiologicalContext,
 ): T[] {
   const values = new Map(biomarkers.map(b => [b.name, b.value] as const));
+  const units = new Map(biomarkers.map(b => [b.name, b.unit] as const));
+  // F021: a rule reads values, and a censored input's value ('<8' stored as 4) is a placeholder.
+  const censored = new Set(biomarkers.filter(b => isCensoredValue(b.raw_value_text)).map(b => b.name));
   return matches.filter(m => {
     const dependency = ruleDependency(m);
     if (dependency.kind === 'unestablished') return false;
-    return withheldInputs(m, values, context).length === 0;
+    if (dependency.kind === 'analytes' && dependency.analytes.some(key => censored.has(key))) return false;
+    return withheldInputs(m, values, context, units).length === 0;
   });
 }
 
@@ -97,13 +106,14 @@ export function insightLanguage(
   match: GatedInsightMatch,
   values: ReadonlyMap<string, number>,
   context: PhysiologicalContext,
+  units?: ReadonlyMap<string, string | null | undefined>,
 ): { language: AuthorizedLanguage; placement: Placement; subject: string; keys: string[] } {
   const dependency = ruleDependency(match);
   const keys = dependency.kind === 'analytes' ? dependency.analytes.filter(k => values.has(k)) : [];
   const languages: AuthorizedLanguage[] = [];
   const placements: Placement[] = [];
   for (const key of keys) {
-    const assessment = assessAmaniContext(key as BiomarkerName, values.get(key)!, context);
+    const assessment = assessAmaniContext(key as BiomarkerName, values.get(key)!, context, units?.get(key));
     languages.push(authorizedLanguage(assessment.kind === 'scored' ? assessment.band : null));
     placements.push(assessment.kind !== 'scored' ? null
       : assessment.status === 'optimal' || assessment.status === 'normal' ? 'within' : 'outside');
@@ -133,9 +143,9 @@ export function authorizeInsightMatches<T extends GatedInsightMatch>(
   context: PhysiologicalContext,
 ): (T & AuthorizedInsightMatch)[] {
   const values = new Map(biomarkers.map(b => [b.name, b.value] as const));
-  const units = new Map(biomarkers.map(b => [b.name, b.unit ?? ''] as const));
+  const units = new Map(biomarkers.map(b => [b.name, b.unit] as const));
   return matches.map(m => {
-    const { language, subject, keys } = insightLanguage(m, values, context);
+    const { language, subject, keys } = insightLanguage(m, values, context, units);
     const measured: MeasuredValue[] = keys.map(k => ({
       name: getDisplayName(k as BiomarkerName), value: values.get(k)!, unit: units.get(k) ?? '',
     }));

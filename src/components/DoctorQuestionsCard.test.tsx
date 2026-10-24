@@ -157,8 +157,9 @@ describe('the card renders only policy-issued prompts, and its presence is prepa
 
   it('an Amani band crossing with no lab-interval change and a minor magnitude selects no question about it', () => {
     // TSH 2.7 -> 2.0: inside her lab interval both times. The old builder asked
-    // about it because it crossed an unreviewed Amani band.
-    const tsh = (value: number, reportDate?: string) => marker('tsh', value, 0.45, 4.5, reportDate);
+    // about it because it crossed an unreviewed Amani band. In TSH's catalog
+    // unit, the only unit an Amani band applies to (F011).
+    const tsh = (value: number, reportDate?: string) => ({ ...marker('tsh', value, 0.45, 4.5, reportDate), unit: 'mIU/L' });
     const summary = buildInsightSummary([tsh(2.0)], [tsh(2.7, '2025-12-01')], null, '2025-12-01');
     const delta = summary.deltaMap.get('tsh');
     expect(delta?.boundaryCrossing).not.toBeNull();

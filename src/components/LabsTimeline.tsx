@@ -1,6 +1,8 @@
 
 import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
 import { LabReport, Biomarker, Intervention } from '../types';
+import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 import { formatDate } from '../utils/formatters';
 import { Card } from './Card';
 import { Button } from './Button';
@@ -103,7 +105,10 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
           if (!current) return [];
 
           let delta = null;
-          if (previous) {
+          // F013: values in two units are not comparable, as in CompareView.
+          // F021: a censored result ('<8') holds a placeholder, not a measurement, so it has no delta.
+          if (previous && sameUnit(previous.unit, current.unit)
+            && !isCensoredValue(previous.raw_value_text) && !isCensoredValue(current.raw_value_text)) {
             delta = calculateDelta(current.value, previous.value);
           }
 
@@ -201,7 +206,7 @@ export function LabsTimeline({ reports, biomarkersByReport, interventions = [], 
                       <div className="flex-1">
                         <span className="text-sm font-medium text-theme-text">{biomarkerName}</span>
                         <div className="text-sm text-theme-muted-text">
-                          {current.value} {current.unit}
+                          {isCensoredValue(current.raw_value_text) ? current.raw_value_text?.trim() : current.value} {current.unit}
                         </div>
                       </div>
                       {/*

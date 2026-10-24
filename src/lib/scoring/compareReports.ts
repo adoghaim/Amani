@@ -1,8 +1,10 @@
 import type { BiomarkerName, CyclePhase, AmaniStatus } from '../../types';
 import { getDisplayName, getRangesForPhase } from '../biomarkers/dictionary';
+import { sameUnit } from '../biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from './scoreBiomarker';
-import { assessAmaniContext, contextFromReport } from './amaniContext';
+import { assessAmaniContext, contextFromReport, type NonCyclingState } from './amaniContext';
 import { authorizedLanguage, BOUNDARY_BUCKET_LABEL, type AuthorizedLanguage, type ReviewStatus } from './insightCopy';
+import { isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 
 export type TrendDirection = 'up' | 'down' | 'stable';
 export type SignificanceTier = 'minor' | 'moderate' | 'significant';
@@ -61,6 +63,8 @@ export interface BiomarkerDelta {
   previousValue: number;
   currentValue: number;
   unit: string;
+  /** The previous value's unit: compareReports pairs only the same unit (F013). Optional only so hand-built deltas still type. */
+  previousUnit?: string;
   absoluteDelta: number;
   percentDelta: number | null;
   trendDirection: TrendDirection;
@@ -80,6 +84,8 @@ interface BiomarkerSnapshot {
   value: number;
   unit: string;
   reportDate?: string;
+  /** The result as printed. A censored one ('<8') holds a placeholder value, not a measurement (F021). */
+  valueText?: string | null;
 }
 
 const MIN_ABSOLUTE_DELTA: Record<string, number> = {
@@ -231,13 +237,17 @@ export function compareReports(
   previous: BiomarkerSnapshot[],
   current: BiomarkerSnapshot[],
   cyclePhase?: CyclePhase | null,
+  state: NonCyclingState | null = null,
 ): BiomarkerDelta[] {
   const prevMap = new Map(previous.map(b => [b.key, b]));
   const deltas: BiomarkerDelta[] = [];
 
   for (const curr of current) {
     const prev = prevMap.get(curr.key);
-    if (!prev) continue;
+    // F013: values in two units are not comparable, and no conversion is approved.
+    if (!prev || !sameUnit(prev.unit, curr.unit)) continue;
+    // F021: a censored result has no measured value, so it has no delta, percent change or trajectory.
+    if (isCensoredValue(prev.valueText) || isCensoredValue(curr.valueText)) continue;
 
     const absoluteDelta = Math.abs(curr.value - prev.value);
     const isNearZero = Math.abs(prev.value) < NEAR_ZERO_THRESHOLD;
@@ -247,14 +257,15 @@ export function compareReports(
     if (curr.value > prev.value) trendDirection = 'up';
     else if (curr.value < prev.value) trendDirection = 'down';
 
-    const prevStatus = computeAmaniStatus(curr.key, prev.value, cyclePhase);
-    const currStatus = computeAmaniStatus(curr.key, curr.value, cyclePhase);
+    const prevStatus = computeAmaniStatus(curr.key, prev.value, cyclePhase, state, prev.unit);
+    const currStatus = computeAmaniStatus(curr.key, curr.value, cyclePhase, state, curr.unit);
     const significance = computeSignificance(percentDelta, absoluteDelta, curr.key);
-    // Withheld context (V2-03): keep the longitudinal values, but make no
-    // judgement about crossing, improving or worsening against a band Amani
-    // is not applying. ('unknown' would otherwise bucket as out_of_range.)
-    const assessment = assessAmaniContext(curr.key, curr.value, contextFromReport(cyclePhase));
-    const withheld = assessment.kind === 'withheld';
+    // Withheld context (V2-03), or no band in this unit (F011): keep the
+    // longitudinal values, but make no judgement about crossing, improving or
+    // worsening against a band Amani is not applying. ('unknown' would
+    // otherwise bucket as out_of_range.)
+    const assessment = assessAmaniContext(curr.key, curr.value, contextFromReport(cyclePhase, state), curr.unit);
+    const withheld = assessment.kind !== 'scored';
     // R1: the destination band's review state, threaded into every judgement
     // below. Unavailable or withheld means nothing is established.
     const bandLanguage = authorizedLanguage(assessment.kind === 'scored' ? assessment.band : null);
@@ -273,6 +284,7 @@ export function compareReports(
       previousValue: prev.value,
       currentValue: curr.value,
       unit: curr.unit,
+      previousUnit: prev.unit,
       absoluteDelta,
       percentDelta: percentDelta !== null ? Math.round(percentDelta * 10) / 10 : null,
       trendDirection,
