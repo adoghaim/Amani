@@ -162,9 +162,14 @@ describe('no hand-rolled full-screen overlays', () => {
   }
 
   it('only the shared Modal (and the dev-only parser debugger) draws a fixed inset-0 sheet', () => {
+    // DeviceLockGate's cover (PK-DEVICE-01, review F001/F002) is not a sheet and
+    // must not be one: nothing may dismiss it (Escape, backdrop or back), it sits
+    // above every sheet (z-[70] over the Modal's z-[60]), and it is drawn outside
+    // #root so an open Modal's inert cannot disable the lock screen.
     const offenders = files('src')
       .filter(f => /fixed\s+inset-0/.test(readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')))
-      .filter(f => !/[\\/]components[\\/]Modal\.tsx$/.test(f) && !/[\\/]pages[\\/]ParserDebugger\.tsx$/.test(f));
+      .filter(f => !/[\\/]components[\\/]Modal\.tsx$/.test(f) && !/[\\/]pages[\\/]ParserDebugger\.tsx$/.test(f)
+        && !/[\\/]features[\\/]deviceLock[\\/]DeviceLockGate\.tsx$/.test(f));
     expect(offenders).toEqual([]);
   });
 });
