@@ -2,13 +2,8 @@ import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine, isPartOfWord } from './textUtils';
 import { bindReferenceRange } from './rangeDetection';
 import { detectUnit } from './labelMatching';
-import { censoredPlaceholder } from '../../../supabase/functions/_shared/censored-value';
 
 const NUM_RE = /(\d+\.\d+|\d+)/g;
-/** An inclusive comparator as labs print it: '<=', '< =', '<OR=', '> OR =', '≤', '≥' (F021). Used with the 'i' flag. */
-const INCLUSIVE_COMPARATOR = String.raw`(?:[<>]\s*(?:or\s*)?=|≤|≥)\s*`;
-const INCLUSIVE_VALUE_RE = new RegExp(String.raw`^${INCLUSIVE_COMPARATOR}\d+\.?\d*`, 'i');
-const COMPARATOR_PREFIX_RE = new RegExp(String.raw`^(?:${INCLUSIVE_COMPARATOR}|[<>]\s*)`, 'i');
 
 const PHASE_LINE_RE = /\b(?:phase|trimester|menopausal|menopaus|pregnancy|pregnant|follicular|luteal|ovulatory|peak|male|female|adult|child|infant)\b/i;
 const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|primary|prevention|factor|method|equation|accuracy)\b/i;
@@ -21,12 +16,6 @@ export function parseValueWithPrefix(text: string): { value: number; rawValue: s
   const gtMatch = text.match(/^>\s*(\d+\.?\d*)/);
   if (gtMatch && gtMatch[1] !== undefined) {
     return { value: parseFloat(gtMatch[1]), rawValue: `>${gtMatch[1]}` };
-  }
-  // F021: an inclusive limit keeps its printed comparator; its number is the shared placeholder.
-  const inclusive = text.match(INCLUSIVE_VALUE_RE)?.[0];
-  const placeholder = censoredPlaceholder(inclusive);
-  if (inclusive !== undefined && placeholder !== null) {
-    return { value: placeholder, rawValue: inclusive };
   }
   const numMatch = text.match(/(\d+\.?\d*)/);
   if (numMatch && numMatch[1] !== undefined) {
@@ -222,20 +211,18 @@ export function extractValueFromWindow(
   // numbers that follow are historical values from prior draws.
   const refBoundaryIdx0 = labelLine.search(/\breference\s+range|\bref\s+range|\bref\.\s*range/i);
   const labelLineBeforeRef0 = refBoundaryIdx0 > 0 ? labelLine.substring(0, refBoundaryIdx0) : labelLine;
-  const prefixRe0 = new RegExp(String.raw`(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+|${INCLUSIVE_COMPARATOR}\d+\.?\d*)`, 'i');
+  const prefixRe0 = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
   const prefixMatch0 = labelLineBeforeRef0.match(prefixRe0);
   if (prefixMatch0 && prefixMatch0[1] !== undefined) {
     const prefixToken = prefixMatch0[1];
     const parsed0 = parseValueWithPrefix(prefixToken.trim());
     if (parsed0) {
       // Extract the raw threshold number (before halving) to check against reference range
-      const rawThreshold = parseFloat(prefixToken.trim().replace(COMPARATOR_PREFIX_RE, ''));
+      const rawThreshold = parseFloat(prefixToken.trim().replace(/^[<>]=?\s*/, ''));
       const isRefComp = referenceResult?.comparator &&
         (referenceResult.comparator.value === rawThreshold ||
          knownRangeNumbers.has(String(rawThreshold)));
-      // F021: an inclusive limit that is one of this marker's printed intervals ("Follicular Phase <=1.1") is not her result.
-      const isPrintedInterval = INCLUSIVE_VALUE_RE.test(prefixToken.trim()) && knownRangeNumbers.has(String(rawThreshold));
-      if (!isRefComp && !isPrintedInterval) {
+      if (!isRefComp) {
         return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult, ...ambiguity };
       }
     }
@@ -254,7 +241,7 @@ export function extractValueFromWindow(
   // This prevents "Hemoglobin A1c 5.6 % 4.8-5.6" from being rescued with
   // "5.6" (which == ref_max) when the correct path is the extended parser.
   if (labelCandidates.length === 0 && knownRangeNumbers.size > 0 && referenceResult?.comparator) {
-    const prefixedNumRe = new RegExp(String.raw`(${INCLUSIVE_COMPARATOR}|<|>)?(\d+\.?\d*)`, 'gi');
+    const prefixedNumRe = /(<=?|>=?)?(\d+\.?\d*)/g;
     let m: RegExpExecArray | null;
     while ((m = prefixedNumRe.exec(labelLine)) !== null) {
       const raw = m[0];
@@ -312,7 +299,7 @@ export function extractValueFromWindow(
   // Only do this after label candidates fail, and skip tokens whose numeric part
   // is already a known range boundary (meaning it IS the reference, not the result).
   // We also collect ambiguous comparators (value == range boundary) for use as last resort.
-  const COMPARATOR_VALUE_RE = new RegExp(String.raw`(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*|${INCLUSIVE_COMPARATOR}\d+\.?\d*)`, 'i');
+  const COMPARATOR_VALUE_RE = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
   let ambiguousComparator: { value: number; rawValue: string } | null = null;
   for (const vLine of valueLines) {
     const trimmed = vLine.trim();
@@ -323,7 +310,7 @@ export function extractValueFromWindow(
       const cmToken = cm2[1];
       const parsed = parseValueWithPrefix(cmToken.trim());
       if (parsed) {
-        const rawNum = cmToken.trim().replace(COMPARATOR_PREFIX_RE, '');
+        const rawNum = cmToken.trim().replace(/^[<>]=?\s*/, '');
         if (knownRangeNumbers.has(rawNum) || knownRangeNumbers.has(String(parseFloat(rawNum)))) {
           ambiguousComparator ??= parsed;
           continue;
