@@ -38,6 +38,7 @@ import { detectLabSource } from '../utils/detectLabSource';
 import { extractDateFromText } from '../utils/extractDateFromText';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
 import { firstPartyEvents } from '../lib/firstPartyEventsClient';
+import { labFileStoragePath } from '../lib/labFilePath';
 import {
   Upload, ArrowRight, ArrowLeft, Loader2, AlertTriangle, CheckCircle,
   ExternalLink, FlaskConical, ChevronRight, ChevronDown, ChevronUp,
@@ -636,8 +637,7 @@ export function NewReport() {
       setSubmitStep('uploading');
       let fileUrl = null;
       if (file) {
-        const fileExt = file.name.split('.').pop();
-        const storagePath = `${user.id}/${Date.now()}.${fileExt}`;
+        const storagePath = labFileStoragePath(user.id, file.type, Date.now());
         const { error: uploadError } = await supabase.storage
           .from('lab-files')
           .upload(storagePath, file);
