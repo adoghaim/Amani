@@ -84,7 +84,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-WP2 Offline is not empty; error boundaries reset | RV | 1 | in-progress | RV-WP1 | - |
 | RV-WP3 Accessible overlays, safe areas, Android back closes sheets first | RV | 1 | todo | RV-WP2 | - |
 | RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | todo | - | - |
-| RV-DL1 Device lock hardening | RV | 1 | in-progress | - | - |
+| RV-DL1 Device lock hardening | RV | 1 | review | - | [#163](https://github.com/adoghaim/Amani/pull/163) |
 | RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | todo | - | - |
 | RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | todo | - | - |
 | RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | todo | - | - |
@@ -116,7 +116,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-BU1 | billing-ui | in-progress | `factory/rv-billing-ui` @ `e321bd3` | Built, DONE_WITH_CONCERNS (F045 partial). Verifier was cut off: needs verification. |
 | RV-WP1 | web-platform | review | `factory/rv-web-platform` @ `dec8bfe` | Built. Security and correctness reviews: recommend merge. |
 | RV-WP2 | web-platform | in-progress | `factory/rv-wip-wp2` @ `979728b` | Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d). |
-| RV-DL1 | device-lock | in-progress | `factory/rv-wip-dl1` @ `e2d2c2e` | Interrupted mid-build: one WIP commit; needs completion, gates and verification. |
+| RV-DL1 | device-lock | review | `factory/rv-wip-dl1` @ `8a3ad77` | PR #163: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-CI1 | ci-workflows | review | `factory/rv-ci-workflows` @ `4bd6043` | Built (F104, F055, F138 partial). Correctness review: recommend merge. |
 | RV-CI2 | ci-workflows | in-progress | `factory/rv-ci-workflows` @ `74bdf7e` | Built on top of CI1. Reviews were cut off by the stop: needs verification. |
 | RV-HY1 | hygiene | review | `factory/rv-hygiene` @ `a44186c` | Built (F090 partial). Blind verifier: PASS_WITH_NOTES. |

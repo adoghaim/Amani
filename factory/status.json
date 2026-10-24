@@ -2727,15 +2727,18 @@
         "F138"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-dl1",
-      "pr": null,
+      "pr": "#163",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2746,7 +2749,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track device-lock; findings F000, F001, F002, F005, F006, F007, F009, F138. Head e2d2c2e. Interrupted mid-build: one WIP commit; needs completion, gates and verification."
+        "Fixed F000, F001, F002, F005, F006, F007, F009 and F138 (device lock hardening, native 1.0.7 and flag-gated); the first blind verdict on 2026-10-23 was FAIL (an open Modal made the lock screen inert), fixed in c39b9cf and re-verified PASS_WITH_NOTES on 2026-10-23; device QA, Android build and the F006 policy ruling are still pending.",
+        "Gates at 8a3ad77 (run locally): lint, typecheck, full test (3,393), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
