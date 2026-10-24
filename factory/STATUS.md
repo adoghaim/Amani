@@ -65,8 +65,8 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-DB1 Harness: Postgres 17, assertive case 010, full-chain replay and a grant audit | RV | 1 | in-progress | - | - |
 | RV-DB2 RLS on the three public tables; revoke client writes on billing tables and anon access to user data | RV | 1 | todo | RV-DB1 | - |
 | RV-DB3 has_consented means consent; interpreted reports stay immutable; lab file ownership | RV | 1 | todo | RV-DB2 | - |
-| RV-CS1 Unit sanity: withhold Amani bands across unit mismatches | RV | 1 | in-progress | - | - |
-| RV-CS2 Declared pregnancy withholds cycle context; scoring fails closed on bad inputs | RV | 1 | todo | RV-CS1 | - |
+| RV-CS1 Unit sanity: withhold Amani bands across unit mismatches | RV | 1 | review | - | [#174](https://github.com/adoghaim/Amani/pull/174) |
+| RV-CS2 Declared pregnancy withholds cycle context; scoring fails closed on bad inputs | RV | 1 | review | RV-CS1 | [#174](https://github.com/adoghaim/Amani/pull/174) |
 | RV-CS3 Censored results never become numbers | RV | 1 | todo | RV-CS2 | - |
 | RV-IA1 Cycle phase and day only from explicit patient lines | RV | 1 | review | - | [#156](https://github.com/adoghaim/Amani/pull/156) |
 | RV-IA2 Parser B12 boundaries; parse-error rows need her confirmation | RV | 1 | in-progress | RV-IA1 | - |
@@ -107,7 +107,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | Packet | Track | Status | Branch @ commit | State |
 |---|---|---|---|---|
 | RV-DB1 | db-security | in-progress | `factory/rv-db-security` @ `b03f619` | Built (F035, F124 partial). Reviews: 3 blocking findings open (1 security, 2 correctness); no fix applied yet. |
-| RV-CS1 | clinical-scoring | in-progress | `factory/rv-clinical-scoring` @ `db14fb2` | Built (F013 partial: its server half is a generate-interpretation handoff). Reviews were cut off: needs verification. |
+| RV-CS1 | clinical-scoring | review | `factory/rv-clinical-scoring` @ `b542a1b` | PR #174: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-IA1 | ingest-cycle-parser | review | `factory/rv-ingest-cycle-parser` @ `5cf7d10` | PR #156: reviewed (correctness + clinical, G4 pass), gates green on current main; awaiting owner confirmation of PK-FIX-06 Q9. |
 | RV-IA2 | ingest-cycle-parser | in-progress | `factory/rv-wip-ia2` @ `073a207` | Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch. |
 | RV-IB1 | ingest-ocr-a11y | in-progress | `factory/rv-ingest-ocr-a11y` @ `4219016` | Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet. |
