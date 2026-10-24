@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveBloodDrawIdentity,
   extractDrawEvidence,
+  fingerprintAnalytes,
   hashDrawKey,
   type DrawEvidence,
 } from './blood-draw-identity';
@@ -249,5 +250,122 @@ describe('hashDrawKey', () => {
     const digest = await hashDrawKey(`report:${REPORT_ID}`);
     // introductory_deep_access_claims_draw_id_is_sha256
     expect(digest).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+/*
+  RV-GI2 (F042): a file hash names the upload, not the values the interpretation
+  is generated from, which the owner can write. The key is bound to a
+  fingerprint of those rows, so the same bytes with other values, or an edited
+  report, is another draw. Synthetic rows only.
+*/
+const tsh = {
+  raw_name: 'TSH', canonical_slug: 'tsh', value_numeric: 2.1, raw_value_text: '2.1', unit: 'mIU/L',
+  raw_reference_range: '0.4-4.0', normalized_min: 0.4, normalized_max: 4, normalized_operator: null,
+  normalized_operator_value: null,
+};
+const ferritin = {
+  raw_name: 'Ferritin', canonical_slug: 'ferritin', value_numeric: 18, raw_value_text: '18', unit: 'ng/mL',
+  raw_reference_range: '16-154', normalized_min: 16, normalized_max: 154, normalized_operator: null,
+  normalized_operator_value: null,
+};
+const crp = {
+  raw_name: 'hs-CRP', canonical_slug: 'hs_crp', value_numeric: null, raw_value_text: '<0.5', unit: 'mg/L',
+  raw_reference_range: '<3.0', normalized_min: null, normalized_max: 3, normalized_operator: '<',
+  normalized_operator_value: 0.5,
+};
+const rows = [tsh, ferritin, crp];
+
+describe('fingerprintAnalytes — RV-GI2', () => {
+  it('is a stable 64-character hex digest', async () => {
+    const a = await fingerprintAnalytes(rows);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(await fingerprintAnalytes(rows)).toBe(a);
+  });
+
+  it('is the same for the same rows in any order', async () => {
+    const a = await fingerprintAnalytes(rows);
+    expect(await fingerprintAnalytes([crp, tsh, ferritin])).toBe(a);
+    expect(await fingerprintAnalytes([ferritin, crp, tsh])).toBe(a);
+  });
+
+  it.each([
+    ['raw_name', 'TSH 3rd generation'],
+    ['canonical_slug', 'free_t4'],
+    ['value_numeric', 2.2],
+    ['raw_value_text', '2.10'],
+    ['unit', 'uIU/mL'],
+    ['raw_reference_range', '0.45-4.5'],
+    ['normalized_min', 0.45],
+    ['normalized_max', 4.5],
+    ['normalized_operator', '>'],
+    ['normalized_operator_value', 2.1],
+  ])('changes when %s changes', async (field, value) => {
+    const changed = await fingerprintAnalytes([{ ...tsh, [field]: value }, ferritin, crp]);
+    expect(changed).not.toBe(await fingerprintAnalytes(rows));
+  });
+
+  it('ignores id, is_core and the review columns', async () => {
+    const withOthers = rows.map((row, i) => ({
+      ...row, id: `synthetic-${i}`, is_core: i === 0, review_status: 'confirmed', reviewed_at: '2026-10-24T00:00:00Z',
+    }));
+    expect(await fingerprintAnalytes(withOthers)).toBe(await fingerprintAnalytes(rows));
+  });
+
+  it('normalises value_numeric through Number: null and non-finite are null, and null is not zero', async () => {
+    expect(await fingerprintAnalytes([{ ...tsh, value_numeric: '2.1' }])).toBe(await fingerprintAnalytes([tsh]));
+    const missing = await fingerprintAnalytes([{ ...tsh, value_numeric: null }]);
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, undefined, 'not a number']) {
+      expect(await fingerprintAnalytes([{ ...tsh, value_numeric: value }])).toBe(missing);
+    }
+    expect(await fingerprintAnalytes([{ ...tsh, value_numeric: 0 }])).not.toBe(missing);
+  });
+
+  it('counts a repeated row, and keeps each value inside its own field', async () => {
+    expect(await fingerprintAnalytes([tsh, tsh])).not.toBe(await fingerprintAnalytes([tsh]));
+    expect(await fingerprintAnalytes([])).not.toBe(await fingerprintAnalytes([tsh]));
+    expect(await fingerprintAnalytes([{ ...tsh, raw_name: 'TSHtsh', canonical_slug: '' }]))
+      .not.toBe(await fingerprintAnalytes([tsh]));
+  });
+});
+
+describe('deriveBloodDrawIdentity — the analyte binding (RV-GI2)', () => {
+  const FP = 'f'.repeat(64);
+
+  it('binds the content-hash key to the analytes', () => {
+    expect(deriveBloodDrawIdentity(null, { reportId: REPORT_ID, contentHash: 'DEADBEEF', analyteFingerprint: FP }))
+      .toEqual({ key: `sha256:deadbeef:analytes:${FP}`, tier: 'content_hash', identified: false });
+  });
+
+  it('binds the per-report key to the analytes', () => {
+    expect(deriveBloodDrawIdentity(null, { reportId: REPORT_ID, analyteFingerprint: FP }))
+      .toEqual({ key: `report:${REPORT_ID}:analytes:${FP}`, tier: 'unidentified', identified: false });
+  });
+
+  it('without a fingerprint each key is exactly today\'s: the legacy key', () => {
+    for (const analyteFingerprint of [undefined, null, '']) {
+      expect(deriveBloodDrawIdentity(null, { reportId: REPORT_ID, contentHash: 'DEADBEEF', analyteFingerprint }))
+        .toEqual(deriveBloodDrawIdentity(null, { reportId: REPORT_ID, contentHash: 'DEADBEEF' }));
+      expect(deriveBloodDrawIdentity(null, { reportId: REPORT_ID, contentHash: 'DEADBEEF', analyteFingerprint }).key)
+        .toBe('sha256:deadbeef');
+      expect(deriveBloodDrawIdentity(null, { reportId: REPORT_ID, analyteFingerprint }).key).toBe(`report:${REPORT_ID}`);
+    }
+  });
+
+  it('leaves the collection-evidence tiers unbound', () => {
+    const options = { reportId: REPORT_ID, contentHash: 'abc', analyteFingerprint: FP };
+    expect(deriveBloodDrawIdentity(full, options).key).toBe('acc:quest:AB12345678');
+    expect(deriveBloodDrawIdentity({ ...full, accessionId: null }, options).key).toBe('dt:quest:2026-08-14T09:30');
+    expect(deriveBloodDrawIdentity({ ...full, accessionId: null, collectionDateTime: null }, options).key)
+      .toBe('d:quest:2026-08-14');
+  });
+
+  it('the same bytes with the same analytes is one draw; with other analytes it is another', async () => {
+    const key = async (analytes: typeof rows, reportId: string) => hashDrawKey(deriveBloodDrawIdentity(null,
+      { reportId, contentHash: 'abc', analyteFingerprint: await fingerprintAnalytes(analytes) }).key);
+    expect(await key([crp, ferritin, tsh], OTHER_REPORT_ID)).toBe(await key(rows, REPORT_ID));
+    expect(await key([{ ...tsh, value_numeric: 9 }, ferritin, crp], OTHER_REPORT_ID)).not.toBe(await key(rows, REPORT_ID));
+    // Neither is the legacy key of those bytes.
+    expect(await key(rows, REPORT_ID)).not.toBe(await hashDrawKey('sha256:abc'));
   });
 });

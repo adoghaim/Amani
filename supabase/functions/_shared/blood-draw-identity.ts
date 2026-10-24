@@ -45,8 +45,8 @@
  * is 2 lifetime credits either way.
  *
  * Pure: no Deno, no network, no clock, no crypto in the derivation path.
- * `hashDrawKey` is the one async export and uses Web Crypto, which Deno and the
- * test runner both provide.
+ * `hashDrawKey` and `fingerprintAnalytes` are the async exports and use Web
+ * Crypto, which Deno and the test runner both provide.
  */
 
 /** Lab identity, mirroring `LabSource` in `src/utils/parser/types.ts`. */
@@ -90,6 +90,14 @@ export interface DeriveOptions {
   /** Report id, used only for the tier-5 fallback so that regenerating the same
    *  report reuses its key instead of minting a second one. */
   reportId: string;
+  /**
+   * `fingerprintAnalytes` of the rows the interpretation is generated from
+   * (RV-GI2, F042). Appended to the tier-4 and tier-5 keys, which otherwise name
+   * only the file or the report: another report of the same bytes with other
+   * values, or a report whose values were edited, is then another draw.
+   * Absent, every key is exactly as before.
+   */
+  analyteFingerprint?: string | null;
 }
 
 const EMPTY_EVIDENCE: DrawEvidence = {
@@ -138,9 +146,11 @@ export function deriveBloodDrawIdentity(
     };
   }
 
+  const analytes = options.analyteFingerprint ? `:analytes:${options.analyteFingerprint}` : "";
+
   if (options.contentHash) {
     return {
-      key: `sha256:${options.contentHash.toLowerCase()}`,
+      key: `sha256:${options.contentHash.toLowerCase()}${analytes}`,
       tier: "content_hash",
       identified: false,
     };
@@ -150,7 +160,7 @@ export function deriveBloodDrawIdentity(
   // same report reuses the same claim, while a genuinely new upload counts as a
   // new draw and stays eligible.
   return {
-    key: `report:${options.reportId}`,
+    key: `report:${options.reportId}${analytes}`,
     tier: "unidentified",
     identified: false,
   };
@@ -340,4 +350,58 @@ export async function hashDrawKey(key: string): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/* ------------------------------------------------------------------------- *
+ * Analyte fingerprint
+ * ------------------------------------------------------------------------- */
+
+/**
+ * The `report_analytes` columns generation reads, in a fixed order. Never `id`
+ * (another upload of the same values mints new ids), `is_core` or the review
+ * columns: none of them changes what is interpreted.
+ */
+const FINGERPRINT_FIELDS = [
+  "raw_name",
+  "canonical_slug",
+  "value_numeric",
+  "raw_value_text",
+  "unit",
+  "raw_reference_range",
+  "normalized_min",
+  "normalized_max",
+  "normalized_operator",
+  "normalized_operator_value",
+] as const;
+
+/** One analyte row as generation reads it; any other column is ignored. */
+export type FingerprintedAnalyte = {
+  readonly [K in typeof FINGERPRINT_FIELDS[number]]?: unknown;
+};
+
+/**
+ * SHA-256 hex of the analyte rows, whatever their order (RV-GI2, F042).
+ *
+ * Each row becomes a JSON array of its fields and the sorted list of those is
+ * hashed: the same rows in any order give the same digest, a change in any one
+ * field gives another. `value_numeric` is normalised through `Number`; null
+ * stays null and a non-finite value becomes null.
+ */
+export function fingerprintAnalytes(
+  rows: readonly FingerprintedAnalyte[],
+): Promise<string> {
+  const canonical = rows
+    .map((row) =>
+      JSON.stringify(FINGERPRINT_FIELDS.map((field) =>
+        field === "value_numeric" ? finiteOrNull(row[field]) : row[field] ?? null
+      ))
+    )
+    .sort();
+  return hashDrawKey(JSON.stringify(canonical));
+}
+
+function finiteOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
