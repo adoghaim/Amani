@@ -15,7 +15,7 @@ import {
 } from "../_shared/account-deletion.ts";
 import { deleteAllStorageObjects } from "../_shared/account-deletion-storage.ts";
 import { errorType, scrubbedErrorMessage } from "../_shared/phi-scrub.ts";
-import { createStoreTeardownActions, StoreTeardownError } from "../_shared/store-teardown.ts";
+import { createStoreTeardownActions, PLAY_SERVICE_ACCOUNT_ENV, playCancellationConfigured, StoreTeardownError } from "../_shared/store-teardown.ts";
 import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 
 const corsHeaders = {
@@ -274,6 +274,9 @@ Deno.serve(async (req: Request) => {
       the subscription list, so the client can name the store and link to the
       right settings screen; `retry: false` because retrying the identical
       request will land here again — the client must come back acknowledged.
+      `play_cancellation_enabled`: whether this deletion cancels a Google Play
+      subscription itself (the Play credential parses), from the same parse the
+      cancel step makes.
     */
     if (error instanceof StoreSubscriptionAcknowledgementRequiredError) {
       return new Response(
@@ -286,6 +289,7 @@ Deno.serve(async (req: Request) => {
             product_id: s.productId,
             expires_at: s.expiresAt,
           })),
+          play_cancellation_enabled: playCancellationConfigured(Deno.env.get(PLAY_SERVICE_ACCOUNT_ENV)),
         }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );

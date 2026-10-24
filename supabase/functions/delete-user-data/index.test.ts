@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as accountDeletion from '../_shared/account-deletion';
 import * as accountDeletionStorage from '../_shared/account-deletion-storage';
 import * as phiScrub from '../_shared/phi-scrub';
-import { StoreTeardownError } from '../_shared/store-teardown';
+import { PLAY_SERVICE_ACCOUNT_ENV, playCancellationConfigured, StoreTeardownError } from '../_shared/store-teardown';
 
 /*
   BS1 (review F029, F038, F036, F033 sites): runs the real Deno callback of
@@ -34,6 +34,8 @@ interface State {
   sticky?: string[];
   readError?: 'stripe_customers' | 'users';
   authDeleteError?: string;
+  /** Server secrets by name; a name not listed reads 'test'. */
+  env?: Record<string, string | undefined>;
 }
 
 function harness(state: State = {}) {
@@ -124,7 +126,12 @@ function harness(state: State = {}) {
     ...accountDeletionStorage,
     ...phiScrub,
     StoreTeardownError,
-    Deno: { env: { get: () => 'test' }, serve: (fn: typeof handler) => { handler = fn; } },
+    PLAY_SERVICE_ACCOUNT_ENV,
+    playCancellationConfigured,
+    Deno: {
+      env: { get: (name: string) => (state.env && name in state.env ? state.env[name] : 'test') },
+      serve: (fn: typeof handler) => { handler = fn; },
+    },
     createClient: () => client,
     Stripe,
     fetchWithBackoff: async () => { throw new Error('no network in tests'); },
@@ -208,6 +215,42 @@ describe('delete-user-data deletes every Stripe customer the account has (F029, 
 
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe(accountDeletion.STORE_SUBSCRIPTION_ACK_CODE);
+    expect(stripe.customers.del).not.toHaveBeenCalled();
+    expect(log).toEqual([]);
+  });
+});
+
+describe('delete-user-data 409 says whether the deletion cancels Google Play (RV-R3 AC1, F045 server half)', () => {
+  const playRow = {
+    platform: 'android', product_id: 'monthly', store_subscription_id: 'GPA.0000-0000-0000-00000',
+    status: 'active', expires_at: null, environment: 'production',
+  };
+  // Synthetic: parses as a service-account key file; it is not a usable key.
+  const parseableKey = JSON.stringify({
+    type: 'service_account',
+    client_email: 'deletion@synthetic-project.iam.gserviceaccount.com',
+    private_key: '-----BEGIN PRIVATE KEY-----\nc3ludGhldGlj\n-----END PRIVATE KEY-----\n',
+  });
+
+  it.each([
+    ['a Play credential that parses', true, parseableKey],
+    ['the Play credential unset', false, undefined],
+    ['a Play credential that is not JSON', false, 'not json'],
+    ['a Play credential that is not a service-account key', false, JSON.stringify({ type: 'authorized_user' })],
+  ])('%s: play_cancellation_enabled is %s, the rest of the body is unchanged, nothing is touched', async (_label, enabled, credential) => {
+    const { handler, log, stripe } = harness({ current: 'cus_checkout', iap: [playRow], env: { [PLAY_SERVICE_ACCOUNT_ENV]: credential } });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'This account has an active subscription billed by Google. Deleting the account does not cancel it — ' +
+        'you must cancel it in your store account settings or you will continue to be charged.',
+      code: accountDeletion.STORE_SUBSCRIPTION_ACK_CODE,
+      retry: false,
+      store_subscriptions: [{ platform: 'android', product_id: 'monthly', expires_at: null }],
+      play_cancellation_enabled: enabled,
+    });
     expect(stripe.customers.del).not.toHaveBeenCalled();
     expect(log).toEqual([]);
   });
