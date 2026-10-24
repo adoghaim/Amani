@@ -1,18 +1,9 @@
 import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine, isPartOfWord } from './textUtils';
-import { INCLUSIVE_COMPARATOR, bindReferenceRange, firstNumericToken, isUnitOrFlagToken } from './rangeDetection';
+import { bindReferenceRange } from './rangeDetection';
 import { detectUnit } from './labelMatching';
 
 const NUM_RE = /(\d+\.\d+|\d+)/g;
-// A result printed at or below/above a limit: "<=8", "< OR = 150", "≤150", "> OR = 60", "≥1000" (F021).
-const INCLUSIVE_VALUE_RE = new RegExp(String.raw`^${INCLUSIVE_COMPARATOR}\s*(\d+\.?\d*)`, 'i');
-const COMPARATOR_PREFIX_RE = new RegExp(String.raw`^(?:${INCLUSIVE_COMPARATOR}|[<>])\s*`, 'i');
-
-/** Her own result line: a number followed only by its unit or flag ("45 mL/min/1.73m2", "45 L", "7.2 H %"). */
-function isOwnResultLine(line: string): boolean {
-  const [first, ...rest] = line.trim().split(/\s+/);
-  return first !== undefined && /^\d+(?:\.\d+)?$/.test(first) && rest.every(isUnitOrFlagToken);
-}
 
 const PHASE_LINE_RE = /\b(?:phase|trimester|menopausal|menopaus|pregnancy|pregnant|follicular|luteal|ovulatory|peak|male|female|adult|child|infant)\b/i;
 const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|primary|prevention|factor|method|equation|accuracy)\b/i;
@@ -26,18 +17,33 @@ export function isBelowLimitResult(valueText: string | null | undefined): boolea
   return /^\s*[<≤]/.test(valueText ?? '');
 }
 
+// An inclusive comparator printed right before a number, in any case and
+// spacing: "> OR =", "< OR =", ">=", "<=", "> =", "< =", "≥", "≤" (F021).
+const INCLUSIVE_BEFORE_RE = /(?:[<>]\s*(?:or\s*)?=|[≤≥])\s*$/i;
+
+/** A number the reader chose; when known, it is printed at `line.slice(start)`. */
+type Candidate = { value: number; rawValue: string; line?: string; start?: number };
+
 /**
- * A number, or a result printed as a limit. An inclusive limit keeps its
- * printed comparator ("> OR = 60", "≤8"); like a strict one its number is the
- * existing placeholder: half the limit below it, the limit above it (F021).
+ * F021, annotation only: the number already chosen stays the number chosen.
+ * When an inclusive comparator is printed right before its token, the result
+ * is a limit, not a measurement: value_text keeps the printed comparator
+ * ("> OR = 60", "<=8", "≥1000") and the number is the existing placeholder
+ * (parseValueWithPrefix: half the limit below it, the limit itself above it).
+ * Anything else is returned as it was.
  */
+export function withInclusiveComparator(chosen: Candidate): { value: number; rawValue: string } {
+  const { value, rawValue, line, start } = chosen;
+  if (line === undefined || start === undefined || !/^\d+\.?\d*$/.test(rawValue)) return { value, rawValue };
+  const comparator = line.slice(0, start).match(INCLUSIVE_BEFORE_RE)?.[0];
+  if (comparator === undefined) return { value, rawValue };
+  const below = comparator.startsWith('<') || comparator.startsWith('≤');
+  const placeholder = parseValueWithPrefix(`${below ? '<' : '>'}${rawValue}`);
+  if (!placeholder) return { value, rawValue };
+  return { value: placeholder.value, rawValue: (comparator + rawValue).replace(/\s+/g, ' ') };
+}
+
 export function parseValueWithPrefix(text: string): { value: number; rawValue: string } | null {
-  const inclusive = text.match(INCLUSIVE_VALUE_RE);
-  if (inclusive && inclusive[1] !== undefined) {
-    const limit = parseFloat(inclusive[1]);
-    const below = text.startsWith('<') || text.startsWith('≤');
-    return { value: below ? limit * 0.5 : limit, rawValue: inclusive[0].replace(/\s+/g, ' ') };
-  }
   const ltMatch = text.match(/^<\s*(\d+\.?\d*)/);
   if (ltMatch && ltMatch[1] !== undefined) {
     return { value: parseFloat(ltMatch[1]) * 0.5, rawValue: `<${ltMatch[1]}` };
@@ -161,8 +167,8 @@ export function extractValueFromWindow(
     sourceLines: string[],
     skipWordDigits = false,
     from = 0,
-  ): { value: number; rawValue: string }[] {
-    const candidates: { value: number; rawValue: string }[] = [];
+  ): Candidate[] {
+    const candidates: Candidate[] = [];
     for (const line of sourceLines) {
       const refIdx = line.search(inlineRangeKeyword);
       const searchLine = refIdx > 0 ? line.substring(0, refIdx) : line;
@@ -185,7 +191,7 @@ export function extractValueFromWindow(
         }
         const v = parseFloat(tok);
         if (v >= 0 && v <= 100000) {
-          candidates.push({ value: v, rawValue: tok });
+          candidates.push({ value: v, rawValue: tok, line: searchLine, start: m.index });
         }
       }
     }
@@ -212,8 +218,8 @@ export function extractValueFromWindow(
   }
 
   function pickBest(
-    candidates: { value: number; rawValue: string }[],
-  ): { value: number; rawValue: string } | null {
+    candidates: Candidate[],
+  ): Candidate | null {
     if (candidates.length === 0) return null;
     if (candidates.length === 1) return candidates[0] ?? null;
     if (referenceResult?.min !== undefined && referenceResult?.max !== undefined) {
@@ -240,17 +246,6 @@ export function extractValueFromWindow(
   // numbers that follow are historical values from prior draws.
   const refBoundaryIdx0 = labelLine.search(/\breference\s+range|\bref\s+range|\bref\.\s*range/i);
   const labelLineBeforeRef0 = refBoundaryIdx0 > 0 ? labelLine.substring(0, refBoundaryIdx0) : labelLine;
-  // F021: an inclusive comparator is her result only in the result position, the
-  // first number after the name ("eGFR > OR = 60 > OR = 60 mL/min/1.73m2"). Beside
-  // or after a measured value it is the reference ("eGFR 45 L ≥60 mL/min/1.73m2"),
-  // and so it is when a measured value follows it ("eGFR (>=60) 45 mL/min/1.73m2").
-  const resultToken = firstNumericToken(labelLineBeforeRef0, labelNameEnd);
-  const resultText = resultToken ? labelLineBeforeRef0.slice(resultToken.start, resultToken.end) : '';
-  const inclusiveResult = INCLUSIVE_VALUE_RE.test(resultText) ? parseValueWithPrefix(resultText) : null;
-  const measuredAfter = resultToken !== null && collectCandidates([labelLineBeforeRef0], true, resultToken.end).length > 0;
-  if (inclusiveResult && !measuredAfter) {
-    return { value: inclusiveResult.value, rawValue: inclusiveResult.rawValue, unit, referenceResult, ...ambiguity };
-  }
   const prefixRe0 = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
   const prefixMatch0 = labelLineBeforeRef0.match(prefixRe0);
   if (prefixMatch0 && prefixMatch0[1] !== undefined) {
@@ -295,7 +290,7 @@ export function extractValueFromWindow(
           /\d{1,2}\/\d{1,2}\/|\bdob\b|\bdate\b|\bcollected?\b|\breport(?:ed)?\b|\baccession\b/i.test(labelLine)) {
         continue;
       }
-      labelCandidates.push({ value: parsed.value, rawValue: parsed.rawValue ?? raw });
+      labelCandidates.push({ value: parsed.value, rawValue: parsed.rawValue ?? raw, line: labelLine, start: m.index + (m[1]?.length ?? 0) });
       break;
     }
   }
@@ -319,19 +314,19 @@ export function extractValueFromWindow(
   if (labelCandidates.length > 0) {
     if (valueCandidates.length === 0 || !referenceResult) {
       const best = pickBest(labelCandidates);
-      if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult, ...ambiguity };
+      if (best) return { ...withInclusiveComparator(best), unit, referenceResult, ...ambiguity };
     } else {
       // Both candidate arrays are non-empty above, so pickBest returns non-null here.
       const bestLabel = pickBest(labelCandidates);
       const bestValue = pickBest(valueCandidates);
       if (bestLabel && bestValue) {
         if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
-          return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult, ...ambiguity };
+          return { ...withInclusiveComparator(bestLabel), unit, referenceResult, ...ambiguity };
         }
-        return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult, ...ambiguity };
+        return { ...withInclusiveComparator(bestValue), unit, referenceResult, ...ambiguity };
       }
-      if (bestLabel) return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult, ...ambiguity };
-      if (bestValue) return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult, ...ambiguity };
+      if (bestLabel) return { ...withInclusiveComparator(bestLabel), unit, referenceResult, ...ambiguity };
+      if (bestValue) return { ...withInclusiveComparator(bestValue), unit, referenceResult, ...ambiguity };
     }
   }
 
@@ -339,24 +334,18 @@ export function extractValueFromWindow(
   // Only do this after label candidates fail, and skip tokens whose numeric part
   // is already a known range boundary (meaning it IS the reference, not the result).
   // We also collect ambiguous comparators (value == range boundary) for use as last resort.
-  const COMPARATOR_VALUE_RE = new RegExp(String.raw`(?:^|\s)(${INCLUSIVE_COMPARATOR}\s*\d+\.?\d*|<\s*\d+\.?\d*|>\s*\d+\.?\d*)`, 'i');
+  const COMPARATOR_VALUE_RE = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
   let ambiguousComparator: { value: number; rawValue: string } | null = null;
-  for (const [k, vLine] of valueLines.entries()) {
+  for (const vLine of valueLines) {
     const trimmed = vLine.trim();
     if (PHASE_LINE_RE.test(trimmed)) continue;
     if (/\breference\s+range\b|\bref\s+range\b/i.test(trimmed)) continue;
     const cm2 = trimmed.match(COMPARATOR_VALUE_RE);
     if (cm2 && cm2[1] !== undefined) {
-      // F021: a comparator after her measured value is its reference, not her
-      // result ("eGFR / 45 mL/min/1.73m2 / > OR = 60"); the measured value stays.
-      // Only her own result line counts, not a number in "Specimen 1" or "CKD-EPI 2021".
-      const measured = collectCandidates([...valueLines.slice(0, k), trimmed.slice(0, cm2.index)].filter(isOwnResultLine), true);
-      const measuredBest = pickBest(measured);
-      if (measuredBest) return { value: measuredBest.value, rawValue: measuredBest.rawValue, unit, referenceResult, ...ambiguity };
       const cmToken = cm2[1];
       const parsed = parseValueWithPrefix(cmToken.trim());
       if (parsed) {
-        const rawNum = cmToken.trim().replace(COMPARATOR_PREFIX_RE, '');
+        const rawNum = cmToken.trim().replace(/^[<>]=?\s*/, '');
         if (knownRangeNumbers.has(rawNum) || knownRangeNumbers.has(String(parseFloat(rawNum)))) {
           ambiguousComparator ??= parsed;
           continue;
@@ -369,7 +358,7 @@ export function extractValueFromWindow(
   // PRIORITY 3: plain numeric candidates from value lines.
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
-    if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult, ...ambiguity };
+    if (best) return { ...withInclusiveComparator(best), unit, referenceResult, ...ambiguity };
   }
 
   // PRIORITY 5: fallback — scan raw (unfiltered) lines for a standalone numeric value.

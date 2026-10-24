@@ -93,6 +93,8 @@ const MORE_ROWS: ReadonlyArray<readonly [string, string]> = [
   ['e_b12_lorq', 'Vitamin B12                  <OR=150   pg/mL     232-1245'],
   ['e_b12_lorq_sp', 'Vitamin B12                  < OR = 150   pg/mL     232-1245'],
   ['e_b12_le', 'Vitamin B12 <=150 pg/mL 232-1245'],
+  // c_vitd_le with the "≤" spelling.
+  ['c_vitd_le_uni', 'Vitamin D, 25-OH, Total ≤8 L 30-100 ng/mL'],
 ];
 
 /**
@@ -223,6 +225,109 @@ const PROBE_ROWS: ReadonlyArray<readonly [string, string]> = [
   ['p_l_egfr_labcorp_unit', 'eGFR\n45 mL/min/1.73\n>59'],
 ];
 
+/**
+ * The second PX1 review's adversarial rows, with its names: a reference on the
+ * label line and her result on the next (r), a reference before her result on
+ * one line (s), a reference after it with odd separators (t), censored results
+ * with trailing extras (c), and a censored result under a count, flag, date or
+ * numbered line (m).
+ */
+const REVIEW_ROWS: ReadonlyArray<readonly [string, string]> = [
+  ['g_r01', 'eGFR (>=60)\n45 mL/min/1.73m2'],
+  ['g_r02', 'eGFR >=60\n45 mL/min/1.73m2'],
+  ['g_r03', 'eGFR Normal >=60\n45 mL/min/1.73m2'],
+  ['g_r04', 'eGFR Ref: >= 60\n45 L mL/min/1.73m2'],
+  ['q_r05', 'HDL Cholesterol (> OR = 40)\n35 L mg/dL'],
+  ['q_r06', 'Hemoglobin A1c (<=5.6)\n7.2 H %'],
+  ['q_r07', 'Hemoglobin A1c ≤5.6\n7.2 %'],
+  ['g_r08', 'eGFR (>60)\n45 mL/min/1.73m2'],
+  ['g_r09', 'HDL Cholesterol (≥40)\n35 mg/dL'],
+  ['l_r10', 'HDL Cholesterol >=40\n35 Low mg/dL'],
+  ['g_s01', 'eGFR [>=60] 45 mL/min/1.73m2'],
+  ['g_s02', 'eGFR (≥ 60) 45 mL/min/1.73m2'],
+  ['g_s03', 'eGFR (> OR = 60) 45 L'],
+  ['g_s04', 'eGFR Ref >=60 45'],
+  ['g_s05', 'HDL Cholesterol Normal: >=40 35 L mg/dL'],
+  ['g_s06', 'Hemoglobin A1c Ref ≤ 5.6 % 7.2 H'],
+  ['g_s07', 'Triglycerides (<=150 mg/dL) 320 H'],
+  ['g_s08', 'Triglycerides <=150 mg/dL 320 mg/dL'],
+  ['q_s09', 'eGFR >=60 mL/min/1.73m2 45 L'],
+  ['q_s10', 'eGFR>=60 45'],
+  ['q_s11', 'Vitamin D, 25-OH, Total (>=30) 12 L ng/mL'],
+  ['q_s12', 'Vitamin D, 25-OH, Total >=30 12.5 ng/mL'],
+  ['q_t01', 'eGFR 45 L (>=60) mL/min/1.73m2'],
+  ['q_t02', 'eGFR 45 L Ref: > OR = 60'],
+  ['q_t03', 'eGFR 4 5 L >=60'],
+  ['q_t04', 'eGFR 45L >=60 mL/min/1.73m2'],
+  ['q_t05', 'eGFR 45 L>=60'],
+  ['q_t06', 'eGFR 45 >=60 L'],
+  ['q_t07', 'Hemoglobin A1c 7.2% <=5.6'],
+  ['q_t08', 'Hemoglobin A1c 7.2 %  (<= 5.6)'],
+  ['q_t09', 'HDL Cholesterol 35 mg/dL Normal >= 40'],
+  ['q_t10', 'eGFR 45 mL/min/1.73m2 >=60 01/15/2026'],
+  ['q_t11', 'eGFR 45 mL/min/1.73m2 >=60 Final'],
+  ['q_t12', 'eGFR 45 mL/min/1.73m2 ≥ 60'],
+  ['q_t13', 'Ferritin 8 L >= 15 ng/mL'],
+  ['q_t14', 'eGFR 120 >= 60 mL/min/1.73m2'],
+  ['q_t15', 'eGFR 60 >= 60'],
+  ['q_t16', 'Vitamin B12 180 L ≥ 232 pg/mL'],
+  ['q_c01', 'eGFR >=60 mL/min/1.73m2 01/15/2026'],
+  ['q_c02', 'eGFR > OR = 60 mL/min/1.73m2 >59'],
+  ['q_c03', 'Vitamin B12 <=150 L pg/mL 232 - 1245'],
+  ['q_c04', 'Vitamin B12 <=150 L pg/mL 2026'],
+  ['q_c05', 'eGFR >=90 mL/min/1.73m2 Prior 85'],
+  ['q_c06', 'hs-CRP <=0.2 mg/L <1.0'],
+  ['q_c07', 'eGFR ≥ 60 L'],
+  ['l_c08', 'eGFR >=60 mL/min/1.73 >59'],
+  ['q_m01', 'PROGESTERONE\n2026\n<0.5 ng/mL'],
+  ['q_m02', 'HCG\n8 hours\n<2.0 mIU/mL'],
+  ['q_m03', 'HCG\nFasting 12 H\n<2.0'],
+  ['q_m04', 'ESTRADIOL\n3 mL\n<15 pg/mL'],
+  ['q_m05', 'ESTRADIOL\n1 L\n<15 pg/mL'],
+  ['q_m06', 'eGFR\n2 H\n>60 mL/min/1.73m2'],
+  ['q_m07', 'PROGESTERONE\n04/12/2026\n<0.5 ng/mL'],
+  ['q_m08', 'PROGESTERONE\nDay 21\n<0.5 ng/mL'],
+  ['q_m09', 'ESTRADIOL\n2\n<=15 pg/mL'],
+  ['q_m10', 'ESTRADIOL\n12 hr\n<15'],
+  ['q_m11', 'TSH\n2.1\n<4.5 mIU/L'],
+  ['q_m12', 'Vitamin B12\n2 Low\n<=150 pg/mL'],
+  ['q_m13', 'Vitamin B12\n150 L\n<150 pg/mL'],
+  ['q_m14', 'eGFR\n90 mL/min\n>60'],
+  ['q_m15', 'eGFR\n45 L\n>60 mL/min/1.73m2'],
+  ['q_m16', 'Vitamin D, 25-OH, Total\n12 L ng/mL\n<30'],
+  ['q_m17', 'eGFR\n45\n>=60\n45'],
+  ['q_m18', 'Hemoglobin A1c\n7.2\nH\n<=5.6 %'],
+  ['q_m19', 'Hemoglobin A1c\n7.2 H\n< 5.7 %'],
+  ['q_m20', 'Ferritin\n8 L ng/mL\n> 15'],
+  ['l_m21', 'Testosterone\n2 Low ng/dL\n<10'],
+  ['g_m22', 'Estradiol\n2\nResult: <15 pg/mL'],
+  ['h_m23', 'hs-CRP\nYour Result: 3.2 mg/L\nOptimal Range: < OR = 1.0'],
+  ['h_m24', 'eGFR\nOptimal Range: > OR = 60\nYour Result: >90'],
+  ['h_m25', 'Vitamin D\nOptimal Range: ≥40\nYour Result: 22 ng/mL'],
+  ['h_m26', 'Vitamin B12\nYour Result: ≤150 pg/mL\nOptimal Range: 400-1100'],
+];
+
+/**
+ * The second PX1 review's probe rows, under a bare header: a censored result
+ * under an "N unit/flag" line with a reference after it, and an inclusive
+ * reference on the label line with her result on the next. The review's names,
+ * with "p_" in front.
+ */
+const REVIEW_PROBE_ROWS: ReadonlyArray<readonly [string, string]> = [
+  ['p_q_prog_24h_ref', 'PROGESTERONE\n24 h\n<0.5 ng/mL\n0.2-28.0'],
+  ['p_l_b12_2low_ref', 'Vitamin B12\n2 Low\n<150 pg/mL\n232-1245'],
+  ['p_q_e2_2A_ref', 'ESTRADIOL\n2 A\n<15 pg/mL\n15-350'],
+  ['p_q_a1c_2pct_ref', 'Hemoglobin A1c\n2 %\n<5.7\n4.0-5.6'],
+  ['p_q_egfr_2H_ref', 'eGFR\n2 H\n>60 mL/min/1.73m2\nReference Range: >59'],
+  ['p_q_e2_1L_ref', 'ESTRADIOL\n1 L\n<15 pg/mL\nReference Range: 15-350'],
+  ['p_g_hdl_ref_label_next', 'HDL Cholesterol (≥40)\n35 mg/dL\nPrior 50'],
+  ['p_g_egfr_ref_label_next_flag', 'eGFR (≥60)\n45 L mL/min/1.73m2'],
+  ['p_g_vitd_ref_label_next', 'Vitamin D, 25-OH, Total (≥30)\n12 L ng/mL'],
+  ['p_g_ferr_ref_label_next', 'Ferritin ≥15\n8 L ng/mL'],
+  // Its finding 3: a "≤" result on a Hone result line, with a "≤" reference.
+  ['p_h_crp_le_le', 'hs-CRP\nYour Result: ≤0.2 mg/L\nOptimal Range: ≤1.0'],
+];
+
 const withHeader = ([name, row]: readonly [string, string]): [string, string] => [name, (HEADERS[name.slice(0, 1)] ?? '') + row];
 const withBareHeader = ([name, row]: readonly [string, string]): [string, string] => [name, (BARE_HEADERS[name.slice(2, 3)] ?? '') + row];
 
@@ -236,4 +341,10 @@ export const comparatorExtraLayouts: ReadonlyMap<string, string> = new Map(MORE_
 export const comparatorAdversarialLayouts: ReadonlyMap<string, string> = new Map([
   ...ADVERSARIAL_ROWS.map(withHeader),
   ...PROBE_ROWS.map(withBareHeader),
+]);
+
+/** The second PX1 review's adversarial and probe rows. */
+export const comparatorReviewLayouts: ReadonlyMap<string, string> = new Map([
+  ...REVIEW_ROWS.map(withHeader),
+  ...REVIEW_PROBE_ROWS.map(withBareHeader),
 ]);
