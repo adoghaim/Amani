@@ -1,0 +1,23 @@
+# graphify: paths kept out of the knowledge graph (gitignore syntax; .gitignore is honored too)
+
+# Vendored third-party agent skills: generic design/animation guidance, not Amani code or docs
+.agents/
+.claude/skills/*
+!.claude/skills/amani-engineering/
+
+# Stale or accidental artifacts that happen to be tracked
+apps/mobile/.expo/
+.bolt/
+supabase/.temp/
+logs.txt
+public/google*.html
+
+# Media (app icons, favicon, QA screenshots, the synthetic lab PDF): no code structure, and each would need a vision pass
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.svg
+*.pdf
