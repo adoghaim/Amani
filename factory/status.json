@@ -2510,14 +2510,17 @@
         "F041"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-iap",
-      "pr": null,
+      "pr": "#164",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2528,7 +2531,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-iap; findings F039, F041. Not started."
+        "F039 fixed (a scheduled Play pause keeps access until expiry, a started pause maps to 'paused' so account deletion warns and cancels, REFUND_REVERSED activates), F041 partly fixed (numeric ids accepted, Play rows keyed on the original order id on both paths, cross-account refusal added; App Store rows still key on the latest transaction id until RevenueCat API v2), F033 verify-iap-purchase site fixed (fixed client error body, scrubbed log); blind verifier PASS_WITH_NOTES 2026-10-23 at 9fc7fc3, 20 tests red on base, mutations m1-m10 reproduced, m11 survived.",
+        "Gates at 8fc2370 (run locally): lint, typecheck, full test (3,375), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"

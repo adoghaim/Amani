@@ -78,7 +78,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | todo | RV-RS1 | - |
 | RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | todo | - | - |
 | RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | todo | RV-BS1 | - |
-| RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | todo | - | - |
+| RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | review | - | [#164](https://github.com/adoghaim/Amani/pull/164) |
 | RV-BU1 Billing labels from the real entitlement; an honest deletion warning | RV | 1 | in-progress | - | - |
 | RV-WP1 Private source maps, production-only routes, security headers | RV | 1 | review | - | - |
 | RV-WP2 Offline is not empty; error boundaries reset | RV | 1 | in-progress | RV-WP1 | - |
