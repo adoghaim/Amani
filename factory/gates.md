@@ -69,14 +69,14 @@ Foundation PRs carry the extension points other packets build on (PK-INT-01, PK-
 For any packet that adds or changes `supabase/migrations/`:
 
 1. Harness fixtures added to `supabase/migrations/__verification__/`, run by a new case file in `__verification__/cases/` (see the header of `run.sh`), covering: cross-user RLS denial, column grants, trigger behaviour, idempotency/race where relevant. A new user-owned table is also registered in `supabase/functions/_shared/user-data-registry.ts`; `account-deletion-sweep.test.ts` fails until it is.
-2. `factory/sql/verify-privileges.sql` expectations updated for new tables.
+2. Each new relation a client may reach is listed on purpose where it is judged: `client_read` (signed-in reads) or `anon_read` (signed-out reads) in `factory/sql/verify-privileges.sql`; for a client view, `client_view` there plus a cross-user probe in `__verification__/full-chain.probes.sql`; FC-CLIENT-WRITES (client writes) or FC-DEFINER-RPC (SECURITY DEFINER functions clients may call) in `__verification__/full-chain.verify.sql`; and for a user-owned table, also the registry (`user-data-registry.ts`) and its cross-user probe in `full-chain.probes.sql`.
 3. **Trigger mode:** every safety trigger is `ENABLE ALWAYS` (`pg_trigger.tgenabled = 'A'`), asserted in the harness and checked after deploy with `factory/sql/verify-triggers-enable-always.sql`. Reason: triggers in the default mode (`O`) do not fire when `session_replication_role = replica`, which restore tooling uses.
 4. No blanket `supabase db push` across an owner-GO boundary (see `docs/interpretation-visibility-rollout.md`). Never hand-reapply a migration (replay hazard documented there).
 
 **Manual deploy caveat.** Netlify deploys only the web app. Migrations and edge functions are deployed by hand: `supabase db push` and `supabase functions deploy <name>`. A merged PR is **not** a deployed backend. The PR must list exactly which migrations/functions need deploying; the owner runs them after GO; then the post-deploy checks below run and their output is attached to the ledger.
 
 **Post-deploy checklist (owner or delegated lead):**
-- [ ] `verify-privileges.sql` shows only intended grants (anon none; authenticated as designed).
+- [ ] `verify-privileges.sql` returns no rows apart from the `CHAIN_KNOWN_VIOLATIONS` rows (`__verification__/cases/240-full-chain-replay.sh`); any other row is a problem.
 - [ ] `verify-triggers-enable-always.sql` returns zero rows whose `status` starts with `FAIL` (see the runbook below).
 - [ ] Function probe: `OPTIONS /functions/v1/<name>` answers 200/204 for each deployed function.
 - [ ] Ledger `deployed.supabase` updated with date and who ran it.
