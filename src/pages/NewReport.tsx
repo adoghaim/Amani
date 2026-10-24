@@ -54,6 +54,9 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
 
 type GuidedStep = 'choose' | 'instructions' | 'upload';
 
+/** A printed range read one line per "; " or line break, as the parser joins them (PK-FIX-05). */
+const bindPrintedRange = (text: string) => bindReferenceRange(text.split(/;\s+|\n/));
+
 /*
   Her confirm-step edit replaces what was read off the page (IB1 review). The
   printed value text and the interval read with the range would otherwise
@@ -72,13 +75,36 @@ function applyReviewEdit(item: ReportItem, field: keyof ReportItem, value: strin
   const updated = { ...item, [field]: value } as ReportItem;
   if (field === 'value_numeric') updated.value_text = null;
   if (field === 'raw_reference_range') {
-    const range = typeof value === 'string' ? bindReferenceRange(value.split(/;\s+|\n/)).range : undefined;
+    const range = typeof value === 'string' ? bindPrintedRange(value).range : undefined;
     updated.normalized_reference_min = range?.min ?? null;
     updated.normalized_reference_max = range?.max ?? null;
     updated.reference_operator = range?.comparator?.operator ?? null;
     updated.reference_operator_value = range?.comparator?.value ?? null;
   }
   return updated;
+}
+
+/*
+  The model's interval is held to the same binding before review (IB1 review,
+  fix wave 2). OCR and AI-refinement rows carry normalized_reference_* as the
+  model filled them. When her lab printed several intervals, or one tied to a
+  cycle phase, menopause or pregnancy, the model's pick placed her value
+  against an interval that may not apply and the row did not open for review.
+  Such a row keeps the printed text, binds no interval and goes to review, as
+  the parser's own rows do. A printed range that binds one interval, or none
+  the parser can read, keeps the model's values.
+*/
+function withBoundModelRange(item: ExtractedItem): ExtractedItem {
+  const printed = item.raw_reference_range;
+  if (typeof printed !== 'string' || !bindPrintedRange(printed).ambiguous) return item;
+  return {
+    ...item,
+    normalized_reference_min: null,
+    normalized_reference_max: null,
+    reference_operator: null,
+    reference_operator_value: null,
+    needs_review: true,
+  };
 }
 
 /*
@@ -484,7 +510,7 @@ export function NewReport() {
 
       // OCR rows are named like report_analytes; the save reads ReportItem names (F093, F114).
       const items: ExtractedAnalyte[] = data.items ?? [];
-      if (items.length > 0) applyExtractedItems(items.map(toExtractedItem), runId);
+      if (items.length > 0) applyExtractedItems(items.map(a => withBoundModelRange(toExtractedItem(a))), runId);
 
       // Capture cycle metadata from OCR if the text-path didn't already find any.
       // OCR returns metadata.cycle_day / metadata.cycle_phase per the edge function contract.
@@ -534,7 +560,7 @@ export function NewReport() {
       // extract-biomarkers maps its rows with the same toExtractedItem before answering.
       const items: ExtractedItem[] = data?.items ?? [];
       if (runId === extractionRunRef.current && items.length > 0) {
-        applyExtractedItems(items, runId);
+        applyExtractedItems(items.map(withBoundModelRange), runId);
       }
     }).catch(err => {
       console.error('[NewReport] AI extraction background network error:', err);

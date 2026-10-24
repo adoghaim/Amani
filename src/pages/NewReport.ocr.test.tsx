@@ -3,7 +3,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
+import { toExtractedItem, type ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 import { ResultRow } from '../components/ResultRow';
 
 /*
@@ -20,6 +20,7 @@ const fixture = vi.hoisted(() => ({
   user: { id: '00000000-0000-4000-8000-0000000001b1' },
   inserts: [] as { table: string; values: unknown }[],
   ocrItems: [] as unknown[],
+  aiItems: [] as unknown[],
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -41,7 +42,10 @@ vi.mock('../lib/supabase', () => {
     // The body parse-lab-report-ocr/index.ts returns.
     functions: { invoke: async (name: string) => (name === 'parse-lab-report-ocr'
       ? { data: { items: fixture.ocrItems, metadata: { cycle_day: null, cycle_phase: null }, _source_format: 'ocr', _parser_version: 'v2_vision_fallback' }, error: null }
-      : { data: null, error: null }) },
+      : name === 'extract-biomarkers'
+        // extract-biomarkers/index.ts answers `items` already mapped by toExtractedItem.
+        ? { data: { items: fixture.aiItems }, error: null }
+        : { data: null, error: null }) },
   } };
 });
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user }) }));
@@ -56,6 +60,7 @@ vi.mock('../utils/subscription', () => ({ checkSubscriptionLive: vi.fn(), handle
 vi.mock('../lib/freemium/gates', () => ({ uploadRequiresSubscription: () => false }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 import { NewReport } from './NewReport';
+import { extractTextFromPDF } from '../utils/pdfExtractor';
 
 /*
   Two rows as the function builds them. The censored TSH carries the
@@ -105,7 +110,7 @@ async function click(el: Element | null) {
 }
 
 /** Choose a synthetic photo, let the OCR answer arrive, and stop on "Confirm your markers". */
-async function uploadPhoto() {
+async function uploadPhoto(file = new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' })) {
   await act(async () => root.render(
     <MemoryRouter initialEntries={['/app/new']}>
       <Routes>
@@ -117,7 +122,7 @@ async function uploadPhoto() {
   await settle();
   const fileInput = app.querySelector<HTMLInputElement>('#file-upload')!;
   Object.defineProperty(fileInput, 'files', {
-    configurable: true, value: [new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' })],
+    configurable: true, value: [file],
   });
   await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
   await click(button('Next'));
@@ -309,6 +314,50 @@ describe('NewReport: her confirm-step corrections to an OCR row reach the report
     await type(rangeInput(), 'Adult 0.45-4.5; fasting');
     const { analytes } = await save();
     expect(analytes['TSH']).toMatchObject({ normalized_min: 0.45, normalized_max: 4.5, normalized_operator: null });
+  });
+
+  /*
+    IB1 review fix wave 2 (MAJOR): the model's own interval is held to the
+    same binding (PK-FIX-05) before review, not only her edits. When the
+    printed range is several phase intervals, or one tied to a phase, the
+    model may fill normalized_reference_* from one of them. Unedited, that
+    interval placed her ovulation-phase 145 "Above your lab's range" against
+    the follicular one, and the row did not open for review.
+  */
+  it.each([
+    ['several cycle-phase intervals', PHASES],
+    ['one interval tied to a cycle phase', 'Follicular phase 21.1 – 121.1'],
+  ])('an unedited OCR row whose printed range binds no single interval saves none and opens for review (%s)', async (_case, printed) => {
+    fixture.ocrItems = [{
+      ...ESTRADIOL, raw_reference_range: printed, normalized_min: 21.1, normalized_max: 121.1,
+      confidence_score: 'high', parse_status: 'mapped', needs_review: false,
+    }];
+    await uploadPhoto();
+    expect(rangeInput()).not.toBeNull();
+    const { analytes, biomarkers } = await save();
+    expect(analytes['Estradiol']).toMatchObject({
+      raw_reference_range: printed, normalized_min: null, normalized_max: null,
+      normalized_operator: null, normalized_operator_value: null, needs_review: true,
+    });
+    expect(biomarkers['estradiol']).toMatchObject({ reference_min: null, reference_max: null });
+    expect((await renderResult(analytes['Estradiol'])).status).not.toBe("Above your lab's range");
+  });
+
+  it('an AI-refined row whose printed range binds no single interval saves none and opens for review', async () => {
+    // A thin text PDF: the local parse finds one row, so extract-biomarkers refines it.
+    vi.mocked(extractTextFromPDF).mockResolvedValueOnce('TSH 2.1 mIU/L 0.45-4.5');
+    fixture.aiItems = [toExtractedItem({
+      ...ESTRADIOL, normalized_min: 21.1, normalized_max: 121.1,
+      confidence_score: 'high', parse_status: 'mapped', needs_review: false,
+    })];
+    await uploadPhoto(new File(['synthetic'], 'synthetic-lab.pdf', { type: 'application/pdf' }));
+    expect(Object.values(confirmValues())).toEqual(['145']);
+    expect(rangeInput()).not.toBeNull();
+    const { analytes } = await save();
+    expect(analytes['Estradiol']).toMatchObject({
+      raw_reference_range: PHASES, normalized_min: null, normalized_max: null, needs_review: true,
+    });
+    expect((await renderResult(analytes['Estradiol'])).status).not.toBe("Above your lab's range");
   });
 
   it('a row whose value text the model sent as a JSON number still saves', async () => {
