@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cycleContextAtDraw, cycleDayAtDraw, knownCycleLength, parseCycleLengthDays, phaseNotEstimated, phaseNotEstimatedCopy,
-  CYCLE_LENGTH_INPUT_ERROR, DAY_MAP_LAST_DAY,
+  cycleContextAtDraw, cycleContextToStore, cycleDayAtDraw, knownCycleLength, parseCycleLengthDays, phaseNotEstimated,
+  phaseNotEstimatedCopy, CYCLE_LENGTH_INPUT_ERROR, DAY_MAP_LAST_DAY, type EstimatedPhase,
 } from './drawCycleContext';
 import { computeAmaniStatus } from './scoring/scoreBiomarker';
 import { requiresCycleContext } from './scoring/amaniContext';
@@ -233,5 +233,64 @@ describe('cycle day arithmetic (unchanged from main)', () => {
     expect(cycleDayAtDraw('2026-04-30', 'not a date')).toBeNull();
     expect(cycleDayAtDraw('2026-04-10', '2026-04-11')).toBe(0);
     expect(cycleDayAtDraw('2026-04-10', '2026-04-15')).toBe(-4);
+  });
+});
+
+/*
+  F010: the cycle day and phase a new report saves. Her dates win over a cycle
+  day or phase printed on the report; a printed value fills in only when her
+  dates give no cycle day, and a printed phase never overrides D13 (b). The
+  page-level cases are in src/pages/NewReport.cycle.test.tsx. Synthetic dates.
+*/
+describe('F010: her dates win over cycle facts printed on the report', () => {
+  const printed = (cycleDay: number | null, cyclePhase: EstimatedPhase | null) => ({ cycleDay, cyclePhase });
+  const noDates = (cycleLengthDays: unknown) => cycleContextAtDraw({ drawDate: DRAW, lastPeriodStart: '', cycleLengthDays });
+
+  it('the review example: LMP 2026-10-01, draw 2026-10-21, a printed follicular phase', () => {
+    const review = (cycleLengthDays: unknown) =>
+      cycleContextAtDraw({ drawDate: '2026-10-21', lastPeriodStart: '2026-10-01', cycleLengthDays });
+    // Her dates: day 21, luteal. It used to be saved as day 21, follicular.
+    expect(cycleContextToStore(review(''), printed(null, 'follicular'))).toEqual({ cycleDay: 21, phase: 'luteal' });
+    // A known 32-day cycle withholds the phase (D13 b); the printed phase used to fill it in.
+    expect(cycleContextToStore(review(32), printed(null, 'follicular'))).toEqual({ cycleDay: 21, phase: 'unknown' });
+  });
+
+  it('her dates give both the day and the phase, on every day 1-40 and every length, whatever was printed', () => {
+    for (const length of ['', 28, 24, 35]) {
+      for (let day = 1; day <= 40; day++) {
+        const drawCycle = at(day, length);
+        for (const p of [printed(3, 'follicular'), printed(null, 'menstrual'), printed(30, null), printed(null, null)]) {
+          expect(cycleContextToStore(drawCycle, p), `${String(length)}/day ${day}/${JSON.stringify(p)}`)
+            .toEqual({ cycleDay: day, phase: drawCycle.phase });
+        }
+      }
+    }
+  });
+
+  it('her dates still decide when her period start is after the draw: no day of 1 or more, no phase', () => {
+    const after = cycleContextAtDraw({ drawDate: '2026-04-10', lastPeriodStart: '2026-04-15', cycleLengthDays: '' });
+    expect(cycleContextToStore(after, printed(21, 'luteal'))).toEqual({ cycleDay: -4, phase: 'unknown' });
+  });
+
+  it('without her dates, a printed day and phase fill in for an unknown or 28-day length, as before', () => {
+    for (const length of ['', null, 28]) {
+      expect(cycleContextToStore(noDates(length), printed(21, 'luteal'))).toEqual({ cycleDay: 21, phase: 'luteal' });
+      expect(cycleContextToStore(noDates(length), printed(null, 'ovulatory'))).toEqual({ cycleDay: null, phase: 'ovulatory' });
+      expect(cycleContextToStore(noDates(length), printed(9, null))).toEqual({ cycleDay: 9, phase: 'unknown' });
+    }
+  });
+
+  it('D13 (b): a printed phase never fills in for a known length other than 28, with or without her dates', () => {
+    for (const length of [24, 35, '32']) {
+      expect(cycleContextToStore(at(21, length), printed(null, 'follicular')), String(length)).toEqual({ cycleDay: 21, phase: 'unknown' });
+      expect(cycleContextToStore(noDates(length), printed(21, 'luteal')), String(length)).toEqual({ cycleDay: 21, phase: 'unknown' });
+      expect(cycleContextToStore(noDates(length), printed(null, 'menstrual')), String(length)).toEqual({ cycleDay: null, phase: 'unknown' });
+    }
+  });
+
+  it('nothing printed: exactly what cycleContextAtDraw gives', () => {
+    for (const drawCycle of [at(21, ''), at(21, 35), at(38, 28), noDates(''), noDates(35)]) {
+      expect(cycleContextToStore(drawCycle, null)).toEqual({ cycleDay: drawCycle.cycleDay, phase: drawCycle.phase });
+    }
   });
 });
