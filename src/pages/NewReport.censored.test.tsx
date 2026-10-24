@@ -87,7 +87,8 @@ async function click(label: string) {
   await settle();
 }
 
-async function upload() {
+type Step = () => Promise<void>;
+async function upload({ onPreview, onReview }: { onPreview?: Step; onReview?: Step } = {}) {
   await act(async () => root.render(
     <MemoryRouter initialEntries={['/app/new']}>
       <Routes>
@@ -104,14 +105,15 @@ async function upload() {
   await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
   await click('Next');
   await settle(20);
+  await onPreview?.();
   const reportDate = app.querySelector<HTMLInputElement>('input[type="date"]')!;
-  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
   await act(async () => {
     setValue.call(reportDate, '2026-09-01');
     reportDate.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await settle();
   await click('Next');
+  await onReview?.();
   await click('Save and analyze');
   await settle(20);
   return fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[];
@@ -125,4 +127,58 @@ it('saves the flag the printed limit decides: eGFR "> OR = 60" unknown, vitamin 
     // Control: a measured value is flagged by its number.
     ['ferritin', '8', 'out_of_range'],
   ]);
+});
+
+/*
+  Fix wave 4. The upload review showed the placeholder as her value: the
+  "View detected markers" preview read '4 ng/mL' for a printed '<8', and the
+  Value input held 4. An edit she made kept the stale '<8', which then
+  overrode her number in the saved flag.
+*/
+const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+/** The Value input of the confirm-step card named `name`, expanded. */
+async function reviewValueInput(name: string) {
+  const card = Array.from(app.querySelectorAll<HTMLElement>('div.cursor-pointer'))
+    .find(c => c.querySelector('span.truncate')?.textContent === name);
+  expect(card, name).toBeDefined();
+  await act(async () => { card!.click(); });
+  return card!.parentElement!.querySelector<HTMLInputElement>('input[type="number"]')!;
+}
+
+it('previews a result printed as a limit by its printed text, never its placeholder', async () => {
+  let preview: string[][] = [];
+  await upload({ onPreview: async () => {
+    const toggle = Array.from(app.querySelectorAll('button')).find(b => b.textContent?.startsWith('View detected markers'));
+    expect(toggle).toBeDefined();
+    await act(async () => { toggle!.click(); });
+    await settle();
+    preview = Array.from(app.querySelectorAll('.divide-y > div'))
+      .map(row => [row.children[0]?.textContent?.trim() ?? '', row.children[1]?.textContent?.trim() ?? '']);
+  } });
+  expect(preview).toContainEqual(['Vitamin D', '<8 ng/mL']);
+  expect(preview).toContainEqual(['eGFR', '> OR = 60 mL/min/1.73m2']);
+  expect(preview.map(([, value]) => value)).not.toContain('4 ng/mL');
+  // Control: a measured value is previewed by its number.
+  expect(preview).toContainEqual(['Ferritin', '8 ng/mL']);
+});
+
+it('leaves the review Value input empty for "<8"; untouched, the row saves its printed text', async () => {
+  let shown: string | undefined;
+  const rows = await upload({ onReview: async () => { shown = (await reviewValueInput('Vitamin D')).value; } });
+  expect(shown).toBe('');
+  expect(rows.find(b => b['name'] === 'vitamin_d_25_oh')).toMatchObject({ raw_value_text: '<8', flagged: 'out_of_range' });
+});
+
+it('an edited value replaces the printed "<8" and is flagged from her number', async () => {
+  const rows = await upload({ onReview: async () => {
+    const input = await reviewValueInput('Vitamin D');
+    await act(async () => {
+      setValue.call(input, '60');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await settle();
+  } });
+  expect(rows.find(b => b['name'] === 'vitamin_d_25_oh')).toMatchObject({ value: 60, raw_value_text: null, flagged: 'in_range' });
+  const analytes = fixture.inserts.find(i => i.table === 'report_analytes')?.values as Record<string, unknown>[];
+  expect(analytes.find(a => a['raw_name'] === 'Vitamin D')).toMatchObject({ value_numeric: 60, raw_value_text: null });
 });
