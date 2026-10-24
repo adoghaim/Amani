@@ -1,16 +1,21 @@
 import type { BiomarkerName, CyclePhase } from '../../types';
-import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
+import { getAllEntries, getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
+import type { NonCyclingState } from '../scoring/amaniContext';
 import { scoreBiomarker, type ScoredBiomarker } from '../scoring/scoreBiomarker';
 import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
 import { assessAmaniContext, contextFromReport } from '../scoring/amaniContext';
 import {
-  authorizedLanguage, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, WATCH_SIGNALS,
-  type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
+  authorizedLanguage, labFindingSentence, labIntervalObservation, labIntervalPlacement, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, statedValue, WATCH_SIGNALS,
+  type FactualLanguage, type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
 } from '../scoring/insightCopy';
 import { formatDateOrNull } from '../../utils/formatters';
+import { isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 
 export interface TopFinding {
+  /** Neutral observation of the supplied lab interval; no Amani authority. */
+  labPlacement?: 'below' | 'above';
+  labLanguage?: FactualLanguage;
   key: BiomarkerName;
   displayName: string;
   value: number;
@@ -25,6 +30,8 @@ export interface TopFinding {
     direction: 'up' | 'down' | 'stable';
     interpretation: 'improved' | 'worsened' | 'stable';
   } | null;
+  /** The result as printed. A censored one ('<8') is stated as this text, never as `value` (F021). */
+  valueText?: string | null;
 }
 
 export interface BiggestChange {
@@ -70,6 +77,7 @@ export interface ReportConfidence {
 
 export interface InsightSummary {
   primaryFinding: TopFinding | null;
+  labFindings?: TopFinding[];
   topFindings: TopFinding[];
   biggestChanges: BiggestChange[];
   deltaMap: Map<BiomarkerName, BiomarkerDelta>;
@@ -95,10 +103,18 @@ interface BiomarkerInput {
   normalizationStatus?: 'mapped' | 'partial' | 'unmapped' | null;
   sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
   reportDate?: string;
+  /** The result as printed; a censored one ('<8') carries a placeholder value (F021). */
+  valueText?: string | null;
 }
 
+const CATALOG_POSITION = new Map(getAllEntries().map((e, i) => [e.key, i]));
+const catalogPosition = (key: BiomarkerName) => CATALOG_POSITION.get(key) ?? Number.MAX_SAFE_INTEGER;
+
+/** A scored marker with the result as printed (F021). */
+type ScoredInput = ScoredBiomarker & { valueText?: string | null };
+
 function toTopFinding(
-  s: ScoredBiomarker,
+  s: ScoredInput,
   rangeLabel: string | null = null,
   delta?: BiomarkerDelta | null,
 ): TopFinding {
@@ -135,10 +151,11 @@ function toTopFinding(
     rangeLabel,
     fact,
     trend,
+    valueText: s.valueText ?? null,
   };
 }
 
-function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerName, BiomarkerDelta>): TopFinding[] {
+function buildTopFindings(scored: ScoredInput[], deltaMap?: Map<BiomarkerName, BiomarkerDelta>): TopFinding[] {
   const abnormal = scored.filter(s => s.concern > 0);
   const ranked = [...abnormal].sort((a, b) => b.weightedConcern - a.weightedConcern);
 
@@ -269,7 +286,8 @@ function buildDoctorQuestions(current: BiomarkerInput[], deltas: BiomarkerDelta[
   }
 
   const outside = current
-    .filter(b => !used.has(b.key))
+    // F021: a censored result's value is a placeholder, so no question states it.
+    .filter(b => !used.has(b.key) && !isCensoredValue(b.valueText))
     .map(b => ({ key: b.key, prompt: DISCUSSION_PREP.labInterval(getDisplayName(b.key), b.value, b.unit, b.labRefMin, b.labRefMax) }))
     .filter((o): o is { key: BiomarkerName; prompt: DiscussionPrepPrompt } => o.prompt !== null);
 
@@ -500,15 +518,17 @@ export function buildInsightSummary(
   previous: BiomarkerInput[] | null,
   cyclePhase?: CyclePhase | null,
   immediatePriorReportDate?: string | null,
+  state: NonCyclingState | null = null,
 ): InsightSummary {
-  const scored = current.map(b =>
-    scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase),
-  );
+  const scored: ScoredInput[] = current.map(b => ({
+    ...scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase, state, b.valueText),
+    valueText: b.valueText,
+  }));
 
-  const systemSummaries = groupBySystem(scored, cyclePhase);
+  const systemSummaries = groupBySystem(scored, cyclePhase, state);
   const bandLanguage = new Map<BiomarkerName, AuthorizedLanguage>();
   for (const b of current) {
-    const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase));
+    const assessment = assessAmaniContext(b.key, b.value, contextFromReport(cyclePhase, state), b.unit);
     if (assessment.kind === 'scored') bandLanguage.set(b.key, authorizedLanguage(assessment.band));
   }
   let biggestChanges: BiggestChange[] = [];
@@ -517,15 +537,37 @@ export function buildInsightSummary(
 
   if (previous && previous.length > 0) {
     deltas = compareReports(
-      previous.map(b => ({ key: b.key, value: b.value, unit: b.unit, reportDate: b.reportDate })),
-      current.map(b => ({ key: b.key, value: b.value, unit: b.unit })),
+      previous.map(b => ({ key: b.key, value: b.value, unit: b.unit, reportDate: b.reportDate, valueText: b.valueText })),
+      current.map(b => ({ key: b.key, value: b.value, unit: b.unit, valueText: b.valueText })),
       cyclePhase,
+      state,
     );
     deltaMap = new Map(deltas.map(d => [d.key, d]));
     biggestChanges = buildBiggestChanges(deltas, immediatePriorReportDate ?? null);
   }
 
-  const topFindings = buildTopFindings(scored, deltaMap);
+  // Owner Ruling 7, a true floor (owner, 2026-10-23): preserve the observable
+  // lab flag even when Amani withholds interpretation, but rank a lab-only
+  // result (concern 0) after every Amani-flagged one. A lab flag on an
+  // Amani-flagged result changes its wording, never its rank. Printed bounds
+  // only; concern scores are untouched. Ties are ordered by catalog position,
+  // then slug, so the upload-time pin and the page agree whatever the row order.
+  const concernOf = new Map(scored.map(s => [s.key, s.concern]));
+  const labFindings = current.flatMap(b => {
+    // F021: a censored result is placed against her lab's range only where its
+    // printed limit decides it, and is stated as printed.
+    const placement = labIntervalPlacement(b.value, b.labRefMin, b.labRefMax, null, null, b.valueText);
+    if (placement !== 'below' && placement !== 'above') return [];
+    const score = scored.find(s => s.key === b.key)!;
+    const finding = toTopFinding(score, null, deltaMap.get(b.key));
+    const fact = labFindingSentence(finding.displayName, placement, statedValue(finding), b.unit);
+    const observation = labIntervalObservation(finding.displayName, b.value, b.labRefMin, b.labRefMax, null, null, b.valueText)!;
+    return [{ ...finding, labPlacement: placement, fact, labLanguage: { ...observation, text: fact } }];
+  }).sort((a, b) => b.severity - a.severity
+    || catalogPosition(a.key) - catalogPosition(b.key) || a.key.localeCompare(b.key));
+  const labByKey = new Map(labFindings.map(f => [f.key, f]));
+  const amaniTop = buildTopFindings(scored, deltaMap).map(f => labByKey.get(f.key) ?? f);
+  const topFindings = [...amaniTop, ...labFindings.filter(l => !amaniTop.some(f => f.key === l.key))];
 
   const primaryKey = topFindings[0]?.status === 'out_of_range'
     ? topFindings[0].key
@@ -559,12 +601,14 @@ export function buildInsightSummary(
 
     if (!alreadyIncluded && primaryDelta) {
       guaranteeInsert(deltaToChange(primaryDelta, immediatePriorReportDate ?? null));
-    } else if (!alreadyIncluded && !primaryDelta) {
+    } else if (!alreadyIncluded && !primaryDelta && !previous?.some(p => p.key === primaryKey)) {
       // Primary marker exists in current report but has no previous value — first recorded result.
+      // A previous value in another unit pairs with nothing (F013), but it is not a first result.
       // Always surface it so users see their most critical out-of-range marker.
       const primaryScored = scored.find(s => s.key === primaryKey);
-      if (primaryScored) {
-        const currentInput = current.find(b => b.key === primaryKey);
+      const currentInput = current.find(b => b.key === primaryKey);
+      // F021: a censored first result has no measured value to state.
+      if (primaryScored && !isCensoredValue(currentInput?.valueText)) {
         const unit = currentInput?.unit ?? '';
         const firstRecordedChange: BiggestChange = {
           key: primaryKey,
@@ -672,6 +716,17 @@ export function buildInsightSummary(
     }
   }
 
+  // The floor for the Primary slot: Amani's primary keeps it (in its lab
+  // wording when the lab flagged it too). Without one, a lab-flagged result
+  // Amani also flags may take it; a lab-only result only when nothing on the
+  // report is Amani-flagged. All lab flags stay visible in topFindings.
+  if (primaryFinding) {
+    primaryFinding = labByKey.get(primaryFinding.key) ?? primaryFinding;
+  } else {
+    primaryFinding = labFindings.find(f => (concernOf.get(f.key) ?? 0) > 0)
+      ?? (abnormalScored.length === 0 ? labFindings[0] ?? null : null);
+  }
+
   const secondaryFindings = primaryFinding
     ? topFindings.filter(f => f.key !== primaryFinding!.key)
     : topFindings;
@@ -680,6 +735,7 @@ export function buildInsightSummary(
 
   return {
     primaryFinding,
+    labFindings,
     topFindings: secondaryFindings,
     biggestChanges,
     deltaMap,

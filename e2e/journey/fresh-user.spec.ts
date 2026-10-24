@@ -36,6 +36,17 @@ async function readAfter(page: Page, action: () => Promise<unknown>) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
+/** A result card shows her lab's printed interval and places the value against it. */
+async function expectLabInterval(page: Page, system: string, marker: string, interval: string) {
+  const toggle = page.getByRole('button', { name: new RegExp(`^${system}\\b`) }).and(page.locator('[aria-expanded]'));
+  // Systems start collapsed unless they hold the primary finding, which is not under test here.
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+  const card = page.getByRole('article', { name: `${marker} result`, exact: true });
+  await expect(card.getByRole('definition').first()).toHaveText(interval);
+  await card.locator('button[aria-expanded]').first().click();
+  await expect(card.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Within your lab's range");
+}
+
 async function expectNoModelProse(page: Page) {
   await expect(page.getByText(/^Lab Report: /).first()).toBeVisible();
   await expect(page.locator('body'), 'unauthorized model prose must never reach the DOM').not.toContainText(MODEL_CANARY);
@@ -106,8 +117,12 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     expect(body).toMatchObject({ access: 'full', plan: 'free', stored_depth: 'deep', version: null,
       complimentary: { used: 1, total: 3, remaining: 2 } });
     await expect(page.getByText('Premium Analysis 1 of 3 included')).toBeVisible();
-    await expect(page.getByText('TSH is measured for the first time at 6 uIU/mL.')).toBeVisible();
+    await expect(page.getByText('TSH is measured for the first time at 6 mIU/L.')).toBeVisible();
     await expectNoModelProse(page);
+    // Review F093, F114: the OCR rows' printed intervals reached the report. They
+    // were saved as null, so each card said "Not provided on your report".
+    await expectLabInterval(page, 'Thyroid', 'TSH', '0–100 mIU/L');
+    await expectLabInterval(page, 'Nutrients', 'Ferritin', '0–100 ng/mL');
     if (backend) {
       const [reportId] = reportIds;
       const report = backend.db.tables.lab_reports.find(r => r.id === reportId)!;
@@ -117,6 +132,12 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
       // Extraction: the OCR rows were saved as this report's analytes.
       const analytes = backend.db.tables.report_analytes.filter(r => r.lab_report_id === reportId);
       expect(analytes.map(a => [a.canonical_slug, a.value_numeric]).sort()).toEqual([['ferritin', 25], ['tsh', 6]]);
+      // ...with the lab's printed value text and interval (review F093, F114).
+      expect(analytes.map(a => [a.canonical_slug, a.raw_value_text, a.raw_reference_range, a.normalized_min, a.normalized_max]).sort())
+        .toEqual([['ferritin', '25', '0-100', 0, 100], ['tsh', '6', '0-100', 0, 100]]);
+      const biomarkers = backend.db.tables.biomarkers.filter(r => r.lab_report_id === reportId);
+      expect(biomarkers.map(b => [b.name, b.raw_value_text, b.reference_min, b.reference_max]).sort())
+        .toEqual([['ferritin', '25', 0, 100], ['tsh', '6', 0, 100]]);
       // Generation: one first-generation request, no request_id (not a regeneration).
       expect(backend.server.generateRequests).toEqual([expect.objectContaining({ reportId })]);
       expect(backend.server.generateRequests[0]).not.toHaveProperty('request_id');
@@ -139,7 +160,7 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     const body = await readAfter(page, async () => { reportIds.push(await uploadLab(page, UPLOADS[1])); });
     expect(body).toMatchObject({ access: 'full', complimentary: { used: 2, remaining: 1 } });
     await expect(page.getByText('Premium Analysis 2 of 3 included')).toBeVisible();
-    await expect(page.getByText('TSH has risen from 6 to 9 uIU/mL.', { exact: false })).toBeVisible();
+    await expect(page.getByText('TSH has risen from 6 to 9 mIU/L.', { exact: false })).toBeVisible();
     await expectNoModelProse(page);
     if (backend) {
       // The server's trend evidence was computed from the prior report it found.
@@ -235,7 +256,7 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     await expect(page.getByText('A fuller analysis is available for this report')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Generate full Amani analysis' })).toHaveCount(0);
     await expectRegenerate(page, false);
-    await expect(page.getByText("TSH changed from 9 to 6 uIU/mL. Amani's comparison band for this result has not yet completed clinical review.", { exact: true })).toBeVisible();
+    await expect(page.getByText("TSH changed from 9 to 6 mIU/L. Amani's comparison band for this result has not yet completed clinical review.", { exact: true })).toBeVisible();
     expect(version.full.trend_evidence).toEqual(expect.arrayContaining([expect.objectContaining({
       biomarker_slug: 'tsh', previous_value: 9, current_value: 6, previous_date: UPLOADS[3].reportDate, direction: 'decreased' })]));
     // The new version's model prose is stored but, like every body, never rendered.

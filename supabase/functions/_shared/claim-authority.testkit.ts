@@ -5,7 +5,7 @@ import { buildTrendEvidence } from './trend-evidence.ts';
 export const projectionCanary = 'Your markers are telling a gentle story about how your energy is settling';
 export function projectedPreviewFixture(currentTsh = 9) {
   const current = [
-    { slug: 'tsh', name: 'TSH', value: currentTsh, unit: 'uIU/mL' },
+    { slug: 'tsh', name: 'TSH', value: currentTsh, unit: 'mIU/L' },
     { slug: 'ferritin', name: 'Ferritin', value: 30, unit: 'ng/mL' },
   ] as const;
   const previous = [{ ...current[0], value: 6 }, { ...current[1], value: 25 }];

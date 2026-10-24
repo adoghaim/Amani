@@ -39,7 +39,7 @@ function baseOrder(input: BiggestChange[]) {
 // V2-03 amendment 2 (B2). Synthetic values only. TSH 2.7 -> 2.0 crosses from
 // borderline into the (unreviewed) Amani band: the exact reviewer reproduction.
 describe('B2 — a boundary crossing never prints "optimal" for an unreviewed band', () => {
-  const tsh = (value: number, reportDate?: string) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5, reportDate });
+  const tsh = (value: number, reportDate?: string) => ({ key: 'tsh' as const, value, unit: 'mIU/L', labRefMin: 0.45, labRefMax: 4.5, reportDate });
 
   it('the bucket for optimal and normal statuses is "within_band", never "optimal"', () => {
     const [delta] = compareReports([tsh(2.7)], [tsh(2.0)], null);

@@ -6,10 +6,21 @@ and nine V2-03 report-context cases per browser, with one redirect-race test qua
 
 ## Install and run
 
-The repository uses npm. Node 20 is the CI baseline. `@playwright/test`,
-`playwright` and `playwright-core` resolve to 1.62.1; the Test package requires
-Node >=20. Do not initialize another Playwright project or upgrade one package
-without checking the other two. Keep jsdom at the existing 26.1.0 pin.
+The repository uses npm. Node 22 is the pinned toolchain (`.nvmrc` is 22.22.2;
+`package.json` `engines.node` is `^22.13.0 || ^24.0.0`). The lower bound comes
+from `pdfjs-dist` (`>=22.13.0 || >=24`) and `eslint-visitor-keys` 5.0.1
+(`^20.19.0 || ^22.13.0 || >=24`). Node 23 is excluded because the latter does
+not admit it; `pdfjs-dist` alone would. Node 25 and later are excluded by
+choice, because they are untested here, not by any locked dependency.
+`@playwright/test` and
+`playwright` are both pinned to exactly 1.64.0 and `playwright-core` resolves to
+the same version; the Test package requires Node >=20. Do not initialize another
+Playwright project or upgrade one package without the other two. `axe-core` is
+pinned to the exact version `@axe-core/playwright` depends on (4.13.0), so there
+is one axe engine; bump both together. Keep jsdom at the existing 26.1.0 pin.
+`js-yaml` is pinned to exactly 4.3.2, the first 4.x release clear of its advisories;
+`npm audit --omit=dev`, the CI gate, does not see it because it is a dev dependency.
+`src/packageManifest.test.ts` enforces these pins.
 
 On a network-enabled engineering machine or CI:
 
@@ -46,7 +57,7 @@ retry. Tests use role/label locators and auto-waiting, without fixed sleeps.
 `E2E_QUARANTINE=1 npm run test:e2e` runs only the strict session-restoration
 redirect test across all three browsers. Normal scripts and CI exclude its
 `@quarantine` tag. This application race is tracked in
-`specs/BACKLOG-1.0.7.md` item 11; it is not browser-specific. Both original
+`E2E-REDIRECT-RACE` in `factory/BACKLOG.md`; it is not browser-specific. Both original
 `/app/reports` assertions remain intact, with no expected-failure annotation.
 Re-entry requires replacing the `window.location.search` read with a router-aware
 source AND at least 10 green runs per browser. After that product fix, collect
@@ -162,7 +173,7 @@ cleans `test-results`. Artifacts and local auth state are gitignored.
 
 ## Agent browser diagnostics and crew order
 
-The installed Playwright 1.62.1 exposes an agent CLI through
+The installed Playwright 1.64.0 exposes an agent CLI through
 `npx --no-install playwright cli`. No separate package or initializer is needed.
 Use `npx --no-install playwright cli --help` for supported commands.
 

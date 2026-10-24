@@ -3,8 +3,11 @@ import {
   canClaimFavourableDirection, canDescribeAsOptimal, isReviewedRange,
   type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
-import { assessAmaniContext, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
+import { assessAmaniContext, censoredClassification, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
+import { sameUnit } from '../biomarkers/normalizeReportItems';
 import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../../types';
+import { LAB_CRITICAL_FLAG_RULE, type LabCriticalFinding } from '../safety/labCriticalFlagRule';
+import { censoredResult, isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 
 /*
   V2-03 amendment 3. Narrative copy built in src/lib/insights (outside TASK-044's
@@ -172,14 +175,20 @@ export const FOCUS_AREA_BAND_SENTENCE =
  * above it rather than echoing TopFinding.fact. A DISPUTED band withholds
  * placement here as it does in every other sentence. */
 export function primaryFindingSentence(
-  finding: Pick<TopFinding, 'displayName' | 'direction' | 'value' | 'unit'>,
+  finding: Pick<TopFinding, 'displayName' | 'direction' | 'value' | 'unit' | 'labPlacement' | 'valueText'>,
   language?: AuthorizedLanguage,
 ): string {
+  if (finding.labPlacement) return labFindingSentence(finding.displayName, finding.labPlacement, statedValue(finding), finding.unit);
   if (language?.reviewStatus === 'DISPUTED') {
-    return `${finding.displayName} was measured at ${finding.value} ${finding.unit}. ${reviewStatement(language)}`;
+    return `${finding.displayName} was measured at ${statedValue(finding)} ${finding.unit}. ${reviewStatement(language)}`;
   }
   const where = finding.direction === 'high' ? 'above' : finding.direction === 'low' ? 'below' : 'outside';
-  return `${finding.displayName} is ${where} the Amani band at ${finding.value} ${finding.unit}. ${BANDS_UNDER_REVIEW}`;
+  return `${finding.displayName} is ${where} the Amani band at ${statedValue(finding)} ${finding.unit}. ${BANDS_UNDER_REVIEW}`;
+}
+
+/** F021: a censored result ('<8') is stated as printed. Its stored number is a placeholder, never a value to state. */
+export function statedValue(finding: { value: number; valueText?: string | null }): string {
+  return isCensoredValue(finding.valueText) ? finding.valueText!.trim() : String(finding.value);
 }
 
 /** Replaces every sentence that calls a band "optimal" with `replacement`
@@ -449,11 +458,15 @@ export function authorizeModelProse(
 /**
  * One claim per measured change the application computed (compareReports),
  * keyed as the caller keys its markers. A change that cannot be a claim is left
- * out, so nothing about it can be authorized.
+ * out, so nothing about it can be authorized: that includes a change whose
+ * previous value was in another unit (F013).
  */
-export function movementClaimsByKey<K>(changes: Iterable<readonly [K, MeasuredMovement]>): Map<K, MovementClaim> {
+export function movementClaimsByKey<K>(
+  changes: Iterable<readonly [K, MeasuredMovement & { previousUnit?: string | null }]>,
+): Map<K, MovementClaim> {
   const claims = new Map<K, MovementClaim>();
   for (const [key, change] of changes) {
+    if (change.previousUnit !== undefined && !sameUnit(change.previousUnit, change.unit)) continue;
     try {
       claims.set(key, createMovementClaim({
         displayName: change.displayName, previousValue: change.previousValue,
@@ -560,12 +573,17 @@ export function bandPlacement(assessment: AmaniAssessment, value: number): Place
   if (assessment.kind !== 'scored') return null;
   const { min, max } = bandBounds(assessment.band);
   if (min === null && max === null) return null;
-  return (min !== null && value < min) || (max !== null && value > max) ? 'outside' : 'within';
+  // F021: a censored result is placed by the printed limit it was decided on, never its placeholder.
+  const placed = assessment.censored ? assessment.censored.threshold : value;
+  return (min !== null && placed < min) || (max !== null && placed > max) ? 'outside' : 'within';
 }
 
 /** Shared selection for count-based surfaces; never derive placement from concern. */
-export function markerBandPlacement(key: BiomarkerName, value: number, cyclePhase?: string | null): Placement {
-  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase)), value);
+export function markerBandPlacement(
+  key: BiomarkerName, value: number, cyclePhase?: string | null, unit?: string | null, state: NonCyclingState | null = null,
+  valueText?: string | null,
+): Placement {
+  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase, state), unit, valueText), value);
 }
 
 /** Short, user-facing review state carried beside every Amani band. */
@@ -590,6 +608,12 @@ const STATE_LABEL: Record<NonCyclingState, string> = {
 /** Copy for a withheld score. Never implies that a score exists. */
 export function withheldCopy(assessment: Extract<AmaniAssessment, { kind: 'withheld' }>): { title: string; body: string } {
   const title = 'Amani context score unavailable';
+  if (assessment.reason === 'censored_result') {
+    return {
+      title,
+      body: `Your lab reported this result as ${assessment.printed}, a limit rather than a measured value. Your result and your lab's range are shown as reported.`,
+    };
+  }
   if (assessment.reason === 'non_cycling_state' && assessment.state) {
     return {
       title,
@@ -635,7 +659,8 @@ export type LabPlacement = 'below' | 'within' | 'above';
 
 /**
  * Her laboratory's interval exactly as printed. Amani adds no margin: a value
- * past either bound is outside it, however close.
+ * past either bound is outside it, however close. A censored result ('<8',
+ * `valueText`) is placed only where its printed limit decides it (F021).
  */
 export function labIntervalPlacement(
   value: number | null | undefined,
@@ -643,7 +668,10 @@ export function labIntervalPlacement(
   max: number | null | undefined,
   operator?: string | null,
   operatorValue?: number | null,
+  valueText?: string | null,
 ): LabPlacement | null {
+  const censored = censoredResult(valueText);
+  if (censored) return censoredClassification(censored, v => labIntervalPlacement(v, min, max, operator, operatorValue));
   if (value == null || Number.isNaN(value)) return null;
   if (min != null || max != null) {
     if (min != null && value < min) return 'below';
@@ -665,6 +693,8 @@ const LAB_PLACEMENT_TEXT: Record<LabPlacement, string> = {
 };
 
 export const NO_LAB_INTERVAL = 'No lab range';
+/** F021: a printed limit ('<8') that her lab's range cannot place. States the fact, no placement. */
+export const CENSORED_LAB_RESULT = 'Reported as a limit';
 
 /*
   PK-DS-01 result row (DESIGN.md "Result row"). Every range her lab printed is
@@ -687,15 +717,22 @@ export function labIntervalObservation(
   max: number | null | undefined,
   operator?: string | null,
   operatorValue?: number | null,
+  valueText?: string | null,
 ): FactualLanguage | null {
-  const placement = labIntervalPlacement(value, min, max, operator, operatorValue);
-  if (!placement) return null;
+  const placement = labIntervalPlacement(value, min, max, operator, operatorValue, valueText);
   const upper = operator && /^</.test(operator) ? operatorValue ?? null : max ?? null;
   const lower = operator && /^>/.test(operator) ? operatorValue ?? null : min ?? null;
+  const authority = { kind: 'patient_lab_interval' as const, subject, min: lower, max: upper };
+  if (!placement) {
+    // F021: the interval is usable (it places the printed limit) but cannot place the result.
+    const censored = censoredResult(valueText);
+    if (!censored || !labIntervalPlacement(censored.threshold, min, max, operator, operatorValue)) return null;
+    return { category: 'factual_observation', text: CENSORED_LAB_RESULT, cue: 'neutral', authority };
+  }
   return {
     category: 'factual_observation', text: LAB_PLACEMENT_TEXT[placement],
     cue: placement === 'within' ? 'neutral' : 'attention',
-    authority: { kind: 'patient_lab_interval', subject, min: lower, max: upper },
+    authority,
   };
 }
 
@@ -732,7 +769,13 @@ export function systemDisplayLabel(category: BiomarkerCategory): string {
   return category === 'nutrients' ? 'Nutrients' : CATEGORY_DISPLAY[category].label;
 }
 
-export const SYSTEMS_INTRO ='Scored against Amani context bands, which are still under review. Select a system to filter biomarkers.';
+export const BAND_LAB_DISTINCTION = "Amani's comparison band is separate from your lab's range and is still under clinical review.";
+
+export function labFindingSentence(name: string, placement: 'below' | 'above', value: number | string, unit: string): string {
+  return `${name} is ${placement} your lab's reference range at ${value} ${unit}.`;
+}
+
+export const SYSTEMS_INTRO = "Amani bands are separate from your lab's ranges and are still under review. Select a system to see both comparisons.";
 
 export function systemSummaryLabel(scoredCount: number, outsideCount: number): ComparisonBandLanguage {
   const unestablished = authorizedLanguage(null);
@@ -1076,9 +1119,11 @@ export const PRODUCT_DISCLAIMERS = {
      produce or resemble a warning, and the band constructors above can only
      produce 'neutral' or 'attention' cues.
   A rule must carry its clinical approval. None is approved, so the registry is
-  empty: Amani has no deterministic safety or critical-value rule today
-  (scoreBiomarker.ts notes the missing panic-value tier). Adding one is a
-  clinical decision, made through the Clinical Truth Layer, not here.
+  empty: Amani has no deterministic safety or critical-value rule of its own
+  today (scoreBiomarker.ts notes the missing panic-value tier). Adding one is a
+  clinical decision, made through the Clinical Truth Layer, not here. The one
+  warning outside the registry relays the laboratory's own printed critical
+  flag, not an Amani threshold (labCriticalFlagWarnings, below).
 */
 export interface SafetyRule {
   ruleId: string;
@@ -1095,6 +1140,14 @@ function isApproved(rule: SafetyRule): boolean {
   return [rule.ruleId, rule.version, approvedBy, approvedAt, evidenceId].every(s => typeof s === 'string' && s.trim().length > 0);
 }
 
+/** The one constructor of a safety warning: a deterministic rule's id and version stand behind each. */
+function safetyWarning(rule: { ruleId: string; version: string }, cue: 'warning' | 'critical', text: string): SafetyWarning {
+  return {
+    category: 'safety_warning', text, cue,
+    authority: { kind: 'deterministic_safety_rule', ruleId: rule.ruleId, version: rule.version },
+  };
+}
+
 /** Every approved rule's warning for these measurements. Unapproved rules fail closed. */
 export function evaluateSafetyRules(
   measured: readonly { name: string; value: number; unit: string }[],
@@ -1106,13 +1159,28 @@ export function evaluateSafetyRules(
     for (const m of measured) {
       if (m.name !== rule.analyte) continue;
       const hit = rule.evaluate(m.value, m.unit);
-      if (hit) {
-        out.push({
-          category: 'safety_warning', text: hit.text, cue: hit.cue,
-          authority: { kind: 'deterministic_safety_rule', ruleId: rule.ruleId, version: rule.version },
-        });
-      }
+      if (hit) out.push(safetyWarning(rule, hit.cue, hit.text));
     }
   }
   return out;
+}
+
+/*
+  Review F014 interim, beside the empty registry rather than in it: when her
+  laboratory printed its own critical or panic flag beside a result
+  (src/lib/safety/labCriticalFlags.ts), one notice says so in fixed words. The
+  results' names are all a report supplies to it; no value, band, review
+  state, model text or tier reaches it. The report page shows it only while
+  features.lab_critical_flag_notice is on, which the owner sets after clinical
+  GO on these words and on the marker table [Pending].
+*/
+export function labCriticalFlagNotice(names: readonly string[]): string {
+  return `Your lab marked your ${listOf(names)} ${names.length > 1 ? 'results' : 'result'} as critical. `
+    + 'Contact your clinician promptly. If you feel unwell, call your local emergency number.';
+}
+
+/** One notice naming, once each and in order, every result her lab printed a critical flag beside; none without one. */
+export function labCriticalFlagWarnings(findings: readonly LabCriticalFinding[]): SafetyWarning[] {
+  const names = [...new Set(findings.map(f => f.name))];
+  return names.length === 0 ? [] : [safetyWarning(LAB_CRITICAL_FLAG_RULE, 'critical', labCriticalFlagNotice(names))];
 }

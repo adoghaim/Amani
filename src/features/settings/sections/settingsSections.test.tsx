@@ -34,6 +34,11 @@ vi.mock('../../../lib/native', () => ({
   authenticateWithBiometrics: async () => ({ ok: false, reason: 'unavailable' }),
   setScreenshotsBlocked: async () => false,
 }));
+// features.local_reminders is on here so the Reminders card renders; RemindersSection.test.tsx covers it off.
+vi.mock('../../../lib/runtimeConfig', () => ({
+  isFeatureEnabled: (name: string) => name === 'local_reminders',
+  loadRuntimeConfig: async () => {},
+}));
 vi.mock('../../../lib/iap', () => ({ storeSubscriptionsUrl: (platform: string, product: string) => `store:${platform}:${product}` }));
 vi.mock('../../../lib/supabase', () => ({
   supabase: {

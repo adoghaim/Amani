@@ -16,7 +16,7 @@ const env = vi.hoisted(() => ({
   loaded: [] as string[],
   calls: [] as unknown[][],
   keychain: new Map<string, string>(),
-  biometry: { isAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true } as Record<string, unknown>,
+  biometry: { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true } as Record<string, unknown>,
   authError: null as null | { code: string },
 }));
 vi.mock('@capacitor/core', () => ({
@@ -47,6 +47,7 @@ vi.mock('@aparajita/capacitor-biometric-auth', () => {
   env.loaded.push('biometric-auth');
   return {
     BiometryType: { none: 0, touchId: 1, faceId: 2, fingerprintAuthentication: 3, faceAuthentication: 4, irisAuthentication: 5 },
+    AndroidBiometryStrength: { weak: 0, strong: 1 },
     BiometricAuth: {
       checkBiometry: async () => env.biometry,
       authenticate: async (options: unknown) => {
@@ -110,6 +111,8 @@ describe('src/lib/native.ts public API', () => {
       // PK-DEVICE-01
       'INSTALL_MARKER_KEY', 'SECURE_STORAGE_PREFIX', 'authSessionStorage', 'authenticateWithBiometrics',
       'checkBiometrics', 'createAuthSessionStorage', 'onAppLifecycle', 'setScreenshotsBlocked',
+      // Review F067: the Android back button goes through the wrapper, not @capacitor/app.
+      'onBackButton',
     ].sort());
   });
 
@@ -279,18 +282,40 @@ describe('PK-DEVICE-01 on native', () => {
   });
 
   it('checkBiometrics names Face ID, Touch ID or a fingerprint, and nothing else counts (D15)', async () => {
-    env.biometry = { isAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true };
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true };
     expect(await native.checkBiometrics()).toEqual({ available: true, kind: 'faceId', deviceSecure: true });
-    env.biometry = { isAvailable: true, biometryType: 1, biometryTypes: [1], deviceIsSecure: true };
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 1, biometryTypes: [1], deviceIsSecure: true };
     expect(await native.checkBiometrics()).toEqual({ available: true, kind: 'touchId', deviceSecure: true });
-    env.biometry = { isAvailable: true, biometryType: 3, biometryTypes: [4, 3], deviceIsSecure: true };
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 3, biometryTypes: [3], deviceIsSecure: true };
     expect(await native.checkBiometrics()).toEqual({ available: true, kind: 'fingerprint', deviceSecure: true });
     // Android face unlock alone is not Face ID or a fingerprint.
-    env.biometry = { isAvailable: true, biometryType: 4, biometryTypes: [4], deviceIsSecure: true };
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 4, biometryTypes: [4], deviceIsSecure: true };
     expect(await native.checkBiometrics()).toEqual({ available: false, kind: null, deviceSecure: true });
-    env.biometry = { isAvailable: false, biometryType: 0, biometryTypes: [], deviceIsSecure: false };
+    env.biometry = { isAvailable: false, strongBiometryIsAvailable: false, biometryType: 0, biometryTypes: [], deviceIsSecure: false };
     expect(await native.checkBiometrics()).toEqual({ available: false, kind: null, deviceSecure: false });
-    env.biometry = { isAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true };
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true };
+  });
+
+  it('review F007: Android lists sensors, not what is enrolled, so a fingerprint sensor beside a face or iris sensor gets the generic name', async () => {
+    // Previously (main@22027b2) [face, fingerprint] hardware was named "fingerprint" whatever she had enrolled.
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 3, biometryTypes: [4, 3], deviceIsSecure: true };
+    expect(await native.checkBiometrics()).toEqual({ available: true, kind: 'biometric', deviceSecure: true });
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 3, biometryTypes: [3, 5], deviceIsSecure: true };
+    expect(await native.checkBiometrics()).toEqual({ available: true, kind: 'biometric', deviceSecure: true });
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true };
+  });
+
+  it('review F007: only strong (Class 3) biometrics count; weak face unlock alone leaves the lock unavailable', async () => {
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: false, biometryType: 3, biometryTypes: [4, 3], deviceIsSecure: true };
+    expect(await native.checkBiometrics()).toEqual({ available: false, kind: 'biometric', deviceSecure: true });
+    env.biometry = { isAvailable: true, biometryType: 3, biometryTypes: [3], deviceIsSecure: true };
+    expect(await native.checkBiometrics()).toEqual({ available: false, kind: 'fingerprint', deviceSecure: true });
+    env.biometry = { isAvailable: true, strongBiometryIsAvailable: true, biometryType: 2, biometryTypes: [2], deviceIsSecure: true };
+  });
+
+  it('review F007: authentication asks Android for strong biometrics, with the passcode still the fallback', async () => {
+    expect(await native.authenticateWithBiometrics('Unlock Amani')).toEqual({ ok: true });
+    expect(env.calls[env.calls.length - 1]).toEqual(['BiometricAuth.authenticate', expect.objectContaining({ androidBiometryStrength: 1, allowDeviceCredential: true })]);
   });
 
   it('authenticateWithBiometrics always allows the passcode fallback, and maps errors without throwing', async () => {

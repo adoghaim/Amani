@@ -6,13 +6,13 @@ import {
   Droplets,
   Plus,
   Upload,
-  FileText,
   StickyNote,
   Bell,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAllRows';
+import { READING_REVIEW_COLUMNS, withoutUnconfirmed, type ReadingReview } from '../lib/biomarkers/confirmation';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
@@ -25,8 +25,10 @@ import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
+import { NoteModal } from '../components/NoteModal';
 import { InsightsModal } from '../components/InsightsModal';
 import { compareReports } from '../lib/scoring/compareReports';
+import { stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
 import { movementClaimsByKey } from '../lib/scoring/insightCopy';
 import { Interventions } from '../components/Interventions';
 import { CompareView } from '../components/CompareView';
@@ -105,11 +107,14 @@ export function Tracker() {
   const insightsClaims = useMemo(() => {
     if (!insightsPair) return [];
     const snapshot = (id: string) => (biomarkersByReport[id] ?? [])
-      .map(b => ({ key: b.name as BiomarkerName, value: b.value, unit: b.unit }));
+      .map(b => ({ key: b.name as BiomarkerName, value: b.value, unit: b.unit, valueText: b.raw_value_text }));
     const phase = reports.find(r => r.id === insightsPair.current)?.estimated_cycle_phase as CyclePhase | null | undefined;
-    const deltas = compareReports(snapshot(insightsPair.previous), snapshot(insightsPair.current), phase ?? null);
+    const deltas = compareReports(
+      snapshot(insightsPair.previous), snapshot(insightsPair.current), phase ?? null,
+      stateFromPregnancyStatus(userProfile?.pregnancy_status),
+    );
     return [...movementClaimsByKey(deltas.map(d => [d.key, d] as const)).values()];
-  }, [insightsPair, biomarkersByReport, reports]);
+  }, [insightsPair, biomarkersByReport, reports, userProfile?.pregnancy_status]);
 
   useEffect(() => {
     if (user) fetchData();
@@ -161,14 +166,24 @@ export function Tracker() {
       if (fetchedReports.length > 0) {
         const ids = fetchedReports.map((r) => r.id);
         // R27: a user's values across every report can pass PostgREST's 1,000-row cap.
-        const { data: bm } = await fetchAllRows<Biomarker>(() =>
-          supabase
-            .from('biomarkers')
-            .select('*')
-            .in('lab_report_id', ids)
-            .order('id'));
+        const [{ data: bm }, { data: flagged }] = await Promise.all([
+          fetchAllRows<Biomarker>(() =>
+            supabase
+              .from('biomarkers')
+              .select('*')
+              .in('lab_report_id', ids)
+              .order('id')),
+          // F022: Compare labs and the timeline measure changes; a value she never confirmed is not one.
+          fetchAllRows<ReadingReview>(() =>
+            supabase
+              .from('report_analytes')
+              .select(READING_REVIEW_COLUMNS)
+              .in('lab_report_id', ids)
+              .eq('needs_review', true)
+              .order('id')),
+        ]);
         if (bm) {
-          const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
+          const grouped = withoutUnconfirmed(bm as Biomarker[], flagged ?? []).reduce<Record<string, Biomarker[]>>((acc, b) => {
             const bucket = acc[b.lab_report_id] ?? [];
             bucket.push(b);
             acc[b.lab_report_id] = bucket;
@@ -627,60 +642,17 @@ export function Tracker() {
         defaultDate={symptomModalDate}
       />
 
-      {noteModal.open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
-              <h2 className="text-base text-theme-text">Add note</h2>
-              <button
-                onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
-              >
-                <FileText className="w-4 h-4 text-theme-muted-text" />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Date</label>
-                <input
-                  type="date"
-                  value={noteModal.defaultDate}
-                  onChange={(e) =>
-                    setNoteModal((prev) => ({ ...prev, defaultDate: e.target.value }))
-                  }
-                  max={dateToKey(today)}
-                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Note</label>
-                <textarea
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  rows={4}
-                  placeholder="Write a note..."
-                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
-                />
-              </div>
-            </div>
-            <div className="px-5 pb-5 flex gap-3">
-              <button
-                onClick={handleSaveNote}
-                disabled={savingNote || !noteText.trim()}
-                className="flex-1 py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
-              >
-                {savingNote ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="flex-1 py-2.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl hover:bg-theme-surface-hover transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NoteModal
+        open={noteModal.open}
+        onClose={() => setNoteModal({ open: false, defaultDate: '' })}
+        date={noteModal.defaultDate}
+        onDateChange={(defaultDate) => setNoteModal((prev) => ({ ...prev, defaultDate }))}
+        maxDate={dateToKey(today)}
+        text={noteText}
+        onTextChange={setNoteText}
+        saving={savingNote}
+        onSave={handleSaveNote}
+      />
 
       <InsightsModal
         isOpen={showInsightsModal}

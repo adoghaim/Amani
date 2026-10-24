@@ -2,15 +2,43 @@ import { useState, useEffect } from 'react';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
 import { supabase } from '../../../lib/supabase';
+import { isFeatureEnabled, loadRuntimeConfig } from '../../../lib/runtimeConfig';
 import { Bell, BellOff, Check } from 'lucide-react';
 import { NotificationPreferences } from '../../../types';
 import type { SettingsSectionProps } from './types';
 
-export function RemindersSection({ user }: SettingsSectionProps) {
+/** features.local_reminders (docs/runtime-config.md): off until on-device reminders ship (PK-NOTIF-LOCAL, D7.7). */
+export const LOCAL_REMINDERS_FLAG = 'local_reminders';
+
+function useLocalRemindersEnabled(): boolean {
+  const [enabled, setEnabled] = useState(() => isFeatureEnabled(LOCAL_REMINDERS_FLAG));
+  useEffect(() => {
+    let live = true;
+    void loadRuntimeConfig().then(() => {
+      if (live) setEnabled(isFeatureEnabled(LOCAL_REMINDERS_FLAG));
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return enabled;
+}
+
+/**
+ * Nothing delivers a reminder today, so the section stays hidden (and reads no
+ * preferences) until the owner switches features.local_reminders on (D7.7).
+ */
+export function RemindersSection(props: SettingsSectionProps) {
+  if (!useLocalRemindersEnabled()) return null;
+  return <RemindersCard {...props} />;
+}
+
+function RemindersCard({ user }: SettingsSectionProps) {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null);
   const [notifLoading, setNotifLoading] = useState(true);
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
+  const [notifSaveFailed, setNotifSaveFailed] = useState(false);
 
   useEffect(() => {
     if (user) fetchNotifPrefs();
@@ -60,6 +88,8 @@ export function RemindersSection({ user }: SettingsSectionProps) {
   const handleSaveNotifPrefs = async () => {
     if (!user) return;
     setNotifSaving(true);
+    setNotifSaved(false);
+    setNotifSaveFailed(false);
     try {
       const prefs = getPrefs();
       const payload = {
@@ -73,17 +103,20 @@ export function RemindersSection({ user }: SettingsSectionProps) {
         updated_at: new Date().toISOString(),
       };
 
+      // supabase-js returns { error } rather than throwing: "Saved" only after a clean answer.
       if (notifPrefs?.id) {
-        await supabase
+        const { error } = await supabase
           .from('notification_preferences')
           .update(payload)
           .eq('id', notifPrefs.id);
+        if (error) throw error;
       } else {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('notification_preferences')
           .insert(payload)
           .select()
           .single();
+        if (error) throw error;
         if (data) setNotifPrefs(data as NotificationPreferences);
       }
 
@@ -91,6 +124,7 @@ export function RemindersSection({ user }: SettingsSectionProps) {
       setTimeout(() => setNotifSaved(false), 2500);
     } catch {
       setNotifSaved(false);
+      setNotifSaveFailed(true);
     } finally {
       setNotifSaving(false);
     }
@@ -193,6 +227,11 @@ export function RemindersSection({ user }: SettingsSectionProps) {
             >
               {notifSaving ? 'Saving...' : 'Save preferences'}
             </Button>
+            {notifSaveFailed && (
+              <span role="alert" className="text-sm text-theme-muted-text">
+                We couldn&rsquo;t save your preferences. Please try again.
+              </span>
+            )}
             {notifSaved && (
               <span className="flex items-center gap-1.5 text-sm text-theme-success font-medium">
                 <Check className="w-4 h-4" />

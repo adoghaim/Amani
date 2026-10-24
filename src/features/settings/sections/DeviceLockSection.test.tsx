@@ -16,12 +16,13 @@ const env = vi.hoisted(() => ({
   biometrics: { available: true, kind: 'faceId', deviceSecure: true } as { available: boolean; kind: string | null; deviceSecure: boolean },
   results: [] as Array<{ ok: true } | { ok: false; reason: 'cancelled' | 'failed' | 'unavailable' }>,
   flagSecure: [] as boolean[],
+  reasons: [] as string[],
 }));
 vi.mock('../../../lib/native', () => ({
   isNative: () => env.native,
   platform: () => (env.native ? env.os : 'web'),
   checkBiometrics: async () => env.biometrics,
-  authenticateWithBiometrics: async () => env.results.shift() ?? { ok: true },
+  authenticateWithBiometrics: async (reason: string) => { env.reasons.push(reason); return env.results.shift() ?? { ok: true }; },
   setScreenshotsBlocked: async (blocked: boolean) => { env.flagSecure.push(blocked); return env.os === 'android'; },
 }));
 vi.mock('../../../lib/runtimeConfig', () => ({ loadRuntimeConfig: async () => {}, isFeatureEnabled: () => env.flag }));
@@ -34,7 +35,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.resetModules();
   localStorage.clear();
-  Object.assign(env, { native: true, os: 'ios', flag: true, results: [], flagSecure: [] });
+  Object.assign(env, { native: true, os: 'ios', flag: true, results: [], flagSecure: [], reasons: [] });
   env.biometrics = { available: true, kind: 'faceId', deviceSecure: true };
   app = document.createElement('div');
   document.body.append(app);
@@ -162,4 +163,46 @@ describe('DeviceLockSection', () => {
     expect(app.querySelector('select')!.className).toContain('min-h-[44px]');
     expect(await axeViolations(app)).toEqual([]);
   });
+});
+
+describe('review F006: turning the lock off asks for Face ID, a fingerprint or the passcode first', () => {
+  it('a successful check turns it off', async () => {
+    await mount({ enabled: true });
+    await act(async () => toggle()!.click());
+    await act(async () => {});
+    expect(env.reasons).toEqual(['Turn off the lock for Amani']);
+    expect(toggle()!.getAttribute('aria-checked')).toBe('false');
+    expect(stored().enabled).toBe(false);
+    expect(app.querySelector('.sr-only[role="status"]')!.textContent).toBe('The lock is off.');
+  });
+
+  it.each(['cancelled', 'failed'] as const)('a %s check leaves it on with a calm notice', async reason => {
+    env.results = [{ ok: false, reason }];
+    await mount({ enabled: true });
+    await act(async () => toggle()!.click());
+    await act(async () => {});
+    expect(toggle()!.getAttribute('aria-checked')).toBe('true');
+    expect(stored().enabled).toBe(true);
+    expect(app.textContent).toContain("The lock wasn't turned off.");
+    expect(app.textContent).toContain('Nothing has changed.');
+    expect(env.flagSecure).toEqual([]);
+  });
+
+  it('a phone with no passcode or biometrics left turns it off without one', async () => {
+    env.results = [{ ok: false, reason: 'unavailable' }];
+    await mount({ enabled: true });
+    env.biometrics = { available: false, kind: null, deviceSecure: false };
+    await act(async () => toggle()!.click());
+    await act(async () => {});
+    expect(stored().enabled).toBe(false);
+    expect(toggle()!.getAttribute('aria-checked')).toBe('false');
+  });
+});
+
+it('review F007: an Android phone that cannot say which sensor is enrolled gets generic wording', async () => {
+  env.os = 'android';
+  env.biometrics = { available: true, kind: 'biometric', deviceSecure: true };
+  await mount();
+  expect(app.querySelector(`label[for="${toggle()!.id}"]`)!.textContent).toBe('Lock Amani with biometric unlock');
+  expect(app.textContent).not.toContain('fingerprint');
 });

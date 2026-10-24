@@ -63,7 +63,14 @@ test.describe('PK-PL-A: Free after the complimentary analyses, a stored Basic re
       expect(await (await response).json()).toEqual(JSON.parse(JSON.stringify(served.body)));
       // Positive readiness: the Basic answer rendered.
       await expect(page.getByText('See the full Premium analysis', { exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: /^Regenerate \(3 left\)$/ })).toHaveCount(offered ? 1 : 0);
+      // Regenerate lives in the header More menu (D19), whose list is hidden until
+      // opened. A closed list cannot prove an absent item, so open it and control on
+      // Delete report, which is always listed, before asserting on Regenerate.
+      const header = page.locator('[data-report-header-actions]');
+      await header.getByRole('button', { name: 'More', exact: true }).click();
+      const list = header.getByRole('list', { name: 'More report actions' });
+      await expect(list.getByRole('button', { name: 'Delete report', exact: true })).toBeVisible();
+      await expect(list.getByRole('button', { name: /^Regenerate \(3 left\)$/ })).toHaveCount(offered ? 1 : 0);
       // Nothing was generated either way: the page never asks on its own.
       expect(generated).toEqual([]);
     });

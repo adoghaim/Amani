@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AmaniLogo } from '../components/AmaniLogo';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,9 +10,50 @@ import { Card } from '../components/Card';
 
 type PageState = 'loading' | 'ready' | 'request';
 
+// auth-js mirrors every PKCE verifier to this fixed key (helpers.js storePKCEVerifier).
+// Without one, a `?code=` cannot be exchanged on this device.
+async function hasPkceVerifier(): Promise<boolean> {
+  const auth = supabase.auth;
+  return Boolean(await auth['storage'].getItem(`${auth['storageKey']}-code-verifier`));
+}
+
+/*
+  auth-js reads tokens from the URL only once, when the client is created. In
+  the native app the WebView starts without them and the recovery link arrives
+  later through DeepLinkHandler as a client-side navigation, so the tokens in
+  the link have to be turned into a session here.
+*/
+async function establishRecoverySession(search: string, hash: string): Promise<boolean> {
+  const query = new URLSearchParams(search);
+  const fragment = new URLSearchParams(hash.replace(/^#/, ''));
+
+  const accessToken = fragment.get('access_token');
+  const refreshToken = fragment.get('refresh_token');
+  if (accessToken && refreshToken && fragment.get('type') === 'recovery') {
+    const { data, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    return !error && Boolean(data.session);
+  }
+
+  const tokenHash = query.get('token_hash');
+  if (tokenHash) {
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+    return !error && Boolean(data.session);
+  }
+
+  const code = query.get('code');
+  if (code && await hasPkceVerifier()) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    return !error && Boolean(data.session);
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  return Boolean(session);
+}
+
 export function ResetPassword() {
   const { resetPassword } = useAuth();
   const navigate = useNavigate();
+  const { search, hash } = useLocation();
   const [pageState, setPageState] = useState<PageState>('loading');
 
   const [password, setPassword] = useState('');
@@ -26,34 +67,16 @@ export function ResetPassword() {
   const [requestError, setRequestError] = useState('');
   const [requestLoading, setRequestLoading] = useState(false);
 
+  // Keyed on the router location: a deep link that arrives while this page is
+  // already showing navigates to the same route, so it must re-run.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const hash = window.location.hash;
-    const isHashRecovery = hash.includes('type=recovery') || hash.includes('access_token');
-
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) {
-          setPageState('request');
-        } else {
-          setPageState('ready');
-        }
-      });
-      return;
-    }
-
-    if (isHashRecovery) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setPageState(session ? 'ready' : 'request');
-      });
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setPageState(session ? 'ready' : 'request');
-    });
-  }, []);
+    let cancelled = false;
+    const settle = (ready: boolean) => {
+      if (!cancelled) setPageState(ready ? 'ready' : 'request');
+    };
+    establishRecoverySession(search, hash).then(settle, () => settle(false));
+    return () => { cancelled = true; };
+  }, [search, hash]);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,8 +86,8 @@ export function ResetPassword() {
       setError('Passwords do not match');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
 

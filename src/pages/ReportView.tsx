@@ -5,6 +5,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
+import { CalmNotice, UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from '../components/CalmNotice';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAllRows';
 import { BiomarkerCard } from '../components/BiomarkerCard';
@@ -26,15 +27,21 @@ import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMet
 import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
-  authorizedLanguage, authorizeModelProse, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  markerBandPlacement, movementClaimsByKey, outsideBandCount, PRIMARY_FINDING_LABEL,
+  authorizedLanguage, authorizeModelProse, combineLanguage, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
+  labCriticalFlagWarnings, labIntervalPlacement, markerBandPlacement, movementClaimsByKey, PRIMARY_FINDING_LABEL,
   primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
   type AuthorizedLanguage, type AuthorizedModelProse,
 } from '../lib/scoring/insightCopy';
 import { SafetyWarnings } from '../components/SafetyWarnings';
+import { findLabCriticalFlags } from '../lib/safety/labCriticalFlags';
+import { useLabCriticalFlagNotice } from '../hooks/useLabCriticalFlagNotice';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
-import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
+import { assessAmaniContext, contextFromReport, stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
+import {
+  isUnconfirmedBiomarker, READING_REVIEW_COLUMNS, unconfirmedReadingKeys, withoutUnconfirmed, type ReadingReview,
+} from '../lib/biomarkers/confirmation';
+import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { computeBaseline } from '../lib/personalization/baseline';
 import { analyzeTrend } from '../lib/personalization/trendAnalysis';
@@ -67,6 +74,7 @@ import { REGENERATION_COPY, regenerationFailureOf, type RegenerationNoticeKind }
 import { handle402 } from '../utils/subscription';
 import { formatDateLong } from '../utils/formatters';
 import { useSubscription } from '../hooks/useSubscription';
+import { useAuth } from '../contexts/AuthContext';
 import { clientFreemiumActive } from '../lib/tier';
 import { cycleContextCard } from '../lib/cycleContextCard';
 import { PHASE_ESTIMATE_LABEL } from '../lib/cycleDayRule';
@@ -85,6 +93,7 @@ import {
 } from '../lib/freemium/reportAccess';
 import { AccessErrorNotice, FreemiumReportPanel } from '../components/freemium/FreemiumReportPanel';
 import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 
 /*
   A 429 from `generate-interpretation` means "over your daily AI quota", not
@@ -175,6 +184,7 @@ interface HistoricalBiomarkerRow {
   reference_min: number | null;
   reference_max: number | null;
   lab_report_id: string;
+  raw_value_text: string | null;
 }
 
 interface OpeningContext {
@@ -353,6 +363,10 @@ export function ReportView() {
   const {
     entitled, plan, complimentary, error: subscriptionError, refetch: refetchSubscription,
   } = useSubscription();
+  // Review F012: her declared pregnancy, postpartum or breastfeeding status
+  // withholds every Amani band that requires that context (interim, PK-04).
+  const { userProfile } = useAuth();
+  const declaredState = stateFromPregnancyStatus(userProfile?.pregnancy_status);
   const navigate = useNavigate();
   /*
     Build-time flag. Off: this page is the 1.0.5 page, reading the
@@ -389,6 +403,8 @@ export function ReportView() {
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [loading, setLoading] = useState(true);
+  // The last read of the report could not reach Amani (F065): not "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   /*
     Which tier the STORED row was written at. Null means it predates Free/Plus,
@@ -416,9 +432,11 @@ export function ReportView() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [, setPreviousBiomarkers] = useState<Biomarker[]>([]);
-  const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number }[]>>(new Map());
-  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>>(new Map());
+  const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number; unit: string; valueText: string | null }[]>>(new Map());
+  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string; valueText: string | null }>>(new Map());
   const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
+  // F021: the prior report's analytes, which generation pairs with this report's for Basic changes.
+  const [previousAnalytes, setPreviousAnalytes] = useState<ReportAnalyte[]>([]);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
@@ -634,28 +652,43 @@ export function ReportView() {
   }, [freemium, accessState]);
 
   const fetchReport = async (isRetry = false) => {
+    /*
+      F065: a read that cannot reach Amani resolves with `error` (postgrest-js
+      does not throw). That is a failed load, with Try again: offline it used to
+      read "Report not found". Nothing is replaced until every read below has
+      answered, so a first load never shows a report without its values, and a
+      failed re-read leaves the report on screen.
+    */
+    const failLoad = () => { setLoadFailed(true); setLoading(false); };
     const { data: reportData, error: reportError } = await supabase
       .from('lab_reports').select('*').eq('id', reportId).maybeSingle();
-    if (reportError) { setError(`Failed to load: ${reportError.message}`); setLoading(false); return; }
+    if (reportError) { failLoad(); return; }
     if (!reportData) {
       if (!isRetry) {
         await new Promise(r => setTimeout(r, 1200));
         return fetchReport(true);
       }
+      setLoadFailed(false);
       setError('Report not found');
       setLoading(false);
       return;
     }
-    setReport(reportData as LabReport);
 
-    const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
+    const [
+      { data: biomarkersData, error: biomarkersError },
+      { data: analytesData, error: analytesError },
+      { data: interpretationData, error: interpretationError },
+    ] = await Promise.all([
       supabase.from('biomarkers').select('*').eq('lab_report_id', reportId),
       supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
       // Flag on, the body is read only through get-interpretation.
       freemium
-        ? Promise.resolve({ data: null })
+        ? Promise.resolve({ data: null, error: null })
         : supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
     ]);
+    if (biomarkersError || analytesError || interpretationError) { failLoad(); return; }
+    setLoadFailed(false);
+    setReport(reportData as LabReport);
 
     if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
     if (analytesData) setReportAnalytes(analytesData as ReportAnalyte[]);
@@ -701,6 +734,8 @@ export function ReportView() {
           .select('*')
           .eq('lab_report_id', prevReportData.id);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
+        const { data: prevAnalyteData } = await supabase.from('report_analytes').select('*').eq('lab_report_id', prevReportData.id);
+        if (prevAnalyteData) setPreviousAnalytes(prevAnalyteData as ReportAnalyte[]);
       }
       if (prevReportData?.report_date) {
         setImmediatePriorReportDate(prevReportData.report_date);
@@ -715,21 +750,31 @@ export function ReportView() {
 
         const allHistoricalIds = allReportsData.map(r => r.id);
         // R27: every prior report's values can pass PostgREST's 1,000-row cap.
-        const { data: allHistoricalBiomarkers } = await fetchAllRows<HistoricalBiomarkerRow>(() =>
-          supabase
-            .from('biomarkers')
-            .select('name, value, unit, reference_min, reference_max, lab_report_id')
-            .in('lab_report_id', allHistoricalIds)
-            .order('id'));
+        const [{ data: allHistoricalBiomarkers }, { data: flaggedHistory }] = await Promise.all([
+          fetchAllRows<HistoricalBiomarkerRow>(() =>
+            supabase
+              .from('biomarkers')
+              .select('name, value, unit, reference_min, reference_max, lab_report_id, raw_value_text')
+              .in('lab_report_id', allHistoricalIds)
+              .order('id')),
+          // F022: a value she never confirmed is no trend point.
+          fetchAllRows<ReadingReview>(() =>
+            supabase
+              .from('report_analytes')
+              .select(READING_REVIEW_COLUMNS)
+              .in('lab_report_id', allHistoricalIds)
+              .eq('needs_review', true)
+              .order('id')),
+        ]);
 
         if (allHistoricalBiomarkers) {
-          const histMap = new Map<string, { reportDate: string; value: number }[]>();
-          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
-          for (const b of allHistoricalBiomarkers) {
+          const histMap = new Map<string, { reportDate: string; value: number; unit: string; valueText: string | null }[]>();
+          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null; valueText: string | null }[]>();
+          for (const b of withoutUnconfirmed(allHistoricalBiomarkers, flaggedHistory ?? [])) {
             const reportDate = reportDateMap.get(b.lab_report_id);
             if (!reportDate) continue;
             if (!histMap.has(b.name)) histMap.set(b.name, []);
-            histMap.get(b.name)!.push({ reportDate, value: b.value });
+            histMap.get(b.name)!.push({ reportDate, value: b.value, unit: b.unit, valueText: b.raw_value_text ?? null });
             if (!occurrences.has(b.name)) occurrences.set(b.name, []);
             occurrences.get(b.name)!.push({
               reportDate,
@@ -737,11 +782,12 @@ export function ReportView() {
               unit: b.unit,
               reference_min: b.reference_min,
               reference_max: b.reference_max,
+              valueText: b.raw_value_text ?? null,
             });
           }
           setHistoricalBiomarkers(histMap);
 
-          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>();
+          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string; valueText: string | null }>();
           for (const [name, list] of occurrences) {
             const sorted = [...list].sort((a, b) => a.reportDate.localeCompare(b.reportDate));
             const last = sorted[sorted.length - 1];
@@ -753,7 +799,8 @@ export function ReportView() {
     }
   };
 
-  const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
+  // F021: a calculation from a censored result ('<2' stored as 1) would compute from its placeholder.
+  const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers.filter(b => !isCensoredValue(b.raw_value_text))), [biomarkers]);
   // V2-03: no pattern card may be built from an input Amani withholds for
   // this report's context (e.g. a PCOS pattern from an unphased LH:FSH ratio).
   // Amendment 4 (R2): a card that survives says only what its bands authorize.
@@ -762,13 +809,16 @@ export function ReportView() {
       gateInsightMatches(
         evaluateInsightRules(biomarkers, report?.estimated_cycle_phase),
         biomarkers,
-        contextFromReport(report?.estimated_cycle_phase),
+        contextFromReport(report?.estimated_cycle_phase, declaredState),
       ),
       biomarkers,
-      contextFromReport(report?.estimated_cycle_phase),
+      contextFromReport(report?.estimated_cycle_phase, declaredState),
     ),
-    [biomarkers, report]
+    [biomarkers, report, declaredState]
   );
+
+  // F022: values on this report Amani may have misread and she has not confirmed.
+  const unconfirmedKeys = useMemo(() => unconfirmedReadingKeys(reportAnalytes), [reportAnalytes]);
 
   const analyteTelemetryMap = useMemo(() => {
     const CONFIDENCE_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -824,7 +874,12 @@ export function ReportView() {
     if (historicalReportCount < PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) return map;
 
     for (const b of biomarkers) {
-      const history = historicalBiomarkers.get(b.name);
+      if (isUnconfirmedBiomarker(b, unconfirmedKeys)) continue;
+      // F021: a censored result ('<8') holds a placeholder, not a measurement, so it is neither
+      // compared with her history nor part of it.
+      if (isCensoredValue(b.raw_value_text)) continue;
+      // F013: a value in another unit is not comparable with this one, so it is not her history here.
+      const history = historicalBiomarkers.get(b.name)?.filter(h => sameUnit(h.unit, b.unit) && !isCensoredValue(h.valueText));
       if (!history || history.length === 0) continue;
 
       const orderedEntries = history
@@ -869,7 +924,7 @@ export function ReportView() {
     }
 
     return map;
-  }, [biomarkers, historicalBiomarkers, historicalReportCount, report?.report_date]);
+  }, [biomarkers, historicalBiomarkers, historicalReportCount, report?.report_date, unconfirmedKeys]);
 
   const insightSummary = useMemo(() => {
     if (biomarkers.length === 0) return null;
@@ -879,6 +934,7 @@ export function ReportView() {
         key: b.name as BiomarkerName,
         value: b.value,
         unit: b.unit,
+        valueText: b.raw_value_text,
         labRefMin: b.reference_min,
         labRefMax: b.reference_max,
         parserConfidence: telemetry?.parserConfidence ?? null,
@@ -894,10 +950,37 @@ export function ReportView() {
           labRefMin: occ.reference_min,
           labRefMax: occ.reference_max,
           reportDate: occ.reportDate,
+          valueText: occ.valueText,
         }))
       : null;
-    return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate);
-  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap]);
+    const summary = buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate, declaredState);
+    /*
+      F022: a value she has not confirmed never picks the primary finding and
+      is no trend point, so the primary, the changes and the questions come
+      from her confirmed values. The systems, the band language and the
+      report's confidence still describe every value she has.
+    */
+    const confirmed = current.filter((_, i) => !isUnconfirmedBiomarker(biomarkers[i]!, unconfirmedKeys));
+    if (confirmed.length === current.length) return summary;
+    const fromConfirmed = buildInsightSummary(confirmed, previous, report?.estimated_cycle_phase, immediatePriorReportDate, declaredState);
+    return { ...fromConfirmed, bandLanguage: summary.bandLanguage, systemSummaries: summary.systemSummaries, confidence: summary.confidence };
+  }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap, unconfirmedKeys, declaredState]);
+
+  // F021: a Basic changes line through a result printed as a limit ('<8') states its placeholder.
+  // Generation keys each report's analytes by canonical slug, else by raw name.
+  const censoredTrend = useMemo(() => {
+    const keyOf = (a: ReportAnalyte) => a.canonical_slug ?? a.raw_name.toLowerCase().replace(/\s+/g, '_');
+    const current = new Set([
+      ...biomarkers.filter(b => isCensoredValue(b.raw_value_text)).map(b => b.name),
+      ...reportAnalytes.filter(a => isCensoredValue(a.raw_value_text)).map(keyOf),
+    ]);
+    const prior = new Set(previousAnalytes.filter(a => isCensoredValue(a.raw_value_text)).map(keyOf));
+    const priorDate = immediatePriorReportDate?.slice(0, 10) ?? null;
+    return (slug: string, previousDate: string | null) => current.has(slug)
+      || (prior.has(slug) && (previousDate === null || previousDate === priorDate))
+      || (historicalBiomarkers.get(slug) ?? []).some(h => isCensoredValue(h.valueText)
+        && (previousDate === null || h.reportDate.slice(0, 10) === previousDate));
+  }, [biomarkers, reportAnalytes, previousAnalytes, immediatePriorReportDate, historicalBiomarkers]);
 
   // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
   // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
@@ -909,8 +992,15 @@ export function ReportView() {
       b.reference_min,
       b.reference_max,
       report?.estimated_cycle_phase as Parameters<typeof scoreBiomarker>[5],
+      declaredState,
+      b.raw_value_text,
     ));
-  }, [biomarkers, report]);
+  }, [biomarkers, report, declaredState]);
+  // F022: a value she has not confirmed opens no focus area or Support plan card and flags no lab.
+  const confirmedScoredBiomarkers = useMemo(
+    () => scoredBiomarkers.filter((_, i) => !isUnconfirmedBiomarker(biomarkers[i]!, unconfirmedKeys)),
+    [scoredBiomarkers, biomarkers, unconfirmedKeys],
+  );
 
   /*
     V2-03b. "Top Priority" / "Main Focus" and the optimization-only headline
@@ -920,18 +1010,26 @@ export function ReportView() {
     band language, with the report's own phase, decides what may be said.
   */
   const markerBandLanguage = useMemo(() => {
-    const context = contextFromReport(report?.estimated_cycle_phase);
+    const context = contextFromReport(report?.estimated_cycle_phase, declaredState);
     const map = new Map<string, AuthorizedLanguage>();
     for (const b of biomarkers) {
-      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context);
+      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context, b.unit, b.raw_value_text);
       if (assessment.kind === 'scored') map.set(b.name, authorizedLanguage(assessment.band));
     }
     return map;
-  }, [biomarkers, report]);
-  const safetyWarnings = useMemo(
-    () => evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
-    [biomarkers],
-  );
+  }, [biomarkers, report, declaredState]);
+  // Review F014 interim: the lab's own printed critical flag, read from the saved lab rows only, dark behind its flag.
+  const labCriticalNotice = useLabCriticalFlagNotice();
+  // F022: no warning is dropped; one about a value she has not confirmed is marked so.
+  const safetyWarnings = useMemo(() => {
+    const measured = (rows: Biomarker[]) => rows.map(b => ({ name: b.name, value: b.value, unit: b.unit }));
+    const unconfirmed = biomarkers.filter(b => isUnconfirmedBiomarker(b, unconfirmedKeys));
+    return [
+      ...evaluateSafetyRules(measured(biomarkers.filter(b => !unconfirmed.includes(b)))),
+      ...evaluateSafetyRules(measured(unconfirmed)).map(w => ({ ...w, unconfirmed: true })),
+      ...(labCriticalNotice ? labCriticalFlagWarnings(findLabCriticalFlags(reportAnalytes)) : []),
+    ];
+  }, [biomarkers, unconfirmedKeys, reportAnalytes, labCriticalNotice]);
 
   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
   // server's interpretation already carries one but it's not surfaced to the
@@ -976,8 +1074,8 @@ export function ReportView() {
   }, [insightSummary]);
 
   const flaggedSlugs = useMemo<BiomarkerName[]>(
-    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside').map(s => s.key),
-    [scoredBiomarkers, report?.estimated_cycle_phase],
+    () => confirmedScoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit, declaredState, s.valueText) === 'outside').map(s => s.key),
+    [confirmedScoredBiomarkers, report?.estimated_cycle_phase, declaredState],
   );
 
   const flaggedCategories = useMemo<BiomarkerCategory[]>(
@@ -990,11 +1088,11 @@ export function ReportView() {
     return buildFocusAreas(
       insightSummary,
       insightSummary.watchSignals,
-      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside'),
+      confirmedScoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit, declaredState) === 'outside'),
       null,
       primaryCategory,
     );
-  }, [insightSummary, scoredBiomarkers, primaryCategory, report?.estimated_cycle_phase]);
+  }, [insightSummary, confirmedScoredBiomarkers, primaryCategory, report?.estimated_cycle_phase, declaredState]);
 
   const guidanceCards = useMemo(() => {
     const primaryFocusId = focusAreas.find((a) => a.isPrimaryAligned)?.id ?? null;
@@ -1321,6 +1419,20 @@ export function ReportView() {
     );
   }
 
+  if (!report && loadFailed) {
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto">
+          <CalmNotice
+            title={UNREACHABLE_TITLE}
+            safe={UNREACHABLE_SAFE_LINE}
+            action={{ label: 'Try again', onClick: () => { setLoading(true); void fetchReport(); } }}
+          />
+        </div>
+      </Layout>
+    );
+  }
+
   if (!report) {
     return (
       <Layout>
@@ -1385,6 +1497,7 @@ export function ReportView() {
     <FreemiumReportPanel
       state={accessState}
       floorSummary={insightSummary}
+      censoredTrend={censoredTrend}
       generating={generating}
       premiumRequired={generatePremiumRequired}
       plan={plan}
@@ -1440,11 +1553,7 @@ export function ReportView() {
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
               )}
               {resolvedLabSource !== 'unknown' && (
-                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-                  resolvedLabSource === 'quest'
-                    ? 'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border'
-                    : 'text-theme-info bg-theme-info-bg border-theme-info-border'
-                }`}>
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border text-theme-muted-text-3 border-theme-border">
                   <FlaskConical className="w-3 h-3" />
                   Imported from {resolvedLabSource === 'quest' ? 'Quest' : 'Labcorp'}
                 </span>
@@ -1462,6 +1571,16 @@ export function ReportView() {
 
         {/* ── Cycle rule (DESIGN.md, D10): the draw day on her cycle ── */}
         <CycleRule report={report} />
+
+        {/* A re-read failed (F065): what is on screen stays, with Try again. */}
+        {loadFailed && (
+          <CalmNotice
+            title={UNREACHABLE_TITLE}
+            safe={UNREACHABLE_SAFE_LINE}
+            className="mb-6"
+            action={{ label: 'Try again', onClick: () => { void fetchReport(); } }}
+          />
+        )}
 
         {error && (
           <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-xl mb-6 text-sm">
@@ -1578,8 +1697,8 @@ export function ReportView() {
             && (generating || accessState?.access === 'error' || accessState?.access === 'generation_needed')
             && freemiumPanel}
 
-          {/* ── A. Safety channel: approved deterministic rules only, never band-derived ── */}
-          {!isProcessing && <SafetyWarnings warnings={safetyWarnings} />}
+          {/* ── A. Safety channel: deterministic rules only, never band-derived; generating cannot hide it ── */}
+          <SafetyWarnings warnings={safetyWarnings} />
 
           {/* ── Notices slot (R22): calm notices about the explanation below, from src/features/report/notices ── */}
           {!isProcessing && (
@@ -1629,9 +1748,23 @@ export function ReportView() {
                       // is not authority for clinical meaning ("because the LLM
                       // generated it" is inadmissible), and it could read "all within
                       // range" while a card says otherwise (Phase 8B, kept).
+                      const labFindings = insightSummary.labFindings ?? [];
+                      if (labFindings.length > 0) {
+                        const ordered = [...labFindings].sort((a, b) => Number(b.key === insightSummary.primaryFinding?.key) - Number(a.key === insightSummary.primaryFinding?.key));
+                        return ordered.map(f => f.labLanguage ? <ClinicalObservation key={f.key} language={{ ...f.labLanguage, text: `${f.labLanguage.text} ` }} /> : null);
+                      }
                       const outside = scoredBiomarkers
-                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
+                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState, s.valueText) === 'outside' && confirmedScoredBiomarkers.includes(s))
                         .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
+                      // F022: her unconfirmed value is never named here, nor hidden behind an all-clear,
+                      // whether it sits outside its Amani band or outside her lab's range (the lab
+                      // headline above names only confirmed values).
+                      const labFlagged = (b: Biomarker) => {
+                        const placement = labIntervalPlacement(b.value, b.reference_min, b.reference_max);
+                        return placement === 'below' || placement === 'above';
+                      };
+                      if (outside.length === 0 && (scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState, s.valueText) === 'outside')
+                        || biomarkers.some(b => isUnconfirmedBiomarker(b, unconfirmedKeys) && labFlagged(b)))) return REPORT_TITLE;
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
                     }
@@ -1942,9 +2075,8 @@ export function ReportView() {
 
               <div className="mt-5 space-y-2">
                 {filteredCategories.map(({ category, items }) => {
-                  // Counted live, not from the persisted upload-time flag: a flag stored
-                  // before V2-03 may have come from a fallback band Amani now withholds.
-                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase) === 'outside').length;
+                  // No outside-band count in the header (DESIGN.md: no counts or scores);
+                  // each row carries its own status word.
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {
@@ -1965,11 +2097,6 @@ export function ReportView() {
                           <span className="text-sm font-semibold text-theme-text">
                             {systemDisplayLabel(category)}
                           </span>
-                          {flaggedCount > 0 && (
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CUE_STYLE.attention.bg} ${CUE_STYLE.attention.text}`}>
-                              {outsideBandCount(flaggedCount)}
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs text-theme-muted-text-3">{items.length}</span>
@@ -1993,6 +2120,7 @@ export function ReportView() {
                                 labRefMin={b.reference_min}
                                 labRefMax={b.reference_max}
                                 cyclePhase={cyclePhase}
+                                state={declaredState}
                                 modelProse={markerProse.get(b.name)}
                                 baselineStatus={personalization?.baselineStatus}
                                 baselineStaleness={personalization?.baselineStaleness}
@@ -2012,8 +2140,9 @@ export function ReportView() {
           )}
 
           {/* ── H. Disclaimer ───────────────────────────────────── */}
-          {/* The policy's product disclaimer; the model's own disclaimer text never renders (owner R1). */}
-          {interpretation && (
+          {/* The policy's product disclaimer; the model's own disclaimer text never renders (owner R1).
+              Shown whenever clinical content is, including a failed or pending generation (review F024). */}
+          {(insightSummary || interpretation) && (
             <div className="flex items-start gap-3 px-4 py-4">
               <Info className="w-3.5 h-3.5 text-theme-neutral-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-muted-text-3 leading-relaxed italic"

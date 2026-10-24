@@ -5,7 +5,6 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:amanibiometrics.com</string>
-		<string>applinks:www.amanibiometrics.com</string>
 		<string>webcredentials:amanibiometrics.com</string>
 	</array>
 </dict>

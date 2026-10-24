@@ -26,16 +26,22 @@ export function onNetworkChange(
 ): () => void {
   if (isNative()) {
     let handle: { remove: () => void } | null = null;
+    let cancelled = false;
 
-    import('@capacitor/network').then(({ Network }) => {
-      Network.addListener('networkStatusChange', (status) => {
+    import('@capacitor/network').then(async ({ Network }) => {
+      if (cancelled) return;
+      const h = await Network.addListener('networkStatusChange', (status) => {
         callback({ connected: status.connected, connectionType: status.connectionType });
-      }).then((h) => {
-        handle = h;
       });
-    });
+      // Released before the listener attached: remove it now, or it stays live.
+      if (cancelled) h.remove();
+      else handle = h;
+    }).catch(() => {});
 
-    return () => handle?.remove();
+    return () => {
+      cancelled = true;
+      handle?.remove();
+    };
   }
 
   // Web fallback

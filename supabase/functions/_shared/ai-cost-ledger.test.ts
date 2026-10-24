@@ -11,6 +11,7 @@ import {
   type AiCallCostRow,
   type AiFunctionName,
 } from './ai-cost-ledger.ts';
+import { DEFAULT_OPENAI_MODELS } from './openai-models.ts';
 
 /*
   PK-FIX-01b: the ai_call_costs row each of the four AI functions writes
@@ -36,7 +37,8 @@ describe('priceFor', () => {
   });
 
   it('prices every model the four functions request today', () => {
-    const requested = new Set<string>();
+    // The ids live in _shared/openai-models.ts (AI1); a handler may still carry a literal.
+    const requested = new Set<string>(Object.values(DEFAULT_OPENAI_MODELS));
     for (const fn of AI_FUNCTION_NAMES) {
       const source = readFileSync(new URL(`../${fn}/index.ts`, import.meta.url), 'utf8');
       for (const m of source.matchAll(/model:\s*"([^"]+)"/g)) requested.add(m[1]!);

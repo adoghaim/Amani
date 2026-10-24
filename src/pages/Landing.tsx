@@ -1,3 +1,4 @@
+import { ga4MeasurementId, openAnalyticsConsent } from '../lib/analytics/ga4'
 import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
@@ -64,7 +65,7 @@ export function Landing() {
               Hormone &amp; blood panels
             </p>
             <h1 className="text-[2.6rem] sm:text-5xl lg:text-[3.4rem] leading-[1.04] mb-6">
-              Your labs, read against your cycle.
+              Your labs, read in context.
             </h1>
             {/* Owner R3: differentiate by context, not judgement. The old line,
                 "normal on day 3 and worrying on day 21", was a clinical judgement. */}
@@ -193,7 +194,7 @@ export function Landing() {
         <ul className="grid sm:grid-cols-2 gap-x-10 gap-y-3 mt-10 max-w-3xl">
           {[
             'Unlimited lab panels',
-            'Results read with your cycle context',
+            'Asks for your cycle dates so results are read in context',
             'Trends across every past panel',
             'Questions to take to your doctor',
           ].map(f => (
@@ -229,6 +230,9 @@ export function Landing() {
             <Link to="/terms" className="hover:text-theme-text transition-colors">Terms</Link>
             <Link to="/contact" className="hover:text-theme-text transition-colors">Contact</Link>
             <Link to="/delete-account" className="hover:text-theme-text transition-colors">Delete account</Link>
+            {ga4MeasurementId() && (
+              <button type="button" onClick={openAnalyticsConsent} className="hover:text-theme-text transition-colors">Cookie settings</button>
+            )}
           </div>
         </div>
       </footer>

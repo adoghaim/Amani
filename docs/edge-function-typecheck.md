@@ -1,15 +1,23 @@
 # Edge function type checking
 
 From the repository root, run `npm run check:functions`. Its exact local command
-is `bash docs/check-functions.sh npx --yes deno@2`. Node/npm fetch and run Deno 2
+is `bash docs/check-functions.sh npx --yes deno@2.1.4`. Node/npm fetch and run Deno
 without requiring a global installation or adding a project dependency. The first
 run requires network access to download Deno and remote module types.
 
-For a standalone local installation, use `npm install --global deno@2`, then run
-`bash docs/check-functions.sh deno`. CI installs Deno using
-`denoland/setup-deno@v2` with `deno-version: v2.x` and runs that same command.
+Deno 2.1.4 is the Deno of the Supabase edge runtime that serves the functions
+(`supabase/edge-runtime` v1.77.8, `deno/Cargo.toml`; every release since v1.70.0,
+and the image Supabase CLI v2.122.0 runs), so the check sees the APIs and
+TypeScript production has. When the runtime moves, change this pin, the
+`deno-version` in `.github/workflows/ci.yml` and `integration-preview.yml`, and
+`check:functions` together; `scripts/ci/workflow-hardening.test.ts` fails while
+they differ.
+
+For a standalone local installation, use `npm install --global deno@2.1.4`, then run
+`bash docs/check-functions.sh deno`. CI installs Deno using the commit-pinned
+`denoland/setup-deno` with `deno-version: 2.1.4` and runs that same command.
 The script invokes `deno check --node-modules-dir=none --no-lock "${files[@]}"` in CI
-and `npx --yes deno@2 check --node-modules-dir=none --no-lock "${files[@]}"` locally.
+and `npx --yes deno@2.1.4 check --node-modules-dir=none --no-lock "${files[@]}"` locally.
 The flags resolve npm specifiers through Deno's global cache without modifying
 the npm-managed node_modules directory or creating/updating a Deno lockfile.
 Downloads populate external npm/Deno caches; no import map or runtime
@@ -53,5 +61,5 @@ files=()
 for file in supabase/functions/*/index.ts supabase/functions/_shared/*.ts; do
   [[ "$file" == *.test.ts ]] || files+=("$file")
 done
-npx --yes deno@2 check --node-modules-dir=none --no-lock "${files[@]}"
+npx --yes deno@2.1.4 check --node-modules-dir=none --no-lock "${files[@]}"
 ```

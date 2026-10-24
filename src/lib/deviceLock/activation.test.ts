@@ -29,6 +29,7 @@ it.each([
   await deviceLock.unlock();
   expect(await deviceLock.turnOn()).toBe(false);
   await deviceLock.turnOff();
+  expect(await deviceLock.confirmTurnOff()).toBe(false);
   deviceLock.setRelockAfter('5m');
   deviceLock.declineOffer();
   expect(await deviceLock.offerEligible()).toStrictEqual({ eligible: false, kind: null });

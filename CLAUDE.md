@@ -14,12 +14,13 @@ Amani is a women's health lab-interpretation app: users upload lab PDFs/photos, 
 - `npm run lint` — ESLint (TS + React Hooks + React Refresh rules).
 - `npm run typecheck` — `tsc --noEmit -p tsconfig.app.json`.
 - `npm test` — Vitest (`vitest.config.ts`). Runs in CI between typecheck and build.
+- `npm run test:device-lock` — compiles and runs the native Java and Swift device-lock release helpers against a shared case matrix (needs `javac` and `swiftc`). Not part of `npm test`; both `native-build.yml` jobs run it.
 - `npm run cap:sync` — build then `npx cap sync` to push web assets into `android/` and `ios/`.
 - `npm run check:functions` — Deno type-check of the Supabase edge functions (`supabase/functions`), excluding a documented baseline of files that fail today; runs in CI as "Edge function typecheck". See `docs/edge-function-typecheck.md`.
 
 Before opening a PR run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Document manual validation steps in the PR (especially for parser, scoring, or interpretation changes).
 
-Suites live beside the code they cover — `src/utils/parser/parser.test.ts` (snapshot harness over 5 lab-source fixtures), `src/lib/deepLinks.test.ts`, `src/lib/scoring/scoreBiomarker.test.ts`, and several under `supabase/functions/_shared/`. Run `npm test` for the current count rather than trusting a number here. Two suites are the medical guardrails and should never be allowed to go red: `_shared/nutrient-policy.test.ts` (interpretation safety) and `src/lib/scoring/scoreBiomarker.test.ts` (biomarker flagging). The edge-function suites set the pattern worth copying for new server logic: keep the ordering and policy in a pure `_shared/*.ts` module behind an injected actions port, with no Deno or Stripe imports, so Vitest can drive it with fakes and the Deno handler stays a thin wiring layer.
+Suites live beside the code they cover — `src/utils/parser/parser.test.ts` (snapshot harness over the lab-source fixtures in `__fixtures__/`), `src/lib/deepLinks.test.ts`, `src/lib/scoring/scoreBiomarker.test.ts`, and several under `supabase/functions/_shared/`. Run `npm test` for the current count rather than trusting a number here. Two suites are the medical guardrails and should never be allowed to go red: `_shared/nutrient-policy.test.ts` (interpretation safety) and `src/lib/scoring/scoreBiomarker.test.ts` (biomarker flagging). The edge-function suites set the pattern worth copying for new server logic: keep the ordering and policy in a pure `_shared/*.ts` module behind an injected actions port, with no Deno or Stripe imports, so Vitest can drive it with fakes and the Deno handler stays a thin wiring layer.
 
 ## Architecture
 
@@ -156,3 +157,21 @@ Key routing rules:
 Read DESIGN.md before visual or UI work: it defines the fonts, colors, spacing, and
 aesthetic direction. Ask the user before departing from it. When reviewing or QA-ing
 UI, flag code that doesn't match DESIGN.md.
+
+## graphify
+
+`graphify-out/` holds a [graphify](https://github.com/Graphify-Labs/graphify) knowledge graph of this
+repository: code parsed locally with tree-sitter, plus a semantic pass over the docs. `.graphifyignore`
+lists what it leaves out. Install with `uv tool install graphifyy` (two y's), then `graphify install`.
+
+- If `graphify` is installed, start codebase questions with `graphify query "<question>"`,
+  `graphify path "<A>" "<B>"` or `graphify explain "<concept>"`, then read the files it points to.
+  `graphify-out/GRAPH_REPORT.md` is the architecture overview.
+- The graph is a map, not evidence: it can lag the code, and INFERRED/AMBIGUOUS edges are guesses, so
+  confirm behaviour in the source. It is never a source for clinical ranges, thresholds, units or
+  guidance — the Clinical Truth Layer is.
+- **Feature PRs do not include `graphify-out/` changes** — regenerated graph files conflict across
+  parallel PRs. A local `graphify update .` is fine; `git restore graphify-out` before committing.
+  Refresh the shared graph in its own PR after merges (`/graphify . --update` in Claude Code).
+- `graphify claude install` would replace this section with graphify's default (which tells agents to
+  rebuild and commit the graph on every change) and adds hooks; keep these rules if you run it.

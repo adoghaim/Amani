@@ -1,9 +1,11 @@
 import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
-import { errorMessage } from "../_shared/errors.ts";
+import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi-scrub.ts";
+import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
+import { ocrImagesRefusal, type ExtractedAnalyte as ReportAnalyte } from "../_shared/lab-extraction.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
@@ -33,26 +35,6 @@ export interface CanonicalAnalyte {
   is_ratio: boolean;
   affects_scoring: boolean;
   affects_recommendations: boolean;
-}
-
-export interface ReportAnalyte {
-  raw_name: string;
-  raw_value_text: string | null;
-  value_numeric: number;
-  unit: string | null;
-  raw_reference_range: string | null;
-  normalized_min: number | null;
-  normalized_max: number | null;
-  normalized_operator: string | null;
-  normalized_operator_value: number | null;
-  source_snippet: string | null;
-  confidence_score: "high" | "medium" | "low";
-  canonical_analyte_id: string | null;
-  canonical_slug: string | null;
-  parse_status: "mapped" | "partial" | "unmapped";
-  needs_review: boolean;
-  is_core: boolean;
-  category: string | null;
 }
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -244,29 +226,12 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { base64Images } = body; // Array of base64 strings with data URLs 'data:image/jpeg;base64,...'
 
-    if (!base64Images || !Array.isArray(base64Images) || base64Images.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "base64Images array is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const MAX_IMAGES = 10;
-    if (base64Images.length > MAX_IMAGES) {
-      return new Response(
-        JSON.stringify({ error: `Too many images (max ${MAX_IMAGES})` }),
-        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const MAX_BASE64_LENGTH = 7_000_000; // ~5 MB raw per image
-    for (const b64 of base64Images) {
-      if (typeof b64 !== "string" || b64.length > MAX_BASE64_LENGTH) {
-        return new Response(
-          JSON.stringify({ error: "Image too large or invalid (max ~5MB per image)" }),
-          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    // Review F026: only PNG or JPEG data URLs, so no remote URL reaches OpenAI.
+    const imagesRefused = ocrImagesRefusal(base64Images);
+    if (imagesRefused) {
+      return new Response(JSON.stringify(imagesRefused.body), {
+        status: imagesRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { analyteMap, synonymMap } = await loadCanonicalRegistry(supabaseAdmin);
@@ -316,6 +281,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
       });
     }
 
+    const model = resolveOpenAiModel("ocr", (name) => Deno.env.get(name));
     const openaiResponse = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -325,13 +291,12 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o", // Strongest model for OCR validation
+          model,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessagesContent }
           ],
-          max_tokens: 4000,
-          temperature: 0.1,
+          ...chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }),
           response_format: { type: "json_object" }
         }),
       },
@@ -340,15 +305,17 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData}`);
+      // F033: the body can echo report content, so it is scrubbed in the log and
+      // kept out of the thrown message (which reaches the client).
+      console.error("OpenAI API error:", openaiResponse.status, scrubServerText(errorData));
+      throw new Error(`OpenAI API error: status ${openaiResponse.status}`);
     }
 
     const openaiData = await openaiResponse.json();
     inBackground(costLedger.record({
       functionName: "parse-lab-report-ocr",
       userId: user.id,
-      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-4o",
+      model: typeof openaiData?.model === "string" ? openaiData.model : model,
       usage: openaiData?.usage,
     }));
     const content = openaiData.choices[0].message.content;
@@ -470,7 +437,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error in OCR fallback:", error);
+    console.error("Error in OCR fallback:", errorType(error), scrubbedErrorMessage(error));
 
     if (isRateLimitExceeded(error)) {
       return new Response(
@@ -481,7 +448,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
 
     inBackground(reporter.captureException(error, { stage: "ocr" }));
     return new Response(
-      JSON.stringify({ error: errorMessage(error) }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

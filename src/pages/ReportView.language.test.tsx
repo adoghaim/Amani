@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as policy from '../lib/scoring/insightCopy';
 import { compareReports } from '../lib/scoring/compareReports';
 import { MODEL_CANARIES, unprovenancedText, unresolvedModelProse } from '../lib/scoring/modelProse.testkit';
-import type { BiomarkerName } from '../types';
+import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../types';
 
 /*
   V2-03b Stage 2. The real ReportView, rendered in jsdom against synthetic rows
@@ -26,6 +26,8 @@ import type { BiomarkerName } from '../types';
 const fixture = vi.hoisted(() => ({
   tables: {} as Record<string, Record<string, unknown>[]>,
   interpretation: null as Record<string, unknown> | null,
+  /** generate-interpretation's error (null: the call is accepted). */
+  invokeError: null as unknown,
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -51,11 +53,12 @@ vi.mock('../lib/supabase', () => {
     };
     return builder;
   };
-  return { supabase: { from: query, functions: { invoke: async () => ({ data: null, error: null }) } } };
+  return { supabase: { from: query, functions: { invoke: async () => ({ data: null, error: fixture.invokeError }) } } };
 });
 vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => ({
   entitled: true, plan: 'premium', complimentary: { used: 0, total: 0, remaining: 0 }, refetch: vi.fn(),
 }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ userProfile: null }) }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 import { ReportView } from './ReportView';
 
@@ -70,6 +73,7 @@ const rows = (reportId: string, markers: Marker[]) => markers.map(([name, value,
 }));
 
 function seed(currentTsh: number, priorTsh: number) {
+  fixture.invokeError = null;
   fixture.tables = {
     lab_reports: [
       { id: CURRENT, user_id: USER, report_date: '2026-01-02', status: 'ready', estimated_cycle_phase: 'unknown', regeneration_count: 0, lab_name: 'Synthetic Lab' },
@@ -77,10 +81,10 @@ function seed(currentTsh: number, priorTsh: number) {
     ],
     biomarkers: [
       ...rows(CURRENT, [
-        ['tsh', currentTsh, 'uIU/mL', 0.45, 4.5], ['ferritin', 20, 'ng/mL', 15, 150], ['hemoglobin_a1c', 6, '%', 4, 5.6],
+        ['tsh', currentTsh, 'mIU/L', 0.45, 4.5], ['ferritin', 20, 'ng/mL', 15, 150], ['hemoglobin_a1c', 6, '%', 4, 5.6],
         ['fasting_glucose', 95, 'mg/dL', 70, 99], ['fasting_insulin', 12, 'uIU/mL', 2, 20],
       ]),
-      ...rows(PRIOR, [['tsh', priorTsh, 'uIU/mL', 0.45, 4.5], ['ferritin', 25, 'ng/mL', 15, 150]]),
+      ...rows(PRIOR, [['tsh', priorTsh, 'mIU/L', 0.45, 4.5], ['ferritin', 25, 'ng/mL', 15, 150]]),
     ],
     report_analytes: [{
       id: 'analyte-1', lab_report_id: CURRENT, raw_name: 'Sodium', display_name: 'Sodium', value_numeric: 145.5,
@@ -209,13 +213,15 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
 
     expect(card?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent)
       .toBe(value > 60 ? "Above your lab's range" : "Within your lab's range");
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toContain(outside ? "outside Amani's current comparison band" : "All scored values are within Amani's context bands");
+    if (value > 60) {
+      expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent).toContain("above your lab's reference range");
+      expect(app.textContent).toContain('Focus areas');
+    } else {
+      expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
+        .toContain(outside ? "outside Amani's current comparison band" : "All scored values are within Amani's context bands");
+      if (!outside) expect(app.textContent).not.toContain('Focus areas');
+    }
     expect(app.textContent).toContain(outside ? '1 outside Amani band' : 'Scored markers within Amani bands');
-    const empty = "No scored marker on this report is outside Amani's comparison bands.";
-    expect((app.textContent ?? '').split(empty).length - 1).toBe(outside ? 0 : 1);
-    // ReportView intentionally does not mount FocusAreas when empty.
-    if (!outside) expect(app.textContent).not.toContain('Focus areas');
     if (!outside) {
       expect(app.textContent).not.toContain('Outside Amani band');
       expect(app.querySelectorAll('[data-language-category="comparison_band"][data-language-cue="attention"]').length).toBe(0);
@@ -230,11 +236,59 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     await renderAndOpenAll();
     const primary = app.querySelector('[data-testid="primary-finding"]');
     expect(primary?.textContent).toContain('Primary finding');
-    expect(primary?.textContent).toContain("TSH is above the Amani band at 9 uIU/mL. Amani's context bands are still under review.");
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toMatch(/is outside Amani's current comparison band|are outside Amani's current comparison bands/);
+    expect(primary?.textContent).toContain("TSH is above your lab's reference range at 9 mIU/L.");
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("TSH is above your lab's reference range");
     // No movement may be claimed without a prior report (a first-recorded placeholder is not a prior value).
     expect(app.textContent).not.toMatch(/since your prior report/);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  // Owner ruling 2026-10-23: Ruling 7 is a true floor. A lab-only flag stays a
+  // visible neutral lab fact but never takes the Primary slot from an
+  // Amani-flagged result, so the Amani-band and DISPUTED sentences stay reachable.
+  const firstReport = (phase: string, markers: Marker[]) => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT)
+      .map(r => ({ ...r, estimated_cycle_phase: phase }));
+    fixture.tables.biomarkers = rows(CURRENT, markers);
+    fixture.tables.report_analytes = [];
+  };
+
+  it('a lab-only HDL flag stays visible but the Amani-flagged ferritin keeps the Primary finding, in its Amani-band sentence', async () => {
+    firstReport('unknown', [['ferritin', 17, 'ng/mL', 15, 150], ['hdl_cholesterol', 61, 'mg/dL', 40, 60]]);
+    await renderAndOpenAll();
+    const primary = app.querySelector('[data-testid="primary-finding"]');
+    expect(primary?.textContent).toContain('Primary finding');
+    expect(primary?.textContent).toContain("Ferritin is below the Amani band at 17 ng/mL. Amani's context bands are still under review.");
+    expect(primary?.textContent).not.toContain('HDL');
+    // The lab-only flag is still on the page as a neutral lab fact: headline and focus areas.
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("HDL is above your lab's reference range at 61 mg/dL.");
+    expect(app.textContent).toContain('Ferritin is the primary finding shown above.');
+    // Focus areas: Amani's area first, the lab-only HDL appended after it, titled as printed.
+    const focusHeading = Array.from(app.querySelectorAll('h2')).find(h => h.textContent === 'Focus areas')!;
+    const areas = Array.from(focusHeading.parentElement!.parentElement!.querySelectorAll('article'));
+    const titles = areas.map(a => a.querySelector('h3')!.textContent);
+    expect(titles).toHaveLength(2);
+    expect(titles[titles.length - 1]).toBe('HDL');
+    expect(areas[0]!.textContent).toContain('Ferritin');
+    expect(areas[areas.length - 1]!.textContent).toContain("HDL is above your lab's reference range at 61 mg/dL.");
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('the DISPUTED luteal progesterone keeps the Primary finding over the lab-flagged LH, withholding placement', async () => {
+    firstReport('luteal', [
+      ['progesterone', 2, 'ng/mL', 0.2, 25], ['tsh', 2, 'uIU/mL', 0.45, 4.5], ['estradiol', 120, 'pg/mL', null, null],
+      ['lh', 30, 'mIU/mL', 2.4, 12.6], ['fsh', 6, 'mIU/mL', 3.5, 12.5],
+    ]);
+    await renderAndOpenAll();
+    const primary = app.querySelector('[data-testid="primary-finding"]');
+    expect(primary?.textContent).toContain('Primary finding');
+    expect(primary?.textContent).toContain('Progesterone was measured at 2 ng/mL. Interpretation unavailable pending clinical review.');
+    expect(primary?.textContent).not.toMatch(/below|above|outside|LH/);
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("LH is above your lab's reference range at 30 mIU/mL.");
     expect(forbiddenHits(pageText())).toEqual([]);
   }, 30_000);
 
@@ -323,7 +377,7 @@ const prepQuestions = () => Array.from(app.querySelectorAll('[data-testid="prep-
   .map(el => el.textContent ?? '');
 // Measured change 6 -> 400, HbA1c above its lab interval, then the context question.
 const PREP_FOR_TSH_400 = [
-  'My TSH changed from 6 to 400 uIU/mL. What could explain this change, and is it clinically meaningful?',
+  'My TSH changed from 6 to 400 mIU/L. What could explain this change, and is it clinically meaningful?',
   // PK-FIX-02: the marker name reads in sentence case mid-sentence ("my ferritin", not "my Ferritin").
   'My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?',
   "My HbA1c is 6 %, above my lab's reference interval of 4–5.6 %. What does this mean in the context of my overall labs?",
@@ -362,9 +416,9 @@ describe('owner R2 — discussion preparation on the page: admissible premises, 
     await renderAndOpenAll();
     const [tshChange, ferritinChange, hba1cInterval] = prepQuestions();
     // TSH 6 -> 9: the primary movement and the trajectory state the same two values.
-    expect(tshChange).toContain('from 6 to 9 uIU/mL');
-    expect(app.querySelector('[data-testid="primary-movement-observation"]')?.textContent).toContain('from 6 to 9 uIU/mL');
-    expect(app.textContent).toContain('TSH has risen from 6 to 9 uIU/mL.');
+    expect(tshChange).toContain('from 6 to 9 mIU/L');
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')?.textContent).toContain('from 6 to 9 mIU/L');
+    expect(app.textContent).toContain('TSH has risen from 6 to 9 mIU/L.');
     expect(ferritinChange).toContain('from 25 to 20 ng/mL');
     expect(app.textContent).toContain('Ferritin has dropped from 25 to 20 ng/mL.');
     // HbA1c: the question's placement and interval are the HbA1c card's own.
@@ -722,5 +776,103 @@ describe('PK-FIX-06: the cycle day renders without a phase, in neutral language'
     await renderAndOpenAll();
     expect(cycleCard()).toBeNull();
     expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+  }, 30_000);
+});
+
+/*
+  RS2 (review F024, F069). The report disclaimer renders whenever clinical
+  content is on screen, not only beside a loaded interpretation; and the page
+  does not count results outside Amani's bands in its system headers (DESIGN.md,
+  Result row and Don'ts: no counts, no scores), nor tint the lab-brand chip in a
+  status or info colour. Synthetic rows.
+*/
+describe('RS2: disclaimer with every clinical state; no outside-band counts', () => {
+  const reportDisclaimers = () => Array.from(app.querySelectorAll('[data-language-source="product_disclaimer"]'))
+    .filter(el => el.textContent === policy.PRODUCT_DISCLAIMERS.report.text);
+  const current = () => fixture.tables.lab_reports!.find(r => r['id'] === CURRENT)!;
+
+  it('F024: a failed generation still shows the headline and primary finding, and the report disclaimer with them', async () => {
+    seed(9, 6);
+    current()['status'] = 'error';
+    fixture.interpretation = null;
+    fixture.invokeError = new Error('synthetic generation failure');
+    await renderAndOpenAll();
+    expect(app.textContent).toContain('AI summary failed');
+    // Two reports: the primary finding renders as its measured movement.
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')).not.toBeNull();
+    expect(app.textContent).toContain('Your trajectory');
+    const disclaimers = reportDisclaimers();
+    expect(disclaimers).toHaveLength(1);
+    expect(disclaimers[0]!.getAttribute('data-language-category')).toBe(policy.PRODUCT_DISCLAIMERS.report.category);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('F024: while the summary is still being generated, the report disclaimer is on screen', async () => {
+    seed(9, 6);
+    fixture.interpretation = null;
+    await renderAndOpenAll();
+    expect(app.textContent).toContain('AI summary is being generated');
+    expect(reportDisclaimers()).toHaveLength(1);
+  }, 30_000);
+
+  it('F024 PRESERVE: with an interpretation loaded the report disclaimer renders once', async () => {
+    seed(9, 6);
+    await renderAndOpenAll();
+    expect(reportDisclaimers()).toHaveLength(1);
+  }, 30_000);
+
+  it('F069: system headers carry no outside-band count and no info tint; each row keeps its status words', async () => {
+    seed(9, 6);
+    await renderAndOpenAll();
+    const labels = new Set((Object.keys(CATEGORY_DISPLAY) as BiomarkerCategory[]).map(policy.systemDisplayLabel));
+    const headers = buttons(b => b.hasAttribute('aria-expanded') && [...labels].some(l => b.querySelector('span')?.textContent === l));
+    expect(headers.length).toBeGreaterThan(0);
+    for (const header of headers) {
+      expect(header.textContent, header.textContent ?? '').not.toMatch(/outside Amani band/i);
+      expect(header.innerHTML, header.textContent ?? '').not.toMatch(/info-(?:bg|border)|text-theme-info/);
+    }
+    // The per-row status word stays: TSH 9 is outside its Amani band.
+    expect(app.querySelector('article[aria-label="TSH result"]')?.textContent).toContain('Outside Amani band');
+  }, 30_000);
+
+  it.each([['quest', 'Quest'], ['labcorp', 'Labcorp']])('F069: the %s chip is not drawn in a status or info colour', async (source, name) => {
+    seed(9, 6);
+    current()['lab_source'] = source;
+    await renderAndOpenAll();
+    const chip = Array.from(app.querySelectorAll('span')).find(el => el.textContent === `Imported from ${name}`);
+    expect(chip).toBeTruthy();
+    expect(chip!.className).not.toMatch(/flag-(?:ok|watch|low)|theme-info/);
+  }, 30_000);
+});
+
+// Review F011: an Amani band is in the catalog unit and no conversion is
+// approved, so a value saved in another unit is placed only against her lab's
+// own interval, on every surface of the page.
+describe('F011 — a value in another unit is never placed against an Amani band', () => {
+  it('LDL 4.9 mmol/L, above her lab interval: lab range only, no band placement anywhere', async () => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
+    fixture.tables.biomarkers = rows(CURRENT, [['ldl_cholesterol', 4.9, 'mmol/L', 0, 3]]);
+    fixture.tables.report_analytes = [];
+    await renderAndOpenAll();
+    const card = app.querySelector('article[aria-label="LDL result"]');
+    expect(card?.textContent).toContain('No Amani band');
+    expect(card?.textContent).toContain("Your lab's range:0–3 mmol/L");
+    expect(card?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent).toBe("Above your lab's range");
+    expect(card?.querySelector('[data-testid="comparison-region"]')).toBeNull();
+    // Pill, system card, headline and primary-finding wording of a band placement.
+    expect(app.textContent).not.toMatch(/outside Amani bands?|within Amani bands?|outside Amani's current comparison band|the Amani band at|All scored values are within/i);
+    expect(app.querySelectorAll('[data-language-category="comparison_band"][data-language-cue="attention"]').length).toBe(0);
+  }, 30_000);
+
+  it('glucose 5.2 mmol/L and insulin 36 pmol/L: no derived metric, so no HOMA-IR against its band', async () => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT);
+    fixture.tables.biomarkers = rows(CURRENT, [['fasting_glucose', 5.2, 'mmol/L', 3.9, 5.5], ['fasting_insulin', 36, 'pmol/L', 13, 139]]);
+    fixture.tables.report_analytes = [];
+    await renderAndOpenAll();
+    expect(app.querySelectorAll('article[aria-label$=" result"]').length).toBe(2);
+    expect(app.textContent).not.toMatch(/Derived metrics|HOMA-IR/);
+    expect(app.textContent).not.toMatch(/outside Amani bands?|within Amani bands?|outside Amani's current comparison band|the Amani band at/i);
   }, 30_000);
 });

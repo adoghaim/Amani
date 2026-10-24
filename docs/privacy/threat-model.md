@@ -135,8 +135,11 @@ leaves for OpenAI in `extract-biomarkers`, `generate-interpretation` and
 
 `parse-lab-report-ocr` sends the page images themselves to OpenAI. The server
 cannot remove a name from pixels without first sending them to an OCR engine,
-which is the exposure we are trying to avoid. Options, for the owner and
-lawyer:
+which is the exposure we are trying to avoid. Since IB1 (review F026) the
+function accepts only base64 PNG or JPEG data URLs, at most 10 of about 5 MB
+each (`_shared/lab-extraction.ts`), so it never forwards a remote URL. That is
+input hygiene, not redaction: the images still reach OpenAI unredacted, and
+retention (ZDR) stays open below. Options, for the owner and lawyer:
 
 | Option | Effect | Cost |
 |---|---|---|

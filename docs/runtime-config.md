@@ -95,6 +95,7 @@ them needs a migration, and no migration may add one (D5).
 | `sample_report` | "See a sample report" (D26) |
 | `visit_summary` | the visit summary (EXP-2) |
 | `ai_assistant_connector` | the AI-assistant connector prototype, not deployed (PK-AIDIST-01, `docs/ai-distribution/design.md`) |
+| `lab_critical_flag_notice` | the report's safety notice, in every tier, when her lab printed its own critical or panic flag beside a result (review F014 interim, not PK-05-B: no Amani threshold; `src/lib/safety/labCriticalFlags.ts`). Client code only: no migration or function deploy. Turn on only after clinical GO on the notice's words and the marker table (HH, LL, CRIT, CRITICAL, PANIC, ALERT) [Pending] |
 
 A packet that adds a flag adds its row here, in the same PR.
 

@@ -1,9 +1,11 @@
 import type { AmaniStatus, BiomarkerName } from '../../types';
 import { getEntry, type ClinicalRange, type OptimalRange } from '../biomarkers/dictionary';
+import { isCatalogUnit } from '../biomarkers/normalizeReportItems';
 import {
   canDescribeAsOptimal, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
 import { ANALYTE_CONTEXT, type AnalyteContext, type ContextModifier } from '../biomarkers/rangeContext.generated';
+import { censoredResult, type CensoredResult } from '../../../supabase/functions/_shared/censored-value';
 
 /*
   V2-03: Amani withholds rather than guesses.
@@ -24,8 +26,8 @@ export type MenstrualPhase = typeof MENSTRUAL_PHASES[number];
 /**
  * Physiological states that are not menstrual-phase cases. None has an
  * evidence-backed context rule yet, so each withholds. First-class sources
- * for these states arrive in V2-04; today only a report's pregnancy phase
- * reaches this module.
+ * for these states arrive in V2-04; today a report's pregnancy phase and the
+ * reproductive status she declared (stateFromPregnancyStatus) reach this module.
  */
 export type NonCyclingState =
   | 'pregnancy'
@@ -50,6 +52,24 @@ const STATE_MODIFIERS: Record<NonCyclingState, readonly ContextModifier[]> = {
   perimenopause: ['cycle', 'life_stage'],
   menopause: ['cycle', 'life_stage'],
 };
+
+// Review F012, interim before PK-04: users.pregnancy_status as onboarding and
+// Settings write it (PREGNANCY_OPTIONS). Breastfeeding has no state of its own;
+// postpartum's modifiers include pregnancy's, so it withholds at least as much.
+const DECLARED_STATE = new Map<string, NonCyclingState>([
+  ['pregnant', 'pregnancy'],
+  ['postpartum', 'postpartum'],
+  ['breastfeeding', 'postpartum'],
+]);
+
+/**
+ * The non-cycling state her declared reproductive status names, or null.
+ * Never infers: 'None', 'Prefer not to say', empty or unrecognised is no state.
+ */
+export function stateFromPregnancyStatus(status: string | null | undefined): NonCyclingState | null {
+  if (typeof status !== 'string') return null;
+  return DECLARED_STATE.get(status.trim().toLowerCase()) ?? null;
+}
 
 /**
  * Builds context from what a report recorded. Never infers: an absent,
@@ -104,7 +124,7 @@ export function bandClaims(_key: BiomarkerName, _phase: MenstrualPhase | null): 
   return NO_CLAIM_EVIDENCE;
 }
 
-export type WithheldReason = 'cycle_phase_missing' | 'cycle_phase_unsupported' | 'non_cycling_state';
+export type WithheldReason = 'cycle_phase_missing' | 'cycle_phase_unsupported' | 'non_cycling_state' | 'censored_result';
 
 export interface AmaniBand {
   /** Placement follows the existing scoring direction; this is not claim authority. */
@@ -120,9 +140,26 @@ export interface AmaniBand {
 }
 
 export type AmaniAssessment =
-  | { kind: 'scored'; status: AmaniStatus; band: AmaniBand }
-  | { kind: 'withheld'; reason: WithheldReason; state: NonCyclingState | null; phase: MenstrualPhase | null }
+  /** `censored`: the printed limit this status was decided on (F021). */
+  | { kind: 'scored'; status: AmaniStatus; band: AmaniBand; censored?: CensoredResult }
+  | { kind: 'withheld'; reason: Exclude<WithheldReason, 'censored_result'>; state: NonCyclingState | null; phase: MenstrualPhase | null }
+  /** F021: a printed limit ('> OR = 60') its band cannot place. `printed` is the result as printed. */
+  | { kind: 'withheld'; reason: 'censored_result'; state: null; phase: MenstrualPhase | null; printed: string }
   | { kind: 'unavailable' };
+
+/**
+ * Review F021. A censored result allows every value from its printed limit to
+ * the open end (0 below a '<' limit, unbounded above a '>' one). Each
+ * classifier this is given orders its classes along the value axis, so all of
+ * those values share one class exactly when the limit and the open end do:
+ * that class, else null (withheld). It reads only the printed comparator and
+ * limit and adds no threshold. A strict limit that sits exactly on a boundary
+ * can be withheld when it need not be; it is never placed when it should not be.
+ */
+export function censoredClassification<T>(censored: CensoredResult, classify: (value: number) => T): T | null {
+  const atLimit = classify(censored.threshold);
+  return atLimit === classify(censored.comparator.startsWith('<') ? 0 : Number.MAX_VALUE) ? atLimit : null;
+}
 
 /** Classification against one Amani band. Unchanged from the pre-V2-03 rule. */
 export function classifyAgainstBand(
@@ -156,14 +193,26 @@ export function classifyAgainstBand(
   return 'normal';
 }
 
+/**
+ * `unit` is the value's own unit. Bands are written in the catalog unit and the
+ * catalog approves no unit conversions, so a value in any other unit, or with
+ * none, has no band (review F011). Omit `unit` only for a value already in the
+ * catalog unit. `valueText` is the result as printed: a censored one ('<8') is
+ * placed by its printed limit, never by its stored placeholder (F021).
+ */
 export function assessAmaniContext(
   key: BiomarkerName,
   value: number,
   context: PhysiologicalContext,
+  unit?: string | null,
+  valueText?: string | null,
 ): AmaniAssessment {
   const entry = getEntry(key);
   const analyte = CONTEXT_BY_KEY.get(key);
   if (!entry || !analyte) return { kind: 'unavailable' };
+  if (unit !== undefined && !isCatalogUnit(key, unit)) return { kind: 'unavailable' };
+  // Review F097: a value that is not a finite, non-negative number is no measurement.
+  if (!Number.isFinite(value) || value < 0) return { kind: 'unavailable' };
 
   if (context.state && stateRequiresContext(analyte, context.state).length > 0) {
     return { kind: 'withheld', reason: 'non_cycling_state', state: context.state, phase: null };
@@ -180,11 +229,20 @@ export function assessAmaniContext(
   }
 
   const values = phase ? entry.phaseRanges![phase]! : { optimal: entry.optimal, clinical: entry.clinical };
+  // Review F097: a band with no bound at all (ana_screen) places nothing.
+  if ([values.optimal.min, values.optimal.max, values.clinical.min, values.clinical.max].every(b => b === null)) {
+    return { kind: 'unavailable' };
+  }
+  const classify = (v: number) => classifyAgainstBand(v, values.optimal, values.clinical, entry.higherIsBetter);
+  const censored = censoredResult(valueText);
+  const status = censored ? censoredClassification(censored, classify) : classify(value);
+  if (status === null) return { kind: 'withheld', reason: 'censored_result', state: null, phase, printed: String(valueText).trim() };
   const provenance = bandProvenance(key, phase);
   const claims = bandClaims(key, phase);
   return {
     kind: 'scored',
-    status: classifyAgainstBand(value, values.optimal, values.clinical, entry.higherIsBetter),
+    status,
+    ...(censored ? { censored } : {}),
     band: {
       higherIsBetter: entry.higherIsBetter,
       min: values.optimal.min,

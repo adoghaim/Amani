@@ -25,7 +25,7 @@ test.describe('the web app is never gated', () => {
 
   test('a minimum of 999.0.0 does not block the public app or sign-in', async ({ page, runtimeConfigReads }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
     await expect.poll(() => runtimeConfigReads.length).toBe(1);
     await expect(page.getByRole('heading', { name: 'Please update Amani' })).toHaveCount(0);
     await expect(page.locator('[data-update-banner]')).toHaveCount(0);

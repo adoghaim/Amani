@@ -2,14 +2,42 @@
 // the NewReport route chunk on cold start; most users never upload a PDF on
 // first visit. The promise is cached so multiple PDF operations in one
 // session don't re-fetch the chunk.
-let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null;
+//
+// The LEGACY build is deliberate. The modern build calls Promise.try and
+// Uint8Array.prototype.toHex with no polyfill, which WebKit below 18.2 and
+// Android 7-9 WebViews lack, and the app still ships to iOS 15 and Android 7.
+// There getDocument() never settles (Promise.try) or rejects (toHex). The
+// legacy build bundles core-js for those (and Set methods, iterator helpers,
+// URL.parse), but NOT for Promise.withResolvers, .at, Object.hasOwn,
+// findLast, structuredClone, ArrayBuffer#transferToFixedLength or
+// ReadableStream async iteration (which getTextContent() needs, and WebKit
+// only has from 27). ./pdfjsPolyfills supplies those: imported here before
+// pdf.mjs, and prepended to the worker by `?lowered-url`, since the worker is
+// a separate realm. Guarded by pdfWorkerTarget.test.ts, which runs the built
+// files with those APIs deleted.
+//
+// The worker is imported with `?lowered-url` (the `loweredUrlAsset` plugin in
+// vite.config.ts), NOT a bare `?url` and NOT `?worker&url`. A bare `?url` copies
+// the file verbatim, so the build target (es2018) never touches it, and
+// pdf.js 6's worker contains syntax (class static blocks, ES2022) that WebKit
+// below 16.4 cannot parse: PDF reading then failed on iOS 15.0-16.3.
+// `?worker&url` lowers it, but Vite's worker bundler also strips the worker's
+// `export { WorkerMessageHandler }`, which pdf.js's fake-worker fallback (module
+// Worker blocked by CSP or a custom-scheme WebView) imports: every getDocument()
+// then rejected. `?lowered-url` lowers the syntax and keeps the export (both
+// guarded by pdfWorkerTarget.test.ts). The legacy build and ./pdfjsPolyfills
+// supply the missing runtime APIs; this supplies the missing syntax.
+type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+let pdfjsPromise: Promise<PdfJs> | null = null;
 
-async function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
+async function loadPdfJs(): Promise<PdfJs> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
+      // Before pdf.mjs evaluates: kept out of the route chunk like pdf.js itself.
+      await import('./pdfjsPolyfills');
       const [pdfjsLib, workerUrlMod] = await Promise.all([
-        import('pdfjs-dist'),
-        import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+        import('pdfjs-dist/legacy/build/pdf.mjs'),
+        import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?lowered-url'),
       ]);
       pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrlMod.default;
       return pdfjsLib;
@@ -20,17 +48,75 @@ async function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
 
 /*
   A lab PDF is attacker-influenceable input: the user uploads whatever a portal
-  (or anyone else) handed her. pdfjs-dist defaults `isEvalSupported` to true,
-  which lets a crafted font program reach `Function` during rendering —
-  GHSA-hq66-cqwq-w95j, "arbitrary JavaScript execution upon opening a malicious
-  PDF". Turning eval off closes that path; the cost is slower font rendering,
-  which does not matter here because we only extract text and rasterise for OCR.
+  (or anyone else) handed her. GHSA-hq66-cqwq-w95j ("arbitrary JavaScript
+  execution upon opening a malicious PDF", fixed in pdfjs-dist 6.2.108) needs
+  `enableScripting: true` together with a page that sets no CSP. We only call
+  getDocument(), getTextContent() and page.render() to a canvas, and never build
+  an AnnotationLayer, the pdf.js viewer or its scripting sandbox, which are the
+  only readers of `enableScripting`. The dependency is on the patched 6.x line
+  regardless, so safety does not hinge on that.
 
-  This is the cheap half of the mitigation. The advisory is fixed in pdfjs-dist
-  6.2.108, a semver-major bump from the pinned 5.x — that upgrade is a separate,
-  scoped change because it touches the parser's regression surface.
+  There is deliberately no `isEvalSupported` option: pdfjs-dist 5.7 and 6.x do
+  not read it (zero occurrences in the shipped builds), so passing it hardened
+  nothing. Do not re-add it as a mitigation. Defence in depth is a
+  Content-Security-Policy on the hosting side, which is tracked separately.
 */
-const PDF_HARDENING = { isEvalSupported: false } as const;
+
+/*
+  A scanned or malformed PDF, or an engine the library cannot run on, can leave
+  getDocument() or getPage() pending forever, which used to leave "Reading your
+  report…" on screen with Next disabled. Past the deadline the loading task is
+  destroyed and the call rejects; NewReport turns that into its manual-entry
+  message (text extraction) or its OCR-failed message (rasterisation).
+*/
+export const PDF_EXTRACT_TIMEOUT_MS = 45_000;
+// Rasterising every page at 2x for OCR is slower than reading the text layer.
+export const PDF_RENDER_TIMEOUT_MS = 120_000;
+
+interface DeadlineState {
+  expired: boolean;
+  /** Register the loading task so the deadline can destroy it. Throws if the deadline already passed. */
+  track(task: { destroy(): unknown }): void;
+}
+
+function destroyQuietly(task: { destroy(): unknown } | null) {
+  try {
+    Promise.resolve(task?.destroy()).catch(() => {});
+  } catch {
+    // already torn down
+  }
+}
+
+async function withDeadline<T>(ms: number, run: (state: DeadlineState) => Promise<T>): Promise<T> {
+  let task: { destroy(): unknown } | null = null;
+  const state: DeadlineState = {
+    expired: false,
+    track(t) {
+      task = t;
+      if (state.expired) {
+        // The deadline passed while the file was being read: do not leave a worker task behind.
+        destroyQuietly(t);
+        throw new Error('PDF processing timed out');
+      }
+    },
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      state.expired = true;
+      destroyQuietly(task);
+      reject(new Error(`PDF processing timed out after ${Math.round(ms / 1000)}s`));
+    }, ms);
+  });
+  const work = run(state);
+  // After a timeout the abandoned work rejects (its task was destroyed); expected.
+  work.catch(() => {});
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface PDFPageText {
   pageNumber: number;
@@ -103,20 +189,26 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtractResult> {
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdfjsLib = await loadPdfJs();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, ...PDF_HARDENING }).promise;
+    const { pdf, pages } = await withDeadline(PDF_EXTRACT_TIMEOUT_MS, async state => {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfjsLib = await loadPdfJs();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      state.track(loadingTask);
+      const doc = await loadingTask.promise;
 
-    const pages: PDFPageText[] = [];
+      const collected: PDFPageText[] = [];
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const items = textContent.items as unknown as TextItem[];
+      for (let pageNum = 1; pageNum <= doc.numPages && !state.expired; pageNum++) {
+        const page = await doc.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const items = textContent.items as unknown as TextItem[];
 
-      const pageText = extractPageLines(items);
-      pages.push({ pageNumber: pageNum, text: pageText });
-    }
+        const pageText = extractPageLines(items);
+        collected.push({ pageNumber: pageNum, text: pageText });
+      }
+
+      return { pdf: doc, pages: collected };
+    });
 
     const fullText = pages.map(p => p.text).join('\n\n');
 
@@ -145,24 +237,28 @@ export async function extractStructuredTextFromPDF(file: File): Promise<PDFExtra
 }
 
 export async function convertPDFToImages(file: File): Promise<string[]> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdfjsLib = await loadPdfJs();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, ...PDF_HARDENING }).promise;
-  const images: string[] = [];
+  return withDeadline(PDF_RENDER_TIMEOUT_MS, async state => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfjsLib = await loadPdfJs();
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    state.track(loadingTask);
+    const pdf = await loadingTask.promise;
+    const images: string[] = [];
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) continue;
+    for (let i = 1; i <= pdf.numPages && !state.expired; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) continue;
 
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
 
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
-    images.push(canvas.toDataURL('image/jpeg', 0.85));
-  }
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.85));
+    }
 
-  return images;
+    return images;
+  });
 }

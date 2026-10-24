@@ -16,11 +16,13 @@ import {
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Loading } from '../components/Loading';
+import { CalmNotice, UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from '../components/CalmNotice';
 import { errorMessage } from '../lib/errors';
 import { TodayCard } from '../components/TodayCard';
 import { TrackerCalendar } from '../components/TrackerCalendar';
 import { PeriodLogModal } from '../components/PeriodLogModal';
 import { SymptomLogModal } from '../components/SymptomLogModal';
+import { NoteModal } from '../components/NoteModal';
 import { SubscriptionStatus } from '../components/SubscriptionStatus';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAllRows';
@@ -50,6 +52,8 @@ export function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The reads failed (F065): shown as such, never as an empty account.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [reports, setReports] = useState<LabReport[]>([]);
   const [biomarkersByReport, setBiomarkersByReport] = useState<Record<string, Biomarker[]>>({});
   const [periodLogs, setPeriodLogs] = useState<PeriodLog[]>([]);
@@ -81,12 +85,19 @@ export function Dashboard() {
     try {
       setLoading(true);
       setError(null);
+      setLoadFailed(false);
       const [reportsRes, periodRes, symptomRes, interventionRes] = await Promise.all([
         supabase.from('lab_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false }),
         supabase.from('period_logs').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
         supabase.from('symptom_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }),
         supabase.from('interventions').select('*').eq('user_id', user.id).order('start_date', { ascending: false }),
       ]);
+      // A read that fails resolves with `error` (postgrest-js does not throw).
+      // Offline, that used to become [] and the first-run "No lab reports yet".
+      if ([reportsRes, periodRes, symptomRes, interventionRes].some(res => res.error)) {
+        setLoadFailed(true);
+        return;
+      }
 
       const fetchedReports = (!reportsRes.error && reportsRes.data) ? reportsRes.data as LabReport[] : [];
       setReports(fetchedReports);
@@ -105,8 +116,13 @@ export function Dashboard() {
       if (fetchedReports.length > 0) {
         const ids = fetchedReports.map((r) => r.id);
         // R27: a user's values across every report can pass PostgREST's 1,000-row cap.
-        const { data: bm } = await fetchAllRows<Biomarker>(() =>
+        const { data: bm, error: bmError } = await fetchAllRows<Biomarker>(() =>
           supabase.from('biomarkers').select('*').in('lab_report_id', ids).order('id'));
+        // Reports without their values would read as reports with nothing in them.
+        if (bmError) {
+          setLoadFailed(true);
+          return;
+        }
         if (bm) {
           const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
             const bucket = acc[b.lab_report_id] ?? [];
@@ -337,6 +353,20 @@ export function Dashboard() {
 
   if (loading) {
     return <Layout><Loading /></Layout>;
+  }
+
+  if (loadFailed) {
+    return (
+      <Layout>
+        <div className="max-w-5xl mx-auto">
+          <CalmNotice
+            title={UNREACHABLE_TITLE}
+            safe={UNREACHABLE_SAFE_LINE}
+            action={{ label: 'Try again', onClick: () => { void fetchData(); } }}
+          />
+        </div>
+      </Layout>
+    );
   }
 
   return (
@@ -590,58 +620,17 @@ export function Dashboard() {
         defaultDate={symptomModalDate}
       />
 
-      {noteModal.open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border">
-              <h2 className="text-base text-theme-text">Add note</h2>
-              <button
-                onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-surface-2 transition-colors"
-              >
-                <X className="w-4 h-4 text-theme-muted-text" />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Date</label>
-                <input
-                  type="date"
-                  value={noteModal.defaultDate}
-                  onChange={(e) => setNoteModal((prev) => ({ ...prev, defaultDate: e.target.value }))}
-                  max={dateToKey(today)}
-                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-theme-muted-text mb-1.5">Note</label>
-                <textarea
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  rows={4}
-                  placeholder="Write a note..."
-                  className="w-full px-3 py-2 text-sm border border-theme-border rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/30 focus:border-theme-primary text-theme-text resize-none placeholder:text-theme-muted-text-3"
-                />
-              </div>
-            </div>
-            <div className="px-5 pb-5 flex gap-3">
-              <button
-                onClick={handleSaveNote}
-                disabled={savingNote || !noteText.trim()}
-                className="flex-1 py-2.5 bg-theme-primary text-white text-sm font-medium rounded-xl hover:bg-theme-primary-dark transition-colors disabled:opacity-50"
-              >
-                {savingNote ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                onClick={() => setNoteModal({ open: false, defaultDate: '' })}
-                className="flex-1 py-2.5 bg-theme-surface-2 text-theme-muted-text text-sm font-medium rounded-xl hover:bg-theme-surface-hover transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NoteModal
+        open={noteModal.open}
+        onClose={() => setNoteModal({ open: false, defaultDate: '' })}
+        date={noteModal.defaultDate}
+        onDateChange={(defaultDate) => setNoteModal((prev) => ({ ...prev, defaultDate }))}
+        maxDate={dateToKey(today)}
+        text={noteText}
+        onTextChange={setNoteText}
+        saving={savingNote}
+        onSave={handleSaveNote}
+      />
     </Layout>
   );
 }

@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
-  lutealPhaseReport, missingPhaseReport, movedCurrentReport, movedPriorReport,
+  labFloorReport, lutealPhaseReport, missingPhaseReport, movedCurrentReport, movedPriorReport,
   patternFollicularReport, patternMissingPhaseReport, trajectoryCurrentReport, trajectoryPriorReport, vitaminDReport,
 } from './synthetic-reports';
 
@@ -45,17 +45,20 @@ test.describe('cycle phase missing from the report', () => {
 
   test.beforeEach(async ({ page }) => {
     await openReport(page, missingPhaseReport.report.id);
-    // Nothing is scored outside the Amani band here, so there is no primary finding.
-    await expandSystem(page, 'Hormones & Reproductive', false);
+    // LH is outside its supplied lab interval. Nothing here is Amani-flagged
+    // (its interpretation is withheld without phase), so under Ruling 7's true
+    // floor the lab-only LH may take the Primary slot, as a neutral lab fact.
+    await expect(page.getByTestId('primary-finding')).toContainText("LH is above your lab's reference range at 30 mIU/mL.");
+    await expandSystem(page, 'Hormones & Reproductive', true);
     await expandSystem(page, 'Thyroid', false);
   });
 
   test('1. lab range and Amani context band render as separate concepts', async ({ page }) => {
     const tsh = card(page, 'TSH');
     await expect(tsh.getByRole('term').filter({ hasText: "Your lab's range:" })).toBeVisible();
-    await expect(tsh.getByRole('definition').filter({ hasText: '0.45–4.5 uIU/mL' })).toBeVisible();
+    await expect(tsh.getByRole('definition').filter({ hasText: '0.45–4.5 mIU/L' })).toBeVisible();
     await expect(tsh.getByRole('term').filter({ hasText: /^Amani context band:$/ })).toBeVisible();
-    await expect(tsh.getByRole('definition').filter({ hasText: '1–2.5 uIU/mL' })).toBeVisible();
+    await expect(tsh.getByRole('definition').filter({ hasText: '1–2.5 mIU/L' })).toBeVisible();
     // The catalog lab_reference row (0.4–4) is never shown as her lab's range.
     await expect(tsh.getByText('0.4–4', { exact: false })).toHaveCount(0);
   });
@@ -110,7 +113,9 @@ test.describe('cycle phase recorded on the report', () => {
 
   test('6. valid context enables the context path, qualified by review state', async ({ page }) => {
     await openReport(page, lutealPhaseReport.report.id);
-    // With the phase known, the low luteal progesterone becomes the primary finding.
+    // With the phase known, the low luteal progesterone becomes the primary
+    // finding. Ruling 7 is a true floor (owner, 2026-10-23): the lab-flagged LH
+    // stays visible as a lab fact but never takes the slot from Amani's pick.
     await expandSystem(page, 'Hormones & Reproductive', true);
     const progesterone = card(page, 'Progesterone');
     await expect(progesterone.getByRole('note')).toHaveCount(0);
@@ -123,26 +128,26 @@ test.describe('cycle phase recorded on the report', () => {
     const lh = card(page, 'LH');
     await expect(lh.getByRole('note')).toHaveCount(0);
     await expect(lh.getByRole('term').filter({ hasText: 'Amani context band (luteal phase):' })).toBeVisible();
-    // Amendment 3. The fixture has no AI primary_concern, so Top Priority takes
-    // its deterministic fallback, which used to echo TopFinding.fact verbatim:
-    // "Progesterone is below the optimal range at 2 ng/mL".
-    // V2-03b Stage 2: the luteal band is DISPUTED, so this sentence now
-    // withholds placement as every other sentence does (it said "below the
-    // Amani band"), and the label is "Primary finding", not "Top Priority".
+    // Amendment 3. The fixture has no AI primary_concern, so the primary finding
+    // is the deterministic one. V2-03b Stage 2: the luteal band is DISPUTED, so
+    // the sentence withholds placement, and the label is "Primary finding".
     const primary = page.getByTestId('primary-finding');
     await expect(primary.getByText(
       'Progesterone was measured at 2 ng/mL. Interpretation unavailable pending clinical review.',
       { exact: true },
     )).toBeVisible();
     await expect(primary).toContainText('Primary finding');
-    await expect(primary).not.toContainText(/below|above|outside|Top Priority|Main Focus/);
+    await expect(primary).not.toContainText(/below|above|outside|LH|Top Priority|Main Focus/);
+    // Owner Ruling 7: the observable lab placement is retained in the headline.
+    await expect(page.getByRole('heading', { level: 2 }).filter({ hasText: "LH is above your lab's reference range at 30 mIU/mL." })).toBeVisible();
     // The persistent half: the cycle_hormones focus area said "Reproductive-hormone
     // markers are outside the optimal range" for the life of the report.
     // V2-03b Stage 2: the area is now the policy's statement for its bands; a
-    // DISPUTED band withholds placement, so it states no placement at all.
+    // DISPUTED band withholds Amani placement; the laboratory's independently
+    // supplied LH interval remains a factual observation, not an Amani claim.
     const focus = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Cycle hormones', exact: true }) });
-    await expect(focus.getByText('Interpretation unavailable pending clinical review.', { exact: true })).toBeVisible();
-    await expect(focus).not.toContainText(/borderline|outside|within|above|below/i);
+    await expect(focus.getByText("LH is above your lab's reference range at 30 mIU/mL. Interpretation unavailable pending clinical review.", { exact: true })).toBeVisible();
+    await expect(focus).not.toContainText(/borderline|(?:outside|within|above|below) Amani/i);
     // Any casing, any position, anywhere on the page.
     await expect(page.getByText(/optimal/i)).toHaveCount(0);
     // Amendment 4 (R2). The luteal-insufficiency card is legitimately shown
@@ -254,9 +259,9 @@ test.describe('health story for an out-of-band marker that moved', () => {
     const story = page.locator('section')
       .filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) })
       .locator('p')
-      .filter({ hasText: /^This report is mainly about/ });
+      .filter({ hasText: /^TSH is the primary finding shown above/ });
     await expect(story).toHaveCount(1);
-    await expect(story).toContainText('which has changed since your prior report.');
+    await expect(story).toContainText('and has changed since your prior report.');
     await expect(story).toContainText("Amani's comparison band for this result has not yet completed clinical review.");
     await expect(story).not.toContainText(/unchanged/i);
     await expect(story).not.toContainText(/improv|right direction/i);
@@ -266,8 +271,8 @@ test.describe('health story for an out-of-band marker that moved', () => {
 // V2-03b: both reports are out of band, so headline, primary observation,
 // trajectory and health-story theme all render. No server safety fixture here.
 for (const [label, previous, current, sentence] of [
-  ['away', 6, 9, 'TSH increased from 6 to 9 uIU/mL.'],
-  ['minor', 6, 6.1, 'TSH has not changed significantly: 6 to 6.1 uIU/mL.'],
+  ['away', 6, 9, 'TSH increased from 6 to 9 mIU/L.'],
+  ['minor', 6, 6.1, 'TSH has not changed significantly: 6 to 6.1 mIU/L.'],
 ] as const) {
   const prior = { ...movedPriorReport, biomarkers: movedPriorReport.biomarkers.map(b => ({ ...b, value: previous, raw_value_text: String(previous) })) };
   const latest = { ...movedCurrentReport, biomarkers: movedCurrentReport.biomarkers.map(b => ({ ...b, value: current, raw_value_text: String(current) })) };
@@ -292,7 +297,7 @@ for (const [label, previous, current, sentence] of [
         .filter({ has: page.getByRole('list') }).last();
       await expect(trajectory).toBeVisible();
       await expect(trajectory).toContainText(label === 'away'
-        ? 'TSH has risen from 6 to 9 uIU/mL.' : 'TSH has not changed significantly.');
+        ? 'TSH has risen from 6 to 9 mIU/L.' : 'TSH has not changed significantly.');
       for (const surface of [primary, trajectory]) {
         await expect(surface).not.toContainText(/worsen|deteriorat|improv|better|worse|healthy|wrong direction|worth discussing|talk to your doctor|seek care|optimal|reassur/i);
         await expect(surface.locator('[class*="flag-watch"], [class*="flag-ok"], [class*="flag-low"]')).toHaveCount(0);
@@ -301,10 +306,39 @@ for (const [label, previous, current, sentence] of [
         }
       }
       const story = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) })
-        .locator('p').filter({ hasText: /^This report is mainly about/ });
+        .locator('p').filter({ hasText: /^TSH is the primary finding shown above/ });
       await expect(story).toHaveCount(1);
       await expect(story).not.toContainText(/unchanged|wrong direction|worsen|improv/i);
       await expect(page.getByRole('heading', { name: sentence, exact: true })).toBeVisible();
     });
   });
 }
+
+// Owner ruling 2026-10-23: Ruling 7 is a true floor. A lab-only flag stays a
+// visible neutral lab fact (headline, focus areas) but ranks after every
+// Amani-flagged result and never takes the Primary finding from one.
+test.describe('a lab-only flag beside an Amani-flagged result', () => {
+  test.use({ authenticated: true, syntheticReports: [labFloorReport] });
+
+  test('12. the Amani-flagged ferritin keeps the Primary finding; the lab-only HDL stays visible after it', async ({ page }) => {
+    await openReport(page, labFloorReport.report.id);
+    const primary = page.getByTestId('primary-finding');
+    await expect(primary).toContainText('Primary finding');
+    await expect(primary.getByText(
+      "Ferritin is below the Amani band at 17 ng/mL. Amani's context bands are still under review.",
+      { exact: true },
+    )).toBeVisible();
+    await expect(primary).not.toContainText('HDL');
+    await expect(page.getByRole('heading', { level: 2 }).filter({ hasText: "HDL is above your lab's reference range at 61 mg/dL." })).toBeVisible();
+    const areas = page.getByRole('article').filter({ has: page.getByRole('heading', { level: 3 }) })
+      .filter({ hasText: 'Related markers' });
+    const hdl = areas.filter({ has: page.getByRole('heading', { name: 'HDL', exact: true }) });
+    await expect(hdl).toContainText("HDL is above your lab's reference range at 61 mg/dL.");
+    await expect(areas.last()).toContainText("HDL is above your lab's reference range at 61 mg/dL.");
+    await expect(areas.first()).toContainText('Ferritin');
+    const story = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Your health story', exact: true }) });
+    await expect(story).toContainText('Ferritin is the primary finding shown above.');
+    await expect(story).toContainText('HDL');
+    await expect(page.getByText(/optimal/i)).toHaveCount(0);
+  });
+});

@@ -15,7 +15,9 @@ const cases: { name: string; previous: number; current: number; status: BiggestC
   { name: 'worsened crossing', previous: 2, current: 6, status: 'newly_abnormal', crossing: { from: 'within_band', to: 'out_of_range', direction: 'worsened' } },
 ];
 const assess = context.assessAmaniContext;
-const tsh = (value: number) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5 });
+// Isolate band-authority language here. Lab-flag sentences have independent
+// patient-interval authority (including when the Amani band is DISPUTED).
+const tsh = (value: number) => ({ key: 'tsh' as const, value, unit: 'mIU/L', labRefMin: null, labRefMax: null });
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -34,7 +36,7 @@ describe.each(['UNKNOWN', 'DISPUTED', 'NEEDS_CONTEXT'] as const)('focus-area mov
     // Exercise every legacy producer input independently, including status-only
     // newly_abnormal (a crossing must not hide that switch branch in the proof).
     Object.assign(summary.biggestChanges[0]!, { trajectoryStatus: status, boundaryCrossing: crossing });
-    const areas = buildFocusAreas(summary, [], [scoreBiomarker('tsh', current, 'uIU/mL', 0.45, 4.5)]);
+    const areas = buildFocusAreas(summary, [], [scoreBiomarker('tsh', current, 'mIU/L', 0.45, 4.5)]);
     expect(areas).toHaveLength(1);
     expect(areas[0]!.id).toBe('thyroid');
     expect(areas[0]!.whyItMatters).not.toMatch(forbidden);
@@ -64,7 +66,7 @@ it('R4 uses calculated magnitude, never a raw stable status as proof of no signi
   for (const [current, expected] of [[6.1, 'has not changed significantly'], [9, 'has changed since your prior report']] as const) {
     const summary = buildInsightSummary([tsh(current)], [tsh(6)], null, '2025-12-01');
     summary.biggestChanges[0]!.trajectoryStatus = 'stable_abnormal';
-    const [area] = buildFocusAreas(summary, [], [scoreBiomarker('tsh', current, 'uIU/mL', 0.45, 4.5)]);
+    const [area] = buildFocusAreas(summary, [], [scoreBiomarker('tsh', current, 'mIU/L', 0.45, 4.5)]);
     expect(area!.whyItMatters).toContain(`TSH ${expected}.`);
     expect(area!.whyItMatters).not.toMatch(/unchanged|safe|healthy|reassur/i);
   }

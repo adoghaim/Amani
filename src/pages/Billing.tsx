@@ -43,6 +43,13 @@ export function Billing() {
 
   const active = isActive();
   /*
+    A read that failed is not "no subscription". Flag on, only a resolved Free
+    plan counts as resolved; flag off, a read error with nothing entitling does
+    not. Neither may be shown a lapsed label or an upgrade offer for something
+    we could not read.
+  */
+  const planUnresolved = !active && (freemium ? Boolean(subError) || plan !== 'free' : Boolean(subError) && source === 'none');
+  /*
     Full access with no purchase behind it. They must not be shown trial
     countdowns or upgrade prompts, and must not be offered to "manage" a
     subscription they never bought — there is no Stripe customer and no store
@@ -295,24 +302,22 @@ export function Billing() {
                       </p>
                     )}
                   </div>
+                ) : planUnresolved ? (
+                  // Never show Free, Expired or a trial for a read we could not complete.
+                  <div className="space-y-3">
+                    <p className="text-theme-text">{FREEMIUM_COPY.plan.loadError}</p>
+                    <Button variant="secondary" size="sm" onClick={() => { void refetch(); }}>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      {FREEMIUM_COPY.report.retry}
+                    </Button>
+                  </div>
                 ) : freemium ? (
-                  // Never show Free for a read we could not complete.
-                  subError || plan !== 'free' ? (
-                    <div className="space-y-3">
-                      <p className="text-theme-text">{FREEMIUM_COPY.plan.loadError}</p>
-                      <Button variant="secondary" size="sm" onClick={() => { void refetch(); }}>
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        {FREEMIUM_COPY.report.retry}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-theme-text font-medium">{FREEMIUM_COPY.plan.free}</p>
-                      <p className="text-theme-muted-text">{FREEMIUM_COPY.plan.freeSummary}</p>
-                      <ComplimentaryCounter used={complimentaryUsage.used} />
-                    </div>
-                  )
-                ) : userProfile.subscription_status === 'trial' ? (
+                  <div className="space-y-3">
+                    <p className="text-theme-text font-medium">{FREEMIUM_COPY.plan.free}</p>
+                    <p className="text-theme-muted-text">{FREEMIUM_COPY.plan.freeSummary}</p>
+                    <ComplimentaryCounter used={complimentaryUsage.used} />
+                  </div>
+                ) : source === 'trial' ? (
                   <div className="space-y-2">
                     <p className="text-theme-text">
                       <span className="font-medium">Status:</span> Free Trial
@@ -327,7 +332,7 @@ export function Billing() {
                 ) : (
                   <div className="space-y-2">
                     <p className="text-theme-text">
-                      <span className="font-medium">Status:</span> Expired
+                      <span className="font-medium">Status:</span> {userProfile.trial_start_date ? 'Expired' : 'No active subscription'}
                     </p>
                     <p className="text-theme-muted-text">
                       Reactivate your subscription to create new lab reports.
@@ -389,7 +394,7 @@ export function Billing() {
                 either error or show an unrelated account.
               */}
               {/* Flag on, an unresolved plan is a retry above, never an upgrade offer. */}
-              {!complimentary && !(freemium && !active && (subError || plan !== 'free')) && (
+              {!complimentary && !planUnresolved && (
                 <Button onClick={handleManageSubscription} disabled={loading}>
                   <Calendar className="w-5 h-5 mr-2" />
                   {loading ? 'Loading...' : manageLabel()}
@@ -408,7 +413,7 @@ export function Billing() {
             )}
           </Card>
 
-          {!freemium && !active && userProfile.subscription_status === 'trial' && getTrialDaysRemaining() > 0 && (
+          {!freemium && source === 'trial' && getTrialDaysRemaining() > 0 && (
             <Card className="bg-theme-surface-2 border-theme-border">
               <h3 className="text-theme-text mb-2">
                 Your trial is active

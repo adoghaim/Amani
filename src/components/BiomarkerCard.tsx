@@ -5,16 +5,18 @@ import {
   contextFromReport,
   formatInterval,
   type AmaniBand,
+  type NonCyclingState,
 } from '../lib/scoring/amaniContext';
 import { getDisplayName } from '../lib/biomarkers/dictionary';
 import type { BiomarkerName, CyclePhase, BaselineStaleness, BaselineStatus, TrendDirection, TrendStrength } from '../types';
 import { getBiomarkerExplanation } from '../lib/insights/biomarkerExplanations';
 import {
-  bandBounds, bandInterval, bandTerm, comparisonBandLabel, CUE_STYLE, extremeMagnitudeLabel, LAB_INTERVAL_TERM, labIntervalObservation,
+  BAND_LAB_DISTINCTION, bandBounds, bandInterval, bandTerm, comparisonBandLabel, CUE_STYLE, extremeMagnitudeLabel, LAB_INTERVAL_TERM, labIntervalObservation,
   personalHistoryLabel, phaseBandNote, reviewStatusLabel, withheldCopy, withoutOptimalClaims,
   type AuthorizedModelProse, type ComparisonBandLanguage, type FactualLanguage,
 } from '../lib/scoring/insightCopy';
 import { ModelProseText } from './ClinicalObservation';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
@@ -26,6 +28,8 @@ interface BiomarkerCardProps {
   labRefMax?: number | null;
   /** As recorded on the report. Never inferred here. */
   cyclePhase?: CyclePhase | string | null;
+  /** Her declared non-cycling state (stateFromPregnancyStatus); it withholds. */
+  state?: NonCyclingState | null;
   /**
    * Owner R1: the interpretation's per-marker prose, already reduced to the
    * sentences that resolve to this marker's own measured-change claim. Raw
@@ -173,22 +177,8 @@ function RangeBar({
   also explained a 'normal' status as "outside Amani's context band", which
   is false: that status is only produced inside a one-sided band.
 */
-function DualStatusSection({
-  name,
-  pill,
-  labRefMin,
-  labRefMax,
-  value,
-}: {
-  name: string;
-  pill: ComparisonBandLanguage;
-  labRefMin: number | null;
-  labRefMax: number | null;
-  value: number;
-}) {
+function BandStatusSection({ pill }: { pill: ComparisonBandLanguage }) {
   const pillStyle = CUE_STYLE[pill.cue];
-  const lab = labIntervalObservation(name, value, labRefMin, labRefMax);
-  const labStyle = lab ? CUE_STYLE[lab.cue] : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -196,11 +186,6 @@ function DualStatusSection({
         <span className={`w-1.5 h-1.5 rounded-full ${pillStyle.dot}`} />
         {pill.text}
       </div>
-      {lab && labStyle && (
-        <div {...languageAttributes(lab)} className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${labStyle.border} ${labStyle.bg} ${labStyle.text}`}>
-          {lab.text}
-        </div>
-      )}
     </div>
   );
 }
@@ -213,6 +198,7 @@ export function BiomarkerCard({
   labRefMin,
   labRefMax,
   cyclePhase,
+  state = null,
   modelProse,
   historicalValues,
   baselineStatus,
@@ -222,7 +208,7 @@ export function BiomarkerCard({
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase));
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state), unit, rawValueText);
   const pillLanguage = comparisonBandLabel(assessment, value);
   const pill = CUE_STYLE[pillLanguage.cue];
   const band = assessment.kind === 'scored' ? assessment.band : null;
@@ -231,6 +217,8 @@ export function BiomarkerCard({
 
   const labMin = labRefMin ?? null;
   const labMax = labRefMax ?? null;
+  // F021: a censored result is placed against her lab's range only where its printed limit decides it.
+  const labObservation = labIntervalObservation(name, value, labMin, labMax, null, null, rawValueText);
   const labText = formatInterval(labMin, labMax);
 
   const displayName = getDisplayName(name);
@@ -324,6 +312,15 @@ export function BiomarkerCard({
           )}
         </dl>
 
+        {labObservation && (
+          <p className="mt-2 text-xs text-theme-text-body">
+            <span {...languageAttributes(labObservation)}>
+              {labObservation.text}
+            </span>
+            {band && <span>. {BAND_LAB_DISTINCTION}</span>}
+          </p>
+        )}
+
         {withheld && (
           <div role="note" className="mt-2 flex items-start gap-1.5 bg-theme-surface-2 border border-theme-border rounded-lg px-3 py-2">
             <Info className="w-3.5 h-3.5 text-theme-muted-text-2 mt-0.5 shrink-0" />
@@ -361,20 +358,14 @@ export function BiomarkerCard({
             </div>
           );
         })()}
-        {band && (
+        {band && !isCensoredValue(rawValueText) && (
           <RangeBar value={value} band={band} labMin={labMin} labMax={labMax} />
         )}
       </div>
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-theme-neutral-100 pt-3">
-          <DualStatusSection
-            name={displayName}
-            pill={pillLanguage}
-            labRefMin={labMin}
-            labRefMax={labMax}
-            value={value}
-          />
+          <BandStatusSection pill={pillLanguage} />
 
           {(() => {
             const explanation = withoutOptimalClaims(getBiomarkerExplanation(name) ?? '');

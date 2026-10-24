@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cycleContextCard } from '../lib/cycleContextCard';
 import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   PK-FIX-06 on the real upload page. NewReport is rendered in jsdom against a
@@ -19,6 +20,10 @@ const fixture = vi.hoisted(() => ({
   inserts: [] as { table: string; values: unknown }[],
   // Cycle facts printed on the lab report, as the OCR function returns them.
   ocrMetadata: undefined as { cycle_day?: number | null; cycle_phase?: string | null } | undefined,
+  ocrItems: null as ExtractedAnalyte[] | null,
+  generationBodies: [] as Record<string, unknown>[],
+  // Her declared reproductive status (review F012); none unless a case sets one.
+  profile: null as { pregnancy_status: string | null } | null,
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -42,21 +47,26 @@ vi.mock('../lib/supabase', () => {
     return builder;
   };
   // An estradiol result, so the biomarkers insert shows whether V2 withholds it.
-  const ocrItems = [{
-    raw_name: 'Estradiol', canonical_slug: 'estradiol', category: 'hormones', value_numeric: 150, value_text: '150',
-    unit: 'pg/mL', raw_reference_range: null, normalized_reference_min: null, normalized_reference_max: null,
-    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-    needs_review: false, source_snippet: 'Estradiol 150 pg/mL', source_format: 'ocr', review_status: 'pending',
+  // parse-lab-report-ocr's own row shape (review F093), not the app's ReportItem.
+  const ocrItems: ExtractedAnalyte[] = [{
+    raw_name: 'Estradiol', raw_value_text: '150', value_numeric: 150, unit: 'pg/mL',
+    raw_reference_range: null, normalized_min: null, normalized_max: null,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: 'Estradiol 150 pg/mL',
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug: 'estradiol', parse_status: 'mapped',
+    needs_review: false, is_core: true, category: 'hormones',
   }];
   return { supabase: {
     from: query,
     auth: { getSession: async () => ({ data: { session: { access_token: 'synthetic-token' } } }) },
     storage: { from: () => ({ upload: async () => ({ error: null }) }) },
-    functions: { invoke: async (name: string) => (name === 'parse-lab-report-ocr'
-      ? { data: { items: ocrItems, metadata: fixture.ocrMetadata }, error: null } : { data: null, error: null }) },
+    functions: { invoke: async (name: string, options: { body: Record<string, unknown> }) => {
+      if (name === 'parse-lab-report-ocr') return { data: { items: fixture.ocrItems ?? ocrItems, metadata: fixture.ocrMetadata }, error: null };
+      if (name === 'generate-interpretation') fixture.generationBodies.push(options.body);
+      return { data: null, error: null };
+    } },
   } };
 });
-vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user, userProfile: fixture.profile }) }));
 vi.mock('../lib/native', () => ({
   isNative: () => false,
   captureLabPhoto: vi.fn(),
@@ -72,6 +82,10 @@ import {
   DAYS, daysBefore, DRAW, EXPECTED, EXPECTED_STORED_LENGTH, expectedNote, LENGTHS, PHASE_SYMBOL, trackerLogs,
   type TypicalLength,
 } from '../lib/cycleR10Table';
+import { extractTextFromPDF } from '../utils/pdfExtractor';
+import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
+import { questHormoneFixture } from '../utils/parser/__fixtures__/questHormones';
+import { labcorpHormoneFixture } from '../utils/parser/__fixtures__/labcorpHormones';
 
 
 let root: Root;
@@ -91,6 +105,9 @@ beforeEach(() => {
   fixture.periodLogs = [];
   fixture.inserts = [];
   fixture.ocrMetadata = undefined;
+  fixture.ocrItems = null;
+  fixture.generationBodies = [];
+  fixture.profile = null;
   mount();
 });
 afterEach(async () => {
@@ -123,8 +140,8 @@ const lengthHint = () => app.querySelector('#typical-cycle-length-hint')?.textCo
 const lengthError = () => app.querySelector('#typical-cycle-length-error')?.textContent ?? null;
 const autoFilledBadges = () => app.textContent?.match(/Auto-filled from your tracker/g)?.length ?? 0;
 
-/** Renders the page, chooses a synthetic photo and continues to the cycle-context step. */
-async function openCycleStep() {
+/** Renders the page, chooses a synthetic photo (or `file`) and continues to the cycle-context step. */
+async function openCycleStep(file = new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' })) {
   await act(async () => root.render(
     <MemoryRouter initialEntries={['/app/new']}>
       <Routes>
@@ -136,9 +153,7 @@ async function openCycleStep() {
   ));
   await settle();
   const fileInput = app.querySelector<HTMLInputElement>('#file-upload')!;
-  Object.defineProperty(fileInput, 'files', {
-    configurable: true, value: [new File(['synthetic'], 'synthetic-lab.png', { type: 'image/png' })],
-  });
+  Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] });
   await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
   await click(button('Next'));
   await settle(20);
@@ -165,6 +180,88 @@ async function save() {
     estradiolFlag: biomarkers?.find(b => b['name'] === 'estradiol')?.['flagged'],
   };
 }
+
+it('October smoke: first generation pins the same Vitamin D primary as the report page', async () => {
+  // parse-lab-report-ocr's own row shape (review F093), like the estradiol row above.
+  const panel: [slug: string, name: string, value: number, unit: string, min: number, max: number, category: string][] = [
+    ['ferritin', 'Ferritin', 18, 'ng/mL', 16, 154, 'nutrients'],
+    ['tsh', 'TSH', 2.85, 'uIU/mL', 0.4, 4.5, 'thyroid'],
+    ['vitamin_d_25_oh', 'Vitamin D', 24, 'ng/mL', 30, 100, 'nutrients'],
+  ];
+  fixture.ocrItems = panel.map(([slug, name, value, unit, min, max, category]) => ({
+    raw_name: name, raw_value_text: String(value), value_numeric: value, unit,
+    raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: `${name} ${value}`,
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped',
+    needs_review: false, is_core: true, category,
+  }));
+  await openCycleStep();
+  await save();
+  // The pin is computed from the rows the report page reads back, each with
+  // her lab's printed value text and interval.
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => [b['name'], b['raw_value_text'], b['reference_min'], b['reference_max']])).toEqual([
+    ['ferritin', '18', 16, 154], ['tsh', '2.85', 0.4, 4.5], ['vitamin_d_25_oh', '24', 30, 100],
+  ]);
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: 'vitamin_d_25_oh' }]);
+});
+
+/*
+  The report page builds its primary with her declared reproductive status
+  (review F012) and each value's printed text (F021), so the pin is built the
+  same way. Rows as parse-lab-report-ocr returns them; synthetic values.
+*/
+const ocrRow = (
+  slug: string, name: string, value: number, text: string, unit: string,
+  min: number | null, max: number | null, category: string,
+): ExtractedAnalyte => ({
+  raw_name: name, raw_value_text: text, value_numeric: value, unit,
+  raw_reference_range: min !== null && max !== null ? `${min}-${max}` : null, normalized_min: min, normalized_max: max,
+  normalized_operator: null, normalized_operator_value: null, source_snippet: `${name} ${text}`,
+  confidence_score: 'high', canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped',
+  needs_review: false, is_core: true, category,
+});
+/** The October smoke values, with or without the ranges her lab printed. */
+const octoberRows = (printedRanges = true) => [
+  ocrRow('ferritin', 'Ferritin', 18, '18', 'ng/mL', printedRanges ? 16 : null, printedRanges ? 154 : null, 'nutrients'),
+  ocrRow('tsh', 'TSH', 2.85, '2.85', 'uIU/mL', printedRanges ? 0.4 : null, printedRanges ? 4.5 : null, 'thyroid'),
+  ocrRow('vitamin_d_25_oh', 'Vitamin D', 24, '24', 'ng/mL', printedRanges ? 30 : null, printedRanges ? 100 : null, 'nutrients'),
+];
+
+it('October smoke, Pregnant declared: every band is withheld and her lab-flagged Vitamin D is the pin (Ruling 7)', async () => {
+  fixture.profile = { pregnancy_status: 'Pregnant' };
+  fixture.ocrItems = octoberRows();
+  await openCycleStep();
+  await save();
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => [b['name'], b['flagged']])).toEqual([
+    ['ferritin', 'unknown'], ['tsh', 'unknown'], ['vitamin_d_25_oh', 'unknown'],
+  ]);
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: 'vitamin_d_25_oh' }]);
+});
+
+it.each([
+  [null, 'vitamin_d_25_oh'],
+  ['Pregnant', null],
+])('October smoke values without printed ranges, %j declared: the pin is %j', async (status, pin) => {
+  fixture.profile = { pregnancy_status: status };
+  fixture.ocrItems = octoberRows(false);
+  await openCycleStep();
+  await save();
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: pin }]);
+});
+
+it('eGFR printed "> OR = 60" beside a ferritin inside its band: no pin, as no primary on the page', async () => {
+  fixture.ocrItems = [
+    ocrRow('egfr', 'eGFR', 60, '> OR = 60', 'mL/min/1.73m2', 60, 200, 'kidney'),
+    ocrRow('ferritin', 'Ferritin', 40, '40', 'ng/mL', 13, 150, 'nutrients'),
+  ];
+  await openCycleStep();
+  await save();
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => [b['name'], b['raw_value_text']])).toEqual([['egfr', '> OR = 60'], ['ferritin', '40']]);
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: null }]);
+});
 
 /*
   Acceptance table (owner decision D13): days 1-40 x typical cycle lengths
@@ -406,28 +503,106 @@ describe('PK-FIX-06: the typical cycle length field on the upload page', () => {
 });
 
 /*
-  Unchanged precedence: a cycle day or phase printed on the lab report (here
-  from the OCR function's metadata) still wins over the calculated value, field
-  by field. That can pair a printed day with a phase from the dates, as before;
-  the PR asks the owner about it rather than changing it.
+  F010 (owner decision): her dates win. A cycle day or phase printed on the lab
+  report (here from the OCR function's metadata) fills in only when her last
+  period start gives no cycle day, and a printed phase never overrides D13 (b).
+  Until F010 the printed value won field by field, even on a known 35-day
+  cycle. The first two cases pinned that precedence; they now pin the decision.
 */
-describe('PK-FIX-06: lab-printed cycle facts still win, field by field, as before', () => {
-  it('a printed cycle day wins over the calculated day; the phase still comes from the dates', async () => {
+describe('F010: her dates win over cycle facts printed on the lab report', () => {
+  it('a printed cycle day does not replace the day from her dates (was day 3 with a luteal phase)', async () => {
     fixture.ocrMetadata = { cycle_day: 3, cycle_phase: null };
     await openCycleStep();
     await type(lastPeriodInput(), '2026-04-10');
     expect((await save()).cycle).toEqual({
-      last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 3, estimated_cycle_phase: 'luteal',
+      last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
     });
   }, 30_000);
 
-  it('a printed phase wins, even with a known length other than 28; the day still comes from the dates', async () => {
+  it('a printed phase neither replaces her phase nor overrides D13 (b) on a known 35-day cycle (was follicular)', async () => {
     fixture.ocrMetadata = { cycle_day: null, cycle_phase: 'follicular' };
     await openCycleStep();
     await type(lastPeriodInput(), '2026-04-10');
     await type(lengthInput(), '35');
-    expect((await save()).cycle).toEqual({
-      last_period_start_date: '2026-04-10', average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'follicular',
+    expect(await save()).toMatchObject({
+      cycle: { last_period_start_date: '2026-04-10', average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'unknown' },
+      estradiolFlag: 'unknown',
     });
+  }, 30_000);
+
+  it('without her last period start, a printed day and phase fill in, as before', async () => {
+    fixture.ocrMetadata = { cycle_day: 21, cycle_phase: 'luteal' };
+    await openCycleStep();
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: null, average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+  }, 30_000);
+
+  it('without her dates, a printed phase still never overrides D13 (b) (was luteal)', async () => {
+    fixture.ocrMetadata = { cycle_day: 21, cycle_phase: 'luteal' };
+    await openCycleStep();
+    await type(lengthInput(), '35');
+    expect(await save()).toMatchObject({
+      cycle: { last_period_start_date: null, average_cycle_length: 35, estimated_cycle_day: 21, estimated_cycle_phase: 'unknown' },
+      estradiolFlag: 'unknown',
+    });
+  }, 30_000);
+});
+
+/*
+  F010 on the PDF path. The Quest and LabCorp hormone panels print phase-labelled
+  reference intervals and no line about her cycle. The page saved their first
+  label, follicular, over the luteal day 21 from her dates, and flagged
+  progesterone 8.2 ng/mL against the follicular band.
+*/
+describe("F010: phase labels on a PDF's reference intervals never set her cycle", () => {
+  const pdf = () => new File(['synthetic'], 'synthetic-lab.pdf', { type: 'application/pdf' });
+  const flagged = (name: string) => (fixture.inserts.find(i => i.table === 'biomarkers')?.values as
+    Record<string, unknown>[] | undefined)?.find(b => b['name'] === name)?.['flagged'];
+  // NewReport's status-to-flag mapping, for the flag V2 gives progesterone in a phase.
+  const flagIn = (phase: string) => {
+    const status = computeAmaniStatus('progesterone', 8.2, phase);
+    if (status === 'unknown') return 'unknown';
+    if (status === 'borderline_low' || status === 'borderline_high') return 'borderline';
+    return status === 'out_of_range_low' || status === 'out_of_range_high' ? 'out_of_range' : 'in_range';
+  };
+
+  for (const [lab, text] of [['Quest', questHormoneFixture], ['LabCorp', labcorpHormoneFixture]] as const) {
+    it(`${lab} hormone panel, day 21 from her dates: luteal is saved and scores progesterone (was follicular)`, async () => {
+      vi.mocked(extractTextFromPDF).mockResolvedValueOnce(text);
+      await openCycleStep(pdf());
+      await type(lastPeriodInput(), '2026-04-10');
+      expect((await save()).cycle).toEqual({
+        last_period_start_date: '2026-04-10', average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+      });
+      expect(flagged('progesterone')).toBe(flagIn('luteal'));
+    }, 30_000);
+
+    it(`${lab} hormone panel without her dates: no phase is saved and progesterone is withheld (was follicular)`, async () => {
+      vi.mocked(extractTextFromPDF).mockResolvedValueOnce(text);
+      await openCycleStep(pdf());
+      expect((await save()).cycle).toEqual({
+        last_period_start_date: null, average_cycle_length: null, estimated_cycle_day: null, estimated_cycle_phase: 'unknown',
+      });
+      expect(flagged('progesterone')).toBe(flagIn('unknown'));
+    }, 30_000);
+  }
+
+  it('a CD4 count is never saved as cycle day 4', async () => {
+    vi.mocked(extractTextFromPDF).mockResolvedValueOnce('CD4 Count 812 cells/uL\nCD8 Count 401 cells/uL');
+    await openCycleStep(pdf());
+    expect((await save()).cycle).toMatchObject({ estimated_cycle_day: null, estimated_cycle_phase: 'unknown' });
+  }, 30_000);
+
+  it('her own labelled line on the report still fills in without her dates', async () => {
+    const header = 'Reporting Physician: Dr. Synthetic\n';
+    vi.mocked(extractTextFromPDF).mockResolvedValueOnce(
+      questHormoneFixture.replace(header, `${header}Cycle Day: 21\nPhase: Luteal\n`),
+    );
+    await openCycleStep(pdf());
+    expect((await save()).cycle).toEqual({
+      last_period_start_date: null, average_cycle_length: null, estimated_cycle_day: 21, estimated_cycle_phase: 'luteal',
+    });
+    expect(flagged('progesterone')).toBe(flagIn('luteal'));
   }, 30_000);
 });

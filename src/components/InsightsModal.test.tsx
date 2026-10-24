@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InsightsModal } from './InsightsModal';
 import { compareReports } from '../lib/scoring/compareReports';
 import {
@@ -35,10 +36,27 @@ const insights = {
   next_steps_general: ['Take 2000 IU of vitamin D daily.', 'Eat more iron-rich foods.', 'Walk 30 minutes a day.'],
 };
 
+// The sheet is the shared Modal, which portals to <body>: render it for real
+// and return the dialog, which holds everything the old static markup held.
+let root: Root;
+let app: HTMLDivElement;
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  app = document.createElement('div');
+  document.body.append(app);
+  root = createRoot(app);
+});
+afterEach(() => {
+  act(() => root.unmount());
+  app.remove();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
 function mount(props: Partial<Parameters<typeof InsightsModal>[0]>) {
-  const host = document.createElement('div');
-  host.innerHTML = renderToStaticMarkup(<InsightsModal isOpen onClose={() => {}} insights={insights} {...props} />);
-  return host;
+  act(() => root.render(<InsightsModal isOpen onClose={() => {}} insights={insights} {...props} />));
+  return document.querySelector<HTMLElement>('[role="dialog"]')!;
 }
 
 describe('InsightsModal (owner R1, R2, R4)', () => {

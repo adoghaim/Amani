@@ -53,6 +53,32 @@ const iapStore: IapStore = {
     return (data as IapSubscriptionRow | null) ?? null;
   },
 
+  /*
+    Only the subscriber-payload path (verify-iap-purchase) sets
+    latestTransactionId, so the write policy does not call this for a webhook
+    event. Implemented to the same contract regardless, so the port stays
+    whole: three bound .eq() reads, thrown on error.
+  */
+  async findByTransactionId(platform: IapPlatform, transactionId: string) {
+    const columns = ['store_subscription_id', 'raw->event->>transaction_id', 'raw->>store_transaction_id'];
+    const results = await Promise.all(
+      columns.map((column) =>
+        supabase
+          .from('iap_subscriptions')
+          .select(IAP_ROW_COLUMNS)
+          .eq('platform', platform)
+          .eq(column, transactionId)
+          .limit(10)
+      ),
+    );
+    const rows = new Map<string, IapSubscriptionRow>();
+    for (const { data, error } of results) {
+      if (error) throw new Error(`iap_subscriptions read failed: ${error.message}`);
+      for (const row of (data ?? []) as unknown as IapSubscriptionRow[]) rows.set(row.id, row);
+    }
+    return [...rows.values()];
+  },
+
   async findByUserProduct(userId: string, platform: IapPlatform, productId: string) {
     const { data, error } = await supabase
       .from('iap_subscriptions')

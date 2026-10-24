@@ -20,6 +20,11 @@ vi.mock('../lib/native', () => ({
   authenticateWithBiometrics: async () => ({ ok: false, reason: 'unavailable' }),
   setScreenshotsBlocked: async () => false,
 }));
+// features.local_reminders is on here so the Reminders card renders (it is covered off in RemindersSection.test.tsx).
+vi.mock('../lib/runtimeConfig', () => ({
+  isFeatureEnabled: (name: string) => name === 'local_reminders',
+  loadRuntimeConfig: async () => {},
+}));
 vi.mock('../lib/iap', () => ({ storeSubscriptionsUrl: vi.fn() }));
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -109,10 +114,11 @@ describe('Settings privacy card says only what the Privacy Policy says', () => {
 
   it('keeps "we don\'t sell your data" only because the Privacy Policy says it', async () => {
     const card = norm((await renderSettings()).privacyCard.textContent);
-    expect(card).toContain('We don’t sell your data, run ads, or use advertising or analytics trackers.');
-    expect(await privacyPolicyText()).toContain(
-      'We do not sell your data, run ads, or use advertising or analytics trackers.',
-    );
+    expect(card).toContain('We don’t sell your data, run ads, or use advertising trackers.');
+    expect(card).toContain('Google Analytics runs only on our public website pages, and only if you agree.');
+    const policy = await privacyPolicyText();
+    expect(policy).toContain('We do not sell your data, run ads, or use advertising trackers.');
+    expect(policy).toContain('we use Google Analytics to count visits to our public website pages only; it never runs inside your account or the app.');
   });
 
   it('access-control and encryption claims match the Privacy Policy', async () => {

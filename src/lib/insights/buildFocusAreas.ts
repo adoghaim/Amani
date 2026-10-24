@@ -119,6 +119,8 @@ const PATTERN_RULES: Partial<Record<BiomarkerCategory, PatternRule[]>> = {
   ],
 };
 
+const IRON_MARKERS = new Set<BiomarkerName>(['ferritin', 'serum_iron', 'iron_saturation', 'tibc', 'uibc']);
+
 function trajectoryPhrase(change: BiggestChange | null | undefined): string {
   // A first-recorded entry has no prior value (its previousValue is a 0
   // placeholder): stating any movement for it would be false.
@@ -244,7 +246,8 @@ function buildOneArea(
   }));
 
   const rules = PATTERN_RULES[category] ?? [];
-  const matchedRule = rules.find(r => r.matches(markers));
+  const mixedNutrients = category === 'nutrients' && markers.some(m => !IRON_MARKERS.has(m.key));
+  const matchedRule = mixedNutrients ? undefined : rules.find(r => r.matches(markers));
 
   const id = matchedRule ? `${category}_${matchedRule.id}` : category;
   const title = matchedRule?.title ?? CATEGORY_DEFAULT_TITLE[category];
@@ -272,19 +275,32 @@ export function buildFocusAreas(
   primaryCategory?: BiomarkerCategory | null,
 ): FocusArea[] {
   const flagged = flaggedBiomarkers.filter(b => b.concern > 0);
-  if (flagged.length === 0) return [];
-
   const buckets = bucketByCategory(flagged);
-  if (buckets.length === 0) return [];
-
-  const top = buckets.slice(0, 3);
+  const labFindings = insightSummary.labFindings ?? [];
+  const labCategories = new Set(labFindings.map(f => getCategory(f.key)));
+  const primaryKey = insightSummary.primaryFinding?.key;
+  // Ruling 7 is a true floor (owner, 2026-10-23): Amani's own area order
+  // stands. Keep every lab-flagged category plus the usual three focus areas;
+  // lab-only findings get their own area, appended after every Amani area.
+  const top = buckets.filter((b, i) => i < 3 || labCategories.has(b.category) || b.category === primaryCategory);
   const focusAreas = top.map(b => buildOneArea(b, watchSignals, insightSummary));
+  for (const finding of labFindings) {
+    const area = focusAreas.find(a => a.relatedMarkers.some(m => m.slug === finding.key));
+    if (area) area.whyItMatters = `${finding.fact} ${area.whyItMatters}`;
+    else focusAreas.push({
+      id: `${getCategory(finding.key)}_lab_${finding.key}`,
+      title: finding.displayName,
+      whyItMatters: finding.fact,
+      relatedMarkers: [{ slug: finding.key, displayName: finding.displayName, status: 'outside' }],
+      isPrimaryAligned: false,
+    });
+  }
 
   const annotated = focusAreas.map(fa => ({
     ...fa,
     isPrimaryAligned:
-      primaryCategory != null
-      && (fa.id === primaryCategory || fa.id.startsWith(`${primaryCategory}_`)),
+      primaryKey ? fa.relatedMarkers.some(m => m.slug === primaryKey)
+        : primaryCategory != null && (fa.id === primaryCategory || fa.id.startsWith(`${primaryCategory}_`)),
   }));
 
   const primaryIdx = annotated.findIndex(fa => fa.isPrimaryAligned);

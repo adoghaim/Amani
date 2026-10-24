@@ -1,6 +1,7 @@
 import type { BiomarkerName, CyclePhase, AmaniStatus, LabStatus } from '../../types';
 import { getRangesForPhase, getScoreWeight, getImportance } from '../biomarkers/dictionary';
-import { assessAmaniContext, contextFromReport, type NonCyclingState } from './amaniContext';
+import { assessAmaniContext, censoredClassification, contextFromReport, type NonCyclingState } from './amaniContext';
+import { censoredResult } from '../../../supabase/functions/_shared/censored-value';
 
 export type ConcernLevel = 0 | 1 | 2;
 
@@ -14,21 +15,27 @@ export interface ScoredBiomarker {
   scoreWeight: number;
   weightedConcern: number;
   deviationMultiplier: number;
+  /** The result as printed, when the caller passed it (F021). */
+  valueText?: string | null;
 }
 
 /**
  * Amani's context status for one value, or 'unknown' when Amani withholds.
  * A cycle-dependent marker with no usable phase, or any marker whose catalog
  * flags the reported non-cycling state, gets no Amani status at all: it is
- * never classified against a broad unphased fallback band (V2-03).
+ * never classified against a broad unphased fallback band (V2-03). Nor does a
+ * value whose `unit` is not the catalog unit (F011; see assessAmaniContext),
+ * or a censored one ('> OR = 60') its printed limit cannot place (F021).
  */
 export function computeAmaniStatus(
   name: BiomarkerName,
   value: number,
   cyclePhase?: CyclePhase | string | null,
   state: NonCyclingState | null = null,
+  unit?: string | null,
+  valueText?: string | null,
 ): AmaniStatus {
-  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state));
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state), unit, valueText);
   return assessment.kind === 'scored' ? assessment.status : 'unknown';
 }
 
@@ -38,6 +45,10 @@ export function computeLabStatus(
   refMax: number | null,
 ): LabStatus {
   if (refMin === null && refMax === null) return 'unknown';
+  // Review F097: no measurement or no usable interval places nothing.
+  const usable = (n: number | null) => n === null || (Number.isFinite(n) && n >= 0);
+  if (!usable(value) || !usable(refMin) || !usable(refMax)) return 'unknown';
+  if (refMin !== null && refMax !== null && refMin >= refMax) return 'unknown';
 
   /*
     The buffer is what separates "just outside the range" (borderline) from
@@ -129,12 +140,19 @@ export function scoreBiomarker(
   labRefMin: number | null,
   labRefMax: number | null,
   cyclePhase?: CyclePhase | null,
+  state: NonCyclingState | null = null,
+  valueText?: string | null,
 ): ScoredBiomarker {
-  const amaniStatus = computeAmaniStatus(name, value, cyclePhase);
-  const labStatus = computeLabStatus(value, labRefMin, labRefMax);
+  const amaniStatus = computeAmaniStatus(name, value, cyclePhase, state, unit, valueText);
+  // F021: a censored result's stored number is a placeholder. It is placed and
+  // ranked by its printed limit, or not at all.
+  const censored = censoredResult(valueText);
+  const labStatus = censored
+    ? censoredClassification(censored, v => computeLabStatus(v, labRefMin, labRefMax)) ?? 'unknown'
+    : computeLabStatus(value, labRefMin, labRefMax);
   const concern = statusToConcern(amaniStatus);
   const weight = getScoreWeight(name);
-  const deviationMultiplier = computeDeviationMultiplier(name, value, concern, cyclePhase);
+  const deviationMultiplier = computeDeviationMultiplier(name, censored ? censored.threshold : value, concern, cyclePhase);
 
   return {
     key: name,
@@ -146,5 +164,6 @@ export function scoreBiomarker(
     scoreWeight: weight,
     weightedConcern: concern * weight * deviationMultiplier,
     deviationMultiplier,
+    ...(valueText !== undefined ? { valueText } : {}),
   };
 }

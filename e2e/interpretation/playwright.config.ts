@@ -2,9 +2,10 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 import base from '../../playwright.config';
 
-// TASK-048 turn 10: the flag-on half of the version-regeneration proof, an
-// opt-in suite like e2e/freemium (the default suite runs the flag-off half).
-// PK-PL-A adds the flag-on Regenerate availability proof.
+// TASK-048 turn 10: the flag-on half of the version-regeneration proof (the
+// default suite runs the flag-off half). PK-PL-A adds the flag-on Regenerate
+// availability proof. Browser smoke runs this config next to e2e/freemium
+// (.github/workflows/e2e.yml), as scripts/ci/e2e-config-truth.test.ts requires.
 export default defineConfig({
   ...base,
   outputDir: fileURLToPath(new URL('../../test-results', import.meta.url)),

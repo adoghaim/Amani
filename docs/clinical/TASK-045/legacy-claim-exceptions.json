@@ -862,14 +862,14 @@
   },
   {
     "file": "src/pages/Privacy.tsx",
-    "text": "We do not sell your data, run ads, or use advertising or analytics trackers. We do use an error-monitoring service, configured so that it cannot record what is on your screen.",
+    "text": "We do not sell your data, run ads, or use advertising trackers. If you agree, we use Google Analytics to count visits to our public website pages only; it never runs inside your account or the app. We also use an error-monitoring service, configured so that it cannot record what is on your screen.",
     "category": "NOT_CLINICAL_LANGUAGE",
     "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."
   },
   {
     "file": "src/pages/Privacy.tsx",
-    "text": "We do not sell your personal information. We do not share it with advertisers or data brokers. We do not use it to build profiles for anyone else. The app contains no advertising SDKs and no product-analytics SDKs — the only third-party code in it that reports anything back about your session is the error monitoring and the in-app purchase processing described below.",
+    "text": "We do not sell your personal information. We do not share it with advertisers or data brokers. We do not use it to build profiles for anyone else. The app contains no advertising SDKs and no product-analytics SDKs — the only third-party code in it that reports anything back about your session is the error monitoring and the in-app purchase processing described below. The one analytics tool we use is on our public website pages, only with your permission, as described next.",
     "category": "NOT_CLINICAL_LANGUAGE",
     "basis": "legal_disclosure",
     "reason": "Legal/contact copy or data-processing disclosure, not a patient-result assessment. Pinned exactly; legal review is outside this amendment."

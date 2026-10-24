@@ -15,6 +15,7 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
+import { Modal } from '../components/Modal';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
@@ -85,49 +86,24 @@ interface DeleteModalProps {
 
 function DeleteModal({ report, onConfirm, onCancel, deleting, error, filePending = false }: DeleteModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-theme-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="px-6 py-5 border-b border-theme-border">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-theme-flag-low-bg flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-5 h-5 text-theme-flag-low" />
-            </div>
-            <div>
-              <h2 className="text-base text-theme-text">
-                {filePending ? 'Uploaded file not removed yet' : 'Delete report?'}
-              </h2>
-              <p className="text-sm text-theme-muted-text mt-0.5">
-                {filePending ? 'The report and its results are deleted.' : 'This cannot be undone.'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="px-6 py-4">
-          {!filePending && (
-            <p className="text-sm text-theme-text-body">
-              You are about to permanently delete the report from{' '}
-              <span className="font-semibold text-theme-text">{formatDateLong(report.report_date)}</span>
-              , including all biomarkers, AI insights and any uploaded lab file. This action cannot be reversed.
-            </p>
-          )}
-          {error && (
-            <div className="mt-3 px-3 py-2 rounded-lg bg-theme-flag-low-bg border border-theme-flag-low-border text-sm text-theme-flag-low">
-              {error}
-            </div>
-          )}
-        </div>
-        <div className="px-6 py-4 bg-theme-neutral-50 flex justify-end gap-3 border-t border-theme-neutral-100">
+    <Modal
+      open
+      // Escape, the backdrop and the Android back button all land here; none of them may abandon a delete in flight.
+      onClose={() => { if (!deleting) onCancel(); }}
+      title={filePending ? 'Uploaded file not removed yet' : 'Delete report?'}
+      footer={(
+        <>
           <button
             onClick={onCancel}
             disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-theme-text-body bg-theme-surface border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 min-h-[44px] text-sm font-medium text-theme-text-body bg-theme-surface border border-theme-border rounded-xl hover:bg-theme-surface-2 transition-colors disabled:opacity-50"
           >
             {filePending ? 'Close' : 'Cancel'}
           </button>
           <button
             onClick={onConfirm}
             disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-white bg-theme-flag-low rounded-xl hover:bg-theme-flag-low transition-colors disabled:opacity-60 flex items-center gap-2"
+            className="flex-1 px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-theme-flag-low rounded-xl hover:bg-theme-flag-low transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {deleting ? (
               <>
@@ -140,9 +116,30 @@ function DeleteModal({ report, onConfirm, onCancel, deleting, error, filePending
               </>
             )}
           </button>
+        </>
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-theme-flag-low-bg flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-5 h-5 text-theme-flag-low" aria-hidden="true" />
         </div>
+        <p className="text-sm text-theme-muted-text">
+          {filePending ? 'The report and its results are deleted.' : 'This cannot be undone.'}
+        </p>
       </div>
-    </div>
+      {!filePending && (
+        <p className="text-sm text-theme-text-body mt-4">
+          You are about to permanently delete the report from{' '}
+          <span className="font-semibold text-theme-text">{formatDateLong(report.report_date)}</span>
+          , including all biomarkers, AI insights and any uploaded lab file. This action cannot be reversed.
+        </p>
+      )}
+      {error && (
+        <div role="alert" className="mt-3 px-3 py-2 rounded-lg bg-theme-flag-low-bg border border-theme-flag-low-border text-sm text-theme-flag-low">
+          {error}
+        </div>
+      )}
+    </Modal>
   );
 }
 

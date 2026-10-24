@@ -3,3 +3,24 @@
 # and iOS would reject the domain without a visible error.
 /.well-known/apple-app-site-association
   Content-Type: application/json
+
+# Security headers on every response. The enforced Content-Security-Policy
+# names only Google's fixed GA4 hosts (gtag.js loads from googletagmanager.com
+# once the user consents; Analytics beacons go to *.google-analytics.com, see
+# https://developers.google.com/tag-platform/security/guides/csp), so it means
+# the same in every deploy context: the app's code, styles, fonts and pdf.js
+# worker are all served from this origin. The report-only line is the full
+# policy. It adds connect-src, whose Supabase host must match VITE_SUPABASE_URL
+# in every Netlify context, and frame-src, which hides the deploy-preview
+# Drawer. Browsers log what it would block and block nothing; once a deploy
+# preview logs nothing, it replaces the enforced line.
+# The dev server never applies this file, so add any new origin the app loads
+# or calls here. The web app calls no camera, microphone, location, payment or
+# USB API: photo capture is native-only, and uploads use a file input.
+/*
+  Content-Security-Policy: script-src 'self' https://www.googletagmanager.com; style-src 'self'; img-src 'self' https://www.googletagmanager.com https://*.google-analytics.com; font-src 'self'; worker-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self'; img-src 'self' https://www.googletagmanager.com https://*.google-analytics.com; font-src 'self'; connect-src 'self' https://eyfvqdnczorscwveaadv.supabase.co wss://eyfvqdnczorscwveaadv.supabase.co https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com; worker-src 'self'; frame-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()

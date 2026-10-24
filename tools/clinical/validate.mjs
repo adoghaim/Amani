@@ -121,5 +121,41 @@ export function validateCatalog(catalog) {
       }
     }
   }
+  validateUnitEquivalences(catalog);
   return catalog;
+}
+
+// Owner decision 2026-10-23 (review-2 of RV-CS1): each 1:1 identity is approved
+// for exactly these analytes, and adding or widening one needs a new decision.
+// mmol/L = mEq/L holds only for monovalent ions; IU/L = U/L only for these enzymes.
+export const APPROVED_UNIT_EQUIVALENCES = [
+  ['sodium', 'mmol/L', 'mEq/L'],
+  ['potassium', 'mmol/L', 'mEq/L'],
+  ['chloride', 'mmol/L', 'mEq/L'],
+  ['co2', 'mmol/L', 'mEq/L'],
+  ['tsh', 'uIU/mL', 'mIU/L'],
+  ['alt', 'IU/L', 'U/L'],
+  ['ast', 'IU/L', 'U/L'],
+  ['alkaline_phosphatase', 'IU/L', 'U/L'],
+];
+
+function validateUnitEquivalences(catalog) {
+  const analytes = new Map(catalog.analytes.map(a => [a.slug, a]));
+  const seen = new Set();
+  for (const e of catalog.unit_equivalences) {
+    const analyte = analytes.get(e.slug);
+    if (!analyte) throw new Error(`unit equivalence names unknown analyte ${e.slug}`);
+    if (e.canonical_unit !== analyte.canonical_unit) throw new Error(`${e.slug}: unit equivalence must target the canonical unit`);
+    if (e.unit.toLowerCase() === e.canonical_unit.toLowerCase()) throw new Error(`${e.slug}: unit equivalence repeats the canonical unit`);
+    if (e.factor !== 1) throw new Error(`${e.slug}: unit equivalence must be an identity (factor 1)`);
+    if (!e.basis.trim() || !e.decision.trim() || !e.decision_ref.trim()) throw new Error(`${e.slug}: unit equivalence needs basis and decision`);
+    // Owner approval is recorded; a clinical countersign is an owner action, never seeded.
+    if (e.reviewer !== null || e.reviewed_at !== null) throw new Error(`${e.slug}: implementer seed cannot assign clinical review`);
+    const key = JSON.stringify([e.slug, e.unit.toLowerCase()]);
+    if (seen.has(key)) throw new Error(`${e.slug}: duplicate unit equivalence ${e.unit}`);
+    seen.add(key);
+  }
+  const recorded = catalog.unit_equivalences.map(e => JSON.stringify([e.slug, e.unit, e.canonical_unit])).sort();
+  const approved = APPROVED_UNIT_EQUIVALENCES.map(pair => JSON.stringify(pair)).sort();
+  if (JSON.stringify(recorded) !== JSON.stringify(approved)) throw new Error('unapproved unit equivalence set');
 }

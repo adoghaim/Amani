@@ -20,6 +20,8 @@
  * thin wiring around the `IapStore` port.
  */
 
+import { errorType, scrubbedErrorMessage } from "./phi-scrub.ts";
+
 // ─── Domain types ─────────────────────────────────────────────────────────
 
 /** Matches the `platform` CHECK on `iap_subscriptions`. */
@@ -56,6 +58,13 @@ export interface NormalizedIapSubscription {
   eventId?: string | null;
   /** When the event occurred, ISO. The ordering high-water mark. */
   eventAt?: string | null;
+  /*
+    The store's per-renewal transaction id, set only by the subscriber-payload
+    path. GET /v1/subscribers exposes nothing else for an App Store
+    subscription, so this is how the write policy recognises a subscription
+    another account already holds under its original transaction id.
+  */
+  latestTransactionId?: string | null;
 }
 
 /**
@@ -107,6 +116,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function str(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * A store id, which RevenueCat's documented GET /v1/subscribers example sends as
+ * a JSON number for the App Store (`"store_transaction_id": 1000000652379790`).
+ * A number is accepted only when it is a safe integer: JSON.parse has already
+ * rounded anything larger, and a rounded id names some other transaction.
+ */
+function storeId(value: unknown): string | null {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+  }
+  return str(value);
+}
+
+/**
+ * Google order ids for renewals carry a `..N` suffix on the original order id
+ * (`GPA.1234-5678-9012-34567..5`). The original is the subscription's stable
+ * identity: the webhook's `original_transaction_id`, and an order id
+ * `orders.get` still resolves for the cancel at account deletion. Both paths
+ * key Play rows on it so a renewal never looks like a different subscription.
+ * Purchase tokens and App Store ids pass through unchanged.
+ */
+export function stableStoreSubscriptionId(platform: IapPlatform, id: string): string {
+  if (platform !== "android" || !id.startsWith("GPA.")) return id;
+  const renewal = id.indexOf("..");
+  return renewal > 0 ? id.slice(0, renewal) : id;
 }
 
 function num(value: unknown): number | null {
@@ -187,6 +223,8 @@ const ACTIVATING_EVENTS = new Set([
   "UNCANCELLATION",
   "SUBSCRIPTION_EXTENDED",
   "NON_RENEWING_PURCHASE",
+  // App Store only: the store took back a refund, so the purchase is paid again.
+  "REFUND_REVERSED",
 ]);
 
 /**
@@ -223,6 +261,14 @@ function statusForEvent(
 
   if (type === "EXPIRATION") {
     const reason = str(event.expiration_reason)?.toUpperCase();
+    /*
+      Play only: the paid period ended and a scheduled pause has begun. No
+      access, but Google resumes and bills on its own, so the row must not read
+      as `expired` — account deletion treats `expired` as "billing has stopped"
+      and would neither warn nor cancel. `paused` does not entitle
+      (entitlement.ts) and still counts as billing (account-deletion.ts).
+    */
+    if (reason === "SUBSCRIPTION_PAUSED") return { status: "paused", expiresAt };
     // A support-initiated expiry is a refund, which is a revocation rather than
     // a lapse. The distinction is only for reporting — neither entitles.
     return { status: reason === "CUSTOMER_SUPPORT" ? "revoked" : "expired", expiresAt };
@@ -242,10 +288,6 @@ function statusForEvent(
       only while the store still says the period is live.
     */
     return { status: "billing_retry", expiresAt };
-  }
-
-  if (type === "SUBSCRIPTION_PAUSED") {
-    return { status: "paused", expiresAt };
   }
 
   return null;
@@ -277,6 +319,21 @@ export function normalizeRevenueCatEvent(body: unknown, now: number): WebhookNor
 
   // RevenueCat's dashboard "send test event" button. Never a real purchase.
   if (type === "TEST") return { kind: "ignored", reason: "test event" };
+
+  /*
+    SUBSCRIPTION_PAUSED means a pause was *scheduled* for the end of the paid
+    period. RevenueCat: don't revoke access on it; revoke only on the
+    EXPIRATION with expiration_reason SUBSCRIPTION_PAUSED that starts the
+    pause. The row keeps its current state until then.
+  */
+  if (type === "SUBSCRIPTION_PAUSED") {
+    return {
+      kind: "ignored",
+      reason:
+        "SUBSCRIPTION_PAUSED only schedules a pause at the end of the paid period; " +
+        "access runs until the EXPIRATION that starts it",
+    };
+  }
 
   /*
     TRANSFER moves a store subscription between app user ids. We configure
@@ -317,10 +374,11 @@ export function normalizeRevenueCatEvent(body: unknown, now: number): WebhookNor
     correct instead of append-only. `transaction_id` is the per-renewal id and
     only stands in when the original is absent.
   */
-  const storeSubscriptionId = str(event.original_transaction_id) ?? str(event.transaction_id);
-  if (!storeSubscriptionId) {
+  const transactionId = storeId(event.original_transaction_id) ?? storeId(event.transaction_id);
+  if (!transactionId) {
     return { kind: "ignored", reason: "no transaction id to key the subscription on" };
   }
+  const storeSubscriptionId = stableStoreSubscriptionId(platform, transactionId);
 
   const resolved = statusForEvent(type, event, now);
   if (!resolved) return { kind: "ignored", reason: `event type ${type} does not change entitlement` };
@@ -366,8 +424,12 @@ function statusForSubscriberEntry(
     return { status: "revoked", expiresAt };
   }
 
-  // Play-only: the customer paused the subscription and it auto-resumes later.
-  if (isoFromDate(entry.auto_resume_date) !== null) {
+  /*
+    Play-only: a pause is scheduled or under way and auto-resumes later. Access
+    runs to the end of the period already paid for; only once `expires_date`
+    has passed is the subscription actually paused (no access, still billing).
+  */
+  if (isoFromDate(entry.auto_resume_date) !== null && !stillPaid) {
     return { status: "paused", expiresAt };
   }
 
@@ -418,19 +480,23 @@ export function normalizeSubscriberPayload(
     }
 
     /*
-      The REST record exposes `store_transaction_id` rather than the webhook's
-      `original_transaction_id`, and the two are not always the same string. The
-      write policy handles that: when this path finds an existing row for the
-      same (user, platform, product) it updates it in place and never rewrites
-      its `store_subscription_id`, so the webhook's identity wins permanently
-      and the two paths converge on one row instead of racing to create two.
+      The REST record exposes `store_transaction_id` — the LATEST renewal's id —
+      rather than the webhook's `original_transaction_id`. For Play the original
+      order id is recoverable (stableStoreSubscriptionId), so both paths key on
+      the same identity. For the App Store it is not, so the latest id is also
+      carried as `latestTransactionId`, which the write policy uses to refuse a
+      subscription another account already holds. When this path finds the
+      user's own row for the same (platform, product) it updates it in place and
+      never rewrites its `store_subscription_id`, so the webhook's identity wins
+      and the two paths converge on one row.
     */
-    const storeSubscriptionId =
-      str(value.original_store_transaction_id) ?? str(value.store_transaction_id);
-    if (!storeSubscriptionId) {
+    const latestTransactionId = storeId(value.store_transaction_id);
+    const transactionId = storeId(value.original_store_transaction_id) ?? latestTransactionId;
+    if (!transactionId) {
       ignored.push(`${productId}: no store transaction id`);
       continue;
     }
+    const storeSubscriptionId = stableStoreSubscriptionId(platform, transactionId);
 
     const resolved = statusForSubscriberEntry(value, now);
 
@@ -441,8 +507,11 @@ export function normalizeSubscriberPayload(
       storeSubscriptionId,
       status: resolved.status,
       expiresAt: resolved.expiresAt,
-      environment: value.is_sandbox === true ? "sandbox" : "production",
+      // Fail towards sandbox, like the webhook's toEnvironment: only an
+      // explicit `false` is a real purchase.
+      environment: value.is_sandbox === false ? "production" : "sandbox",
       raw: value,
+      latestTransactionId,
     });
   }
 
@@ -466,6 +535,13 @@ export interface IapStore {
     platform: IapPlatform,
     storeSubscriptionId: string,
   ): Promise<IapSubscriptionRow | null>;
+  /**
+   * Rows on this platform, whoever owns them, that record this per-renewal
+   * transaction id: as their store key, or as the latest transaction in their
+   * stored webhook (`raw.event.transaction_id`) or subscriber-entry
+   * (`raw.store_transaction_id`) payload.
+   */
+  findByTransactionId(platform: IapPlatform, transactionId: string): Promise<IapSubscriptionRow[]>;
   /** This user's existing row for the same product, if any. */
   findByUserProduct(
     userId: string,
@@ -578,9 +654,28 @@ export async function persistIapSubscription(
   }
 
   /*
-    No row under this store key, but this user may already hold a row for the
-    same product written by the other path under its own identifier (see the
-    note in normalizeSubscriberPayload). Update that row and leave its
+    No row under this store key. The subscriber-payload path may still be
+    looking at a subscription another account holds under a different key: an
+    App Store purchase keyed by the webhook on its original_transaction_id,
+    which GET /v1/subscribers never shows. If every row recording this
+    transaction belongs to someone else, refuse rather than insert a second
+    claim on it.
+  */
+  if (subscription.latestTransactionId) {
+    const holders = await store.findByTransactionId(
+      subscription.platform,
+      subscription.latestTransactionId,
+    );
+    const foreign = holders.find((row) => row.user_id !== subscription.userId);
+    if (foreign && !holders.some((row) => row.user_id === subscription.userId)) {
+      return { action: "rejected", reason: "ownership_conflict", ownerUserId: foreign.user_id };
+    }
+  }
+
+  /*
+    This user may already hold a row for the same product written by the
+    other path under its own identifier (see the note in
+    normalizeSubscriberPayload). Update that row and leave its
     `store_subscription_id` alone, so the two paths converge instead of
     alternately inserting duplicates of one subscription.
   */
@@ -617,6 +712,27 @@ export async function persistIapSubscriptions(
     outcomes.push(await persistIapSubscription(store, subscription));
   }
   return outcomes;
+}
+
+// ─── verify-iap-purchase failure response ─────────────────────────────────
+
+export const VERIFICATION_FAILED_CODE = "verification_failed";
+
+/**
+ * What the verify handler answers when anything unexpected throws. The client
+ * gets a fixed message and code; the error itself can quote RevenueCat's
+ * response body or a Postgres row, so it only reaches the log after phi-scrub.
+ */
+export function verificationFailure(error: unknown): {
+  status: 500;
+  body: { error: string; code: string };
+  log: string;
+} {
+  return {
+    status: 500,
+    body: { error: "Failed to verify purchase", code: VERIFICATION_FAILED_CODE },
+    log: `${errorType(error)}: ${scrubbedErrorMessage(error)}`,
+  };
 }
 
 // ─── Webhook authentication ───────────────────────────────────────────────

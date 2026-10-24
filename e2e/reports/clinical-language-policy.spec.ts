@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
   egfrHigherIsBetterReport, ferritinDecreased, higherIsBetterReport, modelCanaries, modelProseCurrentReport,
-  stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport, tshIncreased,
+  smokePanelReport, stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport, tshIncreased,
 } from './synthetic-reports';
 
 /*
@@ -130,10 +130,10 @@ test.describe('V2-03b Stage 2 — every surface speaks only policy language', ()
       .flatMap(s => [`[data-testid="prep-questions"]${s}`, `[data-testid="prep-questions"] ${s}`]).join(', '))).toHaveCount(0);
     expect(await card.evaluate(el => el.outerHTML)).not.toMatch(/flag-(?:ok|watch|low)/);
     // Standing rule 5: the same facts, stated the same way elsewhere on the page.
-    await expect(items.nth(0)).toHaveText('My TSH changed from 6 to 9 uIU/mL. What could explain this change, and is it clinically meaningful?');
+    await expect(items.nth(0)).toHaveText('My TSH changed from 6 to 9 mIU/L. What could explain this change, and is it clinically meaningful?');
     // PK-FIX-02: a title-case display name reads in sentence case mid-sentence; acronyms keep their capitals.
     await expect(items.nth(1)).toHaveText('My ferritin changed from 25 to 20 ng/mL. What could explain this change, and is it clinically meaningful?');
-    await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 uIU/mL');
+    await expect(page.getByTestId('primary-movement-observation')).toContainText('from 6 to 9 mIU/L');
     await expect(items.nth(2)).toContainText("above my lab's reference interval of 4–5.6 %");
     const hba1c = page.getByRole('article', { name: 'HbA1c result', exact: true });
     await expect(hba1c.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Above your lab's range");
@@ -227,7 +227,7 @@ const MARKETING_FORBIDDEN = new RegExp(`${FORBIDDEN.source}|worr\\w*|sits where 
 test.describe('R3: the landing page says nothing Amani may not say to a real user', () => {
   test('page-wide prohibition, context not judgement, and specimen statements that agree with their rows', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
     const legal = 'Amani is educational. It does not diagnose, prescribe, or replace your clinician — it helps you walk into the appointment knowing what to ask. Anything that concerns you belongs in front of a licensed provider.';
     const text = await page.evaluate(legalText => {
       const clone = document.body.cloneNode(true) as HTMLElement;
@@ -281,12 +281,37 @@ for (const { report, name, min, max, unit } of [
     await expect(bandPills.nth(0)).toBeVisible();
     await expect(bandPills.nth(1)).toBeVisible();
     await expect(card.locator('[data-language-source="patient_lab_interval"]')).toHaveText("Above your lab's range");
-    await expect(page.locator('h2 [data-language-category="comparison_band"]')).toContainText("All scored values are within Amani's context bands");
+    await expect(page.locator('h2 [data-language-source="patient_lab_interval"]')).toContainText("above your lab's reference range");
     await expect(page.getByText('Scored markers within Amani bands', { exact: true })).toBeVisible();
-    await expect(page.getByText("No scored marker on this report is outside Amani's comparison bands.", { exact: true })).toHaveCount(1);
-    await expect(page.getByRole('heading', { name: 'Focus areas', exact: true })).toHaveCount(0);
+    await expect(page.getByText("No scored marker on this report is outside Amani's comparison bands.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Focus areas', exact: true })).toBeVisible();
     await expect(page.getByText('Outside Amani band', { exact: true })).toHaveCount(0);
     await expect(page.locator('[data-language-category="comparison_band"][data-language-cue="attention"], [data-language-cue="warning"], [data-language-cue="critical"]')).toHaveCount(0);
     expect(hits(await pageText(page))).toEqual([]);
+  });
+});
+
+
+test.describe('October smoke panel consistency', () => {
+  test.use({ authenticated: true, syntheticReports: [[smokePanelReport], { scope: 'test' }] });
+  test('lab facts, primary finding, story and comparison bands agree', async ({ page }, testInfo) => {
+    await page.goto(`/app/reports/${smokePanelReport.report.id}`);
+    await expect(page.getByTestId('primary-finding')).toContainText("Vitamin D is below your lab's reference range at 24 ng/mL.");
+    await expect(page.getByText(/^Vitamin D is the primary finding shown above\./)).toBeVisible();
+    await expect(page.locator('h2 [data-language-source="patient_lab_interval"]')).toHaveText([
+      "Vitamin D is below your lab's reference range at 24 ng/mL. ",
+      "LDL is above your lab's reference range at 112 mg/dL. ",
+    ]);
+    await expect(page.getByText(/mainly about iron/)).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('summary.png') });
+    for (const label of [/^Thyroid\b/, /^Lipids & Cardiovascular\b/]) {
+      await page.getByRole('button', { name: label }).and(page.locator('[aria-expanded="false"]')).click();
+    }
+    for (const name of ['Ferritin', 'TSH']) {
+      const card = page.getByRole('article', { name: `${name} result`, exact: true });
+      await expect(card).toContainText("Within your lab's range");
+      await expect(card).toContainText("Amani's comparison band is separate from your lab's range and is still under clinical review.");
+    }
+    await page.screenshot({ path: testInfo.outputPath('smoke-panel-consistency.png'), fullPage: true });
   });
 });

@@ -10,6 +10,11 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/components/analytics",
+    "mode": "scanned",
+    "reason": "GA4 (privacy-safe, consent-gated, public marketing pages only): production literals are scanned like every other directory; no clinical claim. Tests are excluded."
+  },
+  {
     "directory": "src/components/auth",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
@@ -95,6 +100,11 @@
     "reason": "Reclassified in amendment 4. Direct modules author clinical copy (cyclePhase.ts pregnancy and phase text, cycleContextCard.ts) beside service, native and entitlement plumbing. Scanned; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/lib/analytics",
+    "mode": "scanned",
+    "reason": "GA4 (privacy-safe, consent-gated, public marketing pages only): production literals are scanned like every other directory; no clinical claim. Tests are excluded."
+  },
+  {
     "directory": "src/lib/biomarkers",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
@@ -143,6 +153,11 @@
     "directory": "src/lib/personalization",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
+  },
+  {
+    "directory": "src/lib/safety",
+    "mode": "scanned",
+    "reason": "Review F014 interim: the recognizer of the lab's own printed critical flags. Production literals are scanned like every other directory; the notice's words live in insightCopy.ts, the policy author. Tests are excluded."
   },
   {
     "directory": "src/lib/scoring",

@@ -18,6 +18,8 @@ export interface OnboardingAnswers {
 interface AuthContextType {
   user: SupabaseUser | null;
   userProfile: User | null;
+  /** The last profile read failed (offline, or the request failed), as opposed to still loading. */
+  profileLoadFailed: boolean;
   loading: boolean;
   isPasswordRecovery: boolean;
   signUp: (email: string, password: string) => Promise<void>;
@@ -36,6 +38,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
@@ -46,6 +49,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', userId)
       .maybeSingle();
 
+    // F065: a failed read resolves with `error` rather than throwing. Record
+    // it, so the route gate offers Try again instead of waiting for ever.
+    setProfileLoadFailed(Boolean(error));
     if (!error && data) {
       setUserProfile(data as User);
       return data as User;
@@ -124,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setUserProfile(null);
+          setProfileLoadFailed(false);
           setLoading(false);
           return;
         }
@@ -283,6 +290,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     user,
     userProfile,
+    profileLoadFailed,
     loading,
     isPasswordRecovery,
     signUp,

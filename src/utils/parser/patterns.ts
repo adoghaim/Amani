@@ -232,6 +232,8 @@ export const BIOMARKER_PATTERNS: BiomarkerPattern[] = [
     canonical: 'vitamin_b12',
     patterns: ['vitamin b12, serum', 'vitamin b12', 'b12', 'cobalamin', 'cyanocobalamin', 'vit b12'],
     commonUnits: ['pg/mL', 'pmol/L', 'pg/ml'],
+    // Holotranscobalamin and transcobalamin are other analytes (F098).
+    wholeWord: true,
   },
   {
     canonical: 'folate',
