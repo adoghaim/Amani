@@ -15,6 +15,7 @@ import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { aiPausedBody } from "../_shared/ai-pause.ts";
 import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
 import { censoredPlaceholder } from "../_shared/censored-value.ts";
+import { sourceSnippetFinder } from "../_shared/source-snippet.ts";
 
 // PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
 // AI cost ledger, and the kill switch. Once per isolate.
@@ -489,6 +490,8 @@ CONFIDENCE:
       if (placeholder !== null) item.value_numeric = placeholder;
     }
 
+    // RV-SN1: each row's printed line, read from the redacted text the model was given; the model never writes it.
+    const snippetFor = sourceSnippetFinder(labText);
     const reportAnalytes: ReportAnalyte[] = rawItems
       .filter(item => typeof item.value_numeric === 'number' && !isNaN(item.value_numeric))
       .map(item => {
@@ -535,7 +538,7 @@ CONFIDENCE:
           normalized_max: item.normalized_reference_max ?? null,
           normalized_operator: item.reference_operator ?? null,
           normalized_operator_value: item.reference_operator_value ?? null,
-          source_snippet: null,
+          source_snippet: snippetFor({ name: item.raw_name ?? item.name, valueText: item.value_text, valueNumeric: item.value_numeric }),
           confidence_score: item.confidence_score ?? 'low',
           canonical_analyte_id: analyte?.id ?? null,
           canonical_slug: canonicalSlug,

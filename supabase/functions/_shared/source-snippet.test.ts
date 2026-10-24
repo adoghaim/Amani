@@ -209,3 +209,35 @@ describe('contract with the app\'s readers', () => {
     }
   });
 });
+
+/*
+  The Deno handler cannot be imported here (npm:/jsr: specifiers, Deno
+  globals), so, as lab-extraction.test.ts does, read its source and pin the
+  wiring.
+*/
+const handler = readFileSync(new URL('../extract-biomarkers/index.ts', import.meta.url), 'utf8');
+
+describe('wiring: extract-biomarkers fills source_snippet from the redacted text', () => {
+  it('imports the finder, builds it once and gives every row its snippet instead of null', () => {
+    expect(handler).toContain('import { sourceSnippetFinder } from "../_shared/source-snippet.ts";');
+    expect(handler).toContain('    const snippetFor = sourceSnippetFinder(labText);');
+    expect(handler).toContain(
+      '          source_snippet: snippetFor({ name: item.raw_name ?? item.name, valueText: item.value_text, valueNumeric: item.value_numeric }),',
+    );
+    expect(handler).not.toMatch(/source_snippet:\s*null/);
+  });
+
+  it('reads the redacted text the model was given, never the uploaded text', () => {
+    expect(handler).not.toContain('sourceSnippetFinder(text)');
+    const redacted = handler.indexOf('const labText = redactLabText(text).text;');
+    expect(redacted).toBeGreaterThan(-1);
+    expect(handler.indexOf('const snippetFor = sourceSnippetFinder(labText);')).toBeGreaterThan(redacted);
+  });
+
+  it('logs no snippet, and the audit event still carries only the coverage counts', () => {
+    const consoleCalls = handler.match(/console\.\w+\([\s\S]*?\);/g) ?? [];
+    expect(consoleCalls.length).toBeGreaterThan(0);
+    for (const call of consoleCalls) expect(call).not.toMatch(/snippet/i);
+    expect(handler).toMatch(/event_type: "lab_uploaded",\s*metadata: \{ \.\.\.coverage \},/);
+  });
+});
