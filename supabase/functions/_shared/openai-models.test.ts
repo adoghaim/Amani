@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   chatCompletionParams,
   DEFAULT_OPENAI_MODELS,
   isReasoningModel,
   OPENAI_MODEL_ENV,
+  OPENAI_MODEL_SHUTDOWNS,
   REASONING_TOKEN_HEADROOM,
   resolveOpenAiModel,
   type OpenAiModelUse,
 } from './openai-models.ts';
-import { priceFor, UNKNOWN_MODEL_PRICE } from './ai-cost-ledger.ts';
+import { MODEL_PRICES, priceFor, UNKNOWN_MODEL_PRICE } from './ai-cost-ledger.ts';
 
 const USES = Object.keys(DEFAULT_OPENAI_MODELS) as OpenAiModelUse[];
 
@@ -84,5 +86,47 @@ describe('chatCompletionParams: what each kind of model accepts (F131)', () => {
     const model = resolveOpenAiModel('ocr', () => 'gpt-6-luna');
     expect(chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }))
       .not.toHaveProperty('temperature');
+  });
+});
+
+describe('OPENAI_MODEL_SHUTDOWNS (RV-MM1 AC4)', () => {
+  const FUNCTION_OF: Record<OpenAiModelUse, string> = {
+    ocr: 'parse-lab-report-ocr', extraction: 'extract-biomarkers',
+    interpretation: 'generate-interpretation', labInsights: 'lab-insights',
+  };
+
+  it("states OpenAI's announced dates and suggested replacements", () => {
+    expect(OPENAI_MODEL_SHUTDOWNS).toEqual({
+      'gpt-4o': { shutdown: '2027-01-14', replacement: 'gpt-6-luna' },
+      'gpt-4o-mini': { shutdown: '2027-01-14', replacement: 'gpt-6-luna' },
+      'gpt-5-mini': { shutdown: '2026-12-11', replacement: 'gpt-5.6-terra' },
+    });
+  });
+
+  it.each(USES)('%s: its default id has an entry', use => {
+    expect(OPENAI_MODEL_SHUTDOWNS[DEFAULT_OPENAI_MODELS[use]]).toBeDefined();
+  });
+
+  it.each(Object.entries(OPENAI_MODEL_SHUTDOWNS))(
+    '%s: the replacement is a reasoning model with its own price row and a valid override id',
+    (_model, { replacement }) => {
+      expect(isReasoningModel(replacement)).toBe(true);
+      expect(Object.keys(MODEL_PRICES)).toContain(replacement);
+      expect(priceFor(replacement)).toBe(MODEL_PRICES[replacement]);
+      expect(resolveOpenAiModel('ocr', () => replacement)).toBe(replacement);
+    },
+  );
+
+  it('matches the table in docs/privacy/ai-processing.md section 1a', () => {
+    const doc = readFileSync(new URL('../../../docs/privacy/ai-processing.md', import.meta.url), 'utf8');
+    const section = doc.slice(doc.indexOf('## 1a.'), doc.indexOf('## 2.'));
+    const rows = [...section.matchAll(/^\| `([a-z-]+)` \| `(\w+)` \| `([^`]+)` \| (\d{4}-\d{2}-\d{2}) \| `([^`]+)` \|$/gm)]
+      .map(([, fn, use, model, shutdown, replacement]) => ({ fn, use, model, shutdown, replacement }));
+    expect(rows).toEqual(USES.map(use => ({
+      fn: FUNCTION_OF[use],
+      use,
+      model: DEFAULT_OPENAI_MODELS[use],
+      ...OPENAI_MODEL_SHUTDOWNS[DEFAULT_OPENAI_MODELS[use]],
+    })));
   });
 });

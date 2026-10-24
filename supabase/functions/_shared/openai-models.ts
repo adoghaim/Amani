@@ -47,6 +47,26 @@ export const DEFAULT_OPENAI_MODELS: Readonly<Record<OpenAiModelUse, string>> = O
   labInsights: "gpt-5-mini",
 });
 
+export interface OpenAiModelShutdown {
+  /** The day OpenAI stops serving the id (YYYY-MM-DD). */
+  shutdown: string;
+  /** OpenAI's suggested replacement. Not switched to: a switch needs the eval and owner sign-off. */
+  replacement: string;
+}
+
+/**
+ * OpenAI's shutdown date and suggested replacement for every default id, from
+ * https://developers.openai.com/api/docs/deprecations (read 2026-10-24). The
+ * handlers send the bare ids; nothing there says those are repointed, so they
+ * are treated as shutting down with their snapshots. Section 1a of
+ * docs/privacy/ai-processing.md states the same table (a test keeps them equal).
+ */
+export const OPENAI_MODEL_SHUTDOWNS: Readonly<Record<string, OpenAiModelShutdown>> = Object.freeze({
+  "gpt-4o": Object.freeze({ shutdown: "2027-01-14", replacement: "gpt-6-luna" }),
+  "gpt-4o-mini": Object.freeze({ shutdown: "2027-01-14", replacement: "gpt-6-luna" }),
+  "gpt-5-mini": Object.freeze({ shutdown: "2026-12-11", replacement: "gpt-5.6-terra" }),
+});
+
 /** The function secret that overrides each use. */
 export const OPENAI_MODEL_ENV: Readonly<Record<OpenAiModelUse, string>> = Object.freeze({
   ocr: "OPENAI_MODEL_OCR",
