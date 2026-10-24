@@ -279,3 +279,41 @@ describe('legitimately consultative and lifestyle text still passes', () => {
     expect(findTextViolations(text)).toEqual([]);
   });
 });
+
+// ─── #159 verifier note 2: a substance recommended with no action verb ───────
+
+describe('a substance recommended with no action verb is prescriptive (#159 note 2)', () => {
+  it.each([
+    ['We recommend iron for your low ferritin.', 'recommend iron'],
+    ['Your ferritin was low; we suggest iron.', 'suggest iron'],
+    ["I'd advise magnesium.", 'advise magnesium'],
+    ["We'd encourage vitamin D.", 'encourage vitamin D'],
+    ['I recommend iron.', 'recommend iron'],
+    ['Recommend iron.', 'Recommend iron'],
+    ['We recommended iron last time.', 'recommended iron'],
+    ["We're recommending magnesium for now.", 'recommending magnesium'],
+    ['We advised iron.', 'advised iron'],
+    ['Recommend a magnesium supplement.', 'Recommend a magnesium'],
+    ['- Suggest iron.', 'Suggest iron'],
+    ['If your ferritin is low, we recommend iron.', 'recommend iron'],
+    ['Experts recommend magnesium for sleep.', 'recommend magnesium'],
+  ])('flags %s', (text, match) => {
+    expect(findTextViolations(text)).toContain(`prescriptive_verb:${match}`);
+  });
+
+  it.each([
+    'Your doctor may suggest checking your iron levels.',
+    'Ask your provider whether they would recommend iron.',
+    'If your doctor recommends iron, ask how long to take it.',
+    'Your doctor may recommend iron.',
+    'Your primary care doctor may recommend iron.',
+    'Would you recommend iron for me?',
+    'These results suggest your vitamin D is low.',
+    'This pattern suggests iron may be a factor.',
+    'We recommend a vitamin D recheck.',
+    'Guidelines recommend vitamin D screening.',
+  ])('passes the consultative or descriptive %s', (text) => {
+    expect(findTextViolations(text)).toEqual([]);
+  });
+});
+

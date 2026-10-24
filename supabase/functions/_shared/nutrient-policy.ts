@@ -241,6 +241,41 @@ function findDirective(text: string): string | null {
   return null;
 }
 
+// A substance recommended with no action verb: "We recommend iron", "I'd
+// advise magnesium", a bare "Recommend iron" — the recommending branch above
+// without its verb. Any subject counts except her own clinician ("Your doctor
+// may recommend iron") and "you", a question to one ("Would you recommend
+// iron?"). "Suggest" also means "indicate" ("these results suggest your
+// vitamin D is low"), so it counts only after I or we, or as an imperative.
+// A whether/if clause stays consultative, as in SECOND_PERSON.
+const RECOMMENDED_SUBSTANCE_REGEX = new RegExp(
+  `\\b(?:(?<s>suggest(?:s|ed|ing)?)|recommend(?:s|ed|ing)?|advis(?:e|es|ed|ing)|encourag(?:e|es|ed|ing))` +
+    `\\s+(?:that\\s+)?(?:you\\s+)?(?:to\\s+)?(?:(?:${FILLER})\\s+){0,3}(?:${SUBSTANCE_TERM})\\b`,
+  "gi",
+);
+const RECOMMENDER_AUX =
+  "(?:(?:may|might|can|could|will|would|should|must|do|does|did|also|often|usually|typically|generally|sometimes|probably|really|strongly|definitely|still|now|then|first|am|are|have|had)\\s+)*";
+const CLINICIAN =
+  "doctors?|providers?|clinicians?|physicians?|practitioners?|(?:care\\s+)?team|ob(?:-|/)?gyns?|gyn(?:a?e)cologists?|endocrinologists?|midwi(?:fe|ves)|nurses?|specialists?|gps?";
+const CONSULTED_SUBJECT = new RegExp(
+  `\\b(?:your\\s+(?:[\\w-]+\\s+){0,2}(?:${CLINICIAN})|you(?:'d|'ll)?)\\s+${RECOMMENDER_AUX}$`,
+  "i",
+);
+const SPEAKER = new RegExp(`(?:\\b(?:i|we)(?:'d|'ll|'m|'re|'ve)?\\s+${RECOMMENDER_AUX}|${CLAUSE_START})$`, "i");
+const WHETHER_IF_CLAUSE = /\b(?:whether|if)\b[^,.!?;:\n]*$/i;
+// How far back the subject and whether/if checks read; it keeps the scan linear.
+const LOOKBACK = 120;
+
+function findRecommendedSubstance(text: string): string | null {
+  for (const m of text.matchAll(RECOMMENDED_SUBSTANCE_REGEX)) {
+    const start = m.index ?? 0;
+    const before = text.slice(Math.max(0, start - LOOKBACK), start);
+    if (LAB_NOUN_AFTER.test(text.slice(start + m[0].length)) || WHETHER_IF_CLAUSE.test(before)) continue;
+    if (m.groups?.s ? SPEAKER.test(before) : !CONSULTED_SUBJECT.test(before)) return m[0];
+  }
+  return null;
+}
+
 // "daily", "twice a day", "every other day", "at bedtime", "with food" —
 // dosing schedule language.
 const FREQUENCY_REGEX =
@@ -315,7 +350,9 @@ export function findTextViolations(raw: string): string[] {
 
   // A directive names its own substance, so it needs no separate context.
   const verbMatch =
-    (hasSubstanceContext && text.match(PRESCRIPTIVE_VERB_REGEX)?.[0]) || findDirective(text);
+    (hasSubstanceContext && text.match(PRESCRIPTIVE_VERB_REGEX)?.[0]) ||
+    findDirective(text) ||
+    findRecommendedSubstance(text);
   if (verbMatch) violations.push(`prescriptive_verb:${verbMatch}`);
 
   if (hasSubstanceContext) {
