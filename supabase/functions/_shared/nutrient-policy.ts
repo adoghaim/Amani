@@ -175,7 +175,11 @@ const BANNED_ABBREVIATION_REGEXES = BANNED_SUPPLEMENT_ABBREVIATIONS.map((t) => (
 // `/kg` is deliberately absent: "5 mg/kg" is genuine weight-based dosing.
 const NUMBER_WORD =
   "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|half";
-const AMOUNT = `(?:\\d+(?:[.,]\\d+)*|(?:${NUMBER_WORD})(?:[-\\s]+(?:and[-\\s]+)?(?:${NUMBER_WORD}))*)`;
+// An amount starts only at the head of its run of number words or digit groups:
+// a start inside the run matches nothing the head does not. Without the two
+// lookbehinds a long run was retried from every word (quadratic in the dose
+// patterns) and could be split between the directive's filler slots (cubic).
+const AMOUNT = `(?:(?<!\\b\\d+[.,])\\d+(?:[.,]\\d+)*|(?<!\\b(?:${NUMBER_WORD})[-\\s]+(?:and[-\\s]+)?)(?:${NUMBER_WORD})(?:[-\\s]+(?:and[-\\s]+)?(?:${NUMBER_WORD}))*)`;
 const DOSAGE_REGEX = new RegExp(
   `\\b${AMOUNT}\\s*-?\\s*(?:i\\.?u\\.?s?|international\\s+units?|mgs?|mcgs?|[µμu]g|gm?s?|mls?|grams?|milligrams?|micrograms?)(?![a-z0-9])(?!\\s*\\/\\s*(?:d?l|ml|100\\s*ml|g|mg|mmol|mol|min|24\\s*h(?:r|rs|ours)?)\\b)`,
   "i",
