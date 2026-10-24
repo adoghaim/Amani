@@ -19,3 +19,16 @@ export interface AnalyteContext {
 }
 
 export const ANALYTE_CONTEXT: readonly AnalyteContext[] = __CONTEXT__;
+
+/**
+ * An owner-approved 1:1 identity between a unit labs print and one analyte's
+ * catalog unit (catalog unit_equivalences, review-2): a value in `unit` is the
+ * same number in `canonicalUnit`. Scoped to `key` only; never a global rule.
+ */
+export interface UnitEquivalence {
+  key: BiomarkerName;
+  unit: string;
+  canonicalUnit: string;
+}
+
+export const UNIT_EQUIVALENCES: readonly UnitEquivalence[] = __UNIT_EQUIVALENCES__;

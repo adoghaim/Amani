@@ -6,7 +6,8 @@
   "required": [
     "schema_version",
     "analytes",
-    "identity_only"
+    "identity_only",
+    "unit_equivalences"
   ],
   "properties": {
     "schema_version": {
@@ -675,6 +676,80 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "unit_equivalences": {
+      "type": "array",
+      "description": "Owner-approved 1:1 identities between a unit labs print and one analyte's canonical_unit. Scoped per analyte, never a global unit rule. Not a unit_conversions entry: the value is used unchanged.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "unit",
+          "canonical_unit",
+          "factor",
+          "basis",
+          "approved_by",
+          "approved_at",
+          "decision",
+          "decision_ref",
+          "reviewer",
+          "reviewed_at"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "canonical_unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "factor": {
+            "type": "number",
+            "const": 1
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approved_by": {
+            "type": "string",
+            "enum": [
+              "owner"
+            ]
+          },
+          "approved_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "decision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decision_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reviewer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Clinical reviewer countersign; null until a clinical reviewer signs."
+          },
+          "reviewed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }

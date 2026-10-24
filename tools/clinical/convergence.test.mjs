@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { readCatalog, renderCatalog, projectEntries } from './generate.mjs';
-import { renderSql, sqlPayload, migrationArtifact, stableJson } from './sql.mjs';
-import { validateCatalog, validateSchema } from './validate.mjs';
+import { readCatalog, renderCatalog, renderContext, projectEntries, projectUnitEquivalences } from './generate.mjs';
+import { renderSql, renderReviewSql, sqlPayload, migrationArtifact, stableJson } from './sql.mjs';
+import { validateCatalog, validateSchema, APPROVED_UNIT_EQUIVALENCES } from './validate.mjs';
 
 test('replacement metacharacters survive generation literally', () => {
   const c = structuredClone(readCatalog());
@@ -52,6 +52,55 @@ test('unit joins require approved explicit factors and refuse missing evidence',
     assert.equal(entry.registry_slug, null);
     assert.equal(entry.legacy_to_registry_factor, null);
   }
+});
+// Review-2 of RV-CS1, owner decision 2026-10-23: 1:1 unit identities, scoped per analyte.
+test('unit equivalences are owner-approved identities for exactly the approved analytes', () => {
+  const c = readCatalog();
+  assert.deepEqual(c.unit_equivalences.map(e => [e.slug, e.unit, e.canonical_unit]), APPROVED_UNIT_EQUIVALENCES);
+  for (const e of c.unit_equivalences) {
+    assert.equal(e.factor, 1);
+    assert.equal(e.canonical_unit, c.analytes.find(a => a.slug === e.slug).canonical_unit);
+    assert.deepEqual([e.approved_by, e.approved_at, e.decision], ['owner', '2026-10-23', 'Approve the equivalences (Recommended)']);
+    assert.deepEqual([e.reviewer, e.reviewed_at], [null, null]);
+    assert.match(e.basis, /^Definitional unit identity/);
+  }
+  assert.deepEqual(projectUnitEquivalences(c), APPROVED_UNIT_EQUIVALENCES.map(([key, unit, canonicalUnit]) => ({ key, unit, canonicalUnit })));
+  assert.ok(renderContext(c).includes('export const UNIT_EQUIVALENCES'));
+  const template = { slug: 'sodium', unit: 'mmol/L', canonical_unit: 'mEq/L', factor: 1, basis: 'b', approved_by: 'owner',
+    approved_at: '2026-10-23', decision: 'd', decision_ref: 'r', reviewer: null, reviewed_at: null };
+  for (const { mutate, error } of [
+    // mEq/L = mmol/L is for monovalent ions only; IU/L = U/L only for ALT, AST, ALP.
+    { mutate: c => c.unit_equivalences.push({ ...template, slug: 'calcium', canonical_unit: 'mg/dL', unit: 'mEq/L' }), error: /unapproved unit equivalence/ },
+    { mutate: c => c.unit_equivalences.push({ ...template, slug: 'magnesium', canonical_unit: 'mg/dL', unit: 'mEq/L' }), error: /unapproved unit equivalence/ },
+    { mutate: c => c.unit_equivalences.push({ ...template, slug: 'ggt', canonical_unit: 'U/L', unit: 'IU/L' }), error: /unapproved unit equivalence/ },
+    { mutate: c => c.unit_equivalences.push({ ...template, slug: 'fasting_glucose', canonical_unit: 'mg/dL', unit: 'mmol/L' }), error: /unapproved unit equivalence/ },
+    { mutate: c => c.unit_equivalences.pop(), error: /unapproved unit equivalence/ },
+    { mutate: c => { c.unit_equivalences[0].factor = 2; }, error: /unexpected constant/ },
+    { mutate: c => { c.unit_equivalences[0].canonical_unit = 'mmol/L'; }, error: /canonical unit/ },
+    { mutate: c => { c.unit_equivalences[0].slug = 'not_an_analyte'; }, error: /unknown analyte/ },
+    { mutate: c => { c.unit_equivalences[0].reviewer = 'Invented reviewer'; }, error: /cannot assign clinical review/ },
+    { mutate: c => { c.unit_equivalences[0].basis = ' '; }, error: /needs basis/ },
+    { mutate: c => { c.unit_equivalences[0].approved_by = 'implementer'; }, error: /unexpected enum/ },
+    { mutate: c => c.unit_equivalences.push({ ...c.unit_equivalences[0] }), error: /duplicate unit equivalence/ },
+    { mutate: c => { delete c.unit_equivalences; }, error: /missing unit_equivalences/ },
+  ]) {
+    const copy = structuredClone(c);
+    mutate(copy);
+    assert.throws(() => validateCatalog(copy), error);
+  }
+});
+test('unit equivalences change no frozen SQL and no shipping dictionary value', () => {
+  const c = readCatalog();
+  for (const text of ['unit_equivalences', 'Approve the equivalences', 'Definitional unit identity']) {
+    assert.equal(stableJson(sqlPayload(c)).includes(text), false, text);
+    assert.equal(renderCatalog(c).includes(text), false, text);
+  }
+  const edited = structuredClone(c);
+  for (const e of edited.unit_equivalences) Object.assign(e, { basis: 'synthetic basis', decision_ref: 'synthetic ref', approved_at: '2000-01-01' });
+  assert.deepEqual(renderSql(edited), renderSql(c));
+  assert.deepEqual(renderReviewSql(edited), renderReviewSql(c));
+  assert.equal(renderCatalog(edited), renderCatalog(c));
+  for (const a of c.analytes) assert.deepEqual(a.unit_conversions, []);
 });
 test('snapshot cardinalities, absent extraction identities and SQL/client ranges agree', () => {
   const c = readCatalog();

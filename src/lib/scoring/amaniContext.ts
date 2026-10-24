@@ -1,6 +1,6 @@
 import type { AmaniStatus, BiomarkerName } from '../../types';
 import { getEntry, type ClinicalRange, type OptimalRange } from '../biomarkers/dictionary';
-import { sameUnit } from '../biomarkers/normalizeReportItems';
+import { isCatalogUnit } from '../biomarkers/normalizeReportItems';
 import {
   canDescribeAsOptimal, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
@@ -190,7 +190,7 @@ export function assessAmaniContext(
   const entry = getEntry(key);
   const analyte = CONTEXT_BY_KEY.get(key);
   if (!entry || !analyte) return { kind: 'unavailable' };
-  if (unit !== undefined && !sameUnit(unit, entry.defaultUnit)) return { kind: 'unavailable' };
+  if (unit !== undefined && !isCatalogUnit(key, unit)) return { kind: 'unavailable' };
   // Review F097: a value that is not a finite, non-negative number is no measurement.
   if (!Number.isFinite(value) || value < 0) return { kind: 'unavailable' };
 
