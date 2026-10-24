@@ -302,6 +302,7 @@ describe('a substance recommended with no action verb is prescriptive (#159 note
   });
 
   it.each([
+    'Discuss iron with your doctor.',
     'Your doctor may suggest checking your iron levels.',
     'Ask your provider whether they would recommend iron.',
     'If your doctor recommends iron, ask how long to take it.',
