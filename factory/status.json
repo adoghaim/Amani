@@ -2585,9 +2585,12 @@
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-web-platform",
-      "pr": null,
+      "pr": "#169",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2598,7 +2601,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track web-platform; findings F068, F109, F028, F113. Head dec8bfe. Built. Security and correctness reviews: recommend merge."
+        "Source maps are deleted at build, dev pages no longer ship, and a host-free CSP plus frame, nosniff, referrer and permissions headers are served (F068, F109, F028, F113); two independent reviewers (correctness, security) recommended merge at dec8bfe on 2026-10-23, with 87/87 and 69/69 browser runs in three browsers; the GA4 loader from main that the enforced CSP would have blocked was fixed in 18eb692, and an independent verifier gave that commit PASS_WITH_NOTES on 2026-10-23.",
+        "Gates at 18eb692 (run locally): lint, typecheck, full test (3,443), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2615,15 +2619,18 @@
       "depends_on": [
         "RV-WP1"
       ],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-wp2",
-      "pr": null,
+      "pr": "#169",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2634,7 +2641,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track web-platform; findings F065, F072. Head 979728b. Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d)."
+        "A failed read on the Dashboard, a report or the profile is now a load failure with Try again, each screen has a resettable error boundary, and the lazy-route storage calls are guarded (F065, F072); the independent verifier gave PASS_WITH_NOTES at 6ffd199 on 2026-10-23, with 15 mutations red and the offline e2e spec 4/4 in three browsers.",
+        "Gates at 18eb692 (run locally): lint, typecheck, full test (3,443), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2652,15 +2660,18 @@
       "depends_on": [
         "RV-WP2"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-web-platform",
-      "pr": null,
+      "pr": "#169",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2671,7 +2682,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track web-platform; findings F066, F071, F067. Not started."
+        "Four overlays use the shared accessible Modal, the safe-area padding now wins the cascade, and Android back closes the top sheet first through a guarded onBackButton (F066, F071, F067); the independent verifier gave PASS_WITH_NOTES at 83e8773 on 2026-10-23, with Android device checks left as owner actions.",
+        "Gates at 18eb692 (run locally): lint, typecheck, full test (3,443), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
