@@ -914,6 +914,17 @@ export function ReportView() {
     return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate, declaredState);
   }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap, declaredState]);
 
+  // F021: a Basic changes line through a result printed as a limit ('<8') states its placeholder.
+  const censoredTrend = useMemo(() => {
+    const current = new Set([
+      ...biomarkers.filter(b => isCensoredValue(b.raw_value_text)).map(b => b.name),
+      ...reportAnalytes.filter(a => a.canonical_slug && isCensoredValue(a.raw_value_text)).map(a => a.canonical_slug as string),
+    ]);
+    return (slug: string, previousDate: string | null) => current.has(slug)
+      || (historicalBiomarkers.get(slug) ?? []).some(h => isCensoredValue(h.valueText)
+        && (previousDate === null || h.reportDate.slice(0, 10) === previousDate));
+  }, [biomarkers, reportAnalytes, historicalBiomarkers]);
+
   // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
   // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
   const scoredBiomarkers = useMemo(() => {
@@ -1401,6 +1412,7 @@ export function ReportView() {
     <FreemiumReportPanel
       state={accessState}
       floorSummary={insightSummary}
+      censoredTrend={censoredTrend}
       generating={generating}
       premiumRequired={generatePremiumRequired}
       plan={plan}

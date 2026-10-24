@@ -62,6 +62,31 @@ export function compareBiomarkerValues(
     .filter((x): x is BiomarkerChange & { key: string } => Boolean(x));
 }
 
+/** The biomarkers columns lab-insights compares. raw_value_text marks a censored result (review F021). */
+export const STORED_BIOMARKER_COLUMNS = "name, value, unit, raw_value_text";
+
+export interface StoredBiomarkerRow {
+  name: string;
+  value: number;
+  unit: string;
+  raw_value_text?: string | null;
+}
+
+/**
+ * lab-insights' pairing of two reports' stored biomarkers rows: by lower-cased,
+ * trimmed name, with each value's printed text, so a censored result is never
+ * compared or put in its prompt (F021).
+ */
+export function compareStoredBiomarkers(
+  current: readonly StoredBiomarkerRow[],
+  previous: readonly StoredBiomarkerRow[],
+): Array<BiomarkerChange & { key: string }> {
+  const comparable = (b: StoredBiomarkerRow): ComparableValue => ({
+    key: b.name.toLowerCase().trim(), name: b.name, value: b.value, unit: b.unit, valueText: b.raw_value_text ?? null,
+  });
+  return compareBiomarkerValues(current.map(comparable), previous.map(comparable));
+}
+
 // Keep this conservative to avoid noise.
 // Many lab units vary widely, so we primarily rely on percent change.
 export function isSignificantChange(change: BiomarkerChange): boolean {

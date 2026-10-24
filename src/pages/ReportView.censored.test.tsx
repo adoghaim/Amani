@@ -17,6 +17,8 @@ const fixture = vi.hoisted(() => ({
   tables: {} as Record<string, Record<string, unknown>[]>,
   interpretation: null as Record<string, unknown> | null,
   profile: { pregnancy_status: null as string | null },
+  /** get-interpretation's answer, flag on. */
+  access: null as Record<string, unknown> | null,
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -46,7 +48,8 @@ vi.mock('../lib/supabase', () => {
     };
     return builder;
   };
-  return { supabase: { from: query, functions: { invoke: async () => ({ data: null, error: null }) } } };
+  return { supabase: { from: query, functions: { invoke: async (name: string) =>
+    ({ data: name === 'get-interpretation' ? fixture.access : null, error: null }) } } };
 });
 vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => ({
   entitled: true, plan: 'premium', complimentary: { used: 0, total: 0, remaining: 0 }, refetch: vi.fn(),
@@ -76,6 +79,7 @@ function seed(vitaminD: [number, string][]) {
   };
   fixture.interpretation = null;
   fixture.profile.pregnancy_status = null;
+  fixture.access = null;
 }
 
 let root: Root;
@@ -155,5 +159,52 @@ describe('Review F021 — a censored result is never compared, trended or stated
     seed([[10, '10'], [20, '20']]);
     const text = await renderAndOpenAll();
     expect(text).toMatch(/10 to 20 ng\/mL|10\s*20\s*ng\/mL/);
+  }, 30_000);
+});
+
+/*
+  Basic tier, flag on. A stored interpretation's trend_evidence was built
+  through the placeholder before generation learnt to skip it, so its
+  flagged_trends line reads "Vitamin D: 4 → 20 ng/mL". The page holds the
+  printed text of both reports' results and drops that line.
+*/
+describe('Review F021 — Basic changes on the report page never state a censored placeholder', () => {
+  const line = (slug: string, marker: string, previous: number, current: number, unit: string) => ({
+    biomarker_slug: slug, marker, previous_value: previous, current_value: current, unit,
+    previous_date: '2026-03-01', direction: current > previous ? 'increased' : 'decreased', status: 'attention', summary: '',
+  });
+  const basicWith = (trends: unknown[]) => ({
+    access: 'basic',
+    interpretation: { headline: 'Your panel', flagged_trends: trends },
+    preview: null, locked: { patterns: 0, cross_report: 0, lifestyle: 0 },
+    plan: 'free', complimentary: null, stored_depth: 'standard',
+  });
+  // A measured flagged line on a marker this fixture holds no values for.
+  const control = line('ferritin', 'Ferritin', 10, 20, 'u');
+
+  it('prior <8 (stored 4), current 20: the stored "4 → 20" line does not render', async () => {
+    seed([[4, '<8'], [20, '20']]);
+    fixture.access = basicWith([line('vitamin_d_25_oh', 'Vitamin D', 4, 20, 'ng/mL'), control]);
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    const text = await renderAndOpenAll();
+    expect(text).toContain('Ferritin: 10 → 20 u');
+    expect(text).not.toMatch(/\b4 → 20\b|\b4 to 20\b/);
+  }, 30_000);
+
+  it('current <8 (stored 4), prior 20: the stored "20 → 4" line does not render', async () => {
+    seed([[20, '20'], [4, '<8']]);
+    fixture.access = basicWith([line('vitamin_d_25_oh', 'Vitamin D', 20, 4, 'ng/mL'), control]);
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    const text = await renderAndOpenAll();
+    expect(text).toContain('Ferritin: 10 → 20 u');
+    expect(text).not.toMatch(/\b20 → 4\b|\b20 to 4\b/);
+  }, 30_000);
+
+  it('measured values on both reports keep their change (control)', async () => {
+    seed([[4, '4'], [20, '20']]);
+    fixture.access = basicWith([line('vitamin_d_25_oh', 'Vitamin D', 4, 20, 'ng/mL')]);
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    const text = await renderAndOpenAll();
+    expect(text).toMatch(/\b4 → 20 ng\/mL|\b4 to 20 ng\/mL/);
   }, 30_000);
 });

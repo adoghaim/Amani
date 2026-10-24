@@ -11,7 +11,9 @@ import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { parseLabInsightsCompletion } from "../_shared/lab-insights-output.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
-import { compareBiomarkerValues, isSignificantChange, topChanges, type BiomarkerChange } from "../_shared/trend-evidence.ts";
+import {
+  compareStoredBiomarkers, isSignificantChange, STORED_BIOMARKER_COLUMNS, topChanges, type BiomarkerChange,
+} from "../_shared/trend-evidence.ts";
 import { aiPausedBody } from "../_shared/ai-pause.ts";
 import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
 
@@ -26,20 +28,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-interface BiomarkerData {
-  name: string;
-  value: number;
-  unit: string;
-}
-
 type InterventionRow = {
   title: string;
   category: string;
   start_date: string;
   end_date?: string | null;
 };
-
-const normalizeName = (s: string) => s.toLowerCase().trim();
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -170,19 +164,19 @@ Deno.serve(async (req: Request) => {
 
     const { data: currentBiomarkers } = await supabaseAuth
       .from("biomarkers")
-      .select("name, value, unit")
+      .select(STORED_BIOMARKER_COLUMNS)
       .eq("lab_report_id", currentReportId);
 
     const { data: previousBiomarkers } = await supabaseAuth
       .from("biomarkers")
-      .select("name, value, unit")
+      .select(STORED_BIOMARKER_COLUMNS)
       .eq("lab_report_id", previousReportId);
 
-    // Same pairing rule as generation's stored trend evidence (_shared/trend-evidence.ts).
-    const comparable = (b: BiomarkerData) => ({ key: normalizeName(b.name), name: b.name, value: b.value, unit: b.unit });
-    const biomarkerChangesAll: BiomarkerChange[] = compareBiomarkerValues(
-      (currentBiomarkers || []).map(comparable),
-      (previousBiomarkers || []).map(comparable),
+    // Same pairing rule as generation's stored trend evidence (_shared/trend-evidence.ts);
+    // a censored result ('<8') is never compared or prompted with (F021).
+    const biomarkerChangesAll: BiomarkerChange[] = compareStoredBiomarkers(
+      currentBiomarkers || [],
+      previousBiomarkers || [],
     );
 
     const significantChanges = biomarkerChangesAll.filter(isSignificantChange);

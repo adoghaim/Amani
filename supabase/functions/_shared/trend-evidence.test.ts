@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  buildTrendEvidence, compareBiomarkerValues, formatTrendEvidencePrompt, isSignificantChange,
-  MAX_TREND_EVIDENCE, sameTrendUnit, topChanges, type TrendInputValue,
+  buildTrendEvidence, compareBiomarkerValues, compareStoredBiomarkers, formatTrendEvidencePrompt, isSignificantChange,
+  MAX_TREND_EVIDENCE, sameTrendUnit, STORED_BIOMARKER_COLUMNS, topChanges, type TrendInputValue,
 } from './trend-evidence';
 import { addFindingMetadata } from './finding-metadata';
 import { buildBasicProjection } from './interpretation-visibility';
@@ -166,5 +167,29 @@ describe('censored results are never trend evidence (F021)', () => {
     expect(compareBiomarkerValues([value(2)], [value(0.005, '<0.01')])).toEqual([]);
     expect(compareBiomarkerValues([value(0.005, '< 0.01')], [value(2)])).toEqual([]);
     expect(compareBiomarkerValues([value(2)], [value(1)])).toHaveLength(1);
+  });
+});
+
+// Review F021, the lab-insights caller: it read only 'name, value, unit' and
+// paired values without the printed text, so the guard above never fired and
+// its prompt said "Vitamin D: 4 → 20 ng/mL (+16.0, 400%)".
+describe('lab-insights pairs stored rows with their printed text (F021)', () => {
+  const row = (name: string, value: number, raw_value_text: string | null) => ({ name, value, unit: 'ng/mL', raw_value_text });
+
+  it('a censored side gives no change; measured pairs still compare by normalized name', () => {
+    expect(compareStoredBiomarkers([row('Vitamin D', 20, '20')], [row('vitamin d ', 4, '<8')])).toEqual([]);
+    expect(compareStoredBiomarkers([row('Ferritin', 1000, '>1000')], [row('Ferritin', 500, '500')])).toEqual([]);
+    expect(compareStoredBiomarkers([row('Ferritin', 40, '40')], [row('ferritin', 20, null)]))
+      .toEqual([expect.objectContaining({ key: 'ferritin', previous_value: 20, current_value: 40, percent_change: 100 })]);
+  });
+
+  it('lab-insights reads raw_value_text for both reports and pairs through compareStoredBiomarkers', () => {
+    const handler = readFileSync(new URL('../lab-insights/index.ts', import.meta.url), 'utf8');
+    expect(STORED_BIOMARKER_COLUMNS.split(',').map(c => c.trim())).toContain('raw_value_text');
+    const reads = handler.match(/\.from\("biomarkers"\)\s*\.select\([^)]*\)/g) ?? [];
+    expect(reads).toHaveLength(2);
+    for (const read of reads) expect(read).toMatch(/\.select\(STORED_BIOMARKER_COLUMNS\)$/);
+    expect(handler).toMatch(/compareStoredBiomarkers\(\s*currentBiomarkers \|\| \[\],\s*previousBiomarkers \|\| \[\],?\s*\)/);
+    expect(handler).not.toMatch(/compareBiomarkerValues\(/);
   });
 });

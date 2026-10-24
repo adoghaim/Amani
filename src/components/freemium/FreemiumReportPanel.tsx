@@ -30,6 +30,12 @@ interface FreemiumReportPanelProps {
   generating: boolean;
   /** Existing deterministic floor, used only to avoid repeating visible changes. */
   floorSummary?: InsightSummary | null;
+  /**
+   * True when this report's result for the slug, or her result on the line's
+   * prior date (null: any earlier one), was printed as a limit ('<8'). Such a
+   * Basic changes line states a placeholder, so it never renders (F021).
+   */
+  censoredTrend?: (slug: string, previousDate: string | null) => boolean;
   /** The last generate request was refused with 402 (Premium required). */
   premiumRequired?: boolean;
   /** `useSubscription().plan`; the counter is only for Free accounts. */
@@ -56,7 +62,8 @@ interface FreemiumReportPanelProps {
  *   generation_needed → the generate action
  */
 export function FreemiumReportPanel({
-  state, generating, floorSummary, premiumRequired = false, plan, complimentaryUsed, onRetry, onGenerate, onOpenPaywall,
+  state, generating, floorSummary, censoredTrend, premiumRequired = false, plan, complimentaryUsed, onRetry, onGenerate,
+  onOpenPaywall,
 }: FreemiumReportPanelProps) {
   const used = state?.complimentary?.used ?? complimentaryUsed;
   // A Basic report consumed no claim, so it gets the remaining/exhausted line only.
@@ -105,7 +112,7 @@ export function FreemiumReportPanel({
   const claimsByKey = movementClaimsByKey(floorSummary?.deltaMap ?? []);
   const claims = [...claimsByKey.values()];
   const basicText = authorizeModelProse('basic.basic_interpretation', basicInterpretationText(state.interpretation), claims);
-  const trends = basicTrendLines(state.interpretation, floorSummary);
+  const trends = basicTrendLines(state.interpretation, floorSummary, censoredTrend);
   const preview = state.preview ? authorizedPreview(state.preview, claimsByKey, claims) : null;
   const locked: { key: string; label: string }[] = [
     ...(state.locked.patterns > 0 ? [{ key: 'patterns', label: lockedPatternsLabel(state.locked.patterns) }] : []),
@@ -191,7 +198,10 @@ function authorizedPreview(
 
 /** Only a rendered trajectory bullet containing the same two values replaces
  * this line. Headlines, priority cards and boundary-only text do not. */
-function basicTrendLines(payload: Record<string, unknown> | null, floor?: InsightSummary | null) {
+function basicTrendLines(
+  payload: Record<string, unknown> | null, floor?: InsightSummary | null,
+  censoredTrend?: FreemiumReportPanelProps['censoredTrend'],
+) {
   const seen = new Set<string>();
   const visible = floor ? selectTrajectoryBullets(floor.biggestChanges, floor.primaryFinding) : [];
   const raw = payload?.flagged_trends;
@@ -202,6 +212,8 @@ function basicTrendLines(payload: Record<string, unknown> | null, floor?: Insigh
     const slug = line.biomarker_slug;
     if (typeof slug !== 'string' || seen.has(slug)) return [];
     seen.add(slug);
+    // F021: stored trend evidence may predate generation skipping censored results.
+    if (censoredTrend?.(slug, typeof line.previous_date === 'string' ? line.previous_date : null)) return [];
     if (visible.some(b => b.key === slug && b.values
       && b.values.previous === line.previous_value && b.values.current === line.current_value
       && b.values.unit === line.unit)) return [];
