@@ -74,8 +74,8 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-IB2 Keyboard- and screen-reader-usable upload flow | RV | 1 | review | RV-IB1 | [#165](https://github.com/adoghaim/Amani/pull/165) |
 | RV-NP1 Harden the nutrient validator with an adversarial corpus | RV | 1 | review | - | [#159](https://github.com/adoghaim/Amani/pull/159) |
 | RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | review | - | [#167](https://github.com/adoghaim/Amani/pull/167) |
-| RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | in-progress | - | - |
-| RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | todo | RV-RS1 | - |
+| RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | review | - | [#161](https://github.com/adoghaim/Amani/pull/161) |
+| RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | review | RV-RS1 | [#161](https://github.com/adoghaim/Amani/pull/161) |
 | RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | review | - | [#168](https://github.com/adoghaim/Amani/pull/168) |
 | RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | review | RV-BS1 | [#168](https://github.com/adoghaim/Amani/pull/168) |
 | RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | review | - | [#164](https://github.com/adoghaim/Amani/pull/164) |
@@ -112,7 +112,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-IA2 | ingest-cycle-parser | in-progress | `factory/rv-wip-ia2` @ `073a207` | Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch. |
 | RV-IB1 | ingest-ocr-a11y | review | `factory/rv-ingest-ocr-a11y` @ `909f307` | PR #165: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-NP1 | nutrient-policy | review | `factory/rv-nutrient-policy` @ `98eb8a0` | PR #159: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
-| RV-RS1 | report-safety | in-progress | `factory/rv-wip-rs1` @ `7ed7625` | Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification. |
+| RV-RS1 | report-safety | review | `factory/rv-wip-rs1` @ `382f3c7` | PR #161: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-BU1 | billing-ui | review | `factory/rv-billing-ui` @ `c62caf4` | PR #157: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 | RV-WP1 | web-platform | review | `factory/rv-web-platform` @ `18eb692` | PR #169: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-WP2 | web-platform | review | `factory/rv-wip-wp2` @ `18eb692` | PR #169: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |

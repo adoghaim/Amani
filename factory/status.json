@@ -2381,16 +2381,19 @@
         "F018"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-rs1",
-      "pr": null,
+      "pr": "#161",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2401,7 +2404,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track report-safety; findings F014, F018. Head 7ed7625. Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification."
+        "Fixed F018 (the server context schema validates each field alone and accepts 'unsure', so her symptoms are kept) and the F014 interim (a deterministic notice for the lab's own printed critical flags, dark behind features.lab_critical_flag_notice); blind verdict PASS_WITH_NOTES on 2026-10-23 at 7ed7625; clinical GO on the copy and marker table, and the generate-interpretation deploy, are still pending.",
+        "Gates at 382f3c7 (run locally): lint, typecheck, full test (3,479), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2418,16 +2422,19 @@
       "depends_on": [
         "RV-RS1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-report-safety",
-      "pr": null,
+      "pr": "#161",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2438,7 +2445,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track report-safety; findings F024, F069. Not started."
+        "Fixed F024 (the report disclaimer shows whenever a summary or interpretation shows, including a failed generation) and part of F069 (header outside-band counts and the lab-brand chip tint removed); the Health systems grid count and the other status-tinted chips are still open; blind verdict PASS_WITH_NOTES on 2026-10-23 at 1492aea.",
+        "Gates at 382f3c7 (run locally): lint, typecheck, full test (3,479), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"

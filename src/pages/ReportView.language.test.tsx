@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as policy from '../lib/scoring/insightCopy';
 import { compareReports } from '../lib/scoring/compareReports';
 import { MODEL_CANARIES, unprovenancedText, unresolvedModelProse } from '../lib/scoring/modelProse.testkit';
-import type { BiomarkerName } from '../types';
+import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../types';
 
 /*
   V2-03b Stage 2. The real ReportView, rendered in jsdom against synthetic rows
@@ -26,6 +26,8 @@ import type { BiomarkerName } from '../types';
 const fixture = vi.hoisted(() => ({
   tables: {} as Record<string, Record<string, unknown>[]>,
   interpretation: null as Record<string, unknown> | null,
+  /** generate-interpretation's error (null: the call is accepted). */
+  invokeError: null as unknown,
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -51,7 +53,7 @@ vi.mock('../lib/supabase', () => {
     };
     return builder;
   };
-  return { supabase: { from: query, functions: { invoke: async () => ({ data: null, error: null }) } } };
+  return { supabase: { from: query, functions: { invoke: async () => ({ data: null, error: fixture.invokeError }) } } };
 });
 vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => ({
   entitled: true, plan: 'premium', complimentary: { used: 0, total: 0, remaining: 0 }, refetch: vi.fn(),
@@ -70,6 +72,7 @@ const rows = (reportId: string, markers: Marker[]) => markers.map(([name, value,
 }));
 
 function seed(currentTsh: number, priorTsh: number) {
+  fixture.invokeError = null;
   fixture.tables = {
     lab_reports: [
       { id: CURRENT, user_id: USER, report_date: '2026-01-02', status: 'ready', estimated_cycle_phase: 'unknown', regeneration_count: 0, lab_name: 'Synthetic Lab' },
@@ -772,5 +775,71 @@ describe('PK-FIX-06: the cycle day renders without a phase, in neutral language'
     await renderAndOpenAll();
     expect(cycleCard()).toBeNull();
     expect(app.querySelector('[data-cycle-phase-note]')).toBeNull();
+  }, 30_000);
+});
+
+/*
+  RS2 (review F024, F069). The report disclaimer renders whenever clinical
+  content is on screen, not only beside a loaded interpretation; and the page
+  does not count results outside Amani's bands in its system headers (DESIGN.md,
+  Result row and Don'ts: no counts, no scores), nor tint the lab-brand chip in a
+  status or info colour. Synthetic rows.
+*/
+describe('RS2: disclaimer with every clinical state; no outside-band counts', () => {
+  const reportDisclaimers = () => Array.from(app.querySelectorAll('[data-language-source="product_disclaimer"]'))
+    .filter(el => el.textContent === policy.PRODUCT_DISCLAIMERS.report.text);
+  const current = () => fixture.tables.lab_reports!.find(r => r['id'] === CURRENT)!;
+
+  it('F024: a failed generation still shows the headline and primary finding, and the report disclaimer with them', async () => {
+    seed(9, 6);
+    current()['status'] = 'error';
+    fixture.interpretation = null;
+    fixture.invokeError = new Error('synthetic generation failure');
+    await renderAndOpenAll();
+    expect(app.textContent).toContain('AI summary failed');
+    // Two reports: the primary finding renders as its measured movement.
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')).not.toBeNull();
+    expect(app.textContent).toContain('Your trajectory');
+    const disclaimers = reportDisclaimers();
+    expect(disclaimers).toHaveLength(1);
+    expect(disclaimers[0]!.getAttribute('data-language-category')).toBe(policy.PRODUCT_DISCLAIMERS.report.category);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('F024: while the summary is still being generated, the report disclaimer is on screen', async () => {
+    seed(9, 6);
+    fixture.interpretation = null;
+    await renderAndOpenAll();
+    expect(app.textContent).toContain('AI summary is being generated');
+    expect(reportDisclaimers()).toHaveLength(1);
+  }, 30_000);
+
+  it('F024 PRESERVE: with an interpretation loaded the report disclaimer renders once', async () => {
+    seed(9, 6);
+    await renderAndOpenAll();
+    expect(reportDisclaimers()).toHaveLength(1);
+  }, 30_000);
+
+  it('F069: system headers carry no outside-band count and no info tint; each row keeps its status words', async () => {
+    seed(9, 6);
+    await renderAndOpenAll();
+    const labels = new Set((Object.keys(CATEGORY_DISPLAY) as BiomarkerCategory[]).map(policy.systemDisplayLabel));
+    const headers = buttons(b => b.hasAttribute('aria-expanded') && [...labels].some(l => b.querySelector('span')?.textContent === l));
+    expect(headers.length).toBeGreaterThan(0);
+    for (const header of headers) {
+      expect(header.textContent, header.textContent ?? '').not.toMatch(/outside Amani band/i);
+      expect(header.innerHTML, header.textContent ?? '').not.toMatch(/info-(?:bg|border)|text-theme-info/);
+    }
+    // The per-row status word stays: TSH 9 is outside its Amani band.
+    expect(app.querySelector('article[aria-label="TSH result"]')?.textContent).toContain('Outside Amani band');
+  }, 30_000);
+
+  it.each([['quest', 'Quest'], ['labcorp', 'Labcorp']])('F069: the %s chip is not drawn in a status or info colour', async (source, name) => {
+    seed(9, 6);
+    current()['lab_source'] = source;
+    await renderAndOpenAll();
+    const chip = Array.from(app.querySelectorAll('span')).find(el => el.textContent === `Imported from ${name}`);
+    expect(chip).toBeTruthy();
+    expect(chip!.className).not.toMatch(/flag-(?:ok|watch|low)|theme-info/);
   }, 30_000);
 });

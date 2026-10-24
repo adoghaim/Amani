@@ -27,12 +27,14 @@ import { computeDerivedMetrics, evaluateInsightRules } from '../utils/derivedMet
 import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insightGate';
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
-  authorizedLanguage, authorizeModelProse, combineLanguage, CUE_STYLE, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  markerBandPlacement, movementClaimsByKey, outsideBandCount, PRIMARY_FINDING_LABEL,
+  authorizedLanguage, authorizeModelProse, combineLanguage, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
+  labCriticalFlagWarnings, markerBandPlacement, movementClaimsByKey, PRIMARY_FINDING_LABEL,
   primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
   type AuthorizedLanguage, type AuthorizedModelProse,
 } from '../lib/scoring/insightCopy';
 import { SafetyWarnings } from '../components/SafetyWarnings';
+import { findLabCriticalFlags } from '../lib/safety/labCriticalFlags';
+import { useLabCriticalFlagNotice } from '../hooks/useLabCriticalFlagNotice';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
 import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
@@ -946,9 +948,14 @@ export function ReportView() {
     }
     return map;
   }, [biomarkers, report]);
+  // Review F014 interim: the lab's own printed critical flag, read from the saved lab rows only, dark behind its flag.
+  const labCriticalNotice = useLabCriticalFlagNotice();
   const safetyWarnings = useMemo(
-    () => evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
-    [biomarkers],
+    () => [
+      ...evaluateSafetyRules(biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit }))),
+      ...(labCriticalNotice ? labCriticalFlagWarnings(findLabCriticalFlags(reportAnalytes)) : []),
+    ],
+    [biomarkers, reportAnalytes, labCriticalNotice],
   );
 
   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
@@ -1472,11 +1479,7 @@ export function ReportView() {
                 <span className="text-xs text-theme-muted-text-3">{reportAnalytes.length} total analytes</span>
               )}
               {resolvedLabSource !== 'unknown' && (
-                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-                  resolvedLabSource === 'quest'
-                    ? 'text-theme-flag-ok bg-theme-flag-ok-bg border-theme-flag-ok-border'
-                    : 'text-theme-info bg-theme-info-bg border-theme-info-border'
-                }`}>
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border text-theme-muted-text-3 border-theme-border">
                   <FlaskConical className="w-3 h-3" />
                   Imported from {resolvedLabSource === 'quest' ? 'Quest' : 'Labcorp'}
                 </span>
@@ -1620,8 +1623,8 @@ export function ReportView() {
             && (generating || accessState?.access === 'error' || accessState?.access === 'generation_needed')
             && freemiumPanel}
 
-          {/* ── A. Safety channel: approved deterministic rules only, never band-derived ── */}
-          {!isProcessing && <SafetyWarnings warnings={safetyWarnings} />}
+          {/* ── A. Safety channel: deterministic rules only, never band-derived; generating cannot hide it ── */}
+          <SafetyWarnings warnings={safetyWarnings} />
 
           {/* ── Notices slot (R22): calm notices about the explanation below, from src/features/report/notices ── */}
           {!isProcessing && (
@@ -1989,9 +1992,8 @@ export function ReportView() {
 
               <div className="mt-5 space-y-2">
                 {filteredCategories.map(({ category, items }) => {
-                  // Counted live, not from the persisted upload-time flag: a flag stored
-                  // before V2-03 may have come from a fallback band Amani now withholds.
-                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase) === 'outside').length;
+                  // No outside-band count in the header (DESIGN.md: no counts or scores);
+                  // each row carries its own status word.
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {
@@ -2012,11 +2014,6 @@ export function ReportView() {
                           <span className="text-sm font-semibold text-theme-text">
                             {systemDisplayLabel(category)}
                           </span>
-                          {flaggedCount > 0 && (
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CUE_STYLE.attention.bg} ${CUE_STYLE.attention.text}`}>
-                              {outsideBandCount(flaggedCount)}
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs text-theme-muted-text-3">{items.length}</span>
@@ -2059,8 +2056,9 @@ export function ReportView() {
           )}
 
           {/* ── H. Disclaimer ───────────────────────────────────── */}
-          {/* The policy's product disclaimer; the model's own disclaimer text never renders (owner R1). */}
-          {interpretation && (
+          {/* The policy's product disclaimer; the model's own disclaimer text never renders (owner R1).
+              Shown whenever clinical content is, including a failed or pending generation (review F024). */}
+          {(insightSummary || interpretation) && (
             <div className="flex items-start gap-3 px-4 py-4">
               <Info className="w-3.5 h-3.5 text-theme-neutral-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-muted-text-3 leading-relaxed italic"

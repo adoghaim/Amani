@@ -5,6 +5,7 @@ import {
 } from '../biomarkers/provenance';
 import { assessAmaniContext, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
 import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../../types';
+import { LAB_CRITICAL_FLAG_RULE, type LabCriticalFinding } from '../safety/labCriticalFlagRule';
 
 /*
   V2-03 amendment 3. Narrative copy built in src/lib/insights (outside TASK-044's
@@ -1083,9 +1084,11 @@ export const PRODUCT_DISCLAIMERS = {
      produce or resemble a warning, and the band constructors above can only
      produce 'neutral' or 'attention' cues.
   A rule must carry its clinical approval. None is approved, so the registry is
-  empty: Amani has no deterministic safety or critical-value rule today
-  (scoreBiomarker.ts notes the missing panic-value tier). Adding one is a
-  clinical decision, made through the Clinical Truth Layer, not here.
+  empty: Amani has no deterministic safety or critical-value rule of its own
+  today (scoreBiomarker.ts notes the missing panic-value tier). Adding one is a
+  clinical decision, made through the Clinical Truth Layer, not here. The one
+  warning outside the registry relays the laboratory's own printed critical
+  flag, not an Amani threshold (labCriticalFlagWarnings, below).
 */
 export interface SafetyRule {
   ruleId: string;
@@ -1102,6 +1105,14 @@ function isApproved(rule: SafetyRule): boolean {
   return [rule.ruleId, rule.version, approvedBy, approvedAt, evidenceId].every(s => typeof s === 'string' && s.trim().length > 0);
 }
 
+/** The one constructor of a safety warning: a deterministic rule's id and version stand behind each. */
+function safetyWarning(rule: { ruleId: string; version: string }, cue: 'warning' | 'critical', text: string): SafetyWarning {
+  return {
+    category: 'safety_warning', text, cue,
+    authority: { kind: 'deterministic_safety_rule', ruleId: rule.ruleId, version: rule.version },
+  };
+}
+
 /** Every approved rule's warning for these measurements. Unapproved rules fail closed. */
 export function evaluateSafetyRules(
   measured: readonly { name: string; value: number; unit: string }[],
@@ -1113,13 +1124,28 @@ export function evaluateSafetyRules(
     for (const m of measured) {
       if (m.name !== rule.analyte) continue;
       const hit = rule.evaluate(m.value, m.unit);
-      if (hit) {
-        out.push({
-          category: 'safety_warning', text: hit.text, cue: hit.cue,
-          authority: { kind: 'deterministic_safety_rule', ruleId: rule.ruleId, version: rule.version },
-        });
-      }
+      if (hit) out.push(safetyWarning(rule, hit.cue, hit.text));
     }
   }
   return out;
+}
+
+/*
+  Review F014 interim, beside the empty registry rather than in it: when her
+  laboratory printed its own critical or panic flag beside a result
+  (src/lib/safety/labCriticalFlags.ts), one notice says so in fixed words. The
+  results' names are all a report supplies to it; no value, band, review
+  state, model text or tier reaches it. The report page shows it only while
+  features.lab_critical_flag_notice is on, which the owner sets after clinical
+  GO on these words and on the marker table [Pending].
+*/
+export function labCriticalFlagNotice(names: readonly string[]): string {
+  return `Your lab marked your ${listOf(names)} ${names.length > 1 ? 'results' : 'result'} as critical. `
+    + 'Contact your clinician promptly. If you feel unwell, call your local emergency number.';
+}
+
+/** One notice naming, once each and in order, every result her lab printed a critical flag beside; none without one. */
+export function labCriticalFlagWarnings(findings: readonly LabCriticalFinding[]): SafetyWarning[] {
+  const names = [...new Set(findings.map(f => f.name))];
+  return names.length === 0 ? [] : [safetyWarning(LAB_CRITICAL_FLAG_RULE, 'critical', labCriticalFlagNotice(names))];
 }
