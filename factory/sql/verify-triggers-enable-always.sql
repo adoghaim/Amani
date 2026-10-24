@@ -38,6 +38,11 @@
 --   stamps (20261013040000 .. 20261015110000). Each migration makes them ALWAYS.
 --   lab_reports_require_consent (20261015040000) is ORIGIN by design: a restore
 --   reloads existing reports without re-asking for consent.
+--   DB3 (20261023101000) adds four more safety-after-v2 guards, ALWAYS:
+--     users            users_derive_has_consented        has_consented mirrors the consent ledger
+--     report_analytes  guard_interpreted_report_results  an interpreted report's results are read-only
+--     biomarkers       guard_interpreted_report_results    to clients
+--     lab_reports      guard_lab_report_file_url         a client file_url is a fresh own-folder path
 -- Made ALWAYS by 20261010000000 (the six V2 guards) and 20261013000000 (the six
 -- pre-V2 safety triggers).
 --
@@ -82,6 +87,10 @@ WITH expected(schema_name, table_name, trigger_name, class, expected_mode, sourc
     ('public', 'consent_records',                  'consent_records_append_only',              'safety-after-v2',   'A', '20261015040000'),
     ('public', 'consent_records',                  'consent_records_no_truncate',              'safety-after-v2',   'A', '20261015040000'),
     ('public', 'lab_reports',                      'zz_record_lab_file_cleanup',               'safety-after-v2',   'A', '20261015110000'),
+    ('public', 'users',                            'users_derive_has_consented',               'safety-after-v2',   'A', '20261023101000'),
+    ('public', 'report_analytes',                  'guard_interpreted_report_results',         'safety-after-v2',   'A', '20261023101000'),
+    ('public', 'biomarkers',                       'guard_interpreted_report_results',         'safety-after-v2',   'A', '20261023101000'),
+    ('public', 'lab_reports',                      'guard_lab_report_file_url',                'safety-after-v2',   'A', '20261023101000'),
     ('public', 'lab_reports',                      'lab_reports_require_consent',              'origin-by-design',  'O', '20261015040000')
 ),
 actual AS (

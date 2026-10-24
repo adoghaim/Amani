@@ -115,6 +115,13 @@ grep -q '^public|interpretations_private|remember_interpretation_history|origin-
   || { echo "FAIL TEA-AFTER: the owner-ruled recorder is not ORIGIN" >&2; echo "$tea_report" >&2; exit 1; }
 echo "$tea_report" | sed 's/^/    /'
 echo "PASS TEA-AFTER: ${#TEA_SAFETY[@]} safety triggers ENABLE ALWAYS, recorder ORIGIN, zero FAIL rows, replay is a no-op."
+# DB3's four guards (20261023101000) are classified safety-after-v2: absent
+# from amani, they are a note, not a FAIL. Case 270 checks them in mode A on
+# the replayed chain.
+tea_db3=$(grep -c '|safety-after-v2|A|MISSING|note: its migration is not applied here|20261023101000$' <<<"$tea_report" || true)
+test "$tea_db3" = 4 \
+  || { echo "FAIL TEA-DB3: expected the four DB3 guards classified safety-after-v2, found $tea_db3" >&2; echo "$tea_report" >&2; exit 1; }
+echo "PASS TEA-DB3: the four DB3 guards are classified (safety-after-v2, ALWAYS) and only a note where their migration is absent."
 
 # 3. Replica-mode behaviour: pre-V2 safety triggers here, the V2 guards by V2's probe.
 if ! psql_f -q -c 'BEGIN' -f /tmp/trigger-enable-always.replica.sql -c 'ROLLBACK' >"$tea_log" 2>&1; then

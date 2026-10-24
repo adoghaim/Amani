@@ -6,7 +6,9 @@
 # applies 20261013000000, so it runs after the cases that check amani is as V2
 # left it (lab-file-cleanup.run.sh re-runs the H048 no-consumption check). 170
 # adds zz_record_lab_file_cleanup to amani; the query classifies it
-# (safety-after-v2). The cases from 190 on use their own databases.
+# (safety-after-v2). The cases from 190 on use their own databases. DB3's four
+# guards (20261023101000) are classified safety-after-v2 too: a note here,
+# checked in mode A by case 270.
 
 # PK-03e-F (V2-03e-10): every safety trigger is ENABLE ALWAYS, checked with the
 # post-deploy query factory/sql/verify-triggers-enable-always.sql, by replica-mode

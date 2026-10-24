@@ -204,9 +204,14 @@ SELECT lives_ok($$
 $$, '2a. legacy signUp upsert is not denied');
 SELECT pg_temp.act_as_server();
 
+/*
+  20261023101000 (review F025): has_consented mirrors the consent ledger, so
+  the upsert's true is inert, like subscription_status. Brei has recorded no
+  consent; record_consent() is what sets it (cases/270 proves that).
+*/
 SELECT ok(
-  (SELECT has_consented FROM public.users WHERE id = 'bbbbbbbb-0000-0000-0000-000000000002'),
-  '2b. has_consented was actually written by the upsert'
+  NOT (SELECT has_consented FROM public.users WHERE id = 'bbbbbbbb-0000-0000-0000-000000000002'),
+  '2b. the upsert could not record consent: has_consented stays false without consent_records'
 );
 SELECT is(
   (SELECT subscription_status FROM public.users WHERE id = 'bbbbbbbb-0000-0000-0000-000000000002'),

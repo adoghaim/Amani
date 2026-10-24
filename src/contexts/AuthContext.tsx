@@ -161,14 +161,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // UPDATE, and subscription_status is gone from the payload — neither it
       // nor email is client-writable any more (see
       // 20260823000000_lock_users_privileged_columns.sql), and the trigger and
-      // the column default both set it to 'trial' regardless.
+      // the column default both set it to 'trial' regardless. has_consented
+      // is not sent: only record_consent() records consent (review F025).
       await supabase
         .from('users')
         .upsert(
           {
             id: data.user.id,
             email: data.user.email!,
-            has_consented: true,
           },
           { onConflict: 'id', ignoreDuplicates: true }
         );
