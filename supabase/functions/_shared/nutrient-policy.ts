@@ -244,25 +244,35 @@ function findDirective(text: string): string | null {
 // A substance recommended with no action verb: "We recommend iron", "I'd
 // advise magnesium", a bare "Recommend iron" — the recommending branch above
 // without its verb. Any subject counts except her own clinician ("Your doctor
-// may recommend iron") and "you", a question to one ("Would you recommend
-// iron?"). "Suggest" also means "indicate" ("these results suggest your
-// vitamin D is low"), so it counts only after I or we, or as an imperative.
-// A whether/if clause stays consultative, as in SECOND_PERSON.
+// may recommend iron", "Your doctor will likely recommend iron", "Discuss with
+// your doctor, who may recommend iron", "Ask your doctor to advise on iron",
+// "If your doctor agrees, they may recommend iron") and "you", a question to
+// one ("Would you recommend iron?"). "Suggest" also means "indicate" ("these
+// results suggest your vitamin D is low"), so it counts only after I or we, or
+// as an imperative. A whether/if clause stays consultative, as in
+// SECOND_PERSON, and so does a recheck recommended for a nutrient ("We
+// recommend that your iron be rechecked").
 const RECOMMENDED_SUBSTANCE_REGEX = new RegExp(
   `\\b(?:(?<s>suggest(?:s|ed|ing)?)|recommend(?:s|ed|ing)?|advis(?:e|es|ed|ing)|encourag(?:e|es|ed|ing))` +
     `\\s+(?:that\\s+)?(?:you\\s+)?(?:to\\s+)?(?:(?:${FILLER})\\s+){0,3}(?:${SUBSTANCE_TERM})\\b`,
   "gi",
 );
 const RECOMMENDER_AUX =
-  "(?:(?:may|might|can|could|will|would|should|must|do|does|did|also|often|usually|typically|generally|sometimes|probably|really|strongly|definitely|still|now|then|first|am|are|have|had)\\s+)*";
+  "(?:(?:may|might|can|could|will|would|should|must|do|does|did|also|often|usually|typically|generally|sometimes|probably|really|strongly|definitely|still|now|then|first|am|are|have|had|is|be|likely|possibly|perhaps|well|already|commonly|routinely|want|wants|need|needs|to)\\s+)*";
 const CLINICIAN =
   "doctors?|providers?|clinicians?|physicians?|practitioners?|(?:care\\s+)?team|ob(?:-|/)?gyns?|gyn(?:a?e)cologists?|endocrinologists?|midwi(?:fe|ves)|nurses?|specialists?|gps?";
+const YOUR_CLINICIAN = `\\byour\\s+(?:[\\w-]+\\s+){0,2}(?:${CLINICIAN})\\b`;
 const CONSULTED_SUBJECT = new RegExp(
-  `\\b(?:your\\s+(?:[\\w-]+\\s+){0,2}(?:${CLINICIAN})|you(?:'d|'ll)?)\\s+${RECOMMENDER_AUX}$`,
+  `(?:${YOUR_CLINICIAN}(?:\\s*,\\s*(?:who|which)\\b[^,.!?;:\\n]{0,80},|\\s*,?\\s+(?:who|that))?` +
+    `|${YOUR_CLINICIAN}[^.!?;:\\n]*\\b(?:they|she|he)|\\byou(?:'d|'ll)?)\\s+${RECOMMENDER_AUX}$`,
   "i",
 );
 const SPEAKER = new RegExp(`(?:\\b(?:i|we)(?:'d|'ll|'m|'re|'ve)?\\s+${RECOMMENDER_AUX}|${CLAUSE_START})$`, "i");
 const WHETHER_IF_CLAUSE = /\b(?:whether|if)\b[^,.!?;:\n]*$/i;
+// Participles that make a nutrient a lab measurement ("iron was drawn", "your
+// iron be rechecked").
+const LAB_PARTICIPLES = "drawn|measured|tested|checked|rechecked|retested|collected|monitored";
+const RECHECK_AFTER = new RegExp(`^\\s+(?:be|is|are|gets?|being)\\s+(?:\\w+\\s+)?(?:${LAB_PARTICIPLES})\\b`, "i");
 // How far back the subject and whether/if checks read; it keeps the scan linear.
 const LOOKBACK = 120;
 
@@ -270,7 +280,8 @@ function findRecommendedSubstance(text: string): string | null {
   for (const m of text.matchAll(RECOMMENDED_SUBSTANCE_REGEX)) {
     const start = m.index ?? 0;
     const before = text.slice(Math.max(0, start - LOOKBACK), start);
-    if (LAB_NOUN_AFTER.test(text.slice(start + m[0].length)) || WHETHER_IF_CLAUSE.test(before)) continue;
+    const after = text.slice(start + m[0].length);
+    if (LAB_NOUN_AFTER.test(after) || RECHECK_AFTER.test(after) || WHETHER_IF_CLAUSE.test(before)) continue;
     if (m.groups?.s ? SPEAKER.test(before) : !CONSULTED_SUBJECT.test(before)) return m[0];
   }
   return null;
@@ -290,12 +301,17 @@ const FREQUENCY_REGEX =
 // supplements are usually best taken at night", "Vitamin D is easiest to take
 // in the morning"). A substance named as a lab measurement does not count:
 // "Serum iron peaks in the morning", "Low magnesium can cause cramps at
-// night", "Have your iron checked in the morning". Nor does "drops", as often
-// a verb as a dosage form ("cortisol drops in the evening").
+// night", "Have your iron checked in the morning", "Retest iron in the
+// morning", "Your vitamin D sample was taken in the morning". Nor does a time
+// of day naming the draw ("Your vitamin D was 25 ng/mL in the morning draw"),
+// nor "drops", as often a verb as a dosage form ("cortisol drops in the
+// evening").
 const TIME_OF_DAY = "at night|in the (?:morning|afternoon|evening)s?";
-const TIME_OF_DAY_REGEX = new RegExp(`\\b(?:${TIME_OF_DAY})\\b`, "i");
+const NOT_A_DRAW =
+  "(?!\\s+(?:(?:fasting|blood|lab)\\s+)?(?:draws?|samples?|specimens?|collections?|blood\\s*work|lab\\s*work|labs?|panels?|tests?|readings?)\\b)";
+const TIME_OF_DAY_REGEX = new RegExp(`\\b(?:${TIME_OF_DAY})\\b${NOT_A_DRAW}`, "i");
 const TIMED_SUBSTANCE_REGEX = new RegExp(
-  `\\b(?:${SUBSTANCE_TERM})\\b(?=(?<gap>(?:[ ,]+[^\\s,.!?;:]+){0,3}?)[ ,]+(?<time>${TIME_OF_DAY})\\b)`,
+  `\\b(?:${SUBSTANCE_TERM})\\b(?=(?<gap>(?:[ ,]+[^\\s,.!?;:]+){0,3}?)[ ,]+(?<time>${TIME_OF_DAY})\\b${NOT_A_DRAW})`,
   "gi",
 );
 const DOSED_SUBSTANCE_REGEX = new RegExp(
@@ -314,25 +330,60 @@ const DOSED_AFTER_REGEX = new RegExp(
     `(?:\\s+(?:when|if|once))?\\s+(?:taken|used(?!\\s+to\\b)|had(?!\\s+(?:been|\\w+ed)\\b)|to\\s+(?:take|use|have))\\b`,
   "gi",
 );
-const LAB_WORD_BEFORE = /\b(?:low|lower|high|higher|elevated|reduced|serum|plasma|blood|urine|urinary)\s+$/i;
-const LAB_PARTICIPLE = /\b(?:drawn|measured|tested|checked|rechecked|retested|collected)\b/i;
+const LAB_WORD_BEFORE =
+  /\b(?:low|lower|high|higher|elevated|reduced|serum|plasma|blood|urine|urinary|(?:(?:re)?(?:test|check)(?:s|ed|ing)?|measur(?:e|es|ed|ing)|monitor(?:s|ed|ing)?|draw(?:s|ing)?)(?:\s+(?:your|the|a))?)\s+$/i;
+const LAB_PARTICIPLE = new RegExp(`\\b(?:${LAB_PARTICIPLES})\\b`, "i");
+// Sample words LAB_NOUN_AFTER (shared with the directive rule) does not list.
+const LAB_SAMPLE_AFTER = /^[-\s]?(?:samples?|specimens?|collections?|blood\s*work|lab\s*work)\b/i;
+// A dosage form is never a lab result: "a low dose", "check your dose".
+const DOSAGE_FORM_TERM = new RegExp(`^(?:${DOSAGE_FORMS})$`, "i");
 
 // `start` and `end` bound the substance term; `next` is the text after it
 // that may hold a participle ("iron was drawn", "iron checked").
 function isLabMention(text: string, start: number, end: number, next: string): boolean {
+  const after = text.slice(end);
   return (
-    LAB_NOUN_AFTER.test(text.slice(end)) ||
-    LAB_WORD_BEFORE.test(text.slice(Math.max(0, start - 20), start)) ||
+    LAB_NOUN_AFTER.test(after) ||
+    LAB_SAMPLE_AFTER.test(after) ||
+    (!DOSAGE_FORM_TERM.test(text.slice(start, end)) &&
+      LAB_WORD_BEFORE.test(text.slice(Math.max(0, start - 40), start))) ||
     LAB_PARTICIPLE.test(next)
   );
 }
 
+// In the three-word window only nearness ties the time to the substance, so
+// these read as a measurement or a body process, not a dose: a level or value
+// after a nutrient ("Your iron was low in the morning sample", "Iron is
+// highest in the morning", "Iron naturally peaks in the morning"; "Your dose
+// is lower in the morning" still counts), the body making it ("Your body
+// makes vitamin D from sunlight in the morning"), or a result the timing
+// affects ("Thyroid medication in the morning can affect your TSH result").
+const ADVERB =
+  "(?:usually|typically|often|naturally|generally|normally|still|now|also|slightly|somewhat|much|even|already|always)\\s+";
+const ANALYTE_PREDICATE = new RegExp(
+  `^\\s+(?:${ADVERB})?(?:(?:is|was|are|were|runs?|ran|reads?|came\\s+(?:back|in)|comes?\\s+(?:back|in)|tends?\\s+to\\s+(?:be|run|read))\\s+(?:${ADVERB})?` +
+    `(?:(?:low|lower|lowest|high|higher|highest|elevated|raised|reduced|normal)(?![\\w-])|in\\s+range|within\\s+(?:the\\s+)?(?:[\\w']+\\s+)?range|out\\s+of\\s+range|(?:below|above|under|over)\\s+(?:the\\s+|your\\s+)?(?:lab|reference|normal|range|\\d)|\\d)` +
+    `|(?:peaks?|peaked|rises?|rose|falls?|fell|dips?|dipped|varies|varied|fluctuates?|fluctuated)\\b)`,
+  "i",
+);
+const BODY_MAKES_BEFORE =
+  /\b(?:body|skin)\s+(?:(?:can|naturally|also|only|mostly|usually)\s+)?(?:makes|made|produces|produced|synthesi[sz]es|synthesi[sz]ed|forms|formed|creates|created)\s+(?:(?:its\s+own|more|less|enough|some)\s+)?$/i;
+const LAB_EFFECT_AFTER =
+  /^\s+(?:(?:can|could|may|might|will|would|does|do|often|also|sometimes|be)\s+){0,2}(?:affect(?:s|ed|ing)?|skew(?:s|ed|ing)?|interfer(?:e|es|ed|ing)\s+with|alter(?:s|ed|ing)?|throw(?:s|ing)?\s+off|threw\s+off|distort(?:s|ed|ing)?)\s+(?:[\w'-]+\s+){0,3}?(?:results?|tests?|readings?|labs?|draws?|values?|measurements?)\b/i;
+
 function findSubstanceTiming(text: string): string | null {
   for (const m of text.matchAll(TIMED_SUBSTANCE_REGEX)) {
     const start = m.index ?? 0;
-    const time = m.groups?.time;
-    const lab = isLabMention(text, start, start + m[0].length, m.groups?.gap ?? "");
-    if (time && !lab && !/^drops$/i.test(m[0])) return time;
+    const end = start + m[0].length;
+    const gap = m.groups?.gap ?? "";
+    const time = m.groups?.time ?? "";
+    const timeEnd = text.indexOf(time, end + gap.length) + time.length;
+    const notADose =
+      isLabMention(text, start, end, gap) ||
+      (!DOSAGE_FORM_TERM.test(m[0]) && ANALYTE_PREDICATE.test(text.slice(end))) ||
+      BODY_MAKES_BEFORE.test(text.slice(Math.max(0, start - 40), start)) ||
+      LAB_EFFECT_AFTER.test(text.slice(timeEnd));
+    if (time && !notADose && !/^drops$/i.test(m[0])) return time;
   }
   for (const sentence of text.split(/[.!?;:\n]/)) {
     const time = sentence.match(TIME_OF_DAY_REGEX)?.[0];

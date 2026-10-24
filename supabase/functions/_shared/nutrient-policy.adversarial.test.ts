@@ -375,7 +375,126 @@ describe('a time of day with the dosing verb after the substance is dosing langu
     'Your iron was low and you had trouble sleeping at night.',
     'Iron was low and had dropped further in the evening.',
     'Iron is used to make hemoglobin, so low iron can leave you tired in the afternoon.',
+    'Your vitamin D sample was taken in the morning.',
   ])('passes %s, where the verb is not a dose of it', (text) => {
+    expect(findTextViolations(text)).toEqual([]);
+  });
+});
+
+// ─── RV-R2 round 1: a nutrient named as a result, or by her own clinician ───
+
+describe('a nutrient named as a lab result or recommended by her clinician still passes (RV-R2)', () => {
+  it.each([
+    // the time of day names the draw, or a level or value follows the nutrient
+    'Your vitamin D was 25 ng/mL in the morning draw.',
+    'Your zinc and selenium in the evening sample were in range.',
+    'Your iron was low in the morning sample.',
+    'Your iron in the morning draw was 45 µg/dL.',
+    'Iron is highest in the morning, so the time of your draw matters.',
+    'Iron naturally peaks in the morning, so a later draw can read lower.',
+    'Zinc is usually lower in the evening.',
+    // a lab verb before the nutrient
+    'Retest iron in the morning after an overnight fast for a cleaner comparison.',
+    'Recheck vitamin D in the morning at your next visit.',
+    // the body making it, or a result the timing affects
+    'Your body makes vitamin D from sunlight in the morning.',
+    'Thyroid medication in the morning can affect your TSH result.',
+    // her own clinician: an adverb, a relative clause, "to", or "they"
+    'Ask your doctor to advise on iron.',
+    'Discuss with your doctor, who may recommend iron.',
+    'Your doctor will likely recommend iron.',
+    'Your doctor, who knows your history, may recommend iron.',
+    'If your doctor agrees, they may recommend iron.',
+    // a recheck recommended for a nutrient
+    'We recommend that your iron be rechecked in three months.',
+  ])('passes %s', (text) => {
+    expect(findTextViolations(text)).toEqual([]);
+  });
+
+  it.each([
+    ['A low dose at night may help you sleep.', 'dosing_frequency:at night'],
+    ['Your dose is lower in the morning.', 'dosing_frequency:in the morning'],
+    ['Check your dose in the morning.', 'dosing_frequency:in the morning'],
+    ['We will likely recommend iron.', 'prescriptive_verb:recommend iron'],
+    ['Your doctor is away, so we recommend iron for now.', 'prescriptive_verb:recommend iron'],
+    ['Experts, who know the research, recommend magnesium for sleep.', 'prescriptive_verb:recommend magnesium'],
+  ])('still flags %s: a dosage form is no lab result, and only her clinician is exempt', (text, violation) => {
+    expect(findTextViolations(text)).toContain(violation);
+  });
+});
+
+// ─── RV-R2 round 1: realistic interpretation sentences ───────────────────────
+// Synthetic sentences shaped like the fields generate-interpretation and
+// lab-insights return, each naming a nutrient next to a time of day or after a
+// recommending verb. In a scalar field (key_findings[].explanation,
+// overall_interpretation, a lab-insights summary) one false positive sends the
+// report to the deterministic fallback, or lab-insights to its 502.
+
+const REALISTIC_SENTENCES: Record<string, string[]> = {
+  'findings and summaries (scalar)': [
+    "Your vitamin D was 25 ng/mL in the morning draw, below the lab's reference range of 30-100 ng/mL.",
+    'Serum iron came back at 48 µg/dL; iron is usually higher in the morning, so draw time can shift this value.',
+    'Your ferritin was 14 ng/mL, and your iron was low in the morning sample as well.',
+    'Iron naturally peaks in the morning, so a later draw can read lower than your usual level.',
+    "Your zinc and selenium in the evening sample were within the lab's range.",
+    'Your B12 was in range in the morning draw at 480 pg/mL.',
+    "Folate was 12 ng/mL in the morning sample, within the lab's reference range.",
+    'Your magnesium came back at 1.9 mg/dL in the afternoon draw.',
+    'Iron is highest in the morning, so the time of your draw matters when comparing reports.',
+    "Your iron was 38 µg/dL in the morning, below the lab's range.",
+    'Zinc tends to run lower in the afternoon, so an afternoon draw can look lower than a morning one.',
+    'Your iron in the morning draw was 45 µg/dL, up from 31 µg/dL last time.',
+    'Your body makes vitamin D from sunlight in the morning and at midday, which is one reason levels dip in winter.',
+    'Thyroid medication in the morning can affect your TSH result, so note when you took it relative to the draw.',
+    'Your doctor will likely recommend iron studies before deciding on any next step.',
+    'Your doctor may recommend iron if your ferritin stays low on the next panel.',
+    'Discuss these results with your doctor, who may recommend iron or further testing.',
+    'Your doctor, who knows your history, may recommend iron or a recheck.',
+    'If your doctor agrees, they may recommend iron after a repeat ferritin.',
+    'Restless legs at night can be a sign of low iron, which fits your ferritin result.',
+    'Low magnesium is linked to cramps at night, and your magnesium is within range.',
+    'Your vitamin D sample was taken in the morning, so it compares cleanly with March.',
+  ],
+  'next steps (list)': [
+    'Retest iron in the morning after an overnight fast for a cleaner comparison.',
+    'Recheck vitamin D in the morning at your next visit so the draws match.',
+    'Ask whether your next iron panel can be drawn in the morning.',
+    'Discuss whether retesting iron in the morning makes sense.',
+    'Consider retesting iron in the morning, fasting, to compare like with like.',
+    'Ask your provider whether your iron should be rechecked in the morning.',
+    'We recommend that your vitamin D be rechecked in about three months.',
+    'We suggest your iron be retested in the morning to compare like with like.',
+    'Ask your doctor to advise on iron before making any changes.',
+    'Talk with your provider, who can recommend iron if it fits your history.',
+  ],
+  'questions for her doctor (list)': [
+    'Should my iron be rechecked in the morning, when it tends to run higher?',
+    'Could my thyroid medication in the morning be affecting my TSH result?',
+    'Would you recommend iron for me, given my ferritin?',
+    'Is my vitamin D low enough that you would recommend a supplement?',
+    'Would a morning draw give a truer picture of my iron?',
+  ],
+  'lab-insights summary (scalar)': [
+    'Your ferritin rose from 12 to 28 ng/mL between reports, and both draws were in the morning.',
+    'Serum iron fell from 95 to 60 µg/dL; iron is usually higher in the morning, and this draw was in the afternoon.',
+    'Iron is usually higher in the morning, so a different draw time could explain part of this change.',
+    'Your zinc was lower in the afternoon draw than in the morning draw last time.',
+    'Your vitamin D came back higher in the morning sample than in your last afternoon draw.',
+  ],
+  'lab-insights factors and next steps (list)': [
+    'Draw time: iron is usually higher in the morning.',
+    'Iron peaks in the morning, so an afternoon draw can read lower.',
+    'Thyroid medication in the morning can affect your TSH result.',
+    'Fasting status and draw time, since iron is highest in the morning.',
+    'Ask your provider whether your next iron draw should be in the morning.',
+    'Your provider may also want to recommend iron after reviewing your symptoms.',
+  ],
+};
+
+describe('realistic interpretation sentences with a time of day or a recommending verb pass (RV-R2)', () => {
+  it.each(
+    Object.entries(REALISTIC_SENTENCES).flatMap(([field, texts]) => texts.map((text) => [field, text])),
+  )('%s: %s', (_field, text) => {
     expect(findTextViolations(text)).toEqual([]);
   });
 });
