@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BiomarkerName } from '../../types';
 import { compareReports } from '../scoring/compareReports';
+import { authorizedLanguage, primaryFindingSentence } from '../scoring/insightCopy';
 import { buildInsightSummary } from './buildInsightSummary';
 
 /*
@@ -68,5 +69,32 @@ describe('buildInsightSummary states no censored placeholder (F021)', () => {
   it('a measured value outside the interval still gets its question', () => {
     const summary = buildInsightSummary([input(VIT_D, 12, '12', 30, 100)], [], null, null);
     expect(summary.questionsForDoctor.some(q => q.text.includes('12 ng/mL'))).toBe(true);
+  });
+});
+
+describe('the primary-finding sentence states a censored result as printed (F021)', () => {
+  const finding = { displayName: 'Vitamin D', direction: 'low' as const, value: 4, unit: 'ng/mL' };
+
+  it('the deterministic sentence reads the printed text, never the placeholder', () => {
+    const summary = buildInsightSummary(
+      [{ key: VIT_D, value: 4, valueText: '<8', unit: 'ng/mL', labRefMin: 30, labRefMax: 100 }], [], null, null,
+    );
+    expect(summary.primaryFinding?.valueText).toBe('<8');
+    const sentence = primaryFindingSentence(summary.primaryFinding!);
+    expect(sentence).toContain('at <8 ng/mL');
+    expect(sentence).not.toMatch(/\b4 ng\/mL/);
+  });
+
+  it('a disputed band still states the printed text', () => {
+    const disputed = { ...authorizedLanguage(null), reviewStatus: 'DISPUTED' as const };
+    const censored = { ...finding, valueText: ' <8 ' };
+    const sentence = primaryFindingSentence(censored, disputed);
+    expect(sentence).toContain('measured at <8 ng/mL');
+  });
+
+  it('a measured value, or one without printed text, is stated as its number (control)', () => {
+    const measured = { ...finding, value: 12, valueText: '12' };
+    expect(primaryFindingSentence(measured)).toContain('at 12 ng/mL');
+    expect(primaryFindingSentence({ ...finding, value: 12 })).toContain('at 12 ng/mL');
   });
 });

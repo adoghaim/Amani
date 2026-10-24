@@ -27,6 +27,8 @@ export interface TopFinding {
     direction: 'up' | 'down' | 'stable';
     interpretation: 'improved' | 'worsened' | 'stable';
   } | null;
+  /** The result as printed. A censored one ('<8') is stated as this text, never as `value` (F021). */
+  valueText?: string | null;
 }
 
 export interface BiggestChange {
@@ -101,8 +103,11 @@ interface BiomarkerInput {
   valueText?: string | null;
 }
 
+/** A scored marker with the result as printed (F021). */
+type ScoredInput = ScoredBiomarker & { valueText?: string | null };
+
 function toTopFinding(
-  s: ScoredBiomarker,
+  s: ScoredInput,
   rangeLabel: string | null = null,
   delta?: BiomarkerDelta | null,
 ): TopFinding {
@@ -139,10 +144,11 @@ function toTopFinding(
     rangeLabel,
     fact,
     trend,
+    valueText: s.valueText ?? null,
   };
 }
 
-function buildTopFindings(scored: ScoredBiomarker[], deltaMap?: Map<BiomarkerName, BiomarkerDelta>): TopFinding[] {
+function buildTopFindings(scored: ScoredInput[], deltaMap?: Map<BiomarkerName, BiomarkerDelta>): TopFinding[] {
   const abnormal = scored.filter(s => s.concern > 0);
   const ranked = [...abnormal].sort((a, b) => b.weightedConcern - a.weightedConcern);
 
@@ -507,9 +513,10 @@ export function buildInsightSummary(
   immediatePriorReportDate?: string | null,
   state: NonCyclingState | null = null,
 ): InsightSummary {
-  const scored = current.map(b =>
-    scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase, state),
-  );
+  const scored: ScoredInput[] = current.map(b => ({
+    ...scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase, state),
+    valueText: b.valueText,
+  }));
 
   const systemSummaries = groupBySystem(scored, cyclePhase, state);
   const bandLanguage = new Map<BiomarkerName, AuthorizedLanguage>();

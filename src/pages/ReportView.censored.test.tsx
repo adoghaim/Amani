@@ -145,6 +145,10 @@ describe('Review F021 — a censored result is never compared, trended or stated
     expect(card()).toContain('<8');
     expect(text).not.toMatch(/\b20 (?:to|→) 4\b|to 4 ng\/mL|-80(?:\.0)?%|measured for the first time at 4\b/);
     expect(card()).not.toMatch(/Trend:|usual level|older history/);
+    // The primary-finding card states the printed result, never the placeholder.
+    const primary = app.querySelector('[data-testid="primary-finding"]')?.textContent ?? '';
+    expect(primary).toContain('<8 ng/mL');
+    expect(text).not.toMatch(/\b4 ng\/mL/);
   }, 30_000);
 
   it('measured values on both reports still show their movement (control)', async () => {

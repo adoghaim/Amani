@@ -6,6 +6,7 @@ import {
 import { assessAmaniContext, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
 import { sameUnit } from '../biomarkers/normalizeReportItems';
 import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../../types';
+import { isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 
 /*
   V2-03 amendment 3. Narrative copy built in src/lib/insights (outside TASK-044's
@@ -177,10 +178,15 @@ export function primaryFindingSentence(
   language?: AuthorizedLanguage,
 ): string {
   if (language?.reviewStatus === 'DISPUTED') {
-    return `${finding.displayName} was measured at ${finding.value} ${finding.unit}. ${reviewStatement(language)}`;
+    return `${finding.displayName} was measured at ${statedValue(finding)} ${finding.unit}. ${reviewStatement(language)}`;
   }
   const where = finding.direction === 'high' ? 'above' : finding.direction === 'low' ? 'below' : 'outside';
-  return `${finding.displayName} is ${where} the Amani band at ${finding.value} ${finding.unit}. ${BANDS_UNDER_REVIEW}`;
+  return `${finding.displayName} is ${where} the Amani band at ${statedValue(finding)} ${finding.unit}. ${BANDS_UNDER_REVIEW}`;
+}
+
+/** F021: a censored result ('<8') is stated as printed. Its stored number is a placeholder, never a value to state. */
+export function statedValue(finding: { value: number; valueText?: string | null }): string {
+  return isCensoredValue(finding.valueText) ? finding.valueText!.trim() : String(finding.value);
 }
 
 /** Replaces every sentence that calls a band "optimal" with `replacement`
