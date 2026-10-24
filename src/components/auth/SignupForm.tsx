@@ -188,8 +188,8 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         pattern when a specific separate consent is being captured, and adding
         one here would gate the OAuth buttons too, which sit above it. If a
         lawyer decides an explicit affirmative consent is required for health
-        data, this is the place it goes, and `users.has_consented` already
-        exists in the schema to record it.
+        data, this is the place it goes: `record_consent()` records consent in
+        `consent_records`, and `users.has_consented` mirrors it.
       */}
       <p className="text-xs text-theme-muted-text text-center leading-relaxed">
         By creating an account — including with Google or Apple — you agree to our{' '}
