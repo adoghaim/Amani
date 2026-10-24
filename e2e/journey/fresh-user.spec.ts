@@ -121,7 +121,7 @@ test('fresh user: signup -> uploads -> Basic/Premium -> trends -> regeneration -
     await expectNoModelProse(page);
     // Review F093, F114: the OCR rows' printed intervals reached the report. They
     // were saved as null, so each card said "Not provided on your report".
-    await expectLabInterval(page, 'Thyroid', 'TSH', '0–100 uIU/mL');
+    await expectLabInterval(page, 'Thyroid', 'TSH', '0–100 mIU/L');
     await expectLabInterval(page, 'Nutrients', 'Ferritin', '0–100 ng/mL');
     if (backend) {
       const [reportId] = reportIds;
