@@ -8,9 +8,9 @@
 # grants on identity sequences, revoked from PUBLIC, anon and authenticated.
 #
 # Case 240 replays the whole chain, this migration included, and its grant
-# audit (factory/sql/verify-privileges.sql) returns no row: on the chain
-# without this migration it returns the 28 rows of authenticated TRUNCATE and
-# unserved writes it removes. This case clones case 240's full_chain
+# audit (factory/sql/verify-privileges.sql), which also judges MAINTAIN and
+# sequences, returns no row: on the chain without this migration it returns
+# the 64 rows this migration removes. This case clones case 240's full_chain
 # database into db5_grants and db5_converge, so it uses case 240's database
 # and its /tmp files; leaves those two databases and the /tmp/db5-grants.*
 # files, which no later case uses.
@@ -40,7 +40,11 @@
 #      grants (TRUNCATE, MAINTAIN, an identity-sequence grant, an unserved
 #      write), one WARNING names each with its owner and the audit prints
 #      the rows; a serial column's sequence and a free-standing one keep
-#      their client USAGE and one WARNING names each.
+#      their client USAGE and one WARNING names each;
+#   f. the audit's MAINTAIN and sequence rules, each probe rolled back:
+#      client MAINTAIN on a table and on a view, and client sequence grants,
+#      are rows; client TRUNCATE and an unserved DELETE (controls) still are;
+#      with no change the audit returns no row.
 
 DB5_MIGRATION=20261024120000_db5_client_grant_hardening.sql
 
@@ -335,5 +339,42 @@ if [ "$db5_failed" != 0 ]; then
 fi
 echo "    drift: identity tables cleaned; a renamed table, another owner's tables and non-identity sequences named and left; nothing raised"
 
+# f. The audit's MAINTAIN and sequence rules, each probe rolled back.
+db5_seq=$(psql_db5 db5_grants -tA -c "SELECT pg_get_serial_sequence('public.stripe_orders', 'id')")
+db5_audit_try() {  # LABEL ROW SQL: after SQL the audit prints ROW and nothing else (no row when ROW is empty)
+  local label=$1 want=$2 sql=$3 out
+  if ! out=$(printf 'BEGIN;\n%s\n\\i /tmp/db5-grants.audit.sql\nROLLBACK;\n' "$sql" | psql_db5_in db5_grants -qtA -F'|'); then
+    echo "FAIL: RV-DB5 audit ($label): a statement or the audit failed" >&2
+    db5_failed=1
+    return 0
+  fi
+  out=$(grep -v '^$' <<<"$out" || true)
+  if [ -n "$want" ] && ! grep -qxF -- "$want" <<<"$out"; then
+    echo "FAIL: RV-DB5 audit ($label): expected the row [$want], got [${out//$'\n'/; }]" >&2
+    db5_failed=1
+  elif [ "$out" != "$want" ]; then
+    echo "FAIL: RV-DB5 audit ($label): expected only [$want], got [${out//$'\n'/; }]" >&2
+    db5_failed=1
+  else
+    echo "    audit ($label): ${want:-no row}"
+  fi
+}
+db5_audit_try 'no change' '' '-- nothing'
+db5_audit_try 'MAINTAIN on a table' 'users|authenticated|MAINTAIN|MAINTAIN is not subject to row level security' \
+  'GRANT MAINTAIN ON public.users TO authenticated;'
+db5_audit_try 'MAINTAIN on a view' 'stripe_user_orders|authenticated|MAINTAIN|MAINTAIN is not subject to row level security' \
+  'GRANT MAINTAIN ON public.stripe_user_orders TO authenticated;'
+db5_audit_try 'USAGE on a sequence' "${db5_seq#public.}|authenticated|USAGE|not a grant a sequence is designed for" \
+  "GRANT USAGE ON SEQUENCE $db5_seq TO authenticated;"
+db5_audit_try 'SELECT and UPDATE on a sequence' "${db5_seq#public.}|anon|SELECT,UPDATE|not a grant a sequence is designed for" \
+  "GRANT SELECT, UPDATE ON SEQUENCE $db5_seq TO anon;"
+db5_audit_try 'control: TRUNCATE' 'canonical_analytes|authenticated|TRUNCATE|TRUNCATE is not subject to row level security' \
+  'GRANT TRUNCATE ON public.canonical_analytes TO authenticated;'
+db5_audit_try 'control: an unserved DELETE' 'users|authenticated|DELETE|no policy serves it' \
+  'GRANT DELETE ON public.users TO authenticated;'
+if [ "$db5_failed" != 0 ]; then
+  exit 1
+fi
+
 echo
-echo "PASS: RV-DB5: $DB5_MIGRATION reapplies without change and converges from a worst-case over-grant, touching no other role; no client TRUNCATE, MAINTAIN, unserved write or identity-sequence use, every shipped client path intact; drift is named in a WARNING and never aborts it."
+echo "PASS: RV-DB5: $DB5_MIGRATION reapplies without change and converges from a worst-case over-grant, touching no other role; no client TRUNCATE, MAINTAIN, unserved write or identity-sequence use, every shipped client path intact; drift is named in a WARNING and never aborts it; the audit flags client MAINTAIN and sequence grants."

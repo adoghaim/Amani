@@ -306,6 +306,12 @@ describe('the whole migration chain replays from empty (F124, F095, F035)', () =
     }
   });
 
+  it('expects no grant-audit row on the replayed chain: CHAIN_KNOWN_VIOLATIONS holds notes only (DB2 and RV-DB5)', () => {
+    const block = /^CHAIN_KNOWN_VIOLATIONS='([^']*)'$/m.exec(replay);
+    expect(block).not.toBeNull();
+    expect(block![1]!.split('\n').filter(line => line.trim() !== '' && !line.startsWith('#'))).toEqual([]);
+  });
+
   it('each migration is named by a case of its own or a sub-harness, or is one of the frozen pre-harness files', () => {
     const dedicated = [
       ...harnessCaseNames().filter(name => name !== '240-full-chain-replay.sh').map(caseText),
