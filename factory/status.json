@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "repo": "adoghaim/Amani",
-  "generated": "2026-10-16",
+  "generated": "2026-10-23",
   "status_values": [
     "todo",
     "in-progress",
@@ -39,6 +39,10 @@
     {
       "id": "L",
       "name": "Later / Strategic / Backlog"
+    },
+    {
+      "id": "RV",
+      "name": "Main review fixes, wave 1 (review of main@22027b2, 2026-10-23; paused by the owner 2026-10-23)"
     }
   ],
   "packets": [
@@ -1910,6 +1914,1143 @@
       ],
       "brain_recorded": false,
       "updated": "2026-10-16"
+    },
+    {
+      "id": "RV-DB1",
+      "title": "Harness: Postgres 17, assertive case 010, full-chain replay and a grant audit",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F127",
+        "F100",
+        "F125",
+        "F095",
+        "F035",
+        "F124"
+      ],
+      "depends_on": [],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-db-security",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track db-security; findings F127, F100, F125, F095, F035, F124. Head b03f619. Built (F035, F124 partial). Reviews: 3 blocking findings open (1 security, 2 correctness); no fix applied yet."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-DB2",
+      "title": "RLS on the three public tables; revoke client writes on billing tables and anon access to user data",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F027",
+        "F034",
+        "F046"
+      ],
+      "depends_on": [
+        "RV-DB1"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-db-security",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track db-security; findings F027, F034, F046. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-DB3",
+      "title": "has_consented means consent; interpreted reports stay immutable; lab file ownership",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F025",
+        "F042",
+        "F032"
+      ],
+      "depends_on": [
+        "RV-DB2"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G3",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-db-security",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track db-security; findings F025, F042, F032. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-CS1",
+      "title": "Unit sanity: withhold Amani bands across unit mismatches",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F011",
+        "F013"
+      ],
+      "depends_on": [],
+      "status": "review",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
+      "branch": "factory/rv-clinical-scoring",
+      "pr": "#174",
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Amani bands are withheld when a result's unit is not the catalog unit (LDL 4.9 mmol/L, glucose 5.2 mmol/L, creatinine 80 umol/L get no band) and cross-unit pairs make no trend, with 8 owner-approved 1:1 equivalences (Na/K/Cl/CO2, TSH, ALT/AST/ALP) scored as before; F011 and the client half of F013, blind verifier PASS_WITH_NOTES on cedc073 and on the units commit dd3b179 on 2026-10-23 after two FAILs.",
+        "Gates at b542a1b (run locally): lint, typecheck, full test (3,539), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-24"
+    },
+    {
+      "id": "RV-CS2",
+      "title": "Declared pregnancy withholds cycle context; scoring fails closed on bad inputs",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F012",
+        "F097"
+      ],
+      "depends_on": [
+        "RV-CS1"
+      ],
+      "status": "review",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
+      "branch": "factory/rv-clinical-scoring",
+      "pr": "#174",
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "A declared Pregnant, Postpartum or Breastfeeding status now reaches every client assessment call and withholds the 56 requires_context analytes, and scoring fails closed on NaN, infinite, negative, inverted and equal-bound inputs (F012, F097 non-decision parts, ana_screen fixed); blind verifier PASS_WITH_NOTES on 13eae31 on 2026-10-23, server half handed off.",
+        "Gates at b542a1b (run locally): lint, typecheck, full test (3,539), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-24"
+    },
+    {
+      "id": "RV-CS3",
+      "title": "Censored results never become numbers",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F021"
+      ],
+      "depends_on": [
+        "RV-CS2"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-clinical-scoring",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track clinical-scoring; findings F021. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-IA1",
+      "title": "Cycle phase and day only from explicit patient lines",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F010"
+      ],
+      "depends_on": [],
+      "status": "review",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [
+        "G0",
+        "G1",
+        "G4"
+      ],
+      "branch": "factory/rv-ingest-cycle-parser",
+      "pr": "#156",
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ingest-cycle-parser; finding F010. Fix 352804d; merged with main 2c3d21d at 5cf7d10.",
+        "Independent reviews at 352804d: correctness recommend merge; clinical recommend merge, \"G4 clinical authority: pass\".",
+        "Gates at 5cf7d10 (run locally; GitHub Actions jobs do not start): lint, typecheck, full test (174 files, 3,350 tests), build, clinical; fresh-user journey 2/2 and browser smoke 4/4 in Chromium, WebKit and Firefox.",
+        "Awaiting owner: confirm PK-FIX-06 [Pending] Q9 (her dates win over the lab-printed cycle day/phase) in PR #156."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-IA2",
+      "title": "Parser B12 boundaries; parse-error rows need her confirmation",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F098",
+        "F022"
+      ],
+      "depends_on": [
+        "RV-IA1"
+      ],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-wip-ia2",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ingest-cycle-parser; findings F098, F022. Head 073a207. Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-IB1",
+      "title": "One extraction contract for OCR and AI refinement",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F093",
+        "F114",
+        "F026"
+      ],
+      "depends_on": [],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-ingest-ocr-a11y",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ingest-ocr-a11y; findings F093, F114, F026. Head 4219016. Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-IB2",
+      "title": "Keyboard- and screen-reader-usable upload flow",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F064"
+      ],
+      "depends_on": [
+        "RV-IB1"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-ingest-ocr-a11y",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ingest-ocr-a11y; findings F064. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-NP1",
+      "title": "Harden the nutrient validator with an adversarial corpus",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F015",
+        "F096"
+      ],
+      "depends_on": [],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-nutrient-policy",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track nutrient-policy; findings F015, F096. Head fefd1f6. Built, DONE_WITH_CONCERNS (F015, F096 partial). Verifier was cut off: needs verification."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-AI1",
+      "title": "Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F017",
+        "F131",
+        "F128",
+        "F033"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-ai-calls",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ai-calls; findings F017, F131, F128, F033. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-RS1",
+      "title": "Dark critical-flag notice from the lab's own flags; report context keeps her symptoms",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F014",
+        "F018"
+      ],
+      "depends_on": [],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-wip-rs1",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track report-safety; findings F014, F018. Head 7ed7625. Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-RS2",
+      "title": "Disclaimer whenever clinical content shows; no outside-band counts",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F024",
+        "F069"
+      ],
+      "depends_on": [
+        "RV-RS1"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-report-safety",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track report-safety; findings F024, F069. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-BS1",
+      "title": "Stripe portal uses the real customer; deletion removes every customer and every file",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F038",
+        "F029",
+        "F094",
+        "F036"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-billing-stripe",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track billing-stripe; findings F038, F029, F094, F036. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-BS2",
+      "title": "Checkout: server price allow-list, server-built redirects, one subscription, tested webhook",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F030",
+        "F031",
+        "F044",
+        "F099",
+        "F040",
+        "F090",
+        "F033"
+      ],
+      "depends_on": [
+        "RV-BS1"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-billing-stripe",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track billing-stripe; findings F030, F031, F044, F099, F040, F090, F033. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-BI1",
+      "title": "Play pause keeps access until expiry; App Store records keyed consistently",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F039",
+        "F041"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-billing-iap",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track billing-iap; findings F039, F041. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-BU1",
+      "title": "Billing labels from the real entitlement; an honest deletion warning",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F047",
+        "F045"
+      ],
+      "depends_on": [],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-billing-ui",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track billing-ui; findings F047, F045. Head e321bd3. Built, DONE_WITH_CONCERNS (F045 partial). Verifier was cut off: needs verification."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-WP1",
+      "title": "Private source maps, production-only routes, security headers",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F068",
+        "F109",
+        "F028",
+        "F113"
+      ],
+      "depends_on": [],
+      "status": "review",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-web-platform",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track web-platform; findings F068, F109, F028, F113. Head dec8bfe. Built. Security and correctness reviews: recommend merge."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-WP2",
+      "title": "Offline is not empty; error boundaries reset",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F065",
+        "F072"
+      ],
+      "depends_on": [
+        "RV-WP1"
+      ],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-wip-wp2",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track web-platform; findings F065, F072. Head 979728b. Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d)."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-WP3",
+      "title": "Accessible overlays, safe areas, Android back closes sheets first",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F066",
+        "F071",
+        "F067"
+      ],
+      "depends_on": [
+        "RV-WP2"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-web-platform",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track web-platform; findings F066, F071, F067. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-HC1",
+      "title": "Reminders hidden until they work; cycle copy matches ruling D7.9",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F137",
+        "F136"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-honest-copy",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track honest-copy; findings F137, F136. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-DL1",
+      "title": "Device lock hardening",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F000",
+        "F001",
+        "F002",
+        "F005",
+        "F006",
+        "F007",
+        "F009",
+        "F138"
+      ],
+      "depends_on": [],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-wip-dl1",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track device-lock; findings F000, F001, F002, F005, F006, F007, F009, F138. Head e2d2c2e. Interrupted mid-build: one WIP commit; needs completion, gates and verification."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-SP1",
+      "title": "Committed Package.resolved matches Package.swift",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F003",
+        "F049",
+        "F121"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-ios-spm",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ios-spm; findings F003, F049, F121. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-AU1",
+      "title": "Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F063",
+        "F133",
+        "F132",
+        "F075",
+        "F076"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G1",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-auth-flows",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track auth-flows; findings F063, F133, F132, F075, F076. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-DP1",
+      "title": "pdf.js 6.4.299 on the legacy build",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F053",
+        "F107",
+        "F062",
+        "F108"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-deps-toolchain",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track deps-toolchain; findings F053, F107, F062, F108. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-DP2",
+      "title": "Declared dependencies, an aligned test toolchain and a Node 22 pin",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F091",
+        "F092",
+        "F106",
+        "F055",
+        "F086",
+        "F110"
+      ],
+      "depends_on": [
+        "RV-DP1"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-deps-toolchain",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track deps-toolchain; findings F091, F092, F106, F055, F086, F110. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-CI1",
+      "title": "Native CI that can fail; the device-lock boundary test runs",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F122",
+        "F123",
+        "F104",
+        "F085"
+      ],
+      "depends_on": [],
+      "status": "review",
+      "gates_required": [
+        "G0",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-ci-workflows",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ci-workflows; findings F122, F123, F104, F085. Head 4bd6043. Built (F104, F055, F138 partial). Correctness review: recommend merge."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-CI2",
+      "title": "Workflow hardening and Node 22 everywhere",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F060",
+        "F061",
+        "F056",
+        "F118"
+      ],
+      "depends_on": [
+        "RV-CI1"
+      ],
+      "status": "in-progress",
+      "gates_required": [
+        "G0",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-ci-workflows",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ci-workflows; findings F060, F061, F056, F118. Head 74bdf7e. Built on top of CI1. Reviews were cut off by the stop: needs verification."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-CI3",
+      "title": "E2E configs tell the truth",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F008",
+        "F102",
+        "F117",
+        "F101",
+        "F116"
+      ],
+      "depends_on": [
+        "RV-CI2"
+      ],
+      "status": "todo",
+      "gates_required": [
+        "G0",
+        "G2",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-ci-workflows",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track ci-workflows; findings F008, F102, F117, F101, F116. Not started."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "RV-HY1",
+      "title": "Untrack leftovers; ignore local state",
+      "phase": "RV",
+      "wave": "1",
+      "tickets": [
+        "F080",
+        "F081",
+        "F090"
+      ],
+      "depends_on": [],
+      "status": "review",
+      "gates_required": [
+        "G0",
+        "G5"
+      ],
+      "gates_passed": [],
+      "branch": "factory/rv-hygiene",
+      "pr": null,
+      "agent": "claude (review-fix wave 1)",
+      "owner_approval": null,
+      "deployed": {
+        "web": false,
+        "supabase": "n/a-or-pending",
+        "ios": false,
+        "android": false
+      },
+      "blocked_reason": null,
+      "evidence": [
+        "Track hygiene; findings F080, F081, F090. Head a44186c. Built (F090 partial). Blind verifier: PASS_WITH_NOTES."
+      ],
+      "brain_recorded": false,
+      "updated": "2026-10-23"
     }
   ],
   "tickets": [
@@ -2315,7 +3456,22 @@
   ],
   "report": {
     "shipped": [],
-    "in_progress": [],
+    "in_progress": [
+      "RV-BU1",
+      "RV-CI1",
+      "RV-CI2",
+      "RV-CS1",
+      "RV-DB1",
+      "RV-DL1",
+      "RV-HY1",
+      "RV-IA1",
+      "RV-IA2",
+      "RV-IB1",
+      "RV-NP1",
+      "RV-RS1",
+      "RV-WP1",
+      "RV-WP2"
+    ],
     "blocked": [
       {
         "id": "PK-05-A",
@@ -2336,7 +3492,10 @@
       "Run node scripts/smoke/v2-post-deploy.mjs --i-understand-this-hits-production with a test account; only after it passes apply factory/sql/post-deploy/retire-delete-interpretations.sql (header runbook)",
       "Xcode Cloud: set workflow variables in App Store Connect (docs/xcode-cloud.md)",
       "Add \"Browser smoke\" to required checks on main (factory/gates.md)",
-      "Answer [Pending] items in brain/open-questions.md (clinical reviewer for PK-05-A/C)"
+      "Answer [Pending] items in brain/open-questions.md (clinical reviewer for PK-05-A/C)",
+      "Review-fix wave 1 (phase RV) is paused, nothing from it is merged: 4 packets built and verified, 10 in progress (4 of them interrupted WIP), 17 not started. Branches factory/rv-*; resume notes in factory/STATUS.md.",
+      "PR #152: Ruling 7 confirmed as a true lab-flag floor (2026-10-23). #152 needs a true-floor fix and handler tests (fallback_reason, model_failure) before it lands; deploy generate-interpretation before or with the web merge.",
+      "PR #154 (graphify knowledge graph of the repo) is ready for review."
     ],
     "growth_suggestions": [
       "Audit landing-page copy against clinical-language rules (\"worrying\", \"sits where it should\", Hone mention) before paid acquisition",

@@ -132,3 +132,20 @@ question is prepared in `docs/clinical/BACKLOG-1.0.7-HANDOFF.md` for the Lead's 
 The frozen V2-01 migration `20261006000000` emits UNKNOWN for all 198 shipping ranges. Exactly 43 differ from the catalog: 35 DISPUTED and eight NEEDS_CONTEXT. A regression test compares every retained range field and bounds the divergence to those exact IDs and review_status alone; the audit-only fields are deliberately omitted. Candidate rows are excluded from the frozen SQL entirely.
 
 **V2-03 must introduce a new authorized migration to carry current review status into the database. Until it ships, the database is not a source of audit truth and nothing may read audit status from it.** The frozen migration must not be edited. Open question: what new migration and consumer gate will persist current dispositions and candidate provenance without rewriting shipping history? Required artifact: separately authorized persistence design, new migration, and integration tests proving status parity before any database audit-status consumer is enabled.
+
+### CF-11 — Owner-approved 1:1 unit equivalences (review-2 of RV-CS1, 2026-10-23)
+
+The owner approved, verbatim, "Approve the equivalences (Recommended)": record these as 1:1 equivalences in the catalog, citing the unit definitions, so results printed in these units are scored as before; real mismatches such as SI glucose still fail closed. They are recorded in `clinical/catalog/catalog.json` `unit_equivalences` (factor exactly 1, `approved_by` owner, `approved_at` 2026-10-23) and pinned in `tools/clinical/validate.mjs` `APPROVED_UNIT_EQUIVALENCES`. Each is scoped to its analyte, never a global unit rule. They are not `unit_conversions` (which stay [] and are frozen in the V2-01 seed) and they change no frozen SQL.
+
+| Analyte | Printed unit | Catalog unit | Basis (unit definition) |
+|---|---|---|---|
+| sodium | mmol/L | mEq/L | Monovalent ion: 1 mmol/L = 1 mEq/L |
+| potassium | mmol/L | mEq/L | Monovalent ion: 1 mmol/L = 1 mEq/L |
+| chloride | mmol/L | mEq/L | Monovalent ion: 1 mmol/L = 1 mEq/L |
+| co2 | mmol/L | mEq/L | Monovalent bicarbonate ion: 1 mmol/L = 1 mEq/L |
+| tsh | uIU/mL (µIU/mL) | mIU/L | SI prefixes: 1 µIU/mL = 1 mIU/L |
+| alt | IU/L | U/L | Same enzyme unit: 1 IU/L = 1 U/L |
+| ast | IU/L | U/L | Same enzyme unit: 1 IU/L = 1 U/L |
+| alkaline_phosphatase | IU/L | U/L | Same enzyme unit: 1 IU/L = 1 U/L |
+
+Not approved, so still withheld: mEq/L or mmol/L for calcium, magnesium, phosphate or any other analyte; IU/L for GGT or any other enzyme; every other unit pair. `reviewer` and `reviewed_at` stay null: clinical reviewer countersign is an open owner action. This does not resolve CF-05's TSH open question (ingestion fixture and the lab's unit legend). Absolute eGFR in mL/min is a different quantity from mL/min/1.73m2 and is not an equivalence.
