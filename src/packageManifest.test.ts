@@ -133,6 +133,55 @@ function satisfies(version: V, range: string): boolean {
   });
 }
 
+const LOW: V = [0, 0, 0];
+const TOP = 9999;
+
+// Just below `v` (largest version that sorts before it) and just above it.
+function below([major, minor, patch]: V): V {
+  if (patch > 0) return [major, minor, patch - 1];
+  if (minor > 0) return [major, minor - 1, TOP];
+  return major > 0 ? [major - 1, TOP, TOP] : LOW;
+}
+const above = ([major, minor, patch]: V): V => [major, minor, patch + 1];
+
+// The version each comparator of an engines range pivots on ("^22.13.0" -> 22.13.0,
+// ">=24" -> 24.0.0), plus the exclusive ceiling a caret, tilde or bare x-range implies.
+function bounds(range: string): V[] {
+  const out: V[] = [];
+  for (const alt of range.split('||')) {
+    const normalised = alt.trim().replace(/(>=|<=|>|<|=|\^|~)\s+/g, '$1').replace(/\.x\b/g, '');
+    for (const token of normalised.split(/\s+/)) {
+      const m = /^(>=|<=|>|<|=|\^|~)?v?(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(token);
+      if (!m) continue;
+      const [, op = '', a, b, c] = m;
+      const v: V = [Number(a), Number(b ?? 0), Number(c ?? 0)];
+      out.push(v);
+      if (op === '^') out.push(v[0] > 0 ? [v[0] + 1, 0, 0] : v[1] > 0 ? [0, v[1] + 1, 0] : [0, 0, v[2] + 1]);
+      else if (op === '~' || (op === '' && c === undefined)) {
+        out.push(c !== undefined || b !== undefined ? [v[0], v[1] + 1, 0] : [v[0] + 1, 0, 0]);
+      }
+    }
+  }
+  return out;
+}
+
+// Probe versions for "does this engines range admit something a locked package rejects":
+// every bound, the version just below and just above it, and one minor below it.
+// Sampling fixed minors misses a gap between two bounds, e.g. "^22.12.0" vs ">=22.13.0".
+function candidateVersions(ranges: string[]): V[] {
+  const seen = new Map<string, V>();
+  const add = (v: V) => seen.set(v.join('.'), v);
+  for (const range of ranges) {
+    for (const bound of bounds(range)) {
+      add(bound);
+      add(below(bound));
+      add(above(bound));
+      if (bound[1] > 0) add([bound[0], bound[1] - 1, bound[2]]);
+    }
+  }
+  return [...seen.values()].sort(cmp);
+}
+
 // ---------------------------------------------------------------------------
 
 describe('package manifest: declared dependencies (F091, F106)', () => {
@@ -168,6 +217,13 @@ describe('package manifest: declared dependencies (F091, F106)', () => {
     expect(read('tools/release/check.sh')).toContain("require('js-yaml')");
     expect(pkg.devDependencies).toHaveProperty('js-yaml');
     expect(pkg.devDependencies!['js-yaml']).toMatch(EXACT);
+  });
+
+  it('pins js-yaml at or above 4.3.2, the first 4.x release outside GHSA-mh29-5h37-fv8m, GHSA-h67p-54hq-rp68 and three more', () => {
+    // `npm audit --omit=dev` (the CI gate) cannot see a dev-only package, so the floor is asserted here.
+    expect(cmp(parseV(declared['js-yaml']!), [4, 3, 2])).toBeGreaterThanOrEqual(0);
+    // @eslint/eslintrc asks for ^4.1.0; staying on 4.x keeps the single deduped copy.
+    expect(parseV(declared['js-yaml']!)[0]).toBe(4);
   });
 
   it('keeps one resolved version of every declared dev tool the lock hoists (esbuild, js-yaml)', () => {
@@ -212,18 +268,25 @@ describe('package manifest: Node pin (F055, F086, F110)', () => {
   });
 
   it('rejects the end-of-life and untested majors that broke or never ran here', () => {
+    // 20/21: end of life. 23: eslint-visitor-keys 5.0.1 ("^20.19.0 || ^22.13.0 || >=24") does not admit it
+    // (pdfjs-dist ">=22.13.0 || >=24" alone would). 25+: excluded by choice (untested), not by a locked package.
     const engines = pkg.engines!.node!;
     for (const rejected of [[20, 20, 2], [21, 0, 0], [23, 0, 0], [25, 0, 0], [26, 0, 0]] as V[]) {
       expect(satisfies(rejected, engines), rejected.join('.')).toBe(false);
     }
   });
 
+  it('derives its probe versions from every comparator bound, including the strictest locked one', () => {
+    const probes = candidateVersions([pkg.engines!.node!, ...lockedRanges().map(({ range }) => range)]).map((v) => v.join('.'));
+    // pdfjs-dist ">=22.13.0 || >=24": the bound, one patch below it and one minor below it.
+    expect(probes).toEqual(expect.arrayContaining(['22.13.0', '22.12.9999', '22.12.0']));
+    // eslint-visitor-keys "^20.19.0 || ^22.13.0 || >=24": the caret ceiling and the version below it.
+    expect(probes).toEqual(expect.arrayContaining(['21.0.0', '20.19.0', '20.18.9999']));
+  });
+
   it('admits only Node versions every locked package supports', () => {
     const engines = pkg.engines!.node!;
-    const candidates: V[] = [];
-    for (const major of [20, 21, 22, 23, 24, 25, 26]) {
-      for (const [minor, patch] of [[0, 0], [13, 0], [19, 0], [22, 2], [99, 0]]) candidates.push([major, minor!, patch!]);
-    }
+    const candidates = candidateVersions([engines, ...lockedRanges().map(({ range }) => range)]);
     const admitted = candidates.filter((v) => satisfies(v, engines));
     expect(admitted.length).toBeGreaterThan(0);
     const violations = admitted.flatMap((v) =>

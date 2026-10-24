@@ -7,13 +7,19 @@ and nine V2-03 report-context cases per browser, with one redirect-race test qua
 ## Install and run
 
 The repository uses npm. Node 22 is the pinned toolchain (`.nvmrc` is 22.22.2;
-`package.json` `engines.node` is `^22.13.0 || ^24.0.0`, the range the locked
-dependencies support, `pdfjs-dist` being the strictest). `@playwright/test` and
+`package.json` `engines.node` is `^22.13.0 || ^24.0.0`). The lower bound comes
+from `pdfjs-dist` (`>=22.13.0 || >=24`) and `eslint-visitor-keys` 5.0.1
+(`^20.19.0 || ^22.13.0 || >=24`). Node 23 is excluded because the latter does
+not admit it; `pdfjs-dist` alone would. Node 25 and later are excluded by
+choice, because they are untested here, not by any locked dependency.
+`@playwright/test` and
 `playwright` are both pinned to exactly 1.64.0 and `playwright-core` resolves to
 the same version; the Test package requires Node >=20. Do not initialize another
 Playwright project or upgrade one package without the other two. `axe-core` is
 pinned to the exact version `@axe-core/playwright` depends on (4.13.0), so there
 is one axe engine; bump both together. Keep jsdom at the existing 26.1.0 pin.
+`js-yaml` is pinned to exactly 4.3.2, the first 4.x release clear of its advisories;
+`npm audit --omit=dev`, the CI gate, does not see it because it is a dev dependency.
 `src/packageManifest.test.ts` enforces these pins.
 
 On a network-enabled engineering machine or CI:
