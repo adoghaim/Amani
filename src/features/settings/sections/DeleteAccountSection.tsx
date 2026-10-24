@@ -47,10 +47,13 @@ export function DeleteAccountSection() {
   const [playCancels, setPlayCancels] = useState(false);
   /*
     A live web (Stripe) subscription is cancelled on the spot by delete-user-data,
-    with no proration or refund — the same statuses it cancels.
+    with no proration or refund — the same statuses it cancels. If the read
+    failed and no subscription is known, the deletion still cancels one that
+    exists, so the line is said conditionally rather than left out.
   */
-  const { subscription } = useSubscription();
+  const { subscription, error: subscriptionError } = useSubscription();
   const stripeLive = STRIPE_LIVE_STATUSES.has(subscription?.subscription_status ?? '');
+  const stripeUnknown = !subscription && Boolean(subscriptionError);
 
   const handleDeleteData = async (acknowledgeStoreSubscriptions = false) => {
     if (deleteConfirmText !== 'DELETE') {
@@ -155,6 +158,12 @@ export function DeleteAccountSection() {
                         <li>
                           Cancel your web subscription immediately. The rest of the period you
                           have paid for is not refunded.
+                        </li>
+                      )}
+                      {stripeUnknown && (
+                        <li>
+                          If you have a web subscription, it is cancelled immediately and the rest
+                          of the period you have paid for is not refunded.
                         </li>
                       )}
                     </ul>
