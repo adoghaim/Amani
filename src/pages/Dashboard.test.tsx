@@ -2,7 +2,9 @@
 import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { axeViolations } from '../components/axe.testkit';
+import { closeTopOverlay } from '../lib/overlayStack';
 
 const fixture = vi.hoisted(() => ({
   user: { id: 'user-1' },
@@ -122,6 +124,39 @@ describe('a dashboard read that could not reach Amani', () => {
     await withDashboard(async app => {
       expect(app.textContent).toContain('No lab reports yet');
       expect(app.textContent).not.toContain("We couldn't reach Amani");
+    });
+  });
+});
+
+// Review F066 and F067: "Add note" was a fixed z-50 div. It is a dialog now, and
+// the Android back button closes it before it exits the app from /app.
+describe('the Add note sheet', () => {
+  beforeEach(() => { vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); });
+  afterEach(() => { vi.restoreAllMocks(); });
+  const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]');
+
+  it('opens as a named modal dialog with labelled fields, passes axe, and Escape closes it', async () => {
+    await withDashboard(async app => {
+      expect(dialog()).toBeNull();
+      await act(async () => button(app, 'Add note')!.click());
+      const d = dialog()!;
+      expect(d.getAttribute('aria-label')).toBe('Add note');
+      expect(d.parentElement!.classList.contains('z-[60]')).toBe(true);
+      expect(d.querySelector('button[aria-label="Close"]')).not.toBeNull();
+      expect(d.querySelector('input[type="date"]')!.id).not.toBe('');
+      expect(await axeViolations(d)).toEqual([]);
+      await act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+      expect(dialog()).toBeNull();
+    });
+  });
+
+  it('is what the Android back button closes first', async () => {
+    await withDashboard(async app => {
+      expect(closeTopOverlay()).toBe(false);
+      await act(async () => button(app, 'Add note')!.click());
+      await act(async () => { expect(closeTopOverlay()).toBe(true); });
+      expect(dialog()).toBeNull();
+      expect(closeTopOverlay()).toBe(false);
     });
   });
 });

@@ -1,4 +1,5 @@
-import { X, AlertCircle, Sparkles, Info } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
+import { Modal } from './Modal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ClinicalObservation, ModelProse } from './ClinicalObservation';
 import {
@@ -107,41 +108,37 @@ function InsightsRenderError() {
 }
 
 export function InsightsModal({ isOpen, onClose, insights, reportDates, loading, error, claims = [] }: InsightsModalProps) {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-theme-surface rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="Your health story"
+      wide
+      footer={(
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 min-h-[44px] rounded-xl bg-theme-text text-white text-sm font-medium hover:bg-theme-neutral-800 transition-colors"
+        >
+          Close
+        </button>
+      )}
+    >
+      {/*
+        The header was white-and-muted text on a navy gradient that measured
+        3.38:1 and 2.18:1 (review F066). The shared Modal's header is the
+        surface colour with theme text, so the comparison line is ordinary muted
+        text on the surface.
+      */}
+      <p className="text-theme-muted-text text-xs mb-5">
+        {reportDates ? (
+          <>
+            Comparing {formatDate(reportDates.previous)} → {formatDate(reportDates.current)}
+            <span className="ml-1">({reportDates.days_between} days)</span>
+          </>
+        ) : 'Comparing your two most recent reports'}
+      </p>
 
-        {/* Header */}
-        <div className="bg-gradient-to-r from-theme-text to-theme-text-body px-6 py-5 flex-shrink-0">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-5 h-5 text-theme-primary" />
-                <h2 className="text-lg text-white">Your health story</h2>
-              </div>
-              {reportDates ? (
-                <p className="text-theme-muted-text-3 text-xs">
-                  Comparing {formatDate(reportDates.previous)} → {formatDate(reportDates.current)}
-                  <span className="ml-1 text-theme-muted-text-3">({reportDates.days_between} days)</span>
-                </p>
-              ) : (
-                <p className="text-theme-muted-text-3 text-xs">Comparing your two most recent reports</p>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="text-theme-muted-text-3 hover:text-white transition-colors ml-4 flex-shrink-0"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-6">
-
+      <div>
           {loading && (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
               <div className="w-12 h-12 rounded-full border-3 border-theme-primary/20 border-t-theme-primary animate-spin" style={{ borderWidth: 3 }} />
@@ -189,18 +186,7 @@ export function InsightsModal({ isOpen, onClose, insights, reportDates, loading,
             </div>
             </ErrorBoundary>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 border-t border-theme-neutral-100 px-6 py-4">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-theme-text text-white text-sm font-medium hover:bg-theme-neutral-800 transition-colors"
-          >
-            Close
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

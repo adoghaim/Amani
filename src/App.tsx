@@ -1,11 +1,12 @@
 import { ReactNode, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
 import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary'
 import { FullScreenGate } from './components/FullScreenGate'
 import { UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from './components/CalmNotice'
 import { OnboardingGate } from './components/OnboardingGate'
+import { AndroidBackHandler } from './components/AndroidBackHandler'
 import { UpdateGate } from './components/UpdateGate'
 import { UploadGate } from './components/freemium/UploadGate'
 import { ConsentGate } from './features/consent/ConsentGate'
@@ -16,7 +17,6 @@ import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 import { safeRedirectTarget } from './lib/redirect'
 import { CampaignLinkRedirect, FirstPartyEventsLifecycle } from './components/FirstPartyEventsLifecycle'
-import { deviceLock } from './lib/deviceLock'
 import { DeviceLockGate } from './features/deviceLock/DeviceLockGate'
 
 // Eagerly loaded — tiny pages used immediately on arrival
@@ -199,38 +199,6 @@ function DeepLinkHandler() {
       if (target) navigate(target, { replace: true });
     });
   }, [navigate]);
-
-  return null;
-}
-
-function AndroidBackHandler() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    if (!isNative()) return;
-
-    let handle: { remove: () => void } | null = null;
-
-    import('@capacitor/app').then(({ App: CapApp }) => {
-      CapApp.addListener('backButton', ({ canGoBack }) => {
-        // Locked (PK-DEVICE-01): back closes the app, never the page under the lock.
-        if (deviceLock.getState().locked) {
-          CapApp.exitApp();
-          return;
-        }
-        // At root routes — exit the app rather than navigating back to a blank state
-        const rootRoutes = ['/app', '/login', '/signup', '/', '/pricing', '/success', '/reset-password'];
-        if (rootRoutes.includes(location.pathname) || !canGoBack) {
-          CapApp.exitApp();
-        } else {
-          navigate(-1);
-        }
-      }).then(h => { handle = h; });
-    });
-
-    return () => { handle?.remove(); };
-  }, [location.pathname, navigate]);
 
   return null;
 }

@@ -30,6 +30,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { registerOverlay } from '../lib/overlayStack';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -41,11 +42,21 @@ interface ModalProps {
   footer?: ReactNode;
   /** Adds the slide-up entrance SymptomLogModal already used. */
   animate?: boolean;
+  /** A wider panel (max-w-2xl) for reading content; the default is max-w-md. */
+  wide?: boolean;
 }
 
-export function Modal({ open, onClose, title, children, footer, animate = false }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, animate = false, wide = false }: ModalProps) {
   useBodyScrollLock(open);
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
+  // The Android back button closes the top open sheet before it navigates (F067).
+  useEffect(() => {
+    if (!open) return;
+    return registerOverlay(() => onCloseRef.current());
+  }, [open]);
 
   // The portal leaves the app inert without disabling the dialog itself.
   // Keep this separate from onClose so inline callbacks do not reset focus.
@@ -96,12 +107,14 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
   const overlay = (
     /*
       dvh, not vh: on Android the browser chrome and the on-screen keyboard both
-      change the visible height, and vh keeps reporting the largest value. The
-      safe-* utilities add the navigation-bar inset so the sheet is not tucked
-      underneath it.
+      change the visible height, and vh keeps reporting the largest value.
+
+      The padding is max(1rem, inset), not `p-4 safe-top safe-bottom`: the
+      safe-* helpers sit in @layer base, so the p-4 utility always beat them and
+      the sheet was tucked under the Android navigation bar (review F071).
     */
     <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 safe-top safe-bottom"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
       style={{ height: '100dvh' }}
       onClick={(e) => {
         // Backdrop click closes; clicks inside the panel must not.
@@ -111,7 +124,7 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`bg-theme-surface rounded-2xl shadow-xl w-full max-w-md flex flex-col ${
+        className={`bg-theme-surface rounded-2xl shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} flex flex-col ${
           animate ? 'animate-slide-up' : ''
         }`}
         /*
@@ -119,7 +132,7 @@ export function Modal({ open, onClose, title, children, footer, animate = false 
           It is a flex column, so the header and footer hold their size and the
           body is the only part that scrolls.
         */
-        style={{ maxHeight: 'calc(100dvh - 2rem)' }}
+        style={{ maxHeight: 'calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)))' }}
         role="dialog"
         aria-modal="true"
         aria-label={title}
