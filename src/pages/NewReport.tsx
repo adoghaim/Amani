@@ -232,7 +232,13 @@ export function NewReport() {
   const [chosenLab, setChosenLab] = useState<'quest' | 'labcorp' | null>(null);
   const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
 
+  // The hidden file inputs are opened by real buttons (F064), so each needs a ref.
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const genericFileInputRef = useRef<HTMLInputElement>(null);
+  // A failed save sets the error at the top while the button she pressed is at
+  // the bottom; bumping the tick moves focus to the error so it is read out and seen.
+  const errorRef = useRef<HTMLDivElement>(null);
+  const [errorFocusTick, setErrorFocusTick] = useState(0);
   const userEditedReportItemsRef = useRef(false);
   const userEditedPeriodRef = useRef(false);
   const userEditedCycleLengthRef = useRef(false);
@@ -569,6 +575,10 @@ export function NewReport() {
     });
   };
 
+  useEffect(() => {
+    if (errorFocusTick > 0) errorRef.current?.focus();
+  }, [errorFocusTick]);
+
   const toggleSymptom = (symptom: Symptom) => {
     if (symptoms.includes(symptom)) {
       setSymptoms(symptoms.filter(s => s !== symptom));
@@ -873,6 +883,7 @@ export function NewReport() {
     } catch (err) {
       const msg = errorMessage(err, 'An error occurred');
       setError(msg);
+      setErrorFocusTick(tick => tick + 1);
       setLoading(false);
       setStep(3);
       setSubmitStep(null);
@@ -954,7 +965,12 @@ export function NewReport() {
         </div>
 
         {error && (
-          <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg mb-6">
+          <div
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+            className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg mb-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+          >
             {error}
           </div>
         )}
@@ -1019,16 +1035,21 @@ export function NewReport() {
 
               {/* Generic file upload */}
               <div>
+                {/* The input stays display:none; this button is the focusable control that opens it (F064). */}
                 <input
+                  ref={genericFileInputRef}
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={handleFileChange}
                   className="hidden"
                   id="file-upload"
+                  tabIndex={-1}
+                  aria-hidden="true"
                 />
-                <label
-                  htmlFor="file-upload"
-                  className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none
+                <button
+                  type="button"
+                  onClick={() => genericFileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background
                     ${file
                       ? 'border-theme-flag-ok-border bg-theme-flag-ok-bg/60'
                       : 'border-theme-neutral-300 hover:border-theme-primary hover:bg-theme-background/60'
@@ -1043,16 +1064,16 @@ export function NewReport() {
                   ) : (
                     <>
                       <Upload className="w-9 h-9 text-theme-neutral-400" />
-                      <div className="text-center px-4">
-                        <p className="text-sm font-medium text-theme-neutral-700">
+                      <span className="block text-center px-4">
+                        <span className="block text-sm font-medium text-theme-neutral-700">
                           <span className="text-theme-primary">Choose a file</span>
                           <span className="hidden sm:inline"> or drag and drop</span>
-                        </p>
-                        <p className="text-xs text-theme-neutral-400 mt-1">PDF, JPG, or PNG</p>
-                      </div>
+                        </span>
+                        <span className="block text-xs text-theme-neutral-400 mt-1">PDF, JPG, or PNG</span>
+                      </span>
                     </>
                   )}
-                </label>
+                </button>
 
                 {/* Camera capture — native only */}
                 {isNative() && (
@@ -1169,17 +1190,23 @@ export function NewReport() {
                     Open MyQuest <ExternalLink className="w-4 h-4" />
                   </a>
 
-                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Quest PDF
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={handleGuidedUploadFile}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleGuidedUploadFile}
+                    className="hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
               </>
             ) : (
@@ -1218,16 +1245,23 @@ export function NewReport() {
                     Open Labcorp <ExternalLink className="w-4 h-4" />
                   </a>
 
-                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Labcorp PDF
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={handleGuidedUploadFile}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleGuidedUploadFile}
+                    className="hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
               </>
             )}
@@ -1394,7 +1428,7 @@ export function NewReport() {
                     <p className="text-xs text-theme-neutral-500">Amani counts the cycle day of your test from the day your last period started.</p>
                   </div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-sm font-medium text-theme-neutral-700">Last period start</label>
+                    <label htmlFor="last-period-start" className="text-sm font-medium text-theme-neutral-700">Last period start</label>
                     {fetchingPeriod && (
                       <span className="flex items-center gap-1 text-xs text-theme-neutral-400">
                         <Loader2 className="w-3 h-3 animate-spin" /> Looking up tracker...
@@ -1407,6 +1441,7 @@ export function NewReport() {
                     )}
                   </div>
                   <input
+                    id="last-period-start"
                     type="date"
                     value={lastPeriodDate}
                     onChange={e => {
@@ -1462,8 +1497,10 @@ export function NewReport() {
                     {SYMPTOMS.map(symptom => (
                       <button
                         key={symptom.value}
+                        type="button"
+                        aria-pressed={symptoms.includes(symptom.value)}
                         onClick={() => toggleSymptom(symptom.value)}
-                        className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
+                        className={`px-3.5 py-1.5 min-h-[44px] rounded-full border-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background ${
                           symptoms.includes(symptom.value)
                             ? 'border-theme-primary bg-theme-primary/10 text-theme-primary font-medium'
                             : 'border-theme-neutral-200 text-theme-neutral-600 hover:border-theme-neutral-300'
