@@ -211,6 +211,7 @@ describe('ResultRow: the lab\'s printed critical marker (RV-CR1)', () => {
   it.each([
     ['(Panic)', line('Glucose', '450', 'mg/dL', 'Glucose 450 (Panic) mg/dL 65-99')],
     ['HH*', line('Potassium', '6.8', 'mmol/L', 'Potassium 6.8 mmol/L HH* 3.5-5.1')],
+    ['(LL)', line('Hemoglobin', '6.1', 'g/dL', 'Hemoglobin 6.1 g/dL (LL) 11.1-15.9')],
   ])('%s stays verbatim', async (token, analyte) => {
     expect(printedLabFlag(analyte.source_snippet, analyte.raw_value_text, analyte.unit)).toBeNull();
     expectOneBadge(renderWith(analyte, token), analyte, token);
