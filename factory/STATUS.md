@@ -67,7 +67,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-DB3 has_consented means consent; interpreted reports stay immutable; lab file ownership | RV | 1 | todo | RV-DB2 | - |
 | RV-CS1 Unit sanity: withhold Amani bands across unit mismatches | RV | 1 | review | - | [#174](https://github.com/adoghaim/Amani/pull/174) |
 | RV-CS2 Declared pregnancy withholds cycle context; scoring fails closed on bad inputs | RV | 1 | review | RV-CS1 | [#174](https://github.com/adoghaim/Amani/pull/174) |
-| RV-CS3 Censored results never become numbers | RV | 1 | todo | RV-CS2 | - |
+| RV-CS3 Censored results never become numbers | RV | 1 | review | RV-CS2 | [#175](https://github.com/adoghaim/Amani/pull/175) |
 | RV-IA1 Cycle phase and day only from explicit patient lines | RV | 1 | review | - | [#156](https://github.com/adoghaim/Amani/pull/156) |
 | RV-IA2 Parser B12 boundaries; parse-error rows need her confirmation | RV | 1 | in-progress | RV-IA1 | - |
 | RV-IB1 One extraction contract for OCR and AI refinement | RV | 1 | in-progress | - | - |
