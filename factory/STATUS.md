@@ -85,7 +85,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-WP3 Accessible overlays, safe areas, Android back closes sheets first | RV | 1 | todo | RV-WP2 | - |
 | RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | todo | - | - |
 | RV-DL1 Device lock hardening | RV | 1 | in-progress | - | - |
-| RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | todo | - | - |
+| RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | review | - | [#171](https://github.com/adoghaim/Amani/pull/171) |
 | RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | todo | - | - |
 | RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | todo | - | - |
 | RV-DP2 Declared dependencies, an aligned test toolchain and a Node 22 pin | RV | 1 | todo | RV-DP1 | - |
