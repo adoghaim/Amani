@@ -9,12 +9,16 @@
 // iOS 15 and Android 7. There getDocument() never settles (Promise.try) or
 // rejects (toHex). The legacy build bundles those polyfills.
 //
-// The worker is imported with `?worker&url`, NOT a bare `?url`. A bare `?url`
-// copies the file verbatim, so the build target (es2018) never touches it, and
+// The worker is imported with `?lowered-url` (the `loweredUrlAsset` plugin in
+// vite.config.ts), NOT a bare `?url` and NOT `?worker&url`. A bare `?url` copies
+// the file verbatim, so the build target (es2018) never touches it, and
 // pdf.js 6's worker contains syntax (class static blocks, ES2022) that WebKit
-// below 16.4 cannot parse: PDF reading then failed on iOS 15.0-16.3. `?worker&url`
-// sends it through Vite's worker pipeline, which lowers it to the build target
-// (guarded by pdfWorkerTarget.test.ts). The legacy build supplies the missing
+// below 16.4 cannot parse: PDF reading then failed on iOS 15.0-16.3.
+// `?worker&url` lowers it, but Vite's worker bundler also strips the worker's
+// `export { WorkerMessageHandler }`, which pdf.js's fake-worker fallback (module
+// Worker blocked by CSP or a custom-scheme WebView) imports: every getDocument()
+// then rejected. `?lowered-url` lowers the syntax and keeps the export (both
+// guarded by pdfWorkerTarget.test.ts). The legacy build supplies the missing
 // runtime APIs; this supplies the missing syntax.
 type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
 let pdfjsPromise: Promise<PdfJs> | null = null;
@@ -24,7 +28,7 @@ async function loadPdfJs(): Promise<PdfJs> {
     pdfjsPromise = (async () => {
       const [pdfjsLib, workerUrlMod] = await Promise.all([
         import('pdfjs-dist/legacy/build/pdf.mjs'),
-        import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker&url'),
+        import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?lowered-url'),
       ]);
       pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrlMod.default;
       return pdfjsLib;

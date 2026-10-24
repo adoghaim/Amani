@@ -1,8 +1,11 @@
 // @vitest-environment node
-import { fileURLToPath } from 'node:url';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as acorn from 'acorn';
 import { build } from 'vite';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /*
   F062 (review of 70fdd2a) — the app ships to iOS 15.0 and Android 7, and the
@@ -73,4 +76,56 @@ describe('production build lowers the pdf.js worker to the app target (es2018)',
     }
     expect(failures).toEqual([]);
   });
+});
+
+/*
+  F062 follow-up (review of d22dba5) — lowering the worker must not cost it its
+  `export { WorkerMessageHandler }`. pdf.js falls back to a fake worker
+  whenever a module Worker cannot start (CSP worker-src, a custom-scheme
+  WebView, an engine without module workers): it does
+  `(await import(workerSrc)).WorkerMessageHandler`. Vite's own `?worker`
+  bundler hard-codes preserveEntrySignatures:false and strips that export, so
+  every getDocument() then rejects with "Cannot read properties of undefined
+  (reading 'setup')". These tests load the BUILT worker the way the fallback
+  does.
+*/
+describe('the built pdf.js worker keeps its ES export for the fake-worker fallback', () => {
+  let dir = '';
+  let workerFile = '';
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'amani-pdf-worker-'));
+    const worker = emitted
+      .filter(e => /pdf\.worker/.test(e.fileName))
+      .sort((a, b) => b.code.length - a.code.length)[0]; // the worker itself, not the URL stub chunk
+    if (!worker) throw new Error('no pdf.js worker emitted');
+    workerFile = join(dir, 'worker.mjs');
+    writeFileSync(workerFile, worker.code);
+  });
+  afterAll(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('exports WorkerMessageHandler as a function', async () => {
+    const mod = (await import(/* @vite-ignore */ pathToFileURL(workerFile).href)) as Record<string, unknown>;
+    expect(typeof mod.WorkerMessageHandler).toBe('function');
+  });
+
+  it('extracts a synthetic Quest PDF through the fake worker using the built file', async () => {
+    const g = globalThis as unknown as Record<string, unknown>;
+    for (const name of ['DOMMatrix', 'Path2D', 'ImageData']) g[name] ??= class {};
+    // Importing the worker module sets this global, which pdf.js prefers over the export; drop it so the export is what is exercised.
+    delete g.pdfjsWorker;
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerFile).href;
+    const data = new Uint8Array(
+      readFileSync(fileURLToPath(new URL('../../e2e/extraction/fixtures/synthetic-quest-labs.pdf', import.meta.url))),
+    );
+    const task = pdfjs.getDocument({ data });
+    const doc = await task.promise;
+    const page = await doc.getPage(1);
+    const text = (await page.getTextContent()).items.map(i => ('str' in i ? i.str : '')).join(' ');
+    expect(text).toMatch(/Vitamin D/i);
+    await task.destroy();
+  }, 30_000);
 });
