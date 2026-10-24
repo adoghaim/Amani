@@ -15,15 +15,24 @@ interface PostgrestReply {
   error: { message?: string; code?: string } | null;
 }
 
-/** The slice of a PostgREST query builder this module uses. */
+/** The slice of a PostgREST filter builder this module uses (what `select()` returns). */
 export interface ConsentQuery extends PromiseLike<PostgrestReply> {
-  select(columns: string): ConsentQuery;
   eq(column: string, value: string): ConsentQuery;
   abortSignal(signal: AbortSignal): ConsentQuery;
 }
 
+/**
+ * The slice of a PostgREST query builder this module uses (what `from()` returns).
+ * The column lists are literal on purpose: supabase-js parses a select string at
+ * type level, and a bare `string` parameter overflows its instantiation depth (TS2589).
+ */
+export interface ConsentTable {
+  select(columns: "key,value"): ConsentQuery;
+  select(columns: "consent_type,version,granted"): ConsentQuery;
+}
+
 export interface ConsentDbClient {
-  from(table: string): ConsentQuery;
+  from(table: string): ConsentTable;
 }
 
 function failure(what: string, error: { message?: string; code?: string }): Error {

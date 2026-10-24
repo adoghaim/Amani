@@ -1,7 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2.105.3";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.105.3";
 import type { RateLimitStore } from "./rate-limit.ts";
-
-type SupabaseClient = ReturnType<typeof createClient>;
 
 /**
  * PostgREST-backed counter for `enforceRateLimit`. The whole policy lives in
