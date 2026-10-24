@@ -14,7 +14,7 @@ const DIGIT_RE = /\d/;
 export function withReviewFlags<T extends ReportItem>(item: T): T {
   const qualitative = item.value_text != null && !DIGIT_RE.test(item.value_text);
   const boundsError = item.canonical_slug && Number.isFinite(item.value_numeric) && !qualitative
-    ? checkPhysiologicalBounds(item.canonical_slug, item.value_numeric)
+    ? checkPhysiologicalBounds(item.canonical_slug, item.value_numeric, item.unit)
     : null;
   const parse_error = item.parse_error ?? boundsError;
   return {

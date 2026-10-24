@@ -122,3 +122,31 @@ describe('parser pipeline (semantic assertions)', () => {
     expect(below[0]).toMatchObject({ needs_review: true });
   });
 });
+
+/*
+  IA2 review, finding 3: the physiological bounds are written in the catalog's
+  canonical unit. A value the lab printed in another unit is checked against
+  none, so a correct SI result is never "likely a parse error". Nothing is
+  converted. The canonical-unit rows are the control.
+*/
+describe('parser pipeline (physiological bounds and units)', () => {
+  const lab = (row: string) => `Lab Report\n\n${row}\n`;
+
+  it.each([
+    ['Glucose                      5.2       mmol/L    3.9-5.5', 'fasting_glucose', 5.2],
+    ['Hemoglobin                   135       g/L       120-160', 'hemoglobin', 135],
+    ['Calcium                      2.4       mmol/L    2.2-2.6', 'calcium', 2.4],
+  ])('an SI-unit value is no parse error: %s', (row, slug, value) => {
+    const item = parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug);
+    expect(item).toMatchObject({ value_numeric: value });
+    expect(item?.parse_error ?? null).toBeNull();
+  });
+
+  it.each([
+    ['Glucose                      5.2       mg/dL     65-99', 'fasting_glucose'],
+    ['Calcium                      2.4       mg/dL     8.6-10.4', 'calcium'],
+  ])('control: the same number in the canonical unit is still a parse error: %s', (row, slug) => {
+    const item = parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug);
+    expect(item?.parse_error).toMatch(/likely a parse error$/);
+  });
+});

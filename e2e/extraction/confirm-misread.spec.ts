@@ -41,7 +41,7 @@ test('a probably misread value keeps Save closed until she confirms it', async (
   await page.locator('#file-upload').setInputFiles({ name: 'synthetic-lab.png', mimeType: 'image/png', buffer: Buffer.from('synthetic') });
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Review your report' })).toBeVisible();
-  await expect(page.getByText("a value we may have misread isn't used for your main finding or trends until you confirm it.", { exact: false })).toBeVisible();
+  await expect(page.getByText("it is left out of your report's main finding, focus areas and changes, and out of your Tracker charts. AI summaries and insights may still include it.", { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Confirm your markers' })).toBeVisible();
 

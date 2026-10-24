@@ -1279,7 +1279,8 @@ export function NewReport() {
                 <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mb-5">
                   <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-theme-flag-watch">
-                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''}. Check them on the next step — a value we may have misread isn't used for your main finding or trends until you confirm it.
+                    {/* IA2 review: only what the web app holds today; the server's AI reads are handoffs. */}
+                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''}. Check them on the next step. Until you confirm a value we may have misread, it is left out of your report's main finding, focus areas and changes, and out of your Tracker charts. AI summaries and insights may still include it.
                   </p>
                 </div>
               )}

@@ -938,6 +938,11 @@ export function ReportView() {
       report?.estimated_cycle_phase as Parameters<typeof scoreBiomarker>[5],
     ));
   }, [biomarkers, report]);
+  // F022: a value she has not confirmed opens no focus area or Support plan card and flags no lab.
+  const confirmedScoredBiomarkers = useMemo(
+    () => scoredBiomarkers.filter((_, i) => !isUnconfirmedBiomarker(biomarkers[i]!, unconfirmedKeys)),
+    [scoredBiomarkers, biomarkers, unconfirmedKeys],
+  );
 
   /*
     V2-03b. "Top Priority" / "Main Focus" and the optimization-only headline
@@ -1008,8 +1013,8 @@ export function ReportView() {
   }, [insightSummary]);
 
   const flaggedSlugs = useMemo<BiomarkerName[]>(
-    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside').map(s => s.key),
-    [scoredBiomarkers, report?.estimated_cycle_phase],
+    () => confirmedScoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside').map(s => s.key),
+    [confirmedScoredBiomarkers, report?.estimated_cycle_phase],
   );
 
   const flaggedCategories = useMemo<BiomarkerCategory[]>(
@@ -1022,11 +1027,11 @@ export function ReportView() {
     return buildFocusAreas(
       insightSummary,
       insightSummary.watchSignals,
-      scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside'),
+      confirmedScoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase) === 'outside'),
       null,
       primaryCategory,
     );
-  }, [insightSummary, scoredBiomarkers, primaryCategory, report?.estimated_cycle_phase]);
+  }, [insightSummary, confirmedScoredBiomarkers, primaryCategory, report?.estimated_cycle_phase]);
 
   const guidanceCards = useMemo(() => {
     const primaryFocusId = focusAreas.find((a) => a.isPrimaryAligned)?.id ?? null;

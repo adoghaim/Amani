@@ -35,6 +35,29 @@ describe('withReviewFlags: the parser\'s review rules on every row of the confir
     expect(withReviewFlags(modelRow({ value_numeric: 2.1, value_text: '2.1', needs_review: true })).needs_review).toBe(true);
   });
 
+  /*
+    IA2 review, finding 3: the bounds are written in the catalog's canonical
+    unit, so a value in another unit (an SI glucose, 5.2 mmol/L) is no parse
+    error and never blocks Save. Nothing is converted.
+  */
+  describe('the bounds hold only for the catalog\'s canonical unit', () => {
+    const glucose = (value: number, unit: string | null) => modelRow({
+      raw_name: 'Glucose', canonical_slug: 'fasting_glucose', category: 'metabolic', value_numeric: value, value_text: String(value), unit,
+    });
+
+    it('an SI-unit value is no parse error and does not keep Save closed', () => {
+      const row = withReviewFlags(glucose(5.2, 'mmol/L'));
+      expect(row).toMatchObject({ parse_error: null, needs_review: false, value_numeric: 5.2, unit: 'mmol/L' });
+      expect(awaitsHerConfirmation(row)).toBe(false);
+    });
+
+    it.each([['mg/dL'], ['MG/DL'], [' mg/dL '], [null]])('control: in the canonical unit (%j) or with no unit, 5.2 is still a parse error', (unit) => {
+      const row = withReviewFlags(glucose(5.2, unit));
+      expect(row.parse_error).toMatch(/^Value 5\.2 is below physiological minimum 30 for .+ — likely a parse error$/);
+      expect(awaitsHerConfirmation(row)).toBe(true);
+    });
+  });
+
   it.each([
     ['a qualitative result', { value_numeric: 0, value_text: 'Negative' }],
     ['a row with no catalog slug', { canonical_slug: null }],

@@ -128,7 +128,23 @@ describe('NewReport confirm step: a probably misread value needs her confirmatio
     fixture.pdfText = edgeCasesFixture;
     await upload(pdf());
     expect(app.textContent).not.toContain('Amani will use what it understood');
-    expect(app.textContent).toContain('a value we may have misread isn\'t used for your main finding or trends until you confirm it.');
+    expect(app.textContent).toContain('Check them on the next step.');
+  });
+
+  /*
+    IA2 review, finding 1: the step-2 copy promises only what the web app does
+    today. Her report page and Tracker charts leave the value out; the server's
+    AI summary and the Tracker's AI insights (lab-insights) read every saved
+    value until their handoffs ship, so the copy says they may still include it.
+  */
+  it('step 2 promises only what holds today: report and Tracker charts leave it out; AI summaries may not', async () => {
+    fixture.pdfText = edgeCasesFixture;
+    await upload(pdf());
+    expect(app.textContent).toContain(
+      'Until you confirm a value we may have misread, it is left out of your report\'s main finding, focus areas and changes, '
+      + 'and out of your Tracker charts. AI summaries and insights may still include it.',
+    );
+    expect(app.textContent).not.toContain('isn\'t used for your main finding or trends');
   });
 
   it('the parser\'s parse-error row keeps Save closed until she marks it correct', async () => {

@@ -71,10 +71,20 @@ export function confidenceRank(c: 'high' | 'medium' | 'low'): number {
   return c === 'high' ? 2 : c === 'medium' ? 1 : 0;
 }
 
-// The message is shown on the upload's confirm step, so it names the marker as the report does.
-export function checkPhysiologicalBounds(slug: string, value: number): string | null {
+const unitKey = (unit: string) => unit.trim().toLowerCase();
+
+/*
+  The message is shown on the upload's confirm step, so it names the marker as
+  the report does. The bounds are written in the catalog's canonical unit: a
+  value printed in another unit (an SI glucose, 5.2 mmol/L) is checked against
+  none, so a correct result is never called a parse error. Nothing is
+  converted. A row with no unit is still checked.
+*/
+export function checkPhysiologicalBounds(slug: string, value: number, unit?: string | null): string | null {
   const bounds = PHYSIOLOGICAL_BOUNDS[slug];
   if (!bounds) return null;
+  const canonicalUnit = getEntry(slug as BiomarkerName)?.defaultUnit;
+  if (unit && unit.trim() !== '' && (!canonicalUnit || unitKey(unit) !== unitKey(canonicalUnit))) return null;
   const name = getDisplayName(slug as BiomarkerName);
   if (value < bounds.min) return `Value ${value} is below physiological minimum ${bounds.min} for ${name} — likely a parse error`;
   if (value > bounds.max) return `Value ${value} exceeds physiological maximum ${bounds.max} for ${name} — likely a parse error`;
@@ -194,7 +204,7 @@ export function layeredParse(
     const confidence: 'high' | 'medium' | 'low' =
       (hasMinMax || hasComparator) ? 'high' : parsed.unit ? 'medium' : 'low';
 
-    const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
+    const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value, parsed.unit);
 
     const debugInfo: ParserDebugInfo | undefined = debug ? {
       matchedLabel: line,
@@ -435,7 +445,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
     const slug    = b.name;
     const isCore  = CORE_SLUGS.has(slug);
     const ref     = b.reference_comparator;
-    const parseError = checkPhysiologicalBounds(slug, b.value);
+    const parseError = checkPhysiologicalBounds(slug, b.value, b.unit);
     const rawRef  = b.reference_text_raw ?? null;
     const confidence = parseError ? 'low' as const : b.confidence;
     const ambiguity = b.reference_ambiguity;
@@ -586,7 +596,7 @@ function buildExtendedItems(
       : (rawUnit || isUnitlessExtended) ? 'medium'
       : 'low';
 
-    const physBoundsError = slug ? checkPhysiologicalBounds(slug, valueNumeric) : null;
+    const physBoundsError = slug ? checkPhysiologicalBounds(slug, valueNumeric, rawUnit) : null;
 
     const parseStatus = computeParseStatus({
       canonical_slug: slug,
@@ -712,7 +722,7 @@ export function parseAllReportItemsWithDebug(
       const hasComparator = !!ref?.comparator;
       const confidence: 'high' | 'medium' | 'low' =
         (hasMinMax || hasComparator) ? 'high' : parsed.unit ? 'medium' : 'low';
-      const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
+      const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value, parsed.unit);
 
       analyteBlocks.push({
         blockIndex: blockIndex++, lineIndex: i, rawLabel: line, canonical,

@@ -22,6 +22,9 @@ const fixture = vi.hoisted(() => ({
   },
   trajectory: [] as { changes: { key: string; previousValue: number }[]; primaryFinding: { key: string } | null }[],
   baselineCalls: [] as { entries: unknown[]; current: unknown }[],
+  focusAreas: [] as { relatedMarkers: { slug: string }[] }[][],
+  guidanceCards: [] as unknown[][],
+  flaggedSlugs: [] as (string[] | undefined)[],
 }));
 
 vi.mock('../lib/supabase', () => ({ supabase: {
@@ -43,6 +46,16 @@ vi.mock('../components/YourTrajectoryCard', () => ({
     fixture.trajectory.push(props);
     return null;
   },
+}));
+// What the page hands its focus areas, Support plan and recommended labs (finding 2 of the IA2 review).
+vi.mock('../components/FocusAreas', () => ({
+  FocusAreas: (props: { focusAreas: { relatedMarkers: { slug: string }[] }[] }) => { fixture.focusAreas.push(props.focusAreas); return null; },
+}));
+vi.mock('../components/GuidanceCards', () => ({
+  GuidanceCards: (props: { cards: unknown[] }) => { fixture.guidanceCards.push(props.cards); return null; },
+}));
+vi.mock('../components/RecommendedLabs', () => ({
+  RecommendedLabs: (props: { flaggedSlugs?: string[] }) => { fixture.flaggedSlugs.push(props.flaggedSlugs); return null; },
 }));
 vi.mock('../lib/personalization/baseline', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/personalization/baseline')>();
@@ -100,6 +113,9 @@ beforeEach(() => {
   vi.stubEnv('VITE_FREEMIUM_ACTIVE', '');
   fixture.trajectory = [];
   fixture.baselineCalls = [];
+  fixture.focusAreas = [];
+  fixture.guidanceCards = [];
+  fixture.flaggedSlugs = [];
   app = document.createElement('div');
   document.body.append(app);
   root = createRoot(app);
@@ -173,6 +189,31 @@ describe('ReportView with a value she has not confirmed (F022)', () => {
     const alert = app.querySelector('[data-safety-rule="synthetic-tsh"]');
     expect(alert?.textContent).toContain('Synthetic safety text for a test.');
     expect(alert?.textContent).toContain("You haven't confirmed this value. Check it against your report.");
+  });
+
+  describe('focus areas, Support plan cards and recommended labs (IA2 review, finding 2)', () => {
+    // Ferritin 8 sits outside its band and would open a Nutrients focus area and card; TSH 2 sits inside.
+    const values: Value[] = [['current', 'tsh', 2, 'mIU/L', 0.4, 4.5], ['current', 'ferritin', 8, 'ng/mL', 16, 154]];
+    const isFerritin8 = ([, slug, value]: Value) => slug === 'ferritin' && value === 8;
+    const last = <T,>(calls: T[]) => calls[calls.length - 1];
+    const focusSlugs = () => (last(fixture.focusAreas) ?? []).flatMap(a => a.relatedMarkers.map(m => m.slug));
+    const cardIds = () => (last(fixture.guidanceCards) ?? []).map(c => (c as { id: string }).id);
+
+    it('her unconfirmed value opens no focus area, no Support plan card and flags no lab', async () => {
+      fixture.db = account([report('current', '2026-09-01')], values, isFerritin8);
+      await open('current');
+      expect(focusSlugs()).not.toContain('ferritin');
+      expect(cardIds()).not.toContain('nutrient_sufficiency');
+      expect(last(fixture.flaggedSlugs) ?? []).not.toContain('ferritin');
+    });
+
+    it('control: once she has confirmed it, that value does', async () => {
+      fixture.db = account([report('current', '2026-09-01')], values, () => false);
+      await open('current');
+      expect(focusSlugs()).toContain('ferritin');
+      expect(cardIds()).toContain('nutrient_sufficiency');
+      expect(last(fixture.flaggedSlugs)).toContain('ferritin');
+    });
   });
 
   it('control: a confirmed value\'s safety copy carries no such mark', async () => {
