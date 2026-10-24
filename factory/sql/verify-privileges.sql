@@ -33,8 +33,27 @@
 --                                              authenticated SELECT on the
 --                                              four views clients read
 --                                              (client_view below)
--- REFERENCES, TRIGGER and (Postgres 17) MAINTAIN are not data access and are
--- not judged here.
+--   not a table authenticated is designed to read
+--                                              an authenticated SELECT (a
+--                                              column grant counts) that a
+--                                              policy serves, on a table not
+--                                              in client_read below
+--   listed in client_read, but authenticated cannot read it
+--                                              a client_read entry that is not
+--                                              a public table, or on which
+--                                              authenticated holds no SELECT:
+--                                              the list is stale
+-- So every signed-in read of a table is judged by design, as anon_read,
+-- client_view and FC-CLIENT-WRITES (full-chain.verify.sql) judge the rest: a
+-- new table a client can read is a row until it is listed on purpose. Which
+-- rows a client_read policy lets her see is not judged here: an over-broad
+-- policy on a client_read table is for the FC-CROSS-USER probes
+-- (full-chain.probes.sql) to catch. The view rule covers the service-only
+-- views funnel_daily (20261015010000) and partner_code_counts
+-- (20261022180000): any client grant on either is a row.
+-- Not judged here: REFERENCES, TRIGGER and (Postgres 17) MAINTAIN, which are
+-- not data access; sequences; and function EXECUTE (FC-DEFINER-RPC in
+-- full-chain.verify.sql pins the SECURITY DEFINER functions only).
 --
 -- The migration harness runs this same file over the whole replayed chain
 -- (supabase/migrations/__verification__/cases/240-full-chain-replay.sh) and
@@ -58,6 +77,27 @@ client_view(relname) AS (
 -- biomarker catalog (src/hooks/useBiomarkerCatalog.ts).
 anon_read(relname) AS (
   VALUES ('app_public_config'), ('biomarker_catalog')
+),
+-- Read signed in: the tables authenticated holds SELECT on and a policy
+-- serves. First the user-owned tables (USER_DATA_REGISTRY), each with an
+-- fc_cross_user probe in full-chain.probes.sql; then the reference tables,
+-- each with its reader or the migration that grants the read.
+client_read(relname) AS (
+  VALUES ('audit_events'), ('biomarkers'), ('complimentary_entitlements'), ('consent_records'),
+         ('cycle_events'), ('derived_metric_results'), ('health_scores'), ('iap_beta_testers'),
+         ('iap_subscriptions'), ('insight_rule_results'), ('interpretation_feedback'),
+         ('interventions'), ('introductory_deep_access_claims'), ('lab_reports'), ('lab_results'),
+         ('notification_preferences'), ('parser_debug'), ('period_logs'), ('rate_limits'),
+         ('reminders'), ('report_analytes'), ('report_items'), ('stripe_customers'),
+         ('stripe_orders'), ('stripe_subscriptions'), ('symptom_logs'), ('users'),
+         -- The extraction functions read it as service_role and no client
+         -- does; the signed-in read is 20260312194342's policy.
+         ('analyte_synonyms'),
+         ('app_public_config'),          -- src/lib/runtimeConfig.ts
+         ('biomarker_catalog'),          -- src/hooks/useBiomarkerCatalog.ts
+         ('canonical_analytes'),         -- src/pages/NewReport.tsx
+         -- No reader yet; granted on purpose by 20261006000000_clinical_catalog.sql.
+         ('clinical_catalog_entries'), ('clinical_ranges')
 ),
 held AS (
   SELECT rel.oid, rel.relname, rel.relkind, rel.relrowsecurity,
@@ -92,6 +132,9 @@ judged AS (
           AND coalesce(pg_get_expr(pol.polqual, pol.polrelid), '') <> 'false'
           AND coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '') <> 'false'
       ) THEN 'no policy serves it'
+      WHEN h.role_name = 'authenticated' AND h.privilege = 'SELECT'
+           AND h.relname NOT IN (SELECT relname FROM client_read)
+        THEN 'not a table authenticated is designed to read'
     END AS problem
   FROM held h
 )
@@ -103,4 +146,9 @@ UNION ALL
 SELECT relname, '-', '-', 'row level security is disabled'
 FROM rel
 WHERE relkind IN ('r', 'p') AND NOT relrowsecurity
+UNION ALL
+SELECT cr.relname, 'authenticated', 'SELECT', 'listed in client_read, but authenticated cannot read it'
+FROM client_read cr
+WHERE cr.relname NOT IN (SELECT h.relname FROM held h
+                         WHERE h.relkind IN ('r', 'p') AND h.role_name = 'authenticated' AND h.privilege = 'SELECT')
 ORDER BY 1, 2, 4;
