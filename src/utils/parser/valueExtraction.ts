@@ -18,8 +18,9 @@ export function isBelowLimitResult(valueText: string | null | undefined): boolea
 }
 
 // An inclusive comparator printed right before a number, in any case and
-// spacing: "> OR =", "< OR =", ">=", "<=", "> =", "< =", "≥", "≤" (F021).
-const INCLUSIVE_BEFORE_RE = /(?:[<>]\s*(?:or\s*)?=|[≤≥])\s*$/i;
+// spacing: "> OR =", "< OR =", ">=", "<=", "> =", "< =", "≥", "≤" (F021), and
+// "≥ OR =", "≤ OR =", "≥=", "≤=" (RV-PX2 D1).
+const INCLUSIVE_BEFORE_RE = /(?:[<>≤≥]\s*(?:or\s*)?=|[≤≥])\s*$/i;
 
 /** A number the reader chose; when known, it is printed at `line.slice(start)`. */
 type Candidate = { value: number; rawValue: string; line?: string; start?: number };

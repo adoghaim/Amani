@@ -5,6 +5,8 @@
 // control row, or bare). Each row pins what the packet reads on both entry
 // points; a control reads as the base (03f9a85) did, every other row did not.
 
+const QUEST = 'Quest Diagnostics\nSYNTHETIC TEST REPORT - NOT A REAL PATIENT\nTest Name Result Flag Reference Range Units\nTSH 2.85 0.40-4.50 mIU/L\n';
+const EDGE = 'Lab Report\n\n';
 const BARE_QUEST = 'Quest Diagnostics\nSYNTHETIC TEST REPORT - NOT A REAL PATIENT\nTest Name Result Flag Reference Range Units\n';
 const BARE_LABCORP = 'LabCorp\nLaboratory Corporation of America\nTest Result Units Ref. Interval\n';
 const BARE_GENERIC = 'Patient Lab Results\nCollection Date: 2026-04-01\n\n';
@@ -131,6 +133,21 @@ export const RESIDUAL_ROWS: readonly ResidualRow[] = [
     reads: ['2.4', 2.4, 'mmol/L', true, '2.2-2.6', null, null, 'needs_review', null] },
   { rule: 'control', id: 'hemoglobin_gl', marker: 'hemoglobin', text: BARE_GENERIC + 'Hemoglobin 135 g/L 120-160',
     reads: ['135', 135, 'g/L', true, '120-160', null, null, 'needs_review', null] },
+  { rule: 'D1', id: 'hdl_ge_or_result', marker: 'hdl_cholesterol', text: QUEST + 'HDL Cholesterol ≥ OR = 100 mg/dL > OR = 40',
+    reads: ['≥ OR = 100', 100, 'mg/dL', false, '> OR = 40', '> OR =', 40, 'mapped', null] },
+  { rule: 'D1', id: 'b12_le_or_result', marker: 'vitamin_b12', text: EDGE + 'Vitamin B12                  ≤ OR = 150   pg/mL     232-1245',
+    reads: ['≤ OR = 150', 75, 'pg/mL', true, '232-1245', null, null, 'mapped', null] },
+  { rule: 'D1', id: 'b12_le_or_result_quest', marker: 'vitamin_b12', text: QUEST + 'Vitamin B12 ≤ OR = 150 L 232-1245 pg/mL',
+    reads: ['≤ OR = 150', 75, 'pg/mL', true, '232-1245', null, null, 'mapped', null] },
+  { rule: 'D1', id: 'vitd_ge_or_glued_result', marker: 'vitamin_d_25_oh', text: QUEST + 'Vitamin D, 25-OH, Total ≥OR=150 H 30-100 ng/mL',
+    reads: ['≥OR=150', 150, 'ng/mL', false, '30-100', null, null, 'mapped', null] },
+  { rule: 'D1', id: 'vitd_ge_eq_result', marker: 'vitamin_d_25_oh', text: QUEST + 'Vitamin D, 25-OH, Total ≥=150 H 30-100 ng/mL',
+    reads: ['≥=150', 150, 'ng/mL', false, '30-100', null, null, 'mapped', null] },
+  { rule: 'D1', id: 'vitd_le_eq_result', marker: 'vitamin_d_25_oh', text: QUEST + 'Vitamin D, 25-OH, Total ≤=8 L 30-100 ng/mL',
+    reads: ['≤=8', 4, 'ng/mL', true, '30-100', null, null, 'mapped', null] },
+  // The comparator is printed after her number, not before it: 35 stays.
+  { rule: 'control', id: 'hdl_measured_ge_or_ref', marker: 'hdl_cholesterol', text: QUEST + 'HDL Cholesterol 35 L ≥ OR = 40 mg/dL',
+    reads: ['35', 35, 'mg/dL', true, null, null, null, 'needs_review', null] },
 ];
 
 /** The unit of every row of the 8 parser fixtures (parseAllReportItems): as at the base, except SHBG's (B3). */

@@ -28,6 +28,8 @@ import type { ReportItem } from './types';
      default (§3a). A "%" standing alone or glued to a number is a unit (B2).
   C: the bounds treat the catalog's notations and owner-approved 1:1
      equivalents as the catalog unit.
+  D: "≥ OR =", "≤ OR =", "≥=" and "≤=" annotate her number like the other
+     inclusive spellings.
 */
 
 const marker = (i: ReportItem) => i.canonical_slug ?? i.raw_name;
