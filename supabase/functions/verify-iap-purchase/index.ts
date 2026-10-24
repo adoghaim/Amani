@@ -19,7 +19,6 @@
 
 import 'jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
-import { errorMessage } from '../_shared/errors.ts';
 import { fetchWithBackoff } from '../_shared/fetchWithBackoff.ts';
 import { loadBetaTester, type BetaAllowlistActions } from '../_shared/beta-allowlist.ts';
 import {
@@ -31,6 +30,7 @@ import {
   IAP_ROW_COLUMNS,
   normalizeSubscriberPayload,
   persistIapSubscriptions,
+  verificationFailure,
   type IapPlatform,
   type IapRowPatch,
   type IapStore,
@@ -85,6 +85,37 @@ function corsResponse(body: object | null, status = 200) {
   });
 }
 
+/*
+  Every row on this platform that records `transactionId` as its key or as the
+  latest transaction in its stored payload (webhook body or subscriber entry).
+  Three .eq() reads rather than one .or() string, so the id is always a bound
+  filter value and never parsed as PostgREST syntax. Thrown on error for the
+  same reason as findByStoreSubscription: a failed read must not become an
+  insert.
+*/
+async function findRowsByTransactionId(
+  platform: IapPlatform,
+  transactionId: string,
+): Promise<IapSubscriptionRow[]> {
+  const columns = ['store_subscription_id', 'raw->event->>transaction_id', 'raw->>store_transaction_id'];
+  const results = await Promise.all(
+    columns.map((column) =>
+      supabase
+        .from('iap_subscriptions')
+        .select(IAP_ROW_COLUMNS)
+        .eq('platform', platform)
+        .eq(column, transactionId)
+        .limit(10)
+    ),
+  );
+  const rows = new Map<string, IapSubscriptionRow>();
+  for (const { data, error } of results) {
+    if (error) throw new Error(`iap_subscriptions read failed: ${error.message}`);
+    for (const row of (data ?? []) as unknown as IapSubscriptionRow[]) rows.set(row.id, row);
+  }
+  return [...rows.values()];
+}
+
 const iapStore: IapStore = {
   async findByStoreSubscription(platform: IapPlatform, storeSubscriptionId: string) {
     const { data, error } = await supabase
@@ -98,6 +129,10 @@ const iapStore: IapStore = {
     // turn an ownership conflict into a silent insert.
     if (error) throw new Error(`iap_subscriptions read failed: ${error.message}`);
     return (data as IapSubscriptionRow | null) ?? null;
+  },
+
+  async findByTransactionId(platform: IapPlatform, transactionId: string) {
+    return await findRowsByTransactionId(platform, transactionId);
   },
 
   async findByUserProduct(userId: string, platform: IapPlatform, productId: string) {
@@ -271,8 +306,10 @@ Deno.serve(async (req) => {
       })),
     });
   } catch (error: unknown) {
-    const message = errorMessage(error, 'Failed to verify purchase');
-    console.error('[verify-iap-purchase] failed:', error);
-    return corsResponse({ error: message }, 500);
+    // Fixed answer to the client; the detail (RevenueCat's body, a Postgres
+    // message) is logged only after phi-scrub.
+    const failure = verificationFailure(error);
+    console.error(`[verify-iap-purchase] failed: ${failure.log}`);
+    return corsResponse(failure.body, failure.status);
   }
 });
