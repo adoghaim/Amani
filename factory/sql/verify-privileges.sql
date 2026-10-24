@@ -21,6 +21,14 @@
 --   TRUNCATE is not subject to row level security
 --                                              any TRUNCATE held by anon or
 --                                              authenticated
+--   not a grant anon is designed for           any anon grant other than
+--                                              SELECT on the two tables a
+--                                              signed-out app reads
+--                                              (anon_read below), whatever
+--                                              policy would serve it (review
+--                                              F034: anon holds nothing on
+--                                              user data, so one broad policy
+--                                              added later exposes nothing)
 --   not a grant a client view is designed for  any grant on a view other than
 --                                              authenticated SELECT on the
 --                                              four views clients read
@@ -31,9 +39,12 @@
 -- The migration harness runs this same file over the whole replayed chain
 -- (supabase/migrations/__verification__/cases/240-full-chain-replay.sh) and
 -- fails unless its rows are exactly that case's CHAIN_KNOWN_VIOLATIONS: the
--- violations the chain still ships, which the db-security track's next
--- packet (DB2) removes. Until that packet's migration is pushed, a database
--- built from this chain returns exactly those rows; any other row is new.
+-- violations the chain still ships. DB2 (20261023100000, review F027, F034,
+-- F046) removed the rows for the three tables without row level security,
+-- every anon grant and the Stripe tables' client writes; what is left is
+-- authenticated TRUNCATE and the authenticated writes no policy serves, for a
+-- later packet. Until DB2's migration is pushed, production also returns the
+-- rows it removes; after it, any row beyond that list is new.
 WITH rel AS (
   SELECT c.oid, c.relname, c.relkind, c.relrowsecurity
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -42,6 +53,11 @@ WITH rel AS (
 client_view(relname) AS (
   VALUES ('interpretations'), ('consent_current'),
          ('stripe_user_subscriptions'), ('stripe_user_orders')
+),
+-- Read before sign-in: runtime config (src/lib/runtimeConfig.ts) and the
+-- biomarker catalog (src/hooks/useBiomarkerCatalog.ts).
+anon_read(relname) AS (
+  VALUES ('app_public_config'), ('biomarker_catalog')
 ),
 held AS (
   SELECT rel.oid, rel.relname, rel.relkind, rel.relrowsecurity,
@@ -58,6 +74,9 @@ judged AS (
   SELECT h.relname, h.role_name, h.privilege,
     CASE
       WHEN h.privilege = 'TRUNCATE' THEN 'TRUNCATE is not subject to row level security'
+      WHEN h.role_name = 'anon' AND NOT (h.privilege = 'SELECT' AND h.relkind IN ('r', 'p')
+                                         AND h.relname IN (SELECT relname FROM anon_read))
+        THEN 'not a grant anon is designed for'
       WHEN h.relkind NOT IN ('r', 'p') THEN
         CASE WHEN h.role_name = 'authenticated' AND h.privilege = 'SELECT'
                   AND h.relname IN (SELECT relname FROM client_view) THEN NULL

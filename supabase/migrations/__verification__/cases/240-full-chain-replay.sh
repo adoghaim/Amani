@@ -11,9 +11,10 @@
 # applied in version order, one transaction per file (psql -1; the Supabase
 # CLI also runs a file as one implicit batch, or as written when the file has
 # its own BEGIN/COMMIT), and the first error fails the case. Uses nothing an
-# earlier case leaves except the container; leaves the full_chain database,
-# /tmp/full-chain/ and the other /tmp files it copies, and the pgtap stand-in
-# in the container's extension directory, which no later case uses.
+# earlier case leaves except the container; leaves the full_chain database
+# (case 260 clones it), /tmp/full-chain/ and the other /tmp files it copies,
+# and the pgtap stand-in in the container's extension directory, which no
+# later case uses.
 #
 # Deferred files. Two files dated before the baseline,
 # 20260216193045_initial_schema.sql, ALTER tables the baseline creates, so they
@@ -38,7 +39,7 @@
 #      anon or authenticated grant a policy serves. Its rows must be exactly
 #      CHAIN_KNOWN_VIOLATIONS below. A new row fails (fix it; never list it to
 #      get green), and so does a listed row that is gone (remove it): the list
-#      only shrinks. The db-security track's next packet (DB2) empties it.
+#      only shrinks. DB2 (case 260) took out its first three groups.
 #   2. full-chain.verify.sql, from the catalog: the explicit allow-list of
 #      client writes and the column locks, no anon write a policy serves, and
 #      the SECURITY DEFINER functions clients may call. full-chain.probes.sql,
@@ -58,86 +59,10 @@ CHAIN_DEFERRED='20260115202339_add_interpretation_source.sql|20260312070949_add_
 
 # verify-privileges.sql rows the chain still ships (relation|role|privileges|problem).
 # Lines starting with # are notes and are not compared.
-CHAIN_KNOWN_VIOLATIONS='# Row level security off: lab_panels, derived_metric_definitions, insight_rules.
-derived_metric_definitions|-|-|row level security is disabled
-derived_metric_definitions|anon|TRUNCATE|TRUNCATE is not subject to row level security
-derived_metric_definitions|anon|DELETE,INSERT,SELECT,UPDATE|row level security is disabled
-derived_metric_definitions|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-derived_metric_definitions|authenticated|DELETE,INSERT,SELECT,UPDATE|row level security is disabled
-insight_rules|-|-|row level security is disabled
-insight_rules|anon|TRUNCATE|TRUNCATE is not subject to row level security
-insight_rules|anon|DELETE,INSERT,SELECT,UPDATE|row level security is disabled
-insight_rules|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-insight_rules|authenticated|DELETE,INSERT,SELECT,UPDATE|row level security is disabled
-lab_panels|-|-|row level security is disabled
-lab_panels|anon|TRUNCATE|TRUNCATE is not subject to row level security
-lab_panels|anon|DELETE,INSERT,SELECT,UPDATE|row level security is disabled
-lab_panels|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-lab_panels|authenticated|DELETE,INSERT,SELECT,UPDATE|row level security is disabled
-# anon grants.
-analyte_synonyms|anon|TRUNCATE|TRUNCATE is not subject to row level security
-analyte_synonyms|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-audit_events|anon|TRUNCATE|TRUNCATE is not subject to row level security
-audit_events|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-biomarker_catalog|anon|TRUNCATE|TRUNCATE is not subject to row level security
-biomarker_catalog|anon|DELETE,INSERT,UPDATE|no policy serves it
-biomarkers|anon|TRUNCATE|TRUNCATE is not subject to row level security
-biomarkers|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-canonical_analytes|anon|TRUNCATE|TRUNCATE is not subject to row level security
-canonical_analytes|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-cycle_events|anon|TRUNCATE|TRUNCATE is not subject to row level security
-cycle_events|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-derived_metric_results|anon|TRUNCATE|TRUNCATE is not subject to row level security
-derived_metric_results|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-health_scores|anon|TRUNCATE|TRUNCATE is not subject to row level security
-health_scores|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-insight_rule_results|anon|TRUNCATE|TRUNCATE is not subject to row level security
-insight_rule_results|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-interventions|anon|TRUNCATE|TRUNCATE is not subject to row level security
-interventions|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-lab_reports|anon|TRUNCATE|TRUNCATE is not subject to row level security
-lab_reports|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-lab_results|anon|TRUNCATE|TRUNCATE is not subject to row level security
-lab_results|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-notification_preferences|anon|TRUNCATE|TRUNCATE is not subject to row level security
-notification_preferences|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-parser_debug|anon|TRUNCATE|TRUNCATE is not subject to row level security
-parser_debug|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-period_logs|anon|TRUNCATE|TRUNCATE is not subject to row level security
-period_logs|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-processed_stripe_events|anon|TRUNCATE|TRUNCATE is not subject to row level security
-processed_stripe_events|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-reminders|anon|TRUNCATE|TRUNCATE is not subject to row level security
-reminders|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-report_analytes|anon|TRUNCATE|TRUNCATE is not subject to row level security
-report_analytes|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-report_items|anon|TRUNCATE|TRUNCATE is not subject to row level security
-report_items|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-stripe_customers|anon|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_customers|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-stripe_orders|anon|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_orders|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-stripe_subscriptions|anon|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_subscriptions|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-stripe_user_orders|anon|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_user_orders|anon|DELETE,INSERT,SELECT,UPDATE|not a grant a client view is designed for
-stripe_user_subscriptions|anon|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_user_subscriptions|anon|DELETE,INSERT,SELECT,UPDATE|not a grant a client view is designed for
-symptom_logs|anon|TRUNCATE|TRUNCATE is not subject to row level security
-symptom_logs|anon|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-# Stripe tables and views: client grants no policy serves.
-processed_stripe_events|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-processed_stripe_events|authenticated|DELETE,INSERT,SELECT,UPDATE|no policy serves it
-stripe_customers|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_customers|authenticated|DELETE,INSERT,UPDATE|no policy serves it
-stripe_orders|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_orders|authenticated|DELETE,INSERT,UPDATE|no policy serves it
-stripe_subscriptions|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_subscriptions|authenticated|DELETE,INSERT,UPDATE|no policy serves it
-stripe_user_orders|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_user_orders|authenticated|DELETE,INSERT,UPDATE|not a grant a client view is designed for
-stripe_user_subscriptions|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
-stripe_user_subscriptions|authenticated|DELETE,INSERT,UPDATE|not a grant a client view is designed for
+CHAIN_KNOWN_VIOLATIONS='# DB2 (20261023100000, case 260) removed the rows for lab_panels,
+# derived_metric_definitions and insight_rules (no row level security), every
+# anon grant, and the client writes on the Stripe tables and views. Left for
+# a later packet:
 # authenticated TRUNCATE, which row level security never filters.
 analyte_synonyms|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
 audit_events|authenticated|TRUNCATE|TRUNCATE is not subject to row level security
