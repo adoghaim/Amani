@@ -16,12 +16,12 @@ vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
   getDocument: h.legacyGetDocument,
   GlobalWorkerOptions: h.legacyOptions,
 }));
-vi.mock('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url', () => ({ default: 'legacy-worker-url' }));
+vi.mock('pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker&url', () => ({ default: 'legacy-worker-url' }));
 vi.mock('pdfjs-dist', () => ({
   getDocument: h.modernGetDocument,
   GlobalWorkerOptions: h.modernOptions,
 }));
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'modern-worker-url' }));
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&url', () => ({ default: 'modern-worker-url' }));
 
 const pdfFile = () => new File([new Uint8Array([37, 80, 68, 70])], 'lab.pdf', { type: 'application/pdf' });
 

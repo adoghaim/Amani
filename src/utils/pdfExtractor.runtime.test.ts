@@ -14,10 +14,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 const fromPackage = (rel: string) =>
   pathToFileURL(fileURLToPath(new URL(`../../node_modules/pdfjs-dist/${rel}`, import.meta.url))).href;
 
-vi.mock('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url', () => ({
+vi.mock('pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker&url', () => ({
   default: fromPackage('legacy/build/pdf.worker.min.mjs'),
 }));
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&url', () => ({
   default: fromPackage('build/pdf.worker.min.mjs'),
 }));
 
