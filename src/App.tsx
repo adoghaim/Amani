@@ -1,5 +1,5 @@
 import { ReactNode, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
 import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary'
@@ -58,13 +58,15 @@ const DesignGallery = import.meta.env.DEV ? lazyWithRetry(() => import('./pages/
 */
 function ProtectedRoute({ children, consentExempt = false }: { children: ReactNode; consentExempt?: boolean }) {
   const { user, userProfile, profileLoadFailed, loading } = useAuth()
+  // The router's location, not window.location: E2E-REDIRECT-RACE (F117).
+  const location = useLocation()
 
   if (loading) {
     return <Loading />
   }
 
   if (!user) {
-    const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+    const redirect = encodeURIComponent(location.pathname + location.search)
     return <Navigate to={`/login?redirect=${redirect}`} replace />
   }
 
@@ -118,12 +120,16 @@ function ProfileUnreachable() {
 
 export function AppRoutes() {
   const { loading, user } = useAuth()
+  // E2E-REDIRECT-RACE (F117): the router commits a navigation in a transition,
+  // so while the next screen loads window.location is already ahead of the
+  // screen on show. Read the redirect from the router's location instead.
+  const { search } = useLocation()
 
   if (loading) {
     return <Loading />
   }
 
-  const redirectTarget = safeRedirectTarget(new URLSearchParams(window.location.search).get('redirect'))
+  const redirectTarget = safeRedirectTarget(new URLSearchParams(search).get('redirect'))
 
   return (
     <Suspense fallback={<Loading />}>
