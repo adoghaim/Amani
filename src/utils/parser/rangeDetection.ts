@@ -415,6 +415,11 @@ export function markerContinuationLines(lines: readonly string[], adapter?: Sour
   return own;
 }
 
+/** How many comparator intervals ("<1.0", ">= 60", "> OR = 60") the binder finds in `text`. */
+export function comparatorIntervalCount(text: string, adapter?: SourceAdapter): number {
+  return findIntervals(text, adapter).filter(iv => iv.range.comparator !== undefined).length;
+}
+
 function decide(found: Candidate[]): RangeBinding {
   if (found.length === 0) return { candidates: [] };
   const printed = found.length > 1 ? found.filter(c => !c.valuePosition) : found;

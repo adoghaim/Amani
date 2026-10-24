@@ -13,7 +13,9 @@ import { edgeCasesFixture } from './__fixtures__/edgeCases';
 import { questHormoneFixture } from './__fixtures__/questHormones';
 import { labcorpHormoneFixture } from './__fixtures__/labcorpHormones';
 import { questSmokeFixture } from './__fixtures__/questSmoke';
-import { comparatorAdversarialLayouts } from './__fixtures__/comparatorLayouts';
+import {
+  comparatorAdversarialLayouts, comparatorExtraLayouts, comparatorLayouts, comparatorReviewLayouts,
+} from './__fixtures__/comparatorLayouts';
 import { FIXTURE_UNITS, RESIDUAL_ROWS, type Reading, type ResidualRow } from './__fixtures__/parserResidualRows';
 import type { ReportItem } from './types';
 
@@ -31,6 +33,8 @@ import type { ReportItem } from './types';
   D: "≥ OR =", "≤ OR =", "≥=" and "≤=" annotate her number like the other
      inclusive spellings.
   E: two comparators on her label line are read by position.
+  F: a label-line token the rescue re-read is never also bound as her lab's
+     range.
 */
 
 const marker = (i: ReportItem) => i.canonical_slug ?? i.raw_name;
@@ -151,5 +155,22 @@ describe('C1: the bounds hold for the catalog unit\'s notations and approved 1:1
     expect(item).toMatchObject({ parse_error: null, needs_review: true, confidence_score: 'low' });
     expect(awaitsHerConfirmation(item)).toBe(false);
     expect(awaitsHerCheck(item)).toBe(true);
+  });
+});
+
+/*
+  G, on both entry points: every non-Hone PX1 row set reads the same on the
+  upload path as on parseAllReportItems, so the PX1 invariant and the 13 sets
+  pinned in inclusiveComparators.test.ts hold for uploads too. The Hone upload
+  route is RV-HN1's.
+*/
+describe('G: the PX1 row sets read the same on both entry points', () => {
+  const sets: [string, string][] = [
+    ...Object.entries(FIXTURES).map(([name, text]) => [`FX:${name}`, text] as [string, string]),
+    ...Object.entries({ CL: comparatorLayouts, CX: comparatorExtraLayouts, CA: comparatorAdversarialLayouts, CR: comparatorReviewLayouts })
+      .flatMap(([set, layouts]) => [...layouts.entries()].map(([name, text]) => [`${set}:${name}`, text] as [string, string])),
+  ];
+  it.each(sets.filter(([key]) => key !== 'FX:hone' && !/^C[LXAR]:(?:p_)?h_/.test(key)))('%s', (_key, text) => {
+    expect(parseAllReportItemsWithDebug(text).items).toEqual(parseAllReportItems(text));
   });
 });

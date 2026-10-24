@@ -104,18 +104,11 @@ const ANNOTATED: Record<string, [string, string, number, boolean]> = {
   'CA:g_d06': ['vitamin_d_25_oh', '<=5', 2.5, true],
   'CA:g_d15': ['triglycerides', '≤150', 75, true],
   // The base took the reference printed on the label line as her result; now a censored limit.
-  'CR:g_r01': ['egfr', '>=60', 60, false],
-  'CR:g_r02': ['egfr', '>=60', 60, false],
-  'CR:g_r03': ['egfr', '>=60', 60, false],
-  'CR:g_r04': ['egfr', '>= 60', 60, false],
-  'CR:q_r05': ['hdl_cholesterol', '> OR = 40', 40, false],
-  'CR:q_r06': ['hemoglobin_a1c', '<=5.6', 2.8, true],
+  // (RV-PX2 moved CR:g_r01-g_r04, q_r05, q_r06, l_r10 and q_c01 to PX2_HARNESS_ROWS, below.)
   'CR:q_r07': ['hemoglobin_a1c', '≤5.6', 2.8, true],
   'CR:g_r09': ['hdl_cholesterol', '≥40', 40, true],
-  'CR:l_r10': ['hdl_cholesterol', '>=40', 40, false],
   'CR:g_s02': ['egfr', '≥ 60', 60, true],
   'CR:g_s06': ['hemoglobin_a1c', '≤ 5.6', 2.8, true],
-  'CR:q_c01': ['egfr', '>=60', 60, false],
   'CR:q_c03': ['vitamin_b12', '<=150', 75, true],
   'CR:q_c07': ['egfr', '≥ 60', 60, true],
   'CR:q_m09': ['estradiol', '<=15', 7.5, true],
@@ -173,15 +166,18 @@ describe('annotate only: every row reads as the base, or gains an inclusive comp
 });
 
 /*
-  RV-PX2: the row sets that read differently from the base on purpose, each
-  pinned whole in PX2_HARNESS_ROWS. E: two comparators on her label line are
-  her result and her lab's reference, read by position. Every other set keeps
-  the invariant above.
+  RV-PX2: exactly 13 row sets read differently from the base on purpose, each
+  pinned whole in PX2_HARNESS_ROWS. E (4): two comparators on her label line
+  are her result and her lab's reference, read by position. F (9): the
+  label-line token the rescue re-read stays her result, with the base's number,
+  but is no longer also bound as her lab's range, so she reviews the row.
+  Every other set keeps the invariant above.
 */
-describe('RV-PX2: the row sets that read differently on purpose', () => {
-  it('are exactly the packet\'s E sets, and none is annotated above', () => {
+describe('RV-PX2: the 13 row sets that read differently on purpose', () => {
+  it('are exactly the packet\'s E and F sets, and none is annotated above', () => {
     expect(Object.keys(PX2_HARNESS_ROWS).sort()).toEqual([
       'CA:l_b11', 'CR:q_c02', 'CR:q_c06', 'CR:l_c08',
+      'CR:g_r01', 'CR:g_r02', 'CR:g_r03', 'CR:g_r04', 'CR:q_r05', 'CR:q_r06', 'CR:g_r08', 'CR:l_r10', 'CR:q_c01',
     ].sort());
     for (const key of Object.keys(PX2_HARNESS_ROWS)) expect(ANNOTATED).not.toHaveProperty([key]);
   });

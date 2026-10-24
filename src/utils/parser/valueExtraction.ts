@@ -1,6 +1,6 @@
 import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine, isPartOfWord } from './textUtils';
-import { bindReferenceRange, markerContinuationLines } from './rangeDetection';
+import { bindReferenceRange, comparatorIntervalCount, markerContinuationLines } from './rangeDetection';
 import { unitPrintedFrom } from './labelMatching';
 
 const NUM_RE = /(\d+\.\d+|\d+)/g;
@@ -21,6 +21,8 @@ export function isBelowLimitResult(valueText: string | null | undefined): boolea
 // spacing: "> OR =", "< OR =", ">=", "<=", "> =", "< =", "≥", "≤" (F021), and
 // "≥ OR =", "≤ OR =", "≥=", "≤=" (RV-PX2 D1).
 const INCLUSIVE_BEFORE_RE = /(?:[<>≤≥]\s*(?:or\s*)?=|[≤≥])\s*$/i;
+// Any comparator printed right before a number (RV-PX2 F-a).
+const COMPARATOR_BEFORE_RE = /[<>≤≥]\s*(?:or\s*)?=?\s*$/i;
 
 /** A number the reader chose; when known, it is printed at `line.slice(start)`. */
 type Candidate = { value: number; rawValue: string; line?: string; start?: number };
@@ -288,6 +290,7 @@ export function extractValueFromWindow(
   // ambiguous — let buildExtendedItems resolve it via the raw label text.
   // This prevents "Hemoglobin A1c 5.6 % 4.8-5.6" from being rescued with
   // "5.6" (which == ref_max) when the correct path is the extended parser.
+  let rescued: Candidate | null = null;
   if (labelCandidates.length === 0 && knownRangeNumbers.size > 0 && referenceResult?.comparator) {
     const prefixedNumRe = /(<=?|>=?)?(\d+\.?\d*)/g;
     let m: RegExpExecArray | null;
@@ -303,7 +306,8 @@ export function extractValueFromWindow(
           /\d{1,2}\/\d{1,2}\/|\bdob\b|\bdate\b|\bcollected?\b|\breport(?:ed)?\b|\baccession\b/i.test(labelLine)) {
         continue;
       }
-      labelCandidates.push({ value: parsed.value, rawValue: parsed.rawValue ?? raw, line: labelLine, start: m.index + (m[1]?.length ?? 0) });
+      rescued = { value: parsed.value, rawValue: parsed.rawValue ?? raw, line: labelLine, start: m.index + (m[1]?.length ?? 0) };
+      labelCandidates.push(rescued);
       break;
     }
   }
@@ -324,17 +328,25 @@ export function extractValueFromWindow(
   // PRIORITY 1b: label-line numeric value wins when scoring agrees.
   // This prevents reference-annotation comparators on value lines (e.g. "<200", "<150", "<9")
   // from overriding the actual patient result on the label line.
+  // RV-PX2 F (#176 residual 5): the rescue re-reads the bound interval's own
+  // token. Her result is never also her lab's range, so the row keeps the
+  // number chosen but binds none, and she reviews it, when that token is the
+  // label line's only comparator (F-a), or when it outranks a number printed on
+  // her value lines (F-b).
   if (labelCandidates.length > 0) {
     if (valueCandidates.length === 0 || !referenceResult) {
       const best = pickBest(labelCandidates);
-      if (best) return { ...withInclusiveComparator(best), unit: unitOf(best), referenceResult, ...ambiguity };
+      const rereadLimit = best !== null && best === rescued && comparatorIntervalCount(labelLine, adapter) === 1
+        && COMPARATOR_BEFORE_RE.test(labelLine.slice(0, best.start));
+      if (best) return { ...withInclusiveComparator(best), unit: unitOf(best), referenceResult: rereadLimit ? undefined : referenceResult, ...ambiguity };
     } else {
       // Both candidate arrays are non-empty above, so pickBest returns non-null here.
       const bestLabel = pickBest(labelCandidates);
       const bestValue = pickBest(valueCandidates);
       if (bestLabel && bestValue) {
         if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
-          return { ...withInclusiveComparator(bestLabel), unit: unitOf(bestLabel), referenceResult, ...ambiguity };
+          const reread = bestLabel === rescued;
+          return { ...withInclusiveComparator(bestLabel), unit: unitOf(bestLabel), referenceResult: reread ? undefined : referenceResult, ...ambiguity };
         }
         return { ...withInclusiveComparator(bestValue), unit: unitOf(bestValue), referenceResult, ...ambiguity };
       }

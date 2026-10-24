@@ -9,6 +9,7 @@ import type { BaseRow } from './comparatorBaseline';
 
 const QUEST = 'Quest Diagnostics\nSYNTHETIC TEST REPORT - NOT A REAL PATIENT\nTest Name Result Flag Reference Range Units\nTSH 2.85 0.40-4.50 mIU/L\n';
 const LABCORP = 'LabCorp\nLaboratory Corporation of America\nTest Result Units Ref. Interval\nTSH 2.850 uIU/mL 0.450-4.500\n';
+const GENERIC = 'Patient Lab Results\nCollection Date: 2026-04-01\n\nSodium 140 mmol/L 136-145\n';
 const EDGE = 'Lab Report\n\n';
 const BARE_QUEST = 'Quest Diagnostics\nSYNTHETIC TEST REPORT - NOT A REAL PATIENT\nTest Name Result Flag Reference Range Units\n';
 const BARE_LABCORP = 'LabCorp\nLaboratory Corporation of America\nTest Result Units Ref. Interval\n';
@@ -199,6 +200,46 @@ export const RESIDUAL_ROWS: readonly ResidualRow[] = [
     reads: ['>150', 150, 'ng/mL', false, '>=30', '>=', 30, 'mapped', null] },
   { rule: 'E3', id: 'ldl_two_reference_words', marker: 'ldl_cholesterol', text: BARE_QUEST + 'LDL-Cholesterol <100 Optimal <130 Near optimal mg/dL',
     reads: ['<100', 50, 'mg/dL', true, '<130', '<', 130, 'mapped', null] },
+  // #176's row: the lone 45 is dropped as a chart axis, and the re-read reference was bound as her range.
+  { rule: 'F-a', id: 'egfr_bracketed_ref_lone_result', marker: 'egfr', text: GENERIC + 'eGFR (>=60)\n45',
+    reads: ['>=60', 60, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-a', id: 'egfr_ge_date_line', marker: 'egfr', text: BARE_QUEST + 'eGFR >=60 mL/min/1.73m2\n01/15/2026',
+    reads: ['>=60', 60, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-a', id: 'egfr_ge_date_on_line', marker: 'egfr', text: QUEST + 'eGFR >=60 mL/min/1.73m2 01/15/2026',
+    reads: ['>=60', 60, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-a', id: 'egfr_gt_alone', marker: 'egfr', text: BARE_QUEST + 'eGFR >60 mL/min/1.73m2',
+    reads: ['>60', 60, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-a', id: 'crp_le_alone', marker: 'hs_crp', text: BARE_GENERIC + 'hs-CRP <=0.2',
+    reads: ['<=0.2', 0.1, 'mg/L', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-a', id: 'e2_lt_alone', marker: 'estradiol', text: BARE_QUEST + 'Estradiol <15 pg/mL',
+    reads: ['<15', 7.5, 'pg/mL', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-a', id: 'prog_lt_alone', marker: 'progesterone', text: BARE_QUEST + 'PROGESTERONE <0.5 ng/mL',
+    reads: ['<0.5', 0.25, 'ng/mL', true, null, null, null, 'needs_review', null] },
+  // The brief's control: her "<0.5" and its number do not change (no 8.4). The lone 8.4 is dropped as a
+  // chart axis, so this is the row above, and F-a unbinds its re-read "<0.5".
+  { rule: 'F-a', id: 'prog_lt_lone_number_under', marker: 'progesterone', text: BARE_QUEST + 'PROGESTERONE <0.5 ng/mL\n8.4',
+    reads: ['<0.5', 0.25, 'ng/mL', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-b', id: 'egfr_bracketed_ref_result_under', marker: 'egfr', text: GENERIC + 'eGFR (>=60)\n45 mL/min/1.73m2',
+    reads: ['>=60', 60, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-b', id: 'hdl_bracketed_ref_result_under', marker: 'hdl_cholesterol', text: BARE_QUEST + 'HDL Cholesterol (> OR = 40)\n35 L mg/dL',
+    reads: ['> OR = 40', 40, 'mg/dL', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-b', id: 'a1c_bracketed_ref_result_under', marker: 'hemoglobin_a1c', text: BARE_QUEST + 'Hemoglobin A1c (<=5.6)\n7.2 H %',
+    reads: ['<=5.6', 2.8, '%', true, null, null, null, 'needs_review', null] },
+  // The selection alternative would read the 2; the number stays the base's (§3b).
+  { rule: 'F-b', id: 'egfr_ge_n_flag_under', marker: 'egfr', text: BARE_QUEST + 'eGFR >=60\n2 H',
+    reads: ['>=60', 60, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },
+  { rule: 'F-b', id: 'egfr_ge_prior_under', marker: 'egfr', text: BARE_QUEST + 'eGFR >=90 mL/min/1.73m2\nPrior 85',
+    reads: ['>=90', 90, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },
+  { rule: 'control', id: 'tgab_equal_to_ref', marker: 'tg_antibodies', text: BARE_QUEST + 'Thyroglobulin Antibodies 1 IU/mL <=1 Normal',
+    reads: ['1', 1, 'IU/mL', false, '<=1', '<=', 1, 'mapped', null] },
+  { rule: 'control', id: 'rf_equal_to_ref', marker: 'rheumatoid_factor', text: BARE_QUEST + 'Rheumatoid Factor <14 IU/mL <14 Normal',
+    reads: ['<14', 7, 'IU/mL', true, '<14', '<', 14, 'mapped', null] },
+  { rule: 'control', id: 'b12_lt_flag_range', marker: 'vitamin_b12', text: BARE_QUEST + 'Vitamin B12 <150 L 232-1245 pg/mL',
+    reads: ['<150', 75, 'pg/mL', true, '232-1245', null, null, 'mapped', null] },
+  { rule: 'control', id: 'b12_lt_range_under', marker: 'vitamin_b12', text: BARE_QUEST + 'Vitamin B12 <150 pg/mL\n232-1245',
+    reads: ['<150', 75, 'pg/mL', true, '232-1245', null, null, 'mapped', null] },
+  { rule: 'control', id: 'tsh_lt_range_under', marker: 'tsh', text: BARE_QUEST + 'TSH <0.01\n0.4-4.5 mIU/L',
+    reads: ['<0.01', 0.005, 'mIU/L', true, '0.4-4.5', null, null, 'mapped', null] },
 ];
 
 /** The unit of every row of the 8 parser fixtures (parseAllReportItems): as at the base, except SHBG's (B3). */
@@ -214,10 +255,12 @@ export const FIXTURE_UNITS: Readonly<Record<string, readonly (readonly [marker: 
 };
 
 /**
- * The PX1 row sets (inclusiveComparators.test.ts) that RV-PX2 reads
+ * The 13 PX1 row sets (inclusiveComparators.test.ts) that RV-PX2 reads
  * differently on purpose, exactly, in BASE_ROWS' row shape. Every other set
  * keeps the PX1 invariant. E1: two comparators on the label line are her
- * result and her lab's reference, read by position (#176 residual 2).
+ * result and her lab's reference, read by position (#176 residual 2). F-a, F-b:
+ * the label-line token the rescue re-read stays her result but is no longer
+ * also bound as her lab's range, so she reviews the row (#176 residual 5).
  */
 export const PX2_HARNESS_ROWS: Readonly<Record<string, readonly BaseRow[]>> = {
   // E1: her result printed in the first of two comparators, the reference in the second.
@@ -225,4 +268,15 @@ export const PX2_HARNESS_ROWS: Readonly<Record<string, readonly BaseRow[]>> = {
   'CR:q_c02': [['tsh', '2.85', 2.85, false, '0.40-4.50', null, null, 0.4, 4.5], ['egfr', '> OR = 60', 60, false, '>59', '>', 59, null, null]],
   'CR:q_c06': [['tsh', '2.85', 2.85, false, '0.40-4.50', null, null, 0.4, 4.5], ['hs_crp', '<=0.2', 0.1, true, '<1.0', '<', 1, null, null]],
   'CR:l_c08': [['tsh', '2.850', 2.85, false, '0.450-4.500', null, null, 0.45, 4.5], ['egfr', '>=60', 60, false, '>59', '>', 59, null, null]],
+  // F-b: the re-read label-line reference outranks her value line: same number, nothing bound.
+  'CR:g_r01': [['sodium', '140', 140, false, '136-145', null, null, 136, 145], ['egfr', '>=60', 60, true, null, null, null, null, null]],
+  'CR:g_r02': [['sodium', '140', 140, false, '136-145', null, null, 136, 145], ['egfr', '>=60', 60, true, null, null, null, null, null]],
+  'CR:g_r03': [['sodium', '140', 140, false, '136-145', null, null, 136, 145], ['egfr', '>=60', 60, true, null, null, null, null, null]],
+  'CR:g_r04': [['sodium', '140', 140, false, '136-145', null, null, 136, 145], ['egfr', '>= 60', 60, true, null, null, null, null, null]],
+  'CR:q_r05': [['tsh', '2.85', 2.85, false, '0.40-4.50', null, null, 0.4, 4.5], ['hdl_cholesterol', '> OR = 40', 40, true, null, null, null, null, null]],
+  'CR:q_r06': [['tsh', '2.85', 2.85, false, '0.40-4.50', null, null, 0.4, 4.5], ['hemoglobin_a1c', '<=5.6', 2.8, true, null, null, null, null, null]],
+  'CR:g_r08': [['sodium', '140', 140, false, '136-145', null, null, 136, 145], ['egfr', '>60', 60, true, null, null, null, null, null]],
+  'CR:l_r10': [['tsh', '2.850', 2.85, false, '0.450-4.500', null, null, 0.45, 4.5], ['hdl_cholesterol', '>=40', 40, true, null, null, null, null, null]],
+  // F-a: the label line's only comparator, re-read as her result, is no longer also her range.
+  'CR:q_c01': [['tsh', '2.85', 2.85, false, '0.40-4.50', null, null, 0.4, 4.5], ['egfr', '>=60', 60, true, null, null, null, null, null]],
 };
