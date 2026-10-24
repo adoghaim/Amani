@@ -1,15 +1,17 @@
-import { ReactNode, Suspense, useEffect } from 'react'
+import { ReactNode, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { Loading } from './components/Loading'
-import { ErrorBoundary } from './components/ErrorBoundary'
+import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary'
+import { FullScreenGate } from './components/FullScreenGate'
+import { UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from './components/CalmNotice'
 import { OnboardingGate } from './components/OnboardingGate'
 import { UpdateGate } from './components/UpdateGate'
 import { UploadGate } from './components/freemium/UploadGate'
 import { ConsentGate } from './features/consent/ConsentGate'
 import { AdultsOnlyExit } from './features/consent/AdultsOnlyExit'
 import { ADULTS_ONLY_PATH } from './features/consent/ConsentSteps'
-import { isNative, onAppUrlOpen } from './lib/native'
+import { isNative, onAppLifecycle, onAppUrlOpen, onNetworkChange } from './lib/native'
 import { deepLinkTarget } from './lib/deepLinks'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 import { safeRedirectTarget } from './lib/redirect'
@@ -54,7 +56,7 @@ const DesignGallery = import.meta.env.DEV ? lazyWithRetry(() => import('./pages/
   `consentExempt` is for Settings only (withdrawal and deletion stay reachable).
 */
 function ProtectedRoute({ children, consentExempt = false }: { children: ReactNode; consentExempt?: boolean }) {
-  const { user, loading } = useAuth()
+  const { user, userProfile, profileLoadFailed, loading } = useAuth()
 
   if (loading) {
     return <Loading />
@@ -65,7 +67,52 @@ function ProtectedRoute({ children, consentExempt = false }: { children: ReactNo
     return <Navigate to={`/login?redirect=${redirect}`} replace />
   }
 
+  // Every gate below waits for her profile; when it could not be read, say so.
+  if (!userProfile && profileLoadFailed) {
+    return <ProfileUnreachable />
+  }
+
   return <ConsentGate exempt={consentExempt}>{children}</ConsentGate>
+}
+
+/*
+  F065: her profile could not be read (offline, or the request failed). It
+  used to leave an endless spinner. Try again here, and again by itself when
+  the connection comes back or she returns to the app.
+*/
+function ProfileUnreachable() {
+  const { refreshUserProfile } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const latestRefresh = useRef(refreshUserProfile)
+  useEffect(() => { latestRefresh.current = refreshUserProfile })
+  const inFlight = useRef(false)
+
+  const retry = useCallback(() => {
+    if (inFlight.current) return
+    inFlight.current = true
+    setBusy(true)
+    void latestRefresh.current().catch(() => {}).finally(() => {
+      inFlight.current = false
+      setBusy(false)
+    })
+  }, [])
+
+  useEffect(() => {
+    const stopNetwork = onNetworkChange(status => { if (status.connected) retry() })
+    const stopLifecycle = onAppLifecycle({ onPause: () => {}, onResume: retry })
+    return () => {
+      stopNetwork()
+      stopLifecycle()
+    }
+  }, [retry])
+
+  return (
+    <FullScreenGate
+      heading={UNREACHABLE_TITLE}
+      sentence={UNREACHABLE_SAFE_LINE}
+      primary={{ label: 'Try again', onClick: retry, busy }}
+    />
+  )
 }
 
 function AppRoutes() {
@@ -79,53 +126,57 @@ function AppRoutes() {
 
   return (
     <Suspense fallback={<Loading />}>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={user ? <Navigate to={redirectTarget} replace /> : <LoginPage />} />
-        <Route path="/signup" element={user ? <Navigate to={redirectTarget} replace /> : <SignupPage />} />
-        {/* PK-EXP5 campaign link (D17, D29): captures the key when first-party events are on, then signup. */}
-        <Route path="/go/:key" element={<CampaignLinkRedirect />} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/success" element={<SuccessPage />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+      {/* F072: one error boundary per screen, keyed by its path. Inside Suspense,
+          so a navigation keeps the current screen while the next one loads. */}
+      <RouteErrorBoundary>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={user ? <Navigate to={redirectTarget} replace /> : <LoginPage />} />
+          <Route path="/signup" element={user ? <Navigate to={redirectTarget} replace /> : <SignupPage />} />
+          {/* PK-EXP5 campaign link (D17, D29): captures the key when first-party events are on, then signup. */}
+          <Route path="/go/:key" element={<CampaignLinkRedirect />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/success" element={<SuccessPage />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Public and unauthenticated on purpose: App Store Review 3.1.2(a)
-            requires the Privacy and Terms links in the binary to resolve, and
-            they have to work for someone deciding whether to sign up at all. */}
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/contact" element={<Contact />} />
-        {/* Google Play requires the account-deletion URL to be readable without
-            signing in — a reviewer, or someone locked out of their account, has
-            to be able to reach it. Linking to /app/settings instead would
-            bounce a signed-out visitor to the login screen. */}
-        <Route path="/delete-account" element={<DeleteAccount />} />
-        {/* D13: the under-18 exit, shown after the account is erased and signed out. Local state only. */}
-        <Route path={ADULTS_ONLY_PATH} element={<AdultsOnlyExit />} />
+          {/* Public and unauthenticated on purpose: App Store Review 3.1.2(a)
+              requires the Privacy and Terms links in the binary to resolve, and
+              they have to work for someone deciding whether to sign up at all. */}
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/contact" element={<Contact />} />
+          {/* Google Play requires the account-deletion URL to be readable without
+              signing in — a reviewer, or someone locked out of their account, has
+              to be able to reach it. Linking to /app/settings instead would
+              bounce a signed-out visitor to the login screen. */}
+          <Route path="/delete-account" element={<DeleteAccount />} />
+          {/* D13: the under-18 exit, shown after the account is erased and signed out. Local state only. */}
+          <Route path={ADULTS_ONLY_PATH} element={<AdultsOnlyExit />} />
 
-        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
-        <Route path="/app" element={<ProtectedRoute><OnboardingGate><Dashboard /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/pricing" element={<ProtectedRoute><OnboardingGate><PricingPage /></OnboardingGate></ProtectedRoute>} />
-        {/* Flag on, uploading is part of Free: auth + onboarding only. See lib/freemium/gates.ts. */}
-        <Route path="/app/new" element={<ProtectedRoute><OnboardingGate><UploadGate><NewReport /></UploadGate></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/reports" element={<ProtectedRoute><OnboardingGate><Reports /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/reports/:id" element={<ProtectedRoute><OnboardingGate><ReportView /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
-        <Route path="/app/settings" element={<ProtectedRoute consentExempt><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
-        {DesignGallery && (
-          <Route path="/dev/design" element={<DesignGallery />} />
-        )}
-        {ParserDebugger && (
-          <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
-        )}
+          <Route path="/app" element={<ProtectedRoute><OnboardingGate><Dashboard /></OnboardingGate></ProtectedRoute>} />
+          <Route path="/app/pricing" element={<ProtectedRoute><OnboardingGate><PricingPage /></OnboardingGate></ProtectedRoute>} />
+          {/* Flag on, uploading is part of Free: auth + onboarding only. See lib/freemium/gates.ts. */}
+          <Route path="/app/new" element={<ProtectedRoute><OnboardingGate><UploadGate><NewReport /></UploadGate></OnboardingGate></ProtectedRoute>} />
+          <Route path="/app/reports" element={<ProtectedRoute><OnboardingGate><Reports /></OnboardingGate></ProtectedRoute>} />
+          <Route path="/app/reports/:id" element={<ProtectedRoute><OnboardingGate><ReportView /></OnboardingGate></ProtectedRoute>} />
+          <Route path="/app/tracker" element={<ProtectedRoute><OnboardingGate><Tracker /></OnboardingGate></ProtectedRoute>} />
+          <Route path="/app/billing" element={<ProtectedRoute><OnboardingGate><Billing /></OnboardingGate></ProtectedRoute>} />
+          <Route path="/app/settings" element={<ProtectedRoute consentExempt><OnboardingGate><Settings /></OnboardingGate></ProtectedRoute>} />
+          {DesignGallery && (
+            <Route path="/dev/design" element={<DesignGallery />} />
+          )}
+          {ParserDebugger && (
+            <Route path="/dev/parser/:id" element={<ProtectedRoute><OnboardingGate><ParserDebugger /></OnboardingGate></ProtectedRoute>} />
+          )}
 
-        {/* Last, so it only catches what no other route matched. Without it an
-            unmatched path rendered null — a typo under /app/* sat on an empty
-            Suspense boundary forever, with no way back. Keep this last. */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+          {/* Last, so it only catches what no other route matched. Without it an
+              unmatched path rendered null — a typo under /app/* sat on an empty
+              Suspense boundary forever, with no way back. Keep this last. */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </RouteErrorBoundary>
     </Suspense>
   )
 }

@@ -21,6 +21,13 @@ import { Button } from './Button';
 
 export const CALM_NOTICE_SAFE_LINE = 'Your reports and results are saved.';
 
+/**
+ * A read that could not reach Amani: offline, or the request failed (F065).
+ * That is a failed load, never an empty account or a missing report.
+ */
+export const UNREACHABLE_TITLE = "We couldn't reach Amani";
+export const UNREACHABLE_SAFE_LINE = 'Your reports are safe.';
+
 export interface CalmNoticeAction {
   label: string;
   onClick: () => void;

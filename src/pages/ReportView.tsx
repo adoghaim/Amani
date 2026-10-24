@@ -5,6 +5,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { firstPartyEvents } from '../lib/firstPartyEventsClient';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
+import { CalmNotice, UNREACHABLE_SAFE_LINE, UNREACHABLE_TITLE } from '../components/CalmNotice';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAllRows';
 import { BiomarkerCard } from '../components/BiomarkerCard';
@@ -389,6 +390,8 @@ export function ReportView() {
   const [reportAnalytes, setReportAnalytes] = useState<ReportAnalyte[]>([]);
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [loading, setLoading] = useState(true);
+  // The last read of the report could not reach Amani (F065): not "not found".
+  const [loadFailed, setLoadFailed] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   /*
     Which tier the STORED row was written at. Null means it predates Free/Plus,
@@ -634,28 +637,43 @@ export function ReportView() {
   }, [freemium, accessState]);
 
   const fetchReport = async (isRetry = false) => {
+    /*
+      F065: a read that cannot reach Amani resolves with `error` (postgrest-js
+      does not throw). That is a failed load, with Try again: offline it used to
+      read "Report not found". Nothing is replaced until every read below has
+      answered, so a first load never shows a report without its values, and a
+      failed re-read leaves the report on screen.
+    */
+    const failLoad = () => { setLoadFailed(true); setLoading(false); };
     const { data: reportData, error: reportError } = await supabase
       .from('lab_reports').select('*').eq('id', reportId).maybeSingle();
-    if (reportError) { setError(`Failed to load: ${reportError.message}`); setLoading(false); return; }
+    if (reportError) { failLoad(); return; }
     if (!reportData) {
       if (!isRetry) {
         await new Promise(r => setTimeout(r, 1200));
         return fetchReport(true);
       }
+      setLoadFailed(false);
       setError('Report not found');
       setLoading(false);
       return;
     }
-    setReport(reportData as LabReport);
 
-    const [{ data: biomarkersData }, { data: analytesData }, { data: interpretationData }] = await Promise.all([
+    const [
+      { data: biomarkersData, error: biomarkersError },
+      { data: analytesData, error: analytesError },
+      { data: interpretationData, error: interpretationError },
+    ] = await Promise.all([
       supabase.from('biomarkers').select('*').eq('lab_report_id', reportId),
       supabase.from('report_analytes').select('*').eq('lab_report_id', reportId).order('raw_name'),
       // Flag on, the body is read only through get-interpretation.
       freemium
-        ? Promise.resolve({ data: null })
+        ? Promise.resolve({ data: null, error: null })
         : supabase.from('interpretations').select('*').eq('lab_report_id', reportId).maybeSingle(),
     ]);
+    if (biomarkersError || analytesError || interpretationError) { failLoad(); return; }
+    setLoadFailed(false);
+    setReport(reportData as LabReport);
 
     if (biomarkersData) setBiomarkers(biomarkersData as Biomarker[]);
     if (analytesData) setReportAnalytes(analytesData as ReportAnalyte[]);
@@ -1321,6 +1339,20 @@ export function ReportView() {
     );
   }
 
+  if (!report && loadFailed) {
+    return (
+      <Layout>
+        <div className="max-w-3xl mx-auto">
+          <CalmNotice
+            title={UNREACHABLE_TITLE}
+            safe={UNREACHABLE_SAFE_LINE}
+            action={{ label: 'Try again', onClick: () => { setLoading(true); void fetchReport(); } }}
+          />
+        </div>
+      </Layout>
+    );
+  }
+
   if (!report) {
     return (
       <Layout>
@@ -1462,6 +1494,16 @@ export function ReportView() {
 
         {/* ── Cycle rule (DESIGN.md, D10): the draw day on her cycle ── */}
         <CycleRule report={report} />
+
+        {/* A re-read failed (F065): what is on screen stays, with Try again. */}
+        {loadFailed && (
+          <CalmNotice
+            title={UNREACHABLE_TITLE}
+            safe={UNREACHABLE_SAFE_LINE}
+            className="mb-6"
+            action={{ label: 'Try again', onClick: () => { void fetchReport(); } }}
+          />
+        )}
 
         {error && (
           <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-xl mb-6 text-sm">
