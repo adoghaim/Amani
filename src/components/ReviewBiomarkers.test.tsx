@@ -45,7 +45,8 @@ function row(raw_name: string, over: Partial<ReportItem> = {}): ReportItem {
 describe('ReviewBiomarkers card names', () => {
   it('names a parse-error row and its notice by display name, never by slug', () => {
     const cards = render(parseAllReportItemsWithDebug(edgeCasesFixture).items);
-    expect(names(cards)).toEqual(['TSH', 'Vitamin B12']);
+    // F098: Holotranscobalamin is its own unmapped row, by its printed label; it was dropped as a second Vitamin B12.
+    expect(names(cards)).toEqual(['TSH', 'Vitamin B12', 'Holotranscobalamin']);
     expect(host.textContent).toContain('below physiological minimum 0.001 for TSH — likely a parse error — please correct the value below.');
     expect(host.textContent).not.toMatch(/\btsh\b|vitamin_b12/);
   });
@@ -56,5 +57,37 @@ describe('ReviewBiomarkers card names', () => {
 
   it('reads "Unnamed" for a row added by hand with no name yet', () => {
     expect(names(render([row('', { needs_review: true, confidence_score: 'low', source_format: 'manual' })]))).toEqual(['Unnamed']);
+  });
+});
+
+// F022: a parse-error row is saved only once she has confirmed it.
+describe('ReviewBiomarkers confirming a flagged value', () => {
+  const parseError = (over: Partial<ReportItem> = {}) => row('TSH', {
+    canonical_slug: 'tsh', is_core_biomarker: true, value_numeric: 0.0008, needs_review: true, confidence_score: 'low',
+    parse_error: 'Value 0.0008 is below physiological minimum 0.001 for TSH — likely a parse error', ...over,
+  });
+  const markCorrect = () => Array.from(host.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Mark as Correct');
+
+  it('typing her value records it as confirmed by her', async () => {
+    const onUpdate = vi.fn();
+    act(() => root.render(<ReviewBiomarkers items={[parseError()]} onUpdate={onUpdate} onRemove={vi.fn()} onAddNew={vi.fn()} />));
+    const input = host.querySelector<HTMLInputElement>('input[type="number"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, '0.8');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(onUpdate).toHaveBeenCalledWith(0, 'value_numeric', 0.8);
+    expect(onUpdate).toHaveBeenCalledWith(0, 'reviewed_by_user', true);
+  });
+
+  it('still offers "Mark as Correct" after she maps the row to another marker', () => {
+    render([parseError({ review_status: 'edited_by_user', reviewed_by_user: false })]);
+    expect(markCorrect()).toBeDefined();
+  });
+
+  it('no longer offers it once she has confirmed the value', () => {
+    render([parseError({ review_status: 'edited_by_user', reviewed_by_user: true })]);
+    expect(markCorrect()).toBeUndefined();
   });
 });

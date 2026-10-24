@@ -154,6 +154,8 @@ function ItemCard({
                 onChange={e => {
                   onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value));
                   onUpdate(globalIndex, 'review_status', 'edited_by_user');
+                  // F022: the value she typed is hers, so it counts as confirmed.
+                  onUpdate(globalIndex, 'reviewed_by_user', true);
                 }}
                 className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border ${item.parse_error ? 'border-theme-flag-low-border bg-theme-flag-low-bg' : 'border-theme-neutral-300'}`}
               />
@@ -185,7 +187,7 @@ function ItemCard({
           </div>
 
           <div className="mt-6 flex justify-end gap-3 border-t border-theme-neutral-100 pt-4">
-            {item.needs_review && item.review_status !== 'reviewed' && item.review_status !== 'edited_by_user' && (
+            {item.needs_review && item.reviewed_by_user !== true && (
               <Button 
                 variant="outline" 
                 size="sm" 

@@ -18,10 +18,10 @@ import {
 } from './patterns';
 import { detectReportSource } from './sourceDetection';
 import { getAdapter } from './adapters';
-import { splitIntoLines, isSectionHeader, isPartOfWord } from './textUtils';
+import { splitIntoLines, isSectionHeader, isPartOfWord, indexOfWord } from './textUtils';
 import { bindReferenceRange, firstNumericToken, intervalNumbers, isReferenceSubLabel } from './rangeDetection';
-import { matchBiomarkerLabel, matchLabelLine } from './labelMatching';
-import { extractValueFromWindow, parseValueWithPrefix } from './valueExtraction';
+import { matchLabelLine, opensAnalyteRow } from './labelMatching';
+import { extractValueFromWindow, isBelowLimitResult, parseValueWithPrefix } from './valueExtraction';
 import { resolveAlias, getEntry, getDisplayName } from '../../lib/biomarkers/dictionary';
 import type { BiomarkerName } from '../../types';
 
@@ -71,14 +71,44 @@ export function confidenceRank(c: 'high' | 'medium' | 'low'): number {
   return c === 'high' ? 2 : c === 'medium' ? 1 : 0;
 }
 
-// The message is shown on the upload's confirm step, so it names the marker as the report does.
-export function checkPhysiologicalBounds(slug: string, value: number): string | null {
+const unitKey = (unit: string) => unit.trim().toLowerCase();
+
+/** The row printed a unit, and it is not the catalog's canonical one. */
+function inAnotherUnit(slug: string, unit?: string | null): boolean {
+  if (!unit || unit.trim() === '') return false;
+  const canonicalUnit = getEntry(slug as BiomarkerName)?.defaultUnit;
+  return !canonicalUnit || unitKey(unit) !== unitKey(canonicalUnit);
+}
+
+/*
+  The message is shown on the upload's confirm step, so it names the marker as
+  the report does. The bounds are written in the catalog's canonical unit: a
+  value printed in another unit (an SI glucose, 5.2 mmol/L) is checked against
+  none, so a correct result is never called a parse error. Nothing is
+  converted. A row with no unit is still checked.
+*/
+export function checkPhysiologicalBounds(slug: string, value: number, unit?: string | null): string | null {
   const bounds = PHYSIOLOGICAL_BOUNDS[slug];
   if (!bounds) return null;
+  if (inAnotherUnit(slug, unit)) return null;
   const name = getDisplayName(slug as BiomarkerName);
   if (value < bounds.min) return `Value ${value} is below physiological minimum ${bounds.min} for ${name} — likely a parse error`;
   if (value > bounds.max) return `Value ${value} exceeds physiological maximum ${bounds.max} for ${name} — likely a parse error`;
   return null;
+}
+
+/*
+  IA2 review wave 2: a value printed in another unit or spelling (mmol/L for
+  potassium, uIU/mL for TSH) that falls outside the bounds cannot be checked
+  against them, and may be a decimal-shift misread. It is no parse error, so
+  a correct SI value still saves, but it is not accepted silently: the row
+  waits for her confirmation (needs_review, low confidence). Nothing is
+  converted and the bounds are unchanged.
+*/
+export function isOutsideBoundsInAnotherUnit(slug: string, value: number, unit?: string | null): boolean {
+  const bounds = PHYSIOLOGICAL_BOUNDS[slug];
+  if (!bounds || !inAnotherUnit(slug, unit) || !Number.isFinite(value)) return false;
+  return value < bounds.min || value > bounds.max;
 }
 
 export function computeParseStatus(params: {
@@ -144,7 +174,7 @@ export function layeredParse(
     const bp = match.pattern;
 
     const rawWindow = lines.slice(i, Math.min(i + windowSize, lines.length));
-    const nextAnalyteOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l, adapter) !== null);
+    const nextAnalyteOffset = rawWindow.slice(1).findIndex(l => opensAnalyteRow(l, adapter));
     const windowLines = nextAnalyteOffset >= 0 ? rawWindow.slice(0, nextAnalyteOffset + 1) : rawWindow;
     const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter, match.nameEnd);
 
@@ -194,7 +224,7 @@ export function layeredParse(
     const confidence: 'high' | 'medium' | 'low' =
       (hasMinMax || hasComparator) ? 'high' : parsed.unit ? 'medium' : 'low';
 
-    const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
+    const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value, parsed.unit);
 
     const debugInfo: ParserDebugInfo | undefined = debug ? {
       matchedLabel: line,
@@ -242,14 +272,14 @@ export function layeredParse(
   return Array.from(results.values());
 }
 
-/** Start offsets of the lines in `text` that open a marker (matchBiomarkerLabel), computed once per parse. */
+/** Start offsets of the lines in `text` that open a marker (opensAnalyteRow), computed once per parse. */
 function labelLineOffsets(text: string, adapter?: SourceAdapter): number[] {
   const offsets: number[] = [];
   for (let start = 0; start <= text.length;) {
     const newline = text.indexOf('\n', start);
     const end = newline === -1 ? text.length : newline;
     const line = text.substring(start, end).trim();
-    if (line.length > 0 && matchBiomarkerLabel(line, adapter) !== null) offsets.push(start);
+    if (line.length > 0 && opensAnalyteRow(line, adapter)) offsets.push(start);
     start = end + 1;
   }
   return offsets;
@@ -376,7 +406,9 @@ export function parseBiomarkersFromText(
       const patternLower = patternStr.toLowerCase();
       let searchIndex = 0;
       while (true) {
-        const foundIndex = textLower.indexOf(patternLower, searchIndex);
+        const foundIndex = pattern.wholeWord
+          ? indexOfWord(textLower, patternLower, searchIndex)
+          : textLower.indexOf(patternLower, searchIndex);
         if (foundIndex === -1) break;
         const labelEnd = foundIndex + patternLower.length;
         const extracted = extractBiomarkerFromContext(
@@ -433,9 +465,10 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
     const slug    = b.name;
     const isCore  = CORE_SLUGS.has(slug);
     const ref     = b.reference_comparator;
-    const parseError = checkPhysiologicalBounds(slug, b.value);
+    const parseError = checkPhysiologicalBounds(slug, b.value, b.unit);
+    const heldForHer = isOutsideBoundsInAnotherUnit(slug, b.value, b.unit);
     const rawRef  = b.reference_text_raw ?? null;
-    const confidence = parseError ? 'low' as const : b.confidence;
+    const confidence = parseError || heldForHer ? 'low' as const : b.confidence;
     const ambiguity = b.reference_ambiguity;
 
     const parseStatus = computeParseStatus({
@@ -468,7 +501,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       reference_operator_value: ref?.value ?? null,
       confidence_score: confidence,
       is_core_biomarker: isCore,
-      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error',
+      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || heldForHer || isBelowLimitResult(b.rawValue),
       source_snippet: b.rawText ?? null,
       parse_error: parseError,
       parse_status: parseStatus,
@@ -507,7 +540,7 @@ function tryResolveExtendedSlug(rawName: string): { slug: string; category: stri
   }
   for (const bp of BIOMARKER_PATTERNS) {
     for (const p of bp.patterns) {
-      if (p === lower || lower.includes(p)) {
+      if (p === lower || (bp.wholeWord ? indexOfWord(lower, p) !== -1 : lower.includes(p))) {
         const canonical = normalizeToCatalogSlug(bp.canonical);
         return { slug: canonical, category: CORE_CATEGORIES[canonical] ?? null, isCore: CORE_SLUGS.has(canonical) };
       }
@@ -584,11 +617,12 @@ function buildExtendedItems(
       : (rawUnit || isUnitlessExtended) ? 'medium'
       : 'low';
 
-    const physBoundsError = slug ? checkPhysiologicalBounds(slug, valueNumeric) : null;
+    const physBoundsError = slug ? checkPhysiologicalBounds(slug, valueNumeric, rawUnit) : null;
+    const heldForHer = slug ? isOutsideBoundsInAnotherUnit(slug, valueNumeric, rawUnit) : false;
 
     const parseStatus = computeParseStatus({
       canonical_slug: slug,
-      parse_confidence: physBoundsError ? 'low' : confidence,
+      parse_confidence: physBoundsError || heldForHer ? 'low' : confidence,
       physBoundsError,
       value_numeric: valueNumeric,
       unit: rawUnit,
@@ -612,9 +646,9 @@ function buildExtendedItems(
       normalized_reference_max: ref?.max ?? null,
       reference_operator: ref?.comparator?.operator ?? null,
       reference_operator_value: ref?.comparator?.value ?? null,
-      confidence_score: physBoundsError ? 'low' : confidence,
+      confidence_score: physBoundsError || heldForHer ? 'low' : confidence,
       is_core_biomarker: isCore,
-      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error',
+      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || heldForHer || isBelowLimitResult(valueText),
       source_snippet: line.substring(0, 120),
       parse_error: physBoundsError,
       parse_status: parseStatus,
@@ -670,7 +704,7 @@ export function parseAllReportItemsWithDebug(
 
       const windowSize = adapter?.windowSize ?? 10;
       const rawWindow  = lines.slice(i, Math.min(i + windowSize, lines.length));
-      const nextOffset = rawWindow.slice(1).findIndex(l => matchBiomarkerLabel(l, adapter) !== null);
+      const nextOffset = rawWindow.slice(1).findIndex(l => opensAnalyteRow(l, adapter));
       const windowLines = nextOffset >= 0 ? rawWindow.slice(0, nextOffset + 1) : rawWindow;
       const parsed = extractValueFromWindow(windowLines, bp.commonUnits, adapter, match.nameEnd);
       const canonical      = normalizeToCatalogSlug(bp.canonical);
@@ -710,7 +744,7 @@ export function parseAllReportItemsWithDebug(
       const hasComparator = !!ref?.comparator;
       const confidence: 'high' | 'medium' | 'low' =
         (hasMinMax || hasComparator) ? 'high' : parsed.unit ? 'medium' : 'low';
-      const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value);
+      const physBoundsError = checkPhysiologicalBounds(canonical, parsed.value, parsed.unit);
 
       analyteBlocks.push({
         blockIndex: blockIndex++, lineIndex: i, rawLabel: line, canonical,

@@ -32,6 +32,11 @@ for (const timezoneId of ['America/Los_Angeles', 'Pacific/Kiritimati']) {
         if (route.request().method() !== 'GET') return route.fallback();
         await route.fulfill({ headers, json: [] });
       });
+      // F022: Tracker also reads which values she has not confirmed; there are none.
+      await page.route(`${api}/rest/v1/report_analytes*`, async route => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        await route.fulfill({ headers, json: [] });
+      });
       await page.goto('/app/tracker');
       await expect(page.locator('dt').filter({ hasText: /^Last panel$/ }).locator('..')).toContainText('Oct 10');
       await page.screenshot({ path: testInfo.outputPath('tracker.png') });

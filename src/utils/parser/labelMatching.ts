@@ -1,6 +1,7 @@
 import type { BiomarkerPattern, SourceAdapter } from './types';
 import { BIOMARKER_PATTERNS } from './patterns';
 import { resolveAlias, getEntry } from '../../lib/biomarkers/dictionary';
+import { indexOfWord } from './textUtils';
 import type { BiomarkerName } from '../../types';
 
 export const KNOWN_UNITS = [
@@ -148,6 +149,31 @@ export function matchBiomarkerLabel(line: string, adapter?: SourceAdapter): Biom
   return matchLabelLine(line, adapter)?.pattern ?? null;
 }
 
+/** The line as the matcher reads it: the adapter's qualifiers stripped, lower case, '-' as ' '. */
+function labelLineText(line: string, adapter?: SourceAdapter): string {
+  let normalizedLine = line;
+  if (adapter?.labelMatch.labelStripPattern) {
+    normalizedLine = normalizedLine.replace(adapter.labelMatch.labelStripPattern, '');
+  }
+  if (adapter?.labelMatch.inlineQualifierPattern) {
+    normalizedLine = normalizedLine.replace(adapter.labelMatch.inlineQualifierPattern, '');
+  }
+  return normalizedLine.toLowerCase().trim().replace(/-/g, ' ');
+}
+
+/**
+ * True when the line opens an analyte's row, so the block of the marker above
+ * it ends there: a line the matcher reads, or one that names another analyte
+ * through a whole-word alias inside a longer word ("Holotranscobalamin").
+ * The matcher read that line as Vitamin B12 before F098; it still ends the
+ * block above it, so its numbers are never read as that marker's result.
+ */
+export function opensAnalyteRow(line: string, adapter?: SourceAdapter): boolean {
+  if (matchBiomarkerLabel(line, adapter) !== null) return true;
+  const lineLower = labelLineText(line, adapter);
+  return ALL_ALIASES.some(({ normAlias, pattern }) => pattern.wholeWord && normAlias.length > 5 && lineLower.includes(normAlias));
+}
+
 /**
  * Resolves a raw extracted line to its `BiomarkerPattern`, and where the name
  * it matched ends on the line.
@@ -174,14 +200,7 @@ export function matchBiomarkerLabel(line: string, adapter?: SourceAdapter): Biom
  *   "Absolute Lymphocytes 2015 cells/uL"   → lymphocytes_absolute
  */
 export function matchLabelLine(line: string, adapter?: SourceAdapter): LabelMatch | null {
-  let normalizedLine = line;
-  if (adapter?.labelMatch.labelStripPattern) {
-    normalizedLine = normalizedLine.replace(adapter.labelMatch.labelStripPattern, '');
-  }
-  if (adapter?.labelMatch.inlineQualifierPattern) {
-    normalizedLine = normalizedLine.replace(adapter.labelMatch.inlineQualifierPattern, '');
-  }
-  const lineLower = normalizedLine.toLowerCase().trim().replace(/-/g, ' ');
+  const lineLower = labelLineText(line, adapter);
 
   const reroute = (bp: BiomarkerPattern): BiomarkerPattern => {
     const reroutedSlug = disambiguateCBCFromLine(bp.canonical, line);
@@ -206,7 +225,8 @@ export function matchLabelLine(line: string, adapter?: SourceAdapter): LabelMatc
   // PASS 2 — substring fallback, longest alias wins globally. Length > 5 to avoid
   // tiny substrings (e.g. "lh", "fsh") accidentally matching unrelated lines.
   for (const { normAlias, pattern: bp } of ALL_ALIASES) {
-    if (normAlias.length > 5 && lineLower.includes(normAlias)) {
+    const found = bp.wholeWord ? indexOfWord(lineLower, normAlias) !== -1 : lineLower.includes(normAlias);
+    if (normAlias.length > 5 && found) {
       return { pattern: reroute(bp), nameEnd: nameEndOf(line, normAlias) };
     }
   }

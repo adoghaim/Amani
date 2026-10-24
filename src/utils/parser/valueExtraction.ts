@@ -8,6 +8,41 @@ const NUM_RE = /(\d+\.\d+|\d+)/g;
 const PHASE_LINE_RE = /\b(?:phase|trimester|menopausal|menopaus|pregnancy|pregnant|follicular|luteal|ovulatory|peak|male|female|adult|child|infant)\b/i;
 const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|primary|prevention|factor|method|equation|accuracy)\b/i;
 
+/**
+ * A result printed below a limit ("<150", "<=150", "< OR = 150", "≤150"). Its
+ * number is half the limit by the convention every reader shares (here,
+ * extract-biomarkers, OCR), so no lab measured it: the row needs her review (F098).
+ */
+export function isBelowLimitResult(valueText: string | null | undefined): boolean {
+  return /^\s*[<≤]/.test(valueText ?? '');
+}
+
+// An inclusive comparator printed right before a number, in any case and
+// spacing: "> OR =", "< OR =", ">=", "<=", "> =", "< =", "≥", "≤" (F021).
+const INCLUSIVE_BEFORE_RE = /(?:[<>]\s*(?:or\s*)?=|[≤≥])\s*$/i;
+
+/** A number the reader chose; when known, it is printed at `line.slice(start)`. */
+type Candidate = { value: number; rawValue: string; line?: string; start?: number };
+
+/**
+ * F021, annotation only: the number already chosen stays the number chosen.
+ * When an inclusive comparator is printed right before its token, the result
+ * is a limit, not a measurement: value_text keeps the printed comparator
+ * ("> OR = 60", "<=8", "≥1000") and the number is the existing placeholder
+ * (parseValueWithPrefix: half the limit below it, the limit itself above it).
+ * Anything else is returned as it was.
+ */
+export function withInclusiveComparator(chosen: Candidate): { value: number; rawValue: string } {
+  const { value, rawValue, line, start } = chosen;
+  if (line === undefined || start === undefined || !/^\d+\.?\d*$/.test(rawValue)) return { value, rawValue };
+  const comparator = line.slice(0, start).match(INCLUSIVE_BEFORE_RE)?.[0];
+  if (comparator === undefined) return { value, rawValue };
+  const below = comparator.startsWith('<') || comparator.startsWith('≤');
+  const placeholder = parseValueWithPrefix(`${below ? '<' : '>'}${rawValue}`);
+  if (!placeholder) return { value, rawValue };
+  return { value: placeholder.value, rawValue: (comparator + rawValue).replace(/\s+/g, ' ') };
+}
+
 export function parseValueWithPrefix(text: string): { value: number; rawValue: string } | null {
   const ltMatch = text.match(/^<\s*(\d+\.?\d*)/);
   if (ltMatch && ltMatch[1] !== undefined) {
@@ -132,8 +167,8 @@ export function extractValueFromWindow(
     sourceLines: string[],
     skipWordDigits = false,
     from = 0,
-  ): { value: number; rawValue: string }[] {
-    const candidates: { value: number; rawValue: string }[] = [];
+  ): Candidate[] {
+    const candidates: Candidate[] = [];
     for (const line of sourceLines) {
       const refIdx = line.search(inlineRangeKeyword);
       const searchLine = refIdx > 0 ? line.substring(0, refIdx) : line;
@@ -156,7 +191,7 @@ export function extractValueFromWindow(
         }
         const v = parseFloat(tok);
         if (v >= 0 && v <= 100000) {
-          candidates.push({ value: v, rawValue: tok });
+          candidates.push({ value: v, rawValue: tok, line: searchLine, start: m.index });
         }
       }
     }
@@ -183,8 +218,8 @@ export function extractValueFromWindow(
   }
 
   function pickBest(
-    candidates: { value: number; rawValue: string }[],
-  ): { value: number; rawValue: string } | null {
+    candidates: Candidate[],
+  ): Candidate | null {
     if (candidates.length === 0) return null;
     if (candidates.length === 1) return candidates[0] ?? null;
     if (referenceResult?.min !== undefined && referenceResult?.max !== undefined) {
@@ -255,7 +290,7 @@ export function extractValueFromWindow(
           /\d{1,2}\/\d{1,2}\/|\bdob\b|\bdate\b|\bcollected?\b|\breport(?:ed)?\b|\baccession\b/i.test(labelLine)) {
         continue;
       }
-      labelCandidates.push({ value: parsed.value, rawValue: parsed.rawValue ?? raw });
+      labelCandidates.push({ value: parsed.value, rawValue: parsed.rawValue ?? raw, line: labelLine, start: m.index + (m[1]?.length ?? 0) });
       break;
     }
   }
@@ -279,19 +314,19 @@ export function extractValueFromWindow(
   if (labelCandidates.length > 0) {
     if (valueCandidates.length === 0 || !referenceResult) {
       const best = pickBest(labelCandidates);
-      if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult, ...ambiguity };
+      if (best) return { ...withInclusiveComparator(best), unit, referenceResult, ...ambiguity };
     } else {
       // Both candidate arrays are non-empty above, so pickBest returns non-null here.
       const bestLabel = pickBest(labelCandidates);
       const bestValue = pickBest(valueCandidates);
       if (bestLabel && bestValue) {
         if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
-          return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult, ...ambiguity };
+          return { ...withInclusiveComparator(bestLabel), unit, referenceResult, ...ambiguity };
         }
-        return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult, ...ambiguity };
+        return { ...withInclusiveComparator(bestValue), unit, referenceResult, ...ambiguity };
       }
-      if (bestLabel) return { value: bestLabel.value, rawValue: bestLabel.rawValue, unit, referenceResult, ...ambiguity };
-      if (bestValue) return { value: bestValue.value, rawValue: bestValue.rawValue, unit, referenceResult, ...ambiguity };
+      if (bestLabel) return { ...withInclusiveComparator(bestLabel), unit, referenceResult, ...ambiguity };
+      if (bestValue) return { ...withInclusiveComparator(bestValue), unit, referenceResult, ...ambiguity };
     }
   }
 
@@ -323,7 +358,7 @@ export function extractValueFromWindow(
   // PRIORITY 3: plain numeric candidates from value lines.
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
-    if (best) return { value: best.value, rawValue: best.rawValue, unit, referenceResult, ...ambiguity };
+    if (best) return { ...withInclusiveComparator(best), unit, referenceResult, ...ambiguity };
   }
 
   // PRIORITY 5: fallback — scan raw (unfiltered) lines for a standalone numeric value.

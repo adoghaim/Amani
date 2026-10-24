@@ -23,6 +23,7 @@ import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
 import { bindReferenceRange } from '../utils/parser/rangeDetection';
+import { awaitsHerCheck, awaitsHerConfirmation, withReviewFlags } from '../utils/parser/reviewFlags';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import {
   cycleContextAtDraw, cycleContextToStore, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
@@ -282,12 +283,14 @@ export function NewReport() {
   const applyExtractedItems = (items: ReportItem[], runId: number) => {
     if (runId !== extractionRunRef.current || !items || items.length === 0 || userEditedReportItemsRef.current) return;
 
-    setReportItems(items);
+    // F022: the parser's review rules hold for model and OCR rows too.
+    const flagged = items.map(withReviewFlags);
+    setReportItems(flagged);
     setCoverage({
-      total_detected: items.length,
-      total_core: items.filter(i => i.is_core_biomarker).length,
-      total_extended: items.filter(i => !i.is_core_biomarker).length,
-      needs_review: items.filter(i => i.needs_review).length,
+      total_detected: flagged.length,
+      total_core: flagged.filter(i => i.is_core_biomarker).length,
+      total_extended: flagged.filter(i => !i.is_core_biomarker).length,
+      needs_review: flagged.filter(i => i.needs_review).length,
     });
   };
 
@@ -595,6 +598,10 @@ export function NewReport() {
 
   // A typed length that is not a whole number of days within the bounds.
   const cycleLengthInvalid = cycleLengthInput.trim() !== '' && parseCycleLengthDays(cycleLengthInput) === null;
+  // F022: probably misread values she has not yet marked correct, corrected or removed.
+  const awaitingConfirmation = reportItems.filter(awaitsHerConfirmation).length;
+  // IA2 review wave 2: values in another unit Amani cannot check; Save stays open.
+  const awaitingCheck = reportItems.filter(awaitsHerCheck).length;
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
@@ -796,7 +803,8 @@ export function NewReport() {
             canonical_analyte_id: canonicalAnalyteId,
             canonical_slug: slug,
             parse_status: isMapped ? (canonicalAnalyteId ? 'mapped' : 'partial') : 'unmapped',
-            needs_review: item.needs_review ?? false,
+            // F022: still flagged and not confirmed by her (marked correct or corrected).
+            needs_review: (item.needs_review ?? false) && item.reviewed_by_user !== true,
             is_core: item.is_core_biomarker ?? false,
             display_name: item._display_name ?? null,
             system_category: item._system_category ?? null,
@@ -1387,7 +1395,8 @@ export function NewReport() {
                 <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mb-5">
                   <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-theme-flag-watch">
-                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''} — you can still continue, Amani will use what it understood
+                    {/* IA2 review: only what the web app holds today; the server's AI reads are handoffs. */}
+                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''}. Check them on the next step. Until you confirm a value we may have misread, it is left out of your report's main finding, focus areas and changes, and out of your Tracker charts. AI summaries and insights may still include it.
                   </p>
                 </div>
               )}
@@ -1643,11 +1652,29 @@ export function NewReport() {
               />
             )}
 
+            {awaitingConfirmation > 0 && (
+              <div role="status" data-testid="confirm-misread" className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mt-6">
+                <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-theme-flag-watch">
+                  Amani may have misread {awaitingConfirmation} value{awaitingConfirmation !== 1 ? 's' : ''}. Mark {awaitingConfirmation !== 1 ? 'each' : 'it'} as correct, fix it, or remove it to save.
+                </p>
+              </div>
+            )}
+
+            {awaitingCheck > 0 && (
+              <div role="status" data-testid="check-unit" className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mt-6">
+                <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-theme-flag-watch">
+                  Amani can't check {awaitingCheck} value{awaitingCheck !== 1 ? 's' : ''} in the unit{awaitingCheck !== 1 ? 's' : ''} printed. Check {awaitingCheck !== 1 ? 'them' : 'it'} against your report, then mark {awaitingCheck !== 1 ? 'each' : 'it'} as correct or fix it.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-between pt-6">
               <Button variant="secondary" onClick={() => setStep(2)}>
                 <ArrowLeft className="w-5 h-5 mr-2" />Back
               </Button>
-              <Button onClick={handleSubmit} disabled={loading || extracting}>
+              <Button onClick={handleSubmit} disabled={loading || extracting || awaitingConfirmation > 0}>
                 {loading ? 'Processing...' : extracting ? 'Reading report...' : 'Save and analyze'}
               </Button>
             </div>

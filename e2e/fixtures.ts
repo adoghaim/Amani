@@ -176,6 +176,21 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
             return;
           }
         }
+        // F022: with it, the flagged rows of the same reports (READING_REVIEW_COLUMNS), so
+        // ReportView leaves a value she never confirmed out of her trends.
+        const reviewColumns = ['id', 'lab_report_id', 'canonical_slug', 'value_numeric', 'raw_value_text',
+          'confidence_score', 'needs_review', 'reviewed_by_user', 'review_status'] as const;
+        if (url.pathname === '/rest/v1/report_analytes' && select === reviewColumns.join(',')
+          && url.searchParams.get('needs_review') === 'eq.true') {
+          const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];
+          const matches = ids.map(id => syntheticReports.find(r => r.report.id === id));
+          if (ids.length > 0 && matches.every(m => m !== undefined)) {
+            await route.fulfill({ json: matches.flatMap(m => (m!.analytes ?? [])
+              .filter(a => a['needs_review'] === true)
+              .map(a => Object.fromEntries(reviewColumns.map(c => [c, a[c] ?? null])))) });
+            return;
+          }
+        }
         // This existing view is read without a user filter by useSubscription.
         // An empty response grants no subscription; no real backend is involved.
         if (url.pathname === '/rest/v1/stripe_user_subscriptions' && url.searchParams.get('select') === '*') {

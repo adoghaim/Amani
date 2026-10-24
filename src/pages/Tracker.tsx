@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAllRows';
+import { READING_REVIEW_COLUMNS, withoutUnconfirmed, type ReadingReview } from '../lib/biomarkers/confirmation';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
@@ -161,14 +162,24 @@ export function Tracker() {
       if (fetchedReports.length > 0) {
         const ids = fetchedReports.map((r) => r.id);
         // R27: a user's values across every report can pass PostgREST's 1,000-row cap.
-        const { data: bm } = await fetchAllRows<Biomarker>(() =>
-          supabase
-            .from('biomarkers')
-            .select('*')
-            .in('lab_report_id', ids)
-            .order('id'));
+        const [{ data: bm }, { data: flagged }] = await Promise.all([
+          fetchAllRows<Biomarker>(() =>
+            supabase
+              .from('biomarkers')
+              .select('*')
+              .in('lab_report_id', ids)
+              .order('id')),
+          // F022: Compare labs and the timeline measure changes; a value she never confirmed is not one.
+          fetchAllRows<ReadingReview>(() =>
+            supabase
+              .from('report_analytes')
+              .select(READING_REVIEW_COLUMNS)
+              .in('lab_report_id', ids)
+              .eq('needs_review', true)
+              .order('id')),
+        ]);
         if (bm) {
-          const grouped = (bm as Biomarker[]).reduce<Record<string, Biomarker[]>>((acc, b) => {
+          const grouped = withoutUnconfirmed(bm as Biomarker[], flagged ?? []).reduce<Record<string, Biomarker[]>>((acc, b) => {
             const bucket = acc[b.lab_report_id] ?? [];
             bucket.push(b);
             acc[b.lab_report_id] = bucket;
