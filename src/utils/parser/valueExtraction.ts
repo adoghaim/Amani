@@ -1,23 +1,37 @@
 import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine, isPartOfWord } from './textUtils';
-import { bindReferenceRange } from './rangeDetection';
+import { INCLUSIVE_COMPARATOR, bindReferenceRange, firstNumericToken } from './rangeDetection';
 import { detectUnit } from './labelMatching';
 
 const NUM_RE = /(\d+\.\d+|\d+)/g;
+// A result printed at or below/above a limit: "<=8", "< OR = 150", "≤150", "> OR = 60", "≥1000" (F021).
+const INCLUSIVE_VALUE_RE = new RegExp(String.raw`^${INCLUSIVE_COMPARATOR}\s*(\d+\.?\d*)`, 'i');
+const COMPARATOR_PREFIX_RE = new RegExp(String.raw`^(?:${INCLUSIVE_COMPARATOR}|[<>])\s*`, 'i');
 
 const PHASE_LINE_RE = /\b(?:phase|trimester|menopausal|menopaus|pregnancy|pregnant|follicular|luteal|ovulatory|peak|male|female|adult|child|infant)\b/i;
 const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|primary|prevention|factor|method|equation|accuracy)\b/i;
 
 /**
- * A result printed below a limit ("<150"). Its number is half the limit by the
- * convention every reader shares (here, extract-biomarkers, OCR), so no lab
- * measured it: the row needs her review (F098).
+ * A result printed below a limit ("<150", "<=150", "< OR = 150", "≤150"). Its
+ * number is half the limit by the convention every reader shares (here,
+ * extract-biomarkers, OCR), so no lab measured it: the row needs her review (F098).
  */
 export function isBelowLimitResult(valueText: string | null | undefined): boolean {
-  return /^\s*</.test(valueText ?? '');
+  return /^\s*[<≤]/.test(valueText ?? '');
 }
 
+/**
+ * A number, or a result printed as a limit. An inclusive limit keeps its
+ * printed comparator ("> OR = 60", "≤8"); like a strict one its number is the
+ * existing placeholder: half the limit below it, the limit above it (F021).
+ */
 export function parseValueWithPrefix(text: string): { value: number; rawValue: string } | null {
+  const inclusive = text.match(INCLUSIVE_VALUE_RE);
+  if (inclusive && inclusive[1] !== undefined) {
+    const limit = parseFloat(inclusive[1]);
+    const below = text.startsWith('<') || text.startsWith('≤');
+    return { value: below ? limit * 0.5 : limit, rawValue: inclusive[0].replace(/\s+/g, ' ') };
+  }
   const ltMatch = text.match(/^<\s*(\d+\.?\d*)/);
   if (ltMatch && ltMatch[1] !== undefined) {
     return { value: parseFloat(ltMatch[1]) * 0.5, rawValue: `<${ltMatch[1]}` };
@@ -220,6 +234,15 @@ export function extractValueFromWindow(
   // numbers that follow are historical values from prior draws.
   const refBoundaryIdx0 = labelLine.search(/\breference\s+range|\bref\s+range|\bref\.\s*range/i);
   const labelLineBeforeRef0 = refBoundaryIdx0 > 0 ? labelLine.substring(0, refBoundaryIdx0) : labelLine;
+  // F021: an inclusive comparator is her result only in the result position, the
+  // first number after the name ("eGFR > OR = 60 > OR = 60 mL/min/1.73m2"). Beside
+  // or after a measured value it is the reference ("eGFR 45 L ≥60 mL/min/1.73m2").
+  const resultToken = firstNumericToken(labelLineBeforeRef0, labelNameEnd);
+  const resultText = resultToken ? labelLineBeforeRef0.slice(resultToken.start, resultToken.end) : '';
+  const inclusiveResult = INCLUSIVE_VALUE_RE.test(resultText) ? parseValueWithPrefix(resultText) : null;
+  if (inclusiveResult) {
+    return { value: inclusiveResult.value, rawValue: inclusiveResult.rawValue, unit, referenceResult, ...ambiguity };
+  }
   const prefixRe0 = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
   const prefixMatch0 = labelLineBeforeRef0.match(prefixRe0);
   if (prefixMatch0 && prefixMatch0[1] !== undefined) {
@@ -308,18 +331,23 @@ export function extractValueFromWindow(
   // Only do this after label candidates fail, and skip tokens whose numeric part
   // is already a known range boundary (meaning it IS the reference, not the result).
   // We also collect ambiguous comparators (value == range boundary) for use as last resort.
-  const COMPARATOR_VALUE_RE = /(?:^|\s)(<\s*\d+\.?\d*|>\s*\d+\.?\d*)/;
+  const COMPARATOR_VALUE_RE = new RegExp(String.raw`(?:^|\s)(${INCLUSIVE_COMPARATOR}\s*\d+\.?\d*|<\s*\d+\.?\d*|>\s*\d+\.?\d*)`, 'i');
   let ambiguousComparator: { value: number; rawValue: string } | null = null;
-  for (const vLine of valueLines) {
+  for (const [k, vLine] of valueLines.entries()) {
     const trimmed = vLine.trim();
     if (PHASE_LINE_RE.test(trimmed)) continue;
     if (/\breference\s+range\b|\bref\s+range\b/i.test(trimmed)) continue;
     const cm2 = trimmed.match(COMPARATOR_VALUE_RE);
     if (cm2 && cm2[1] !== undefined) {
+      // F021: a comparator after her measured value is its reference, not her
+      // result ("eGFR / 45 mL/min/1.73m2 / > OR = 60"); the measured value stays.
+      const measured = collectCandidates([...valueLines.slice(0, k), trimmed.slice(0, cm2.index)], true);
+      const measuredBest = pickBest(measured);
+      if (measuredBest) return { value: measuredBest.value, rawValue: measuredBest.rawValue, unit, referenceResult, ...ambiguity };
       const cmToken = cm2[1];
       const parsed = parseValueWithPrefix(cmToken.trim());
       if (parsed) {
-        const rawNum = cmToken.trim().replace(/^[<>]=?\s*/, '');
+        const rawNum = cmToken.trim().replace(COMPARATOR_PREFIX_RE, '');
         if (knownRangeNumbers.has(rawNum) || knownRangeNumbers.has(String(parseFloat(rawNum)))) {
           ambiguousComparator ??= parsed;
           continue;

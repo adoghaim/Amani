@@ -9,12 +9,22 @@ import type {
 import { KNOWN_UNITS } from './labelMatching';
 import { isPartOfWord } from './textUtils';
 
+/**
+ * An inclusive comparator as labs print it: "<=", "< =", "<OR=", "< OR =",
+ * "≤", and the same with ">" or "≥" (review F021). These are the spellings
+ * supabase/functions/_shared/censored-value.ts reads. A RegExp source, used
+ * with the "i" flag; a number follows it.
+ */
+export const INCLUSIVE_COMPARATOR = String.raw`(?:[<>]\s*(?:or\s*)?=|[≤≥](?:\s*(?:or\s*)?=)?)`;
+
 export function detectComparatorRange(text: string): ComparatorRange | null {
   const patterns: Array<{ re: RegExp; op: ComparatorRange['operator'] }> = [
     { re: />\s*or\s*=\s*(\d+\.?\d*)/i, op: '> OR =' },
     { re: /<\s*or\s*=\s*(\d+\.?\d*)/i, op: '< OR =' },
-    { re: />=\s*(\d+\.?\d*)/,           op: '>=' },
-    { re: /<=\s*(\d+\.?\d*)/,           op: '<=' },
+    { re: />\s*=\s*(\d+\.?\d*)/,        op: '>=' },
+    { re: /<\s*=\s*(\d+\.?\d*)/,        op: '<=' },
+    { re: /≥\s*(?:(?:or\s*)?=\s*)?(\d+\.?\d*)/i, op: '>=' },
+    { re: /≤\s*(?:(?:or\s*)?=\s*)?(\d+\.?\d*)/i, op: '<=' },
     { re: />\s*(\d+\.?\d*)/,            op: '>' },
     { re: /<\s*(\d+\.?\d*)/,            op: '<' },
   ];
@@ -104,7 +114,7 @@ const UNIVERSAL_MIN_MAX: readonly RegExp[] = [
   /(\d+\.?\d*)\s+to\s+(\d+\.?\d*)/gi,
 ];
 // The operators detectComparatorRange knows, every occurrence.
-const ANY_COMPARATOR_RE = />\s*or\s*=\s*\d+\.?\d*|<\s*or\s*=\s*\d+\.?\d*|>=\s*\d+\.?\d*|<=\s*\d+\.?\d*|>\s*\d+\.?\d*|<\s*\d+\.?\d*/gi;
+const ANY_COMPARATOR_RE = new RegExp(String.raw`${INCLUSIVE_COMPARATOR}\s*\d+\.?\d*|>\s*\d+\.?\d*|<\s*\d+\.?\d*`, 'gi');
 
 function everyMatch(re: RegExp): RegExp {
   return re.flags.includes('g') ? re : new RegExp(re.source, re.flags + 'g');
@@ -250,10 +260,11 @@ export function splitPrintedIntervals(text: string, adapter?: SourceAdapter): Pr
 /**
  * The first number on a line, at or after `from`, that is not part of a word
  * ("T3", "A1c", "25-OH", "Omega-3") or an ordinal ("1st"), with any comparator
- * glued to it. Without lookbehind, for older WebViews.
+ * glued to it, inclusive spellings included ("> OR = 60", "≤8"). Without
+ * lookbehind, for older WebViews.
  */
 export function firstNumericToken(line: string, from = 0): { start: number; end: number } | null {
-  const re = /(^|[^A-Za-z0-9.])((?:[<>]=?\s*)?\d+(?:\.\d+)?)(?!\d|\.\d|\s*(?:st|nd|rd|th)\b)/gi;
+  const re = new RegExp(String.raw`(^|[^A-Za-z0-9.])((?:(?:${INCLUSIVE_COMPARATOR}|[<>])\s*)?\d+(?:\.\d+)?)(?!\d|\.\d|\s*(?:st|nd|rd|th)\b)`, 'gi');
   for (const m of line.matchAll(re)) {
     if (m[1] === undefined || m[2] === undefined) continue;
     const start = (m.index ?? 0) + m[1].length;
