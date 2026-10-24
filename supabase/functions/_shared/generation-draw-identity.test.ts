@@ -523,6 +523,20 @@ describe('generate-interpretation F042: a claim covers its own draw only (execut
     expect(w.claims).toHaveLength(1);
   });
 
+  it('(b) a report whose values became a claimed draw is served free: the draw\'s claim wins over its own', async () => {
+    const w = world();
+    await claimFirstReport(w);
+    upload(w, R2, SECOND_FILE, BYTES, EDITED);
+    await generate(w, { reportId: R2 });
+    // Her second report now holds the values of her first: that draw is claimed.
+    w.analytes[R2] = [...ANALYTES];
+    const again = await generate(w, { reportId: R2, requestId: REQUEST });
+    expect(again.status).toBe(200);
+    expect(again.settled).toEqual(['already_claimed']);
+    expect(argsOf(again.rpcs, 'commit_deep_access_version')).toMatchObject({ p_report_id: R2, p_consume_credit: false });
+    expect(again.body).toMatchObject({ access: 'full' });
+  });
+
   it.each([undefined, 'always', 'on_demand'])('(c) a claimed report whose analytes were edited is refused (post-limit %s): no model call, nothing claimed or written', async postLimit => {
     const w = world();
     await claimFirstReport(w);
