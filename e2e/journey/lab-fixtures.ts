@@ -1,4 +1,5 @@
 import { deflateSync } from 'node:zlib';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   Synthetic lab uploads for the PK-03e-I journey. Never real patient files.
@@ -61,9 +62,9 @@ export const UPLOADS = [
   upload(5, 'synthetic-lab-e', '2026-10-05', 6, 25),
 ] as const;
 
-/** parse-lab-report-ocr's `items` (ReportAnalyte) for one upload, field for field. */
-export function ocrItems(u: SyntheticUpload) {
-  const row = (rawName: string, slug: string, value: number, unit: string) => ({
+/** parse-lab-report-ocr's `items` (ExtractedAnalyte) for one upload, field for field. */
+export function ocrItems(u: SyntheticUpload): ExtractedAnalyte[] {
+  const row = (rawName: string, slug: string, value: number, unit: string): ExtractedAnalyte => ({
     raw_name: rawName, raw_value_text: String(value), value_numeric: value, unit,
     raw_reference_range: '0-100', normalized_min: 0, normalized_max: 100,
     normalized_operator: null, normalized_operator_value: null,

@@ -16,6 +16,7 @@ import { deleteUserAccount, deleteUserDataTables, checkUserDataTablesReady, Acco
 import {
   isVersionable, versionIdentity, regenerationFailedResponse, REQUEST_ID_REQUIRED, type StoredVersion,
 } from '../../supabase/functions/_shared/interpretation-version-write';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 import type { FakeSupabase, Row } from './fake-supabase';
 
 /*
@@ -113,7 +114,7 @@ export class ServerModel {
   /** Every generate-interpretation body received, in order. */
   readonly generateRequests: Row[] = [];
   /** Base64 data URL -> the OCR function's `items` for that image. */
-  readonly ocr = new Map<string, Row[]>();
+  readonly ocr = new Map<string, ExtractedAnalyte[]>();
 
   constructor(private readonly db: FakeSupabase) {
     db.functions = {

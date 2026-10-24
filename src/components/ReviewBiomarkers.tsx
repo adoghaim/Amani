@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { AlertCircle, AlertTriangle, ChevronDown, ChevronRight, FlaskConical, Microscope } from 'lucide-react';
 import { Button } from './Button';
 import type { ReportItem } from '../utils/biomarkerParser';
@@ -43,6 +43,9 @@ function ItemCard({
   catalogSlugs: { slug: string; name: string; unit: string }[];
 }) {
   const [expanded, setExpanded] = useState(item.confidence_score === 'low' || item.needs_review);
+  const uid = useId();
+  const fieldId = (name: string) => `${uid}-${name}`;
+  const markerName = reportItemDisplayName(item);
 
   const borderColor =
     item.confidence_score === 'low'
@@ -53,16 +56,25 @@ function ItemCard({
 
   return (
     <div className={`border rounded-lg overflow-hidden ${borderColor}`}>
+      {/*
+        The whole header is a click target for a pointer, but the control is the
+        button inside it: it takes focus, Enter and Space press it, and the click
+        it produces bubbles up here, so one handler serves both. (F064)
+      */}
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-theme-neutral-50/50 transition-colors"
+        className="flex items-center justify-between px-4 py-1 cursor-pointer select-none hover:bg-theme-neutral-50/50 transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          {expanded ? <ChevronDown className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" />}
+        <button
+          type="button"
+          aria-expanded={expanded}
+          className="flex items-center gap-3 min-w-0 min-h-[44px] flex-1 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary"
+        >
+          {expanded ? <ChevronDown aria-hidden="true" className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" /> : <ChevronRight aria-hidden="true" className="w-4 h-4 text-theme-neutral-400 flex-shrink-0" />}
           <span className="font-medium text-theme-neutral-900 truncate">
-            {reportItemDisplayName(item) || <span className="text-theme-neutral-400 italic">Unnamed</span>}
+            {markerName || <span className="text-theme-neutral-400 italic">Unnamed</span>}
           </span>
-        </div>
+        </button>
         <div className="flex items-center gap-3 flex-shrink-0 ml-3">
           <span className="font-semibold text-theme-neutral-900 tabular-nums">
             {item.value_text ?? item.value_numeric}
@@ -70,11 +82,12 @@ function ItemCard({
           </span>
           <ConfidenceBadge confidence={item.confidence_score} />
           <button
-            className="text-theme-neutral-400 hover:text-theme-flag-low transition-colors ml-1"
+            type="button"
+            className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-md text-theme-neutral-400 hover:text-theme-flag-low transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary"
             onClick={e => { e.stopPropagation(); onRemove(globalIndex); }}
-            title="Remove"
+            aria-label={`Remove ${markerName || 'this item'}`}
           >
-            ×
+            <span aria-hidden="true">×</span>
           </button>
         </div>
       </div>
@@ -83,7 +96,7 @@ function ItemCard({
         <div className="px-4 pb-4 border-t border-theme-neutral-100 bg-theme-surface">
           {item.source_snippet && (
             <div className="mt-4 p-3 bg-theme-neutral-50 rounded-lg border border-theme-neutral-200">
-              <label className="block text-[10px] font-bold text-theme-neutral-400 uppercase tracking-wider mb-1">Raw report context</label>
+              <p className="block text-[10px] font-bold text-theme-neutral-400 uppercase tracking-wider mb-1">Raw report context</p>
               <p className="text-sm font-mono text-theme-neutral-700 break-words leading-relaxed">
                 {item.source_snippet}
               </p>
@@ -99,8 +112,9 @@ function ItemCard({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
             <div>
-              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Test Label (on report)</label>
+              <label htmlFor={fieldId('raw-name')} className="block text-xs font-medium text-theme-neutral-600 mb-1">Test Label (on report)</label>
               <input
+                id={fieldId('raw-name')}
                 type="text"
                 value={item.raw_name}
                 onChange={e => onUpdate(globalIndex, 'raw_name', e.target.value)}
@@ -109,8 +123,9 @@ function ItemCard({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Map to Amani Biomarker</label>
+              <label htmlFor={fieldId('slug')} className="block text-xs font-medium text-theme-neutral-600 mb-1">Map to Amani Biomarker</label>
               <select
+                id={fieldId('slug')}
                 value={item.canonical_slug ?? ''}
                 onChange={e => {
                   const slug = e.target.value || null;
@@ -128,10 +143,11 @@ function ItemCard({
             </div>
 
             <div>
-              <label className={`block text-xs font-medium mb-1 ${item.parse_error ? 'text-theme-flag-low' : 'text-theme-neutral-600'}`}>
+              <label htmlFor={fieldId('value')} className={`block text-xs font-medium mb-1 ${item.parse_error ? 'text-theme-flag-low' : 'text-theme-neutral-600'}`}>
                 Value
               </label>
               <input
+                id={fieldId('value')}
                 type="number"
                 step="0.001"
                 value={item.value_numeric}
@@ -144,8 +160,9 @@ function ItemCard({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Unit</label>
+              <label htmlFor={fieldId('unit')} className="block text-xs font-medium text-theme-neutral-600 mb-1">Unit</label>
               <input
+                id={fieldId('unit')}
                 type="text"
                 value={item.unit ?? ''}
                 onChange={e => onUpdate(globalIndex, 'unit', e.target.value || null)}
@@ -155,8 +172,9 @@ function ItemCard({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-theme-neutral-600 mb-1">Reference range (raw)</label>
+              <label htmlFor={fieldId('range')} className="block text-xs font-medium text-theme-neutral-600 mb-1">Reference range (raw)</label>
               <input
+                id={fieldId('range')}
                 type="text"
                 value={item.raw_reference_range ?? ''}
                 onChange={e => onUpdate(globalIndex, 'raw_reference_range', e.target.value || null)}
@@ -280,6 +298,8 @@ export function ReviewBiomarkers({ items, onUpdate, onRemove, onAddNew }: Review
       {extendedItems.length > 0 && (
         <section>
           <button
+            type="button"
+            aria-expanded={showExtended}
             className="flex items-center gap-2 mb-3 group w-full text-left"
             onClick={() => setShowExtended(v => !v)}
           >

@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cycleContextCard } from '../lib/cycleContextCard';
 import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   PK-FIX-06 on the real upload page. NewReport is rendered in jsdom against a
@@ -42,11 +43,13 @@ vi.mock('../lib/supabase', () => {
     return builder;
   };
   // An estradiol result, so the biomarkers insert shows whether V2 withholds it.
-  const ocrItems = [{
-    raw_name: 'Estradiol', canonical_slug: 'estradiol', category: 'hormones', value_numeric: 150, value_text: '150',
-    unit: 'pg/mL', raw_reference_range: null, normalized_reference_min: null, normalized_reference_max: null,
-    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-    needs_review: false, source_snippet: 'Estradiol 150 pg/mL', source_format: 'ocr', review_status: 'pending',
+  // parse-lab-report-ocr's own row shape (review F093), not the app's ReportItem.
+  const ocrItems: ExtractedAnalyte[] = [{
+    raw_name: 'Estradiol', raw_value_text: '150', value_numeric: 150, unit: 'pg/mL',
+    raw_reference_range: null, normalized_min: null, normalized_max: null,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: 'Estradiol 150 pg/mL',
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug: 'estradiol', parse_status: 'mapped',
+    needs_review: false, is_core: true, category: 'hormones',
   }];
   return { supabase: {
     from: query,

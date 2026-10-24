@@ -18,9 +18,11 @@ import { isAiPausedResponse, noteAiPaused } from '../lib/aiPause';
 import { OcrPausedNotice } from '../components/OcrPausedNotice';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
+import { toExtractedItem, type ExtractedAnalyte, type ExtractedItem } from '../../supabase/functions/_shared/lab-extraction';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
+import { bindReferenceRange } from '../utils/parser/rangeDetection';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import {
   cycleContextAtDraw, cycleContextToStore, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
@@ -51,6 +53,59 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
 ];
 
 type GuidedStep = 'choose' | 'instructions' | 'upload';
+
+/** A printed range read one line per "; " or line break, as the parser joins them (PK-FIX-05). */
+const bindPrintedRange = (text: string) => bindReferenceRange(text.split(/;\s+|\n/));
+
+/*
+  Her confirm-step edit replaces what was read off the page (IB1 review). The
+  printed value text and the interval read with the range would otherwise
+  outlive her correction: the report showed the misread value, and placed her
+  value against an interval she had corrected. A corrected value drops the
+  printed text; a corrected range is read again from what she typed, and
+  leaves no interval when it does not parse.
+
+  Her text is read the way the parser binds a marker's interval (PK-FIX-05),
+  one printed line per "; " or line break, as the parser joins them: an
+  interval is bound only when exactly one applies. Several intervals, or one
+  tied to a cycle phase, menopause or pregnancy, bind none (IB1 review: the
+  first-interval read placed her against the follicular interval).
+*/
+function applyReviewEdit(item: ReportItem, field: keyof ReportItem, value: string | number | null | boolean): ReportItem {
+  const updated = { ...item, [field]: value } as ReportItem;
+  if (field === 'value_numeric') updated.value_text = null;
+  if (field === 'raw_reference_range') {
+    const range = typeof value === 'string' ? bindPrintedRange(value).range : undefined;
+    updated.normalized_reference_min = range?.min ?? null;
+    updated.normalized_reference_max = range?.max ?? null;
+    updated.reference_operator = range?.comparator?.operator ?? null;
+    updated.reference_operator_value = range?.comparator?.value ?? null;
+  }
+  return updated;
+}
+
+/*
+  The model's interval is held to the same binding before review (IB1 review,
+  fix wave 2). OCR and AI-refinement rows carry normalized_reference_* as the
+  model filled them. When her lab printed several intervals, or one tied to a
+  cycle phase, menopause or pregnancy, the model's pick placed her value
+  against an interval that may not apply and the row did not open for review.
+  Such a row keeps the printed text, binds no interval and goes to review, as
+  the parser's own rows do. A printed range that binds one interval, or none
+  the parser can read, keeps the model's values.
+*/
+function withBoundModelRange(item: ExtractedItem): ExtractedItem {
+  const printed = item.raw_reference_range;
+  if (typeof printed !== 'string' || !bindPrintedRange(printed).ambiguous) return item;
+  return {
+    ...item,
+    normalized_reference_min: null,
+    normalized_reference_max: null,
+    reference_operator: null,
+    reference_operator_value: null,
+    needs_review: true,
+  };
+}
 
 /*
   Mark a report as terminally failed.
@@ -177,7 +232,13 @@ export function NewReport() {
   const [chosenLab, setChosenLab] = useState<'quest' | 'labcorp' | null>(null);
   const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
 
+  // The hidden file inputs are opened by real buttons (F064), so each needs a ref.
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const genericFileInputRef = useRef<HTMLInputElement>(null);
+  // A failed save sets the error at the top while the button she pressed is at
+  // the bottom; bumping the tick moves focus to the error so it is read out and seen.
+  const errorRef = useRef<HTMLDivElement>(null);
+  const [errorFocusTick, setErrorFocusTick] = useState(0);
   const userEditedReportItemsRef = useRef(false);
   const userEditedPeriodRef = useRef(false);
   const userEditedCycleLengthRef = useRef(false);
@@ -453,7 +514,9 @@ export function NewReport() {
         return;
       }
 
-      if (data.items && data.items.length > 0) applyExtractedItems(data.items, runId);
+      // OCR rows are named like report_analytes; the save reads ReportItem names (F093, F114).
+      const items: ExtractedAnalyte[] = data.items ?? [];
+      if (items.length > 0) applyExtractedItems(items.map(a => withBoundModelRange(toExtractedItem(a))), runId);
 
       // Capture cycle metadata from OCR if the text-path didn't already find any.
       // OCR returns metadata.cycle_day / metadata.cycle_phase per the edge function contract.
@@ -500,8 +563,10 @@ export function NewReport() {
         console.warn('[NewReport] AI extraction background warning:', invokeError.message);
         return;
       }
-      if (runId === extractionRunRef.current && data?.items && data.items.length > 0) {
-        applyExtractedItems(data.items, runId);
+      // extract-biomarkers maps its rows with the same toExtractedItem before answering.
+      const items: ExtractedItem[] = data?.items ?? [];
+      if (runId === extractionRunRef.current && items.length > 0) {
+        applyExtractedItems(items.map(withBoundModelRange), runId);
       }
     }).catch(err => {
       console.error('[NewReport] AI extraction background network error:', err);
@@ -509,6 +574,10 @@ export function NewReport() {
       if (runId === extractionRunRef.current) setAiRefining(false);
     });
   };
+
+  useEffect(() => {
+    if (errorFocusTick > 0) errorRef.current?.focus();
+  }, [errorFocusTick]);
 
   const toggleSymptom = (symptom: Symptom) => {
     if (symptoms.includes(symptom)) {
@@ -824,6 +893,7 @@ export function NewReport() {
       // F065: plain words. The raw message ("File upload failed: Failed to
       // fetch") tells her nothing she can act on.
       setError("We couldn't save your report. Check your connection, then try again.");
+      setErrorFocusTick(tick => tick + 1);
       setLoading(false);
       setStep(3);
       setSubmitStep(null);
@@ -905,7 +975,12 @@ export function NewReport() {
         </div>
 
         {error && (
-          <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg mb-6">
+          <div
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+            className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg mb-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+          >
             {error}
           </div>
         )}
@@ -970,16 +1045,21 @@ export function NewReport() {
 
               {/* Generic file upload */}
               <div>
+                {/* The input stays display:none; this button is the focusable control that opens it (F064). */}
                 <input
+                  ref={genericFileInputRef}
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={handleFileChange}
                   className="hidden"
                   id="file-upload"
+                  tabIndex={-1}
+                  aria-hidden="true"
                 />
-                <label
-                  htmlFor="file-upload"
-                  className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none
+                <button
+                  type="button"
+                  onClick={() => genericFileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background
                     ${file
                       ? 'border-theme-flag-ok-border bg-theme-flag-ok-bg/60'
                       : 'border-theme-neutral-300 hover:border-theme-primary hover:bg-theme-background/60'
@@ -994,16 +1074,16 @@ export function NewReport() {
                   ) : (
                     <>
                       <Upload className="w-9 h-9 text-theme-neutral-400" />
-                      <div className="text-center px-4">
-                        <p className="text-sm font-medium text-theme-neutral-700">
+                      <span className="block text-center px-4">
+                        <span className="block text-sm font-medium text-theme-neutral-700">
                           <span className="text-theme-primary">Choose a file</span>
                           <span className="hidden sm:inline"> or drag and drop</span>
-                        </p>
-                        <p className="text-xs text-theme-neutral-400 mt-1">PDF, JPG, or PNG</p>
-                      </div>
+                        </span>
+                        <span className="block text-xs text-theme-neutral-400 mt-1">PDF, JPG, or PNG</span>
+                      </span>
                     </>
                   )}
-                </label>
+                </button>
 
                 {/* Camera capture — native only */}
                 {isNative() && (
@@ -1120,17 +1200,23 @@ export function NewReport() {
                     Open MyQuest <ExternalLink className="w-4 h-4" />
                   </a>
 
-                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Quest PDF
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={handleGuidedUploadFile}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleGuidedUploadFile}
+                    className="hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
               </>
             ) : (
@@ -1169,16 +1255,23 @@ export function NewReport() {
                     Open Labcorp <ExternalLink className="w-4 h-4" />
                   </a>
 
-                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Labcorp PDF
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={handleGuidedUploadFile}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleGuidedUploadFile}
+                    className="hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
               </>
             )}
@@ -1345,7 +1438,7 @@ export function NewReport() {
                     <p className="text-xs text-theme-neutral-500">Amani counts the cycle day of your test from the day your last period started.</p>
                   </div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-sm font-medium text-theme-neutral-700">Last period start</label>
+                    <label htmlFor="last-period-start" className="text-sm font-medium text-theme-neutral-700">Last period start</label>
                     {fetchingPeriod && (
                       <span className="flex items-center gap-1 text-xs text-theme-neutral-400">
                         <Loader2 className="w-3 h-3 animate-spin" /> Looking up tracker...
@@ -1358,6 +1451,7 @@ export function NewReport() {
                     )}
                   </div>
                   <input
+                    id="last-period-start"
                     type="date"
                     value={lastPeriodDate}
                     onChange={e => {
@@ -1413,8 +1507,10 @@ export function NewReport() {
                     {SYMPTOMS.map(symptom => (
                       <button
                         key={symptom.value}
+                        type="button"
+                        aria-pressed={symptoms.includes(symptom.value)}
                         onClick={() => toggleSymptom(symptom.value)}
-                        className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
+                        className={`px-3.5 py-1.5 min-h-[44px] rounded-full border-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background ${
                           symptoms.includes(symptom.value)
                             ? 'border-theme-primary bg-theme-primary/10 text-theme-primary font-medium'
                             : 'border-theme-neutral-200 text-theme-neutral-600 hover:border-theme-neutral-300'
@@ -1504,7 +1600,8 @@ export function NewReport() {
                   userEditedReportItemsRef.current = true;
                   setReportItems(prev => {
                     const updated = [...prev];
-                    updated[index] = { ...updated[index], [field]: value } as ReportItem;
+                    const current = updated[index];
+                    if (current) updated[index] = applyReviewEdit(current, field, value);
                     return updated;
                   });
                 }}

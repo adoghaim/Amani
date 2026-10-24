@@ -5,6 +5,7 @@ import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi
 import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
+import { ocrImagesRefusal, type ExtractedAnalyte as ReportAnalyte } from "../_shared/lab-extraction.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
@@ -34,26 +35,6 @@ export interface CanonicalAnalyte {
   is_ratio: boolean;
   affects_scoring: boolean;
   affects_recommendations: boolean;
-}
-
-export interface ReportAnalyte {
-  raw_name: string;
-  raw_value_text: string | null;
-  value_numeric: number;
-  unit: string | null;
-  raw_reference_range: string | null;
-  normalized_min: number | null;
-  normalized_max: number | null;
-  normalized_operator: string | null;
-  normalized_operator_value: number | null;
-  source_snippet: string | null;
-  confidence_score: "high" | "medium" | "low";
-  canonical_analyte_id: string | null;
-  canonical_slug: string | null;
-  parse_status: "mapped" | "partial" | "unmapped";
-  needs_review: boolean;
-  is_core: boolean;
-  category: string | null;
 }
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -245,29 +226,12 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { base64Images } = body; // Array of base64 strings with data URLs 'data:image/jpeg;base64,...'
 
-    if (!base64Images || !Array.isArray(base64Images) || base64Images.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "base64Images array is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const MAX_IMAGES = 10;
-    if (base64Images.length > MAX_IMAGES) {
-      return new Response(
-        JSON.stringify({ error: `Too many images (max ${MAX_IMAGES})` }),
-        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const MAX_BASE64_LENGTH = 7_000_000; // ~5 MB raw per image
-    for (const b64 of base64Images) {
-      if (typeof b64 !== "string" || b64.length > MAX_BASE64_LENGTH) {
-        return new Response(
-          JSON.stringify({ error: "Image too large or invalid (max ~5MB per image)" }),
-          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    // Review F026: only PNG or JPEG data URLs, so no remote URL reaches OpenAI.
+    const imagesRefused = ocrImagesRefusal(base64Images);
+    if (imagesRefused) {
+      return new Response(JSON.stringify(imagesRefused.body), {
+        status: imagesRefused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { analyteMap, synonymMap } = await loadCanonicalRegistry(supabaseAdmin);

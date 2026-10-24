@@ -33,7 +33,9 @@ export function Alert({ type = 'info', title, children, className = '' }: AlertP
   const Icon = icons[type];
 
   return (
-    <div className={`rounded-xl border p-4 ${colors[type]} ${className}`}>
+    // A live region, so a screen reader reads it out when it appears (F064).
+    // Errors interrupt; the rest wait their turn.
+    <div role={type === 'error' ? 'alert' : 'status'} className={`rounded-xl border p-4 ${colors[type]} ${className}`}>
       <div className="flex">
         <div className="flex-shrink-0">
           <Icon className={`h-5 w-5 ${iconColors[type]}`} />

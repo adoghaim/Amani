@@ -70,8 +70,8 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-CS3 Censored results never become numbers | RV | 1 | todo | RV-CS2 | - |
 | RV-IA1 Cycle phase and day only from explicit patient lines | RV | 1 | review | - | [#156](https://github.com/adoghaim/Amani/pull/156) |
 | RV-IA2 Parser B12 boundaries; parse-error rows need her confirmation | RV | 1 | in-progress | RV-IA1 | - |
-| RV-IB1 One extraction contract for OCR and AI refinement | RV | 1 | in-progress | - | - |
-| RV-IB2 Keyboard- and screen-reader-usable upload flow | RV | 1 | todo | RV-IB1 | - |
+| RV-IB1 One extraction contract for OCR and AI refinement | RV | 1 | review | - | [#165](https://github.com/adoghaim/Amani/pull/165) |
+| RV-IB2 Keyboard- and screen-reader-usable upload flow | RV | 1 | review | RV-IB1 | [#165](https://github.com/adoghaim/Amani/pull/165) |
 | RV-NP1 Harden the nutrient validator with an adversarial corpus | RV | 1 | review | - | [#159](https://github.com/adoghaim/Amani/pull/159) |
 | RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | review | - | [#167](https://github.com/adoghaim/Amani/pull/167) |
 | RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | in-progress | - | - |
@@ -110,7 +110,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-CS1 | clinical-scoring | in-progress | `factory/rv-clinical-scoring` @ `db14fb2` | Built (F013 partial: its server half is a generate-interpretation handoff). Reviews were cut off: needs verification. |
 | RV-IA1 | ingest-cycle-parser | review | `factory/rv-ingest-cycle-parser` @ `5cf7d10` | PR #156: reviewed (correctness + clinical, G4 pass), gates green on current main; awaiting owner confirmation of PK-FIX-06 Q9. |
 | RV-IA2 | ingest-cycle-parser | in-progress | `factory/rv-wip-ia2` @ `073a207` | Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch. |
-| RV-IB1 | ingest-ocr-a11y | in-progress | `factory/rv-ingest-ocr-a11y` @ `4219016` | Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet. |
+| RV-IB1 | ingest-ocr-a11y | review | `factory/rv-ingest-ocr-a11y` @ `909f307` | PR #165: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-NP1 | nutrient-policy | review | `factory/rv-nutrient-policy` @ `98eb8a0` | PR #159: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 | RV-RS1 | report-safety | in-progress | `factory/rv-wip-rs1` @ `7ed7625` | Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification. |
 | RV-BU1 | billing-ui | review | `factory/rv-billing-ui` @ `c62caf4` | PR #157: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
