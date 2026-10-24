@@ -72,7 +72,8 @@ function assessmentCalls() {
     const src = readFileSync(file, 'utf8');
     for (const m of src.matchAll(/(?<!function |\.|\w)(\w+)\(/g)) {
       const name = m[1]!;
-      if (!(name in STATE_ARG)) continue;
+      // Own keys only: `in` also matches Object.prototype names, such as valueOf().
+      if (!Object.prototype.hasOwnProperty.call(STATE_ARG, name)) continue;
       const args = argsAt(src, m.index! + name.length);
       const state = args[STATE_ARG[name]!];
       calls.push({ file, name, call: `${name}(${args.join(', ')})`, ok: state !== undefined && state !== 'null' });
