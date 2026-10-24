@@ -64,6 +64,23 @@ describe('F011 — a value in another unit gets no Amani band', () => {
     ['neutrophils_absolute', 3000, 'cells/µL'],
     ['egfr', 95, 'mL/min/1.73m²'],
     ['egfr', 95, 'mL/min/1.73 m2'],
+    ['egfr', 95, 'mL/min/1.73'],
+    // Notations of the catalog unit the parser and labs print (review fix wave 1).
+    ['chol_hdl_ratio', 3.5, 'ratio'],
+    ['albumin_globulin_ratio', 1.5, 'Ratio'],
+    ['bun_creatinine_ratio', 15, 'ratio'],
+    ['wbc', 6, 'x10E3/uL'],
+    ['wbc', 6, '10^3/uL'],
+    ['wbc', 6, 'x10^3/µL'],
+    ['wbc', 6, '10³/µL'],
+    ['wbc', 6, '10*3/uL'],
+    ['wbc', 6, 'Thousand/uL'],
+    ['platelets', 250, 'thou/uL'],
+    ['platelets', 250, 'x10E3/uL'],
+    ['rbc', 4.5, 'x10E6/uL'],
+    ['rbc', 4.5, '10^6/uL'],
+    ['rbc', 4.5, 'mill/uL'],
+    ['esr', 10, 'mm/h'],
   ] as const)('%s %s in %j is the catalog unit spelled differently, so it is scored', (key, value, unit) => {
     expect(assessAmaniContext(key, value, NO_CONTEXT, unit).kind).toBe('scored');
   });
@@ -75,6 +92,17 @@ describe('F011 — a value in another unit gets no Amani band', () => {
     ['egfr', 95, 'mL/min'],
     ['ldl_cholesterol', 160, null],
     ['ldl_cholesterol', 160, ''],
+    // Factor-1 pairs that are different units: not joined without clinical sign-off.
+    ['potassium', 4.2, 'mmol/L'],
+    ['alt', 20, 'IU/L'],
+    ['ast', 22, 'IU/L'],
+    // Notation rules join only notations of one unit, never units a factor apart.
+    ['wbc', 6000, 'cells/uL'],
+    ['wbc', 6, '10^9/L'],
+    ['wbc', 6, 'x10E6/uL'],
+    ['rbc', 4.5, 'x10E3/uL'],
+    ['ldl_cholesterol', 160, 'ratio'],
+    ['egfr', 95, 'mL/min/1.7'],
   ] as const)('%s %s in %j is not the catalog unit; no conversion is approved, so no band', (key, value, unit) => {
     expect(assessAmaniContext(key, value, NO_CONTEXT, unit)).toEqual({ kind: 'unavailable' });
   });
@@ -143,6 +171,10 @@ describe('F013 — values pair across reports only in the same unit', () => {
   it('compareReports still pairs the same unit, however it is spelled', () => {
     const [d] = compareReports([{ key: LDL, value: 190, unit: 'mg/dL' }], [{ key: LDL, value: 160, unit: 'MG/DL' }]);
     expect(d).toMatchObject({ previousValue: 190, currentValue: 160, trendDirection: 'down' });
+    const wbc = 'wbc' as BiomarkerName;
+    const [w] = compareReports([{ key: wbc, value: 6, unit: 'K/uL' }], [{ key: wbc, value: 9, unit: 'x10E3/uL' }]);
+    expect(w).toMatchObject({ previousValue: 6, currentValue: 9, trendDirection: 'up' });
+    expect(compareReports([{ key: wbc, value: 6000, unit: 'cells/uL' }], [{ key: wbc, value: 9, unit: 'x10E3/uL' }])).toEqual([]);
   });
 
   it('a same-unit pair in a unit Amani has no band for gets no band judgement', () => {

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeReportItems, reportItemDisplayName } from './normalizeReportItems';
+import { normalizeReportItems, reportItemDisplayName, sameUnit } from './normalizeReportItems';
+import { getEntry } from './dictionary';
 import { parseAllReportItemsWithDebug } from '../../utils/parser/pipeline';
+import { BIOMARKER_PATTERNS } from '../../utils/parser/patterns';
 import type { ReportItem } from '../../utils/parser/types';
+import type { BiomarkerName } from '../../types';
+import { computeAmaniStatus } from '../scoring/scoreBiomarker';
 import { questSmokeFixture } from '../../utils/parser/__fixtures__/questSmoke';
 import { questFixture } from '../../utils/parser/__fixtures__/quest';
 import { labcorpFixture } from '../../utils/parser/__fixtures__/labcorp';
@@ -82,5 +86,41 @@ describe('normalizeReportItems — unit sanity', () => {
     expect(bySlug.get('creatinine')?._normalized_unit).toBe('umol/L');
     expect(bySlug.get('hemoglobin_a1c')?._normalized_unit).toBe('mmol/mol');
     expect(bySlug.get('ferritin')).toMatchObject({ is_core_biomarker: true, normalization_status: 'mapped' });
+  });
+
+  // Review fix wave 1: the parser's own spellings of a catalog unit ("ratio",
+  // x10E3/uL, x10E6/uL, mm/h) are that unit, so these rows stay core and banded.
+  it('the real parser on CBC, ratio and ESR rows keeps every one core and scored', () => {
+    const text = [
+      'Test Result Units Reference Interval',
+      'WBC 6.0 x10E3/uL 3.4-10.8',
+      'RBC 4.50 x10E6/uL 3.77-5.28',
+      'Platelets 250 x10E3/uL 150-450',
+      'WBC 6.0 Thousand/uL 3.8-10.8',
+      'Cholesterol/HDL Ratio 3.5 0.0-4.4',
+      'A/G Ratio 1.5 1.2-2.2',
+      'BUN/Creatinine Ratio 15 9-23',
+      'Sed Rate by Westergren 10 mm/h 0-32',
+    ].join('\n');
+    const items = normalizeReportItems(parseAllReportItemsWithDebug(text).items);
+    const slugs = ['wbc', 'rbc', 'platelets', 'chol_hdl_ratio', 'albumin_globulin_ratio', 'bun_creatinine_ratio', 'esr'];
+    expect(new Set(items.map(i => i.canonical_slug))).toEqual(new Set(slugs));
+    for (const i of items) {
+      expect(i, i.canonical_slug ?? i.raw_name).toMatchObject({ is_core_biomarker: true, normalization_status: 'mapped' });
+      expect(computeAmaniStatus(i.canonical_slug as BiomarkerName, i.value_numeric!, null, null, i.unit), i.canonical_slug!)
+        .not.toBe('unknown');
+    }
+  });
+
+  // Every parsed marker the parser stamps with its default unit (no unit
+  // printed) must be scorable in that unit. The only exceptions are the listed
+  // factor-1 pairs, which are different units the catalog has not joined.
+  it('the parser\'s default unit for every marker is its catalog unit, except unjoined factor-1 pairs', () => {
+    const AWAITING_SIGN_OFF = new Set(['sodium', 'potassium', 'chloride', 'co2']); // mmol/L vs mEq/L
+    const mismatched = BIOMARKER_PATTERNS
+      .filter(p => !sameUnit(p.commonUnits[0] ?? null, getEntry(p.canonical as BiomarkerName)?.defaultUnit))
+      .map(p => p.canonical);
+    expect(mismatched.filter(slug => !AWAITING_SIGN_OFF.has(slug))).toEqual([]);
+    expect(new Set(mismatched)).toEqual(AWAITING_SIGN_OFF);
   });
 });
