@@ -1,6 +1,6 @@
 import { Modal } from '../Modal';
 import { PricingCard } from '../pricing/PricingCard';
-import { IapPaywall } from '../pricing/IapPaywall';
+import { IapPaywall, PaidPlanGate } from '../pricing/IapPaywall';
 import { stripeProducts } from '../../stripe-config';
 import { isNative } from '../../lib/native';
 import { FREEMIUM_COPY } from '../../lib/freemium/copy';
@@ -36,11 +36,13 @@ export function PremiumPaywall({ open, onClose, onEntitled, reason }: PremiumPay
         {isNative() ? (
           <IapPaywall onEntitled={() => { onClose(); onEntitled?.(); }} />
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {ordered.map((product, index) => (
-              <PricingCard key={product.id} product={product} isPopular={index === 0} />
-            ))}
-          </div>
+          <PaidPlanGate onManage={onClose}>
+            <div className="grid grid-cols-1 gap-6">
+              {ordered.map((product, index) => (
+                <PricingCard key={product.id} product={product} isPopular={index === 0} />
+              ))}
+            </div>
+          </PaidPlanGate>
         )}
       </div>
     </Modal>

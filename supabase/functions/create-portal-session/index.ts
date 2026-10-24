@@ -7,6 +7,7 @@ import {
   PORTAL_UNAVAILABLE_MESSAGE,
 } from "../_shared/stripe-portal.ts";
 import { errorType, scrubbedErrorMessage } from "../_shared/phi-scrub.ts";
+import { APP_URL_SECRET_NAME, resolveAppOrigin } from "../_shared/stripe-checkout-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,7 +53,9 @@ Deno.serve(async (req: Request) => {
       apiVersion: "2024-11-20.acacia",
     });
 
-    const origin = req.headers.get("origin") || "http://localhost:5173";
+    // The allow-listed APP_URL, never the caller's Origin header (BS2, review F031).
+    const origin = resolveAppOrigin(Deno.env.get(APP_URL_SECRET_NAME));
+    if (!origin) throw new Error(`${APP_URL_SECRET_NAME} is not an allowed Amani origin`);
 
     // Which customer, and never creating one, is ../_shared/stripe-portal.ts
     // (review F038, F029, F094). Both reads use the caller's JWT: RLS limits

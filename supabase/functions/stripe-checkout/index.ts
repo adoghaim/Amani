@@ -1,8 +1,9 @@
 import 'jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
-import { errorMessage } from '../_shared/errors.ts';
 import { fetchWithBackoff } from '../_shared/fetchWithBackoff.ts';
+import { errorType, scrubbedErrorMessage } from '../_shared/phi-scrub.ts';
+import { checkUserSubscription } from '../_shared/subscription-guard.ts';
 import {
   PROMOTION_LOOKUP_FAILED_MESSAGE,
   PROMOTION_LOOKUP_TIMEOUT_MS,
@@ -15,12 +16,22 @@ import {
   promotionCodesEnabled,
   type CheckoutSessionParams,
 } from '../_shared/checkout-promotion.ts';
+import {
+  APP_URL_SECRET_NAME,
+  CHECKOUT_UNAVAILABLE_CODE,
+  CHECKOUT_UNAVAILABLE_MESSAGE,
+  EXISTING_PLAN_CODE,
+  EXISTING_PLAN_MESSAGE,
+  existingPlanDecision,
+  resolveAppOrigin,
+  validateCheckoutRequest,
+} from '../_shared/stripe-checkout-request.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripe = new Stripe(stripeSecret, {
   appInfo: {
-    name: 'Bolt Integration',
+    name: 'Amani',
     version: '1.0.0',
   },
 });
@@ -57,24 +68,24 @@ Deno.serve(async (req) => {
       return corsResponse({ error: 'Method not allowed' }, 405);
     }
 
-    const { price_id, success_url, cancel_url, mode, promo_code } = await req.json();
-
-    const error = validateParameters(
-      { price_id, success_url, cancel_url, mode },
-      {
-        cancel_url: 'string',
-        price_id: 'string',
-        success_url: 'string',
-        mode: { values: ['payment', 'subscription'] },
-      },
-    );
-
-    if (error) {
-      return corsResponse({ error }, 400);
+    // The return URLs are built on this origin, never on one the client names (F031).
+    const appOrigin = resolveAppOrigin(Deno.env.get(APP_URL_SECRET_NAME));
+    if (!appOrigin) {
+      console.error(`${APP_URL_SECRET_NAME} is not an allowed Amani origin; refusing checkout`);
+      return corsResponse({ error: CHECKOUT_UNAVAILABLE_CODE, message: CHECKOUT_UNAVAILABLE_MESSAGE }, 500);
     }
 
+    const body: unknown = await req.json().catch(() => null);
+
+    // Only the two sold prices, always as a subscription (F030, F044); see _shared/stripe-checkout-request.ts.
+    const checked = validateCheckoutRequest(body, appOrigin);
+    if (!checked.ok) {
+      return corsResponse(checked.body, checked.status);
+    }
+    const { priceId, mode, successUrl, cancelUrl } = checked.request;
+
     // Optional saved creator/partner code (D29). Validated at the boundary (D5.3).
-    const promoInput = parsePromoCodeInput(promo_code);
+    const promoInput = parsePromoCodeInput((body as Record<string, unknown>).promo_code);
     if (!promoInput.ok) {
       return corsResponse({ error: promoInput.error }, 400);
     }
@@ -92,6 +103,27 @@ Deno.serve(async (req) => {
 
     if (!user) {
       return corsResponse({ error: 'User not found' }, 404);
+    }
+
+    /*
+      One subscription per person (F040). A paid Stripe plan (active, trialing,
+      past_due) or an entitling store purchase refuses a second checkout before
+      any customer side effect. Read through her own JWT, because
+      stripe_user_subscriptions is scoped to auth.uid(); a failed read refuses
+      too, so an outage never lets anyone pay twice.
+    */
+    const userClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
+      global: { headers: { Authorization: authHeader } },
+    });
+    // This function pins supabase-js 2.49.1 and the guard is typed against 2.105.3; the query API it uses is the same.
+    const guardClient = userClient as unknown as Parameters<typeof checkUserSubscription>[0];
+    const existingPlan = existingPlanDecision(await checkUserSubscription(guardClient, user.id, undefined, true));
+    if (existingPlan === 'refuse') {
+      return corsResponse({ error: EXISTING_PLAN_CODE, message: EXISTING_PLAN_MESSAGE }, 409);
+    }
+    if (existingPlan === 'unknown') {
+      console.error('Entitlement read failed; refusing checkout');
+      return corsResponse({ error: CHECKOUT_UNAVAILABLE_CODE, message: CHECKOUT_UNAVAILABLE_MESSAGE }, 503);
     }
 
     /*
@@ -235,13 +267,13 @@ Deno.serve(async (req) => {
         payment_method_types: ['card'],
         line_items: [
           {
-            price: price_id,
+            price: priceId,
             quantity: 1,
           },
         ],
         mode,
-        success_url,
-        cancel_url,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
       },
       plan: promotionPlan,
       createSession: async (params: CheckoutSessionParams) => {
@@ -254,33 +286,8 @@ Deno.serve(async (req) => {
 
     return corsResponse({ sessionId: session.id, url: session.url, promo: outcome });
   } catch (error: unknown) {
-    const message = errorMessage(error, 'Checkout failed');
-    console.error(`Checkout error: ${message}`);
-    return corsResponse({ error: message }, 500);
+    // A fixed body for the client (F033); the type and a scrubbed message for the log.
+    console.error('Checkout error:', errorType(error), scrubbedErrorMessage(error));
+    return corsResponse({ error: CHECKOUT_UNAVAILABLE_CODE, message: CHECKOUT_UNAVAILABLE_MESSAGE }, 500);
   }
 });
-
-type ExpectedType = 'string' | { values: string[] };
-type Expectations<T> = { [K in keyof T]: ExpectedType };
-
-function validateParameters<T extends Record<string, unknown>>(values: T, expected: Expectations<T>): string | undefined {
-  for (const parameter in values) {
-    const expectation = expected[parameter];
-    const value = values[parameter];
-
-    if (expectation === 'string') {
-      if (value == null) {
-        return `Missing required parameter ${parameter}`;
-      }
-      if (typeof value !== 'string') {
-        return `Expected parameter ${parameter} to be a string got ${JSON.stringify(value)}`;
-      }
-    } else {
-      if (!expectation.values.includes(value)) {
-        return `Expected parameter ${parameter} to be one of ${expectation.values.join(', ')}`;
-      }
-    }
-  }
-
-  return undefined;
-}

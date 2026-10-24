@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { PricingCard } from '../components/pricing/PricingCard'
-import { IapPaywall } from '../components/pricing/IapPaywall'
+import { IapPaywall, PaidPlanGate } from '../components/pricing/IapPaywall'
 import { stripeProducts } from '../stripe-config'
 import { isNative } from '../lib/native'
 import { clientFreemiumActive } from '../lib/tier'
@@ -82,15 +82,17 @@ export function PricingPage() {
         {native ? (
           <IapPaywall onEntitled={() => navigate('/app')} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            {ordered.map((product, index) => (
-              <PricingCard
-                key={product.id}
-                product={product}
-                isPopular={index === 0}
-              />
-            ))}
-          </div>
+          <PaidPlanGate>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
+              {ordered.map((product, index) => (
+                <PricingCard
+                  key={product.id}
+                  product={product}
+                  isPopular={index === 0}
+                />
+              ))}
+            </div>
+          </PaidPlanGate>
         )}
       </div>
     </div>

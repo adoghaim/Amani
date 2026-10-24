@@ -3,6 +3,7 @@ import { transformSync } from 'esbuild';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as stripePortal from '../_shared/stripe-portal';
 import * as phiScrub from '../_shared/phi-scrub';
+import * as checkoutRequest from '../_shared/stripe-checkout-request';
 
 /*
   BS1 (review F038, F029, F094): runs the real Deno callback of
@@ -24,6 +25,8 @@ interface Options {
   readError?: 'stripe_customers' | 'users';
   portalError?: Error;
   signedIn?: boolean;
+  /** The APP_URL function secret (BS2, review F031); unset by default. */
+  appUrl?: string;
 }
 
 function harness(options: Options = {}) {
@@ -85,7 +88,8 @@ function harness(options: Options = {}) {
   const values: Record<string, unknown> = {
     ...stripePortal,
     ...phiScrub,
-    Deno: { env: { get: () => 'test' }, serve: (fn: typeof handler) => { handler = fn; } },
+    ...checkoutRequest,
+    Deno: { env: { get: (key: string) => (key === 'APP_URL' ? options.appUrl : 'test') }, serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => ({ auth: { getUser }, from }),
     Stripe,
   };
@@ -110,7 +114,7 @@ describe('create-portal-session opens the portal for the customer that holds the
     expect(await response.json()).toEqual({ url: 'https://billing.stripe.test/session/cus_checkout' });
     expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith({
       customer: 'cus_checkout',
-      return_url: 'https://app.example.test/app/billing',
+      return_url: 'https://amanibiometrics.com/app/billing',
     });
     expect(stripe.customers.create).not.toHaveBeenCalled();
     expect(writes).toEqual([]);
@@ -174,6 +178,41 @@ describe('create-portal-session opens the portal for the customer that holds the
 
     expect(response.status).toBe(401);
     expect(reads).toEqual([]);
+    expect(stripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('create-portal-session builds return_url on APP_URL, not the Origin header (BS2, review F031)', () => {
+  it('ignores the Origin header the caller sends', async () => {
+    const { handler, stripe } = harness({ current: { customer_id: 'cus_checkout', deleted_at: null } });
+
+    await handler(new Request('https://example.invalid/functions/v1/create-portal-session', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test', Origin: 'https://evil.example' },
+    }));
+
+    expect(stripe.billingPortal.sessions.create.mock.calls[0][0].return_url).toBe('https://amanibiometrics.com/app/billing');
+  });
+
+  it('uses an allow-listed APP_URL', async () => {
+    const { handler, stripe } = harness({ current: { customer_id: 'cus_checkout', deleted_at: null }, appUrl: 'https://www.amanibiometrics.com' });
+
+    await handler(request());
+
+    expect(stripe.billingPortal.sessions.create.mock.calls[0][0].return_url).toBe('https://www.amanibiometrics.com/app/billing');
+  });
+
+  it('a misconfigured APP_URL answers the fixed 500 and opens no portal', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { handler, stripe } = harness({ current: { customer_id: 'cus_checkout', deleted_at: null }, appUrl: 'https://evil.example' });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: stripePortal.PORTAL_UNAVAILABLE_MESSAGE,
+      code: stripePortal.PORTAL_UNAVAILABLE_CODE,
+    });
     expect(stripe.billingPortal.sessions.create).not.toHaveBeenCalled();
   });
 });
