@@ -174,14 +174,15 @@ describe('interpretation model wiring: one secret drives both attempts', () => {
   // A violating first answer forces the stricter retry, as in the output_rejected case above.
   const violating = () => answer({ ...modelBody(), overall_interpretation: 'Take 5000 IU of vitamin D daily.' });
 
-  it("no secret: today's body, gpt-4o-mini with max_tokens 2200, temperature 0.25 and JSON mode", async () => {
+  it("no secret: today's body, gpt-4o-mini with max_tokens 2200, temperature 0.25, JSON mode, not stored", async () => {
     silence();
     const h = harness();
     await h.run();
     const bodies = sentBodies(h);
     expect(bodies).toHaveLength(1);
-    expect(Object.keys(bodies[0]!)).toEqual(['model', 'messages', 'max_tokens', 'temperature', 'response_format']);
-    expect(bodies[0]).toMatchObject({ model: 'gpt-4o-mini', max_tokens: 2200, temperature: 0.25, response_format: { type: 'json_object' } });
+    expect(Object.keys(bodies[0]!)).toEqual(['model', 'messages', 'max_tokens', 'temperature', 'response_format', 'store']);
+    expect(bodies[0]).toMatchObject({ model: 'gpt-4o-mini', max_tokens: 2200, temperature: 0.25,
+      response_format: { type: 'json_object' }, store: false });
   });
 
   it('OPENAI_MODEL_INTERPRETATION=gpt-6-luna: both attempts send it, with max_completion_tokens and no temperature', async () => {
@@ -193,9 +194,9 @@ describe('interpretation model wiring: one secret drives both attempts', () => {
     const bodies = sentBodies(h);
     expect(bodies).toHaveLength(2);
     for (const body of bodies) {
-      expect(Object.keys(body)).toEqual(['model', 'messages', 'max_completion_tokens', 'response_format']);
+      expect(Object.keys(body)).toEqual(['model', 'messages', 'max_completion_tokens', 'response_format', 'store']);
       expect(body).toMatchObject({ model: 'gpt-6-luna', max_completion_tokens: 2200 + REASONING_TOKEN_HEADROOM,
-        response_format: { type: 'json_object' } });
+        response_format: { type: 'json_object' }, store: false });
     }
     expect(produced.shaped.source).toBe('ai');
   });

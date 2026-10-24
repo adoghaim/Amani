@@ -279,6 +279,7 @@ ${labInsightsPolicyPrompt()}`;
           // limit is max_completion_tokens. The rules live with the model id.
           ...chatCompletionParams(model, { maxOutputTokens: 3000, temperature: 0.7 }),
           response_format: { type: "json_object" },
+          store: false,
         }),
       },
       { attemptTimeoutMs: 18000 },

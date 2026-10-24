@@ -1308,6 +1308,7 @@ async function callOpenAIOnce(
           ],
           ...chatCompletionParams(requestedModel, { maxOutputTokens: 2200, temperature: 0.25 }),
           response_format: { type: "json_object" },
+          store: false,
         }),
       },
       { attemptTimeoutMs: 18000 },

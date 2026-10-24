@@ -28,6 +28,11 @@ describe.each(FUNCTIONS.map(fn => [fn]))('%s', fn => {
     expect(outsideHelper).not.toMatch(/\bmax_(?:completion_)?tokens:/);
   });
 
+  it('asks OpenAI not to store the completion, right after JSON mode (RV-MM1 AC3)', () => {
+    expect(text).toMatch(/\n {10}response_format: \{ type: "json_object" \},\n {10}store: false,\n/);
+    expect(text.match(/\bstore\s*:/g)).toEqual(['store:']);
+  });
+
   it('returns a fixed message to the client and logs scrubbed detail (F033)', () => {
     expect(text).not.toContain('errorMessage(');
     expect(text).not.toContain('_shared/errors.ts');
@@ -100,5 +105,10 @@ describe('generate-interpretation model call (RV-MM1 AC1)', () => {
     const outsideHelper = text.replace(/chatCompletionParams\([^)]*\)/g, '');
     expect(outsideHelper).not.toMatch(/\btemperature:/);
     expect(outsideHelper).not.toMatch(/\bmax_(?:completion_)?tokens:/);
+  });
+
+  it('asks OpenAI not to store the completion, right after JSON mode (RV-MM1 AC3)', () => {
+    expect(callOnce).toMatch(/\n {10}response_format: \{ type: "json_object" \},\n {10}store: false,\n/);
+    expect(text.match(/\bstore\s*:/g)).toEqual(['store:']);
   });
 });

@@ -297,7 +297,8 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
             { role: "user", content: userMessagesContent }
           ],
           ...chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }),
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          store: false,
         }),
       },
       { attemptTimeoutMs: 30000 },
