@@ -6,11 +6,14 @@ import { describe, expect, it } from 'vitest';
 
 /*
   RV-ZD1: what the zod 4 upgrade changes on purpose, kept out of the zod
-  3.25.76 golden. R2 and D2 (b) to (d) failed on the base; D2 (a) holds on
-  both, and guards the shape the handlers rely on.
+  3.25.76 golden. R2, R3 and D2 (b) to (d) failed on the base; D2 (a) holds
+  on both, and guards the shape the handlers rely on.
   - R2 (AC5, GHSA-mrhx-c7xc-m3w5): a too-long bounded array is refused with
     one too_big issue, before any element is read. zod 3 built an issue for
     every element first.
+  - R3 (AC6): top_symptoms has no length bound (one would turn "keep the
+    first 10" into "drop them all"), so its check stops at the first element
+    that is not a string.
   - D2: the other results that change.
   The modules load as in zod-equivalence.test.ts: evaluated against the root
   zod, only when they import exactly the installed version.
@@ -29,7 +32,7 @@ function load(file: string): Record<string, any> {
   new Function('require', 'module', 'exports', code)(require, module, module.exports);
   return module.exports;
 }
-const { UserProfileContextSchema } = load('./context.ts');
+const { LabReportContextSchema, UserProfileContextSchema } = load('./context.ts');
 const { GenerateInterpretationRequestSchema } = load('./requests.ts');
 const { StripeCheckoutOrderSchema } = load('./stripe.ts');
 
@@ -64,6 +67,24 @@ describe('R2 (AC5): a too-long bounded array is refused unread', () => {
     expect(result.error.issues.length).toBe(1);
     expect(result.error.issues.map((issue: { code: string; path: unknown[] }) => [issue.code, issue.path])).toEqual([['too_big', [key]]]);
     expect(reads()).toBe(0);
+  });
+});
+
+describe('R3 (AC6): top_symptoms stops at the first element that is not a string', () => {
+  it('100,000 non-strings: at most one element read, and top_symptoms reads as undefined', () => {
+    const { proxy, reads } = counted(Array(N).fill(0));
+    const result = LabReportContextSchema.safeParse({ top_symptoms: proxy });
+    expect(reads()).toBeLessThanOrEqual(1);
+    expect(result.success).toBe(true);
+    expect(Object.keys(result.data)).toEqual(['top_symptoms']);
+    expect(result.data.top_symptoms).toBeUndefined();
+  });
+
+  it('a string, then 99,999 non-strings: two element reads', () => {
+    const { proxy, reads } = counted(['fatigue', ...Array(N - 1).fill(null)]);
+    const result = LabReportContextSchema.safeParse({ top_symptoms: proxy, pregnant: 'no' });
+    expect(reads()).toBe(2);
+    expect(result.data).toEqual({ pregnant: 'no', top_symptoms: undefined });
   });
 });
 

@@ -11,13 +11,26 @@ import { z } from "npm:zod@4.6.7";
 // questions it does not ask, reads as absent, as does any other value.
 const yesNo = z.enum(["yes", "no"]).optional().catch(undefined);
 
+// top_symptoms has no length bound: .max(10) would refuse an 11-symptom list
+// that the transform cuts to 10. And zod checks every element of an unbounded
+// array, building an issue for each bad one (GHSA-mrhx-c7xc-m3w5 is fixed for
+// bounded arrays only). So check by index and stop at the first element that
+// is not a string; a hole reads as undefined, as it did before.
+function isStringList(value: unknown): value is string[] {
+  if (!Array.isArray(value)) return false;
+  for (let i = 0; i < value.length; i++) {
+    if (typeof value[i] !== "string") return false;
+  }
+  return true;
+}
+
 export const LabReportContextSchema = z
   .object({
     birth_control: yesNo,
     pregnant: yesNo,
     postpartum: yesNo,
     top_symptoms: z
-      .array(z.string())
+      .custom<string[]>(isStringList)
       .transform((arr) => arr.map((s) => s.slice(0, 80)).slice(0, 10))
       .optional()
       .catch(undefined),
