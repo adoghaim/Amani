@@ -2293,15 +2293,18 @@
         "F096"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-nutrient-policy",
-      "pr": null,
+      "pr": "#159",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2312,7 +2315,10 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track nutrient-policy; findings F015, F096. Head fefd1f6. Built, DONE_WITH_CONCERNS (F015, F096 partial). Verifier was cut off: needs verification."
+        "Track nutrient-policy; findings F015, F096. Fix fefd1f6; merged with main 25d09b7 at 98eb8a0.",
+        "Blind verifier (opus) at fefd1f6: PASS_WITH_NOTES, G4 clinical authority: pass (guardrail only stricter).",
+        "Gates at 98eb8a0 (run locally): lint, typecheck, full test (3,504), build, clinical, functions; CI e2e matrix green in Chromium, WebKit and Firefox.",
+        "Owner/clinical: review deny-list additions (valerian, kava, shatavari); medication and brand lists; deploy generate-interpretation after merge."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
