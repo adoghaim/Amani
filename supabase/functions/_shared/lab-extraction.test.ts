@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  MAX_BASE64_LENGTH, MAX_IMAGES, ocrImagesRefusal, toExtractedItem, type ExtractedAnalyte,
+  MAX_BASE64_LENGTH, MAX_IMAGES, ocrImagesRefusal, toExtractedItem, withCensoredPlaceholder, type ExtractedAnalyte,
 } from './lab-extraction.ts';
 
 /*
@@ -63,6 +63,39 @@ describe('toExtractedItem: one row under the names the app saves (F093, F114)', 
       'normalized_reference_min', 'normalized_reference_max', 'reference_operator', 'reference_operator_value',
       'confidence_score', 'needs_review', 'is_core_biomarker', 'source_snippet',
     ]);
+  });
+});
+
+/*
+  RV-PX2 A1: a censored OCR row stores the placeholder of its printed text,
+  whatever number the model typed. The handler's old regex read only "<", ">",
+  "<=" and ">=", and only for a 0 or a missing number: "> OR = 60" with a 0
+  became a parse error, with null it was dropped, and the model's own number
+  was kept as if measured.
+*/
+describe('withCensoredPlaceholder: a censored model row stores the placeholder of its text (RV-PX2 A1)', () => {
+  it.each<[string, number]>([['> OR = 60', 60], ['≤8', 4], ['<OR=150', 75], ['≥ OR = 100', 100], ['<0.5', 0.25], ['>=1000', 1000]])(
+    '%s stores %s, whatever number the model typed', (value_text, placeholder) => {
+      for (const value_numeric of [0, null, undefined, 999, 4.2]) {
+        expect(withCensoredPlaceholder({ raw_name: 'X', value_text, value_numeric })).toEqual({ raw_name: 'X', value_text, value_numeric: placeholder });
+      }
+    },
+  );
+
+  it('measured and qualitative text keeps the model\'s number, and null stays null', () => {
+    for (const row of [
+      { value_text: '20', value_numeric: 20 }, { value_text: '20', value_numeric: 19 }, { value_text: '5.2', value_numeric: 5.2 },
+      { value_text: 'Negative', value_numeric: 0 }, { value_text: '20', value_numeric: null }, { value_text: null, value_numeric: null },
+      { value_numeric: 7 }, { value_text: 5.2, value_numeric: 5.2 },
+    ]) {
+      expect(withCensoredPlaceholder(row)).toBe(row);
+    }
+  });
+
+  it('never changes the row it was given', () => {
+    const row = { value_text: '> OR = 60', value_numeric: 0 };
+    expect(withCensoredPlaceholder(row)).not.toBe(row);
+    expect(row).toEqual({ value_text: '> OR = 60', value_numeric: 0 });
   });
 });
 
@@ -149,5 +182,20 @@ describe('wiring: both functions answer with this contract', () => {
     expect(text).toMatch(/if \(imagesRefused\) \{\s*return new Response\(JSON\.stringify\(imagesRefused\.body\), \{\s*status: imagesRefused\.status,/);
     // The inline checks it replaced, which let any string through.
     expect(text).not.toMatch(/typeof b64 !== "string"/);
+  });
+
+  it('parse-lab-report-ocr places every censored row\'s placeholder after reading the reply and before the numeric filter (RV-PX2 A1)', () => {
+    const text = source('parse-lab-report-ocr');
+    expect(text).toMatch(/import \{[^}]*\bwithCensoredPlaceholder\b[^}]*\} from "\.\.\/_shared\/lab-extraction\.ts";/);
+    const read = text.indexOf('rawItems = (parsedJson as { items: RawExtractedItem[] }).items;');
+    const placed = text.indexOf('rawItems = rawItems.map(withCensoredPlaceholder);');
+    const filtered = text.indexOf(".filter(item => typeof item.value_numeric === 'number' && !isNaN(item.value_numeric))");
+    expect(read).toBeGreaterThan(-1);
+    expect(placed).toBeGreaterThan(read);
+    expect(filtered).toBeGreaterThan(placed);
+    expect(text.match(/withCensoredPlaceholder/g)).toHaveLength(2);
+    // The regex it replaced, which read only "<", ">", "<=" and ">=".
+    expect(text).not.toContain('comparatorMatch');
+    expect(text).not.toContain(String.raw`/^([<>]=?)\s*(\d+(?:\.\d+)?)/`);
   });
 });

@@ -5,7 +5,7 @@ import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi
 import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
-import { ocrImagesRefusal, type ExtractedAnalyte as ReportAnalyte } from "../_shared/lab-extraction.ts";
+import { ocrImagesRefusal, withCensoredPlaceholder, type ExtractedAnalyte as ReportAnalyte } from "../_shared/lab-extraction.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
 import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts";
@@ -378,16 +378,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
       rawItems = [];
     }
 
-    for (const item of rawItems) {
-      if ((item.value_numeric === 0 || item.value_numeric == null) && item.value_text) {
-        const comparatorMatch = String(item.value_text).match(/^([<>]=?)\s*(\d+(?:\.\d+)?)/);
-        if (comparatorMatch) {
-          const threshold = parseFloat(comparatorMatch[2]);
-          const op = comparatorMatch[1];
-          item.value_numeric = op.startsWith('<') ? threshold / 2 : threshold;
-        }
-      }
-    }
+    rawItems = rawItems.map(withCensoredPlaceholder);
 
     const reportAnalytes: ReportAnalyte[] = rawItems
       .filter(item => typeof item.value_numeric === 'number' && !isNaN(item.value_numeric))

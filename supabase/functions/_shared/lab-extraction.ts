@@ -17,6 +17,8 @@
  * all load it.
  */
 
+import { censoredPlaceholder } from "./censored-value.ts";
+
 /** One extracted result, named like its report_analytes row. */
 export interface ExtractedAnalyte {
   raw_name: string;
@@ -86,6 +88,19 @@ export function toExtractedItem(a: ExtractedAnalyte): ExtractedItem {
     is_core_biomarker: a.is_core,
     source_snippet: a.source_snippet,
   };
+}
+
+/*
+  RV-PX2 A1 (#175 Handoff 3): a model row whose value_text is censored ("<0.5",
+  "> OR = 60", "≤8", "<OR=150", "≥ OR = 100") stores the placeholder for that
+  text, whatever number the model typed: 0, null or its own. parse-lab-report-ocr's
+  own regex read only "<", ">", "<=" and ">=", and only when the model typed 0
+  or nothing. Any other row keeps the model's number. extract-biomarkers reads
+  its rows the same way.
+*/
+export function withCensoredPlaceholder<T extends { value_numeric?: number | null; value_text?: unknown }>(item: T): T {
+  const placeholder = censoredPlaceholder(item.value_text);
+  return placeholder === null ? item : { ...item, value_numeric: placeholder };
 }
 
 /** Images per parse-lab-report-ocr call. */
