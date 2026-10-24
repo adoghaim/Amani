@@ -11,7 +11,9 @@ export const KNOWN_UNITS = [
   'uIU/mL', 'uiu/ml', 'mcIU/mL', 'mcu/ml',
   'mg/dL', 'mg/dl', 'mg/L', 'mg/l',
   'U/L', 'u/l', 'kIU/L', 'kiu/l',
-  'mL/min/1.73m2', 'ml/min/1.73m2', 'mL/min', 'ml/min',
+  // LabCorp prints eGFR's mL/min/1.73m2 without its m2; before mL/min, so the
+  // clearance unit never claims it (review CS1 fix wave 2).
+  'mL/min/1.73m2', 'ml/min/1.73m2', 'mL/min/1.73', 'ml/min/1.73', 'mL/min', 'ml/min',
   'mm/h', 'mm/hr',
   'g/dL', 'g/dl', 'g/L', 'g/l',
   'fL', 'fl', 'pg',
@@ -28,7 +30,8 @@ export const KNOWN_UNITS = [
 export function detectUnit(text: string): string | null {
   // \b cannot precede µ or μ (neither is a word character), so the micro prefix
   // is matched as its u spelling: "80 µmol/L" is umol/L, not the default unit.
-  const spelled = text.replace(/[µμ]/g, 'u');
+  // Square metres printed as m² or m^2 are matched as m2.
+  const spelled = text.replace(/[µμ]/g, 'u').replace(/m(?:²|\^2)/g, 'm2');
   for (const u of KNOWN_UNITS) {
     const escaped = u.replace(/[/()[\].+*?^${}|\\]/g, '\\$&');
     if (new RegExp('\\b' + escaped + '\\b', 'i').test(spelled)) {

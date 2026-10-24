@@ -112,6 +112,26 @@ describe('normalizeReportItems — unit sanity', () => {
     }
   });
 
+  // Review fix wave 2: LabCorp prints eGFR's unit as "mL/min/1.73" (no m²), and
+  // m² may be printed as a superscript, after a space or as m^2. Each is
+  // mL/min/1.73m2, the catalog unit; the parser read all of them as mL/min.
+  it.each(['mL/min/1.73', 'ml/min/1.73', 'mL/min/1.73m2', 'mL/min/1.73m²', 'mL/min/1.73 m2', 'mL/min/1.73 m²', 'mL/min/1.73m^2'])(
+    'the real parser on "eGFR 95 %s" keeps eGFR core and scored', unit => {
+      const text = ['Test Result Units Reference Interval', `eGFR 95 ${unit} >59`, 'Ferritin 50 ng/mL 15-150'].join('\n');
+      const egfr = normalizeReportItems(parseAllReportItemsWithDebug(text).items).find(i => i.canonical_slug === 'egfr');
+      expect(egfr).toMatchObject({ value_numeric: 95, is_core_biomarker: true, normalization_status: 'mapped' });
+      expect(computeAmaniStatus('egfr', 95, null, null, egfr?.unit)).not.toBe('unknown');
+    },
+  );
+
+  // Negative controls: mL/min (a clearance, not per 1.73 m²) is another unit.
+  it.each(['mL/min', 'mL/min/1.7'])('the real parser on "eGFR 95 %s" leaves eGFR partial and not core', unit => {
+    const text = ['Test Result Units Reference Interval', `eGFR 95 ${unit} >59`].join('\n');
+    const egfr = normalizeReportItems(parseAllReportItemsWithDebug(text).items).find(i => i.canonical_slug === 'egfr');
+    expect(egfr).toMatchObject({ value_numeric: 95, is_core_biomarker: false, normalization_status: 'partial' });
+    expect(computeAmaniStatus('egfr', 95, null, null, egfr?.unit)).toBe('unknown');
+  });
+
   // Every parsed marker the parser stamps with its default unit (no unit
   // printed) must be scorable in that unit. The only exceptions are the listed
   // factor-1 pairs, which are different units the catalog has not joined.
