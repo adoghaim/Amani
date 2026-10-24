@@ -60,6 +60,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY");
+    // @ts-expect-error stripe-version-2024-11-20.acacia: stripe-node types only its latest API version (README); the pin keeps the wire unchanged
     const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-11-20.acacia" }) : null;
 
     // Play cancellation and RevenueCat customer deletion. Every request, its
