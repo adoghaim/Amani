@@ -56,6 +56,7 @@ vi.mock('../lib/runtimeConfig', async importOriginal => ({
   loadRuntimeConfig: () => fixture.configLoad,
 }));
 vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => fixture.subscription }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ userProfile: null }) }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('../components/freemium/PremiumPaywall', () => ({ PremiumPaywall: () => null }));
 import { ReportView } from './ReportView';

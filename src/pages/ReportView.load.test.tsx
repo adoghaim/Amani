@@ -46,6 +46,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => ({
   entitled: true, plan: 'premium', complimentary: { used: 0, total: 3, remaining: 3 }, refetch: vi.fn(),
 }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ userProfile: null }) }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('../components/freemium/PremiumPaywall', () => ({ PremiumPaywall: () => null }));
 import { ReportView } from './ReportView';
