@@ -92,7 +92,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-CI1 Native CI that can fail; the device-lock boundary test runs | RV | 1 | review | - | - |
 | RV-CI2 Workflow hardening and Node 22 everywhere | RV | 1 | in-progress | RV-CI1 | - |
 | RV-CI3 E2E configs tell the truth | RV | 1 | todo | RV-CI2 | - |
-| RV-HY1 Untrack leftovers; ignore local state | RV | 1 | review | - | - |
+| RV-HY1 Untrack leftovers; ignore local state | RV | 1 | review | - | [#158](https://github.com/adoghaim/Amani/pull/158) |
 
 **Superseded by owner rulings:** PK-03e-A, PK-03e-B, PK-03e-C, PK-03e-D, PK-03e-E (V2-03e turn 10 removed the remediation flow; V2 `erase_reports` replaced PK-03e-E, PR #92 closed).
 
@@ -119,7 +119,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-DL1 | device-lock | in-progress | `factory/rv-wip-dl1` @ `e2d2c2e` | Interrupted mid-build: one WIP commit; needs completion, gates and verification. |
 | RV-CI1 | ci-workflows | review | `factory/rv-ci-workflows` @ `4bd6043` | Built (F104, F055, F138 partial). Correctness review: recommend merge. |
 | RV-CI2 | ci-workflows | in-progress | `factory/rv-ci-workflows` @ `74bdf7e` | Built on top of CI1. Reviews were cut off by the stop: needs verification. |
-| RV-HY1 | hygiene | review | `factory/rv-hygiene` @ `a44186c` | Built (F090 partial). Blind verifier: PASS_WITH_NOTES. |
+| RV-HY1 | hygiene | review | `factory/rv-hygiene` @ `2c1d777` | PR #158: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 
 Not started (17): RV-DB2, RV-DB3, RV-CS2, RV-CS3, RV-IB2, RV-AI1, RV-RS2, RV-BS1, RV-BS2, RV-BI1, RV-WP3, RV-HC1, RV-SP1, RV-AU1, RV-DP1, RV-DP2, RV-CI3. Their track branches sit at 22027b2 or at the last built packet.
 

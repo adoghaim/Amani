@@ -3026,9 +3026,12 @@
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-hygiene",
-      "pr": null,
+      "pr": "#158",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -3039,7 +3042,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track hygiene; findings F080, F081, F090. Head a44186c. Built (F090 partial). Blind verifier: PASS_WITH_NOTES."
+        "Track hygiene; findings F080, F081, F090. Fix a44186c; merged with main 25d09b7 at 6f666d7; integration edit 2c1d777 keeps the versioned graphify graph visible (#154).",
+        "Blind verifier (opus) at a44186c: PASS_WITH_NOTES (two minor notes in PR #158).",
+        "Gates at 2c1d777 (run locally): lint, typecheck, full test (3,368), build, release check; CI e2e matrix green in Chromium, WebKit and Firefox."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
