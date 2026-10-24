@@ -260,6 +260,29 @@ describe('ReportView with a value she has not confirmed (F022)', () => {
       await open('current');
       expect(headline()).toContain('TSH');
     });
+
+    /*
+      #152 x F022: the headline speaks the lab's own range for a lab-flagged
+      value. HDL 61 sits above its lab's range and inside its Amani band, so
+      with her HDL unconfirmed an all-clear in Amani's bands would hide it.
+    */
+    describe('her unconfirmed value outside its lab range, inside its Amani band', () => {
+      const values: Value[] = [['current', 'hdl_cholesterol', 61, 'mg/dL', 40, 60], ['current', 'ferritin', 40, 'ng/mL', 16, 154]];
+      const isHdl = ([, slug]: Value) => slug === 'hdl_cholesterol';
+
+      it('names nothing and claims no all-clear', async () => {
+        fixture.db = account([report('current', '2026-09-01')], values, isHdl);
+        await open('current');
+        expect(headline()).not.toContain('HDL');
+        expect(headline()).not.toContain('All scored values');
+      });
+
+      it("control: once she has confirmed it, the headline names it in her lab's words", async () => {
+        fixture.db = account([report('current', '2026-09-01')], values, () => false);
+        await open('current');
+        expect(headline()).toContain("HDL is above your lab's reference range at 61 mg/dL.");
+      });
+    });
   });
 
   it('control: a confirmed value\'s safety copy carries no such mark', async () => {

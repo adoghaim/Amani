@@ -28,7 +28,7 @@ import { authorizeInsightMatches, gateInsightMatches } from '../lib/scoring/insi
 import { bandLanguageByKey } from '../lib/scoring/compareReports';
 import {
   authorizedLanguage, authorizeModelProse, combineLanguage, describeComparisonBand, describeMeasuredMovement, evaluateSafetyRules,
-  labCriticalFlagWarnings, markerBandPlacement, movementClaimsByKey, PRIMARY_FINDING_LABEL,
+  labCriticalFlagWarnings, labIntervalPlacement, markerBandPlacement, movementClaimsByKey, PRIMARY_FINDING_LABEL,
   primaryFindingSentence, PRODUCT_DISCLAIMERS, REPORT_TITLE, reportHeadline, systemDisplayLabel,
   type AuthorizedLanguage, type AuthorizedModelProse,
 } from '../lib/scoring/insightCopy';
@@ -1717,8 +1717,15 @@ export function ReportView() {
                       const outside = scoredBiomarkers
                         .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside' && confirmedScoredBiomarkers.includes(s))
                         .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
-                      // F022: her unconfirmed value is never named here, nor hidden behind an all-clear.
-                      if (outside.length === 0 && scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')) return REPORT_TITLE;
+                      // F022: her unconfirmed value is never named here, nor hidden behind an all-clear,
+                      // whether it sits outside its Amani band or outside her lab's range (the lab
+                      // headline above names only confirmed values).
+                      const labFlagged = (b: Biomarker) => {
+                        const placement = labIntervalPlacement(b.value, b.reference_min, b.reference_max);
+                        return placement === 'below' || placement === 'above';
+                      };
+                      if (outside.length === 0 && (scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
+                        || biomarkers.some(b => isUnconfirmedBiomarker(b, unconfirmedKeys) && labFlagged(b)))) return REPORT_TITLE;
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
                     }
