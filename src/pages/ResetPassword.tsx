@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -16,6 +16,8 @@ interface Recovery {
   user: User;
   /** Who was signed in on this device before the link was handled. */
   previous: User | null;
+  /** The session came from tokens in the link. */
+  fromLink: boolean;
 }
 
 // auth-js mirrors every PKCE verifier to this fixed key (helpers.js storePKCEVerifier).
@@ -38,7 +40,7 @@ async function establishRecoverySession(search: string, hash: string): Promise<R
   const { data: { session: before } } = await supabase.auth.getSession();
   const previous = before?.user ?? null;
   const recovery = (session: Session | null, error: unknown): Recovery | null =>
-    !error && session ? { user: session.user, previous } : null;
+    !error && session ? { user: session.user, previous, fromLink: true } : null;
 
   const accessToken = fragment.get('access_token');
   const refreshToken = fragment.get('refresh_token');
@@ -59,7 +61,7 @@ async function establishRecoverySession(search: string, hash: string): Promise<R
     return recovery(data.session, error);
   }
 
-  return recovery(before, null);
+  return before ? { user: before.user, previous, fromLink: false } : null;
 }
 
 /** The account's email, or a neutral name for an account without one. */
@@ -70,9 +72,11 @@ function accountName(user: User | null | undefined): string {
 export function ResetPassword() {
   const { resetPassword } = useAuth();
   const navigate = useNavigate();
-  const { search, hash } = useLocation();
+  const { pathname, search, hash } = useLocation();
   const [pageState, setPageState] = useState<PageState>('loading');
   const [recovery, setRecovery] = useState<Recovery | null>(null);
+  // Set while this page takes the link's tokens out of the URL itself (#166 note 2).
+  const droppingTokens = useRef(false);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -88,6 +92,11 @@ export function ResetPassword() {
   // Keyed on the router location: a deep link that arrives while this page is
   // already showing navigates to the same route, so it must re-run.
   useEffect(() => {
+    // Our own token-dropping navigation below: its result is already on screen.
+    if (droppingTokens.current) {
+      droppingTokens.current = false;
+      if (!search && !hash) return;
+    }
     let cancelled = false;
     const settle = (result: Recovery | null) => {
       if (cancelled) return;
@@ -95,10 +104,15 @@ export function ResetPassword() {
       if (!result) setPageState('request');
       // #166 note 1: a link for another account asks before she uses it.
       else setPageState(result.previous && result.previous.id !== result.user.id ? 'switch' : 'ready');
+      // #166 note 2: no tokens left in the router location or the history entry.
+      if (result?.fromLink) {
+        droppingTokens.current = true;
+        navigate(pathname, { replace: true });
+      }
     };
     establishRecoverySession(search, hash).then(settle, () => settle(null));
     return () => { cancelled = true; };
-  }, [search, hash]);
+  }, [pathname, search, hash, navigate]);
 
   // #166 note 1: she did not mean to switch, so the link's account is signed out.
   const handleCancelSwitch = async () => {

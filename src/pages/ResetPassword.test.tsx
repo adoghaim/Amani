@@ -175,6 +175,7 @@ async function renderHistory(entries: string[]) {
   ));
 }
 
+const href = () => `${location.pathname}${location.search}${location.hash}`;
 const passwordInputs = () => container.querySelectorAll('input[type="password"]');
 const button = (label: string) => Array.from(container.querySelectorAll('button')).find(b => b.textContent === label)!;
 const SWITCH_PROMPT = 'This link resets the password for b.synthetic@example.com. You were signed in as a.synthetic@example.com.';
@@ -237,3 +238,31 @@ it("#166 note 1: signed in as A, a link whose tokens are rejected shows the requ
   expect(passwordInputs()).toHaveLength(0);
 });
 
+it('#166 note 2: once a link is a session its tokens leave the router location and the history entry, and the form stays', async () => {
+  device(null, USER_B);
+  const added: string[] = [];
+  const observer = new MutationObserver(records => {
+    for (const record of records) for (const node of Array.from(record.addedNodes)) added.push(node.textContent ?? '');
+  });
+  observer.observe(container, { childList: true, subtree: true, characterData: true });
+  await renderHistory(['/login', `/reset-password${RECOVERY_HASH}`]);
+  observer.disconnect();
+
+  expect(href()).toBe('/reset-password');
+  expect(passwordInputs()).toHaveLength(2);
+  // No flash of "Verifying reset link..." or of the request form once the form showed.
+  const formShown = added.findIndex(nodeText => nodeText.includes('Update password'));
+  expect(formShown).toBeGreaterThanOrEqual(0);
+  expect(added.slice(formShown).filter(nodeText => /Verifying reset link|Reset your password/.test(nodeText))).toEqual([]);
+
+  // Back goes to the page before the link: no history entry holds the tokens.
+  await act(async () => navigate(-1));
+  expect(href()).toBe('/login');
+});
+
+it.each(LINKS)('#166 note 2: %s leaves no tokens in the location, and the switch prompt stays', async (_shape, entry) => {
+  device(USER_A, USER_B);
+  await renderHistory([entry]);
+  expect(href()).toBe('/reset-password');
+  expect(text()).toContain(SWITCH_PROMPT);
+});
