@@ -16,6 +16,9 @@ import { deleteUserAccount, deleteUserDataTables, checkUserDataTablesReady, Acco
 import {
   isVersionable, versionIdentity, regenerationFailedResponse, REQUEST_ID_REQUIRED, type StoredVersion,
 } from '../../supabase/functions/_shared/interpretation-version-write';
+import {
+  fallbackDiagnostics, fallbackReasonOf, refusalDiagnostics, regenerationRefusalReason, type ModelFailure,
+} from '../../supabase/functions/_shared/generation-outcome';
 import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 import type { FakeSupabase, Row } from './fake-supabase';
 
@@ -32,7 +35,8 @@ import type { FakeSupabase, Row } from './fake-supabase';
     buildTrendEvidence (prior report by report_date, as loadGenerationContext),
     shapeInterpretation, withClaimAuthority, projectBasic, isVersionable and
     versionIdentity; a regeneration of an anchored report appends a version and
-    needs a request_id, exactly like the handler;
+    needs a request_id, exactly like the handler; a fallback or a refusal says
+    why (fallback_reason / reason, model_failure; generation-outcome.ts);
   - delete-user-data -> deleteUserAccount with actions over the stand-in.
 
   The OpenAI call is the one thing no module can supply. The model proposal is
@@ -69,10 +73,11 @@ export class ServerModel {
   // Owner Ruling 9 activation record, 2026-10-16 (control repo).
   visibilityEnabled = true;
   aiPaused = false;
-  private failModel = false;
+  private failModel: ModelFailure | null = null;
   readonly deletionSteps: string[] = [];
   private readonly requests = new Map<string, StoredVersion>();
-  failNextModelCall() { this.failModel = true; }
+  /** The next model call produces nothing usable, the way `failure` says (generation-outcome.ts). */
+  failNextModelCall(failure: ModelFailure = 'http_500') { this.failModel = failure; }
 
   private async event(input: ServerEventInput) {
     await logServerEvent({ insertEvent: async row => { this.db.tables.app_events.push({ ...row }); } }, input);
@@ -219,8 +224,14 @@ export class ServerModel {
       { tier, userId: uid, bloodDrawId: `synthetic-draw:${reportId}` }) : null;
     const generateDeep = decideDeepGeneration({ freemiumActive: true, tier, decision, postLimitGeneration: undefined });
     if (this.aiPaused) throw new Error('unmodelled: AI pause');
-    const modelReturned = generateDeep && analytes.length > 0 && !this.failModel;
-    this.failModel = false;
+    // The handler calls the model only for a deep decision with values and a key (always set here).
+    const modelCalled = generateDeep && analytes.length > 0;
+    const modelFailure = modelCalled ? this.failModel : null;
+    const modelReturned = modelCalled && !modelFailure;
+    this.failModel = null;
+    // produceInterpretation's fallbackReasonOf: why this answer is the deterministic one, or null.
+    const fallbackReason = fallbackReasonOf({ deepGeneration: generateDeep, hasReport: true,
+      hasAnalytes: analytes.length > 0, hasApiKey: true, aiPaused: this.aiPaused, modelProduced: modelReturned });
 
     const shaped = shapeInterpretation({
       tier, deepAccessGranted: generateDeep,
@@ -250,7 +261,7 @@ export class ServerModel {
     const now = new Date().toISOString();
     // generate-interpretation/index.ts:1945-1997: refuse before ledger writes.
     if (thread && !isVersionable({ source: shaped.source, depth: shaped.depth, floorViolations })) {
-      return regenerationFailedResponse(generateDeep);
+      return regenerationFailedResponse(generateDeep, refusalDiagnostics(regenerationRefusalReason(fallbackReason), modelFailure));
     }
     if (tier === 'free') {
       const committed = await commitGeneratedInterpretation(introActions, {
@@ -261,7 +272,7 @@ export class ServerModel {
       shaped.tier = committed.tier;
     }
 
-    if (thread && ledgerLimitReached) return regenerationFailedResponse(true);
+    if (thread && ledgerLimitReached) return regenerationFailedResponse(true, refusalDiagnostics('introductory_limit_reached', null));
     let identity: Record<string, unknown> = {};
     if (thread) {
       const version: StoredVersion = { versionId: randomUUID(), historicalInterpretationId: thread.anchor.id,
@@ -276,8 +287,8 @@ export class ServerModel {
     report.status = 'ready';
     await this.event({ event: 'interpretation_generated', userId: uid, props: { tier: shaped.tier } });
     const plus = shaped.tier === 'plus';
-    return { status: 200, body: { success: true, source: shaped.source, access: plus ? 'full' : 'basic',
-      interpretation: plus ? full : servedBasic(basic), ...visibleClaimProjection(basic), ...identity } };
+    return { status: 200, body: { success: true, source: shaped.source, ...fallbackDiagnostics(fallbackReason, modelFailure),
+      access: plus ? 'full' : 'basic', interpretation: plus ? full : servedBasic(basic), ...visibleClaimProjection(basic), ...identity } };
   }
 
   /** read_interpretation_for_server: one projection, the selected version's identity. */

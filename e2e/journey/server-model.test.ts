@@ -39,21 +39,38 @@ test('production default: fourth Free generation is deep, Free metadata, Basic r
 
 test('Premium fallback, required request id, append, reuse, failed regeneration preserves anchor and selection', async () => {
   const f = fixture(); f.server.grantStripeSubscription(uid); f.report('a'); f.server.failNextModelCall();
-  assert.equal((await f.generate('a')).status, 200);
+  const fallback = await f.generate('a');
+  assert.equal(fallback.status, 200);
+  // The handler's diagnostics (generation-outcome.ts): a fallback says why, and how the model failed.
+  subset(fallback.body, { success: true, source: 'fallback', fallback_reason: 'model_failed', model_failure: 'http_500' });
   const anchor = structuredClone(f.server.threads.get('a')!.anchor);
   assert.equal(anchor.depth, 'standard');
   subset((await f.read('a')).body, { access: 'generation_needed', plan: 'premium' });
   assert.deepEqual(await f.generate('a'), { status: 400, body: { error: 'request_id_required' } });
   const request = '00000000-0000-4000-a000-000000000002';
-  subset((await f.generate('a', request)).body, { success: true, reused: false });
+  const appended = await f.generate('a', request);
+  subset(appended.body, { success: true, source: 'ai', reused: false });
+  assert.equal('fallback_reason' in (appended.body as object) || 'model_failure' in (appended.body as object), false);
   f.server.failNextModelCall();
   subset((await f.generate('a', request)).body, { success: true, reused: true });
-  assert.equal((await f.generate('a', '00000000-0000-4000-a000-000000000003')).status, 503);
+  assert.deepEqual(await f.generate('a', '00000000-0000-4000-a000-000000000003'), { status: 503,
+    body: { error: 'regeneration_failed', retryable: true, reason: 'model_failed', model_failure: 'http_500' } });
   assert.deepEqual(f.server.threads.get('a')!.anchor, anchor);
   assert.equal(f.server.threads.get('a')!.versions.length, 1);
   assert.equal(f.db.tables.lab_reports[0].status, 'ready');
   assert.equal(f.db.tables.introductory_deep_access_claims.length, 0);
   assert.equal(f.db.tables.app_events.length, 2);
+});
+
+test('a fallback names its reason; model_failure only when the model was called', async () => {
+  const f = fixture(); f.server.grantStripeSubscription(uid);
+  f.db.tables.lab_reports.push({ id: 'empty', user_id: uid, report_date: '2026-01-05', regeneration_count: 0, status: 'processing' });
+  f.server.failNextModelCall('timeout');
+  const empty = await f.generate('empty');
+  subset(empty, { status: 200, body: { success: true, source: 'fallback', fallback_reason: 'no_analytes' } });
+  assert.equal('model_failure' in (empty.body as object), false);
+  f.report('a'); f.server.failNextModelCall('timeout');
+  subset(await f.generate('a'), { status: 200, body: { source: 'fallback', fallback_reason: 'model_failed', model_failure: 'timeout' } });
 });
 
 test('switch off fails explicitly, onboarding tier gate blocks, daily generation limit is real', async () => {
