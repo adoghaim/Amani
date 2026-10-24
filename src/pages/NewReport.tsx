@@ -23,7 +23,7 @@ import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import {
-  cycleContextAtDraw, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
+  cycleContextAtDraw, cycleContextToStore, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
 } from '../lib/drawCycleContext';
 import { normalizeReportItems, reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
@@ -182,8 +182,8 @@ export function NewReport() {
   const userEditedPeriodRef = useRef(false);
   const userEditedCycleLengthRef = useRef(false);
   const extractionRunRef = useRef(0);
-  // Cycle metadata extracted from the PDF/OCR itself. When non-null, it wins
-  // over the calculated fallback derived from reportDate + lastPeriodDate.
+  // Cycle metadata printed on the report (her labelled line, or OCR metadata).
+  // It fills in only when her dates give no cycle day (F010, cycleContextToStore).
   const parsedCycleRef = useRef<ExtractedCycleContext | null>(null);
   // Flag on, uploading is part of Free and there is nothing to re-check here.
   const [subChecked, setSubChecked] = useState(() => !uploadRequiresSubscription());
@@ -571,11 +571,9 @@ export function NewReport() {
         lastPeriodStart: lastPeriodDate,
         cycleLengthDays: cycleLengthInput,
       });
-      const parsedCycle = parsedCycleRef.current;
-      // Parser-extracted cycle metadata wins per-field; fall back to the
-      // calculated value when the PDF/OCR didn't expose explicit cycle context.
-      const cycleDay = parsedCycle?.cycleDay ?? drawCycle.cycleDay;
-      const cyclePhase = parsedCycle?.cyclePhase ?? drawCycle.phase;
+      // F010: her dates win. A cycle day or phase printed on the report fills in
+      // only when her dates give no cycle day, and never overrides D13 (b).
+      const { cycleDay, phase: cyclePhase } = cycleContextToStore(drawCycle, parsedCycleRef.current);
       const context: LabReportContext = {
         birth_control: birthControl,
         pregnant,

@@ -22,12 +22,13 @@
   ============================================================================
 */
 
+import { openAnalyticsConsent } from '../lib/analytics/ga4'
 import { ArrowLeft } from 'lucide-react';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { Link } from 'react-router-dom';
 import { useConsentGateFlag } from '../lib/consent/consentStore';
 
-const LAST_UPDATED = '7 September 2026';
+const LAST_UPDATED = '23 October 2026';
 
 export function Privacy() {
   const consentGateOn = useConsentGateFlag();
@@ -86,9 +87,10 @@ export function Privacy() {
                 your health data leaves our own infrastructure for a non-storage purpose.
               </li>
               <li>
-                We do not sell your data, run ads, or use advertising or analytics trackers. We
-                do use an error-monitoring service, configured so that it cannot record what is
-                on your screen.
+                We do not sell your data, run ads, or use advertising trackers. If you agree, we
+                use Google Analytics to count visits to our public website pages only; it never
+                runs inside your account or the app. We also use an error-monitoring service,
+                configured so that it cannot record what is on your screen.
               </li>
               <li>
                 You can delete everything from Settings, and that deletion is real — it removes
@@ -217,8 +219,8 @@ export function Privacy() {
               the name of the step, when it happened, whether you used the website or the app,
               the app version, and any campaign link or promo or referral code you arrived with
               or typed when you signed up. These records never contain your lab values, your
-              health details or anything else you write. They are not sent to any third-party
-              analytics or advertising tracker. Before you sign in, a step is tied only to a
+              health details or anything else you write. These step records are not sent to any
+              third-party analytics or advertising service. Before you sign in, a step is tied only to a
               random identifier stored on your device, not to your account. After you sign in,
               the steps and your signup code are tied to your account and are deleted when you
               delete your account.
@@ -245,7 +247,44 @@ export function Privacy() {
               data brokers. We do not use it to build profiles for anyone else. The app contains
               no advertising SDKs and no product-analytics SDKs — the only third-party code in it
               that reports anything back about your session is the error monitoring and the
-              in-app purchase processing described below.
+              in-app purchase processing described below. The one analytics tool we use is on
+              our public website pages, only with your permission, as described next.
+            </p>
+          </section>
+
+          <section id="analytics" aria-labelledby="privacy-analytics">
+            <h2 id="privacy-analytics" className="text-xl font-semibold text-theme-text mb-3">
+              Website analytics (Google Analytics)
+            </h2>
+            <p className="mb-3">
+              On our public website pages — the home page, pricing, this policy, the terms,
+              contact and account-deletion pages — we ask whether you agree to analytics cookies.
+              Only if you choose Accept do we load Google Analytics 4, provided by Google, which
+              processes the data on our behalf. If you decline or do not answer, it is not loaded.
+              It is never loaded on sign-in, sign-up or password pages, inside your account, on
+              your reports, or in the iPhone and Android apps.
+            </p>
+            <p className="mb-3">
+              When it runs, Google receives which public page you viewed (with any campaign
+              tags such as utm_source, but with other link parameters removed), the page title,
+              the referring site, a random identifier stored in a cookie on your browser, your
+              browser and device type, screen size, language, and an approximate location
+              derived from your IP address. It never receives your account details, email
+              address, lab values, reports or any health information.
+            </p>
+            <p className="mb-3">
+              Google&rsquo;s advertising features are switched off: ad storage, ad personalization
+              and ad user data are always denied, and Google signals are disabled. We do not use
+              analytics data for advertising. Google Analytics data is kept for 2 months and
+              then deleted.
+            </p>
+            <p>
+              You can change your choice at any time.{' '}
+              <button type="button" onClick={openAnalyticsConsent} className="underline text-theme-text">
+                Cookie settings
+              </button>
+              . Choosing Decline stops further collection; you can also clear the cookies in
+              your browser.
             </p>
           </section>
 
