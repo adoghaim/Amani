@@ -317,3 +317,34 @@ describe('a substance recommended with no action verb is prescriptive (#159 note
   });
 });
 
+// ─── #159 verifier note 2: a time of day tied to a substance ─────────────────
+
+describe('a time of day tied to a substance is dosing language (#159 note 2)', () => {
+  it.each([
+    ['Iron supplements are best taken at night.', 'at night'],
+    ['Have your vitamin D supplement at night.', 'at night'],
+    ['Magnesium at night may help you sleep.', 'at night'],
+    ['Vitamin D in the morning is easiest to remember.', 'in the morning'],
+    ['Magnesium, ideally at night.', 'at night'],
+    ['Vitamin D works best in the afternoon.', 'in the afternoon'],
+    ['Take your vitamin D with a glass of water in the morning.', 'in the morning'],
+    ['In the evening, take your magnesium.', 'In the evening'],
+  ])('flags %s', (text, phrase) => {
+    expect(findTextViolations(text)).toContain(`dosing_frequency:${phrase}`);
+  });
+
+  it.each([
+    'Do you wake up at night? Ask about your ferritin.',
+    'Low iron can cause restless legs at night.',
+    'Track how you sleep at night and bring it to your visit.',
+    'Iron can leave your legs restless at night.',
+    'Low magnesium can cause cramps at night.',
+    'Serum iron peaks in the morning.',
+    'Have your iron checked in the morning.',
+    'Iron studies are usually drawn in the morning.',
+    'Get some sun in the morning for your vitamin D.',
+    'Cortisol drops in the evening, and your vitamin D is fine.',
+  ])('passes the ordinary lab or symptom sentence %s', (text) => {
+    expect(findTextViolations(text)).toEqual([]);
+  });
+});

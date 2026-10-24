@@ -281,6 +281,59 @@ function findRecommendedSubstance(text: string): string | null {
 const FREQUENCY_REGEX =
   /\b(?:daily|nightly|twice (?:a |per )day|(?:once|twice|three times|\d+ times) (?:a|per|each) (?:day|week)|every (?:other )?(?:day|morning|night|evening)|each (?:day|morning|night|evening)|once a day|per day|at bedtime|before (?:bed|bedtime|sleep)|with (?:food|meals?|breakfast|lunch|dinner)|with (?:a|your) (?:\w+ )?(?:meal|breakfast|lunch|dinner)|between meals|on an empty stomach)\b/i;
 
+// A time of day tied to a substance: "Magnesium at night", "Vitamin D in the
+// morning", "Iron supplements are best taken at night". Ordinary text uses the
+// same words ("Do you wake up at night?", "Low iron can cause restless legs at
+// night"), so the phrase counts only within three words after a substance
+// term, or in a sentence with a dosing verb aimed at one ("Take your vitamin D
+// with a glass of water in the morning"). A substance named as a lab
+// measurement does not count: "Serum iron peaks in the morning", "Low
+// magnesium can cause cramps at night", "Have your iron checked in the
+// morning". Nor does "drops", as often a verb as a dosage form ("cortisol
+// drops in the evening").
+const TIME_OF_DAY = "at night|in the (?:morning|afternoon|evening)s?";
+const TIME_OF_DAY_REGEX = new RegExp(`\\b(?:${TIME_OF_DAY})\\b`, "i");
+const TIMED_SUBSTANCE_REGEX = new RegExp(
+  `\\b(?:${SUBSTANCE_TERM})\\b(?=(?<gap>(?:[ ,]+[^\\s,.!?;:]+){0,3}?)[ ,]+(?<time>${TIME_OF_DAY})\\b)`,
+  "gi",
+);
+const DOSED_SUBSTANCE_REGEX = new RegExp(
+  `\\b(?:take|takes|taking|taken|took|have|has|having|had|use|uses|using|used)\\s+(?:(?:${FILLER})\\s+){0,3}(?<sub>${SUBSTANCE_TERM})\\b`,
+  "gi",
+);
+const LAB_WORD_BEFORE = /\b(?:low|lower|high|higher|elevated|reduced|serum|plasma|blood|urine|urinary)\s+$/i;
+const LAB_PARTICIPLE = /\b(?:drawn|measured|tested|checked|rechecked|retested|collected)\b/i;
+
+// `start` and `end` bound the substance term; `next` is the text after it
+// that may hold a participle ("iron was drawn", "iron checked").
+function isLabMention(text: string, start: number, end: number, next: string): boolean {
+  return (
+    LAB_NOUN_AFTER.test(text.slice(end)) ||
+    LAB_WORD_BEFORE.test(text.slice(Math.max(0, start - 20), start)) ||
+    LAB_PARTICIPLE.test(next)
+  );
+}
+
+function findSubstanceTiming(text: string): string | null {
+  for (const m of text.matchAll(TIMED_SUBSTANCE_REGEX)) {
+    const start = m.index ?? 0;
+    const time = m.groups?.time;
+    const lab = isLabMention(text, start, start + m[0].length, m.groups?.gap ?? "");
+    if (time && !lab && !/^drops$/i.test(m[0])) return time;
+  }
+  for (const sentence of text.split(/[.!?;:\n]/)) {
+    const time = sentence.match(TIME_OF_DAY_REGEX)?.[0];
+    if (!time) continue;
+    for (const m of sentence.matchAll(DOSED_SUBSTANCE_REGEX)) {
+      const end = (m.index ?? 0) + m[0].length;
+      const start = end - (m.groups?.sub ?? "").length;
+      const nextWord = sentence.slice(end).match(/^\s+\S+/)?.[0] ?? "";
+      if (!isLabMention(sentence, start, end, nextWord)) return time;
+    }
+  }
+  return null;
+}
+
 // Brands and product endorsements, which NUTRIENT_GUIDELINES.md bans. A
 // trademark sign is checked on the raw text, because NFKD spells ™ as "TM".
 const BRAND_MARK_REGEX = /[®™℠]/;
@@ -356,8 +409,8 @@ export function findTextViolations(raw: string): string[] {
   if (verbMatch) violations.push(`prescriptive_verb:${verbMatch}`);
 
   if (hasSubstanceContext) {
-    const freqMatch = text.match(FREQUENCY_REGEX);
-    if (freqMatch) violations.push(`dosing_frequency:${freqMatch[0]}`);
+    const freqMatch = text.match(FREQUENCY_REGEX)?.[0] ?? findSubstanceTiming(text);
+    if (freqMatch) violations.push(`dosing_frequency:${freqMatch}`);
 
     const brandMatch = text.match(BRAND_WORD_REGEX);
     if (brandMatch) violations.push(`brand_name:${brandMatch[0]}`);
