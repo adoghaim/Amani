@@ -86,7 +86,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | todo | - | - |
 | RV-DL1 Device lock hardening | RV | 1 | in-progress | - | - |
 | RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | todo | - | - |
-| RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | todo | - | - |
+| RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | review | - | [#166](https://github.com/adoghaim/Amani/pull/166) |
 | RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | todo | - | - |
 | RV-DP2 Declared dependencies, an aligned test toolchain and a Node 22 pin | RV | 1 | todo | RV-DP1 | - |
 | RV-CI1 Native CI that can fail; the device-lock boundary test runs | RV | 1 | review | - | - |
