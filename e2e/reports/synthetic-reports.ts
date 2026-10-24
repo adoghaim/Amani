@@ -214,3 +214,33 @@ export const labFloorReport = report(1, 'unknown', [
   ['ferritin', 17, '17', 'ng/mL', 15, 150],
   ['hdl_cholesterol', 61, '61', 'mg/dL', 40, 60],
 ]);
+
+/*
+  RV-LF2 (Ruling 7): the October smoke panel in the shape NewReport saves it
+  (comparatorBaseline FX:questSmoke), entirely synthetic. A range printed on
+  one side binds no bounds, so its biomarkers row is null/null and only its
+  report_analytes row keeps the comparator.
+*/
+const ONE_SIDED_SMOKE: [name: string, value: number, unit: string, printed: string,
+  min: number | null, max: number | null, operator: string | null, bound: number | null][] = [
+  ['ferritin', 18, 'ng/mL', '16-154', 16, 154, null, null],
+  ['tsh', 2.85, 'mIU/L', '0.40-4.50', 0.4, 4.5, null, null],
+  ['vitamin_d_25_oh', 24, 'ng/mL', '30-100', 30, 100, null, null],
+  ['ldl_cholesterol', 112, 'mg/dL', '<100', null, null, '<', 100],
+  ['hdl_cholesterol', 61, 'mg/dL', '> OR = 50', null, null, '> OR =', 50],
+  ['total_cholesterol', 192, 'mg/dL', '<200', null, null, '<', 200],
+  ['triglycerides', 95, 'mg/dL', '<150', null, null, '<', 150],
+  ['hemoglobin_a1c', 5.4, '%', '<5.7', null, null, '<', 5.7],
+];
+const oneSidedSmoke = report(1, 'unknown',
+  ONE_SIDED_SMOKE.map(([name, value, unit, , min, max]): Marker => [name, value, String(value), unit, min, max]));
+export const oneSidedSmokePanelReport: SyntheticReport = {
+  ...oneSidedSmoke,
+  analytes: ONE_SIDED_SMOKE.map(([name, value, unit, printed, min, max, operator, bound], i) => ({
+    id: `00000000-0000-4000-c000-00000000010${i + 1}`, lab_report_id: oneSidedSmoke.report.id,
+    raw_name: name, value_numeric: value, raw_value_text: String(value), unit, raw_reference_range: printed,
+    normalized_min: min, normalized_max: max, normalized_operator: operator, normalized_operator_value: bound,
+    parse_status: 'mapped', canonical_slug: name, is_core: true, needs_review: false,
+    confidence_score: 'high', normalization_status: 'mapped', source_format: 'text',
+  })),
+};

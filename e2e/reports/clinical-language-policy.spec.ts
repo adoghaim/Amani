@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
 import {
   egfrHigherIsBetterReport, ferritinDecreased, higherIsBetterReport, modelCanaries, modelProseCurrentReport,
-  smokePanelReport, stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport, tshIncreased,
+  oneSidedSmokePanelReport, smokePanelReport, stage2CurrentReport, stage2ModelNextSteps, stage2PriorReport, tshIncreased,
 } from './synthetic-reports';
 
 /*
@@ -313,5 +313,39 @@ test.describe('October smoke panel consistency', () => {
       await expect(card).toContainText("Amani's comparison band is separate from your lab's range and is still under clinical review.");
     }
     await page.screenshot({ path: testInfo.outputPath('smoke-panel-consistency.png'), fullPage: true });
+  });
+});
+
+/*
+  RV-LF2 (Ruling 7): the same panel in the shape the save writes, where a
+  range printed on one side is kept only on report_analytes and the page reads
+  it from there. Logic twin: src/pages/ReportView.comparator.test.tsx (AC1).
+*/
+test.describe('October smoke panel, one-sided printed ranges as saved', () => {
+  test.use({ authenticated: true, syntheticReports: [[oneSidedSmokePanelReport], { scope: 'test' }] });
+  test('the headline, the primary and every card place her values against the bounds her lab printed', async ({ page }) => {
+    await page.goto(`/app/reports/${oneSidedSmokePanelReport.report.id}`);
+    await expect(page.locator('h2 [data-language-source="patient_lab_interval"]')).toHaveText([
+      "Vitamin D is below your lab's reference range at 24 ng/mL. ",
+      "LDL is above your lab's reference range at 112 mg/dL. ",
+    ]);
+    await expect(page.getByTestId('primary-finding')).toContainText("Vitamin D is below your lab's reference range at 24 ng/mL.");
+    await clickAll(page, 'button[aria-expanded="false"]:not(article button)');
+    await clickAll(page, 'article button[aria-expanded="false"]');
+    for (const [name, range, placement] of [
+      ['LDL', '≤ 100 mg/dL', "Above your lab's range"],
+      ['HDL', '≥ 50 mg/dL', "Within your lab's range"],
+      ['Total Cholesterol', '≤ 200 mg/dL', "Within your lab's range"],
+      ['Triglycerides', '≤ 150 mg/dL', "Within your lab's range"],
+      ['HbA1c', '≤ 5.7 %', "Within your lab's range"],
+    ] as const) {
+      const card = page.getByRole('article', { name: `${name} result`, exact: true });
+      await expect(card, name).toContainText(`Your lab's range:${range}`);
+      await expect(card.locator('[data-language-source="patient_lab_interval"]'), name).toHaveText(placement);
+    }
+    for (const text of await page.locator('article [data-language-source="patient_lab_interval"]').allTextContents()) {
+      expect(text).toMatch(/^(?:Above|Below|Within) your lab's range$/);
+    }
+    expect(hits(await pageText(page))).toEqual([]);
   });
 });
