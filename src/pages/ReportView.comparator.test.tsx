@@ -353,3 +353,29 @@ describe('AC8: her unconfirmed value outside its one-sided lab range', () => {
     expect(headline()).toContain("LDL is above your lab's reference range at 95 mg/dL.");
   }, 30_000);
 });
+
+/*
+  RES1 I4-4 (F021 x F022): the headline guard for her unconfirmed value reads
+  a censored result by its printed limit, never by its stored placeholder.
+  Synthetic: hs-CRP printed '<0.8' or '<0.3' (stored as half the limit) beside
+  an invented printed range of 0.5-3.0; both limits sit inside its Amani band.
+*/
+describe('RES1 I4-4: her unconfirmed censored value is lab-flagged only where its printed limit places it', () => {
+  const unconfirmedCrp = (limit: number) => account(
+    [['hs_crp', limit / 2, `<${limit}`, 'mg/L', '0.5-3.0', 0.5, 3, null, null], ['ferritin', 40, '40', 'ng/mL', '16-154', 16, 154, null, null]],
+    rows => rows.map(r => r['canonical_slug'] === 'hs_crp' ? { ...r, needs_review: true, confidence_score: 'low' } : r),
+  );
+
+  it("'<0.8' may be below or within 0.5-3.0, so it is not read as outside it: the band headline stands", async () => {
+    fixture.db = unconfirmedCrp(0.8);
+    await open();
+    expect(headline()).toBe("All scored values are within Amani's context bands, which are still under review.");
+  }, 30_000);
+
+  it("control: '<0.3' is below 0.5-3.0 at both ends, so the headline names nothing and claims no all-clear", async () => {
+    fixture.db = unconfirmedCrp(0.3);
+    await open();
+    expect(headline()).not.toContain('All scored values');
+    expect(headline()).not.toContain('hs-CRP');
+  }, 30_000);
+});

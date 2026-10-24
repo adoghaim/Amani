@@ -1774,7 +1774,7 @@ export function ReportView() {
                       // whether it sits outside its Amani band or outside her lab's range (the lab
                       // headline above names only confirmed values).
                       const labFlagged = (b: Biomarker) => {
-                        const placement = labIntervalPlacement(b.value, labBounds.get(b)?.min, labBounds.get(b)?.max);
+                        const placement = labIntervalPlacement(b.value, labBounds.get(b)?.min, labBounds.get(b)?.max, null, null, b.raw_value_text);
                         return placement === 'below' || placement === 'above';
                       };
                       if (outside.length === 0 && (scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState, s.valueText) === 'outside')
