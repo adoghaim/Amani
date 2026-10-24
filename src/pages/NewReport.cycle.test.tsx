@@ -20,7 +20,7 @@ const fixture = vi.hoisted(() => ({
   inserts: [] as { table: string; values: unknown }[],
   // Cycle facts printed on the lab report, as the OCR function returns them.
   ocrMetadata: undefined as { cycle_day?: number | null; cycle_phase?: string | null } | undefined,
-  ocrItems: null as Record<string, unknown>[] | null,
+  ocrItems: null as ExtractedAnalyte[] | null,
   generationBodies: [] as Record<string, unknown>[],
 }));
 
@@ -179,18 +179,27 @@ async function save() {
 }
 
 it('October smoke: first generation pins the same Vitamin D primary as the report page', async () => {
-  fixture.ocrItems = [
-    ['ferritin', 'Ferritin', 18, 'ng/mL', 16, 154],
-    ['tsh', 'TSH', 2.85, 'uIU/mL', 0.4, 4.5],
-    ['vitamin_d_25_oh', 'Vitamin D', 24, 'ng/mL', 30, 100],
-  ].map(([slug, name, value, unit, min, max]) => ({
-    raw_name: name, canonical_slug: slug, value_numeric: value, value_text: String(value), unit,
-    raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
-    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-    needs_review: false, source_snippet: `${name} ${value}`, source_format: 'ocr', review_status: 'pending',
+  // parse-lab-report-ocr's own row shape (review F093), like the estradiol row above.
+  const panel: [slug: string, name: string, value: number, unit: string, min: number, max: number, category: string][] = [
+    ['ferritin', 'Ferritin', 18, 'ng/mL', 16, 154, 'nutrients'],
+    ['tsh', 'TSH', 2.85, 'uIU/mL', 0.4, 4.5, 'thyroid'],
+    ['vitamin_d_25_oh', 'Vitamin D', 24, 'ng/mL', 30, 100, 'nutrients'],
+  ];
+  fixture.ocrItems = panel.map(([slug, name, value, unit, min, max, category]) => ({
+    raw_name: name, raw_value_text: String(value), value_numeric: value, unit,
+    raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: `${name} ${value}`,
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped',
+    needs_review: false, is_core: true, category,
   }));
   await openCycleStep();
   await save();
+  // The pin is computed from the rows the report page reads back, each with
+  // her lab's printed value text and interval.
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => [b['name'], b['raw_value_text'], b['reference_min'], b['reference_max']])).toEqual([
+    ['ferritin', '18', 16, 154], ['tsh', '2.85', 0.4, 4.5], ['vitamin_d_25_oh', '24', 30, 100],
+  ]);
   expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: 'vitamin_d_25_oh' }]);
 });
 
