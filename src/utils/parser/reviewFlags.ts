@@ -1,5 +1,5 @@
 import type { ReportItem } from './types';
-import { checkPhysiologicalBounds } from './pipeline';
+import { checkPhysiologicalBounds, isOutsideBoundsInAnotherUnit } from './pipeline';
 import { isBelowLimitResult } from './valueExtraction';
 
 const DIGIT_RE = /\d/;
@@ -17,11 +17,30 @@ export function withReviewFlags<T extends ReportItem>(item: T): T {
     ? checkPhysiologicalBounds(item.canonical_slug, item.value_numeric, item.unit)
     : null;
   const parse_error = item.parse_error ?? boundsError;
+  const held = parse_error == null && heldForHerCheck(item);
   return {
     ...item,
     parse_error,
-    needs_review: item.needs_review || parse_error != null || isBelowLimitResult(item.value_text),
+    ...(held ? { confidence_score: 'low' as const } : {}),
+    needs_review: item.needs_review || parse_error != null || held || isBelowLimitResult(item.value_text),
   };
+}
+
+type CheckFields = Pick<ReportItem, 'canonical_slug' | 'value_numeric' | 'value_text' | 'unit'>;
+
+function heldForHerCheck(item: CheckFields): boolean {
+  const qualitative = item.value_text != null && !DIGIT_RE.test(item.value_text);
+  return !!item.canonical_slug && !qualitative && isOutsideBoundsInAnotherUnit(item.canonical_slug, item.value_numeric, item.unit);
+}
+
+/**
+ * IA2 review wave 2: a value printed in another unit outside the bounds,
+ * which Amani cannot check, that she has not marked correct or corrected. It
+ * does not keep Save closed, but she is asked to check it, and until she
+ * confirms it the saved row is unconfirmed (low confidence, needs_review).
+ */
+export function awaitsHerCheck(item: CheckFields & Pick<ReportItem, 'parse_error' | 'reviewed_by_user'>): boolean {
+  return !item.parse_error && item.reviewed_by_user !== true && heldForHerCheck(item);
 }
 
 /**

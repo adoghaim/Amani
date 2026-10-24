@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { awaitsHerConfirmation, withReviewFlags } from './reviewFlags';
+import { awaitsHerCheck, awaitsHerConfirmation, withReviewFlags } from './reviewFlags';
 import type { ReportItem } from './types';
 
 // Rows as extract-biomarkers or OCR return them: no parse_error field. Synthetic values.
@@ -45,16 +45,49 @@ describe('withReviewFlags: the parser\'s review rules on every row of the confir
       raw_name: 'Glucose', canonical_slug: 'fasting_glucose', category: 'metabolic', value_numeric: value, value_text: String(value), unit,
     });
 
-    it('an SI-unit value is no parse error and does not keep Save closed', () => {
+    // IA2 review wave 2, finding 2: it is not accepted silently either; it waits for her confirmation.
+    it('an SI-unit value is no parse error and does not keep Save closed, but waits for her confirmation', () => {
       const row = withReviewFlags(glucose(5.2, 'mmol/L'));
-      expect(row).toMatchObject({ parse_error: null, needs_review: false, value_numeric: 5.2, unit: 'mmol/L' });
+      expect(row).toMatchObject({ parse_error: null, needs_review: true, confidence_score: 'low', value_numeric: 5.2, unit: 'mmol/L' });
       expect(awaitsHerConfirmation(row)).toBe(false);
+      expect(awaitsHerCheck(row)).toBe(true);
     });
 
     it.each([['mg/dL'], ['MG/DL'], [' mg/dL '], [null]])('control: in the canonical unit (%j) or with no unit, 5.2 is still a parse error', (unit) => {
       const row = withReviewFlags(glucose(5.2, unit));
       expect(row.parse_error).toMatch(/^Value 5\.2 is below physiological minimum 30 for .+ — likely a parse error$/);
       expect(awaitsHerConfirmation(row)).toBe(true);
+    });
+  });
+
+  /*
+    IA2 review wave 2, finding 1: an OCR or model row in an equivalent spelling
+    or another unit, outside the bounds, is held for her confirmation instead of
+    passing as cleanly read. Nothing is converted.
+  */
+  describe('a value in another unit outside the bounds waits for her confirmation', () => {
+    it.each([
+      ['Potassium', 'potassium', 45, 'mmol/L'],
+      ['TSH', 'tsh', 900, 'uIU/mL'],
+      ['ALT', 'alt', 0.2, 'IU/L'],
+    ])('%s %s %s', (raw_name, canonical_slug, value_numeric, unit) => {
+      const row = withReviewFlags(modelRow({ raw_name, canonical_slug, value_numeric, value_text: String(value_numeric), unit }));
+      expect(row).toMatchObject({ parse_error: null, needs_review: true, confidence_score: 'low' });
+      expect(awaitsHerConfirmation(row)).toBe(false);
+      expect(awaitsHerCheck(row)).toBe(true);
+      expect(awaitsHerCheck({ ...row, reviewed_by_user: true })).toBe(false);
+    });
+
+    it('control: inside the bounds in another unit, the row is unchanged', () => {
+      const clean = modelRow({ raw_name: 'Potassium', canonical_slug: 'potassium', value_numeric: 4.1, value_text: '4.1', unit: 'mmol/L' });
+      expect(withReviewFlags(clean)).toEqual({ ...clean, parse_error: null });
+      expect(awaitsHerCheck(clean)).toBe(false);
+    });
+
+    it('control: the canonical-unit row keeps the parse error, not this hold', () => {
+      const row = withReviewFlags(modelRow({ raw_name: 'Potassium', canonical_slug: 'potassium', value_numeric: 45, value_text: '45', unit: 'mEq/L' }));
+      expect(row.parse_error).toMatch(/likely a parse error$/);
+      expect(awaitsHerCheck(row)).toBe(false);
     });
   });
 

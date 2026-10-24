@@ -2,6 +2,7 @@ import { isBelowLimitResult } from '../../utils/parser/valueExtraction';
 
 const READING_REVIEW_COLUMN_LIST = [
   'id', 'lab_report_id', 'canonical_slug', 'value_numeric', 'raw_value_text', 'confidence_score', 'needs_review', 'reviewed_by_user',
+  'review_status',
 ] as const;
 type Joined<T extends readonly string[]> = T extends readonly [infer H extends string, ...infer R extends readonly string[]]
   ? (R extends readonly [] ? H : `${H},${Joined<R>}`)
@@ -21,7 +22,17 @@ export interface ReadingReview {
   confidence_score?: string | null;
   needs_review?: boolean | null;
   reviewed_by_user?: boolean | null;
+  review_status?: string | null;
 }
+
+/*
+  Before IA2, typing a corrected value set review_status 'edited_by_user' but
+  left reviewed_by_user false and needs_review true; Mark as Correct set
+  'reviewed'. Both still count as her confirmation (IA2 review wave 2). The
+  column comes from the same migrations as reviewed_by_user, and an absent
+  value confirms nothing.
+*/
+const CONFIRMED_REVIEW_STATUSES: ReadonlySet<string> = new Set(['reviewed', 'edited_by_user']);
 
 /**
  * A value Amani may have misread that she has not confirmed (F022): flagged
@@ -35,6 +46,7 @@ export interface ReadingReview {
  */
 export function isUnconfirmedReading(row: ReadingReview): boolean {
   return row.needs_review === true && row.reviewed_by_user !== true
+    && !CONFIRMED_REVIEW_STATUSES.has(row.review_status ?? '')
     && (row.confidence_score === 'low' || isBelowLimitResult(row.raw_value_text));
 }
 

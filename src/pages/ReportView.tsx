@@ -1667,8 +1667,10 @@ export function ReportView() {
                       // generated it" is inadmissible), and it could read "all within
                       // range" while a card says otherwise (Phase 8B, kept).
                       const outside = scoredBiomarkers
-                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')
+                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside' && confirmedScoredBiomarkers.includes(s))
                         .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
+                      // F022: her unconfirmed value is never named here, nor hidden behind an all-clear.
+                      if (outside.length === 0 && scoredBiomarkers.some(s => markerBandPlacement(s.key, s.value, cyclePhase) === 'outside')) return REPORT_TITLE;
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
                     }

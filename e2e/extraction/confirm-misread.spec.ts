@@ -12,6 +12,8 @@ test.use({ authenticated: true });
 const OCR_ITEMS = [
   ['TSH', 'tsh', 0.0008, 'mIU/L', 0.4, 4.5],
   ['Ferritin', 'ferritin', 40, 'ng/mL', 16, 154],
+  // IA2 review wave 2: another unit, outside the bounds; held for her check, Save not blocked.
+  ['Potassium', 'potassium', 45, 'mmol/L', 3.5, 5.1],
 ].map(([name, slug, value, unit, min, max]) => ({
   raw_name: name, canonical_slug: slug, value_numeric: value, value_text: String(value), unit,
   raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
@@ -52,7 +54,11 @@ test('a probably misread value keeps Save closed until she confirms it', async (
   await expect(tsh).toContainText('below physiological minimum 0.001 for TSH');
   await testInfo.attach('confirm-misread-blocked', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 
+  await expect(page.getByTestId('check-unit')).toHaveText("Amani can't check 1 value in the unit printed. Check it against your report, then mark it as correct or fix it.");
+
   await tsh.getByRole('button', { name: 'Mark as Correct' }).click();
   await expect(save).toBeEnabled();
   await expect(page.getByTestId('confirm-misread')).toHaveCount(0);
+  // The held value does not keep Save closed; she is still asked to check it.
+  await expect(page.getByTestId('check-unit')).toBeVisible();
 });

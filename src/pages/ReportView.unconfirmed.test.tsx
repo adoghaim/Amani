@@ -157,6 +157,19 @@ describe('ReportView with a value she has not confirmed (F022)', () => {
     expect(latestTrajectory()?.primaryFinding?.key).toBe('tsh');
   });
 
+  // IA2 review wave 2, finding 3: before IA2, typing her value left reviewed_by_user false.
+  it('a value she corrected before reviewed_by_user was recorded (legacy edited_by_user) counts as confirmed', async () => {
+    fixture.db = createFakeDb({
+      lab_reports: [report('current', '2026-09-01')],
+      biomarkers: current.map(biomarker),
+      report_analytes: current.map((v, i) => analyte(v, i, isTsh0008(v)
+        ? { needs_review: true, confidence_score: 'low', reviewed_by_user: false, review_status: 'edited_by_user' } : {})),
+      interpretations: [],
+    });
+    await open('current');
+    expect(latestTrajectory()?.primaryFinding?.key).toBe('tsh');
+  });
+
   it('her unconfirmed value is no trend point in this report: no change, no baseline', async () => {
     fixture.db = account(
       [report('p1', '2026-03-01'), report('p2', '2026-06-01'), report('current', '2026-09-01')],
@@ -213,6 +226,39 @@ describe('ReportView with a value she has not confirmed (F022)', () => {
       expect(focusSlugs()).toContain('ferritin');
       expect(cardIds()).toContain('nutrient_sufficiency');
       expect(last(fixture.flaggedSlugs)).toContain('ferritin');
+    });
+  });
+
+  /*
+    IA2 review wave 2, finding 4: the headline Amani writes from its own data
+    names no value she has not confirmed, and does not hide it behind an
+    all-clear either.
+  */
+  describe('the report headline', () => {
+    const headline = () => app.querySelector('h2.text-lg')?.textContent ?? '';
+
+    it('names her confirmed out-of-band value, not her unconfirmed one', async () => {
+      fixture.db = account([report('current', '2026-09-01')], current, isTsh0008);
+      await open('current');
+      expect(headline()).toContain('Ferritin');
+      expect(headline()).not.toContain('TSH');
+    });
+
+    it('with only her unconfirmed value out of band, names nothing and claims no all-clear', async () => {
+      fixture.db = account(
+        [report('current', '2026-09-01')],
+        [['current', 'tsh', 0.0008, 'mIU/L', 0.4, 4.5], ['current', 'ferritin', 40, 'ng/mL', 16, 154]],
+        isTsh0008,
+      );
+      await open('current');
+      expect(headline()).not.toContain('TSH');
+      expect(headline()).not.toContain('All scored values');
+    });
+
+    it('control: once she has confirmed it, the headline names it', async () => {
+      fixture.db = account([report('current', '2026-09-01')], current, () => false);
+      await open('current');
+      expect(headline()).toContain('TSH');
     });
   });
 

@@ -54,6 +54,7 @@ vi.mock('../lib/freemium/gates', () => ({ uploadRequiresSubscription: () => fals
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 import { NewReport } from './NewReport';
 import { edgeCasesFixture } from '../utils/parser/__fixtures__/edgeCases';
+import { isUnconfirmedReading, type ReadingReview } from '../lib/biomarkers/confirmation';
 
 let root: Root;
 let app: HTMLDivElement;
@@ -195,6 +196,57 @@ describe('NewReport confirm step: a probably misread value needs her confirmatio
     expect(tsh).toMatchObject({ value_numeric: 0.8, needs_review: false, reviewed_by_user: true, review_status: 'edited_by_user' });
     const biomarkers = (fixture.inserts.find(i => i.table === 'biomarkers')?.values ?? []) as Record<string, unknown>[];
     expect(biomarkers.find(b => b['name'] === 'tsh')).toMatchObject({ value: 0.8 });
+  });
+
+  /*
+    IA2 review wave 2, findings 1-2: a value printed in another unit outside the
+    bounds (an SI glucose) is no parse error, so Save stays open, but it is not
+    accepted silently: she is asked to check it, and until she confirms it the
+    saved row is unconfirmed, so it stays out of her primary finding and trends.
+  */
+  it('a value in another unit outside the bounds does not block Save but is saved unconfirmed until she checks it', async () => {
+    fixture.ocrItems = [
+      ['fasting_glucose', 'Glucose', 5.2, '5.2', 'mmol/L', 3.9, 5.5],
+      ['ferritin', 'Ferritin', 18, '18', 'ng/mL', 16, 154],
+    ].map(([slug, name, value, text, unit, min, max]) => ({
+      raw_name: name, canonical_slug: slug, value_numeric: value, value_text: text, unit,
+      raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
+      reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
+      needs_review: false, source_snippet: `${name} ${text}`, source_format: 'ocr', review_status: 'pending',
+    }));
+    await upload(photo());
+    await click(button('Next'));
+
+    expect(saveButton()?.disabled).toBe(false);
+    expect(app.querySelector('[data-testid="confirm-misread"]')).toBeNull();
+    expect(app.querySelector('[data-testid="check-unit"]')?.textContent)
+      .toBe("Amani can't check 1 value in the unit printed. Check it against your report, then mark it as correct or fix it.");
+    expect(card('Fasting Glucose').textContent).not.toContain('likely a parse error');
+
+    await click(saveButton());
+    await settle(20);
+    const glucose = savedAnalytes().find(a => a['canonical_slug'] === 'fasting_glucose');
+    expect(glucose).toMatchObject({ value_numeric: 5.2, needs_review: true, confidence_score: 'low', reviewed_by_user: false });
+    expect(isUnconfirmedReading(glucose as unknown as ReadingReview)).toBe(true);
+    const ferritin = savedAnalytes().find(a => a['canonical_slug'] === 'ferritin');
+    expect(isUnconfirmedReading(ferritin as unknown as ReadingReview)).toBe(false);
+  });
+
+  it('control: once she marks that value correct, the check line goes and it is saved confirmed', async () => {
+    fixture.ocrItems = [{
+      raw_name: 'Glucose', canonical_slug: 'fasting_glucose', value_numeric: 5.2, value_text: '5.2', unit: 'mmol/L',
+      raw_reference_range: '3.9-5.5', normalized_reference_min: 3.9, normalized_reference_max: 5.5,
+      reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
+      needs_review: false, source_snippet: 'Glucose 5.2', source_format: 'ocr', review_status: 'pending',
+    }];
+    await upload(photo());
+    await click(button('Next'));
+    await click(button('Mark as Correct', card('Fasting Glucose')));
+    expect(app.querySelector('[data-testid="check-unit"]')).toBeNull();
+    await click(saveButton());
+    await settle(20);
+    const glucose = savedAnalytes().find(a => a['canonical_slug'] === 'fasting_glucose');
+    expect(isUnconfirmedReading(glucose as unknown as ReadingReview)).toBe(false);
   });
 
   it('removing the row also releases Save', async () => {

@@ -179,7 +179,7 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
         // F022: with it, the flagged rows of the same reports (READING_REVIEW_COLUMNS), so
         // ReportView leaves a value she never confirmed out of her trends.
         const reviewColumns = ['id', 'lab_report_id', 'canonical_slug', 'value_numeric', 'raw_value_text',
-          'confidence_score', 'needs_review', 'reviewed_by_user'] as const;
+          'confidence_score', 'needs_review', 'reviewed_by_user', 'review_status'] as const;
         if (url.pathname === '/rest/v1/report_analytes' && select === reviewColumns.join(',')
           && url.searchParams.get('needs_review') === 'eq.true') {
           const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];

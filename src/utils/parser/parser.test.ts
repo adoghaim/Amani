@@ -8,6 +8,9 @@ import { genericFixture } from './__fixtures__/generic';
 import { edgeCasesFixture } from './__fixtures__/edgeCases';
 import { questHormoneFixture } from './__fixtures__/questHormones';
 import { labcorpHormoneFixture } from './__fixtures__/labcorpHormones';
+import { awaitsHerCheck, awaitsHerConfirmation } from './reviewFlags';
+import { isUnconfirmedReading } from '../../lib/biomarkers/confirmation';
+import type { ReportItem } from './types';
 
 // Snapshot regression harness for the parser pipeline.
 // Each test pins current behavior of `parseAllReportItems` for a representative
@@ -148,5 +151,53 @@ describe('parser pipeline (physiological bounds and units)', () => {
   ])('control: the same number in the canonical unit is still a parse error: %s', (row, slug) => {
     const item = parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug);
     expect(item?.parse_error).toMatch(/likely a parse error$/);
+  });
+});
+
+/*
+  IA2 review wave 2, finding 1: the bounds are known only in the catalog's
+  canonical unit. A value printed in another spelling or unit that falls
+  outside them cannot be checked, so it is not accepted silently: it waits for
+  her confirmation (needs_review, low confidence) and stays out of her primary
+  finding and trends until she gives it. It is no parse error, so a correct SI
+  value still saves. Nothing is converted and no bound changes.
+*/
+describe('parser pipeline (a value in another unit outside the bounds waits for her)', () => {
+  const lab = (row: string) => `Lab Report\n\n${row}\n`;
+  // The row as NewReport saves it to report_analytes, before she reviews it.
+  const asSaved = (i: ReportItem) => ({
+    lab_report_id: 'r', canonical_slug: i.canonical_slug, value_numeric: i.value_numeric, raw_value_text: i.value_text,
+    confidence_score: i.confidence_score, needs_review: i.needs_review && i.reviewed_by_user !== true, reviewed_by_user: i.reviewed_by_user ?? false,
+  });
+
+  it.each([
+    ['Potassium                    45        mmol/L    3.5-5.1', 'potassium', 45],
+    ['TSH                          900       uIU/mL    0.40-4.50', 'tsh', 900],
+    ['ALT                          0.2       IU/L      7-35', 'alt', 0.2],
+    ['Sodium                       14        mmol/L    136-145', 'sodium', 14],
+    ['Glucose                      5.2       mmol/L    3.9-5.5', 'fasting_glucose', 5.2],
+  ])('held for her confirmation, out of her primary finding, Save not blocked: %s', (row, slug, value) => {
+    const item = parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug);
+    expect(item).toMatchObject({ value_numeric: value, needs_review: true, confidence_score: 'low' });
+    expect(item?.parse_error ?? null).toBeNull();
+    expect(awaitsHerConfirmation(item!)).toBe(false);
+    expect(awaitsHerCheck(item!)).toBe(true);
+    expect(isUnconfirmedReading(asSaved(item!))).toBe(true);
+  });
+
+  it('control: the same potassium in the canonical unit is still the Save-blocking parse error', () => {
+    const item = parseAllReportItems(lab('Potassium                    45        mEq/L     3.5-5.1')).find(i => i.canonical_slug === 'potassium');
+    expect(item?.parse_error).toMatch(/^Value 45 exceeds physiological maximum 10 for .+ — likely a parse error$/);
+    expect(awaitsHerConfirmation(item!)).toBe(true);
+    expect(awaitsHerCheck(item!)).toBe(false);
+  });
+
+  it.each([
+    ['Potassium                    4.1       mmol/L    3.5-5.1', 'potassium'],
+    ['TSH                          2.1       uIU/mL    0.40-4.50', 'tsh'],
+  ])('control: a value in another unit inside the bounds is not held: %s', (row, slug) => {
+    const item = parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug);
+    expect(item).toMatchObject({ needs_review: false, parse_error: null });
+    expect(awaitsHerCheck(item!)).toBe(false);
   });
 });

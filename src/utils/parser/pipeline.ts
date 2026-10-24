@@ -73,6 +73,13 @@ export function confidenceRank(c: 'high' | 'medium' | 'low'): number {
 
 const unitKey = (unit: string) => unit.trim().toLowerCase();
 
+/** The row printed a unit, and it is not the catalog's canonical one. */
+function inAnotherUnit(slug: string, unit?: string | null): boolean {
+  if (!unit || unit.trim() === '') return false;
+  const canonicalUnit = getEntry(slug as BiomarkerName)?.defaultUnit;
+  return !canonicalUnit || unitKey(unit) !== unitKey(canonicalUnit);
+}
+
 /*
   The message is shown on the upload's confirm step, so it names the marker as
   the report does. The bounds are written in the catalog's canonical unit: a
@@ -83,12 +90,25 @@ const unitKey = (unit: string) => unit.trim().toLowerCase();
 export function checkPhysiologicalBounds(slug: string, value: number, unit?: string | null): string | null {
   const bounds = PHYSIOLOGICAL_BOUNDS[slug];
   if (!bounds) return null;
-  const canonicalUnit = getEntry(slug as BiomarkerName)?.defaultUnit;
-  if (unit && unit.trim() !== '' && (!canonicalUnit || unitKey(unit) !== unitKey(canonicalUnit))) return null;
+  if (inAnotherUnit(slug, unit)) return null;
   const name = getDisplayName(slug as BiomarkerName);
   if (value < bounds.min) return `Value ${value} is below physiological minimum ${bounds.min} for ${name} — likely a parse error`;
   if (value > bounds.max) return `Value ${value} exceeds physiological maximum ${bounds.max} for ${name} — likely a parse error`;
   return null;
+}
+
+/*
+  IA2 review wave 2: a value printed in another unit or spelling (mmol/L for
+  potassium, uIU/mL for TSH) that falls outside the bounds cannot be checked
+  against them, and may be a decimal-shift misread. It is no parse error, so
+  a correct SI value still saves, but it is not accepted silently: the row
+  waits for her confirmation (needs_review, low confidence). Nothing is
+  converted and the bounds are unchanged.
+*/
+export function isOutsideBoundsInAnotherUnit(slug: string, value: number, unit?: string | null): boolean {
+  const bounds = PHYSIOLOGICAL_BOUNDS[slug];
+  if (!bounds || !inAnotherUnit(slug, unit) || !Number.isFinite(value)) return false;
+  return value < bounds.min || value > bounds.max;
 }
 
 export function computeParseStatus(params: {
@@ -446,8 +466,9 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
     const isCore  = CORE_SLUGS.has(slug);
     const ref     = b.reference_comparator;
     const parseError = checkPhysiologicalBounds(slug, b.value, b.unit);
+    const heldForHer = isOutsideBoundsInAnotherUnit(slug, b.value, b.unit);
     const rawRef  = b.reference_text_raw ?? null;
-    const confidence = parseError ? 'low' as const : b.confidence;
+    const confidence = parseError || heldForHer ? 'low' as const : b.confidence;
     const ambiguity = b.reference_ambiguity;
 
     const parseStatus = computeParseStatus({
@@ -480,7 +501,7 @@ export function convertExtractedToReportItems(extracted: ExtractedBiomarker[]): 
       reference_operator_value: ref?.value ?? null,
       confidence_score: confidence,
       is_core_biomarker: isCore,
-      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || isBelowLimitResult(b.rawValue),
+      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || heldForHer || isBelowLimitResult(b.rawValue),
       source_snippet: b.rawText ?? null,
       parse_error: parseError,
       parse_status: parseStatus,
@@ -597,10 +618,11 @@ function buildExtendedItems(
       : 'low';
 
     const physBoundsError = slug ? checkPhysiologicalBounds(slug, valueNumeric, rawUnit) : null;
+    const heldForHer = slug ? isOutsideBoundsInAnotherUnit(slug, valueNumeric, rawUnit) : false;
 
     const parseStatus = computeParseStatus({
       canonical_slug: slug,
-      parse_confidence: physBoundsError ? 'low' : confidence,
+      parse_confidence: physBoundsError || heldForHer ? 'low' : confidence,
       physBoundsError,
       value_numeric: valueNumeric,
       unit: rawUnit,
@@ -624,9 +646,9 @@ function buildExtendedItems(
       normalized_reference_max: ref?.max ?? null,
       reference_operator: ref?.comparator?.operator ?? null,
       reference_operator_value: ref?.comparator?.value ?? null,
-      confidence_score: physBoundsError ? 'low' : confidence,
+      confidence_score: physBoundsError || heldForHer ? 'low' : confidence,
       is_core_biomarker: isCore,
-      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || isBelowLimitResult(valueText),
+      needs_review: parseStatus === 'needs_review' || parseStatus === 'parse_error' || heldForHer || isBelowLimitResult(valueText),
       source_snippet: line.substring(0, 120),
       parse_error: physBoundsError,
       parse_status: parseStatus,

@@ -21,7 +21,7 @@ import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
-import { awaitsHerConfirmation, withReviewFlags } from '../utils/parser/reviewFlags';
+import { awaitsHerCheck, awaitsHerConfirmation, withReviewFlags } from '../utils/parser/reviewFlags';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import {
   cycleContextAtDraw, cycleContextToStore, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
@@ -530,6 +530,8 @@ export function NewReport() {
   const cycleLengthInvalid = cycleLengthInput.trim() !== '' && parseCycleLengthDays(cycleLengthInput) === null;
   // F022: probably misread values she has not yet marked correct, corrected or removed.
   const awaitingConfirmation = reportItems.filter(awaitsHerConfirmation).length;
+  // IA2 review wave 2: values in another unit Amani cannot check; Save stays open.
+  const awaitingCheck = reportItems.filter(awaitsHerCheck).length;
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
@@ -1537,6 +1539,15 @@ export function NewReport() {
                 <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-theme-flag-watch">
                   Amani may have misread {awaitingConfirmation} value{awaitingConfirmation !== 1 ? 's' : ''}. Mark {awaitingConfirmation !== 1 ? 'each' : 'it'} as correct, fix it, or remove it to save.
+                </p>
+              </div>
+            )}
+
+            {awaitingCheck > 0 && (
+              <div role="status" data-testid="check-unit" className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mt-6">
+                <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-theme-flag-watch">
+                  Amani can't check {awaitingCheck} value{awaitingCheck !== 1 ? 's' : ''} in the unit{awaitingCheck !== 1 ? 's' : ''} printed. Check {awaitingCheck !== 1 ? 'them' : 'it'} against your report, then mark {awaitingCheck !== 1 ? 'each' : 'it'} as correct or fix it.
                 </p>
               </div>
             )}

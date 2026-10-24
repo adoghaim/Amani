@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isUnconfirmedReading, unconfirmedReadingKeys, isUnconfirmedBiomarker, withoutUnconfirmed } from './confirmation';
+import { isUnconfirmedReading, unconfirmedReadingKeys, isUnconfirmedBiomarker, withoutUnconfirmed, READING_REVIEW_COLUMNS } from './confirmation';
 
 // Synthetic rows only.
 const analyte = (over: Record<string, unknown> = {}) => ({
@@ -24,8 +24,22 @@ describe('isUnconfirmedReading (F022)', () => {
     // PK-FIX-05: several printed intervals; the value itself was read cleanly.
     ['its lab printed several intervals', { canonical_slug: 'progesterone', value_numeric: 8.2, raw_value_text: '8.2', confidence_score: 'medium' }],
     ['the review columns are absent', { needs_review: undefined, reviewed_by_user: undefined }],
+    // IA2 review wave 2, finding 3: rows she corrected before reviewed_by_user was set on typing.
+    ['she corrected it before reviewed_by_user was recorded (legacy edited_by_user)', { review_status: 'edited_by_user' }],
+    ['she marked it reviewed before reviewed_by_user was recorded (legacy reviewed)', { review_status: 'reviewed' }],
   ])('not when %s', (_, over) => {
     expect(isUnconfirmedReading(analyte(over))).toBe(false);
+  });
+});
+
+describe('READING_REVIEW_COLUMNS (IA2 review wave 2, finding 3)', () => {
+  it('reads review_status, which 20260402000001 and 20260406055443 add with reviewed_by_user', () => {
+    expect(READING_REVIEW_COLUMNS.split(',')).toEqual(expect.arrayContaining(['needs_review', 'reviewed_by_user', 'review_status']));
+  });
+
+  it('a pending review status leaves an unconfirmed row unconfirmed', () => {
+    expect(isUnconfirmedReading(analyte({ review_status: 'pending' }))).toBe(true);
+    expect(isUnconfirmedReading(analyte({ review_status: null }))).toBe(true);
   });
 });
 
