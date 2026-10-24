@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import Stripe from "npm:stripe@17.7.0";
-import { errorMessage } from "../_shared/errors.ts";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
 import {
   AccountDeletionNotReadyError,
@@ -14,7 +13,9 @@ import {
   type AccountDeletionActions,
   type StoreSubscriptionRecord,
 } from "../_shared/account-deletion.ts";
-import { createStoreTeardownActions } from "../_shared/store-teardown.ts";
+import { deleteAllStorageObjects } from "../_shared/account-deletion-storage.ts";
+import { errorType, scrubbedErrorMessage } from "../_shared/phi-scrub.ts";
+import { createStoreTeardownActions, StoreTeardownError } from "../_shared/store-teardown.ts";
 import { createAppEventSink, logServerEvent } from "../_shared/app-events.ts";
 
 const corsHeaders = {
@@ -113,21 +114,29 @@ Deno.serve(async (req: Request) => {
       cancelPlaySubscriptions: storeTeardown.cancelPlaySubscriptions,
       deleteRevenueCatSubscriber: storeTeardown.deleteRevenueCatSubscriber,
 
-      async getStripeCustomerId(userId) {
-        // Prefer stripe_customers (current); fall back to users.stripe_customer_id (legacy).
-        const { data: linked } = await supabase
+      async getStripeCustomerIds(userId) {
+        // Both locations, always: stripe_customers (current, written by
+        // stripe-checkout; soft-deleted rows included, erasure takes them too)
+        // and users.stripe_customer_id (legacy, written by the old portal).
+        // They can name different customers (review F029); the policy tears
+        // down each distinct one. A failed read refuses the deletion rather
+        // than leaving a customer behind at Stripe.
+        const { data: linked, error: linkedError } = await supabase
           .from("stripe_customers")
           .select("customer_id")
           .eq("user_id", userId)
           .maybeSingle();
-        if (linked?.customer_id) return linked.customer_id as string;
+        if (linkedError) throw new Error(`Reading stripe_customers failed: ${linkedError.message}`);
 
-        const { data: legacy } = await supabase
+        const { data: legacy, error: legacyError } = await supabase
           .from("users")
           .select("stripe_customer_id")
           .eq("id", userId)
           .maybeSingle();
-        return (legacy?.stripe_customer_id as string | null) ?? null;
+        if (legacyError) throw new Error(`Reading users.stripe_customer_id failed: ${legacyError.message}`);
+
+        return [linked?.customer_id, legacy?.stripe_customer_id]
+          .filter((id): id is string => typeof id === "string");
       },
 
       async cancelStripeSubscriptions(customerId) {
@@ -174,12 +183,19 @@ Deno.serve(async (req: Request) => {
         // List every object under the user's prefix rather than trusting the
         // file_url column — catches orphaned uploads that never made it into
         // lab_reports (e.g., upload succeeded but the DB insert failed).
-        const { data: files, error: listError } = await supabase.storage.from("lab-files").list(userId, { limit: 1000 });
-        if (listError) throw new Error(`Storage list failed: ${listError.message}`);
-        if (!files || files.length === 0) return;
-        const paths = files.map((f) => `${userId}/${f.name}`);
-        const { error: removeError } = await supabase.storage.from("lab-files").remove(paths);
-        if (removeError) throw new Error(`Storage remove failed: ${removeError.message}`);
+        // Every page, then a final check that the prefix is empty (review
+        // F036): ../_shared/account-deletion-storage.ts.
+        await deleteAllStorageObjects({
+          async list(userId, { limit, offset }) {
+            const { data: files, error: listError } = await supabase.storage.from("lab-files").list(userId, { limit, offset });
+            if (listError) throw new Error(`Storage list failed: ${listError.message}`);
+            return files ?? [];
+          },
+          async remove(paths) {
+            const { error: removeError } = await supabase.storage.from("lab-files").remove(paths);
+            if (removeError) throw new Error(`Storage remove failed: ${removeError.message}`);
+          },
+        }, userId);
       },
 
       async deleteDataTables(userId) {
@@ -291,9 +307,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.error("Error deleting user account:", error);
+    // The type and a scrubbed message for the log; for the client either a
+    // StoreTeardownError's text (fixed wording written for the user, naming the
+    // store step and an HTTP status only: ../_shared/store-teardown.ts) or a
+    // fixed body. No Stripe, Storage or Postgres detail reaches the client.
+    console.error("Error deleting user account:", errorType(error), scrubbedErrorMessage(error));
     return new Response(
-      JSON.stringify({ error: errorMessage(error, "Failed to delete account"), retry: true }),
+      JSON.stringify(error instanceof StoreTeardownError
+        ? { error: error.message, retry: true }
+        : { error: "Failed to delete account. Please try again.", code: "account_deletion_failed", retry: true }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
