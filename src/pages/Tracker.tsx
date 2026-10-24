@@ -106,7 +106,7 @@ export function Tracker() {
   const insightsClaims = useMemo(() => {
     if (!insightsPair) return [];
     const snapshot = (id: string) => (biomarkersByReport[id] ?? [])
-      .map(b => ({ key: b.name as BiomarkerName, value: b.value, unit: b.unit }));
+      .map(b => ({ key: b.name as BiomarkerName, value: b.value, unit: b.unit, valueText: b.raw_value_text }));
     const phase = reports.find(r => r.id === insightsPair.current)?.estimated_cycle_phase as CyclePhase | null | undefined;
     const deltas = compareReports(
       snapshot(insightsPair.previous), snapshot(insightsPair.current), phase ?? null,

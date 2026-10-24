@@ -87,6 +87,7 @@ import {
 } from '../lib/freemium/reportAccess';
 import { AccessErrorNotice, FreemiumReportPanel } from '../components/freemium/FreemiumReportPanel';
 import { PremiumPaywall } from '../components/freemium/PremiumPaywall';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 
 /*
   A 429 from `generate-interpretation` means "over your daily AI quota", not
@@ -177,6 +178,7 @@ interface HistoricalBiomarkerRow {
   reference_min: number | null;
   reference_max: number | null;
   lab_report_id: string;
+  raw_value_text: string | null;
 }
 
 interface OpeningContext {
@@ -422,8 +424,8 @@ export function ReportView() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<BiomarkerCategory>>(new Set());
   const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [, setPreviousBiomarkers] = useState<Biomarker[]>([]);
-  const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number; unit: string }[]>>(new Map());
-  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>>(new Map());
+  const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number; unit: string; valueText: string | null }[]>>(new Map());
+  const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string; valueText: string | null }>>(new Map());
   const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
@@ -724,18 +726,18 @@ export function ReportView() {
         const { data: allHistoricalBiomarkers } = await fetchAllRows<HistoricalBiomarkerRow>(() =>
           supabase
             .from('biomarkers')
-            .select('name, value, unit, reference_min, reference_max, lab_report_id')
+            .select('name, value, unit, reference_min, reference_max, lab_report_id, raw_value_text')
             .in('lab_report_id', allHistoricalIds)
             .order('id'));
 
         if (allHistoricalBiomarkers) {
-          const histMap = new Map<string, { reportDate: string; value: number; unit: string }[]>();
-          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null }[]>();
+          const histMap = new Map<string, { reportDate: string; value: number; unit: string; valueText: string | null }[]>();
+          const occurrences = new Map<string, { reportDate: string; value: number; unit: string; reference_min: number | null; reference_max: number | null; valueText: string | null }[]>();
           for (const b of allHistoricalBiomarkers) {
             const reportDate = reportDateMap.get(b.lab_report_id);
             if (!reportDate) continue;
             if (!histMap.has(b.name)) histMap.set(b.name, []);
-            histMap.get(b.name)!.push({ reportDate, value: b.value, unit: b.unit });
+            histMap.get(b.name)!.push({ reportDate, value: b.value, unit: b.unit, valueText: b.raw_value_text ?? null });
             if (!occurrences.has(b.name)) occurrences.set(b.name, []);
             occurrences.get(b.name)!.push({
               reportDate,
@@ -743,11 +745,12 @@ export function ReportView() {
               unit: b.unit,
               reference_min: b.reference_min,
               reference_max: b.reference_max,
+              valueText: b.raw_value_text ?? null,
             });
           }
           setHistoricalBiomarkers(histMap);
 
-          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string }>();
+          const latestPriorByMarker = new Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string; valueText: string | null }>();
           for (const [name, list] of occurrences) {
             const sorted = [...list].sort((a, b) => a.reportDate.localeCompare(b.reportDate));
             const last = sorted[sorted.length - 1];
@@ -830,8 +833,11 @@ export function ReportView() {
     if (historicalReportCount < PERSONALIZATION_THRESHOLDS.MIN_REPORTS_FOR_BASELINE) return map;
 
     for (const b of biomarkers) {
+      // F021: a censored result ('<8') holds a placeholder, not a measurement, so it is neither
+      // compared with her history nor part of it.
+      if (isCensoredValue(b.raw_value_text)) continue;
       // F013: a value in another unit is not comparable with this one, so it is not her history here.
-      const history = historicalBiomarkers.get(b.name)?.filter(h => sameUnit(h.unit, b.unit));
+      const history = historicalBiomarkers.get(b.name)?.filter(h => sameUnit(h.unit, b.unit) && !isCensoredValue(h.valueText));
       if (!history || history.length === 0) continue;
 
       const orderedEntries = history
@@ -886,6 +892,7 @@ export function ReportView() {
         key: b.name as BiomarkerName,
         value: b.value,
         unit: b.unit,
+        valueText: b.raw_value_text,
         labRefMin: b.reference_min,
         labRefMax: b.reference_max,
         parserConfidence: telemetry?.parserConfidence ?? null,
@@ -901,6 +908,7 @@ export function ReportView() {
           labRefMin: occ.reference_min,
           labRefMax: occ.reference_max,
           reportDate: occ.reportDate,
+          valueText: occ.valueText,
         }))
       : null;
     return buildInsightSummary(current, previous, report?.estimated_cycle_phase, immediatePriorReportDate, declaredState);

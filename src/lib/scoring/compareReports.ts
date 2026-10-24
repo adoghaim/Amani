@@ -4,6 +4,7 @@ import { sameUnit } from '../biomarkers/normalizeReportItems';
 import { computeAmaniStatus } from './scoreBiomarker';
 import { assessAmaniContext, contextFromReport, type NonCyclingState } from './amaniContext';
 import { authorizedLanguage, BOUNDARY_BUCKET_LABEL, type AuthorizedLanguage, type ReviewStatus } from './insightCopy';
+import { isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 
 export type TrendDirection = 'up' | 'down' | 'stable';
 export type SignificanceTier = 'minor' | 'moderate' | 'significant';
@@ -83,6 +84,8 @@ interface BiomarkerSnapshot {
   value: number;
   unit: string;
   reportDate?: string;
+  /** The result as printed. A censored one ('<8') holds a placeholder value, not a measurement (F021). */
+  valueText?: string | null;
 }
 
 const MIN_ABSOLUTE_DELTA: Record<string, number> = {
@@ -243,6 +246,8 @@ export function compareReports(
     const prev = prevMap.get(curr.key);
     // F013: values in two units are not comparable, and no conversion is approved.
     if (!prev || !sameUnit(prev.unit, curr.unit)) continue;
+    // F021: a censored result has no measured value, so it has no delta, percent change or trajectory.
+    if (isCensoredValue(prev.valueText) || isCensoredValue(curr.valueText)) continue;
 
     const absoluteDelta = Math.abs(curr.value - prev.value);
     const isNearZero = Math.abs(prev.value) < NEAR_ZERO_THRESHOLD;
