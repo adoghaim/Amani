@@ -6,7 +6,10 @@ import {
   isReasoningModel,
   OPENAI_MODEL_ENV,
   OPENAI_MODEL_SHUTDOWNS,
+  OPENAI_REASONING_EFFORT_ENV,
+  REASONING_EFFORTS,
   REASONING_TOKEN_HEADROOM,
+  reasoningEffortParams,
   resolveOpenAiModel,
   type OpenAiModelUse,
 } from './openai-models.ts';
@@ -128,5 +131,56 @@ describe('OPENAI_MODEL_SHUTDOWNS (RV-MM1 AC4)', () => {
       model: DEFAULT_OPENAI_MODELS[use],
       ...OPENAI_MODEL_SHUTDOWNS[DEFAULT_OPENAI_MODELS[use]],
     })));
+  });
+});
+
+describe('reasoningEffortParams (RV-MM1 AC5: per-use secret, unset by default)', () => {
+  it('lists exactly the values Chat Completions documents', () => {
+    expect(REASONING_EFFORTS).toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+  });
+
+  it.each(USES)('%s: sends nothing while its secret is unset or blank', use => {
+    expect(reasoningEffortParams(use, 'gpt-6-luna')).toEqual({});
+    expect(reasoningEffortParams(use, 'gpt-6-luna', () => undefined)).toEqual({});
+    expect(reasoningEffortParams(use, 'gpt-6-luna', () => '  ')).toEqual({});
+  });
+
+  it.each(REASONING_EFFORTS)('sends %s to a reasoning model, read trimmed and in any case', effort => {
+    expect(reasoningEffortParams('interpretation', 'gpt-6-luna', () => effort)).toEqual({ reasoning_effort: effort });
+    expect(reasoningEffortParams('interpretation', 'gpt-5.6-terra', () => ` ${effort.toUpperCase()} `))
+      .toEqual({ reasoning_effort: effort });
+  });
+
+  it.each(['extreme', 'lowest', 'low; DROP', 'low,high', 'none minimal', '"low"', '1', 'medium-high'])(
+    'ignores the value %j',
+    bad => {
+      expect(reasoningEffortParams('ocr', 'gpt-6-luna', () => bad)).toEqual({});
+    },
+  );
+
+  it.each(['gpt-4o', 'gpt-4o-mini', 'gpt-4o-2024-08-06'])('never sends the field to the chat model %s', model => {
+    expect(reasoningEffortParams('extraction', model, () => 'low')).toEqual({});
+  });
+
+  it.each(USES)('%s reads only the secret named for it', use => {
+    const env: Record<string, string> = { [OPENAI_REASONING_EFFORT_ENV[use]]: 'high' };
+    expect(reasoningEffortParams(use, 'gpt-6-luna', n => env[n])).toEqual({ reasoning_effort: 'high' });
+    for (const other of USES.filter(u => u !== use)) {
+      expect(reasoningEffortParams(other, 'gpt-6-luna', n => env[n])).toEqual({});
+    }
+  });
+
+  it('names a distinct effort secret per use, none of them a model secret', () => {
+    const names = Object.values(OPENAI_REASONING_EFFORT_ENV);
+    expect(new Set(names).size).toBe(USES.length);
+    for (const name of names) expect(Object.values(OPENAI_MODEL_ENV)).not.toContain(name);
+  });
+
+  it('leaves the limit fields to chatCompletionParams: an effort adds no temperature', () => {
+    const body = {
+      ...chatCompletionParams('gpt-6-luna', { maxOutputTokens: 2200, temperature: 0.25 }),
+      ...reasoningEffortParams('interpretation', 'gpt-6-luna', () => 'none'),
+    };
+    expect(body).toEqual({ max_completion_tokens: 2200 + REASONING_TOKEN_HEADROOM, reasoning_effort: 'none' });
   });
 });
