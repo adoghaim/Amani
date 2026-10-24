@@ -10,7 +10,7 @@ test('public web stays unlocked with the flag on', async ({ page, runtimeConfigR
   const plugins: string[] = [];
   page.on('request', request => { if (request.url().includes('aparajita')) plugins.push(request.url()); });
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
   await expect.poll(() => runtimeConfigReads.length).toBe(1);
   await expect(page.getByRole('heading', { name: 'Amani is locked' })).toHaveCount(0);
   expect(plugins).toEqual([]);

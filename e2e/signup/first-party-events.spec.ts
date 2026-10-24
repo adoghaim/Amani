@@ -48,7 +48,7 @@ const codeLink = (page: Page) => page.getByRole('button', { name: 'Have a promo 
 test.describe('first-party events off (the seed)', () => {
   test('no code link, no event call, nothing stored', async ({ page, runtimeConfigReads }) => {
     await page.goto('/?utm_source=tiktok&promo=SPRING25');
-    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
     await page.goto('/go/creator.jane');
     await expect(page).toHaveURL(/\/signup$/);
     await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
@@ -121,7 +121,7 @@ test.describe('first-party events on', () => {
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto('/?utm_source=tiktok');
-    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read against your cycle.' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Your labs, read in context.' })).toBeVisible();
     await expect.poll(() => calls).toBe(1);
     await page.goto('/signup');
     await expect(codeLink(page)).toBeVisible();
