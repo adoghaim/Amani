@@ -37,7 +37,8 @@ set -euo pipefail
 
 CONTAINER=amani-pgtest-verify
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Production's Postgres major (17.6, supabase/.temp/postgres-version). The one
+# Production's Postgres major (17.6, docs/clinical/TABLE-DISPOSITION.md:49;
+# verification-harness.test.ts pins PG_MAJOR to it). The one
 # place it is set: the image is named from it, and the run stops if the server
 # that starts is any other major.
 PG_MAJOR=17

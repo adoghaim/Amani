@@ -204,12 +204,14 @@ const MIGRATIONS = join(DIR, '..');
 const harnessFile = (name: string) => readFileSync(join(DIR, name), 'utf8');
 
 describe('run.sh tests the Postgres major production runs (F127)', () => {
-  it('names the image from one PG_MAJOR, equal to the linked project\'s major, and stops on any other server', () => {
+  it('names the image from one PG_MAJOR, equal to production\'s major, and stops on any other server', () => {
     const pins = [...runSh.matchAll(/^PG_MAJOR=(\d+)$/gm)];
     expect(pins).toHaveLength(1);
-    // supabase/.temp/postgres-version is what the Supabase CLI recorded for the linked project.
-    const production = readFileSync(join(MIGRATIONS, '../.temp/postgres-version'), 'utf8').trim();
-    expect(production.split('.')[0]).toBe(pins[0]![1]);
+    // Production's Postgres, as the Lead verified it (docs/clinical/TABLE-DISPOSITION.md:49,
+    // 'PostgreSQL is 17.6'). Pinned here, in a tracked file: supabase/.temp is CLI state
+    // and is not tracked (scripts/repo-hygiene.test.ts). A production upgrade changes this line.
+    const PRODUCTION_POSTGRES = '17.6';
+    expect(PRODUCTION_POSTGRES.split('.')[0]).toBe(pins[0]![1]);
     expect(runSh).toContain('"postgres:$PG_MAJOR-alpine"');
     expect(runSh).not.toMatch(/postgres:\d/);
     // Checked once the server accepts connections, before any case or the clinical-only run.

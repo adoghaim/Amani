@@ -157,10 +157,17 @@ BEGIN
 END $$;
 -- As A (run as postgres; it acts as A): an unfiltered UPDATE (SET update_col
 -- = DEFAULT) and DELETE under the tripwire must reach none of theirs.
+-- update_col is the column every UPDATE probe of rel sets: when authenticated
+-- may update rel at all, it must be allowed to update that column, or each
+-- UPDATE probe would stop at 'permission denied' and test no policy.
 CREATE FUNCTION pg_temp.fc_owner_unfiltered(rel regclass, owner_spec text, update_col text, theirs text[], label text)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE reached text;
 BEGIN
+  PERFORM pg_temp.vassert(NOT has_any_column_privilege('authenticated', rel, 'UPDATE')
+      OR has_column_privilege('authenticated', rel, update_col, 'UPDATE'),
+    format('%s-UPDATE-COLUMN %s: authenticated may update it, but not %s, so its UPDATE probes would test a missing grant, not RLS; probe a column it may update',
+      label, rel, update_col));
   EXECUTE format('CREATE TRIGGER "!fc_tripwire" BEFORE UPDATE OR DELETE ON %s FOR EACH ROW EXECUTE FUNCTION pg_temp.fc_tripwire(%L, %L)',
     rel, owner_spec, theirs::text);
   PERFORM pg_temp.fc_act('authenticated');
@@ -234,12 +241,16 @@ BEGIN
   PERFORM pg_temp.vassert(pg_temp.fc_reached($s$SELECT count(*) FROM storage.objects$s$) = 0, 'FC-STORAGE-ANON-READ');
   PERFORM pg_temp.fc_insert_refused(format($s$INSERT INTO storage.objects (bucket_id, name) VALUES ('lab-files', %L)$s$, a || '/3.pdf'),
     'FC-STORAGE-ANON-UPLOAD');
-  PERFORM pg_temp.vassert(pg_temp.fc_reached(format($s$UPDATE storage.objects SET name = name WHERE name LIKE %L$s$, b || '/%')) = 0,
-    'FC-STORAGE-ANON-UPDATE');
-  PERFORM pg_temp.vassert(pg_temp.fc_reached(format($s$DELETE FROM storage.objects WHERE name LIKE %L$s$, b || '/%')) = 0,
-    'FC-STORAGE-ANON-DELETE');
-  PERFORM pg_temp.vassert(pg_temp.fc_reached($s$UPDATE storage.buckets SET public = true WHERE id = 'lab-files'$s$) = 0,
-    'FC-STORAGE-ANON-BUCKET-STAYS-PRIVATE');
+  -- anon's filtered writes also meet the SELECT policies, and anon has none
+  -- here, so these reach nothing even under an anon UPDATE or DELETE policy;
+  -- the unfiltered loop above is what catches one. They still fail on any
+  -- reach or WITH CHECK refusal (fc_reach_and_undo, not fc_reached).
+  reached := pg_temp.fc_reach_and_undo(format($s$UPDATE storage.objects SET name = name WHERE name LIKE %L$s$, b || '/%'));
+  PERFORM pg_temp.vassert(reached = 'none', 'FC-STORAGE-ANON-UPDATE reached ' || reached);
+  reached := pg_temp.fc_reach_and_undo(format($s$DELETE FROM storage.objects WHERE name LIKE %L$s$, b || '/%'));
+  PERFORM pg_temp.vassert(reached = 'none', 'FC-STORAGE-ANON-DELETE reached ' || reached);
+  reached := pg_temp.fc_reach_and_undo($s$UPDATE storage.buckets SET public = true WHERE id = 'lab-files'$s$);
+  PERFORM pg_temp.vassert(reached = 'none', 'FC-STORAGE-ANON-BUCKET-STAYS-PRIVATE reached ' || reached);
   PERFORM pg_temp.fc_unact();
   PERFORM pg_temp.vassert((SELECT public FROM storage.buckets WHERE id = 'lab-files') IS FALSE
       AND (SELECT count(*) FROM storage.objects WHERE bucket_id = 'lab-files') = 2,
@@ -309,8 +320,9 @@ END $$;
 -- insert_theirs (a row owned by someone else) is refused with 42501. As A,
 -- her own rows (owner_col in mine) are all readable, so the probe is not
 -- vacuous. A view takes the read probes only; users has its own insert check
--- below. update_col is a column A may update where one exists, so the UPDATE
--- probe meets RLS rather than a missing grant.
+-- below. update_col (owner_col when NULL) is a column A may update wherever
+-- she may update the table, so the UPDATE probes meet RLS rather than a
+-- missing grant; fc_owner_unfiltered asserts it.
 -- Filtered writes (WHERE owner_col ...) read columns, so the SELECT policies
 -- apply to them too. An unfiltered UPDATE ... SET col = DEFAULT or DELETE
 -- reads none, and only the UPDATE or DELETE policy stands in its way, as in a
