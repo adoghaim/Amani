@@ -1,0 +1,2 @@
+# graphify output is generated: collapse it in GitHub diffs and keep it out of language stats
+graphify-out/** linguist-generated=true
