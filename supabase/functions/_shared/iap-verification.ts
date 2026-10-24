@@ -52,12 +52,20 @@ export interface NormalizedIapSubscription {
   /*
     Webhook event identity. Null for the subscriber-payload path
     (verify-iap-purchase), which is a point-in-time read of current state rather
-    than an event in a stream — it has nothing to be out of order with, and no
-    id to deduplicate.
+    than an event in a stream: it has no id to deduplicate, and it is ordered by
+    `snapshotAt` instead.
   */
   eventId?: string | null;
   /** When the event occurred, ISO. The ordering high-water mark. */
   eventAt?: string | null;
+  /*
+    When RevenueCat served the subscriber record, ISO: its top-level
+    `request_date_ms`, on the clock `event_timestamp_ms` uses. Set only by the
+    subscriber-payload path. An ordering condition and nothing more: the
+    snapshot is not applied over a row whose mark is newer, but it never moves
+    the mark, so it cannot make a webhook event delivered after it stale.
+  */
+  snapshotAt?: string | null;
   /*
     The store's per-renewal transaction id, set only by the subscriber-payload
     path. GET /v1/subscribers exposes nothing else for an App Store
@@ -311,8 +319,9 @@ export function normalizeRevenueCatEvent(body: unknown, now: number): WebhookNor
 
   /*
     Event identity, used for deduplication and ordering. Both are optional in
-    the type because the subscriber-payload path has neither, and both degrade
-    to "apply it" rather than "drop it" — see isEventFresh.
+    the type because the subscriber-payload path has neither (it is ordered by
+    snapshotAt, which never moves the mark), and both degrade to "apply it"
+    rather than "drop it" — see isEventFresh.
   */
   const eventId = str(event.id);
   const eventAt = isoFromMs(event.event_timestamp_ms);
@@ -406,6 +415,12 @@ export interface SubscriberNormalizeResult {
   subscriptions: NormalizedIapSubscription[];
   /** Human-readable notes for entries that produced no row. */
   ignored: string[];
+  /**
+   * When RevenueCat served the record (see NormalizedIapSubscription.snapshotAt).
+   * Null when `request_date_ms` is missing or unusable: the writes are then
+   * unordered against webhook events.
+   */
+  snapshotAt: string | null;
 }
 
 /**
@@ -460,8 +475,16 @@ export function normalizeSubscriberPayload(
 ): SubscriberNormalizeResult {
   const ignored: string[] = [];
 
+  /*
+    Only the top-level `request_date_ms`, and only a positive finite number:
+    `request_date` (a string) is never parsed, and anything else leaves the
+    snapshot unordered rather than guessing a time for it.
+  */
+  const requestMs = isRecord(body) ? num(body.request_date_ms) : null;
+  const snapshotAt = requestMs !== null && requestMs > 0 ? isoFromMs(requestMs) : null;
+
   if (!isRecord(body) || !isRecord(body.subscriber)) {
-    return { subscriptions: [], ignored: ["response has no subscriber object"] };
+    return { subscriptions: [], ignored: ["response has no subscriber object"], snapshotAt };
   }
 
   const subs = isRecord(body.subscriber.subscriptions) ? body.subscriber.subscriptions : {};
@@ -512,10 +535,11 @@ export function normalizeSubscriberPayload(
       environment: value.is_sandbox === false ? "production" : "sandbox",
       raw: value,
       latestTransactionId,
+      snapshotAt,
     });
   }
 
-  return { subscriptions, ignored };
+  return { subscriptions, ignored, snapshotAt };
 }
 
 // ─── Write policy ─────────────────────────────────────────────────────────
@@ -549,8 +573,12 @@ export interface IapStore {
     productId: string,
   ): Promise<IapSubscriptionRow | null>;
   insert(subscription: NormalizedIapSubscription): Promise<void>;
-  /** Conditional on patch.last_event_at when present; returns matched row count. */
-  update(id: string, patch: IapRowPatch): Promise<number>;
+  /**
+   * Conditional on the write's order time, `orderAt ?? patch.last_event_at`,
+   * when there is one: matches only a row whose mark is null or not newer.
+   * Returns the matched row count.
+   */
+  update(id: string, patch: IapRowPatch, orderAt?: string): Promise<number>;
 }
 
 /**
@@ -615,12 +643,22 @@ export async function persistIapSubscription(
     /*
       Only advance the mark on events that actually carry a timestamp. A
       malformed event still applies its patch (see isEventFresh) but must not
-      move the watermark, or it would make every later event look stale.
+      move the watermark, or it would make every later event look stale. A
+      subscriber snapshot never moves it either: see orderAt.
     */
     ...(subscription.eventAt
       ? { last_event_at: subscription.eventAt, last_event_id: subscription.eventId ?? null }
       : {}),
   };
+
+  /*
+    The time this write is ordered by: the event's own timestamp, or for a
+    subscriber snapshot the moment RevenueCat served it (#73). It is a condition
+    only. A snapshot is not applied over a newer mark, here or in the database,
+    but it never becomes the mark: that would make the INITIAL_PURCHASE webhook
+    stale whenever verify writes first, and let a snapshot discard real events.
+  */
+  const orderAt = subscription.eventAt ?? subscription.snapshotAt ?? null;
 
   const byStore = await store.findByStoreSubscription(
     subscription.platform,
@@ -640,13 +678,14 @@ export async function persistIapSubscription(
       Ordering guard. A CANCELLATION delivered after the RENEWAL that superseded
       it would otherwise overwrite a live subscription with a cancelled one, and
       the user would lose access they had paid for. This is the case that makes
-      releasing RevenueCat's retry backlog safe.
+      releasing RevenueCat's retry backlog safe. It also stops a snapshot read
+      before a refund webhook landed from putting the row back to active.
     */
-    if (!isEventFresh(byStore.last_event_at, subscription.eventAt)) {
+    if (!isEventFresh(byStore.last_event_at, orderAt)) {
       return { action: "stale", id: byStore.id, appliedAt: byStore.last_event_at ?? null };
     }
 
-    if (await store.update(byStore.id, patch) === 0) {
+    if (await store.update(byStore.id, patch, orderAt ?? undefined) === 0) {
       // The database observed a newer write after our read.
       return { action: "stale", id: byStore.id, appliedAt: null };
     }
@@ -686,10 +725,10 @@ export async function persistIapSubscription(
   );
 
   if (byProduct) {
-    if (!isEventFresh(byProduct.last_event_at, subscription.eventAt)) {
+    if (!isEventFresh(byProduct.last_event_at, orderAt)) {
       return { action: "stale", id: byProduct.id, appliedAt: byProduct.last_event_at ?? null };
     }
-    if (await store.update(byProduct.id, patch) === 0) {
+    if (await store.update(byProduct.id, patch, orderAt ?? undefined) === 0) {
       // The database observed a newer write after our read.
       return { action: "stale", id: byProduct.id, appliedAt: null };
     }
