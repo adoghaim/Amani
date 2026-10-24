@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { deepLinkTarget } from './deepLinks';
+import { DEEP_LINK_HOSTS, deepLinkTarget } from './deepLinks';
 
 describe('deepLinkTarget', () => {
   it('routes a password-reset link with an implicit-flow token in the hash', () => {
@@ -22,8 +23,8 @@ describe('deepLinkTarget', () => {
     );
   });
 
-  it('accepts the www host', () => {
-    expect(deepLinkTarget('https://www.amanibiometrics.com/success')).toBe('/success');
+  it('F075: ignores the www host, which redirects and so cannot pass App Links verification', () => {
+    expect(deepLinkTarget('https://www.amanibiometrics.com/success')).toBeNull();
   });
 
   it('is case-insensitive about the host', () => {
@@ -54,5 +55,26 @@ describe('deepLinkTarget', () => {
   it('ignores malformed input', () => {
     expect(deepLinkTarget('not a url')).toBeNull();
     expect(deepLinkTarget('')).toBeNull();
+  });
+});
+
+describe('F075: claimed hosts stay in sync across platforms', () => {
+  const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+
+  it('DEEP_LINK_HOSTS is the apex domain only', () => {
+    expect(DEEP_LINK_HOSTS).toEqual(['amanibiometrics.com']);
+  });
+
+  it('the Android autoVerify filter claims exactly DEEP_LINK_HOSTS', () => {
+    const manifest = read('android/app/src/main/AndroidManifest.xml');
+    const hosts = [...manifest.matchAll(/android:host="([^"]+)"/g)].map(m => m[1]);
+    expect(hosts.length).toBeGreaterThan(0);
+    expect([...new Set(hosts)]).toEqual([...DEEP_LINK_HOSTS]);
+  });
+
+  it('the iOS associated-domains entitlement claims exactly DEEP_LINK_HOSTS', () => {
+    const entitlements = read('ios/App/App/App.entitlements');
+    const hosts = [...entitlements.matchAll(/<string>applinks:([^<]+)<\/string>/g)].map(m => m[1]);
+    expect(hosts).toEqual([...DEEP_LINK_HOSTS]);
   });
 });

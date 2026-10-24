@@ -1,5 +1,11 @@
 project_id = "eyfvqdnczorscwveaadv"
 
+# Matches the 8-character minimum in SignupForm and ResetPassword. The hosted
+# project keeps its own value (Auth settings in the dashboard) until someone
+# changes it there; this file sets the local stack.
+[auth]
+minimum_password_length = 8
+
 # Functions that authenticate the request themselves. They run their own
 # `supabase.auth.getUser()` check and a 401 path; setting verify_jwt = false
 # is intentional, not an oversight.
