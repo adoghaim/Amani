@@ -259,7 +259,6 @@ describe('the whole migration chain replays from empty (F124, F095, F035)', () =
     '20260216194325_20260126021208_add_cycle_events.sql',
     '20260216194328_20260126030815_add_interventions.sql',
     '20260216195036_add_lab_files_storage_bucket.sql',
-    '20260217130956_wispy_sky.sql',
     '20260221194201_add_foreign_key_indexes.sql',
     '20260224062147_security_hardening_rls_audit_storage_rate_limits.sql',
     '20260307054419_add_period_logs_symptom_logs_notifications.sql',
@@ -284,8 +283,6 @@ describe('the whole migration chain replays from empty (F124, F095, F035)', () =
     '20260519000000_add_full_name_to_users.sql',
     '20260521000000_defer_trial_start_until_onboarding.sql',
     '20260811000000_stripe_event_claim_lease.sql',
-    '20260821000000_add_iap_subscriptions.sql',
-    '20260821010000_lock_iap_subscriptions_writes.sql',
     '20260823000000_lock_users_privileged_columns.sql',
   ];
 
