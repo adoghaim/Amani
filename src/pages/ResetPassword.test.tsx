@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, useNavigate, type NavigateFunction } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate, type Location, type NavigateFunction } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ResetPassword } from './ResetPassword';
 
@@ -123,3 +123,117 @@ it('F132: the new password must be at least 8 characters', async () => {
   expect(text()).toContain('Password must be at least 8 characters');
   expect(auth.updateUser).not.toHaveBeenCalled();
 });
+
+// RV-R7 (#166 verifier notes 1 and 2). Synthetic accounts only.
+type SyntheticUser = { id: string; email: string };
+const USER_A: SyntheticUser = { id: 'synthetic-user-a', email: 'a.synthetic@example.com' };
+const USER_B: SyntheticUser = { id: 'synthetic-user-b', email: 'b.synthetic@example.com' };
+const sessionOf = (user: SyntheticUser) => ({ access_token: 'synthetic-access', refresh_token: 'synthetic-refresh', user });
+
+const LINKS = [
+  ['a recovery hash', `/reset-password${RECOVERY_HASH}`],
+  ['a token_hash link', '/reset-password?token_hash=synthetic-hash&type=recovery'],
+  ['a ?code= link', '/reset-password?code=synthetic-code'],
+] as const;
+
+/**
+ * This device's auth: signed in as `before` (or nobody); a link that works
+ * signs `linkUser` in, and getSession reports whoever is signed in now.
+ */
+function device(before: SyntheticUser | null, linkUser: SyntheticUser) {
+  let current = before;
+  auth.getSession.mockImplementation(async () => ({ data: { session: current && sessionOf(current) }, error: null }));
+  const signInFromLink = async () => {
+    current = linkUser;
+    return { data: { session: sessionOf(linkUser), user: linkUser }, error: null };
+  };
+  auth.setSession.mockImplementation(signInFromLink);
+  auth.verifyOtp.mockImplementation(signInFromLink);
+  auth.exchangeCodeForSession.mockImplementation(signInFromLink);
+  auth.signOut.mockImplementation(async () => {
+    current = null;
+    return { error: null };
+  });
+  auth.storage.getItem.mockResolvedValue('synthetic-verifier/PASSWORD_RECOVERY');
+}
+
+let location: Location;
+
+function ProbeLocation() {
+  location = useLocation();
+  return null;
+}
+
+/** As render(), with earlier history entries before the last one and a probe of the router location. */
+async function renderHistory(entries: string[]) {
+  await act(async () => root.render(
+    <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
+      <CaptureNavigate />
+      <ProbeLocation />
+      <ResetPassword />
+    </MemoryRouter>,
+  ));
+}
+
+const passwordInputs = () => container.querySelectorAll('input[type="password"]');
+const button = (label: string) => Array.from(container.querySelectorAll('button')).find(b => b.textContent === label)!;
+const SWITCH_PROMPT = 'This link resets the password for b.synthetic@example.com. You were signed in as a.synthetic@example.com.';
+
+it.each(LINKS)('#166 note 1: %s names the account whose password it resets', async (_shape, entry) => {
+  device(null, USER_B);
+  await renderHistory([entry]);
+  expect(text()).toContain('Set a new password for b.synthetic@example.com');
+  expect(passwordInputs()).toHaveLength(2);
+});
+
+it('#166 note 1: with no link, an existing session names its own account', async () => {
+  device(USER_B, USER_B);
+  await renderHistory(['/reset-password']);
+  expect(auth.setSession).not.toHaveBeenCalled();
+  expect(text()).toContain('Set a new password for b.synthetic@example.com');
+  expect(passwordInputs()).toHaveLength(2);
+});
+
+it.each(LINKS)('#166 note 1: signed in as A, %s for B asks before switching accounts', async (_shape, entry) => {
+  device(USER_A, USER_B);
+  await renderHistory([entry]);
+  expect(text()).toContain(SWITCH_PROMPT);
+  expect(passwordInputs()).toHaveLength(0);
+});
+
+it('#166 note 1: Cancel on the switch prompt signs out and opens /login', async () => {
+  device(USER_A, USER_B);
+  await renderHistory([`/reset-password${RECOVERY_HASH}`]);
+  expect(text()).toContain(SWITCH_PROMPT);
+  await act(async () => button('Cancel').click());
+  expect(auth.signOut).toHaveBeenCalledOnce();
+  expect(location.pathname).toBe('/login');
+});
+
+it('#166 note 1: Continue on the switch prompt opens the form for the account the link is for', async () => {
+  device(USER_A, USER_B);
+  await renderHistory([`/reset-password${RECOVERY_HASH}`]);
+  expect(text()).toContain(SWITCH_PROMPT);
+  await act(async () => button('Continue').click());
+  expect(text()).toContain('Set a new password for b.synthetic@example.com');
+  expect(text()).not.toContain('You were signed in as');
+  expect(passwordInputs()).toHaveLength(2);
+  expect(auth.signOut).not.toHaveBeenCalled();
+});
+
+it.each(LINKS)('#166 note 1: %s for the account already signed in opens the form without asking', async (_shape, entry) => {
+  device(USER_A, USER_A);
+  await renderHistory([entry]);
+  expect(text()).not.toContain('You were signed in as');
+  expect(passwordInputs()).toHaveLength(2);
+});
+
+it("#166 note 1: signed in as A, a link whose tokens are rejected shows the request form, not a prompt or A's form", async () => {
+  device(USER_A, USER_B);
+  auth.setSession.mockResolvedValue({ data: { session: null, user: null }, error: { message: 'invalid' } });
+  await renderHistory([`/reset-password${RECOVERY_HASH}`]);
+  expect(text()).toContain('Reset your password');
+  expect(text()).not.toContain('You were signed in as');
+  expect(passwordInputs()).toHaveLength(0);
+});
+

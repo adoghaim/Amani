@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { Session, User } from '@supabase/supabase-js';
 import { AmaniLogo } from '../components/AmaniLogo';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -8,7 +9,14 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 
-type PageState = 'loading' | 'ready' | 'request';
+type PageState = 'loading' | 'ready' | 'request' | 'switch';
+
+interface Recovery {
+  /** The account whose password this screen resets. */
+  user: User;
+  /** Who was signed in on this device before the link was handled. */
+  previous: User | null;
+}
 
 // auth-js mirrors every PKCE verifier to this fixed key (helpers.js storePKCEVerifier).
 // Without one, a `?code=` cannot be exchanged on this device.
@@ -23,31 +31,40 @@ async function hasPkceVerifier(): Promise<boolean> {
   later through DeepLinkHandler as a client-side navigation, so the tokens in
   the link have to be turned into a session here.
 */
-async function establishRecoverySession(search: string, hash: string): Promise<boolean> {
+async function establishRecoverySession(search: string, hash: string): Promise<Recovery | null> {
   const query = new URLSearchParams(search);
   const fragment = new URLSearchParams(hash.replace(/^#/, ''));
+  // Read before the link can replace it (#166 note 1).
+  const { data: { session: before } } = await supabase.auth.getSession();
+  const previous = before?.user ?? null;
+  const recovery = (session: Session | null, error: unknown): Recovery | null =>
+    !error && session ? { user: session.user, previous } : null;
 
   const accessToken = fragment.get('access_token');
   const refreshToken = fragment.get('refresh_token');
   if (accessToken && refreshToken && fragment.get('type') === 'recovery') {
     const { data, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    return !error && Boolean(data.session);
+    return recovery(data.session, error);
   }
 
   const tokenHash = query.get('token_hash');
   if (tokenHash) {
     const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
-    return !error && Boolean(data.session);
+    return recovery(data.session, error);
   }
 
   const code = query.get('code');
   if (code && await hasPkceVerifier()) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    return !error && Boolean(data.session);
+    return recovery(data.session, error);
   }
 
-  const { data: { session } } = await supabase.auth.getSession();
-  return Boolean(session);
+  return recovery(before, null);
+}
+
+/** The account's email, or a neutral name for an account without one. */
+function accountName(user: User | null | undefined): string {
+  return user?.email || 'another account';
 }
 
 export function ResetPassword() {
@@ -55,6 +72,7 @@ export function ResetPassword() {
   const navigate = useNavigate();
   const { search, hash } = useLocation();
   const [pageState, setPageState] = useState<PageState>('loading');
+  const [recovery, setRecovery] = useState<Recovery | null>(null);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -71,12 +89,22 @@ export function ResetPassword() {
   // already showing navigates to the same route, so it must re-run.
   useEffect(() => {
     let cancelled = false;
-    const settle = (ready: boolean) => {
-      if (!cancelled) setPageState(ready ? 'ready' : 'request');
+    const settle = (result: Recovery | null) => {
+      if (cancelled) return;
+      setRecovery(result);
+      if (!result) setPageState('request');
+      // #166 note 1: a link for another account asks before she uses it.
+      else setPageState(result.previous && result.previous.id !== result.user.id ? 'switch' : 'ready');
     };
-    establishRecoverySession(search, hash).then(settle, () => settle(false));
+    establishRecoverySession(search, hash).then(settle, () => settle(null));
     return () => { cancelled = true; };
   }, [search, hash]);
+
+  // #166 note 1: she did not mean to switch, so the link's account is signed out.
+  const handleCancelSwitch = async () => {
+    await supabase.auth.signOut();
+    navigate('/login', { replace: true });
+  };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,14 +228,29 @@ export function ResetPassword() {
       <div className="w-full max-w-md">
         {logo}
         <Card>
-          {success ? (
+          {pageState === 'switch' ? (
+            <div className="space-y-4">
+              <p className="text-theme-text break-words">
+                This link resets the password for {accountName(recovery?.user)}. You were signed in
+                as {accountName(recovery?.previous)}.
+              </p>
+              <Button type="button" onClick={() => setPageState('ready')} className="w-full">
+                Continue
+              </Button>
+              <Button type="button" variant="outline" onClick={handleCancelSwitch} className="w-full">
+                Cancel
+              </Button>
+            </div>
+          ) : success ? (
             <div className="bg-theme-flag-ok-bg border border-theme-flag-ok-border text-theme-flag-ok px-4 py-3 rounded-lg text-sm">
               Password updated successfully! Redirecting to login...
             </div>
           ) : (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div>
-                <h2 className="text-xl text-theme-text mb-1">Set new password</h2>
+                <h2 className="text-xl text-theme-text mb-1 break-words">
+                  {recovery?.user.email ? `Set a new password for ${recovery.user.email}` : 'Set new password'}
+                </h2>
               </div>
 
               {error && (
