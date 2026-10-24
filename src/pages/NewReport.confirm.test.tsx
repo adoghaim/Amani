@@ -16,6 +16,7 @@ const fixture = vi.hoisted(() => ({
   inserts: [] as { table: string; values: unknown }[],
   pdfText: '',
   ocrItems: [] as ExtractedAnalyte[],
+  generationBodies: [] as unknown[],
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -35,8 +36,10 @@ vi.mock('../lib/supabase', () => {
     from: query,
     auth: { getSession: async () => ({ data: { session: { access_token: 'synthetic-token' } } }) },
     storage: { from: () => ({ upload: async () => ({ error: null }) }) },
-    functions: { invoke: async (name: string) => (name === 'parse-lab-report-ocr'
-      ? { data: { items: fixture.ocrItems }, error: null } : { data: null, error: null }) },
+    functions: { invoke: async (name: string, options?: { body?: unknown }) => {
+      if (name === 'generate-interpretation') fixture.generationBodies.push(options?.body);
+      return name === 'parse-lab-report-ocr' ? { data: { items: fixture.ocrItems }, error: null } : { data: null, error: null };
+    } },
   } };
 });
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user }) }));
@@ -64,6 +67,7 @@ beforeEach(() => {
   fixture.inserts = [];
   fixture.pdfText = '';
   fixture.ocrItems = [];
+  fixture.generationBodies = [];
   app = document.createElement('div');
   document.body.append(app);
   root = createRoot(app);
@@ -258,5 +262,55 @@ describe('NewReport confirm step: a probably misread value needs her confirmatio
     expect(saveButton()?.disabled).toBe(true);
     await click(button('Remove Item', card('TSH')));
     expect(saveButton()?.disabled).toBe(false);
+  });
+});
+
+/*
+  F022 x the first generation's primary pin (#152). The report page picks its
+  primary finding from her confirmed values only (ReportView), and the first
+  generation pins the page's primary so the AI leads with the same marker. A
+  value she has not confirmed is therefore never the pin either.
+*/
+describe('NewReport first generation: the primary pin is a value she has confirmed (F022)', () => {
+  // TSH 9 would lead this panel; an unclear photo read it with low confidence.
+  const panel = (): ExtractedAnalyte[] => [
+    ocrRow('ferritin', 'Ferritin', 18, 'ng/mL', 16, 154, 'nutrients'),
+    { ...ocrRow('tsh', 'TSH', 9, 'mIU/L', 0.4, 4.5, 'thyroid'), confidence_score: 'low', needs_review: true },
+    ocrRow('vitamin_d_25_oh', 'Vitamin D', 24, 'ng/mL', 30, 100, 'nutrients'),
+  ];
+  const savedTsh = () => savedAnalytes().find(a => a['canonical_slug'] === 'tsh') as unknown as ReadingReview;
+
+  it('her unconfirmed value is not pinned; the confirmed primary is', async () => {
+    fixture.ocrItems = panel();
+    await upload(photo());
+    await click(button('Next'));
+    await click(saveButton());
+    await settle(20);
+    expect(isUnconfirmedReading(savedTsh())).toBe(true);
+    expect(fixture.generationBodies).toEqual([{ reportId: 'report-f022', primary_canonical_slug: 'vitamin_d_25_oh' }]);
+  });
+
+  it('control: once she marks that value correct, it may be pinned', async () => {
+    fixture.ocrItems = panel();
+    await upload(photo());
+    await click(button('Next'));
+    await click(button('Mark as Correct', card('TSH')));
+    await click(saveButton());
+    await settle(20);
+    expect(isUnconfirmedReading(savedTsh())).toBe(false);
+    expect(fixture.generationBodies).toEqual([{ reportId: 'report-f022', primary_canonical_slug: 'tsh' }]);
+  });
+
+  // Typing leaves needs_review and the low confidence on the row; reviewed_by_user confirms it.
+  it('control: once she corrects that value by typing it, it may be pinned', async () => {
+    fixture.ocrItems = panel();
+    await upload(photo());
+    await click(button('Next'));
+    await typeValue(card('TSH').querySelector<HTMLInputElement>('input[type="number"]')!, '9.2');
+    await click(saveButton());
+    await settle(20);
+    expect(savedTsh()).toMatchObject({ value_numeric: 9.2, confidence_score: 'low', reviewed_by_user: true });
+    expect(isUnconfirmedReading(savedTsh())).toBe(false);
+    expect(fixture.generationBodies).toEqual([{ reportId: 'report-f022', primary_canonical_slug: 'tsh' }]);
   });
 });

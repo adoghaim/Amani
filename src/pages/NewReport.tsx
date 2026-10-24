@@ -29,6 +29,7 @@ import {
   cycleContextAtDraw, cycleContextToStore, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
 } from '../lib/drawCycleContext';
 import { normalizeReportItems, reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
+import { isUnconfirmedBiomarker, unconfirmedReadingKeys } from '../lib/biomarkers/confirmation';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { detectLabSource } from '../utils/detectLabSource';
@@ -757,7 +758,20 @@ export function NewReport() {
           // Use the report page's primary selection on the first generation,
           // too. Previously only manual regenerations sent this pin, so the
           // model could lead with a different marker before the page opened.
-          primaryCanonicalSlug = buildInsightSummary(biomarkerInserts.map(b => ({
+          // F022: the page picks its primary from her confirmed values only,
+          // judged by the review columns each report_analytes row gets below,
+          // so a value she has not confirmed is no pin either.
+          const unconfirmed = unconfirmedReadingKeys(coreItems.map(item => ({
+            lab_report_id: createdReportId!,
+            canonical_slug: item.canonical_slug,
+            value_numeric: item.value_numeric,
+            raw_value_text: item.value_text ?? null,
+            confidence_score: item.confidence_score ?? 'low',
+            needs_review: (item.needs_review ?? false) && item.reviewed_by_user !== true,
+            reviewed_by_user: item.reviewed_by_user ?? false,
+            review_status: item.review_status ?? 'pending',
+          })));
+          primaryCanonicalSlug = buildInsightSummary(biomarkerInserts.filter(b => !isUnconfirmedBiomarker(b, unconfirmed)).map(b => ({
             key: b.name, value: b.value!, unit: b.unit,
             labRefMin: b.reference_min, labRefMax: b.reference_max,
           })), null, cyclePhase).primaryFinding?.key ?? null;
