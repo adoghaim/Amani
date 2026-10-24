@@ -16,10 +16,10 @@ password, auth token and user id are not sent in any of them.
 
 | Function | When it runs | Model in code | What is sent | Redacted by this packet? |
 |---|---|---|---|---|
-| `extract-biomarkers` | The on-device parser read a PDF but its result looks unreliable, so the model checks the work | `gpt-4o-mini` | The **full text extracted from the report** plus extraction instructions | **Yes.** `redactLabText(text)` runs before the prompt is built |
-| `parse-lab-report-ocr` | A photo is uploaded, or a PDF the parser cannot read is rendered to images | `gpt-4o` (vision) | The **page images** (at most 10 per call, `MAX_IMAGES`) plus instructions | **No.** Pixels cannot be redacted server-side without sending them to an OCR engine first. See section 4 |
-| `generate-interpretation` | The user asks for an interpretation of a report | `gpt-4o-mini` | Biomarker names, values, units, reference ranges and statuses; report date; cycle day/phase notes; report context (symptoms, pregnant, postpartum, birth control); the optional profile block (preferred first name, age range, sex at birth, reproductive status, health goals, things to keep in mind); deterministic primary context and trend evidence against a prior report | **Yes**, the whole user message passes through `redactLabText` on every attempt (first and stricter retry). The "Preferred name" line is deliberately kept (see [Pending] 1) |
-| `lab-insights` | The user compares two reports | `gpt-5-mini` | Report dates, the most notable biomarker changes (name, previous and current value, unit, delta), cycle phase/day for both reports, and the title, category and dates of tracked interventions active in the window | **Yes**, the whole user message passes through `redactLabText` |
+| `extract-biomarkers` | The on-device parser read a PDF but its result looks unreliable, so the model checks the work | `gpt-4o-mini` by default; secret `OPENAI_MODEL_EXTRACTION` overrides | The **full text extracted from the report** plus extraction instructions | **Yes.** `redactLabText(text)` runs before the prompt is built |
+| `parse-lab-report-ocr` | A photo is uploaded, or a PDF the parser cannot read is rendered to images | `gpt-4o` (vision) by default; secret `OPENAI_MODEL_OCR` overrides | The **page images** (at most 10 per call, `MAX_IMAGES`) plus instructions | **No.** Pixels cannot be redacted server-side without sending them to an OCR engine first. See section 4 |
+| `generate-interpretation` | The user asks for an interpretation of a report | `gpt-4o-mini` by default; secret `OPENAI_MODEL_INTERPRETATION` overrides | Biomarker names, values, units, reference ranges and statuses; report date; cycle day/phase notes; report context (symptoms, pregnant, postpartum, birth control); the optional profile block (preferred first name, age range, sex at birth, reproductive status, health goals, things to keep in mind); deterministic primary context and trend evidence against a prior report | **Yes**, the whole user message passes through `redactLabText` on every attempt (first and stricter retry). The "Preferred name" line is deliberately kept (see [Pending] 1) |
+| `lab-insights` | The user compares two reports | `gpt-5-mini` by default; secret `OPENAI_MODEL_LAB_INSIGHTS` overrides | Report dates, the most notable biomarker changes (name, previous and current value, unit, delta), cycle phase/day for both reports, and the title, category and dates of tracked interventions active in the window | **Yes**, the whole user message passes through `redactLabText` |
 
 What the redaction removes and keeps is documented in
 `supabase/functions/_shared/lab-text-redaction.ts` and proven by
@@ -60,21 +60,31 @@ models (gpt-5*, gpt-6*, o-series) get `max_completion_tokens` and no
 `temperature`; chat models keep `max_tokens` and `temperature`. An id can be
 replaced without a code change by setting a function secret (names only):
 `OPENAI_MODEL_OCR`, `OPENAI_MODEL_EXTRACTION`, `OPENAI_MODEL_INTERPRETATION`,
-`OPENAI_MODEL_LAB_INSIGHTS`. `generate-interpretation` does not read its secret
-yet: wiring it to the module is a pending change to that function.
+`OPENAI_MODEL_LAB_INSIGHTS`. All four functions read theirs;
+`generate-interpretation` does from RV-MM1 on, once that function is redeployed.
+A reasoning model's effort is set the same way, per function:
+`OPENAI_REASONING_EFFORT_OCR`, `OPENAI_REASONING_EFFORT_EXTRACTION`,
+`OPENAI_REASONING_EFFORT_INTERPRETATION`, `OPENAI_REASONING_EFFORT_LAB_INSIGHTS`,
+each one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`. Unset,
+the default, no `reasoning_effort` is sent and the model's own default applies;
+a chat model never gets the field. The table below is also
+`OPENAI_MODEL_SHUTDOWNS` in the module, and a test keeps the two equal.
 
-| Function | Use key | Model today | OpenAI shutdown (deprecations page, read 2026-10-23) | OpenAI's suggested replacement |
+| Function | Use key | Model today | OpenAI shutdown (deprecations page, read 2026-10-23, re-checked 2026-10-24) | OpenAI's suggested replacement |
 |---|---|---|---|---|
 | `parse-lab-report-ocr` | `ocr` | `gpt-4o` | 2027-01-14 | `gpt-6-luna` |
 | `extract-biomarkers` | `extraction` | `gpt-4o-mini` | 2027-01-14 | `gpt-6-luna` |
 | `generate-interpretation` | `interpretation` | `gpt-4o-mini` | 2027-01-14 | `gpt-6-luna` |
 | `lab-insights` | `labInsights` | `gpt-5-mini` | 2026-12-11 | `gpt-5.6-terra` |
 
-`CLAUDE.md` names `gpt-4o-2024-08-06` for interpretations; the code calls
-`gpt-4o-mini`. The table follows the code. Cost estimates: `MODEL_PRICES` in
+The table follows the code. Cost estimates: `MODEL_PRICES` in
 `_shared/ai-cost-ledger.ts` is keyed by model prefix and prices the three ids
-above; a model it does not list is priced at the highest listed rate until a row
-is added.
+above and both suggested replacements, at OpenAI's list prices (pricing page,
+standard tier, read 2026-10-24; USD per 1M input / output tokens): `gpt-4o`
+2.50 / 10.00, `gpt-4o-mini` 0.15 / 0.60, `gpt-5-mini` 0.25 / 2.00, `gpt-6-luna`
+0.10 / 0.50, `gpt-5.6-terra` 2.00 / 12.00. The owner confirms the figures
+**[Pending]**. A model it does not list is priced at the highest listed rate
+until a row is added.
 
 No model was switched in this packet. After the shutdown dates, photo and
 weak-PDF OCR fall back to manual entry, every interpretation becomes the
@@ -84,15 +94,20 @@ land before **2026-12-11**.
 ### Migration steps (owner actions; none can be done by the factory)
 
 1. Choose a replacement per function and sign off the choice.
-2. Run a synthetic golden-set eval of OCR and interpretation on the candidate
-   (there is none today), plus the `nutrient-policy` and `claim-authority`
-   suites against real model output rather than mocks.
-3. Add the new model's price to `MODEL_PRICES` (`_shared/ai-cost-ledger.ts`),
-   and confirm the figure.
-4. Set the matching `OPENAI_MODEL_*` secret on the Supabase project. The request
-   parameters follow the id automatically; confirm any reasoning effort setting
-   the new model needs and that its latency fits each function's timeout
-   (`lab-insights` allows 18 s per attempt).
+2. Run the synthetic eval, `scripts/model-eval/README.md`: it sends the same
+   synthetic reports through each function's own request code with today's
+   model and the candidate, runs the nutrient-policy validator, the claim
+   authority and the medical floor on the real model output, and reports per
+   function whether the candidate is BLOCKING or what it measured. It checks
+   deterministic guardrails only; the clinical quality of candidate prose is
+   for the clinical reviewer.
+3. Confirm the `MODEL_PRICES` figures for the chosen models
+   (`_shared/ai-cost-ledger.ts`; both suggested replacements are listed).
+4. Set the matching `OPENAI_MODEL_*` secret on the Supabase project; it takes
+   effect once the function that reads it is deployed. The request parameters
+   follow the id automatically; set an `OPENAI_REASONING_EFFORT_*` secret only if
+   the eval shows one is needed, and confirm the latency fits each function's
+   timeout (`lab-insights` allows 18 s per attempt).
 5. Update the model names in the privacy policy and store disclosures (section 5,
    question 3), then deploy the functions that read the secret.
 6. Track OpenAI's deprecation notices and the dates above in the factory ledger.
@@ -112,8 +127,10 @@ Drafter's understanding **[lawyer to confirm]**:
   endpoints: content is not stored at rest for abuse monitoring. It requires an
   application to OpenAI and approval; it is not a setting Amani can turn on in
   code. Some features (for example stored responses, files, or certain tools)
-  are not eligible. Chat Completions without `store: true` is the pattern Amani
-  uses; none of the four calls sets `store`.
+  are not eligible. All four calls send `store: false`. OpenAI says Chat
+  Completions are stored by default for new accounts, so whether calls made
+  before that setting was deployed were stored depends on the account
+  **[lawyer to confirm]**.
 - OpenAI offers a Data Processing Addendum and, for eligible customers, a
   Business Associate Agreement. Amani is likely not a HIPAA covered entity, so a
   BAA may not be needed, but the DPA should be signed.
