@@ -9,6 +9,8 @@ export default defineConfig({
   ...base,
   outputDir: fileURLToPath(new URL('../../test-results', import.meta.url)),
   reporter: [['list'], ['html', { open: 'never', outputFolder: fileURLToPath(new URL('../../playwright-report', import.meta.url)) }]],
+  // No whole-test retry (PR #151, review F008): a failed first attempt fails the job.
+  retries: 0,
   testDir: '.',
   testMatch: '**/fresh-user.spec.ts',
   timeout: 300_000,

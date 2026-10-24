@@ -14,6 +14,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // The retry only keeps a trace of the first failure. A test that fails once and
+  // passes on retry still fails the CI run (review F102).
+  failOnFlakyTests: !!process.env.CI,
   workers: process.env.CI ? 2 : undefined,
   timeout: 30_000,
   expect: { timeout: 10_000 },

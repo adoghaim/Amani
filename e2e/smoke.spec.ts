@@ -26,7 +26,7 @@ test.describe('synthetic authenticated session', () => {
 
   test('restores the fixture session and retains it across reload @quarantine', async ({ page }) => {
     // Quarantined by default: a flaky application redirect race affects all browsers.
-    // specs/BACKLOG-1.0.7.md item 11. Both hypotheses remain unproven:
+    // Tracked as E2E-REDIRECT-RACE in factory/BACKLOG.md (owner: Mohammed). Both hypotheses remain unproven:
     // App.tsx:64 reads window.location.search outside React Router awareness,
     // or OnboardingFlow.tsx:57 navigate('/app') wins a race.
     // Opt in: E2E_QUARANTINE=1 npm run test:e2e
