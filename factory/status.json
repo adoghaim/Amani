@@ -2835,14 +2835,17 @@
         "F108"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-deps-toolchain",
-      "pr": null,
+      "pr": "#173",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2853,10 +2856,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track deps-toolchain; findings F053, F107, F062, F108. Not started."
+        "pdfjs-dist is now 6.4.299 (patched for GHSA-hq66-cqwq-w95j) on the legacy build, with a 45 s / 120 s extraction deadline, the legacy worker lowered to the build target with its ES export and import.meta kept, install-if-missing polyfills in both the page and the worker realm, and the dead isEvalSupported option removed (F053, F062, F108; F107 closed together with RV-DP2's zod removal); blind verifier PASS_WITH_NOTES at 41b8720 on 2026-10-24 after three FAIL rounds, built chunk and worker extract and render with 19 APIs deleted in Chromium, WebKit and Firefox, no real iOS or Android device run.",
+        "Gates at d5b2f32 (run locally): lint, typecheck, full test (3,394), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-DP2",
@@ -2874,14 +2878,17 @@
       "depends_on": [
         "RV-DP1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-deps-toolchain",
-      "pr": null,
+      "pr": "#173",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2892,10 +2899,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track deps-toolchain; findings F091, F092, F106, F055, F086, F110. Not started."
+        "zod and @types/react-router-dom are removed, esbuild and js-yaml 4.3.2 are declared exact, axe-core is aligned to 4.13.0, playwright is pinned to 1.64.0, and .nvmrc 22.22.2 plus engines.node ^22.13.0 || ^24.0.0 are added, so npm audit --omit=dev reports 0 vulnerabilities (F091, F092, F106, F055, F086, F110); blind verifier PASS_WITH_NOTES at b4f1fdd on 2026-10-24, its three notes fixed in 1f7f5fb, fresh blind verifier PASS_WITH_NOTES at 1f7f5fb on 2026-10-24.",
+        "Gates at d5b2f32 (run locally): lint, typecheck, full test (3,394), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-CI1",
