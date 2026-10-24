@@ -36,7 +36,8 @@ describe('BiomarkerCard — lab range and Amani context band are separate (invar
   // so a value in another unit shows only her lab's interval, never a band.
   it.each([
     ['ldl_cholesterol', 4.9, 'mmol/L', 0, 3, '0–3 mmol/L'],
-    ['tsh', 2.1, 'uIU/mL', 0.45, 4.5, '0.45–4.5 uIU/mL'],
+    ['fasting_glucose', 5.2, 'mmol/L', 3.9, 5.5, '3.9–5.5 mmol/L'],
+    ['calcium', 4.8, 'mEq/L', 4.3, 5.3, '4.3–5.3 mEq/L'],
   ] as const)('%s %s %s: no Amani band, only the lab range', (name, value, unit, labRefMin, labRefMax, interval) => {
     const text = render({ name, value, unit, labRefMin, labRefMax, cyclePhase: null });
     expect(labRow()).toBe(interval);
@@ -44,6 +45,16 @@ describe('BiomarkerCard — lab range and Amani context band are separate (invar
     expect(host.querySelector('[role="note"]')).toBeNull();
     expect(text).toContain('No Amani band');
     expect(text).not.toMatch(/Within Amani band|Outside Amani band/);
+  });
+
+  // Review-2 (owner, 2026-10-23): uIU/mL is a catalog-recorded 1:1 equivalent of
+  // TSH's catalog unit mIU/L, so the card shows the same band numbers as for
+  // mIU/L, written in the unit her lab printed.
+  it('TSH printed in uIU/mL shows the Amani band, as in mIU/L', () => {
+    render({ name: 'tsh', value: 2.1, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5, cyclePhase: null });
+    expect(labRow()).toBe('0.45–4.5 uIU/mL');
+    expect(amaniRow()?.textContent).toBe('Amani context band:');
+    expect(amaniRow()?.nextElementSibling?.textContent).toBe('1–2.5 uIU/mL · Not yet reviewed');
   });
 
   it('never presents the catalog lab_reference row as the patient\'s lab range', () => {

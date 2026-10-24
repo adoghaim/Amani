@@ -18,6 +18,14 @@ export function projectEntries(catalog) {
   });
 }
 
+// Review-2 runtime projection: the owner-approved 1:1 unit identities, keyed
+// like the legacy dictionary. The value is used unchanged; no factor is applied.
+export function projectUnitEquivalences(catalog) {
+  validateCatalog(catalog);
+  const keys = new Map(catalog.analytes.map(a => [a.slug, a.legacy_key ?? a.slug]));
+  return catalog.unit_equivalences.map(e => ({ key: keys.get(e.slug), unit: e.unit, canonicalUnit: e.canonical_unit }));
+}
+
 // V2-03 runtime projection: review state and context modifiers for every
 // shipping band, keyed like the legacy dictionary. Values stay in
 // projectEntries so a band's endpoints have exactly one client source.

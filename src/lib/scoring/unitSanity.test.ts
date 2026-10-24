@@ -86,16 +86,21 @@ describe('F011 — a value in another unit gets no Amani band', () => {
   });
 
   it.each([
-    ['tsh', 2, 'uIU/mL'],
-    ['sodium', 140, 'mmol/L'],
     ['neutrophils_absolute', 3, 'K/uL'],
     ['egfr', 95, 'mL/min'],
     ['ldl_cholesterol', 160, null],
     ['ldl_cholesterol', 160, ''],
-    // Factor-1 pairs that are different units: not joined without clinical sign-off.
-    ['potassium', 4.2, 'mmol/L'],
-    ['alt', 20, 'IU/L'],
-    ['ast', 22, 'IU/L'],
+    // Equivalences the catalog does not record (review-2): each is scoped to the
+    // analytes the owner approved, never a global rule for the unit pair.
+    ['calcium', 4.8, 'mEq/L'],
+    ['magnesium', 1.7, 'mEq/L'],
+    ['calcium', 2.4, 'mmol/L'],
+    ['ggt', 30, 'IU/L'],
+    ['tsh', 2, 'mIU/mL'],
+    ['sodium', 140, 'IU/L'],
+    ['alt', 20, 'mmol/L'],
+    ['sodium', 140, 'mmol/mol'],
+    ['sodium', 140, 'furlongs/L'],
     // Notation rules join only notations of one unit, never units a factor apart.
     ['wbc', 6000, 'cells/uL'],
     ['wbc', 6, '10^9/L'],
@@ -105,6 +110,36 @@ describe('F011 — a value in another unit gets no Amani band', () => {
     ['egfr', 95, 'mL/min/1.7'],
   ] as const)('%s %s in %j is not the catalog unit; no conversion is approved, so no band', (key, value, unit) => {
     expect(assessAmaniContext(key, value, NO_CONTEXT, unit)).toEqual({ kind: 'unavailable' });
+  });
+
+  // Review-2, owner decision 2026-10-23 ("Approve the equivalences"): the catalog
+  // records these as 1:1 identities of each analyte's catalog unit (monovalent
+  // ions: 1 mmol/L = 1 mEq/L; 1 µIU/mL = 1 mIU/L; 1 IU/L = 1 U/L), so a value
+  // printed in one is placed exactly as the same number in the catalog unit.
+  it.each([
+    ['sodium', 140, 'mmol/L', 'mEq/L'],
+    ['potassium', 4.2, 'mmol/L', 'mEq/L'],
+    ['potassium', 6.1, 'mmol/L', 'mEq/L'],
+    ['chloride', 102, 'mmol/L', 'mEq/L'],
+    ['co2', 24, 'mmol/L', 'mEq/L'],
+    ['co2', 24, 'MMOL/L', 'mEq/L'],
+    ['tsh', 2.1, 'uIU/mL', 'mIU/L'],
+    ['tsh', 2.1, 'µIU/mL', 'mIU/L'],
+    ['tsh', 2.1, 'μIU/mL', 'mIU/L'],
+    ['tsh', 6, 'uIU/mL', 'mIU/L'],
+    ['alt', 25, 'IU/L', 'U/L'],
+    ['ast', 22, 'IU/L', 'U/L'],
+    ['alkaline_phosphatase', 70, 'IU/L', 'U/L'],
+  ] as const)('%s %s %s is placed exactly as in %s', (key, value, unit, catalogUnit) => {
+    expect(getEntry(key)!.defaultUnit).toBe(catalogUnit);
+    const asCatalog = assessAmaniContext(key, value, NO_CONTEXT, catalogUnit);
+    expect(asCatalog.kind).toBe('scored');
+    expect(assessAmaniContext(key, value, NO_CONTEXT, unit)).toEqual(asCatalog);
+    expect(markerBandPlacement(key, value, null, unit)).toBe(markerBandPlacement(key, value, null, catalogUnit));
+    expect(computeAmaniStatus(key, value, null, null, unit)).toBe(computeAmaniStatus(key, value, null, null, catalogUnit));
+    expect(scoreBiomarker(key, value, unit, null, null, null)).toEqual(
+      { ...scoreBiomarker(key, value, catalogUnit, null, null, null), unit },
+    );
   });
 
   it('an analyte the catalog writes without a unit is still scored without one', () => {

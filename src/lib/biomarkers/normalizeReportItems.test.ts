@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeReportItems, reportItemDisplayName, sameUnit } from './normalizeReportItems';
+import { isCatalogUnit, normalizeReportItems, reportItemDisplayName, sameUnit } from './normalizeReportItems';
 import { getEntry } from './dictionary';
+import { UNIT_EQUIVALENCES } from './rangeContext.generated';
 import { parseAllReportItemsWithDebug } from '../../utils/parser/pipeline';
 import { BIOMARKER_PATTERNS } from '../../utils/parser/patterns';
 import type { ReportItem } from '../../utils/parser/types';
@@ -50,7 +51,10 @@ describe('normalizeReportItems — unit sanity', () => {
     ['ldl_cholesterol', 4.9, 'mmol/L'],
     ['fasting_glucose', 5.2, 'mmol/L'],
     ['creatinine', 80, 'µmol/L'],
-    ['tsh', 2, 'uIU/mL'],
+    ['calcium', 4.8, 'mEq/L'],
+    ['magnesium', 1.7, 'mEq/L'],
+    ['ggt', 30, 'IU/L'],
+    ['sodium', 140, 'furlongs/L'],
     ['ldl_cholesterol', 160, null],
   ] as const)('%s %s in %j is partial and not core', (slug, value, unit) => {
     const [n] = normalizeReportItems([item(slug, value, unit)]);
@@ -132,15 +136,80 @@ describe('normalizeReportItems — unit sanity', () => {
     expect(computeAmaniStatus('egfr', 95, null, null, egfr?.unit)).toBe('unknown');
   });
 
+  // Review-2, owner decision 2026-10-23: the catalog records these 1:1 unit
+  // equivalences for exactly these analytes, so each result is a core,
+  // mapped row placed exactly as the same number in the catalog unit.
+  it.each([
+    ['sodium', 140, 'mmol/L'],
+    ['potassium', 4.2, 'mmol/L'],
+    ['chloride', 102, 'mmol/L'],
+    ['co2', 24, 'mmol/L'],
+    ['tsh', 2.1, 'uIU/mL'],
+    ['tsh', 2.1, 'µIU/mL'],
+    ['alt', 25, 'IU/L'],
+    ['ast', 22, 'IU/L'],
+    ['alkaline_phosphatase', 70, 'IU/L'],
+  ] as const)('%s %s %s is a core row, scored as in the catalog unit', (slug, value, unit) => {
+    const catalogUnit = getEntry(slug)!.defaultUnit;
+    const [n] = normalizeReportItems([item(slug, value, unit)]);
+    const [asCatalog] = normalizeReportItems([item(slug, value, catalogUnit)]);
+    expect(n).toMatchObject({ canonical_slug: slug, value_numeric: value, normalization_status: 'mapped', is_core_biomarker: true, unit_original: unit });
+    expect(asCatalog).toMatchObject({ normalization_status: 'mapped', is_core_biomarker: true });
+    const status = computeAmaniStatus(slug, value, null, null, n?.unit);
+    expect(status).not.toBe('unknown');
+    expect(status).toBe(computeAmaniStatus(slug, value, null, null, asCatalog?.unit));
+  });
+
+  it('the real parser on a US CMP, liver and thyroid panel keeps every result core and scored', () => {
+    const text = [
+      'Test Result Units Reference Interval',
+      'Sodium 140 mmol/L 134-144',
+      'Potassium 4.2 mmol/L 3.5-5.2',
+      'Chloride 102 mmol/L 96-106',
+      'Carbon Dioxide, Total 24 mmol/L 20-29',
+      'TSH 2.1 uIU/mL 0.450-4.500',
+      'ALT (SGPT) 25 IU/L 0-32',
+      'AST (SGOT) 22 IU/L 0-40',
+      'Alkaline Phosphatase 70 IU/L 44-121',
+    ].join('\n');
+    const items = normalizeReportItems(parseAllReportItemsWithDebug(text).items);
+    const slugs = ['sodium', 'potassium', 'chloride', 'co2', 'tsh', 'alt', 'ast', 'alkaline_phosphatase'];
+    expect(new Set(items.map(i => i.canonical_slug))).toEqual(new Set(slugs));
+    for (const i of items) {
+      const slug = i.canonical_slug as BiomarkerName;
+      expect(i, slug).toMatchObject({ is_core_biomarker: true, normalization_status: 'mapped' });
+      const status = computeAmaniStatus(slug, i.value_numeric!, null, null, i.unit);
+      expect(status, slug).not.toBe('unknown');
+      expect(status, slug).toBe(computeAmaniStatus(slug, i.value_numeric!, null, null, getEntry(slug)!.defaultUnit));
+    }
+  });
+
+  it('an approved equivalence holds only for its own analyte', () => {
+    expect(isCatalogUnit('sodium', 'mmol/L')).toBe(true);
+    expect(isCatalogUnit('calcium', 'mEq/L')).toBe(false);
+    expect(isCatalogUnit('magnesium', 'mEq/L')).toBe(false);
+    expect(isCatalogUnit('ggt', 'IU/L')).toBe(false);
+    expect(isCatalogUnit('fasting_glucose', 'mmol/L')).toBe(false);
+    expect(isCatalogUnit('alt', 'mmol/L')).toBe(false);
+    expect(isCatalogUnit('sodium', null)).toBe(false);
+    expect(isCatalogUnit('not_a_marker', 'mmol/L')).toBe(false);
+  });
+
   // Every parsed marker the parser stamps with its default unit (no unit
-  // printed) must be scorable in that unit. The only exceptions are the listed
-  // factor-1 pairs, which are different units the catalog has not joined.
-  it('the parser\'s default unit for every marker is its catalog unit, except unjoined factor-1 pairs', () => {
-    const AWAITING_SIGN_OFF = new Set(['sodium', 'potassium', 'chloride', 'co2']); // mmol/L vs mEq/L
+  // printed) must be scorable in that unit: its catalog unit, or a unit the
+  // catalog records as an approved equivalent for that marker (review-2).
+  it('the parser\'s default unit for every marker is its catalog unit or a recorded equivalent', () => {
     const mismatched = BIOMARKER_PATTERNS
-      .filter(p => !sameUnit(p.commonUnits[0] ?? null, getEntry(p.canonical as BiomarkerName)?.defaultUnit))
+      .filter(p => !isCatalogUnit(p.canonical, p.commonUnits[0] ?? null))
       .map(p => p.canonical);
-    expect(mismatched.filter(slug => !AWAITING_SIGN_OFF.has(slug))).toEqual([]);
-    expect(new Set(mismatched)).toEqual(AWAITING_SIGN_OFF);
+    expect(mismatched).toEqual([]);
+    // The parser defaults that differ in spelling from the catalog unit are
+    // exactly the ones the catalog records as an equivalence for that marker.
+    const viaEquivalence = BIOMARKER_PATTERNS
+      .filter(p => !sameUnit(p.commonUnits[0] ?? null, getEntry(p.canonical as BiomarkerName)?.defaultUnit));
+    expect(viaEquivalence.length).toBeGreaterThan(0);
+    for (const p of viaEquivalence) {
+      expect(UNIT_EQUIVALENCES.some(e => e.key === p.canonical && sameUnit(e.unit, p.commonUnits[0])), p.canonical).toBe(true);
+    }
   });
 });

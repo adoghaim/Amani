@@ -1,5 +1,6 @@
 import type { ReportItem } from '../../utils/parser/types';
 import { resolveAlias, getEntry } from './dictionary';
+import { UNIT_EQUIVALENCES } from './rangeContext.generated';
 import type { BiomarkerName } from '../../types';
 
 const UNIT_ALIASES: Record<string, string> = {
@@ -64,10 +65,26 @@ function unitSpelling(raw: string | null | undefined): string {
  * x10E3/uL, 10^3/uL, thou/uL and K/uL; x10E6/uL and M/uL; mm/h and mm/hr).
  * Different units never match, however they relate (mmol/L and mg/dL, uIU/mL
  * and mIU/L, mmol/L and mEq/L, IU/L and U/L): the catalog approves no unit
- * conversions (review F011, PK-05-B V2-05-03).
+ * conversions (review F011, PK-05-B V2-05-03). The few 1:1 identities the
+ * catalog does record hold per analyte only: see isCatalogUnit.
  */
 export function sameUnit(a: string | null | undefined, b: string | null | undefined): boolean {
   return unitSpelling(a) === unitSpelling(b);
+}
+
+/**
+ * Whether `unit` is the catalog unit of the analyte `key`: the same unit
+ * (sameUnit), or a unit the catalog records as an owner-approved 1:1
+ * equivalent for exactly this analyte (catalog unit_equivalences, review-2:
+ * mmol/L for sodium, potassium, chloride and CO2; uIU/mL for TSH; IU/L for
+ * ALT, AST and alkaline phosphatase). A value in such a unit is used unchanged.
+ * Every other unit of every analyte fails closed.
+ */
+export function isCatalogUnit(key: string, unit: string | null | undefined): boolean {
+  const entry = getEntry(key as BiomarkerName);
+  if (!entry) return false;
+  return sameUnit(unit, entry.defaultUnit) || UNIT_EQUIVALENCES.some(e =>
+    e.key === entry.key && sameUnit(e.canonicalUnit, entry.defaultUnit) && sameUnit(e.unit, unit));
 }
 
 export interface NormalizedReportItem extends ReportItem {
@@ -121,7 +138,8 @@ export function normalizeReportItems(items: ReportItem[]): NormalizedReportItem[
         unitNorm.toLowerCase() === entry.defaultUnit.toLowerCase();
       // Amani's bands are in the catalog unit and no conversion is approved: an
       // item in another unit keeps its lab interval but is not scored (F011).
-      const catalogUnit = sameUnit(unitNorm, entry.defaultUnit);
+      // A catalog-recorded 1:1 equivalent of the catalog unit is that unit (review-2).
+      const catalogUnit = isCatalogUnit(entry.key, unitNorm);
 
       return {
         ...item,

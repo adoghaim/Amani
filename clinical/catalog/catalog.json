@@ -12588,5 +12588,111 @@
       "specimen_basis": "UNKNOWN: empty unit, null numeric endpoints and absent extraction identity do not establish a specimen. Obtain the original ANA method and reporting sheet."
     }
   ],
-  "identity_only": []
+  "identity_only": [],
+  "unit_equivalences": [
+    {
+      "slug": "sodium",
+      "unit": "mmol/L",
+      "canonical_unit": "mEq/L",
+      "factor": 1,
+      "basis": "Definitional unit identity: for a monovalent ion (charge 1) one milliequivalent is one millimole, so 1 mmol/L = 1 mEq/L. Holds only for monovalent ions; never for calcium, magnesium, phosphate or any other analyte.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "slug": "potassium",
+      "unit": "mmol/L",
+      "canonical_unit": "mEq/L",
+      "factor": 1,
+      "basis": "Definitional unit identity: for a monovalent ion (charge 1) one milliequivalent is one millimole, so 1 mmol/L = 1 mEq/L. Holds only for monovalent ions; never for calcium, magnesium, phosphate or any other analyte.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "slug": "chloride",
+      "unit": "mmol/L",
+      "canonical_unit": "mEq/L",
+      "factor": 1,
+      "basis": "Definitional unit identity: for a monovalent ion (charge 1) one milliequivalent is one millimole, so 1 mmol/L = 1 mEq/L. Holds only for monovalent ions; never for calcium, magnesium, phosphate or any other analyte.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "slug": "co2",
+      "unit": "mmol/L",
+      "canonical_unit": "mEq/L",
+      "factor": 1,
+      "basis": "Definitional unit identity: for a monovalent ion (charge 1) one milliequivalent is one millimole, so 1 mmol/L = 1 mEq/L. Holds only for monovalent ions; never for calcium, magnesium, phosphate or any other analyte. CO2 (bicarbonate) is reported as the monovalent bicarbonate ion.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "slug": "tsh",
+      "unit": "uIU/mL",
+      "canonical_unit": "mIU/L",
+      "factor": 1,
+      "basis": "Definitional unit identity of SI prefixes: 1 µIU/mL (also spelled uIU/mL) = 10^-6 IU per 10^-3 L = 10^-3 IU per L = 1 mIU/L.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "slug": "alt",
+      "unit": "IU/L",
+      "canonical_unit": "U/L",
+      "factor": 1,
+      "basis": "Definitional unit identity: IU/L and U/L both name the enzyme unit (U, the international unit of enzyme activity) per litre, so 1 IU/L = 1 U/L. Approved for ALT, AST and alkaline phosphatase only.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "slug": "ast",
+      "unit": "IU/L",
+      "canonical_unit": "U/L",
+      "factor": 1,
+      "basis": "Definitional unit identity: IU/L and U/L both name the enzyme unit (U, the international unit of enzyme activity) per litre, so 1 IU/L = 1 U/L. Approved for ALT, AST and alkaline phosphatase only.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "slug": "alkaline_phosphatase",
+      "unit": "IU/L",
+      "canonical_unit": "U/L",
+      "factor": 1,
+      "basis": "Definitional unit identity: IU/L and U/L both name the enzyme unit (U, the international unit of enzyme activity) per litre, so 1 IU/L = 1 U/L. Approved for ALT, AST and alkaline phosphatase only.",
+      "approved_by": "owner",
+      "approved_at": "2026-10-23",
+      "decision": "Approve the equivalences (Recommended)",
+      "decision_ref": "Review-2 of work packet RV-CS1 (review findings F011, F013), clinical-scoring track",
+      "reviewer": null,
+      "reviewed_at": null
+    }
+  ]
 }
