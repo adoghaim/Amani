@@ -28,6 +28,7 @@ import {
 } from '../_shared/entitlement.ts';
 import {
   IAP_ROW_COLUMNS,
+  iapInsertError,
   normalizeSubscriberPayload,
   persistIapSubscriptions,
   verificationFailure,
@@ -163,7 +164,8 @@ const iapStore: IapStore = {
         : {}),
     });
 
-    if (error) throw new Error(`iap_subscriptions insert failed: ${error.message}`);
+    // A lost unique-key race becomes the typed error the policy re-runs on.
+    if (error) throw iapInsertError(error);
   },
 
   async update(id: string, patch: IapRowPatch, orderAt?: string) {

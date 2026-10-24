@@ -547,11 +547,40 @@ export function normalizeSubscriberPayload(
 export const IAP_ROW_COLUMNS = 'id, user_id, platform, product_id, store_subscription_id, status, expires_at, environment, last_event_at, last_event_id';
 
 
+/** Postgres unique_violation, as PostgREST reports it in `error.code`. */
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * An insert lost a race for a unique key: another writer created the row
+ * between the policy's reads and its insert. The message is fixed on purpose.
+ * PostgREST's message and details quote the key
+ * (`Key (platform, store_subscription_id)=(...)`), and this error can reach a
+ * log line and, from the webhook, a response body.
+ */
+export class IapUniqueViolationError extends Error {
+  constructor() {
+    super("iap_subscriptions insert lost a unique-key race");
+    this.name = "IapUniqueViolationError";
+  }
+}
+
+/**
+ * What an adapter's `insert` throws for a PostgREST error: the typed error for
+ * a unique violation, which the write policy re-runs on, and today's plain
+ * error for anything else.
+ */
+export function iapInsertError(error: { code?: string; message: string }): Error {
+  if (error.code === UNIQUE_VIOLATION) return new IapUniqueViolationError();
+  return new Error(`iap_subscriptions insert failed: ${error.message}`);
+}
+
 /**
  * The four lookups/writes the policy needs. Errors are thrown by the
  * implementation (unlike the PostgREST-shaped `StoreResult` in
  * `stripe-idempotency.ts`) because there is no error here we would want to
- * continue past — a failed read must not become an accidental insert.
+ * continue past — a failed read must not become an accidental insert. The one
+ * the policy acts on is an insert's IapUniqueViolationError: it re-runs its
+ * decision once, which then reads the row that won.
  */
 export interface IapStore {
   /** Row holding this exact store subscription, whoever owns it. */
@@ -572,6 +601,7 @@ export interface IapStore {
     platform: IapPlatform,
     productId: string,
   ): Promise<IapSubscriptionRow | null>;
+  /** Throws iapInsertError's result on failure. */
   insert(subscription: NormalizedIapSubscription): Promise<void>;
   /**
    * Conditional on the write's order time, `orderAt ?? patch.last_event_at`,
@@ -629,10 +659,23 @@ export type PersistOutcome =
  * The honest cost: someone who genuinely changed accounts cannot self-serve.
  * That is a support ticket, and support tickets are recoverable — a
  * subscription-sharing hole in a paid product is not.
+ *
+ * An insert that loses a unique-key race runs the whole decision once more
+ * (#74), so the row that won goes through the same ownership and ordering
+ * rules instead of turning the race into a 500.
  */
 export async function persistIapSubscription(
   store: IapStore,
   subscription: NormalizedIapSubscription,
+): Promise<PersistOutcome> {
+  return await decideAndWrite(store, subscription, true);
+}
+
+/** One pass of persistIapSubscription; `mayRerun` permits the single re-run. */
+async function decideAndWrite(
+  store: IapStore,
+  subscription: NormalizedIapSubscription,
+  mayRerun: boolean,
 ): Promise<PersistOutcome> {
   const patch: IapRowPatch = {
     product_id: subscription.productId,
@@ -735,7 +778,20 @@ export async function persistIapSubscription(
     return { action: "updated", id: byProduct.id, matchedBy: "user_product" };
   }
 
-  await store.insert(subscription);
+  try {
+    await store.insert(subscription);
+  } catch (error) {
+    /*
+      Another writer inserted this key between our reads and our insert: the
+      webhook and verify racing one first purchase. The re-run reads that row,
+      so a racer on another account is refused and a newer one is stale. A
+      second loss, and any other error, propagates: at most two inserts.
+    */
+    if (mayRerun && error instanceof IapUniqueViolationError) {
+      return await decideAndWrite(store, subscription, false);
+    }
+    throw error;
+  }
   return { action: "inserted" };
 }
 
