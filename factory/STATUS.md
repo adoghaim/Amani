@@ -84,7 +84,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-WP2 Offline is not empty; error boundaries reset | RV | 1 | in-progress | RV-WP1 | - |
 | RV-WP3 Accessible overlays, safe areas, Android back closes sheets first | RV | 1 | todo | RV-WP2 | - |
 | RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | todo | - | - |
-| RV-DL1 Device lock hardening | RV | 1 | in-progress | - | - |
+| RV-DL1 Device lock hardening | RV | 1 | review | - | [#163](https://github.com/adoghaim/Amani/pull/163) |
 | RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | review | - | [#171](https://github.com/adoghaim/Amani/pull/171) |
 | RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | todo | - | - |
 | RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | review | - | [#173](https://github.com/adoghaim/Amani/pull/173) |
@@ -116,7 +116,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-BU1 | billing-ui | review | `factory/rv-billing-ui` @ `c62caf4` | PR #157: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 | RV-WP1 | web-platform | review | `factory/rv-web-platform` @ `dec8bfe` | Built. Security and correctness reviews: recommend merge. |
 | RV-WP2 | web-platform | in-progress | `factory/rv-wip-wp2` @ `979728b` | Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d). |
-| RV-DL1 | device-lock | in-progress | `factory/rv-wip-dl1` @ `e2d2c2e` | Interrupted mid-build: one WIP commit; needs completion, gates and verification. |
+| RV-DL1 | device-lock | review | `factory/rv-wip-dl1` @ `8a3ad77` | PR #163: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-CI1 | ci-workflows | review | `factory/rv-ci-workflows` @ `fc21c1d` | PR #160: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 | RV-CI2 | ci-workflows | review | `factory/rv-ci-workflows` @ `fc21c1d` | PR #160: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 | RV-HY1 | hygiene | review | `factory/rv-hygiene` @ `2c1d777` | PR #158: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
