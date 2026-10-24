@@ -296,8 +296,22 @@ function candidatesIn(
  * when her result (`result`) is printed in the first and the first is not
  * marked (E1); the first when only it is marked (E2). Otherwise null, and the
  * line binds as before (E3). The fallback passes no name end and never gets here.
+ *
+ * E1 and E2 take her result from the label line. So the line also binds as
+ * before when that result would be a ">" bound below the "<" bound read as her
+ * reference, because together they print one two-sided reference ("Vitamin D,
+ * 25-OH, Total >=30 <100"), and when her own lines under it (`below`) print her
+ * result ("12 ng/mL"). Read by position, such a line showed ">=30" with no
+ * review where the base asked for one (PX1 invariant: review is only ever added).
  */
-function referenceOfTwo(line: string, intervals: Interval[], nameEnd: number, result: { start: number } | null): Interval | null {
+function referenceOfTwo(
+  line: string,
+  intervals: Interval[],
+  nameEnd: number,
+  result: { start: number } | null,
+  below: readonly string[],
+  adapter?: SourceAdapter,
+): Interval | null {
   const [first, second] = intervals;
   if (nameEnd <= 0 || result === null || intervals.length !== 2 || first === undefined || second === undefined) return null;
   const marked = (iv: Interval, from: number) => {
@@ -305,23 +319,51 @@ function referenceOfTwo(line: string, intervals: Interval[], nameEnd: number, re
     return /[([]\s*$/.test(before) || startsWithReferenceWord(before.replace(/[[\]]/g, ' '));
   };
   const firstMarked = marked(first, nameEnd);
-  if (!firstMarked && result.start >= first.start && result.start < first.end) return second;
-  if (firstMarked && !marked(second, first.end)) return first;
-  return null;
+  const read = !firstMarked && result.start >= first.start && result.start < first.end ? { hers: first, reference: second }
+    : firstMarked && !marked(second, first.end) ? { hers: second, reference: first }
+    : null;
+  if (read === null || boundsOneInterval(read.hers, read.reference) || printsHerResult(below, adapter)) return null;
+  return read.reference;
+}
+
+/** A ">" bound below a "<" bound: "Vitamin D >=30 <100" prints one two-sided reference. */
+function boundsOneInterval(lower: Interval, upper: Interval): boolean {
+  const lo = lower.range.comparator;
+  const hi = upper.range.comparator;
+  return lo !== undefined && hi !== undefined && lo.operator.startsWith('>') && hi.operator.startsWith('<') && lo.value < hi.value;
+}
+
+/**
+ * Her own lines under the label line (markerContinuationLines) print a number
+ * that no interval on its line accounts for ("12 ng/mL", "Result: 12"): her
+ * result. Unit-only and flag-only lines, reference lines and history lines
+ * print none.
+ */
+function printsHerResult(lines: readonly string[], adapter?: SourceAdapter): boolean {
+  return markerContinuationLines(lines, adapter).some(line => {
+    if (isUnitOrFlagOnly(line)) return false;
+    const intervals = findIntervals(line, adapter);
+    for (let token = firstNumericToken(line); token !== null; token = firstNumericToken(line, token.end)) {
+      const at = token.start;
+      if (!intervals.some(iv => at >= iv.start && at < iv.end)) return true;
+    }
+    return false;
+  });
 }
 
 /**
  * Intervals on the label line. As before, a min-max pair outranks a comparator
  * there, and without one the single comparator detectComparatorRange picks is
  * the line's interval (or the reference of two, referenceOfTwo); a comparator
- * labelled by reference words ("Postmenopausal <=31") counts as well.
+ * labelled by reference words ("Postmenopausal <=31") counts as well. `below`
+ * are the lines under it.
  */
-function labelLineCandidates(line: string, adapter?: SourceAdapter, nameEnd = 0): Candidate[] {
+function labelLineCandidates(line: string, adapter?: SourceAdapter, nameEnd = 0, below: readonly string[] = []): Candidate[] {
   const intervals = findIntervals(line, adapter);
   if (intervals.length === 0) return [];
   const hasMinMax = intervals.some(iv => iv.range.min !== undefined);
   const result = firstNumericToken(line, nameEnd);
-  const reference = hasMinMax ? null : referenceOfTwo(line, intervals, nameEnd, result);
+  const reference = hasMinMax ? null : referenceOfTwo(line, intervals, nameEnd, result, below, adapter);
   const own = hasMinMax ? null : reference?.range.comparator ?? detectComparatorRange(line);
   const ownKey = own ? `${own.operator}${own.value}` : null;
   let ownTaken = false;
@@ -452,7 +494,7 @@ function decide(found: Candidate[]): RangeBinding {
 export function bindReferenceRange(lines: readonly string[], adapter?: SourceAdapter, nameEnd = 0): RangeBinding {
   const [labelLine, ...rest] = lines;
   if (labelLine === undefined) return { candidates: [] };
-  return decide([...labelLineCandidates(labelLine, adapter, nameEnd), ...continuationCandidates(rest, adapter)]);
+  return decide([...labelLineCandidates(labelLine, adapter, nameEnd, rest), ...continuationCandidates(rest, adapter)]);
 }
 
 /** Every number printed as part of an interval: never a result. */

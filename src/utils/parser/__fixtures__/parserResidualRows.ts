@@ -200,6 +200,52 @@ export const RESIDUAL_ROWS: readonly ResidualRow[] = [
     reads: ['>150', 150, 'ng/mL', false, '>=30', '>=', 30, 'mapped', null] },
   { rule: 'E3', id: 'ldl_two_reference_words', marker: 'ldl_cholesterol', text: BARE_QUEST + 'LDL-Cholesterol <100 Optimal <130 Near optimal mg/dL',
     reads: ['<100', 50, 'mg/dL', true, '<130', '<', 130, 'mapped', null] },
+  // Both comparators are reference text: a ">" bound below a "<" bound is one two-sided reference, and her
+  // result is printed under it or not at all. E read ">=30" or ">=60" as her result with no review, and
+  // her 12 stayed hidden; the line binds as at the base, with its review (PX1 invariant).
+  { rule: 'E3', id: 'vitd_two_sided_ref_result_under', marker: 'vitamin_d_25_oh', text: BARE_QUEST + 'Vitamin D, 25-OH, Total >=30 <100\n12 ng/mL',
+    reads: ['<100', 50, 'ng/mL', true, '>=30', '>=', 30, 'mapped', null] },
+  { rule: 'E3', id: 'vitd_two_sided_ref_result_under_generic', marker: 'vitamin_d_25_oh', text: BARE_GENERIC + 'Vitamin D, 25-OH, Total >=30 <100\n12 ng/mL',
+    reads: ['<100', 50, 'ng/mL', true, '>=30', '>=', 30, 'mapped', null] },
+  { rule: 'E3', id: 'vitd_ref_word_two_sided_ref_result_under', marker: 'vitamin_d_25_oh', text: BARE_QUEST + 'Vitamin D, 25-OH, Total Ref >=30 <100\n12 ng/mL',
+    reads: ['<100', 50, 'ng/mL', true, '>=30', '>=', 30, 'mapped', null] },
+  { rule: 'E3', id: 'vitd_unit_two_sided_ref_result_under', marker: 'vitamin_d_25_oh', text: BARE_QUEST + 'Vitamin D, 25-OH, Total ng/mL >=30 <100\n12',
+    reads: ['<100', 50, 'ng/mL', true, '>=30', '>=', 30, 'mapped', null] },
+  { rule: 'E3', id: 'hdl_two_sided_ref_result_under', marker: 'hdl_cholesterol', text: BARE_QUEST + 'HDL Cholesterol >=60 <100\n12 mg/dL',
+    reads: ['<100', 50, 'mg/dL', true, '>=60', '>=', 60, 'mapped', null] },
+  { rule: 'E3', id: 'vitd_two_sided_ref_alone', marker: 'vitamin_d_25_oh', text: BARE_QUEST + 'Vitamin D, 25-OH, Total >=30 <100',
+    reads: ['<100', 50, 'ng/mL', true, '>=30', '>=', 30, 'mapped', null] },
+  { rule: 'E3', id: 'vitd_or_two_sided_ref_alone', marker: 'vitamin_d_25_oh', text: BARE_QUEST + 'Vitamin D, 25-OH, Total > OR = 30 < OR = 100',
+    reads: ['< OR = 100', 50, 'ng/mL', true, '> OR = 30', '> OR =', 30, 'mapped', null] },
+  { rule: 'E3', id: 'hdl_two_sided_ref_unit_between', marker: 'hdl_cholesterol', text: BARE_QUEST + 'HDL Cholesterol >=60 mg/dL <100',
+    reads: ['<100', 50, 'mg/dL', true, '>=60', '>=', 60, 'mapped', null] },
+  // E2's order: the "<" bound printed first, after a reference word.
+  { rule: 'E3', id: 'hdl_ref_word_upper_bound_first', marker: 'hdl_cholesterol', text: BARE_QUEST + 'HDL Cholesterol Ref <100 >=60 mg/dL',
+    reads: ['<100', 50, 'mg/dL', true, '>=60', '>=', 60, 'mapped', null] },
+  // The base's reading, kept: it reads the 150 and not her 8 under the line, with no review either way (a later packet's).
+  { rule: 'E3', id: 'ferritin_strict_two_sided_ref_result_under', marker: 'ferritin', text: BARE_QUEST + 'Ferritin >15 <150\n8 ng/mL',
+    reads: ['150', 150, 'ng/mL', false, '>15', '>', 15, 'mapped', null] },
+  // Her own line under two same-way comparators prints her result: as at the base (E read ">=60"); her 45 is a later packet's.
+  { rule: 'E3', id: 'egfr_two_refs_result_under', marker: 'egfr', text: BARE_QUEST + 'eGFR >=60 >59\n45 mL/min/1.73m2',
+    reads: ['>59', 59, 'mL/min/1.73m2', false, '>=60', '>=', 60, 'mapped', null] },
+  { rule: 'E3', id: 'egfr_two_refs_result_line', marker: 'egfr', text: BARE_GENERIC + 'eGFR >=60 >59\nResult: 45 mL/min/1.73m2',
+    reads: ['>59', 59, 'mL/min/1.73m2', false, '>=60', '>=', 60, 'mapped', null] },
+  // E still reads her result from the label line when the lines under it print none of hers: a unit-only
+  // line, a flag-only line, a dated history line, a reference line, an unrecognised next row.
+  { rule: 'E1', id: 'egfr_ge_then_gt_unit_line_under', marker: 'egfr', text: LABCORP + 'eGFR If NonAfricn Am >=60 >59\nmL/min/1.73',
+    reads: ['>=60', 60, 'mL/min/1.73', false, '>59', '>', 59, 'mapped', null] },
+  { rule: 'E1', id: 'crp_le_then_lt_flag_line_under', marker: 'hs_crp', text: BARE_QUEST + 'hs-CRP <=0.2 <1.0 mg/L\nL',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '<1.0', '<', 1, 'mapped', null] },
+  { rule: 'E1', id: 'crp_le_then_lt_history_line_under', marker: 'hs_crp', text: BARE_QUEST + 'hs-CRP <=0.2 mg/L <1.0\n04/12/2026 0.3 mg/L',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '<1.0', '<', 1, 'mapped', null] },
+  // Two intervals for her, nothing bound, she reviews it; the base bound the line under it.
+  { rule: 'E1', id: 'tsh_lt_then_lt_range_line_under', marker: 'tsh', text: BARE_QUEST + 'TSH <0.01 L <4.5 mIU/L\nReference Range: 0.4-4.5',
+    reads: ['<0.01', 0.005, 'mIU/L', true, '<4.5 mIU/L; Reference Range: 0.4-4.5', null, null, 'needs_review', null] },
+  { rule: 'E1', id: 'crp_le_then_lt_unrecognised_row_under', marker: 'hs_crp', text: BARE_QUEST + 'hs-CRP <=0.2 mg/L <1.0\nFibrinogen 300 mg/dL 200-400',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '<1.0', '<', 1, 'mapped', null] },
+  // Her result is the "<" bound, read as below a limit, so she reviews it: E1 stands (the base read ">0.1", no review).
+  { rule: 'E1', id: 'crp_le_then_gt', marker: 'hs_crp', text: BARE_QUEST + 'hs-CRP <=0.2 mg/L >0.1',
+    reads: ['<=0.2', 0.1, 'mg/L', true, '>0.1', '>', 0.1, 'mapped', null] },
   // #176's row: the lone 45 is dropped as a chart axis, and the re-read reference was bound as her range.
   { rule: 'F-a', id: 'egfr_bracketed_ref_lone_result', marker: 'egfr', text: GENERIC + 'eGFR (>=60)\n45',
     reads: ['>=60', 60, 'mL/min/1.73m2', true, null, null, null, 'needs_review', null] },

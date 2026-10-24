@@ -32,7 +32,10 @@ import type { ReportItem } from './types';
      equivalents as the catalog unit.
   D: "≥ OR =", "≤ OR =", "≥=" and "≤=" annotate her number like the other
      inclusive spellings.
-  E: two comparators on her label line are read by position.
+  E: two comparators on her label line are read by position, unless a ">"
+     bound below a "<" bound prints one two-sided reference or her own lines
+     under it print her result: then it binds as at the base (E3), with its
+     review.
   F: a label-line token the rescue re-read is never also bound as her lab's
      range.
 */
