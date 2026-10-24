@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
-import { errorMessage } from "../_shared/errors.ts";
+import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi-scrub.ts";
+import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
@@ -432,6 +433,7 @@ CONFIDENCE:
 
     const userPrompt = `Extract ALL lab test results from this report. Include every item with a numeric result.\n\n${labText}\n\nReturn JSON: { "items": [...] }`;
 
+    const model = resolveOpenAiModel("extraction", (name) => Deno.env.get(name));
     const openaiResponse = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -441,13 +443,12 @@ CONFIDENCE:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          max_tokens: 4000,
-          temperature: 0.1,
+          ...chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }),
           response_format: { type: "json_object" }
         }),
       },
@@ -456,15 +457,17 @@ CONFIDENCE:
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData}`);
+      // F033: the body can echo report content, so it is scrubbed in the log and
+      // kept out of the thrown message (which reaches the client).
+      console.error("OpenAI API error:", openaiResponse.status, scrubServerText(errorData));
+      throw new Error(`OpenAI API error: status ${openaiResponse.status}`);
     }
 
     const openaiData = await openaiResponse.json();
     inBackground(costLedger.record({
       functionName: "extract-biomarkers",
       userId: user.id,
-      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-4o-mini",
+      model: typeof openaiData?.model === "string" ? openaiData.model : model,
       usage: openaiData?.usage,
     }));
     const content = openaiData.choices[0].message.content;
@@ -607,7 +610,7 @@ CONFIDENCE:
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error extracting biomarkers:", error);
+    console.error("Error extracting biomarkers:", errorType(error), scrubbedErrorMessage(error));
 
     if (isRateLimitExceeded(error)) {
       return new Response(
@@ -618,7 +621,7 @@ CONFIDENCE:
 
     inBackground(reporter.captureException(error, { stage: "extract" }));
     return new Response(
-      JSON.stringify({ error: errorMessage(error) }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

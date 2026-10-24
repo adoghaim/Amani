@@ -1,7 +1,9 @@
 import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
-import { errorMessage } from "../_shared/errors.ts";
+import { errorType, scrubbedErrorMessage } from "../_shared/phi-scrub.ts";
+import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
+import { enforceLabInsightsPolicy, labInsightsPolicyPrompt, MAX_PROMPT_INTERVENTIONS, promptInterventionLabel } from "../_shared/lab-insights-policy.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
@@ -231,7 +233,7 @@ Cycle context (if available; use only as possible context, not as an explanation
 - Current cycle phase/day: ${cycleContext.current.phase ?? 'unknown'} / ${cycleContext.current.day ?? 'unknown'}
 
 Tracked interventions active during this window:
-${interventions && interventions.length > 0 ? (interventions as InterventionRow[]).map((i) => `- ${i.title} (${i.category}) start ${i.start_date}${i.end_date ? `, end ${i.end_date}` : ''}`).join('\n') : 'None tracked'}
+${interventions && interventions.length > 0 ? (interventions as InterventionRow[]).slice(0, MAX_PROMPT_INTERVENTIONS).map((i) => `- ${promptInterventionLabel(i.title, i.category)} (${i.category}) start ${i.start_date}${i.end_date ? `, end ${i.end_date}` : ''}`).join('\n') : 'None tracked'}
 
 Please provide:
 1) A brief summary (2–4 sentences) that highlights the most meaningful changes and what they may imply generally.
@@ -252,7 +254,11 @@ Remember:
 - Use cautious, educational language.
 - Avoid diagnosis, treatment advice, or urgency language.
 - If cycle context is present, treat it as possible context only.
-- Keep explanations accessible and action-neutral ("consider discussing", "ask about").`;
+- Keep explanations accessible and action-neutral ("consider discussing", "ask about").
+
+${labInsightsPolicyPrompt()}`;
+
+    const model = resolveOpenAiModel("labInsights", (name) => Deno.env.get(name));
 
     const openaiResponse = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
@@ -263,7 +269,7 @@ Remember:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-5-mini",
+          model,
           messages: [
             {
               role: "system",
@@ -275,7 +281,9 @@ Remember:
               content: redactLabText(prompt).text,
             },
           ],
-          temperature: 0.7,
+          // gpt-5-mini is a reasoning model: it rejects temperature (F131), and its
+          // limit is max_completion_tokens. The rules live with the model id.
+          ...chatCompletionParams(model, { maxOutputTokens: 3000, temperature: 0.7 }),
           response_format: { type: "json_object" },
         }),
       },
@@ -283,14 +291,14 @@ Remember:
     );
 
     if (!openaiResponse.ok) {
-      throw new Error(`OpenAI API error: ${openaiResponse.statusText}`);
+      throw new Error(`OpenAI API error: status ${openaiResponse.status}`);
     }
 
     const openaiData = await openaiResponse.json();
     inBackground(costLedger.record({
       functionName: "lab-insights",
       userId,
-      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-5-mini",
+      model: typeof openaiData?.model === "string" ? openaiData.model : model,
       usage: openaiData?.usage,
     }));
 
@@ -304,7 +312,10 @@ Remember:
       that unguarded call and cannot be updated, so the guarantee has to be made
       here.
     */
-    const insights = parseLabInsightsCompletion(openaiData);
+    const parsedInsights = parseLabInsightsCompletion(openaiData);
+    // F017: the nutrient policy over every returned string. A violating summary
+    // refuses the answer (null), exactly like an unusable completion.
+    const insights = parsedInsights ? enforceLabInsightsPolicy(parsedInsights) : null;
     if (!insights) {
       console.error("[lab-insights] Unusable model response");
       return new Response(
@@ -328,7 +339,8 @@ Remember:
       }
     );
   } catch (error: unknown) {
-    console.error("Error generating insights:", error);
+    // F033: details go to the log scrubbed; the client gets a fixed message.
+    console.error("Error generating insights:", errorType(error), scrubbedErrorMessage(error));
     if (isRateLimitExceeded(error)) {
       return new Response(
         JSON.stringify({ error: "Rate limit reached. Please try again tomorrow." }),
@@ -336,10 +348,9 @@ Remember:
       );
     }
     inBackground(reporter.captureException(error, { stage: "insights" }));
-    const message = errorMessage(error, "Failed to generate insights");
     return new Response(
       JSON.stringify({
-        error: message,
+        error: "Failed to generate insights",
       }),
       {
         status: 500,
