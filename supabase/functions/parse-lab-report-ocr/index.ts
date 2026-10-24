@@ -37,7 +37,7 @@ export interface CanonicalAnalyte {
   affects_recommendations: boolean;
 }
 
-type SupabaseClient = ReturnType<typeof createClient>;
+type SupabaseClient = ReturnType<typeof createClient<any>>;
 type RawExtractedItem = Record<string, unknown> & {
   raw_name?: string;
   name?: string;

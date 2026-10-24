@@ -40,7 +40,7 @@ interface CanonicalAnalyte {
   affects_recommendations: boolean;
 }
 
-type SupabaseClient = ReturnType<typeof createClient>;
+type SupabaseClient = ReturnType<typeof createClient<any>>;
 type RawExtractedItem = Record<string, unknown> & {
   raw_name?: string;
   name?: string;
@@ -528,7 +528,7 @@ CONFIDENCE:
         return {
           raw_name: rawName,
           raw_value_text: item.value_text ?? null,
-          value_numeric: typeof item.value_numeric === 'number' ? item.value_numeric : parseFloat(item.value_numeric),
+          value_numeric: typeof item.value_numeric === 'number' ? item.value_numeric : parseFloat(String(item.value_numeric)),
           unit: item.unit ?? null,
           raw_reference_range: item.raw_reference_range ?? null,
           normalized_min: item.normalized_reference_min ?? null,
