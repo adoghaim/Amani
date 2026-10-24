@@ -20,6 +20,8 @@ const fixture = vi.hoisted(() => ({
   inserts: [] as { table: string; values: unknown }[],
   // Cycle facts printed on the lab report, as the OCR function returns them.
   ocrMetadata: undefined as { cycle_day?: number | null; cycle_phase?: string | null } | undefined,
+  ocrItems: null as Record<string, unknown>[] | null,
+  generationBodies: [] as Record<string, unknown>[],
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -55,8 +57,11 @@ vi.mock('../lib/supabase', () => {
     from: query,
     auth: { getSession: async () => ({ data: { session: { access_token: 'synthetic-token' } } }) },
     storage: { from: () => ({ upload: async () => ({ error: null }) }) },
-    functions: { invoke: async (name: string) => (name === 'parse-lab-report-ocr'
-      ? { data: { items: ocrItems, metadata: fixture.ocrMetadata }, error: null } : { data: null, error: null }) },
+    functions: { invoke: async (name: string, options: { body: Record<string, unknown> }) => {
+      if (name === 'parse-lab-report-ocr') return { data: { items: fixture.ocrItems ?? ocrItems, metadata: fixture.ocrMetadata }, error: null };
+      if (name === 'generate-interpretation') fixture.generationBodies.push(options.body);
+      return { data: null, error: null };
+    } },
   } };
 });
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user }) }));
@@ -98,6 +103,8 @@ beforeEach(() => {
   fixture.periodLogs = [];
   fixture.inserts = [];
   fixture.ocrMetadata = undefined;
+  fixture.ocrItems = null;
+  fixture.generationBodies = [];
   mount();
 });
 afterEach(async () => {
@@ -170,6 +177,22 @@ async function save() {
     estradiolFlag: biomarkers?.find(b => b['name'] === 'estradiol')?.['flagged'],
   };
 }
+
+it('October smoke: first generation pins the same Vitamin D primary as the report page', async () => {
+  fixture.ocrItems = [
+    ['ferritin', 'Ferritin', 18, 'ng/mL', 16, 154],
+    ['tsh', 'TSH', 2.85, 'uIU/mL', 0.4, 4.5],
+    ['vitamin_d_25_oh', 'Vitamin D', 24, 'ng/mL', 30, 100],
+  ].map(([slug, name, value, unit, min, max]) => ({
+    raw_name: name, canonical_slug: slug, value_numeric: value, value_text: String(value), unit,
+    raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
+    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
+    needs_review: false, source_snippet: `${name} ${value}`, source_format: 'ocr', review_status: 'pending',
+  }));
+  await openCycleStep();
+  await save();
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: 'vitamin_d_25_oh' }]);
+});
 
 /*
   Acceptance table (owner decision D13): days 1-40 x typical cycle lengths

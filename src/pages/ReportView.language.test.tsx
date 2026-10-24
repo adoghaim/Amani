@@ -209,13 +209,15 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
 
     expect(card?.querySelector('[data-language-source="patient_lab_interval"]')?.textContent)
       .toBe(value > 60 ? "Above your lab's range" : "Within your lab's range");
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toContain(outside ? "outside Amani's current comparison band" : "All scored values are within Amani's context bands");
+    if (value > 60) {
+      expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent).toContain("above your lab's reference range");
+      expect(app.textContent).toContain('Focus areas');
+    } else {
+      expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
+        .toContain(outside ? "outside Amani's current comparison band" : "All scored values are within Amani's context bands");
+      if (!outside) expect(app.textContent).not.toContain('Focus areas');
+    }
     expect(app.textContent).toContain(outside ? '1 outside Amani band' : 'Scored markers within Amani bands');
-    const empty = "No scored marker on this report is outside Amani's comparison bands.";
-    expect((app.textContent ?? '').split(empty).length - 1).toBe(outside ? 0 : 1);
-    // ReportView intentionally does not mount FocusAreas when empty.
-    if (!outside) expect(app.textContent).not.toContain('Focus areas');
     if (!outside) {
       expect(app.textContent).not.toContain('Outside Amani band');
       expect(app.querySelectorAll('[data-language-category="comparison_band"][data-language-cue="attention"]').length).toBe(0);
@@ -230,11 +232,59 @@ describe('V2-03b Stage 2 — the whole report page speaks only policy language',
     await renderAndOpenAll();
     const primary = app.querySelector('[data-testid="primary-finding"]');
     expect(primary?.textContent).toContain('Primary finding');
-    expect(primary?.textContent).toContain("TSH is above the Amani band at 9 uIU/mL. Amani's context bands are still under review.");
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toMatch(/is outside Amani's current comparison band|are outside Amani's current comparison bands/);
+    expect(primary?.textContent).toContain("TSH is above your lab's reference range at 9 uIU/mL.");
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("TSH is above your lab's reference range");
     // No movement may be claimed without a prior report (a first-recorded placeholder is not a prior value).
     expect(app.textContent).not.toMatch(/since your prior report/);
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  // Owner ruling 2026-10-23: Ruling 7 is a true floor. A lab-only flag stays a
+  // visible neutral lab fact but never takes the Primary slot from an
+  // Amani-flagged result, so the Amani-band and DISPUTED sentences stay reachable.
+  const firstReport = (phase: string, markers: Marker[]) => {
+    seed(9, 6);
+    fixture.tables.lab_reports = fixture.tables.lab_reports!.filter(r => r['id'] === CURRENT)
+      .map(r => ({ ...r, estimated_cycle_phase: phase }));
+    fixture.tables.biomarkers = rows(CURRENT, markers);
+    fixture.tables.report_analytes = [];
+  };
+
+  it('a lab-only HDL flag stays visible but the Amani-flagged ferritin keeps the Primary finding, in its Amani-band sentence', async () => {
+    firstReport('unknown', [['ferritin', 17, 'ng/mL', 15, 150], ['hdl_cholesterol', 61, 'mg/dL', 40, 60]]);
+    await renderAndOpenAll();
+    const primary = app.querySelector('[data-testid="primary-finding"]');
+    expect(primary?.textContent).toContain('Primary finding');
+    expect(primary?.textContent).toContain("Ferritin is below the Amani band at 17 ng/mL. Amani's context bands are still under review.");
+    expect(primary?.textContent).not.toContain('HDL');
+    // The lab-only flag is still on the page as a neutral lab fact: headline and focus areas.
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("HDL is above your lab's reference range at 61 mg/dL.");
+    expect(app.textContent).toContain('Ferritin is the primary finding shown above.');
+    // Focus areas: Amani's area first, the lab-only HDL appended after it, titled as printed.
+    const focusHeading = Array.from(app.querySelectorAll('h2')).find(h => h.textContent === 'Focus areas')!;
+    const areas = Array.from(focusHeading.parentElement!.parentElement!.querySelectorAll('article'));
+    const titles = areas.map(a => a.querySelector('h3')!.textContent);
+    expect(titles).toHaveLength(2);
+    expect(titles[titles.length - 1]).toBe('HDL');
+    expect(areas[0]!.textContent).toContain('Ferritin');
+    expect(areas[areas.length - 1]!.textContent).toContain("HDL is above your lab's reference range at 61 mg/dL.");
+    expect(forbiddenHits(pageText())).toEqual([]);
+  }, 30_000);
+
+  it('the DISPUTED luteal progesterone keeps the Primary finding over the lab-flagged LH, withholding placement', async () => {
+    firstReport('luteal', [
+      ['progesterone', 2, 'ng/mL', 0.2, 25], ['tsh', 2, 'uIU/mL', 0.45, 4.5], ['estradiol', 120, 'pg/mL', null, null],
+      ['lh', 30, 'mIU/mL', 2.4, 12.6], ['fsh', 6, 'mIU/mL', 3.5, 12.5],
+    ]);
+    await renderAndOpenAll();
+    const primary = app.querySelector('[data-testid="primary-finding"]');
+    expect(primary?.textContent).toContain('Primary finding');
+    expect(primary?.textContent).toContain('Progesterone was measured at 2 ng/mL. Interpretation unavailable pending clinical review.');
+    expect(primary?.textContent).not.toMatch(/below|above|outside|LH/);
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("LH is above your lab's reference range at 30 mIU/mL.");
     expect(forbiddenHits(pageText())).toEqual([]);
   }, 30_000);
 

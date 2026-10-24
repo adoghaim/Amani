@@ -172,9 +172,10 @@ export const FOCUS_AREA_BAND_SENTENCE =
  * above it rather than echoing TopFinding.fact. A DISPUTED band withholds
  * placement here as it does in every other sentence. */
 export function primaryFindingSentence(
-  finding: Pick<TopFinding, 'displayName' | 'direction' | 'value' | 'unit'>,
+  finding: Pick<TopFinding, 'displayName' | 'direction' | 'value' | 'unit' | 'labPlacement'>,
   language?: AuthorizedLanguage,
 ): string {
+  if (finding.labPlacement) return labFindingSentence(finding.displayName, finding.labPlacement, finding.value, finding.unit);
   if (language?.reviewStatus === 'DISPUTED') {
     return `${finding.displayName} was measured at ${finding.value} ${finding.unit}. ${reviewStatement(language)}`;
   }
@@ -732,7 +733,13 @@ export function systemDisplayLabel(category: BiomarkerCategory): string {
   return category === 'nutrients' ? 'Nutrients' : CATEGORY_DISPLAY[category].label;
 }
 
-export const SYSTEMS_INTRO ='Scored against Amani context bands, which are still under review. Select a system to filter biomarkers.';
+export const BAND_LAB_DISTINCTION = "Amani's comparison band is separate from your lab's range and is still under clinical review.";
+
+export function labFindingSentence(name: string, placement: 'below' | 'above', value: number, unit: string): string {
+  return `${name} is ${placement} your lab's reference range at ${value} ${unit}.`;
+}
+
+export const SYSTEMS_INTRO = "Amani bands are separate from your lab's ranges and are still under review. Select a system to see both comparisons.";
 
 export function systemSummaryLabel(scoredCount: number, outsideCount: number): ComparisonBandLanguage {
   const unestablished = authorizedLanguage(null);

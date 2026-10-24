@@ -52,6 +52,8 @@ function pickDominant(
   focusAreas: FocusArea[],
   primaryCategory?: BiomarkerCategory | null,
 ): FocusArea | null {
+  const aligned = focusAreas.find(fa => fa.isPrimaryAligned);
+  if (aligned) return aligned;
   // 1. Prefer focus area whose category-id slice matches primaryCategory.
   // FocusArea ids are formed as either "<category>" or "<category>_<rule>" (see buildFocusAreas line 317).
   if (primaryCategory) {
@@ -61,7 +63,13 @@ function pickDominant(
     if (matched) return matched;
   }
   // 2. Fall back to existing behavior.
-  return focusAreas.find((fa) => fa.isPrimaryAligned) ?? focusAreas[0] ?? null;
+  return focusAreas[0] ?? null;
+}
+
+// Category and rule titles read as prose ("thyroid function"); a lab-only area
+// titled by its marker keeps the display name as printed ("HDL", not "hdl").
+function titleInSentence(area: FocusArea): string {
+  return area.relatedMarkers.some(m => m.displayName === area.title) ? area.title : area.title.toLowerCase();
 }
 
 function formatList(items: string[]): string {
@@ -77,10 +85,14 @@ function buildThemeSentence(
   primaryContext: PrimaryContext | null,
   primaryCategory?: BiomarkerCategory | null,
 ): HealthStorySentence | null {
+  if (primaryContext) return {
+    kind: 'theme',
+    text: `${primaryContext.primary_biomarker} is the primary finding shown above${primaryContext.trajectory === 'no_prior_data' ? '.' : ` and ${trajectoryVerb(primaryContext.trajectory)}.`}`,
+  };
   const dominant = pickDominant(focusAreas, primaryCategory);
   if (!dominant) return null;
-  const dominantTitle = dominant.title.toLowerCase();
-  const verb = trajectoryVerb(primaryContext?.trajectory ?? null);
+  const dominantTitle = titleInSentence(dominant);
+  const verb = trajectoryVerb(null);
   return {
     kind: 'theme',
     text: `This report is mainly about ${dominantTitle}, which ${verb}.`,
@@ -101,7 +113,7 @@ function buildOthersSentence(
     const lowered = area.title.toLowerCase();
     if (seen.has(lowered)) continue;
     seen.add(lowered);
-    others.push(lowered);
+    others.push(titleInSentence(area));
   }
   if (others.length === 0) return null;
   return {
@@ -124,7 +136,7 @@ export function buildHealthStory(args: BuildHealthStoryArgs): HealthStory {
   // "Your overall panel is generally within reference ranges" was reassurance
   // about her lab's ranges, inferred from Amani's bands. The policy states the
   // fact that produced it.
-  if (focusAreas.length === 0) {
+  if (focusAreas.length === 0 && !primaryContext) {
     return { sentences: [{ kind: 'theme', text: HEALTH_STORY_EMPTY }] };
   }
 
