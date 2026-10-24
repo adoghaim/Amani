@@ -12,7 +12,7 @@ Existing workflow `.github/workflows/ci.yml` (seen in the source snapshot; verif
 | `Edge function typecheck` | `bash docs/check-functions.sh deno` (local: `npm run check:functions`). Baseline exclusions may only shrink. |
 | `Migration behaviour (Postgres)` | `./supabase/migrations/__verification__/run.sh` (Docker). It runs every case in `__verification__/cases/` in lexical order; how to add one is in the header of `run.sh`. |
 | `Migration order (D6)` | `.github/workflows/migration-order.yml`, on PRs into `main`: `node tools/ci/migration-order.mjs`. See "Migration order (D6)" below. |
-| `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. |
+| `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. Each browser runs in its own job, `Browser smoke (chromium)`, `(webkit)` and `(firefox)`; the `Browser smoke` job passes only when all three pass, and it is the check to require. |
 
 | `Fresh-user journey` (`.github/workflows/e2e.yml`) | `npm run test:e2e:journey:guard`, then `npm run test:e2e:journey` against the production build in Chromium, WebKit and Firefox. |
 
@@ -61,7 +61,7 @@ Foundation PRs carry the extension points other packets build on (PK-INT-01, PK-
 
 - `npm run cap:sync` (runs `BUILD_TARGET=native vite build && npx cap sync`).
 - **Android:** `cd android && ./gradlew assembleDebug` succeeds (JDK 21, SDK 36, as in `native-grade.md`); CI runs it on every PR (workflow `native-build.yml`). Optional: emulator smoke (app launches, login screen renders, packet screen reachable) via the `android-emulator` job.
-- **iOS:** `xcodebuild` simulator build with signing disabled succeeds (macOS runner; opt-in because of cost). Signed archives and store uploads are **owner-only** and outside the factory.
+- **iOS:** Swift packages resolve from the committed `Package.resolved` with automatic resolution disabled, and the `xcodebuild` simulator build with signing disabled succeeds (macOS runner; CI runs it on PRs that change `ios/**`, `package.json`, `package-lock.json` or `capacitor.config.ts`, or with the `factory:ios` label). Signed archives and store uploads are **owner-only** and outside the factory.
 - Device-only checks (edge-to-edge on Android 15+, purchases, App Links) stay on the release QA checklist; the factory reports them as pending.
 
 ## G3 — Database: migrations, RLS, grants, triggers

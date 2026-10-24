@@ -8,8 +8,12 @@
 # - Android build (assembleDebug): every pull request to main.
 # - Android emulator smoke: opt-in, with the label factory:android-emulator or
 #   a manual run.
-# - iOS simulator build: opt-in, with the label factory:ios or a manual run;
-#   macOS minutes cost more than Linux.
+# - iOS simulator build: every pull request that changes ios/**, package.json,
+#   package-lock.json, capacitor.config.ts or this workflow (the native-changes
+#   job decides), plus the label factory:ios or a manual run. macOS minutes cost
+#   more than Linux, so other pull requests skip it.
+# - Both build jobs run npm run test:device-lock, which compiles and runs the
+#   real Java and Swift device-lock release helpers.
 #
 # The bundle is built against synthetic Supabase values that cannot resolve (the
 # same convention as e2e/server.mjs): these jobs compile and launch the app and
@@ -55,8 +59,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          # The Capacitor 8 CLI requires Node >= 22.
-          node-version: 24
+          # The Node every workflow uses; the Capacitor 8 CLI requires >= 22.
+          node-version-file: .nvmrc
           cache: npm
       - uses: actions/setup-java@v6
         with:
@@ -64,8 +68,11 @@ jobs:
           java-version: '21'
       # v4 installs only platform-tools by default. v3 also asked for the
       # retired 'tools' package, which current runner images no longer have.
-      - uses: android-actions/setup-android@v4
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - run: npm ci
+      # javac comes from setup-java; the Ubuntu runner image ships swiftc.
+      - name: Device-lock native release boundary
+        run: npm run test:device-lock
       - name: Build web bundle and sync Capacitor
         run: npm run cap:sync
       - name: Assemble debug APK
@@ -93,7 +100,7 @@ jobs:
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@v2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           arch: x86_64
@@ -109,23 +116,85 @@ jobs:
           name: android-emulator-evidence
           path: launch.png
 
+  native-changes:
+    name: Native changes
+    # Labels other than factory:* do not change the code, so they do not rebuild.
+    if: github.event.action != 'labeled' || startsWith(github.event.label.name, 'factory:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ios: ${{ steps.decide.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A pull_request run checks out the test merge commit. Its first
+          # parent is the base branch, so HEAD^1..HEAD is the PR's change.
+          fetch-depth: 2
+      - name: Decide whether the iOS simulator build runs
+        id: decide
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          ADDED_LABEL: ${{ github.event.label.name }}
+          IOS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'factory:ios') }}
+          RUN_IOS: ${{ inputs.run_ios }}
+        run: |
+          ios=false
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$RUN_IOS" = true ]; then ios=true; fi
+          elif [ "$EVENT_ACTION" = labeled ]; then
+            # A label run builds iOS only for the label that asks for it.
+            if [ "$ADDED_LABEL" = factory:ios ]; then ios=true; fi
+          elif [ "$IOS_LABEL" = true ]; then
+            ios=true
+          else
+            # --no-renames lists both paths of a move, so moving a file out of ios/ counts.
+            changed=$(git diff --name-only --no-renames HEAD^1 HEAD)
+            if grep -qE '^(ios/|package\.json$|package-lock\.json$|capacitor\.config\.ts$|\.github/workflows/native-build\.yml$)' <<<"$changed"; then
+              ios=true
+            fi
+          fi
+          echo "iOS simulator build: $ios"
+          echo "ios=$ios" >> "$GITHUB_OUTPUT"
+
   ios-build:
-    name: iOS simulator build (opt-in, macOS cost)
-    if: (github.event_name == 'workflow_dispatch' && inputs.run_ios) || (contains(github.event.pull_request.labels.*.name, 'factory:ios') && (github.event.action != 'labeled' || github.event.label.name == 'factory:ios'))
+    name: iOS simulator build (macOS cost)
+    needs: native-changes
+    if: needs.native-changes.outputs.ios == 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          # The Capacitor 8 CLI requires Node >= 22.
-          node-version: 24
+          # The Node every workflow uses; the Capacitor 8 CLI requires >= 22.
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # The macOS runner image ships a JDK and Xcode's swiftc.
+      - name: Device-lock native release boundary
+        run: npm run test:device-lock
       - run: npm run cap:sync
+      # Xcode Cloud resolves Swift packages only from the committed
+      # Package.resolved (automatic resolution off). Resolve the same way, so a
+      # lockfile that no longer matches Package.swift fails here, not there.
+      - name: Resolve Swift packages from the committed Package.resolved
+        run: |
+          xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj \
+            -scheme App -disableAutomaticPackageResolution
       - name: Build for simulator, signing disabled
+        # Without shell: bash a step runs as bash -e, with no pipefail, and
+        # tail's exit status would hide a failed build.
+        shell: bash
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App \
             -configuration Debug -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build | tail -n 50
+            CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/xcodebuild.log" | tail -n 50
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          retention-days: 7

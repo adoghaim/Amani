@@ -17,58 +17,96 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-${{ github.ref }}
-  # Superseded PR pushes are cancelled to save minutes; runs on main are never
-  # cancelled, so every merge commit keeps its own Browser smoke result.
+  # A newer push to a pull request cancels its older run, to save minutes.
+  # Every other run gets a group of its own commit: GitHub cancels a pending run
+  # whenever another run queues in the same group, even without
+  # cancel-in-progress, so one group for main dropped the results of merge
+  # commits that landed close together. Now every merge commit keeps its own
+  # Browser smoke result.
+  group: e2e-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   smoke:
-    # Keep this name stable: it is the status-check name branch protection uses.
-    name: Browser smoke
+    # One job per browser. All three in one job on two workers took 20-22 of
+    # its 30 minutes in the last green runs, before the suite grew by a fifth.
+    # The Browser smoke job below is the check branch protection uses.
+    name: Browser smoke (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # 183 specs across three browsers on two workers ran past 15 minutes once the
-    # 2026-10-15 merge train landed (124 passed, none failed, when it was cut off).
     timeout-minutes: 30
+    strategy:
+      # The other browsers finish, so one run shows every failure.
+      fail-fast: false
+      matrix:
+        # The projects of playwright.config.ts, which the freemium config shares.
+        project: [chromium, webkit, firefox]
+    env:
+      BROWSER_PROJECT: ${{ matrix.project }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      # Browser binaries are keyed on the lockfile, so a cache hit is always the
-      # exact revision the locked Playwright 1.62.1 expects. OS packages are not
-      # cacheable and are installed on every run.
-      - name: Cache Playwright browsers
+      # Browser binaries are keyed on the runner image and the lockfile, so a
+      # cache hit is always the exact revision the locked Playwright expects,
+      # built for this image: Playwright downloads a separate WebKit for each
+      # Ubuntu release into a directory that does not name the release, and
+      # ubuntu-latest moves to Ubuntu 26 from 2026-10-19. The runner sets
+      # ImageOS (ubuntu24, ubuntu26); the env context does not carry it.
+      - name: Runner image
+        id: image
+        run: echo "os=${ImageOS:?the runner image does not set ImageOS}" >> "$GITHUB_OUTPUT"
+      # OS packages are not cacheable and are installed on every run.
+      - name: Cache Playwright browser
         id: pw-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - name: Install matching browsers and OS dependencies
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.image.outputs.os }}-${{ matrix.project }}-${{ hashFiles('package-lock.json') }}
+      - name: Install the matching browser and OS dependencies
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx --no-install playwright install --with-deps chromium webkit firefox
-      - name: Install OS dependencies for cached browsers
+        run: npx --no-install playwright install --with-deps "$BROWSER_PROJECT"
+      - name: Install OS dependencies for the cached browser
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx --no-install playwright install-deps chromium webkit firefox
+        run: npx --no-install playwright install-deps "$BROWSER_PROJECT"
       - name: Verify E2E environment isolation
         run: npm run test:e2e:isolation
       - name: Run isolated synthetic smoke tests
-        run: npm run test:e2e
+        run: npm run test:e2e -- --project="$BROWSER_PROJECT"
       - name: Run isolated freemium regressions
-        run: npx --no-install playwright test --config e2e/freemium/playwright.config.ts
+        run: npx --no-install playwright test --config e2e/freemium/playwright.config.ts --project="$BROWSER_PROJECT"
+      - name: Run isolated interpretation regressions
+        run: npx --no-install playwright test --config e2e/interpretation/playwright.config.ts --project="$BROWSER_PROJECT"
       - name: Preserve failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-failure-diagnostics
+          name: e2e-failure-diagnostics-${{ matrix.project }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  smoke-result:
+    # Keep this name stable: it is the status-check name branch protection uses.
+    # It runs even when a browser job fails, because a skipped job reports
+    # success even as a required check, and it passes only when all passed.
+    name: Browser smoke
+    needs: smoke
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every browser passed
+        env:
+          SHARDS: ${{ needs.smoke.result }}
+        run: |
+          echo "Browser smoke shards: $SHARDS"
+          test "$SHARDS" = success
 
   journey:
     # PK-03e-I: the fresh-user journey against the production build (vite
@@ -79,25 +117,29 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      # Keyed on the runner image, as in Browser smoke.
+      - name: Runner image
+        id: image
+        run: echo "os=${ImageOS:?the runner image does not set ImageOS}" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.image.outputs.os }}-chromium-webkit-firefox-${{ hashFiles('package-lock.json') }}
       - name: Install matching browsers and OS dependencies
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx --no-install playwright install --with-deps chromium webkit firefox
       - name: Install OS dependencies for cached browsers
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx --no-install playwright install-deps chromium webkit firefox
-      - name: Stand-in server contracts (Node 20)
+      - name: Stand-in server contracts
         run: |
           npx --no-install esbuild e2e/journey/server-model.test.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/task053-server-model.test.mjs"
           node --test "$RUNNER_TEMP/task053-server-model.test.mjs"

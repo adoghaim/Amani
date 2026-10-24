@@ -32,9 +32,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       # The factory CI tools test themselves wherever they run; this job runs
       # on every PR into main, so a change to tools/ci is tested before merge.

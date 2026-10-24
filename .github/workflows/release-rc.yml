@@ -139,7 +139,7 @@
       },
       "steps": [
         {
-          "uses": "actions/checkout@v7",
+          "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
           "with": {
             "ref": "${{ github.sha }}",
             "path": "automation",
@@ -148,7 +148,7 @@
           }
         },
         {
-          "uses": "actions/checkout@v7",
+          "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
           "with": {
             "ref": "main",
             "path": "source",
@@ -201,13 +201,13 @@
           }
         },
         {
-          "uses": "actions/setup-node@v4",
+          "uses": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
           "with": {
-            "node-version": "22"
+            "node-version-file": "source/.nvmrc"
           }
         },
         {
-          "uses": "actions/setup-java@v6",
+          "uses": "actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad",
           "with": {
             "distribution": "temurin",
             "java-version": "21"
@@ -255,7 +255,7 @@
         },
         {
           "name": "Keep verified binaries",
-          "uses": "actions/upload-artifact@v7",
+          "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
           "with": {
             "name": "rc-binaries-${{ github.run_id }}-${{ github.run_attempt }}",
             "path": "${{ env.RELEASE_OUT }}/app.ipa\n${{ env.RELEASE_OUT }}/app.aab\n${{ env.RELEASE_OUT }}/app.apk",
@@ -330,7 +330,7 @@
         {
           "name": "Publish sanitized evidence",
           "if": "${{ always() }}",
-          "uses": "actions/upload-artifact@v7",
+          "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
           "with": {
             "name": "rc-evidence-${{ github.run_id }}-${{ github.run_attempt }}",
             "path": "${{ env.RELEASE_OUT }}/*.json\n${{ env.RELEASE_OUT }}/*.md",

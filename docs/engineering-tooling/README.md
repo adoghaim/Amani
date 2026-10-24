@@ -57,7 +57,7 @@ retry. Tests use role/label locators and auto-waiting, without fixed sleeps.
 `E2E_QUARANTINE=1 npm run test:e2e` runs only the strict session-restoration
 redirect test across all three browsers. Normal scripts and CI exclude its
 `@quarantine` tag. This application race is tracked in
-`specs/BACKLOG-1.0.7.md` item 11; it is not browser-specific. Both original
+`E2E-REDIRECT-RACE` in `factory/BACKLOG.md`; it is not browser-specific. Both original
 `/app/reports` assertions remain intact, with no expected-failure annotation.
 Re-entry requires replacing the `window.location.search` read with a router-aware
 source AND at least 10 green runs per browser. After that product fix, collect

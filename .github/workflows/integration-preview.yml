@@ -56,9 +56,9 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       - name: Test the queue tooling
         run: node --test tools/ci/integration-preview.test.mjs
@@ -74,10 +74,11 @@ jobs:
         if: steps.merge.outputs.count != '0'
         run: git config --local --unset-all http.https://github.com/.extraheader || true
 
-      - uses: denoland/setup-deno@v2
+      # The Deno of the Supabase edge runtime, as in ci.yml.
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         if: steps.merge.outputs.count != '0'
         with:
-          deno-version: v2.x
+          deno-version: 2.1.4
 
       - name: npm ci
         id: install
@@ -137,9 +138,10 @@ jobs:
           persist-credentials: false
           sparse-checkout: tools/ci
 
-      - uses: actions/setup-node@v4
+      # A cone-mode sparse checkout keeps the files at the root, .nvmrc included.
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       - name: Write the report
         id: report
