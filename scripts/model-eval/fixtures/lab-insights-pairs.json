@@ -1,0 +1,43 @@
+{
+  "about": "Synthetic report pairs for the lab-insights part of the model eval (RV-MM1 AC8). Stored biomarker rows are the trend suite's values verbatim (copiedFrom); intervention titles and categories are the lab-insights policy suite's (interventionsCopiedFrom). Report dates and the intervention window are layout: the previous date is the trend suite's, the current one the October smoke report's.",
+  "pairs": [
+    {
+      "id": "two-reports-with-interventions",
+      "synthetic": true,
+      "copiedFrom": "supabase/functions/_shared/trend-evidence.test.ts",
+      "previousReport": { "report_date": "2026-03-01", "estimated_cycle_phase": null, "estimated_cycle_day": null },
+      "currentReport": { "report_date": "2026-10-17", "estimated_cycle_phase": null, "estimated_cycle_day": null },
+      "previous": [
+        "{ slug: 'vitamin_d', name: 'Vitamin D', value: 18, unit: 'ng/mL' }",
+        "{ slug: 'tsh', name: 'TSH', value: '2.0', unit: 'mIU/L' }",
+        "{ slug: 'ferritin', name: 'Ferritin', value: 40, unit: 'ng/mL' }",
+        "{ slug: 'glucose', name: 'Glucose', value: 90, unit: 'mg/dL' }",
+        "{ slug: 'crp', name: 'CRP', value: 0, unit: 'mg/L' }"
+      ],
+      "current": [
+        "{ slug: 'vitamin_d', name: 'Vitamin D', value: 31, unit: 'ng/mL' }",
+        "{ slug: 'tsh', name: 'TSH', value: 2.6, unit: 'mIU/L' }",
+        "{ slug: 'ferritin', name: 'Ferritin', value: 42, unit: 'ng/mL' }",
+        "{ slug: 'glucose', name: 'Glucose', value: 5.4, unit: 'mmol/L' }",
+        "{ slug: 'crp', name: 'CRP', value: 1.2, unit: 'mg/L' }",
+        "{ slug: 'amh', name: 'AMH', value: 2, unit: 'ng/mL' }"
+      ],
+      "interventionsCopiedFrom": "supabase/functions/_shared/lab-insights-policy.test.ts",
+      "interventions": [
+        "promptInterventionLabel('Vitamin D', 'supplement')",
+        "promptInterventionLabel('Morning walks', 'exercise')",
+        "promptInterventionLabel('Metformin', 'medication')"
+      ]
+    },
+    {
+      "id": "censored-prior",
+      "synthetic": true,
+      "copiedFrom": "supabase/functions/_shared/trend-evidence.test.ts",
+      "previousReport": { "report_date": "2026-03-01", "estimated_cycle_phase": null, "estimated_cycle_day": null },
+      "currentReport": { "report_date": "2026-10-17", "estimated_cycle_phase": null, "estimated_cycle_day": null },
+      "previous": ["row('vitamin d ', 4, '<8')", "row('ferritin', 20, null)"],
+      "current": ["row('Vitamin D', 20, '20')", "row('Ferritin', 40, '40')"],
+      "interventions": []
+    }
+  ]
+}

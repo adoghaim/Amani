@@ -1,0 +1,28 @@
+{
+  "about": "Synthetic OCR cases for the model eval (RV-MM1 AC8). Every page is a lab text from lab-texts.json, rendered by the eval as a clean PNG or a degraded JPEG (slight rotation, lossy). One case sends two pages in one call; one prints a cycle day, using layout text copied from the parser's comparator layouts. printedCycle is what the page prints (null when nothing is printed).",
+  "cases": [
+    { "id": "quest-smoke.png", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "quest-smoke", "render": "png" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "quest-smoke.jpeg", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "quest-smoke", "render": "jpeg-degraded" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "quest-hormones.png", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "quest-hormones", "render": "png" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "quest-hormones.jpeg", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "quest-hormones", "render": "jpeg-degraded" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "labcorp-hormones.png", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "labcorp-hormones", "render": "png" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "labcorp-hormones.jpeg", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "labcorp-hormones", "render": "jpeg-degraded" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "edge-cases.png", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "edge-cases", "render": "png" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "edge-cases.jpeg", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "edge-cases", "render": "jpeg-degraded" }], "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "quest-two-pages.png", "synthetic": true, "copiedFrom": "scripts/model-eval/fixtures/lab-texts.json",
+      "pages": [{ "text": "quest-smoke", "render": "png" }, { "text": "quest-hormones", "render": "png" }],
+      "printedCycle": { "cycle_day": null, "cycle_phase": null } },
+    { "id": "quest-hormones-cycle-day.png", "synthetic": true, "copiedFrom": "src/utils/parser/__fixtures__/comparatorLayouts.ts",
+      "pages": [{ "text": "quest-hormones", "render": "png",
+        "insertLine": { "after": "Reporting Physician: Dr. Synthetic", "line": "Cycle Day 3" } }],
+      "printedCycle": { "cycle_day": 3, "cycle_phase": null } }
+  ]
+}
