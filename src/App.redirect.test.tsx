@@ -116,7 +116,7 @@ const where = () => app.querySelector('[data-testid="where"]')?.textContent ?? n
 async function openRoutesAt(start: string, windowUrl = '/elsewhere?redirect=%2Fapp%2Fsettings') {
   window.history.replaceState(null, '', windowUrl);
   await act(async () => root.render(
-    <MemoryRouter initialEntries={[start]}>
+    <MemoryRouter key={start} initialEntries={[start]}>
       <AppRoutes />
       <Where />
     </MemoryRouter>,
@@ -153,6 +153,7 @@ describe('login and signup send a signed-in visitor to the router-aware redirect
     for (const unsafe of ['%2F%2Fevil.com', 'https%3A%2F%2Fevil.com', '%2F%5Cevil.com', '%2F%40evil.com']) {
       auth.reset();
       await openRoutesAt(`/login?redirect=${unsafe}`, '/');
+      expect(where(), unsafe).toBe(`/login?redirect=${unsafe}`);
       await act(async () => signIn());
       await settle();
       expect(where(), unsafe).toBe('/app');
