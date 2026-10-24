@@ -2188,16 +2188,19 @@
       "depends_on": [
         "RV-IA1"
       ],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-ia2",
-      "pr": null,
+      "pr": "#172",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2208,7 +2211,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ingest-cycle-parser; findings F098, F022. Head 073a207. Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch."
+        "Fixed F098 (B12 aliases match whole words, so '*cobalamin' analytes stay unmapped, and '<X' results need review) and the client part of F022 (parse-error rows keep Save closed until she confirms, and unconfirmed values stay out of the primary finding, focus areas, trends and headline); final independent verdict PASS_WITH_NOTES at fd21f11 on 2026-10-23 after an earlier FAIL at 72a02f1 was fixed; the generate-interpretation and lab-insights exclusion, the remap-only save path and in-bounds SI values stay open.",
+        "Gates at fa3b851 (run locally): lint, typecheck, full test (3,446), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
