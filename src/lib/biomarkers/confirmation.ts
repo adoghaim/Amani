@@ -56,7 +56,7 @@ interface ScoredValue {
   value: number;
 }
 
-const keyOf = (reportId: string, slug: string, value: number) => `${reportId}|${slug}|${Number(value)}`;
+export const keyOf = (reportId: string, slug: string, value: number) => `${reportId}|${slug}|${Number(value)}`;
 
 /*
   biomarkers rows carry no review columns. NewReport writes each one from the

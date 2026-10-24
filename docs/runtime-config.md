@@ -95,7 +95,7 @@ them needs a migration, and no migration may add one (D5).
 | `sample_report` | "See a sample report" (D26) |
 | `visit_summary` | the visit summary (EXP-2) |
 | `ai_assistant_connector` | the AI-assistant connector prototype, not deployed (PK-AIDIST-01, `docs/ai-distribution/design.md`) |
-| `lab_critical_flag_notice` | the report's safety notice, in every tier, when her lab printed its own critical or panic flag beside a result (review F014 interim, not PK-05-B: no Amani threshold; `src/lib/safety/labCriticalFlags.ts`). Client code only: no migration or function deploy. Turn on only after clinical GO on the notice's words and the marker table (HH, LL, CRIT, CRITICAL, PANIC, ALERT) [Pending] |
+| `lab_critical_flag_notice` | the report's safety notice, in every tier, when her lab printed its own critical or panic flag beside a result (review F014 interim, not PK-05-B: no Amani threshold; `src/lib/safety/labCriticalFlags.ts`), and that marker, exactly as printed, beside the value in her result rows and result cards (RV-CR1, from the same findings; off, a row shows only the H/L flag printed straight after its value, as before, and a card shows none). Client code only: no migration or function deploy. Turn on only after clinical GO on the notice's words, on the marker table (HH, LL, CRIT, CRITICAL, PANIC, ALERT) and on showing those markers beside values in result rows and result cards. The GO must settle bare CRIT, which can abbreviate hematocrit: the synthetic line `Hemoglobin 13.5 Crit 40.1` reads as CRIT on hemoglobin [Pending] |
 
 A packet that adds a flag adds its row here, in the same PR.
 

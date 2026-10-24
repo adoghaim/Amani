@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import {
-  CUE_STYLE, drawDayPhaseNote, LAB_FLAG_PREFIX, labIntervalObservation, NO_LAB_INTERVAL, PRINTED_INTERVALS_LABEL,
+  CUE_STYLE, drawDayPhaseNote, labIntervalObservation, NO_LAB_INTERVAL, PRINTED_INTERVALS_LABEL,
   SEVERAL_LAB_INTERVALS,
 } from '../lib/scoring/insightCopy';
 import {
@@ -8,6 +8,7 @@ import {
 } from '../lib/resultRow';
 import type { ReportAnalyte } from '../types';
 import type { LabelledRange } from '../utils/parser/types';
+import { LabFlagBadge } from './LabFlagBadge';
 
 export interface ResultRowProps {
   analyte: Pick<ReportAnalyte,
@@ -16,6 +17,12 @@ export interface ResultRowProps {
     | 'source_snippet' | 'parse_status'> & { reference_candidates?: LabelledRange[] | null };
   /** The report's estimated phase on the draw day; null or 'unknown' means no cycle context. */
   cyclePhase: string | null;
+  /**
+   * RV-CR1: the critical marker her lab printed beside this value, exactly as
+   * printed (a labCriticalFlags finding's `printed`). The report page passes it
+   * only while features.lab_critical_flag_notice is on; it replaces the H/L flag.
+   */
+  labCriticalFlag?: string | null;
 }
 
 const PLACEMENT_ICON = { below: ArrowDown, above: ArrowUp, within: Minus } as const;
@@ -39,7 +46,7 @@ function placementOf(text: string | undefined): keyof typeof PLACEMENT_ICON | nu
   the one interval her lab printed for this marker, with no margin, and its
   wording is the owner-pinned placement text.
 */
-export function ResultRow({ analyte, cyclePhase }: ResultRowProps) {
+export function ResultRow({ analyte, cyclePhase, labCriticalFlag }: ResultRowProps) {
   const label = analyte.display_name || analyte.raw_name;
   const placement = labIntervalObservation(
     label,
@@ -54,7 +61,7 @@ export function ResultRow({ analyte, cyclePhase }: ResultRowProps) {
   const applies = applicableRangeIndex(ranges, cyclePhase);
   const phase = rangePhaseOf(cyclePhase);
   const valueText = analyte.raw_value_text ?? (analyte.value_numeric != null ? String(analyte.value_numeric) : null);
-  const labFlag = printedLabFlag(analyte.source_snippet, valueText, analyte.unit);
+  const labFlag = labCriticalFlag || printedLabFlag(analyte.source_snippet, valueText, analyte.unit);
   const style = CUE_STYLE[placement?.cue ?? 'neutral'];
   const where = placementOf(placement?.text);
   const Icon = where ? PLACEMENT_ICON[where] : null;
@@ -71,15 +78,7 @@ export function ResultRow({ analyte, cyclePhase }: ResultRowProps) {
         <p className="flex items-baseline gap-2 flex-shrink-0">
           <span className="font-mono text-[1.0625rem] font-medium text-theme-text" data-testid="result-value">{valueText}</span>
           {analyte.unit && <span className="font-mono text-xs text-theme-muted-text">{analyte.unit}</span>}
-          {labFlag && (
-            <span
-              className="inline-flex items-center px-1 font-mono text-xs font-medium text-theme-text border border-theme-text rounded-[3px]"
-              data-testid="lab-flag"
-            >
-              <span className="sr-only">{LAB_FLAG_PREFIX}</span>
-              {labFlag}
-            </span>
-          )}
+          {labFlag && <LabFlagBadge flag={labFlag} />}
         </p>
       </div>
 

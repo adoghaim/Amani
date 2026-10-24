@@ -34,12 +34,13 @@ import {
 } from '../lib/scoring/insightCopy';
 import { SafetyWarnings } from '../components/SafetyWarnings';
 import { findLabCriticalFlags } from '../lib/safety/labCriticalFlags';
+import { labCriticalDisplay } from '../lib/safety/labCriticalDisplay';
 import { useLabCriticalFlagNotice } from '../hooks/useLabCriticalFlagNotice';
 import { primaryTrajectory, withBandReview } from '../lib/scoring/healthStoryTrajectory';
 import { assessAmaniContext, contextFromReport, stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
 import { getCategory, getDisplayName } from '../lib/biomarkers/dictionary';
 import {
-  isUnconfirmedBiomarker, READING_REVIEW_COLUMNS, unconfirmedReadingKeys, withoutUnconfirmed, type ReadingReview,
+  isUnconfirmedBiomarker, keyOf, READING_REVIEW_COLUMNS, unconfirmedReadingKeys, withoutUnconfirmed, type ReadingReview,
 } from '../lib/biomarkers/confirmation';
 import { sameUnit } from '../lib/biomarkers/normalizeReportItems';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
@@ -1020,6 +1021,11 @@ export function ReportView() {
   }, [biomarkers, report, declaredState]);
   // Review F014 interim: the lab's own printed critical flag, read from the saved lab rows only, dark behind its flag.
   const labCriticalNotice = useLabCriticalFlagNotice();
+  // RV-CR1: one reading feeds the notice and the markers beside values in result rows and cards; none while dark.
+  const labCritical = useMemo(() => {
+    const findings = labCriticalNotice ? findLabCriticalFlags(reportAnalytes) : [];
+    return { findings, ...labCriticalDisplay(reportAnalytes, findings) };
+  }, [labCriticalNotice, reportAnalytes]);
   // F022: no warning is dropped; one about a value she has not confirmed is marked so.
   const safetyWarnings = useMemo(() => {
     const measured = (rows: Biomarker[]) => rows.map(b => ({ name: b.name, value: b.value, unit: b.unit }));
@@ -1027,9 +1033,9 @@ export function ReportView() {
     return [
       ...evaluateSafetyRules(measured(biomarkers.filter(b => !unconfirmed.includes(b)))),
       ...evaluateSafetyRules(measured(unconfirmed)).map(w => ({ ...w, unconfirmed: true })),
-      ...(labCriticalNotice ? labCriticalFlagWarnings(findLabCriticalFlags(reportAnalytes)) : []),
+      ...labCriticalFlagWarnings(labCritical.findings),
     ];
-  }, [biomarkers, unconfirmedKeys, reportAnalytes, labCriticalNotice]);
+  }, [biomarkers, unconfirmedKeys, labCritical]);
 
   // Build a frontend PrimaryContext from insightSummary + biggestChanges. The
   // server's interpretation already carries one but it's not surfaced to the
@@ -1961,7 +1967,7 @@ export function ReportView() {
                       <div key={cat}>
                         <h3 className="text-xs text-theme-neutral-400 uppercase tracking-widest mb-2">{cat}</h3>
                         <div className="divide-y divide-theme-neutral-100">
-                          {items.map(item => <ResultRow key={item.id} analyte={item} cyclePhase={cyclePhase} />)}
+                          {items.map(item => <ResultRow key={item.id} analyte={item} cyclePhase={cyclePhase} labCriticalFlag={labCritical.rows.get(item.id)} />)}
                         </div>
                       </div>
                     ))}
@@ -2127,6 +2133,7 @@ export function ReportView() {
                                 baselineValue={personalization?.baselineValue}
                                 trendDirection={personalization?.trendDirection}
                                 trendStrength={personalization?.trendStrength}
+                                labCriticalFlag={labCritical.cards.get(keyOf(b.lab_report_id, b.name, b.value))}
                               />
                             );
                           })}

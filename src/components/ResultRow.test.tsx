@@ -4,6 +4,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ResultRow, type ResultRowProps } from './ResultRow';
+import { printedLabFlag } from '../lib/resultRow';
+import { LAB_FLAG_PREFIX } from '../lib/scoring/insightCopy';
 
 // Synthetic values only; the intervals are the PK-FIX-05 fixture placeholders,
 // not clinical reference ranges.
@@ -157,5 +159,99 @@ describe('ResultRow (PK-DS-01, DESIGN.md "Result row")', () => {
     render({ ...base, raw_reference_range: null, normalized_min: null, normalized_max: null }, 'luteal');
     expect(host.querySelector('[data-testid="lab-intervals"]')).toBeNull();
     expect(status().textContent).toBe('No lab range');
+  });
+});
+
+/*
+  RV-CR1. While features.lab_critical_flag_notice is on, the report page hands
+  the row the marker her lab printed beside this value (a labCriticalFlags
+  finding's `printed`), wherever on the line the recognizer read it. The row
+  draws it in today's lab-flag badge, exactly as printed. Synthetic lines; the
+  intervals are placeholders, not clinical ranges.
+*/
+describe('ResultRow: the lab\'s printed critical marker (RV-CR1)', () => {
+  const BADGE_CLASSES = 'inline-flex items-center px-1 font-mono text-xs font-medium text-theme-text border border-theme-text rounded-[3px]';
+  /** One saved result: its name, value and unit, on the line the lab printed. */
+  const line = (name: string, value: string, unit: string, snippet: string): Analyte => ({
+    ...base, raw_name: name.toLowerCase(), display_name: name, raw_value_text: value, value_numeric: Number(value), unit,
+    raw_reference_range: null, normalized_min: null, normalized_max: null, source_snippet: snippet,
+  });
+  const potassium = line('Potassium', '6.8', 'mmol/L', 'Potassium, Serum 6.8 Critical mmol/L 3.5-5.2');
+
+  function renderWith(analyte: Analyte, labCriticalFlag?: string | null) {
+    act(() => root.render(<ResultRow analyte={analyte} cyclePhase={null} labCriticalFlag={labCriticalFlag} />));
+    return [...host.querySelectorAll('[data-testid="lab-flag"]')] as HTMLElement[];
+  }
+  /** Exactly one badge: the prefix for screen readers, then the token, straight after the unit, which is straight after the value. */
+  function expectOneBadge(flags: HTMLElement[], analyte: Analyte, token: string) {
+    expect(flags).toHaveLength(1);
+    const flag = flags[0]!;
+    const value = host.querySelector('[data-testid="result-value"]')!;
+    expect(flag.textContent).toBe(`${LAB_FLAG_PREFIX}${token}`);
+    expect(flag.lastChild?.textContent).toBe(token);
+    expect(value.textContent).toBe(analyte.raw_value_text);
+    expect(flag.previousElementSibling?.textContent).toBe(analyte.unit);
+    expect(flag.previousElementSibling?.previousElementSibling).toBe(value);
+    return flag;
+  }
+
+  it('the token exactly as printed, in today\'s ink badge, after the value and unit', async () => {
+    expect(printedLabFlag(potassium.source_snippet, '6.8', 'mmol/L')).toBeNull();
+    const flag = expectOneBadge(renderWith(potassium, 'Critical'), potassium, 'Critical');
+    expect(flag.querySelector('.sr-only')?.textContent).toBe(LAB_FLAG_PREFIX);
+    expect(follows(host.querySelector('[data-testid="result-value"]')!, flag)).toBe(true);
+    // Today's badge: ink text and border, 3px corners, the data face. No tint, role, live region or policy attributes.
+    expect(flag.className).toBe(BADGE_CLASSES);
+    expect(flag.getAttributeNames().sort()).toEqual(['class', 'data-testid']);
+    expect(flag.querySelector('.sr-only')!.getAttributeNames()).toEqual(['class']);
+    expect(host.querySelector('[role], [aria-live], [data-safety-rule]')).toBeNull();
+    await expectNoAxeViolations();
+  });
+
+  it.each([
+    ['(Panic)', line('Glucose', '450', 'mg/dL', 'Glucose 450 (Panic) mg/dL 65-99')],
+    ['HH*', line('Potassium', '6.8', 'mmol/L', 'Potassium 6.8 mmol/L HH* 3.5-5.1')],
+    ['(LL)', line('Hemoglobin', '6.1', 'g/dL', 'Hemoglobin 6.1 g/dL (LL) 11.1-15.9')],
+  ])('%s stays verbatim', async (token, analyte) => {
+    expect(printedLabFlag(analyte.source_snippet, analyte.raw_value_text, analyte.unit)).toBeNull();
+    expectOneBadge(renderWith(analyte, token), analyte, token);
+    await expectNoAxeViolations();
+  });
+
+  it.each([
+    ['after the unit', line('Potassium', '6.8', 'mmol/L', 'Potassium 6.8 mmol/L HH 3.5-5.1')],
+    ['glued to the value', line('Potassium', '6.8', 'mmol/L', 'Potassium 6.8HH mmol/L 3.5-5.1')],
+    ['beside a later occurrence of the value', line('CA 125', '125', 'U/mL', 'CA 125 125 HH 0.0-35.0 U/mL')],
+  ])('HH %s: the badge shows, though the H/L reader sees none there', (_, analyte) => {
+    expect(printedLabFlag(analyte.source_snippet, analyte.raw_value_text, analyte.unit)).toBeNull();
+    expectOneBadge(renderWith(analyte, 'HH'), analyte, 'HH');
+  });
+
+  it('one badge only: the finding wins over the H/L token', () => {
+    // The H/L reader takes the first "450"; the lab's panic marker sits beside the second.
+    const twice = line('Glucose', '450', 'mg/dL', 'Glucose 450 H 450 Panic 65-99 mg/dL');
+    expect(printedLabFlag(twice.source_snippet, '450', 'mg/dL')).toBe('H');
+    expectOneBadge(renderWith(twice, 'Panic'), twice, 'Panic');
+    // HH straight after the value, which both readers read: still one badge.
+    const direct = line('Potassium', '6.8', 'mmol/L', 'Potassium 6.8 HH 3.5-5.3 mmol/L');
+    expectOneBadge(renderWith(direct, 'HH'), direct, 'HH');
+  });
+
+  it('no token: the row is exactly today\'s, its H/L flag read as before', () => {
+    for (const analyte of [
+      potassium,
+      line('Potassium', '6.8', 'mmol/L', 'Potassium 6.8 HH 3.5-5.3 mmol/L'),
+      line('Potassium', '6.8', 'mmol/L', 'Potassium 6.8 mmol/L HH 3.5-5.1'),
+      line('TSH', '4.85', 'mIU/L', 'TSH 4.85 (H) mIU/L 0.40-4.50'),
+    ]) {
+      act(() => root.render(<ResultRow analyte={analyte} cyclePhase={null} />));
+      const today = host.innerHTML;
+      const shown = [...host.querySelectorAll('[data-testid="lab-flag"]')].map(f => f.lastChild?.textContent);
+      expect(shown).toEqual([printedLabFlag(analyte.source_snippet, analyte.raw_value_text, analyte.unit)].filter(Boolean));
+      for (const none of [undefined, null]) {
+        renderWith(analyte, none);
+        expect(host.innerHTML).toBe(today);
+      }
+    }
   });
 });

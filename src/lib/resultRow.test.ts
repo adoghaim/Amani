@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applicableRangeIndex, labelPhase, printedLabFlag, printedRanges, rangePhaseOf } from './resultRow';
 import { bindReferenceRange } from '../utils/parser/rangeDetection';
+import { criticalMarker } from './safety/labCriticalFlags';
 
 // Placeholder intervals from the synthetic PK-FIX-05 fixtures. Not clinical ranges.
 const FSH = 'Follicular Phase 2.1-11.1; Mid-Cycle Peak 5.2-22.2; Luteal Phase 1.3-8.8; Postmenopausal 22.2-133.3';
@@ -129,5 +130,30 @@ describe('printedLabFlag: the lab\'s own flag exactly as printed', () => {
     expect(printedLabFlag(null, '5', null)).toBeNull();
     expect(printedLabFlag('TSH 4.85 (H)', null, null)).toBeNull();
     expect(printedLabFlag('TSH 4.85 (H)', '9.99', null)).toBeNull();
+  });
+});
+
+/*
+  RV-CR1 drift guard. The lab's critical markers have one reader,
+  labCriticalFlags.ts, and the report page shows them beside values only from
+  its findings. The row's own H/L reader must never grow a second marker list.
+*/
+describe('printedLabFlag reads no critical word: the critical markers have one reader', () => {
+  it.each([
+    'CRIT', 'Crit', 'crit', 'CRITICAL', 'Critical', 'PANIC', 'Panic', 'ALERT', 'Alert', '(CRIT)', '(Critical)', 'CRIT*', 'Panic*',
+  ])('%s straight after the value is not an H/L flag', token => {
+    expect(printedLabFlag(`Potassium 6.8 ${token} mmol/L 3.5-5.1`, '6.8', 'mmol/L')).toBeNull();
+    // The critical reader does read it, so the guard is not vacuous.
+    expect(criticalMarker(token)).not.toBeNull();
+  });
+
+  it('the tokens both readers accept are exactly the HH/LL forms', () => {
+    const words = [
+      'H', 'L', 'HH', 'LL', 'A', 'High', 'HIGH', 'Low', 'LOW',
+      'CRIT', 'Crit', 'crit', 'CRITICAL', 'Critical', 'critical', 'PANIC', 'Panic', 'panic', 'ALERT', 'Alert', 'alert',
+    ];
+    const tokens = words.flatMap(w => [w, `(${w})`, `${w}*`, `(${w})*`]);
+    const both = tokens.filter(t => printedLabFlag(`Result 5 ${t} 1-10`, '5', null) !== null && criticalMarker(t) !== null);
+    expect(both).toEqual(['HH', '(HH)', 'HH*', '(HH)*', 'LL', '(LL)', 'LL*', '(LL)*']);
   });
 });
