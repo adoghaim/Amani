@@ -350,3 +350,33 @@ describe('real server projection to rendered Basic panel', () => {
     expect(host.textContent).not.toContain(projectionCanary);
   });
 });
+
+/*
+  Review F021. A stored trend_evidence entry built from a prior '<8' (stored 4)
+  and a current 20 reached Basic as "Vitamin D: 4 → 20 ng/mL". The page knows
+  which results were printed as limits; a line through one never renders.
+*/
+describe('Basic changes never state a censored placeholder (F021)', () => {
+  const vitaminD = { ...trend('vitamin_d_25_oh', 'Vitamin D'), previous_value: 4, current_value: 20, unit: 'ng/mL' };
+  const state = withTrends([vitaminD, trend('ferritin', 'Ferritin')]);
+
+  it('drops the line the page marks censored, with its slug and prior date, and keeps the rest', () => {
+    const asked: [string, string | null][] = [];
+    const out = render(state, { censoredTrend: (slug, date) => {
+      asked.push([slug, date]);
+      return slug === 'vitamin_d_25_oh';
+    } });
+    expect(out).not.toMatch(/Vitamin D|4 → 20/);
+    expect(out).toContain('Ferritin: 10 → 20 u · increased · 2026-03-01');
+    expect(asked).toEqual([['vitamin_d_25_oh', '2026-03-01'], ['ferritin', '2026-03-01']]);
+  });
+
+  it('a line with no prior date is asked about with null', () => {
+    const asked: (string | null)[] = [];
+    render(withTrends([{ ...vitaminD, previous_date: undefined }]), { censoredTrend: (_slug, date) => {
+      asked.push(date);
+      return false;
+    } });
+    expect(asked).toEqual([null]);
+  });
+});

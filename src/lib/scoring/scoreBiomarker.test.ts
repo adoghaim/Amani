@@ -425,3 +425,53 @@ describe('scoreBiomarker — a value in another unit is not flagged against the 
     expect(computeAmaniStatus('ldl_cholesterol', 160, null, null, 'mg/dL')).toBe('out_of_range_high');
   });
 });
+
+// ─── Censored results (review F021) ──────────────────────────────────────────
+// A result printed as a limit ('> OR = 60', '<8') is stored with a placeholder
+// (the limit, or half a lower limit). It gets a status only when every value the
+// printed result allows gets that status; otherwise it is withheld. eGFR
+// '> OR = 60' was stored as 60 and flagged out_of_range_low.
+
+describe('scoreBiomarker — a censored result is flagged only where its printed limit decides it (F021)', () => {
+  const EGFR = 'mL/min/1.73m2';
+  const cases: Array<[BiomarkerName, number, string, string, AmaniStatus, string]> = [
+    // eGFR band 90–200 (clinical 60–200), higher is better.
+    ['egfr', 60, EGFR, '> OR = 60', 'unknown', 'anything from 60 up: below the band or within it'],
+    ['egfr', 90, EGFR, '>90', 'optimal', 'every value above 90 is within a higher-is-better band'],
+    ['egfr', 7.5, EGFR, '<15', 'out_of_range_low', 'every value below 15 is out of range'],
+    // Vitamin D band 50–80 (clinical 30–100); out of range below 42.5.
+    ['vitamin_d_25_oh', 4, 'ng/mL', '<8', 'out_of_range_low', 'every value below 8 is out of range'],
+    ['vitamin_d_25_oh', 22.5, 'ng/mL', '<45', 'unknown', 'below the band, but borderline or out of range'],
+    // Ferritin band 30–150 (clinical 13–150).
+    ['ferritin', 20, 'ng/mL', '<40', 'unknown', 'a limit inside the band: below it or within it'],
+    ['ferritin', 1000, 'ng/mL', '>1000', 'out_of_range_high', 'every value above 1000 is out of range'],
+    ['ferritin', 140, 'ng/mL', '>140', 'unknown', 'a limit inside the band: within it or above it'],
+  ];
+  it.each(cases)('%s stored %s %s, printed %s → %s (%s)', (key, value, unit, printed, expected) => {
+    expect(computeAmaniStatus(key, value, null, null, unit, printed)).toBe(expected);
+    const scored = scoreBiomarker(key, value, unit, null, null, null, null, printed);
+    expect(scored.amaniStatus).toBe(expected);
+    if (expected === 'unknown') expect(scored).toMatchObject({ concern: 0, weightedConcern: 0, deviationMultiplier: 1 });
+  });
+
+  it('a measured result, or one without printed text, is flagged by its number as before', () => {
+    expect(computeAmaniStatus('egfr', 60, null, null, EGFR, '60')).toBe('out_of_range_low');
+    expect(computeAmaniStatus('egfr', 60, null, null, EGFR)).toBe('out_of_range_low');
+    expect(scoreBiomarker('ferritin', 12, 'ng/mL', 13, 150, null, null, '12').amaniStatus).toBe('out_of_range_low');
+  });
+
+  it('a decided censored result ranks by its printed limit, never by the placeholder', () => {
+    const censored = scoreBiomarker('vitamin_d_25_oh', 4, 'ng/mL', 30, 100, null, null, '<8');
+    const atLimit = scoreBiomarker('vitamin_d_25_oh', 8, 'ng/mL', 30, 100, null);
+    expect(censored.concern).toBe(2);
+    expect(censored.deviationMultiplier).toBe(atLimit.deviationMultiplier);
+    expect(censored.weightedConcern).toBe(atLimit.weightedConcern);
+  });
+
+  it('places a censored result against her lab interval only where the limit decides it', () => {
+    expect(scoreBiomarker('vitamin_d_25_oh', 4, 'ng/mL', 30, 100, null, null, '<8').labStatus).toBe('out_of_range_low');
+    // '<8' against 5–20: below the interval or inside it.
+    expect(scoreBiomarker('vitamin_d_25_oh', 4, 'ng/mL', 5, 20, null, null, '<8').labStatus).toBe('unknown');
+    expect(scoreBiomarker('vitamin_d_25_oh', 4, 'ng/mL', 5, 20, null).labStatus).toBe('borderline_low');
+  });
+});

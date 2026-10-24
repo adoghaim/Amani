@@ -16,6 +16,7 @@ import {
   type AuthorizedModelProse, type ComparisonBandLanguage, type FactualLanguage,
 } from '../lib/scoring/insightCopy';
 import { ModelProseText } from './ClinicalObservation';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 
 interface BiomarkerCardProps {
   name: BiomarkerName;
@@ -182,15 +183,17 @@ function DualStatusSection({
   labRefMin,
   labRefMax,
   value,
+  valueText,
 }: {
   name: string;
   pill: ComparisonBandLanguage;
   labRefMin: number | null;
   labRefMax: number | null;
   value: number;
+  valueText?: string | null;
 }) {
   const pillStyle = CUE_STYLE[pill.cue];
-  const lab = labIntervalObservation(name, value, labRefMin, labRefMax);
+  const lab = labIntervalObservation(name, value, labRefMin, labRefMax, null, null, valueText);
   const labStyle = lab ? CUE_STYLE[lab.cue] : null;
 
   return (
@@ -226,7 +229,7 @@ export function BiomarkerCard({
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state), unit);
+  const assessment = assessAmaniContext(name, value, contextFromReport(cyclePhase, state), unit, rawValueText);
   const pillLanguage = comparisonBandLabel(assessment, value);
   const pill = CUE_STYLE[pillLanguage.cue];
   const band = assessment.kind === 'scored' ? assessment.band : null;
@@ -365,7 +368,7 @@ export function BiomarkerCard({
             </div>
           );
         })()}
-        {band && (
+        {band && !isCensoredValue(rawValueText) && (
           <RangeBar value={value} band={band} labMin={labMin} labMax={labMax} />
         )}
       </div>
@@ -378,6 +381,7 @@ export function BiomarkerCard({
             labRefMin={labMin}
             labRefMax={labMax}
             value={value}
+            valueText={rawValueText}
           />
 
           {(() => {

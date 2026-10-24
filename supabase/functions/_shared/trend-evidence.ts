@@ -7,6 +7,7 @@
  * lab-insights comparison rules moved here verbatim: pair by key, require the
  * same unit, percent change against the previous value (0 when it was 0).
  */
+import { isCensoredValue } from "./censored-value.ts";
 
 export type BiomarkerChange = {
   name: string;
@@ -23,6 +24,8 @@ export interface ComparableValue {
   name: string;
   value: number;
   unit: string;
+  /** The result as printed; a censored one ('<8') carries a placeholder value (review F021). */
+  valueText?: string | null;
 }
 
 /**
@@ -43,6 +46,8 @@ export function compareBiomarkerValues(
     .map(value => {
       const prior = previous.find(p => p.key === value.key);
       if (!prior || !sameTrendUnit(value.unit, prior.unit)) return null;
+      // F021: a censored result is a printed limit, not a measurement: no delta or percent change.
+      if (isCensoredValue(value.valueText) || isCensoredValue(prior.valueText)) return null;
       const delta = value.value - prior.value;
       return {
         key: value.key,
@@ -55,6 +60,31 @@ export function compareBiomarkerValues(
       };
     })
     .filter((x): x is BiomarkerChange & { key: string } => Boolean(x));
+}
+
+/** The biomarkers columns lab-insights compares. raw_value_text marks a censored result (review F021). */
+export const STORED_BIOMARKER_COLUMNS = "name, value, unit, raw_value_text";
+
+export interface StoredBiomarkerRow {
+  name: string;
+  value: number;
+  unit: string;
+  raw_value_text?: string | null;
+}
+
+/**
+ * lab-insights' pairing of two reports' stored biomarkers rows: by lower-cased,
+ * trimmed name, with each value's printed text, so a censored result is never
+ * compared or put in its prompt (F021).
+ */
+export function compareStoredBiomarkers(
+  current: readonly StoredBiomarkerRow[],
+  previous: readonly StoredBiomarkerRow[],
+): Array<BiomarkerChange & { key: string }> {
+  const comparable = (b: StoredBiomarkerRow): ComparableValue => ({
+    key: b.name.toLowerCase().trim(), name: b.name, value: b.value, unit: b.unit, valueText: b.raw_value_text ?? null,
+  });
+  return compareBiomarkerValues(current.map(comparable), previous.map(comparable));
 }
 
 // Keep this conservative to avoid noise.
@@ -99,6 +129,8 @@ export interface TrendInputValue {
   name: string;
   value: unknown;
   unit: string | null;
+  /** report_analytes.raw_value_text; a censored result is never part of a trend (F021). */
+  value_text?: string | null;
 }
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
@@ -125,7 +157,7 @@ export function buildTrendEvidence(
       if (typeof v.slug !== "string" || !v.slug || !Number.isFinite(value)) continue;
       const unit = v.unit ?? "";
       if (!unit && unique.get(v.slug)?.unit) continue;
-      unique.set(v.slug, { key: v.slug, name: v.name, value, unit });
+      unique.set(v.slug, { key: v.slug, name: v.name, value, unit, valueText: v.value_text ?? null });
     }
     return [...unique.values()];
   };

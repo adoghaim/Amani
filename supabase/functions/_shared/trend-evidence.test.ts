@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  buildTrendEvidence, compareBiomarkerValues, formatTrendEvidencePrompt, isSignificantChange,
-  MAX_TREND_EVIDENCE, sameTrendUnit, topChanges, type TrendInputValue,
+  buildTrendEvidence, compareBiomarkerValues, compareStoredBiomarkers, formatTrendEvidencePrompt, isSignificantChange,
+  MAX_TREND_EVIDENCE, sameTrendUnit, STORED_BIOMARKER_COLUMNS, topChanges, type TrendInputValue,
 } from './trend-evidence';
 import { addFindingMetadata } from './finding-metadata';
 import { buildBasicProjection } from './interpretation-visibility';
@@ -138,4 +139,57 @@ it('catalogues only the first pattern referencing a trend slug', () => {
   expect(catalog.filter(f => f.kind === 'trend')).toHaveLength(evidence.length);
   expect(catalog.some(f => f.source_path === '/pattern_signals/1')).toBe(false);
   expect(catalog.some(f => f.source_path === '/trend_evidence/0')).toBe(false);
+});
+
+// Review F021: the verifier's case. A prior '<8' is stored as 4, and the stored
+// summary read "Vitamin D increased 4 → 20 ng/mL", a value the lab never reported.
+describe('censored results are never trend evidence (F021)', () => {
+  const vitD = (value: number, value_text: string | null): TrendInputValue =>
+    ({ slug: 'vitamin_d_25_oh', name: 'Vitamin D', value, unit: 'ng/mL', value_text });
+
+  it('a censored prior value gives no change, summary or prompt line', () => {
+    const evidence = buildTrendEvidence([vitD(20, '20')], [vitD(4, '<8')], '2026-03-01');
+    expect(evidence).toEqual([]);
+    expect(formatTrendEvidencePrompt(evidence)).toBe('');
+  });
+
+  it('a censored current value gives no change either', () => {
+    expect(buildTrendEvidence([vitD(1000, '>1000')], [vitD(500, '500')], '2026-03-01')).toEqual([]);
+  });
+
+  it('two measured values still compare as before', () => {
+    expect(buildTrendEvidence([vitD(20, '20')], [vitD(10, '10')], '2026-03-01').map(e => e.summary))
+      .toEqual(['Vitamin D increased 10 → 20 ng/mL since 2026-03-01']);
+  });
+
+  it('compareBiomarkerValues skips a pair with a censored side (lab-insights pairing)', () => {
+    const value = (v: number, valueText?: string | null) => ({ key: 'tsh', name: 'TSH', value: v, unit: 'mIU/L', valueText });
+    expect(compareBiomarkerValues([value(2)], [value(0.005, '<0.01')])).toEqual([]);
+    expect(compareBiomarkerValues([value(0.005, '< 0.01')], [value(2)])).toEqual([]);
+    expect(compareBiomarkerValues([value(2)], [value(1)])).toHaveLength(1);
+  });
+});
+
+// Review F021, the lab-insights caller: it read only 'name, value, unit' and
+// paired values without the printed text, so the guard above never fired and
+// its prompt said "Vitamin D: 4 → 20 ng/mL (+16.0, 400%)".
+describe('lab-insights pairs stored rows with their printed text (F021)', () => {
+  const row = (name: string, value: number, raw_value_text: string | null) => ({ name, value, unit: 'ng/mL', raw_value_text });
+
+  it('a censored side gives no change; measured pairs still compare by normalized name', () => {
+    expect(compareStoredBiomarkers([row('Vitamin D', 20, '20')], [row('vitamin d ', 4, '<8')])).toEqual([]);
+    expect(compareStoredBiomarkers([row('Ferritin', 1000, '>1000')], [row('Ferritin', 500, '500')])).toEqual([]);
+    expect(compareStoredBiomarkers([row('Ferritin', 40, '40')], [row('ferritin', 20, null)]))
+      .toEqual([expect.objectContaining({ key: 'ferritin', previous_value: 20, current_value: 40, percent_change: 100 })]);
+  });
+
+  it('lab-insights reads raw_value_text for both reports and pairs through compareStoredBiomarkers', () => {
+    const handler = readFileSync(new URL('../lab-insights/index.ts', import.meta.url), 'utf8');
+    expect(STORED_BIOMARKER_COLUMNS.split(',').map(c => c.trim())).toContain('raw_value_text');
+    const reads = handler.match(/\.from\("biomarkers"\)\s*\.select\([^)]*\)/g) ?? [];
+    expect(reads).toHaveLength(2);
+    for (const read of reads) expect(read).toMatch(/\.select\(STORED_BIOMARKER_COLUMNS\)$/);
+    expect(handler).toMatch(/compareStoredBiomarkers\(\s*currentBiomarkers \|\| \[\],\s*previousBiomarkers \|\| \[\],?\s*\)/);
+    expect(handler).not.toMatch(/compareBiomarkerValues\(/);
+  });
 });

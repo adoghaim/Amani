@@ -12,6 +12,7 @@ import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts"
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { aiPausedBody } from "../_shared/ai-pause.ts";
 import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+import { censoredPlaceholder } from "../_shared/censored-value.ts";
 
 // PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
 // AI cost ledger, and the kill switch. Once per isolate.
@@ -342,6 +343,7 @@ CRITICAL RULES:
 11. Extract units exactly as shown; use null if not present
 12. Preserve reference ranges exactly as shown in raw_reference_range
 13. raw_name must be the EXACT label as printed on the report — do not normalize or abbreviate
+14. value_text must be the result EXACTLY as printed, keeping any comparator ("<", ">", "≤", "≥", "OR ="); for a comparator result value_numeric is only a storage placeholder
 
 CANONICAL SLUG MAPPING (use these slugs when the test EXACTLY matches, null otherwise):
 Hormones: estradiol, progesterone, lh, fsh, amh, total_testosterone, free_testosterone, dheas, prolactin, fasting_insulin, shbg
@@ -495,19 +497,12 @@ CONFIDENCE:
       rawItems = [];
     }
 
+    // F021: a comparator result's number is derived from its printed text, never
+    // from the model, in every comparator form the rules above name ("> OR = 60",
+    // "≤", "≥"). raw_value_text keeps the text, which readers treat as authority.
     for (const item of rawItems) {
-      if ((item.value_numeric === 0 || item.value_numeric == null) && item.value_text) {
-        const comparatorMatch = String(item.value_text).match(/^([<>]=?)\s*(\d+(?:\.\d+)?)/);
-        if (comparatorMatch) {
-          const threshold = parseFloat(comparatorMatch[2]);
-          const op = comparatorMatch[1];
-          if (op.startsWith('<')) {
-            item.value_numeric = threshold / 2;
-          } else {
-            item.value_numeric = threshold;
-          }
-        }
-      }
+      const placeholder = censoredPlaceholder(item.value_text);
+      if (placeholder !== null) item.value_numeric = placeholder;
     }
 
     const reportAnalytes: ReportAnalyte[] = rawItems

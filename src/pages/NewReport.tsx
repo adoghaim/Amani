@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 import { checkSubscriptionLive, handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { uploadRequiresSubscription } from '../lib/freemium/gates';
@@ -652,7 +653,7 @@ export function NewReport() {
           const declaredState = stateFromPregnancyStatus(userProfile?.pregnancy_status);
           const biomarkerInserts = coreItems.map(item => {
             const slug = item.canonical_slug! as BiomarkerName;
-            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, declaredState, item._normalized_unit ?? item.unit ?? '');
+            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, declaredState, item._normalized_unit ?? item.unit ?? '', item.value_text);
             let flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown' = 'in_range';
             if (status === 'borderline_low' || status === 'borderline_high') flagged = 'borderline';
             else if (status === 'out_of_range_low' || status === 'out_of_range_high') flagged = 'out_of_range';
@@ -1301,7 +1302,9 @@ export function NewReport() {
                         <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-theme-neutral-50">
                           <span className="text-sm text-theme-neutral-800 font-medium truncate max-w-[60%]">{reportItemDisplayName(item)}</span>
                           <span className="text-sm text-theme-neutral-500 ml-2 flex-shrink-0">
-                            {item.value_text && (item.value_numeric == null || item.value_numeric === 0)
+                            {isCensoredValue(item.value_text)
+                              ? `${item.value_text}${item.unit ? ' ' + item.unit : ''}`
+                              : item.value_text && (item.value_numeric == null || item.value_numeric === 0)
                               ? item.value_text
                               : item.value_numeric != null
                                 ? `${item.value_numeric}${item.unit ? ' ' + item.unit : ''}`
@@ -1497,6 +1500,8 @@ export function NewReport() {
                   setReportItems(prev => {
                     const updated = [...prev];
                     updated[index] = { ...updated[index], [field]: value } as ReportItem;
+                    // Her edited value replaces the printed text, so a printed '<8' cannot outlive it (F021).
+                    if (field === 'value_numeric') updated[index].value_text = null;
                     return updated;
                   });
                 }}

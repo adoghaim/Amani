@@ -4,6 +4,7 @@ import { Button } from './Button';
 import type { ReportItem } from '../utils/biomarkerParser';
 import { useBiomarkerCatalog } from '../hooks/useBiomarkerCatalog';
 import { reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 
 interface ReviewBiomarkersProps {
   items: ReportItem[];
@@ -131,16 +132,23 @@ function ItemCard({
               <label className={`block text-xs font-medium mb-1 ${item.parse_error ? 'text-theme-flag-low' : 'text-theme-neutral-600'}`}>
                 Value
               </label>
+              {/* F021: a result printed as a limit ('<8') stores a placeholder number; it is never shown as her value. */}
               <input
                 type="number"
                 step="0.001"
-                value={item.value_numeric}
+                value={isCensoredValue(item.value_text) ? '' : item.value_numeric}
+                aria-describedby={isCensoredValue(item.value_text) ? `printed-value-${globalIndex}` : undefined}
                 onChange={e => {
                   onUpdate(globalIndex, 'value_numeric', parseFloat(e.target.value));
                   onUpdate(globalIndex, 'review_status', 'edited_by_user');
                 }}
                 className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-theme-flag-ok-border focus:border-theme-flag-ok-border ${item.parse_error ? 'border-theme-flag-low-border bg-theme-flag-low-bg' : 'border-theme-neutral-300'}`}
               />
+              {isCensoredValue(item.value_text) && (
+                <p id={`printed-value-${globalIndex}`} className="mt-1 text-xs text-theme-neutral-600">
+                  Your lab reported {item.value_text}{item.unit ? ` ${item.unit}` : ''}, a limit rather than a measured value.
+                </p>
+              )}
             </div>
 
             <div>

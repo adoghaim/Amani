@@ -3,9 +3,10 @@ import {
   canClaimFavourableDirection, canDescribeAsOptimal, isReviewedRange,
   type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
-import { assessAmaniContext, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
+import { assessAmaniContext, censoredClassification, contextFromReport, formatInterval, type AmaniAssessment, type AmaniBand, type NonCyclingState } from './amaniContext';
 import { sameUnit } from '../biomarkers/normalizeReportItems';
 import { CATEGORY_DISPLAY, type BiomarkerCategory, type BiomarkerName } from '../../types';
+import { censoredResult, isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 
 /*
   V2-03 amendment 3. Narrative copy built in src/lib/insights (outside TASK-044's
@@ -177,10 +178,15 @@ export function primaryFindingSentence(
   language?: AuthorizedLanguage,
 ): string {
   if (language?.reviewStatus === 'DISPUTED') {
-    return `${finding.displayName} was measured at ${finding.value} ${finding.unit}. ${reviewStatement(language)}`;
+    return `${finding.displayName} was measured at ${statedValue(finding)} ${finding.unit}. ${reviewStatement(language)}`;
   }
   const where = finding.direction === 'high' ? 'above' : finding.direction === 'low' ? 'below' : 'outside';
-  return `${finding.displayName} is ${where} the Amani band at ${finding.value} ${finding.unit}. ${BANDS_UNDER_REVIEW}`;
+  return `${finding.displayName} is ${where} the Amani band at ${statedValue(finding)} ${finding.unit}. ${BANDS_UNDER_REVIEW}`;
+}
+
+/** F021: a censored result ('<8') is stated as printed. Its stored number is a placeholder, never a value to state. */
+export function statedValue(finding: { value: number; valueText?: string | null }): string {
+  return isCensoredValue(finding.valueText) ? finding.valueText!.trim() : String(finding.value);
 }
 
 /** Replaces every sentence that calls a band "optimal" with `replacement`
@@ -565,14 +571,17 @@ export function bandPlacement(assessment: AmaniAssessment, value: number): Place
   if (assessment.kind !== 'scored') return null;
   const { min, max } = bandBounds(assessment.band);
   if (min === null && max === null) return null;
-  return (min !== null && value < min) || (max !== null && value > max) ? 'outside' : 'within';
+  // F021: a censored result is placed by the printed limit it was decided on, never its placeholder.
+  const placed = assessment.censored ? assessment.censored.threshold : value;
+  return (min !== null && placed < min) || (max !== null && placed > max) ? 'outside' : 'within';
 }
 
 /** Shared selection for count-based surfaces; never derive placement from concern. */
 export function markerBandPlacement(
   key: BiomarkerName, value: number, cyclePhase?: string | null, unit?: string | null, state: NonCyclingState | null = null,
+  valueText?: string | null,
 ): Placement {
-  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase, state), unit), value);
+  return bandPlacement(assessAmaniContext(key, value, contextFromReport(cyclePhase, state), unit, valueText), value);
 }
 
 /** Short, user-facing review state carried beside every Amani band. */
@@ -597,6 +606,12 @@ const STATE_LABEL: Record<NonCyclingState, string> = {
 /** Copy for a withheld score. Never implies that a score exists. */
 export function withheldCopy(assessment: Extract<AmaniAssessment, { kind: 'withheld' }>): { title: string; body: string } {
   const title = 'Amani context score unavailable';
+  if (assessment.reason === 'censored_result') {
+    return {
+      title,
+      body: `Your lab reported this result as ${assessment.printed}, a limit rather than a measured value. Your result and your lab's range are shown as reported.`,
+    };
+  }
   if (assessment.reason === 'non_cycling_state' && assessment.state) {
     return {
       title,
@@ -642,7 +657,8 @@ export type LabPlacement = 'below' | 'within' | 'above';
 
 /**
  * Her laboratory's interval exactly as printed. Amani adds no margin: a value
- * past either bound is outside it, however close.
+ * past either bound is outside it, however close. A censored result ('<8',
+ * `valueText`) is placed only where its printed limit decides it (F021).
  */
 export function labIntervalPlacement(
   value: number | null | undefined,
@@ -650,7 +666,10 @@ export function labIntervalPlacement(
   max: number | null | undefined,
   operator?: string | null,
   operatorValue?: number | null,
+  valueText?: string | null,
 ): LabPlacement | null {
+  const censored = censoredResult(valueText);
+  if (censored) return censoredClassification(censored, v => labIntervalPlacement(v, min, max, operator, operatorValue));
   if (value == null || Number.isNaN(value)) return null;
   if (min != null || max != null) {
     if (min != null && value < min) return 'below';
@@ -672,6 +691,8 @@ const LAB_PLACEMENT_TEXT: Record<LabPlacement, string> = {
 };
 
 export const NO_LAB_INTERVAL = 'No lab range';
+/** F021: a printed limit ('<8') that her lab's range cannot place. States the fact, no placement. */
+export const CENSORED_LAB_RESULT = 'Reported as a limit';
 
 /*
   PK-DS-01 result row (DESIGN.md "Result row"). Every range her lab printed is
@@ -694,15 +715,22 @@ export function labIntervalObservation(
   max: number | null | undefined,
   operator?: string | null,
   operatorValue?: number | null,
+  valueText?: string | null,
 ): FactualLanguage | null {
-  const placement = labIntervalPlacement(value, min, max, operator, operatorValue);
-  if (!placement) return null;
+  const placement = labIntervalPlacement(value, min, max, operator, operatorValue, valueText);
   const upper = operator && /^</.test(operator) ? operatorValue ?? null : max ?? null;
   const lower = operator && /^>/.test(operator) ? operatorValue ?? null : min ?? null;
+  const authority = { kind: 'patient_lab_interval' as const, subject, min: lower, max: upper };
+  if (!placement) {
+    // F021: the interval is usable (it places the printed limit) but cannot place the result.
+    const censored = censoredResult(valueText);
+    if (!censored || !labIntervalPlacement(censored.threshold, min, max, operator, operatorValue)) return null;
+    return { category: 'factual_observation', text: CENSORED_LAB_RESULT, cue: 'neutral', authority };
+  }
   return {
     category: 'factual_observation', text: LAB_PLACEMENT_TEXT[placement],
     cue: placement === 'within' ? 'neutral' : 'attention',
-    authority: { kind: 'patient_lab_interval', subject, min: lower, max: upper },
+    authority,
   };
 }
 

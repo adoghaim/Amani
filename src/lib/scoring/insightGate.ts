@@ -2,6 +2,7 @@ import type { BiomarkerName } from '../../types';
 import { INSIGHT_RULES } from '../../utils/derivedMetrics';
 import { getDisplayName } from '../biomarkers/dictionary';
 import { assessAmaniContext, type PhysiologicalContext } from './amaniContext';
+import { isCensoredValue } from '../../../supabase/functions/_shared/censored-value';
 import {
   authorizedLanguage, combineLanguage, patternRuleObservation,
   type AuthorizedLanguage, type ComparisonBandLanguage, type MeasuredValue, type Placement,
@@ -81,14 +82,17 @@ export function withheldInputs(
 
 export function gateInsightMatches<T extends GatedInsightMatch>(
   matches: readonly T[],
-  biomarkers: readonly { name: string; value: number; unit?: string | null }[],
+  biomarkers: readonly { name: string; value: number; unit?: string | null; raw_value_text?: string | null }[],
   context: PhysiologicalContext,
 ): T[] {
   const values = new Map(biomarkers.map(b => [b.name, b.value] as const));
   const units = new Map(biomarkers.map(b => [b.name, b.unit] as const));
+  // F021: a rule reads values, and a censored input's value ('<8' stored as 4) is a placeholder.
+  const censored = new Set(biomarkers.filter(b => isCensoredValue(b.raw_value_text)).map(b => b.name));
   return matches.filter(m => {
     const dependency = ruleDependency(m);
     if (dependency.kind === 'unestablished') return false;
+    if (dependency.kind === 'analytes' && dependency.analytes.some(key => censored.has(key))) return false;
     return withheldInputs(m, values, context, units).length === 0;
   });
 }

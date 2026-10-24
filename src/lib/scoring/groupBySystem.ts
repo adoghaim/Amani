@@ -62,7 +62,7 @@ export function groupBySystem(
     }
 
     const flaggedCount = biomarkers.filter(
-      b => markerBandPlacement(b.key, b.value, cyclePhase, b.unit, state) === 'outside',
+      b => markerBandPlacement(b.key, b.value, cyclePhase, b.unit, state, b.valueText) === 'outside',
     ).length;
 
     const display = CATEGORY_DISPLAY[cat];

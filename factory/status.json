@@ -2118,16 +2118,19 @@
       "depends_on": [
         "RV-CS2"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-clinical-scoring",
-      "pr": null,
+      "pr": "#175",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2138,10 +2141,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track clinical-scoring; findings F021. Not started."
+        "A censored result ('<8', '> OR = 60') is no longer compared, trended, percent-changed, classified, displayed or sent to lab-insights as its stored placeholder number on the client and in shared server logic; F021 is partial pending PX1 (inclusive comparators in the local PDF parser) and the post-#152 generate-interpretation packet; blind verifier verdict PASS_WITH_NOTES at 3c25fef on 2026-10-24 after seven rounds and two back-outs.",
+        "Gates at ed08e99 (run locally): lint, typecheck, full test (3,657), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-IA1",
