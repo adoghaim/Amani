@@ -74,8 +74,8 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-IB2 Keyboard- and screen-reader-usable upload flow | RV | 1 | todo | RV-IB1 | - |
 | RV-NP1 Harden the nutrient validator with an adversarial corpus | RV | 1 | in-progress | - | - |
 | RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | todo | - | - |
-| RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | in-progress | - | - |
-| RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | todo | RV-RS1 | - |
+| RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | review | - | [#161](https://github.com/adoghaim/Amani/pull/161) |
+| RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | review | RV-RS1 | [#161](https://github.com/adoghaim/Amani/pull/161) |
 | RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | todo | - | - |
 | RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | todo | RV-BS1 | - |
 | RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | todo | - | - |
@@ -112,7 +112,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-IA2 | ingest-cycle-parser | in-progress | `factory/rv-wip-ia2` @ `073a207` | Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch. |
 | RV-IB1 | ingest-ocr-a11y | in-progress | `factory/rv-ingest-ocr-a11y` @ `4219016` | Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet. |
 | RV-NP1 | nutrient-policy | in-progress | `factory/rv-nutrient-policy` @ `fefd1f6` | Built, DONE_WITH_CONCERNS (F015, F096 partial). Verifier was cut off: needs verification. |
-| RV-RS1 | report-safety | in-progress | `factory/rv-wip-rs1` @ `7ed7625` | Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification. |
+| RV-RS1 | report-safety | review | `factory/rv-wip-rs1` @ `382f3c7` | PR #161: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-BU1 | billing-ui | in-progress | `factory/rv-billing-ui` @ `e321bd3` | Built, DONE_WITH_CONCERNS (F045 partial). Verifier was cut off: needs verification. |
 | RV-WP1 | web-platform | review | `factory/rv-web-platform` @ `dec8bfe` | Built. Security and correctness reviews: recommend merge. |
 | RV-WP2 | web-platform | in-progress | `factory/rv-wip-wp2` @ `979728b` | Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d). |
