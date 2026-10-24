@@ -36,6 +36,10 @@ interface State {
   authDeleteError?: string;
   /** Server secrets by name; a name not listed reads 'test'. */
   env?: Record<string, string | undefined>;
+  /** Customers already deleted at Stripe: listing their subscriptions, or deleting them, is resource_missing. */
+  stripeGone?: string[];
+  /** Thrown by every subscriptions.list call for a customer not in stripeGone. */
+  listError?: unknown;
 }
 
 function harness(state: State = {}) {
@@ -116,12 +120,23 @@ function harness(state: State = {}) {
     storage,
   };
 
+  const missing = (id: string) => Object.assign(new Error(`No such customer: '${id}'`), { code: 'resource_missing' });
   const stripe = {
     subscriptions: {
-      list: vi.fn(async ({ customer }: { customer: string }) => ({ data: state.subs?.[customer] ?? [] })),
+      list: vi.fn(async ({ customer }: { customer: string }) => {
+        if (state.stripeGone?.includes(customer)) throw missing(customer);
+        if (state.listError) throw state.listError;
+        return { data: state.subs?.[customer] ?? [] };
+      }),
       cancel: vi.fn(async (id: string) => { log.push(`stripe:cancel:${id}`); return { id }; }),
     },
-    customers: { del: vi.fn(async (id: string) => { log.push(`stripe:del:${id}`); return { id, deleted: true }; }) },
+    customers: {
+      del: vi.fn(async (id: string) => {
+        if (state.stripeGone?.includes(id)) throw missing(id);
+        log.push(`stripe:del:${id}`);
+        return { id, deleted: true };
+      }),
+    },
   };
   function Stripe() { return stripe; }
 
@@ -257,6 +272,56 @@ describe('delete-user-data 409 says whether the deletion cancels Google Play (RV
     });
     expect(stripe.customers.del).not.toHaveBeenCalled();
     expect(log).toEqual([]);
+  });
+});
+
+describe('delete-user-data finishes a retry whose Stripe customer is already gone (RV-R3 AC3, RES1 168-5)', () => {
+  it('a customer an earlier run deleted lists as resource_missing: nothing to cancel, and the deletion completes', async () => {
+    const { handler, log, stripe } = harness({ current: 'cus_already_deleted', stripeGone: ['cus_already_deleted'], files: ['1.pdf'] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(stripe.subscriptions.list).toHaveBeenCalledTimes(1);
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
+    expect(stripe.customers.del.mock.calls.map((c) => c[0])).toEqual(['cus_already_deleted']);
+    expect(log).toContain('delete:stripe_customers');
+    expect(log.at(-1)).toBe('auth:delete');
+  });
+
+  it('only that customer is skipped: another customer on the account is still cancelled and deleted first', async () => {
+    const { handler, log, stripe } = harness({
+      current: 'cus_already_deleted',
+      legacy: 'cus_portal_orphan',
+      stripeGone: ['cus_already_deleted'],
+      subs: { cus_portal_orphan: [{ id: 'sub_live', status: 'active' }] },
+    });
+
+    expect((await handler(request())).status).toBe(200);
+    expect(log).toContain('stripe:cancel:sub_live');
+    expect(stripe.customers.del.mock.calls.map((c) => c[0]).sort()).toEqual(['cus_already_deleted', 'cus_portal_orphan']);
+    expect(log.indexOf('stripe:del:cus_portal_orphan')).toBeLessThan(log.indexOf('delete:stripe_customers'));
+    expect(log.at(-1)).toBe('auth:delete');
+  });
+
+  it.each([
+    ['a Stripe error with another code', Object.assign(new Error('Too many requests'), { code: 'rate_limit' })],
+    ['an error with no code', new Error('fetch failed')],
+  ])('any other subscriptions.list failure (%s) still refuses with the fixed 500 body, deleting nothing', async (_label, failure) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { handler, log, stripe } = harness({ current: 'cus_checkout', listError: failure, files: ['1.pdf'] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: 'Failed to delete account. Please try again.',
+      code: 'account_deletion_failed',
+      retry: true,
+    });
+    expect(stripe.customers.del).not.toHaveBeenCalled();
+    expect(log.filter((e) => e.startsWith('storage:') || e.startsWith('delete:') || e.startsWith('update:') || e === 'auth:delete')).toEqual([]);
   });
 });
 

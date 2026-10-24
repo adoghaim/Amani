@@ -142,7 +142,16 @@ Deno.serve(async (req: Request) => {
 
       async cancelStripeSubscriptions(customerId) {
         if (!stripe) return; // Stripe not configured — nothing to cancel.
-        const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 100 });
+        let subs: Stripe.ApiList<Stripe.Subscription>;
+        try {
+          subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 100 });
+        } catch (err: unknown) {
+          // A customer an earlier run deleted before failing at a later step
+          // (its local pointer is what this retry found) has nothing to cancel.
+          const code = (err as { code?: string }).code;
+          if (code !== STRIPE_RESOURCE_MISSING) throw err;
+          return;
+        }
         const active = subs.data.filter((s) =>
           s.status === "active" || s.status === "trialing" || s.status === "past_due" || s.status === "unpaid"
         );
