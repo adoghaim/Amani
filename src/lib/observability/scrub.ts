@@ -238,7 +238,7 @@ export function scrubBreadcrumb(
  * redacted), the full stack trace, release, environment, platform, and
  * breadcrumb structure. Stack frames are never touched — they are the payload
  * that makes a crash fixable, they hold code paths rather than user data, and
- * `build.sourcemap: 'hidden'` exists so they can be symbolicated.
+ * an uploaded source map can symbolicate them (vite.config.ts publishes none).
  */
 export function scrubEvent(event: ScrubbableEvent): ScrubbableEvent {
   /*

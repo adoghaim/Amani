@@ -111,6 +111,8 @@ describe('src/lib/native.ts public API', () => {
       // PK-DEVICE-01
       'INSTALL_MARKER_KEY', 'SECURE_STORAGE_PREFIX', 'authSessionStorage', 'authenticateWithBiometrics',
       'checkBiometrics', 'createAuthSessionStorage', 'onAppLifecycle', 'setScreenshotsBlocked',
+      // Review F067: the Android back button goes through the wrapper, not @capacitor/app.
+      'onBackButton',
     ].sort());
   });
 
