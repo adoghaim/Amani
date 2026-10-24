@@ -6,7 +6,7 @@ import type {
   RangeResult,
   SourceAdapter,
 } from './types';
-import { KNOWN_UNITS } from './labelMatching';
+import { KNOWN_UNITS, detectUnit } from './labelMatching';
 import { isPartOfWord } from './textUtils';
 
 /**
@@ -194,6 +194,11 @@ function isLabelWord(token: string): boolean {
   return WORD_TOKEN_RE.test(token);
 }
 
+/** A unit or a result flag printed beside a value: "mL/min/1.73m2", "mL/min/1.73", "%", "L", "High". */
+export function isUnitOrFlagToken(token: string): boolean {
+  return FLAG_TOKEN_RE.test(token) || UNIT_TOKENS.has(token.toLowerCase()) || detectUnit(token) !== null;
+}
+
 function isUnitOrFlagOnly(line: string): boolean {
   return line.split(/\s+/).every(t => FLAG_TOKEN_RE.test(t) || UNIT_TOKENS.has(t.toLowerCase()));
 }
@@ -307,7 +312,12 @@ function labelLineCandidates(line: string, adapter?: SourceAdapter, nameEnd = 0)
   const intervals = findIntervals(line, adapter);
   if (intervals.length === 0) return [];
   const hasMinMax = intervals.some(iv => iv.range.min !== undefined);
-  const own = hasMinMax ? null : detectComparatorRange(line);
+  const result = firstNumericToken(line, nameEnd);
+  // A comparator in the value position is her result, not the line's own
+  // reference, when another comparator follows it ("eGFR ≥60 mL/min/1.73 >59").
+  const withoutResult = result === null ? line
+    : line.slice(0, result.start) + ' '.repeat(result.end - result.start) + line.slice(result.end);
+  const own = hasMinMax ? null : detectComparatorRange(withoutResult) ?? detectComparatorRange(line);
   const ownKey = own ? `${own.operator}${own.value}` : null;
   let ownTaken = false;
   const kept = labelIntervals(line, intervals, 0).filter(({ iv, label }) => {
@@ -321,7 +331,6 @@ function labelLineCandidates(line: string, adapter?: SourceAdapter, nameEnd = 0)
   });
   const firstKept = kept[0];
   if (firstKept === undefined) return [];
-  const result = firstNumericToken(line, nameEnd);
   const printed = line.slice(firstKept.printedStart).trim().replace(/\s+/g, ' ');
   return kept.map(({ iv, label }) => ({
     range: own && iv.key === ownKey ? { comparator: own, raw: own.raw } : iv.range,

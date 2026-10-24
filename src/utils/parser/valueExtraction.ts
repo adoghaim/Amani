@@ -1,12 +1,18 @@
 import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine, isPartOfWord } from './textUtils';
-import { INCLUSIVE_COMPARATOR, bindReferenceRange, firstNumericToken } from './rangeDetection';
+import { INCLUSIVE_COMPARATOR, bindReferenceRange, firstNumericToken, isUnitOrFlagToken } from './rangeDetection';
 import { detectUnit } from './labelMatching';
 
 const NUM_RE = /(\d+\.\d+|\d+)/g;
 // A result printed at or below/above a limit: "<=8", "< OR = 150", "≤150", "> OR = 60", "≥1000" (F021).
 const INCLUSIVE_VALUE_RE = new RegExp(String.raw`^${INCLUSIVE_COMPARATOR}\s*(\d+\.?\d*)`, 'i');
 const COMPARATOR_PREFIX_RE = new RegExp(String.raw`^(?:${INCLUSIVE_COMPARATOR}|[<>])\s*`, 'i');
+
+/** Her own result line: a number followed only by its unit or flag ("45 mL/min/1.73m2", "45 L", "7.2 H %"). */
+function isOwnResultLine(line: string): boolean {
+  const [first, ...rest] = line.trim().split(/\s+/);
+  return first !== undefined && /^\d+(?:\.\d+)?$/.test(first) && rest.every(isUnitOrFlagToken);
+}
 
 const PHASE_LINE_RE = /\b(?:phase|trimester|menopausal|menopaus|pregnancy|pregnant|follicular|luteal|ovulatory|peak|male|female|adult|child|infant)\b/i;
 const PROSE_WORDS_RE = /\b(?:for|with|patients?|range|desirable|goal|option|primary|prevention|factor|method|equation|accuracy)\b/i;
@@ -236,11 +242,13 @@ export function extractValueFromWindow(
   const labelLineBeforeRef0 = refBoundaryIdx0 > 0 ? labelLine.substring(0, refBoundaryIdx0) : labelLine;
   // F021: an inclusive comparator is her result only in the result position, the
   // first number after the name ("eGFR > OR = 60 > OR = 60 mL/min/1.73m2"). Beside
-  // or after a measured value it is the reference ("eGFR 45 L ≥60 mL/min/1.73m2").
+  // or after a measured value it is the reference ("eGFR 45 L ≥60 mL/min/1.73m2"),
+  // and so it is when a measured value follows it ("eGFR (>=60) 45 mL/min/1.73m2").
   const resultToken = firstNumericToken(labelLineBeforeRef0, labelNameEnd);
   const resultText = resultToken ? labelLineBeforeRef0.slice(resultToken.start, resultToken.end) : '';
   const inclusiveResult = INCLUSIVE_VALUE_RE.test(resultText) ? parseValueWithPrefix(resultText) : null;
-  if (inclusiveResult) {
+  const measuredAfter = resultToken !== null && collectCandidates([labelLineBeforeRef0], true, resultToken.end).length > 0;
+  if (inclusiveResult && !measuredAfter) {
     return { value: inclusiveResult.value, rawValue: inclusiveResult.rawValue, unit, referenceResult, ...ambiguity };
   }
   const prefixRe0 = /(?:^|\s)(<\s*\d+\.\d+|<\s*\d+|>\s*\d+\.\d+|>\s*\d+)/;
@@ -341,7 +349,8 @@ export function extractValueFromWindow(
     if (cm2 && cm2[1] !== undefined) {
       // F021: a comparator after her measured value is its reference, not her
       // result ("eGFR / 45 mL/min/1.73m2 / > OR = 60"); the measured value stays.
-      const measured = collectCandidates([...valueLines.slice(0, k), trimmed.slice(0, cm2.index)], true);
+      // Only her own result line counts, not a number in "Specimen 1" or "CKD-EPI 2021".
+      const measured = collectCandidates([...valueLines.slice(0, k), trimmed.slice(0, cm2.index)].filter(isOwnResultLine), true);
       const measuredBest = pickBest(measured);
       if (measuredBest) return { value: measuredBest.value, rawValue: measuredBest.rawValue, unit, referenceResult, ...ambiguity };
       const cmToken = cm2[1];

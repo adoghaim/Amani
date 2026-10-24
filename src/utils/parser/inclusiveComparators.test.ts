@@ -10,7 +10,7 @@ import { edgeCasesFixture } from './__fixtures__/edgeCases';
 import { questHormoneFixture } from './__fixtures__/questHormones';
 import { labcorpHormoneFixture } from './__fixtures__/labcorpHormones';
 import { questSmokeFixture } from './__fixtures__/questSmoke';
-import { comparatorExtraLayouts, comparatorLayouts } from './__fixtures__/comparatorLayouts';
+import { comparatorAdversarialLayouts, comparatorExtraLayouts, comparatorLayouts } from './__fixtures__/comparatorLayouts';
 
 /*
   Review F021, packet PX1. A result printed as a limit keeps its comparator in
@@ -30,7 +30,7 @@ const tuples = (text: string): Tuple[] =>
 const item = (text: string, slug: string) => parseAllReportItems(text).find(i => i.canonical_slug === slug);
 
 function layout(name: string): string {
-  const text = comparatorLayouts.get(name) ?? comparatorExtraLayouts.get(name);
+  const text = comparatorLayouts.get(name) ?? comparatorExtraLayouts.get(name) ?? comparatorAdversarialLayouts.get(name);
   if (text === undefined) throw new Error(`no layout ${name}`);
   return text;
 }
@@ -44,7 +44,8 @@ const CONTROL: Record<string, Tuple> = {
   g: ['sodium', '140', 140],
 };
 const expectRow = (name: string, ...rows: Tuple[]) => {
-  const control = CONTROL[name.slice(0, 1)];
+  // Probe rows ("p_…") are printed under a bare header, with no control row.
+  const control = name.startsWith('p_') ? undefined : CONTROL[name.slice(0, 1)];
   expect(tuples(layout(name))).toEqual(control ? [control, ...rows] : rows);
 };
 
@@ -144,6 +145,169 @@ describe('a split row whose result line was dropped reads as the printed limit',
   ])('%s', (name, row) => expectRow(name, row));
 });
 
+/*
+  The PX1 review's adversarial and probe rows (comparatorAdversarialLayouts),
+  each pinned at what the packet's base (d5b6ae9) read when that was her
+  measured result, or at the corrected read where the base was wrong.
+*/
+describe('a reference printed before her result on the label line is not her result', () => {
+  // Review finding 1: the measured value that follows the reference stays her result.
+  it.each<[string, Tuple]>([
+    ['q_a10', ['egfr', '45', 45]],
+    ['q_a11', ['egfr', '45', 45]],
+    ['q_a12', ['egfr', '45', 45]],
+    ['q_a19', ['hemoglobin_a1c', '7.2', 7.2]],
+    ['g_d02', ['egfr', '45', 45]],
+    ['g_d03', ['egfr', '45', 45]],
+    ['g_d04', ['hdl_cholesterol', '35', 35]],
+    ['g_d08', ['egfr', '45', 45]],
+    ['g_d10', ['hemoglobin_a1c', '7.2', 7.2]],
+    // The strict spellings read the same way at the base already.
+    ['q_a21', ['triglycerides', '320', 320]],
+    ['g_d11', ['hdl_cholesterol', '35', 35]],
+    ['g_d12', ['egfr', '45', 45]],
+  ])('%s', (name, row) => expectRow(name, row));
+
+  it.each(['q_a10', 'q_a11', 'q_a12', 'g_d02', 'g_d03', 'g_d08'])('%s: the eGFR row binds the printed >= 60 reference', name => {
+    expect(item(layout(name), 'egfr')).toMatchObject({ value_numeric: 45, reference_operator_value: 60 });
+  });
+
+  // Nothing but its unit, flag, reference interval or another comparator follows: her result, as printed.
+  it.each<[string, Tuple]>([
+    ['q_a13', ['egfr', '>=60', 60]],
+    ['q_a14', ['egfr', '≥60', 60]],
+    ['q_a15', ['egfr', '> OR =60', 60]],
+    ['q_a16', ['egfr', '>= 60', 60]],
+    ['q_a24', ['vitamin_b12', '<=150', 75]],
+    ['q_a25', ['vitamin_b12', '< OR =150', 75]],
+    ['q_a26', ['ferritin', '>=1000', 1000]],
+    ['q_a48', ['vitamin_d_25_oh', '>= 150', 150]],
+    ['l_b04', ['egfr', '>=60', 60]],
+    ['l_b05', ['egfr', '≥60', 60]],
+    ['l_b07', ['vitamin_b12', '<=150', 75]],
+    ['l_b11', ['hdl_cholesterol', '>=100', 100]],
+    ['g_d06', ['vitamin_d_25_oh', '<=5', 2.5]],
+  ])('%s', (name, row) => expectRow(name, row));
+});
+
+describe('a censored result under a line that is not her result line stays her result', () => {
+  // Review finding 2: "Specimen 1", "Test 2 of 2", "Visit 2" and "CKD-EPI 2021" carry no result.
+  it.each<[string, Tuple]>([
+    ['p_q_prog_specimen', ['progesterone', '<0.5', 0.25]],
+    ['p_q_e2_test_of', ['estradiol', '<15', 7.5]],
+    ['p_g_e2_visit', ['estradiol', '<15', 7.5]],
+    ['p_q_egfr_method_gt', ['egfr', '>60', 60]],
+    ['p_q_e2_lone_number', ['estradiol', '<15', 7.5]],
+    ['p_q_e2_count_line', ['estradiol', '<15', 7.5]],
+    ['p_q_e2_numbered_line', ['estradiol', '<15', 7.5]],
+    // The base read "2021" here; the inclusive limit is now read like the strict one above.
+    ['p_q_egfr_method_or', ['egfr', '> OR = 60', 60]],
+  ])('%s', (name, row) => expectRow(name, row));
+
+  // Her own result line, a number with only its unit or flag, keeps her measured value.
+  it.each<[string, Tuple]>([
+    ['q_a31', ['egfr', '45', 45]],
+    ['q_a34', ['hemoglobin_a1c', '7.2', 7.2]],
+    ['q_a35', ['hemoglobin_a1c', '7.2', 7.2]],
+    ['q_a51', ['estradiol', '25', 25]],
+    ['q_a52', ['estradiol', '25', 25]],
+    ['l_b14', ['egfr', '45', 45]],
+    ['g_d14', ['triglycerides', '320', 320]],
+    ['p_l_b12_flag_line', ['vitamin_b12', '2', 2]],
+    // The base read the strict limit ">59" here.
+    ['p_l_egfr_labcorp_unit', ['egfr', '45', 45]],
+  ])('%s', (name, row) => expectRow(name, row));
+});
+
+describe('every other adversarial and probe row', () => {
+  it.each<[string, Tuple]>([
+    ['q_a01', ['egfr', '45', 45]],
+    ['q_a02', ['egfr', '45', 45]],
+    ['q_a03', ['egfr', '45', 45]],
+    ['q_a04', ['egfr', '45', 45]],
+    ['q_a05', ['egfr', '45', 45]],
+    ['q_a06', ['egfr', '45', 45]],
+    ['q_a07', ['egfr', '45', 45]],
+    ['q_a08', ['egfr', '45', 45]],
+    ['q_a09', ['egfr', '45', 45]],
+    ['q_a17', ['hemoglobin_a1c', '7.2', 7.2]],
+    ['q_a18', ['hemoglobin_a1c', '7.2', 7.2]],
+    ['q_a20', ['triglycerides', '320', 320]],
+    ['q_a22', ['triglycerides', '320', 320]],
+    ['q_a23', ['ldl_cholesterol', '130', 130]],
+    ['q_a27', ['hdl_cholesterol', '35', 35]],
+    ['q_a28', ['hdl_cholesterol', '35', 35]],
+    ['q_a36', ['egfr', '>=60', 60]],
+    ['q_a37', ['egfr', '> OR =60', 60]],
+    ['q_a38', ['egfr', '≥60', 60]],
+    ['q_a39', ['progesterone', '<0.5', 0.25]],
+    ['q_a40', ['progesterone', '<0.5', 0.25]],
+    ['q_a42', ['vitamin_b12', '<150', 75]],
+    ['q_a43', ['vitamin_b12', '<=150', 75]],
+    ['q_a44', ['egfr', '45', 45]],
+    ['q_a45', ['hdl_cholesterol', '35', 35]],
+    ['q_a46', ['egfr', '45', 45]],
+    ['q_a47', ['vitamin_d_25_oh', '12', 12]],
+    ['l_b01', ['egfr', '45', 45]],
+    ['l_b02', ['egfr', '45', 45]],
+    ['l_b03', ['egfr', '>59', 59]],
+    ['l_b06', ['hemoglobin_a1c', '7.2', 7.2]],
+    ['l_b08', ['triglycerides', '320', 320]],
+    ['l_b09', ['hdl_cholesterol', '35', 35]],
+    ['l_b10', ['hdl_cholesterol', '35', 35]],
+    ['l_b12', ['egfr', '45', 45]],
+    ['h_c02', ['egfr', null, 60]],
+    ['h_c04', ['egfr', null, 45]],
+    ['h_c05', ['hs_crp', null, 3.2]],
+    ['g_d05', ['vitamin_d_25_oh', '12', 12]],
+    ['g_d07', ['egfr', '45', 45]],
+    ['g_d09', ['hemoglobin_a1c', '7.2', 7.2]],
+    ['g_d13', ['hdl_cholesterol', '35', 35]],
+    ['g_d16', ['egfr', '45', 45]],
+    ['p_h_crp_lt', ['hs_crp', '<0.2', 0.1]],
+    ['p_h_egfr_gt', ['egfr', '>60', 60]],
+  ])('%s', (name, row) => expectRow(name, row));
+
+  // No label the parser knows ("C-Reactive Protein", "HCG"), or a second TSH row: only the control row comes out.
+  it.each(['q_a29', 'q_a41', 'q_a50'])('%s', name => expectRow(name));
+});
+
+/*
+  Rows the base misread as well, pinned as read today so any change is seen.
+  None of them is her measured value. Each needs work outside this packet:
+  a result printed alone on its line is dropped as a chart-axis number
+  (textUtils CHART_AXIS_RE: q_a32, q_a49, l_b13); a bare reference line above
+  her result is read first (q_a30, q_a33, g_d15); a number in a heading or the
+  name is read as her result (p_q_e2_cycle_day, p_g_egfr_method_label); the
+  Hone result line goes down the strict-only fallback (h_c01, h_c03,
+  p_h_crp_le, pipeline.ts); g_d01 yields no eGFR row at all.
+*/
+describe('rows misread at the base too, pinned as read', () => {
+  it.each<[string, Tuple]>([
+    ['q_a30', ['egfr', '> OR = 60', 60]],
+    ['q_a32', ['egfr', '> OR = 60', 60]],
+    ['q_a33', ['egfr', '>=60', 60]],
+    ['q_a49', ['egfr', '> OR = 60', 60]],
+    ['l_b13', ['egfr', '>=59', 59]],
+    ['g_d15', ['triglycerides', '≤150', 75]],
+    ['h_c01', ['egfr', null, 1.73]],
+    ['h_c03', ['hs_crp', null, 0.2]],
+    ['p_h_crp_le', ['hs_crp', null, 0.2]],
+    ['p_q_e2_cycle_day', ['estradiol', '3', 3]],
+    ['p_g_egfr_method_label', ['egfr', '2021', 2021]],
+  ])('%s', (name, row) => expectRow(name, row));
+
+  it('g_d01', () => expectRow('g_d01'));
+
+  it.each(['q_a30', 'q_a32', 'q_a33', 'q_a49', 'l_b13', 'g_d15', 'h_c01', 'p_g_egfr_method_label'])(
+    '%s: still goes to her review',
+    name => {
+      const rows = parseAllReportItems(layout(name)).filter(i => !['tsh', 'sodium'].includes(i.canonical_slug ?? ''));
+      expect(rows.map(i => i.needs_review)).toEqual([true]);
+    },
+  );
+});
+
 describe('range detection knows the inclusive spellings', () => {
   it.each<[string, string, string, string, number]>([
     ['q_tg_le_uni', 'triglycerides', '≤150', '<=', 150],
@@ -161,6 +325,10 @@ describe('range detection knows the inclusive spellings', () => {
     ['g_a1c_leu', 'hemoglobin_a1c', '≤5.6', '<=', 5.6],
     ['qf_egfr_low', 'egfr', '≥60', '>=', 60],
     ['qf_a1c_high', 'hemoglobin_a1c', '≤5.6', '<=', 5.6],
+    // Review finding 3: her result in the value position is not the line's own reference.
+    ['l_b05', 'egfr', '>59', '>', 59],
+    ['l_b11', 'hdl_cholesterol', '>39', '>', 39],
+    ['c_egfr', 'egfr', '> OR = 60', '> OR =', 60],
   ])('%s binds the printed %s reference', (name, slug, raw, operator, value) => {
     expect(item(layout(name), slug)).toMatchObject({
       raw_reference_range: raw, reference_operator: operator, reference_operator_value: value,
