@@ -6,7 +6,7 @@ import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
 import { assessAmaniContext, contextFromReport } from '../scoring/amaniContext';
 import {
-  authorizedLanguage, labFindingSentence, labIntervalObservation, labIntervalPlacement, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, WATCH_SIGNALS,
+  authorizedLanguage, labFindingSentence, labIntervalObservation, labIntervalPlacement, describeMeasuredMovement, DISCUSSION_PREP, primaryFindingSentence, statedValue, WATCH_SIGNALS,
   type FactualLanguage, type AuthorizedLanguage, type DiscussionPremise, type DiscussionPrepPrompt,
 } from '../scoring/insightCopy';
 import { formatDateOrNull } from '../../utils/formatters';
@@ -554,12 +554,14 @@ export function buildInsightSummary(
   // then slug, so the upload-time pin and the page agree whatever the row order.
   const concernOf = new Map(scored.map(s => [s.key, s.concern]));
   const labFindings = current.flatMap(b => {
-    const placement = labIntervalPlacement(b.value, b.labRefMin, b.labRefMax);
+    // F021: a censored result is placed against her lab's range only where its
+    // printed limit decides it, and is stated as printed.
+    const placement = labIntervalPlacement(b.value, b.labRefMin, b.labRefMax, null, null, b.valueText);
     if (placement !== 'below' && placement !== 'above') return [];
     const score = scored.find(s => s.key === b.key)!;
     const finding = toTopFinding(score, null, deltaMap.get(b.key));
-    const fact = labFindingSentence(finding.displayName, placement, b.value, b.unit);
-    const observation = labIntervalObservation(finding.displayName, b.value, b.labRefMin, b.labRefMax)!;
+    const fact = labFindingSentence(finding.displayName, placement, statedValue(finding), b.unit);
+    const observation = labIntervalObservation(finding.displayName, b.value, b.labRefMin, b.labRefMax, null, null, b.valueText)!;
     return [{ ...finding, labPlacement: placement, fact, labLanguage: { ...observation, text: fact } }];
   }).sort((a, b) => b.severity - a.severity
     || catalogPosition(a.key) - catalogPosition(b.key) || a.key.localeCompare(b.key));

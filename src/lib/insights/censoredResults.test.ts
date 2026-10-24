@@ -125,10 +125,39 @@ describe('buildInsightSummary never ranks a censored result its printed limit ca
   });
 
   it('a censored result its limit does place is still ranked and stated as printed (control)', () => {
+    // No lab interval: under owner Ruling 7 (#152) an Amani primary her lab also
+    // flags is worded in her lab's terms (the lab-floor cases below).
     const summary = buildInsightSummary(
-      [{ key: VIT_D, value: 4, valueText: '<8', unit: 'ng/mL', labRefMin: 30, labRefMax: 100 }], null, null, null,
+      [{ key: VIT_D, value: 4, valueText: '<8', unit: 'ng/mL', labRefMin: null, labRefMax: null }], null, null, null,
     );
     expect(summary.primaryFinding).toMatchObject({ key: VIT_D, direction: 'low', status: 'out_of_range' });
     expect(primaryFindingSentence(summary.primaryFinding!)).toContain('below the Amani band at <8 ng/mL');
+  });
+});
+
+/*
+  Owner Ruling 7 (#152) keeps her lab's own flag as a finding and words a
+  lab-flagged primary in her lab's terms. A censored result reaches that floor
+  only where its printed limit decides its place against her lab's range, and
+  is stated there as printed.
+*/
+describe('the lab-flag floor places and states a censored result by its printed limit (F021)', () => {
+  it("'<8' against her lab's 5–20 is no lab finding: it may lie below that range or inside it", () => {
+    const summary = buildInsightSummary(
+      [{ key: VIT_D, value: 4, valueText: '<8', unit: 'ng/mL', labRefMin: 5, labRefMax: 20 }], null, null, null,
+    );
+    expect(summary.labFindings).toEqual([]);
+    // The primary keeps its Amani-band sentence, as printed.
+    const sentence = primaryFindingSentence(summary.primaryFinding!);
+    expect(sentence).toContain('below the Amani band at <8 ng/mL');
+    expect(sentence).not.toMatch(/your lab's reference range/);
+  });
+
+  it("'>1000' against her lab's 15–150 is above it, and is stated as printed", () => {
+    const summary = buildInsightSummary(
+      [{ key: FERRITIN, value: 1000, valueText: '>1000', unit: 'ng/mL', labRefMin: 15, labRefMax: 150 }], null, null, null,
+    );
+    expect(summary.labFindings?.map(f => [f.key, f.labPlacement, f.labLanguage?.cue])).toEqual([[FERRITIN, 'above', 'attention']]);
+    expect(primaryFindingSentence(summary.primaryFinding!)).toBe("Ferritin is above your lab's reference range at >1000 ng/mL.");
   });
 });

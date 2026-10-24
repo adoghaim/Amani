@@ -286,7 +286,9 @@ describe('Review F021 — a censored result is never placed, flagged or computed
   }, 30_000);
 
   it('a censored result its limit does place is still stated as printed (control)', async () => {
-    seedPanel({ biomarkers: [biomarker('vitamin_d_25_oh', 4, '<8', 'ng/mL', 30, 100)] });
+    // No lab interval: under owner Ruling 7 (#152) a primary her lab also flags is
+    // worded in her lab's terms ('current <8 (stored 4), prior 20' above).
+    seedPanel({ biomarkers: [biomarker('vitamin_d_25_oh', 4, '<8', 'ng/mL')] });
     const text = await renderAndOpenAll();
     expect(text).toContain('Vitamin D is below the Amani band at <8 ng/mL');
     expect(card()).toContain('Outside Amani band');

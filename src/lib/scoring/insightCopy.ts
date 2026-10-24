@@ -175,10 +175,10 @@ export const FOCUS_AREA_BAND_SENTENCE =
  * above it rather than echoing TopFinding.fact. A DISPUTED band withholds
  * placement here as it does in every other sentence. */
 export function primaryFindingSentence(
-  finding: Pick<TopFinding, 'displayName' | 'direction' | 'value' | 'unit' | 'labPlacement'>,
+  finding: Pick<TopFinding, 'displayName' | 'direction' | 'value' | 'unit' | 'labPlacement' | 'valueText'>,
   language?: AuthorizedLanguage,
 ): string {
-  if (finding.labPlacement) return labFindingSentence(finding.displayName, finding.labPlacement, finding.value, finding.unit);
+  if (finding.labPlacement) return labFindingSentence(finding.displayName, finding.labPlacement, statedValue(finding), finding.unit);
   if (language?.reviewStatus === 'DISPUTED') {
     return `${finding.displayName} was measured at ${statedValue(finding)} ${finding.unit}. ${reviewStatement(language)}`;
   }
@@ -771,7 +771,7 @@ export function systemDisplayLabel(category: BiomarkerCategory): string {
 
 export const BAND_LAB_DISTINCTION = "Amani's comparison band is separate from your lab's range and is still under clinical review.";
 
-export function labFindingSentence(name: string, placement: 'below' | 'above', value: number, unit: string): string {
+export function labFindingSentence(name: string, placement: 'below' | 'above', value: number | string, unit: string): string {
   return `${name} is ${placement} your lab's reference range at ${value} ${unit}.`;
 }
 
