@@ -5,6 +5,7 @@ import * as accountDeletion from '../_shared/account-deletion';
 import * as accountDeletionStorage from '../_shared/account-deletion-storage';
 import * as phiScrub from '../_shared/phi-scrub';
 import { PLAY_SERVICE_ACCOUNT_ENV, playCancellationConfigured, StoreTeardownError } from '../_shared/store-teardown';
+import { USER_DATA_REGISTRY } from '../_shared/user-data-registry';
 
 /*
   BS1 (review F029, F038, F036, F033 sites): runs the real Deno callback of
@@ -373,6 +374,19 @@ describe('delete-user-data removes every stored file before the auth identity (F
     expect((await response.json()).code).toBe('account_deletion_failed');
     expect(log).not.toContain('auth:delete');
     expect(log.some((e) => e.startsWith('delete:'))).toBe(false);
+  });
+});
+
+describe("the registry's Stripe exceptions say what this handler does (RV-R3 AC5, RES1 168-8)", () => {
+  it('name the port it wires, getStripeCustomerIds, and both places that port reads', () => {
+    expect(source).toContain('async getStripeCustomerIds(userId) {');
+    for (const table of ['stripe_customers', 'stripe_subscriptions', 'stripe_orders']) {
+      const reason = USER_DATA_REGISTRY.find((entry) => entry.table === table)?.reason ?? '';
+      expect(reason, table).toMatch(/\bgetStripeCustomerIds\b/);
+      expect(reason, table).not.toMatch(/\bgetStripeCustomerId\b/);
+      expect(reason, table).toContain('users.stripe_customer_id');
+      expect(reason, table).not.toMatch(/\belse\b/);
+    }
   });
 });
 
