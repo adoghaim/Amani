@@ -166,6 +166,14 @@ export interface DeviceLockController {
   availability(): Promise<LockAvailability>;
 }
 
+/** Her time away while the turn-off check is up (#163 note 1). */
+interface TurnOffAway {
+  /** She left during the check and is not back yet. */
+  pausedAt: number | null;
+  /** A time away during the check reached the re-lock time. */
+  timeUp: boolean;
+}
+
 export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
   const listeners = new Set<() => void>();
 
@@ -187,6 +195,14 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
   // The system sheet is up. Android's passcode screen is its own activity, so
   // it pauses and resumes the app: those events must not re-lock it.
   let authInFlight = false;
+  // The turn-off check is up: her time away is recorded, not dropped, so a
+  // check that fails or is cancelled still re-locks when it should (#163 note 1).
+  let turnOffAway: TurnOffAway | null = null;
+
+  // F005: a clock set back (negative time away) counts as time up.
+  function timeUp(away: number): boolean {
+    return away < 0 || away >= relockDelayMs(state.settings.relockAfter);
+  }
 
   async function authenticate(reason: string): Promise<BiometricUnlockResult> {
     authInFlight = true;
@@ -270,6 +286,10 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
     },
     pause() {
       if (!ports.isNative()) return;
+      if (turnOffAway) {
+        turnOffAway.pausedAt = ports.now();
+        return;
+      }
       if (authInFlight) return;
       pausedAt = ports.now();
       if (!state.settings.enabled) return;
@@ -279,6 +299,11 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
     },
     resume() {
       if (!ports.isNative()) return;
+      if (turnOffAway) {
+        if (turnOffAway.pausedAt !== null && timeUp(ports.now() - turnOffAway.pausedAt)) turnOffAway.timeUp = true;
+        turnOffAway.pausedAt = null;
+        return;
+      }
       if (authInFlight) return;
       const left = pausedAt;
       pausedAt = null;
@@ -288,9 +313,7 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
         if (state.covered) set({ covered: false });
         return;
       }
-      const away = ports.now() - left;
-      // F005: a clock set back (negative time away) counts as time up.
-      const expired = away < 0 || away >= relockDelayMs(state.settings.relockAfter);
+      const expired = timeUp(ports.now() - left);
       set(expired ? { covered: false, locked: true, problem: null } : { covered: false });
       if (ask && state.locked) void unlock();
     },
@@ -308,8 +331,23 @@ export function createDeviceLock(ports: DeviceLockPorts): DeviceLockController {
     async confirmTurnOff() {
       if (!ports.isNative()) return false;
       if (!state.settings.enabled) return true;
-      const result = await authenticate(TURN_OFF_REASON);
-      if (!result.ok && !(result.reason === 'unavailable' && await nothingCanProveIt())) return false;
+      const away: TurnOffAway = { pausedAt: null, timeUp: false };
+      turnOffAway = away;
+      let proven: boolean;
+      try {
+        const result = await authenticate(TURN_OFF_REASON);
+        proven = result.ok || (result.reason === 'unavailable' && await nothingCanProveIt());
+      } finally {
+        turnOffAway = null;
+      }
+      if (!proven) {
+        // Still on: her time away during the check counts as resume() counts it.
+        if (state.settings.enabled) {
+          if (away.timeUp) set({ covered: false, locked: true, problem: null });
+          else if (away.pausedAt !== null) pausedAt = away.pausedAt;
+        }
+        return false;
+      }
       await turnOff();
       return true;
     },

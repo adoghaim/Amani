@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BiometricStatus, BiometricUnlockResult } from '../native';
 import {
   createDeviceLock, DEFAULT_RELOCK_AFTER, LOCK_SETTINGS_STORAGE_KEY, lockMethodName, parseLockSettings,
-  RELOCK_OPTIONS, type LockSettings,
+  RELOCK_OPTIONS, type LockSettings, type RelockAfter,
 } from './lockController';
 
 /*
@@ -398,5 +398,170 @@ describe('review F006: turning the lock off from Settings asks first', () => {
     const web = setup({ native: false, stored: { enabled: true } });
     expect(await web.lock.confirmTurnOff()).toBe(false);
     expect(web.calls).toEqual([]);
+  });
+});
+
+/** Each system sheet stays up until the test answers it, oldest first; the clock moves only when the test moves it. */
+function setupWithSheet(stored: Partial<LockSettings>) {
+  const local = new Map<string, string>([[LOCK_SETTINGS_STORAGE_KEY, JSON.stringify(stored)]]);
+  const clock = { now: 1_000_000 };
+  const sheets: Array<(result: BiometricUnlockResult) => void> = [];
+  const lock = createDeviceLock({
+    isNative: () => true,
+    flagOn: async () => true,
+    checkBiometrics: async () => FACE,
+    authenticate: () => new Promise<BiometricUnlockResult>(resolve => { sheets.push(resolve); }),
+    setScreenshotsBlocked: async () => {},
+    storage: () => ({ getItem: key => local.get(key) ?? null, setItem: (key, value) => { local.set(key, value); } }),
+    now: () => clock.now,
+  });
+  return {
+    lock,
+    clock,
+    answer: (result: BiometricUnlockResult) => { sheets.shift()?.(result); },
+    stored: () => parseLockSettings(local.get(LOCK_SETTINGS_STORAGE_KEY)),
+  };
+}
+
+/** The lock on and opened, as it is when she reaches Settings to turn it off. */
+async function openedWithSheet(relockAfter: RelockAfter) {
+  const opened = setupWithSheet({ enabled: true, relockAfter });
+  const opening = opened.lock.unlock();
+  opened.answer({ ok: true });
+  await opening;
+  return opened;
+}
+
+describe('#163 note 1: leaving the app during the turn-off check is timed', () => {
+  it("the verifier's case: re-lock 1 minute, she leaves at the prompt, it is cancelled, she is back an hour later: locked", async () => {
+    const { lock, clock, answer, stored } = await openedWithSheet('1m');
+    const turningOff = lock.confirmTurnOff();
+    lock.pause();
+    answer({ ok: false, reason: 'cancelled' });
+    expect(await turningOff).toBe(false);
+    clock.now += 3_600_000;
+    lock.resume();
+    expect(lock.getState()).toMatchObject({ locked: true, covered: false });
+    expect(stored().enabled).toBe(true);
+  });
+
+  it.each(['cancelled', 'failed'] as const)('away an hour and back while the check is up, then %s: locked at once', async reason => {
+    const { lock, clock, answer } = await openedWithSheet('1m');
+    const turningOff = lock.confirmTurnOff();
+    lock.pause();
+    clock.now += 3_600_000;
+    lock.resume();
+    // While the check is up, leaving and coming back only record the times.
+    expect(lock.getState()).toMatchObject({ locked: false, covered: false });
+    answer({ ok: false, reason });
+    expect(await turningOff).toBe(false);
+    expect(lock.getState()).toMatchObject({ locked: true, covered: false, problem: null });
+  });
+
+  it('back within the re-lock time, before or after the answer: a cancelled check leaves the app open', async () => {
+    const backFirst = await openedWithSheet('1m');
+    const first = backFirst.lock.confirmTurnOff();
+    backFirst.lock.pause();
+    backFirst.clock.now += 59_999;
+    backFirst.lock.resume();
+    backFirst.answer({ ok: false, reason: 'cancelled' });
+    expect(await first).toBe(false);
+    expect(backFirst.lock.getState()).toMatchObject({ locked: false, covered: false });
+
+    const answeredFirst = await openedWithSheet('1m');
+    const second = answeredFirst.lock.confirmTurnOff();
+    answeredFirst.lock.pause();
+    answeredFirst.answer({ ok: false, reason: 'cancelled' });
+    expect(await second).toBe(false);
+    answeredFirst.clock.now += 59_999;
+    answeredFirst.lock.resume();
+    expect(answeredFirst.lock.getState()).toMatchObject({ locked: false, covered: false });
+  });
+
+  it('review F005 holds during the check too: a clock set back counts as time up', async () => {
+    const { lock, clock, answer } = await openedWithSheet('15m');
+    const turningOff = lock.confirmTurnOff();
+    lock.pause();
+    clock.now -= 1;
+    lock.resume();
+    answer({ ok: false, reason: 'cancelled' });
+    expect(await turningOff).toBe(false);
+    expect(lock.getState().locked).toBe(true);
+  });
+
+  it("'Immediately' fails closed: a turn-off cancelled on the Android passcode screen locks the app", async () => {
+    const { lock, answer } = await openedWithSheet('immediately');
+    const turningOff = lock.confirmTurnOff();
+    lock.pause(); // the passcode activity opens
+    answer({ ok: false, reason: 'cancelled' });
+    expect(await turningOff).toBe(false);
+    lock.resume(); // MainActivity resumes after the result
+    expect(lock.getState().locked).toBe(true);
+  });
+
+  it('a check she never left the app for: cancelled, the app stays open', async () => {
+    const { lock, clock, answer } = await openedWithSheet('1m');
+    const turningOff = lock.confirmTurnOff();
+    clock.now += 3_600_000;
+    answer({ ok: false, reason: 'cancelled' });
+    expect(await turningOff).toBe(false);
+    expect(lock.getState()).toMatchObject({ locked: false, covered: false, settings: { enabled: true } });
+  });
+
+  it('a successful check turns the lock off and never shows it, however long she was away', async () => {
+    const backFirst = await openedWithSheet('1m');
+    const seen: boolean[] = [];
+    backFirst.lock.subscribe(() => { seen.push(backFirst.lock.getState().locked); });
+    const first = backFirst.lock.confirmTurnOff();
+    backFirst.lock.pause();
+    backFirst.clock.now += 3_600_000;
+    backFirst.lock.resume();
+    backFirst.answer({ ok: true });
+    expect(await first).toBe(true);
+    expect(seen).not.toContain(true);
+    expect(backFirst.lock.getState()).toMatchObject({ locked: false, covered: false, settings: { enabled: false } });
+    expect(backFirst.stored().enabled).toBe(false);
+
+    const answeredFirst = await openedWithSheet('1m');
+    const second = answeredFirst.lock.confirmTurnOff();
+    answeredFirst.lock.pause();
+    answeredFirst.answer({ ok: true });
+    expect(await second).toBe(true);
+    answeredFirst.clock.now += 3_600_000;
+    answeredFirst.lock.resume();
+    expect(answeredFirst.lock.getState()).toMatchObject({ locked: false, covered: false, settings: { enabled: false } });
+  });
+
+  it('a lock turned off some other way while the check was up is not locked by the cancelled check', async () => {
+    const { lock, clock, answer } = await openedWithSheet('1m');
+    const turningOff = lock.confirmTurnOff();
+    lock.pause();
+    clock.now += 3_600_000;
+    lock.resume();
+    await lock.turnOff();
+    answer({ ok: false, reason: 'cancelled' });
+    await turningOff;
+    expect(lock.getState()).toMatchObject({ locked: false, settings: { enabled: false } });
+  });
+
+  it('unchanged: leaving during the unlock or turn-on sheet is never timed', async () => {
+    const unlocking = setupWithSheet({ enabled: true, relockAfter: '1m' });
+    const opening = unlocking.lock.unlock();
+    unlocking.lock.pause();
+    unlocking.clock.now += 3_600_000;
+    unlocking.lock.resume();
+    unlocking.answer({ ok: true });
+    await opening;
+    expect(unlocking.lock.getState()).toMatchObject({ locked: false, covered: false });
+
+    const turningOn = setupWithSheet({ enabled: false, relockAfter: '1m' });
+    const on = turningOn.lock.turnOn();
+    await new Promise(resolve => setTimeout(resolve, 0)); // the sheet opens after the availability check
+    turningOn.lock.pause();
+    turningOn.clock.now += 3_600_000;
+    turningOn.lock.resume();
+    turningOn.answer({ ok: true });
+    expect(await on).toBe(true);
+    expect(turningOn.lock.getState()).toMatchObject({ locked: false, covered: false, settings: { enabled: true } });
   });
 });
