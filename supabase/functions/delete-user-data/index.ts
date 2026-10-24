@@ -184,8 +184,8 @@ Deno.serve(async (req: Request) => {
         // List every object under the user's prefix rather than trusting the
         // file_url column — catches orphaned uploads that never made it into
         // lab_reports (e.g., upload succeeded but the DB insert failed).
-        // Every page, then a final check that the prefix is empty (review
-        // F036): ../_shared/account-deletion-storage.ts.
+        // Every page of every folder, then a final check that the prefix is
+        // empty (review F036, RV-R3): ../_shared/account-deletion-storage.ts.
         await deleteAllStorageObjects({
           async list(userId, { limit, offset }) {
             const { data: files, error: listError } = await supabase.storage.from("lab-files").list(userId, { limit, offset });

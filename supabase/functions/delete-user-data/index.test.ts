@@ -82,10 +82,14 @@ function harness(state: State = {}) {
       return {
         list: async (prefix: string, opts: { limit?: number; offset?: number } = {}) => {
           listCalls.push({ prefix, ...opts });
-          const names = [...files].filter((p) => p.startsWith(`${prefix}/`)).map((p) => p.slice(prefix.length + 1)).sort();
+          // One level, as Storage lists: a folder is one entry with a null id, before the objects.
+          const under = [...files].filter((p) => p.startsWith(`${prefix}/`)).map((p) => p.slice(prefix.length + 1));
+          const folders = [...new Set(under.filter((n) => n.includes('/')).map((n) => n.split('/')[0]!))].sort();
+          const names = under.filter((n) => !n.includes('/')).sort();
+          const entries = [...folders.map((name) => ({ name, id: null })), ...names.map((name) => ({ name, id: name }))];
           const offset = opts.offset ?? 0;
           const limit = opts.limit ?? 100;
-          return { data: names.slice(offset, offset + limit).map((name) => ({ name, id: name })), error: null };
+          return { data: entries.slice(offset, offset + limit), error: null };
         },
         remove: async (paths: string[]) => {
           removeBatches.push(paths.length);
@@ -278,6 +282,30 @@ describe('delete-user-data removes every stored file before the auth identity (F
     const response = await handler(request());
 
     expect(response.status).toBe(500);
+    expect(log).not.toContain('auth:delete');
+    expect(log.some((e) => e.startsWith('delete:'))).toBe(false);
+  });
+
+  it('removes an object inside a folder too, so a nested upload no longer refuses every retry (RV-R3 AC2)', async () => {
+    const { handler, files, listCalls, log } = harness({ files: ['a.pdf', 'x/y.pdf'] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(200);
+    expect(files.size).toBe(0);
+    expect(listCalls.map((c) => c.prefix)).toEqual([USER_ID, `${USER_ID}/x`, USER_ID]);
+    expect(log.indexOf('auth:delete')).toBeGreaterThan(log.lastIndexOf('storage:remove:2'));
+    expect(log.at(-1)).toBe('auth:delete');
+  });
+
+  it('still refuses to delete the auth user while an object inside a folder remains (RV-R3 AC2)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { handler, log } = harness({ files: ['a.pdf', 'x/y.pdf'], sticky: [`${USER_ID}/x/y.pdf`] });
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(500);
+    expect((await response.json()).code).toBe('account_deletion_failed');
     expect(log).not.toContain('auth:delete');
     expect(log.some((e) => e.startsWith('delete:'))).toBe(false);
   });
