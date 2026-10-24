@@ -1,0 +1,72 @@
+diff --git a/supabase/functions/_shared/schemas/context.ts b/supabase/functions/_shared/schemas/context.ts
+index fbeac76..a2b5430 100644
+--- a/supabase/functions/_shared/schemas/context.ts
++++ b/supabase/functions/_shared/schemas/context.ts
+@@ -39,6 +39,13 @@ export const LabReportContextSchema = z
+ 
+ export type LabReportContext = z.infer<typeof LabReportContextSchema>;
+ 
++// A trimmed string of at most `max` UTF-16 units (String#length), the unit
++// the caps below were set in and zod 3 counted. zod 4's string .max() counts
++// code points instead, which would let astral characters such as emoji carry
++// up to twice as many units into the prompt.
++const boundedText = (max: number) =>
++  z.string().trim().refine((s) => s.length <= max, `Too big: expected string to have <=${max} UTF-16 units`);
++
+ // Voluntary profile fields the user enters in onboarding / Settings.
+ // These are user-writable via RLS UPDATE on `users`, so every field that
+ // flows into the OpenAI prompt is a prompt-injection surface. All fields
+@@ -48,12 +55,12 @@ export type LabReportContext = z.infer<typeof LabReportContextSchema>;
+ // those carry the highest risk of model-prescriptive drift and are not
+ // part of this slice.
+ export const UserProfileContextSchema = z.object({
+-  full_name: z.string().trim().max(80).nullable().optional(),
+-  age_range: z.string().trim().max(40).nullable().optional(),
+-  sex_at_birth: z.string().trim().max(40).nullable().optional(),
+-  pregnancy_status: z.string().trim().max(40).nullable().optional(),
+-  health_goals: z.array(z.string().trim().max(80)).max(10).nullable().optional(),
+-  symptoms: z.array(z.string().trim().max(120)).max(10).nullable().optional(),
++  full_name: boundedText(80).nullable().optional(),
++  age_range: boundedText(40).nullable().optional(),
++  sex_at_birth: boundedText(40).nullable().optional(),
++  pregnancy_status: boundedText(40).nullable().optional(),
++  health_goals: z.array(boundedText(80)).max(10).nullable().optional(),
++  symptoms: z.array(boundedText(120)).max(10).nullable().optional(),
+ });
+ 
+ export type UserProfileContext = z.infer<typeof UserProfileContextSchema>;
+diff --git a/supabase/functions/_shared/schemas/zod-bounds.test.ts b/supabase/functions/_shared/schemas/zod-bounds.test.ts
+index 3f57df2..e60f3b3 100644
+--- a/supabase/functions/_shared/schemas/zod-bounds.test.ts
++++ b/supabase/functions/_shared/schemas/zod-bounds.test.ts
+@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
+ 
+ /*
+   RV-ZD1: what the zod 4 upgrade changes on purpose, kept out of the zod
+-  3.25.76 golden. R2, R3 and D2 (b) to (d) failed on the base; D2 (a) holds
++  3.25.76 golden. R2, R3, D2 (b) and D2 (c) failed on the base; D2 (a) holds
+   on both, and guards the shape the handlers rely on.
+   - R2 (AC5, GHSA-mrhx-c7xc-m3w5): a too-long bounded array is refused with
+     one too_big issue, before any element is read. zod 3 built an issue for
+@@ -119,21 +119,4 @@ describe('D2: divergences from zod 3.25.76 that the upgrade accepts', () => {
+     expect(object.amount_total).toBe(Infinity);
+     expect(StripeCheckoutOrderSchema.safeParse(object).success).toBe(false);
+   });
+-
+-  // Proposed in RV-ZD1's result for the lead to confirm: zod 4.6 counts
+-  // string .max() in code points (colinhacks/zod#6441), zod 3 counted UTF-16
+-  // units. A string of astral characters (emoji) up to the bound now passes;
+-  // one more is still refused, so the payload stays bounded.
+-  const FLOWER = '\u{1F338}';
+-  it.each([
+-    ['full_name', 80, (s: string) => ({ full_name: s })],
+-    ['age_range', 40, (s: string) => ({ age_range: s })],
+-    ['sex_at_birth', 40, (s: string) => ({ sex_at_birth: s })],
+-    ['pregnancy_status', 40, (s: string) => ({ pregnancy_status: s })],
+-    ['health_goals[0]', 80, (s: string) => ({ health_goals: [s] })],
+-    ['symptoms[0]', 120, (s: string) => ({ symptoms: [s] })],
+-  ] as const)('(d) %s max(%i) counts code points: that many astral characters pass, one more fails', (_, limit, profile) => {
+-    expect(UserProfileContextSchema.safeParse(profile(FLOWER.repeat(limit))).success).toBe(true);
+-    expect(UserProfileContextSchema.safeParse(profile(FLOWER.repeat(limit + 1))).success).toBe(false);
+-  });
+ });
