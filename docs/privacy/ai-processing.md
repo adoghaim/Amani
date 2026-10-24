@@ -39,8 +39,63 @@ caught, and the CEO plan records that as an accepted, tracked risk.
   `_shared/nutrient-policy.ts`, regenerated once on violation, sanitised, and
   replaced by the deterministic fallback when sanitising fails closed. It is
   stored as an interpretation version.
-- `lab-insights` output is parsed by `_shared/lab-insights-output.ts` and
+- `lab-insights` output is parsed by `_shared/lab-insights-output.ts`, then
+  every string in it is checked against the same nutrient policy
+  (`_shared/lab-insights-policy.ts`, review F017): violating list items and
+  changes are dropped, and a violating summary refuses the whole answer with a
+  fixed 502. The prompt also carries the allow-list and the dosage and
+  prescriptive-verb bans, and sends tracked-intervention titles only when they
+  are short, plain and policy-clean (never for medications). The result is
   returned to the client.
+- The three non-billing AI functions (`extract-biomarkers`,
+  `parse-lab-report-ocr`, `lab-insights`) return a fixed error message to the
+  client; OpenAI's response body and other internal text are logged only through
+  `_shared/phi-scrub.ts` (review F033).
+
+## 1a. Models, shutdown dates and migration
+
+Every model id and its request rules live in
+`supabase/functions/_shared/openai-models.ts` (review F128, F131). Reasoning
+models (gpt-5*, gpt-6*, o-series) get `max_completion_tokens` and no
+`temperature`; chat models keep `max_tokens` and `temperature`. An id can be
+replaced without a code change by setting a function secret (names only):
+`OPENAI_MODEL_OCR`, `OPENAI_MODEL_EXTRACTION`, `OPENAI_MODEL_INTERPRETATION`,
+`OPENAI_MODEL_LAB_INSIGHTS`. `generate-interpretation` does not read its secret
+yet: wiring it to the module is a pending change to that function.
+
+| Function | Use key | Model today | OpenAI shutdown (deprecations page, read 2026-10-23) | OpenAI's suggested replacement |
+|---|---|---|---|---|
+| `parse-lab-report-ocr` | `ocr` | `gpt-4o` | 2027-01-14 | `gpt-6-luna` |
+| `extract-biomarkers` | `extraction` | `gpt-4o-mini` | 2027-01-14 | `gpt-6-luna` |
+| `generate-interpretation` | `interpretation` | `gpt-4o-mini` | 2027-01-14 | `gpt-6-luna` |
+| `lab-insights` | `labInsights` | `gpt-5-mini` | 2026-12-11 | `gpt-5.6-terra` |
+
+`CLAUDE.md` names `gpt-4o-2024-08-06` for interpretations; the code calls
+`gpt-4o-mini`. The table follows the code. Cost estimates: `MODEL_PRICES` in
+`_shared/ai-cost-ledger.ts` is keyed by model prefix and prices the three ids
+above; a model it does not list is priced at the highest listed rate until a row
+is added.
+
+No model was switched in this packet. After the shutdown dates, photo and
+weak-PDF OCR fall back to manual entry, every interpretation becomes the
+deterministic fallback, and Compare insights fail, so the migration below has to
+land before **2026-12-11**.
+
+### Migration steps (owner actions; none can be done by the factory)
+
+1. Choose a replacement per function and sign off the choice.
+2. Run a synthetic golden-set eval of OCR and interpretation on the candidate
+   (there is none today), plus the `nutrient-policy` and `claim-authority`
+   suites against real model output rather than mocks.
+3. Add the new model's price to `MODEL_PRICES` (`_shared/ai-cost-ledger.ts`),
+   and confirm the figure.
+4. Set the matching `OPENAI_MODEL_*` secret on the Supabase project. The request
+   parameters follow the id automatically; confirm any reasoning effort setting
+   the new model needs and that its latency fits each function's timeout
+   (`lab-insights` allows 18 s per attempt).
+5. Update the model names in the privacy policy and store disclosures (section 5,
+   question 3), then deploy the functions that read the secret.
+6. Track OpenAI's deprecation notices and the dates above in the factory ledger.
 
 ## 2. OpenAI's retention, and zero data retention (ZDR)
 

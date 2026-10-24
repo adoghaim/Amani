@@ -73,7 +73,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-IB1 One extraction contract for OCR and AI refinement | RV | 1 | in-progress | - | - |
 | RV-IB2 Keyboard- and screen-reader-usable upload flow | RV | 1 | todo | RV-IB1 | - |
 | RV-NP1 Harden the nutrient validator with an adversarial corpus | RV | 1 | review | - | [#159](https://github.com/adoghaim/Amani/pull/159) |
-| RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | todo | - | - |
+| RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | review | - | [#167](https://github.com/adoghaim/Amani/pull/167) |
 | RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | in-progress | - | - |
 | RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | todo | RV-RS1 | - |
 | RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | todo | - | - |

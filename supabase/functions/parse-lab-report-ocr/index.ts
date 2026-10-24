@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
-import { errorMessage } from "../_shared/errors.ts";
+import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi-scrub.ts";
+import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
@@ -316,6 +317,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
       });
     }
 
+    const model = resolveOpenAiModel("ocr", (name) => Deno.env.get(name));
     const openaiResponse = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -325,13 +327,12 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o", // Strongest model for OCR validation
+          model,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessagesContent }
           ],
-          max_tokens: 4000,
-          temperature: 0.1,
+          ...chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }),
           response_format: { type: "json_object" }
         }),
       },
@@ -340,15 +341,17 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData}`);
+      // F033: the body can echo report content, so it is scrubbed in the log and
+      // kept out of the thrown message (which reaches the client).
+      console.error("OpenAI API error:", openaiResponse.status, scrubServerText(errorData));
+      throw new Error(`OpenAI API error: status ${openaiResponse.status}`);
     }
 
     const openaiData = await openaiResponse.json();
     inBackground(costLedger.record({
       functionName: "parse-lab-report-ocr",
       userId: user.id,
-      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-4o",
+      model: typeof openaiData?.model === "string" ? openaiData.model : model,
       usage: openaiData?.usage,
     }));
     const content = openaiData.choices[0].message.content;
@@ -470,7 +473,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error in OCR fallback:", error);
+    console.error("Error in OCR fallback:", errorType(error), scrubbedErrorMessage(error));
 
     if (isRateLimitExceeded(error)) {
       return new Response(
@@ -481,7 +484,7 @@ Additionally, if the report contains menstrual cycle metadata explicitly printed
 
     inBackground(reporter.captureException(error, { stage: "ocr" }));
     return new Response(
-      JSON.stringify({ error: errorMessage(error) }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
