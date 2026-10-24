@@ -208,10 +208,10 @@ describe('duplicate delivery', () => {
   });
 });
 
-describe('the subscriber-payload path is unaffected', () => {
-  it('has no event identity and is never treated as stale', async () => {
-    // verify-iap-purchase reads current state rather than consuming an event
-    // stream. It has nothing to be out of order with.
+describe('a write with neither an event time nor a snapshot time', () => {
+  it('is applied, never dropped', async () => {
+    // Nothing orders it against the row's mark, so isEventFresh fails open: a
+    // real state change is applied late rather than dropped for a missing field.
     const { store, writes } = fakeStore({ last_event_at: new Date(NOW).toISOString() });
     const sub = normalized(event());
     const withoutIdentity: NormalizedIapSubscription = {

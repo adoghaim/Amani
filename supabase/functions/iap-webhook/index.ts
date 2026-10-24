@@ -20,6 +20,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { errorMessage } from '../_shared/errors.ts';
 import {
   IAP_ROW_COLUMNS,
+  iapInsertError,
   normalizeRevenueCatEvent,
   verifyWebhookAuthorization,
   type IapPlatform,
@@ -107,13 +108,18 @@ const iapStore: IapStore = {
         : {}),
     });
 
-    if (error) throw new Error(`iap_subscriptions insert failed: ${error.message}`);
+    // A lost unique-key race becomes the typed error the policy re-runs on,
+    // inside this delivery's claim.
+    if (error) throw iapInsertError(error);
   },
 
-  async update(id: string, patch: IapRowPatch) {
+  async update(id: string, patch: IapRowPatch, orderAt?: string) {
     let query = supabase.from('iap_subscriptions').update(patch).eq('id', id);
-    if (patch.last_event_at) {
-      query = query.or(`last_event_at.is.null,last_event_at.lte.${patch.last_event_at}`);
+    // Same bound as verify-iap-purchase; for an event, orderAt is its own
+    // timestamp. Both values are ISO strings the shared module produced.
+    const bound = orderAt ?? patch.last_event_at;
+    if (bound) {
+      query = query.or(`last_event_at.is.null,last_event_at.lte.${bound}`);
     }
     const { data, error } = await query.select('id');
     if (error) throw new Error(`iap_subscriptions update failed: ${error.message}`);

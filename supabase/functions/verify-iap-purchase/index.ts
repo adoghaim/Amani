@@ -28,6 +28,7 @@ import {
 } from '../_shared/entitlement.ts';
 import {
   IAP_ROW_COLUMNS,
+  iapInsertError,
   normalizeSubscriberPayload,
   persistIapSubscriptions,
   verificationFailure,
@@ -163,13 +164,17 @@ const iapStore: IapStore = {
         : {}),
     });
 
-    if (error) throw new Error(`iap_subscriptions insert failed: ${error.message}`);
+    // A lost unique-key race becomes the typed error the policy re-runs on.
+    if (error) throw iapInsertError(error);
   },
 
-  async update(id: string, patch: IapRowPatch) {
+  async update(id: string, patch: IapRowPatch, orderAt?: string) {
     let query = supabase.from('iap_subscriptions').update(patch).eq('id', id);
-    if (patch.last_event_at) {
-      query = query.or(`last_event_at.is.null,last_event_at.lte.${patch.last_event_at}`);
+    // A snapshot's time conditions the write without being written (#73).
+    // Both values are ISO strings the shared module produced.
+    const bound = orderAt ?? patch.last_event_at;
+    if (bound) {
+      query = query.or(`last_event_at.is.null,last_event_at.lte.${bound}`);
     }
     const { data, error } = await query.select('id');
     if (error) throw new Error(`iap_subscriptions update failed: ${error.message}`);
@@ -218,13 +223,34 @@ Deno.serve(async (req) => {
 
     const subscriber = await fetchSubscriber(user.id, secretKey);
     const now = Date.now();
-    const { subscriptions, ignored } = normalizeSubscriberPayload(user.id, subscriber, now);
+    const { subscriptions, ignored, snapshotAt } = normalizeSubscriberPayload(user.id, subscriber, now);
 
     for (const note of ignored) {
       console.info(`[verify-iap-purchase] skipped for ${user.id}: ${note}`);
     }
 
+    if (snapshotAt === null && subscriptions.length > 0) {
+      console.warn(
+        '[verify-iap-purchase] RevenueCat sent no usable request_date_ms; ' +
+          'these writes are unordered against webhook events',
+      );
+    }
+
     const outcomes = await persistIapSubscriptions(iapStore, subscriptions);
+
+    /*
+      A row a newer webhook event already moved past keeps that state (#73).
+      The response below still reports the snapshot; subscription-guard reads
+      the row and stays the authority for access.
+    */
+    outcomes.forEach((outcome, i) => {
+      if (outcome.action !== 'stale') return;
+      const { platform, productId } = subscriptions[i];
+      console.info(
+        `[verify-iap-purchase] stale snapshot for ${platform}/${productId}: ` +
+          `row already at ${outcome.appliedAt}. Not applied.`,
+      );
+    });
 
     const conflict = outcomes.find((o) => o.action === 'rejected');
     if (conflict && conflict.action === 'rejected') {
