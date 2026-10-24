@@ -2823,15 +2823,18 @@
         "F076"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-auth-flows",
-      "pr": null,
+      "pr": "#166",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2842,7 +2845,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track auth-flows; findings F063, F133, F132, F075, F076. Not started."
+        "F063 fixed (ResetPassword turns a recovery hash, token_hash or PKCE code into a session in the app), F075 fixed (www removed from the Android filter, iOS entitlement and DEEP_LINK_HOSTS), F132 and F133 fixed in code only (check-your-inbox screen, 8-character client minimum, native login guidance; dashboard settings, CAPTCHA and native OAuth stay with the owner), F076 deferred (iTunes lookup returns 0 results for com.amani.health); blind verifier PASS_WITH_NOTES 2026-10-23 at 256189c, 12 tests red on base.",
+        "Gates at 29c0efa (run locally): lint, typecheck, full test (3,366), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"

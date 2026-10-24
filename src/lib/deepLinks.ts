@@ -12,11 +12,11 @@
  * `com.apple.developer.associated-domains` entitlement and the Android
  * intent filter — a host listed in one place but not the others either fails
  * to route or fails verification, both silently.
+ *
+ * www is deliberately absent: it 301-redirects to the apex, so its
+ * assetlinks.json fails Android App Links verification.
  */
-export const DEEP_LINK_HOSTS: readonly string[] = [
-  'amanibiometrics.com',
-  'www.amanibiometrics.com',
-];
+export const DEEP_LINK_HOSTS: readonly string[] = ['amanibiometrics.com'];
 
 /**
  * Paths the app handles. Must stay in sync with the `components` array in

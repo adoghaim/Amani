@@ -29,15 +29,16 @@
                  app instead of a browser. autoVerify requires
                  /.well-known/assetlinks.json on the domain to list this app's
                  Play App Signing SHA-256, or the links silently fall back to
-                 the browser. Keep the paths in sync with src/lib/deepLinks.ts. -->
+                 the browser. Keep the paths in sync with src/lib/deepLinks.ts.
+                 No www host: www 301-redirects to the apex, and a redirected
+                 assetlinks.json fails verification (on Android 11 and lower
+                 that failure also stops the apex links). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="amanibiometrics.com" android:pathPrefix="/reset-password" />
                 <data android:scheme="https" android:host="amanibiometrics.com" android:pathPrefix="/success" />
-                <data android:scheme="https" android:host="www.amanibiometrics.com" android:pathPrefix="/reset-password" />
-                <data android:scheme="https" android:host="www.amanibiometrics.com" android:pathPrefix="/success" />
             </intent-filter>
 
         </activity>

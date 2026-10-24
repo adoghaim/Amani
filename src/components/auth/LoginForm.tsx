@@ -112,6 +112,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           Sign in
         </Button>
       </form>
+
+      {/* The app has no Google or Apple sign-in, and an account created that way has no password. */}
+      {isNative() && (
+        <p className="text-xs text-theme-muted-text text-center leading-relaxed">
+          Signed up with Google on the website? The app signs in with email and password. Tap
+          "Forgot your password?" below to set one for the same email, then sign in here.
+        </p>
+      )}
     </div>
   )
 }

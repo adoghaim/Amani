@@ -24,6 +24,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [confirmationSentTo, setConfirmationSentTo] = useState('')
   // PK-EXP5 (D6.2): the code field and every event call stay off until the owner turns this on.
   const eventsOn = useFirstPartyEventsEnabled()
 
@@ -39,18 +40,26 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
       setLoading(false)
       return
     }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
+      setLoading(false)
+      return
+    }
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: undefined // Disable email confirmation
+          emailRedirectTo: undefined
         }
       })
 
       if (error) {
         setError(error.message)
+      } else if (!data.session) {
+        // With Confirm email on, signUp returns no session until the link is opened.
+        setConfirmationSentTo(email)
       } else {
         // handle_new_user creates public.users in the signup transaction.
         // A second INSERT conflicts with that row; refresh it instead so the
@@ -74,6 +83,23 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed')
     }
+  }
+
+  if (confirmationSentTo) {
+    return (
+      <div className="space-y-4">
+        <Alert type="info" title="Check your inbox">
+          We sent a confirmation link to {confirmationSentTo}. Open it to finish creating your
+          account, then sign in.
+        </Alert>
+        <Link
+          to="/login"
+          className="block text-center text-sm text-theme-muted-text hover:text-theme-text transition-colors"
+        >
+          Back to sign in
+        </Link>
+      </div>
+    )
   }
 
   return (
@@ -129,7 +155,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           onChange={(e) => setPassword(e.target.value)}
           required
           autoComplete="new-password"
-          minLength={6}
+          minLength={8}
         />
 
         <Input
@@ -139,7 +165,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
           autoComplete="new-password"
-          minLength={6}
+          minLength={8}
         />
 
         <Button
