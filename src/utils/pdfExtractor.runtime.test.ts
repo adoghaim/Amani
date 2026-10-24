@@ -7,9 +7,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
   F062 — runs the REAL pdf.js (the library is not mocked) against a synthetic
   lab PDF in an engine that lacks Promise.try and Uint8Array.prototype.toHex,
   the feature set of WebKit 17.4-18.1 and Android 7-9 WebView. The modern build
-  needs both and never settles or throws there; the legacy build bundles the
-  polyfills. Only the Vite `?url` worker specifiers are replaced, with file URLs
-  that a Node fake worker can import.
+  needs both and never settles or throws there; the legacy build bundles those
+  two polyfills. Only the Vite `?url` worker specifiers are replaced, with file
+  URLs that a Node fake worker can import. The APIs the legacy build does NOT
+  polyfill (Promise.withResolvers, .at, Object.hasOwn, ...) come from
+  ./pdfjsPolyfills; pdfWorkerTarget.test.ts deletes them all and runs the
+  built files in a fresh process.
 */
 const fromPackage = (rel: string) =>
   pathToFileURL(fileURLToPath(new URL(`../../node_modules/pdfjs-dist/${rel}`, import.meta.url))).href;

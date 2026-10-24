@@ -3,11 +3,18 @@
 // first visit. The promise is cached so multiple PDF operations in one
 // session don't re-fetch the chunk.
 //
-// The LEGACY build is deliberate. The modern build calls Promise.try,
-// Promise.withResolvers and Uint8Array.prototype.toHex with no polyfill, which
-// WebKit below 18.2 and Android 7-9 WebViews lack, and the app still ships to
-// iOS 15 and Android 7. There getDocument() never settles (Promise.try) or
-// rejects (toHex). The legacy build bundles those polyfills.
+// The LEGACY build is deliberate. The modern build calls Promise.try and
+// Uint8Array.prototype.toHex with no polyfill, which WebKit below 18.2 and
+// Android 7-9 WebViews lack, and the app still ships to iOS 15 and Android 7.
+// There getDocument() never settles (Promise.try) or rejects (toHex). The
+// legacy build bundles core-js for those (and Set methods, iterator helpers,
+// URL.parse), but NOT for Promise.withResolvers, .at, Object.hasOwn,
+// findLast, structuredClone, ArrayBuffer#transferToFixedLength or
+// ReadableStream async iteration (which getTextContent() needs, and WebKit
+// only has from 27). ./pdfjsPolyfills supplies those: imported here before
+// pdf.mjs, and prepended to the worker by `?lowered-url`, since the worker is
+// a separate realm. Guarded by pdfWorkerTarget.test.ts, which runs the built
+// files with those APIs deleted.
 //
 // The worker is imported with `?lowered-url` (the `loweredUrlAsset` plugin in
 // vite.config.ts), NOT a bare `?url` and NOT `?worker&url`. A bare `?url` copies
@@ -18,14 +25,16 @@
 // `export { WorkerMessageHandler }`, which pdf.js's fake-worker fallback (module
 // Worker blocked by CSP or a custom-scheme WebView) imports: every getDocument()
 // then rejected. `?lowered-url` lowers the syntax and keeps the export (both
-// guarded by pdfWorkerTarget.test.ts). The legacy build supplies the missing
-// runtime APIs; this supplies the missing syntax.
+// guarded by pdfWorkerTarget.test.ts). The legacy build and ./pdfjsPolyfills
+// supply the missing runtime APIs; this supplies the missing syntax.
 type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
 let pdfjsPromise: Promise<PdfJs> | null = null;
 
 async function loadPdfJs(): Promise<PdfJs> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
+      // Before pdf.mjs evaluates: kept out of the route chunk like pdf.js itself.
+      await import('./pdfjsPolyfills');
       const [pdfjsLib, workerUrlMod] = await Promise.all([
         import('pdfjs-dist/legacy/build/pdf.mjs'),
         import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?lowered-url'),

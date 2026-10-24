@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, transformWithEsbuild, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -33,9 +34,16 @@ const appRelease = commit ? `amani@${version}+${commit.slice(0, 7)}` : `amani@${
   Guarded by src/utils/pdfWorkerTarget.test.ts. The asset goes through Vite's
   own `__VITE_ASSET__` placeholder so `base` (absolute on web, './' on native)
   is applied to the URL as for any other asset.
+
+  - Runtime APIs: lowering is syntax only. `prelude` (src/utils/pdfjsPolyfills.ts)
+    is compiled to an IIFE and put in front of the file, because the worker is
+    its own realm and does not see the main thread's polyfills.
+  - `import.meta` stays: esbuild would otherwise replace it below es2020 with an
+    empty object, and the worker's emscripten (JBig2/OpenJPEG) loaders read
+    `import.meta.url`. Every engine with module workers supports it.
 */
 const LOWERED_URL = '?lowered-url';
-function loweredUrlAsset(): Plugin {
+function loweredUrlAsset({ prelude }: { prelude: string }): Plugin {
   let target: string | string[] | false = 'es2018';
   let isBuild = false;
   return {
@@ -59,9 +67,17 @@ function loweredUrlAsset(): Plugin {
       this.addWatchFile(file);
       // The dev server serves modern browsers unbundled; only a build lowers.
       if (!isBuild) return `export default ${JSON.stringify(`/@fs/${file.replace(/^\//, '')}`)};`;
-      const { code } = await transformWithEsbuild(readFileSync(file, 'utf-8'), file, {
+      this.addWatchFile(prelude);
+      const esbuildTarget = target || 'es2018';
+      const polyfills = await transformWithEsbuild(readFileSync(prelude, 'utf-8'), prelude, {
+        format: 'iife',
+        target: esbuildTarget,
+        sourcemap: false,
+      });
+      const { code } = await transformWithEsbuild(`${polyfills.code}\n${readFileSync(file, 'utf-8')}`, file, {
         format: 'esm',
-        target: target || 'es2018',
+        target: esbuildTarget,
+        supported: { 'import-meta': true },
         minify: true,
         sourcemap: false,
         legalComments: 'none',
@@ -81,7 +97,10 @@ function loweredUrlAsset(): Plugin {
 // native plugins to iOS/Android — otherwise camera capture, in-app browser,
 // network detection, and the Android back button silently no-op on device.
 export default defineConfig(({ command }) => ({
-  plugins: [loweredUrlAsset(), react()],
+  plugins: [
+    loweredUrlAsset({ prelude: fileURLToPath(new URL('./src/utils/pdfjsPolyfills.ts', import.meta.url)) }),
+    react(),
+  ],
   /*
     Web needs an absolute base. With './', a nested route like /app/reports
     resolves its asset URLs against /app/, so the bundle 404s and the page
