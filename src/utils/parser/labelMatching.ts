@@ -43,6 +43,34 @@ export function detectUnit(text: string): string | null {
 }
 
 /**
+ * The unit printed first in `text` at or after `from`, by position: detectUnit
+ * answers by KNOWN_UNITS order, so a unit printed later, a neighbour's, could
+ * win (review F011, RV-PX2 B1). Units that start at the same position keep
+ * KNOWN_UNITS order ("mL/min/1.73m2" before "mL/min"). A "%" that stands alone
+ * or is glued to a number ("5.4 %", "7.2%") is read too; \b never matches
+ * around it, so detectUnit cannot (B2). Spellings are read as detectUnit reads
+ * them.
+ */
+export function unitPrintedFrom(text: string, from = 0): string | null {
+  const spell = (s: string) => s.replace(/[µμ]/g, 'u').replace(/m(?:²|\^2)/g, 'm2');
+  const spelled = spell(text);
+  const start = spell(text.slice(0, from)).length;
+  let first: { at: number; unit: string } | null = null;
+  for (const u of KNOWN_UNITS) {
+    if (u === '%') continue;
+    const escaped = u.replace(/[/()[\].+*?^${}|\\]/g, '\\$&');
+    const re = new RegExp('\\b' + escaped + '\\b', 'gi');
+    re.lastIndex = start;
+    const m = re.exec(spelled);
+    if (m && (first === null || m.index < first.at)) first = { at: m.index, unit: u };
+  }
+  for (let at = spelled.indexOf('%', start); at !== -1 && (first === null || at < first.at); at = spelled.indexOf('%', at + 1)) {
+    if (/[\s\d]/.test(spelled[at - 1] ?? ' ') && !/[\w%]/.test(spelled[at + 1] ?? ' ')) first = { at, unit: '%' };
+  }
+  return first?.unit ?? null;
+}
+
+/**
  * CBC differential disambiguator.
  *
  * Bare labels like `Neutrophils` resolve to the percent-unit slug by default,

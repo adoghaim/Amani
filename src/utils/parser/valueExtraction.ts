@@ -1,7 +1,7 @@
 import type { ParsedResult, SourceAdapter } from './types';
 import { isNoiseLine, isPartOfWord } from './textUtils';
-import { bindReferenceRange } from './rangeDetection';
-import { detectUnit } from './labelMatching';
+import { bindReferenceRange, markerContinuationLines } from './rangeDetection';
+import { unitPrintedFrom } from './labelMatching';
 
 const NUM_RE = /(\d+\.\d+|\d+)/g;
 
@@ -92,9 +92,20 @@ export function extractValueFromWindow(
     }
   }
 
-  const blockLines = cleanLines.slice(0, Math.min(3, cleanLines.length));
-  const blockText = blockLines.join(' ');
-  const unit = detectUnit(blockText) ?? preferredUnits[0] ?? null;
+  // RV-PX2 B1: a unit is read from the marker's own lines only. The first unit
+  // of KNOWN_UNITS anywhere in the next three lines took a neighbour's (F011).
+  const ownLines = [labelLine, ...markerContinuationLines(cleanLines.slice(1), adapter)];
+  /** The unit printed after the chosen number on its line, else the first on her own lines, else the default. */
+  function unitOf(chosen?: { line?: string; start?: number }): string | null {
+    const after = chosen?.line !== undefined && chosen.start !== undefined ? unitPrintedFrom(chosen.line, chosen.start) : null;
+    if (after !== null) return after;
+    for (const line of ownLines) {
+      const printed = unitPrintedFrom(line);
+      if (printed !== null) return printed;
+    }
+    return preferredUnits[0] ?? null;
+  }
+  const unit = unitOf();
 
   const windowText = cleanLines.join(' ');
   // Only the marker's own lines are read for its interval (PK-FIX-05): taking
@@ -258,7 +269,8 @@ export function extractValueFromWindow(
         (referenceResult.comparator.value === rawThreshold ||
          knownRangeNumbers.has(String(rawThreshold)));
       if (!isRefComp) {
-        return { value: parsed0.value, rawValue: parsed0.rawValue, unit, referenceResult, ...ambiguity };
+        const start = (prefixMatch0.index ?? 0) + prefixMatch0[0].length - prefixToken.length;
+        return { value: parsed0.value, rawValue: parsed0.rawValue, unit: unitOf({ line: labelLine, start }), referenceResult, ...ambiguity };
       }
     }
   }
@@ -314,19 +326,19 @@ export function extractValueFromWindow(
   if (labelCandidates.length > 0) {
     if (valueCandidates.length === 0 || !referenceResult) {
       const best = pickBest(labelCandidates);
-      if (best) return { ...withInclusiveComparator(best), unit, referenceResult, ...ambiguity };
+      if (best) return { ...withInclusiveComparator(best), unit: unitOf(best), referenceResult, ...ambiguity };
     } else {
       // Both candidate arrays are non-empty above, so pickBest returns non-null here.
       const bestLabel = pickBest(labelCandidates);
       const bestValue = pickBest(valueCandidates);
       if (bestLabel && bestValue) {
         if (scoreCandidate(bestLabel.value) <= scoreCandidate(bestValue.value)) {
-          return { ...withInclusiveComparator(bestLabel), unit, referenceResult, ...ambiguity };
+          return { ...withInclusiveComparator(bestLabel), unit: unitOf(bestLabel), referenceResult, ...ambiguity };
         }
-        return { ...withInclusiveComparator(bestValue), unit, referenceResult, ...ambiguity };
+        return { ...withInclusiveComparator(bestValue), unit: unitOf(bestValue), referenceResult, ...ambiguity };
       }
-      if (bestLabel) return { ...withInclusiveComparator(bestLabel), unit, referenceResult, ...ambiguity };
-      if (bestValue) return { ...withInclusiveComparator(bestValue), unit, referenceResult, ...ambiguity };
+      if (bestLabel) return { ...withInclusiveComparator(bestLabel), unit: unitOf(bestLabel), referenceResult, ...ambiguity };
+      if (bestValue) return { ...withInclusiveComparator(bestValue), unit: unitOf(bestValue), referenceResult, ...ambiguity };
     }
   }
 
@@ -350,7 +362,8 @@ export function extractValueFromWindow(
           ambiguousComparator ??= parsed;
           continue;
         }
-        return { value: parsed.value, rawValue: parsed.rawValue, unit, referenceResult, ...ambiguity };
+        const start = (cm2.index ?? 0) + cm2[0].length - cmToken.length;
+        return { value: parsed.value, rawValue: parsed.rawValue, unit: unitOf({ line: trimmed, start }), referenceResult, ...ambiguity };
       }
     }
   }
@@ -358,7 +371,7 @@ export function extractValueFromWindow(
   // PRIORITY 3: plain numeric candidates from value lines.
   if (valueCandidates.length > 0) {
     const best = pickBest(valueCandidates);
-    if (best) return { ...withInclusiveComparator(best), unit, referenceResult, ...ambiguity };
+    if (best) return { ...withInclusiveComparator(best), unit: unitOf(best), referenceResult, ...ambiguity };
   }
 
   // PRIORITY 5: fallback — scan raw (unfiltered) lines for a standalone numeric value.

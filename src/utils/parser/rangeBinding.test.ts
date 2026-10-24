@@ -153,6 +153,7 @@ describe('acceptance: synthetic Quest hormone panel', () => {
   it('never gives SHBG the interval (or the result) of the unrecognised row printed under it', () => {
     expect(item(items, 'shbg')).toMatchObject({
       value_numeric: 62,
+      unit: 'nmol/L',
       raw_reference_range: null,
       normalized_reference_min: null,
       normalized_reference_max: null,
@@ -266,6 +267,7 @@ describe('acceptance: synthetic Labcorp hormone panel', () => {
   it('never gives SHBG the interval (or the result) of the unrecognised row printed under it', () => {
     expect(item(items, 'shbg')).toMatchObject({
       value_numeric: 62,
+      unit: 'nmol/L',
       raw_reference_range: null,
       normalized_reference_min: null,
       normalized_reference_max: null,

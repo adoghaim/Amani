@@ -368,6 +368,27 @@ function continuationCandidates(lines: readonly string[], adapter?: SourceAdapte
   return out;
 }
 
+/**
+ * The lines under the label line that belong to the marker, read as
+ * continuationCandidates reads them: her result lines, unit-only and flag-only
+ * lines, reference headings and labelled interval lines, up to the first line
+ * that starts another row (RV-PX2 B1). A unit-only line with digits
+ * ("mL/min/1.73") belongs to the marker here as well; it prints no interval.
+ */
+export function markerContinuationLines(lines: readonly string[], adapter?: SourceAdapter): string[] {
+  const own: string[] = [];
+  const history = adapter?.historyLine.historyLinePattern ?? null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line.length === 0 || (history !== null && history.test(line))) continue;
+    const token = firstNumericToken(line);
+    const label = token === null ? line : line.slice(0, token.start).trim();
+    if (!isUnitOrFlagOnly(line) && label.length > 0 && !RESULT_LABEL_RE.test(label) && !startsWithReferenceWord(label)) break;
+    own.push(line);
+  }
+  return own;
+}
+
 function decide(found: Candidate[]): RangeBinding {
   if (found.length === 0) return { candidates: [] };
   const printed = found.length > 1 ? found.filter(c => !c.valuePosition) : found;
