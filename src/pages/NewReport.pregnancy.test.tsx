@@ -3,6 +3,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   Review F012 on the real upload page. The reproductive status she declared in
@@ -30,11 +31,13 @@ vi.mock('../lib/supabase', () => {
     };
     return builder;
   };
-  const item = (raw_name: string, canonical_slug: string, value: number, unit: string, min: number, max: number) => ({
-    raw_name, canonical_slug, category: null, value_numeric: value, value_text: String(value), unit,
-    raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
-    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-    needs_review: false, source_snippet: `${raw_name} ${value} ${unit} ${min}-${max}`, source_format: 'ocr', review_status: 'pending',
+  // parse-lab-report-ocr's own row shape (ExtractedAnalyte, review F093), not the app's ReportItem.
+  const item = (raw_name: string, canonical_slug: string, value: number, unit: string, min: number, max: number): ExtractedAnalyte => ({
+    raw_name, raw_value_text: String(value), value_numeric: value, unit,
+    raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: `${raw_name} ${value} ${unit} ${min}-${max}`,
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug, parse_status: 'mapped',
+    needs_review: false, is_core: true, category: null,
   });
   const ocrItems = [item('Ferritin', 'ferritin', 8, 'ng/mL', 13, 150), item('TSH', 'tsh', 12, 'mIU/L', 0.4, 4)];
   return { supabase: {

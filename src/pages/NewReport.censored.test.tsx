@@ -3,6 +3,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   Review F021, wave 3, on the real upload page. A result printed as a limit is
@@ -29,11 +30,13 @@ vi.mock('../lib/supabase', () => {
     };
     return builder;
   };
-  const item = (raw_name: string, canonical_slug: string, value: number, text: string, unit: string, min: number, max: number) => ({
-    raw_name, canonical_slug, category: null, value_numeric: value, value_text: text, unit,
-    raw_reference_range: `${min}-${max}`, normalized_reference_min: min, normalized_reference_max: max,
-    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-    needs_review: false, source_snippet: `${raw_name} ${text} ${unit} ${min}-${max}`, source_format: 'ocr', review_status: 'pending',
+  // parse-lab-report-ocr's own row shape (ExtractedAnalyte, review F093), not the app's ReportItem.
+  const item = (raw_name: string, canonical_slug: string, value: number, text: string, unit: string, min: number, max: number): ExtractedAnalyte => ({
+    raw_name, raw_value_text: text, value_numeric: value, unit,
+    raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: `${raw_name} ${text} ${unit} ${min}-${max}`,
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug, parse_status: 'mapped',
+    needs_review: false, is_core: true, category: null,
   });
   const ocrItems = [
     item('eGFR', 'egfr', 60, '> OR = 60', 'mL/min/1.73m2', 60, 200),
@@ -141,21 +144,31 @@ async function reviewValueInput(name: string) {
   const card = Array.from(app.querySelectorAll<HTMLElement>('div.cursor-pointer'))
     .find(c => c.querySelector('span.truncate')?.textContent === name);
   expect(card, name).toBeDefined();
-  await act(async () => { card!.click(); });
+  // A row held for her review (#172, F098: a result printed below a limit) opens
+  // on its own; a click would close it.
+  if (card!.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded') !== 'true') {
+    await act(async () => { card!.click(); });
+  }
   return card!.parentElement!.querySelector<HTMLInputElement>('input[type="number"]')!;
 }
 
 it('previews a result printed as a limit by its printed text, never its placeholder', async () => {
   let preview: string[][] = [];
+  let held: string[] = [];
   await upload({ onPreview: async () => {
     const toggle = Array.from(app.querySelectorAll('button')).find(b => b.textContent?.startsWith('View detected markers'));
     expect(toggle).toBeDefined();
     await act(async () => { toggle!.click(); });
     await settle();
-    preview = Array.from(app.querySelectorAll('.divide-y > div'))
-      .map(row => [row.children[0]?.textContent?.trim() ?? '', row.children[1]?.textContent?.trim() ?? '']);
+    const rows = Array.from(app.querySelectorAll('.divide-y > div'));
+    // The value as previewed, apart from the 'review' marker on a row held for her review.
+    preview = rows.map(row => [row.children[0]?.textContent?.trim() ?? '', row.children[1]?.firstChild?.textContent?.trim() ?? '']);
+    held = rows.filter(row => row.children[1]?.lastElementChild?.textContent === 'review')
+      .map(row => row.children[0]?.textContent?.trim() ?? '');
   } });
   expect(preview).toContainEqual(['Vitamin D', '<8 ng/mL']);
+  // #172 (F098): a result printed below a limit is held for her review.
+  expect(held).toEqual(['Vitamin D']);
   expect(preview).toContainEqual(['eGFR', '> OR = 60 mL/min/1.73m2']);
   expect(preview.map(([, value]) => value)).not.toContain('4 ng/mL');
   // Control: a measured value is previewed by its number.
