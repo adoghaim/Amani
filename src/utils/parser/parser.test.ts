@@ -171,10 +171,6 @@ describe('parser pipeline (a value in another unit outside the bounds waits for 
   });
 
   it.each([
-    ['Potassium                    45        mmol/L    3.5-5.1', 'potassium', 45],
-    ['TSH                          900       uIU/mL    0.40-4.50', 'tsh', 900],
-    ['ALT                          0.2       IU/L      7-35', 'alt', 0.2],
-    ['Sodium                       14        mmol/L    136-145', 'sodium', 14],
     ['Glucose                      5.2       mmol/L    3.9-5.5', 'fasting_glucose', 5.2],
   ])('held for her confirmation, out of her primary finding, Save not blocked: %s', (row, slug, value) => {
     const item = parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug);
@@ -182,6 +178,23 @@ describe('parser pipeline (a value in another unit outside the bounds waits for 
     expect(item?.parse_error ?? null).toBeNull();
     expect(awaitsHerConfirmation(item!)).toBe(false);
     expect(awaitsHerCheck(item!)).toBe(true);
+    expect(isUnconfirmedReading(asSaved(item!))).toBe(true);
+  });
+
+  // RV-PX2 C1: a unit the catalog records as an owner-approved 1:1 equivalent
+  // (review-2) is checked as the catalog unit, so these are the same
+  // Save-blocking parse error as their catalog-unit twins, not a hold.
+  it.each([
+    ['Potassium                    45        mmol/L    3.5-5.1', 'potassium', 'Value 45 exceeds physiological maximum 10'],
+    ['TSH                          900       uIU/mL    0.40-4.50', 'tsh', 'Value 900 exceeds physiological maximum 200'],
+    ['ALT                          0.2       IU/L      7-35', 'alt', 'Value 0.2 is below physiological minimum 1'],
+    ['Sodium                       14        mmol/L    136-145', 'sodium', 'Value 14 is below physiological minimum 100'],
+  ])('in an approved equivalent unit, the Save-blocking parse error: %s', (row, slug, error) => {
+    const item = parseAllReportItems(lab(row)).find(i => i.canonical_slug === slug);
+    expect(item).toMatchObject({ needs_review: true, confidence_score: 'low', parse_status: 'parse_error' });
+    expect(item?.parse_error).toMatch(new RegExp(`^${error.replace(/\./g, '\\.')} for .+ — likely a parse error$`));
+    expect(awaitsHerConfirmation(item!)).toBe(true);
+    expect(awaitsHerCheck(item!)).toBe(false);
     expect(isUnconfirmedReading(asSaved(item!))).toBe(true);
   });
 

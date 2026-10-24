@@ -67,15 +67,28 @@ describe('withReviewFlags: the parser\'s review rules on every row of the confir
   */
   describe('a value in another unit outside the bounds waits for her confirmation', () => {
     it.each([
-      ['Potassium', 'potassium', 45, 'mmol/L'],
-      ['TSH', 'tsh', 900, 'uIU/mL'],
-      ['ALT', 'alt', 0.2, 'IU/L'],
+      ['Glucose', 'fasting_glucose', 5.2, 'mmol/L'],
+      ['Calcium', 'calcium', 2.4, 'mmol/L'],
+      ['Hemoglobin', 'hemoglobin', 135, 'g/L'],
     ])('%s %s %s', (raw_name, canonical_slug, value_numeric, unit) => {
       const row = withReviewFlags(modelRow({ raw_name, canonical_slug, value_numeric, value_text: String(value_numeric), unit }));
       expect(row).toMatchObject({ parse_error: null, needs_review: true, confidence_score: 'low' });
       expect(awaitsHerConfirmation(row)).toBe(false);
       expect(awaitsHerCheck(row)).toBe(true);
       expect(awaitsHerCheck({ ...row, reviewed_by_user: true })).toBe(false);
+    });
+
+    // RV-PX2 C1: an owner-approved 1:1 equivalent (review-2) is checked as the
+    // catalog unit: the parser's Save-blocking parse error, not this hold.
+    it.each([
+      ['Potassium', 'potassium', 45, 'mmol/L', 'Value 45 exceeds physiological maximum 10 for Potassium'],
+      ['TSH', 'tsh', 900, 'uIU/mL', 'Value 900 exceeds physiological maximum 200 for TSH'],
+      ['ALT', 'alt', 0.2, 'IU/L', 'Value 0.2 is below physiological minimum 1 for ALT'],
+    ])('%s %s %s: the parse error', (raw_name, canonical_slug, value_numeric, unit, error) => {
+      const row = withReviewFlags(modelRow({ raw_name, canonical_slug, value_numeric, value_text: String(value_numeric), unit }));
+      expect(row).toMatchObject({ parse_error: `${error} — likely a parse error`, needs_review: true });
+      expect(awaitsHerConfirmation(row)).toBe(true);
+      expect(awaitsHerCheck(row)).toBe(false);
     });
 
     it('control: inside the bounds in another unit, the row is unchanged', () => {

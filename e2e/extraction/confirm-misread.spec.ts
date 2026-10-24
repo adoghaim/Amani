@@ -15,7 +15,7 @@ const OCR_ITEMS: ExtractedAnalyte[] = ([
   ['TSH', 'tsh', 0.0008, 'mIU/L', 0.4, 4.5],
   ['Ferritin', 'ferritin', 40, 'ng/mL', 16, 154],
   // IA2 review wave 2: another unit, outside the bounds; held for her check, Save not blocked.
-  ['Potassium', 'potassium', 45, 'mmol/L', 3.5, 5.1],
+  ['Glucose', 'fasting_glucose', 5.2, 'mmol/L', 3.9, 5.5],
 ] as const).map(([name, slug, value, unit, min, max]): ExtractedAnalyte => ({
   raw_name: name, raw_value_text: String(value), value_numeric: value, unit,
   raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,

@@ -101,6 +101,36 @@ export const RESIDUAL_ROWS: readonly ResidualRow[] = [
     reads: ['5.4', 5.4, '%', false, '<5.7', '<', 5.7, 'mapped', null] },
   { rule: 'control', id: 'fsh_above_lh', marker: 'fsh', text: BARE_QUEST + 'FSH 6.1 mIU/mL\nLH 5.6 mIU/mL',
     reads: ['6.1', 6.1, 'mIU/mL', true, null, null, null, 'needs_review', null] },
+  // An owner-approved 1:1 equivalent is checked as the catalog unit: the same parse error as its twin.
+  { rule: 'C1', id: 'k_mmol_out_of_bounds', marker: 'potassium', text: BARE_GENERIC + 'Potassium 45 mmol/L 3.5-5.1',
+    reads: ['45', 45, 'mmol/L', true, '3.5-5.1', null, null, 'parse_error', 'Value 45 exceeds physiological maximum 10 for Potassium — likely a parse error'] },
+  { rule: 'C1', id: 'na_mmol_out_of_bounds', marker: 'sodium', text: BARE_GENERIC + 'Sodium 14 mmol/L 136-145',
+    reads: ['14', 14, 'mmol/L', true, '136-145', null, null, 'parse_error', 'Value 14 is below physiological minimum 100 for Sodium — likely a parse error'] },
+  { rule: 'C1', id: 'tsh_uiu_out_of_bounds', marker: 'tsh', text: BARE_GENERIC + 'TSH 900 uIU/mL 0.4-4.5',
+    reads: ['900', 900, 'uIU/mL', true, '0.4-4.5', null, null, 'parse_error', 'Value 900 exceeds physiological maximum 200 for TSH — likely a parse error'] },
+  { rule: 'C1', id: 'alt_iu_out_of_bounds', marker: 'alt', text: BARE_GENERIC + 'ALT 0.2 IU/L 7-35',
+    reads: ['0.2', 0.2, 'IU/L', true, '7-35', null, null, 'parse_error', 'Value 0.2 is below physiological minimum 1 for ALT — likely a parse error'] },
+  { rule: 'C1', id: 'wbc_x10e3_out_of_bounds', marker: 'wbc', text: BARE_GENERIC + 'WBC 650 x10E3/uL 3.4-10.8',
+    reads: ['650', 650, 'x10E3/uL', true, '3.4-10.8', null, null, 'parse_error', 'Value 650 exceeds physiological maximum 100 for WBC — likely a parse error'] },
+  // The twins in the catalog unit, as at the base.
+  { rule: 'control', id: 'k_meq_out_of_bounds', marker: 'potassium', text: BARE_GENERIC + 'Potassium 45 mEq/L 3.5-5.1',
+    reads: ['45', 45, 'mEq/L', true, '3.5-5.1', null, null, 'parse_error', 'Value 45 exceeds physiological maximum 10 for Potassium — likely a parse error'] },
+  { rule: 'control', id: 'tsh_miu_out_of_bounds', marker: 'tsh', text: BARE_GENERIC + 'TSH 900 mIU/L 0.4-4.5',
+    reads: ['900', 900, 'mIU/L', true, '0.4-4.5', null, null, 'parse_error', 'Value 900 exceeds physiological maximum 200 for TSH — likely a parse error'] },
+  { rule: 'control', id: 'alt_u_out_of_bounds', marker: 'alt', text: BARE_GENERIC + 'ALT 0.2 U/L 7-35',
+    reads: ['0.2', 0.2, 'U/L', true, '7-35', null, null, 'parse_error', 'Value 0.2 is below physiological minimum 1 for ALT — likely a parse error'] },
+  { rule: 'control', id: 'wbc_k_out_of_bounds', marker: 'wbc', text: BARE_GENERIC + 'WBC 650 K/uL 3.4-10.8',
+    reads: ['650', 650, 'K/uL', true, '3.4-10.8', null, null, 'parse_error', 'Value 650 exceeds physiological maximum 100 for WBC — likely a parse error'] },
+  // Inside the bounds: no parse error, not held.
+  { rule: 'C1', id: 'k_mmol_inside', marker: 'potassium', text: BARE_GENERIC + 'Potassium 4.2 mmol/L 3.5-5.1',
+    reads: ['4.2', 4.2, 'mmol/L', false, '3.5-5.1', null, null, 'mapped', null] },
+  // Another unit, outside the bounds: still held for her check, no parse error.
+  { rule: 'control', id: 'glucose_mmol', marker: 'fasting_glucose', text: BARE_GENERIC + 'Glucose 5.2 mmol/L 3.9-5.5',
+    reads: ['5.2', 5.2, 'mmol/L', true, '3.9-5.5', null, null, 'needs_review', null] },
+  { rule: 'control', id: 'calcium_mmol', marker: 'calcium', text: BARE_GENERIC + 'Calcium 2.4 mmol/L 2.2-2.6',
+    reads: ['2.4', 2.4, 'mmol/L', true, '2.2-2.6', null, null, 'needs_review', null] },
+  { rule: 'control', id: 'hemoglobin_gl', marker: 'hemoglobin', text: BARE_GENERIC + 'Hemoglobin 135 g/L 120-160',
+    reads: ['135', 135, 'g/L', true, '120-160', null, null, 'needs_review', null] },
 ];
 
 /** The unit of every row of the 8 parser fixtures (parseAllReportItems): as at the base, except SHBG's (B3). */

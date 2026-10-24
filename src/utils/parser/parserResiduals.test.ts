@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseAllReportItems, parseAllReportItemsWithDebug } from './pipeline';
+import { awaitsHerCheck, awaitsHerConfirmation } from './reviewFlags';
 import { unitPrintedFrom } from './labelMatching';
 import { markerContinuationLines } from './rangeDetection';
 import { getAdapter } from './adapters';
@@ -25,6 +26,8 @@ import type { ReportItem } from './types';
   B: a unit comes from the marker's own lines only: printed after her number on
      its line, else on her label line, else on her own lines under it, else the
      default (§3a). A "%" standing alone or glued to a number is a unit (B2).
+  C: the bounds treat the catalog's notations and owner-approved 1:1
+     equivalents as the catalog unit.
 */
 
 const marker = (i: ReportItem) => i.canonical_slug ?? i.raw_name;
@@ -120,5 +123,30 @@ const FIXTURES: Record<string, string> = {
 describe('B3: across the 8 parser fixtures only SHBG\'s unit changes, to the nmol/L it prints', () => {
   it.each(Object.entries(FIXTURES))('%s', (name, text) => {
     expect(parseAllReportItems(text).map(i => [marker(i), i.unit])).toEqual(FIXTURE_UNITS[name]);
+  });
+});
+
+describe('C1: the bounds hold for the catalog unit\'s notations and approved 1:1 equivalents', () => {
+  it.each(['k_mmol_out_of_bounds', 'na_mmol_out_of_bounds', 'tsh_uiu_out_of_bounds', 'alt_iu_out_of_bounds', 'wbc_x10e3_out_of_bounds'])(
+    '%s is the same Save-blocking parse error as its catalog-unit twin', id => {
+      const item = only(byId(id));
+      expect(item.parse_error).toMatch(/likely a parse error$/);
+      expect(awaitsHerConfirmation(item)).toBe(true);
+      expect(awaitsHerCheck(item)).toBe(false);
+    },
+  );
+
+  it('potassium 4.2 mmol/L is no parse error and is not held', () => {
+    const item = only(byId('k_mmol_inside'));
+    expect(item).toMatchObject({ parse_error: null, needs_review: false });
+    expect(awaitsHerConfirmation(item)).toBe(false);
+    expect(awaitsHerCheck(item)).toBe(false);
+  });
+
+  it.each(['glucose_mmol', 'calcium_mmol', 'hemoglobin_gl'])('%s, in another unit, stays held with no parse error', id => {
+    const item = only(byId(id));
+    expect(item).toMatchObject({ parse_error: null, needs_review: true, confidence_score: 'low' });
+    expect(awaitsHerConfirmation(item)).toBe(false);
+    expect(awaitsHerCheck(item)).toBe(true);
   });
 });

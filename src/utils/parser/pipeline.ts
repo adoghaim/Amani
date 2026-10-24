@@ -23,6 +23,7 @@ import { bindReferenceRange, firstNumericToken, intervalNumbers, isReferenceSubL
 import { matchLabelLine, opensAnalyteRow } from './labelMatching';
 import { extractValueFromWindow, isBelowLimitResult, parseValueWithPrefix } from './valueExtraction';
 import { resolveAlias, getEntry, getDisplayName } from '../../lib/biomarkers/dictionary';
+import { isCatalogUnit } from '../../lib/biomarkers/normalizeReportItems';
 import type { BiomarkerName } from '../../types';
 
 export { normalizeToCatalogSlug } from './patterns';
@@ -71,13 +72,10 @@ export function confidenceRank(c: 'high' | 'medium' | 'low'): number {
   return c === 'high' ? 2 : c === 'medium' ? 1 : 0;
 }
 
-const unitKey = (unit: string) => unit.trim().toLowerCase();
-
-/** The row printed a unit, and it is not the catalog's canonical one. */
+/** The row printed a unit, and it is not the catalog's unit or a notation or approved 1:1 equivalent of it (isCatalogUnit). */
 function inAnotherUnit(slug: string, unit?: string | null): boolean {
   if (!unit || unit.trim() === '') return false;
-  const canonicalUnit = getEntry(slug as BiomarkerName)?.defaultUnit;
-  return !canonicalUnit || unitKey(unit) !== unitKey(canonicalUnit);
+  return !isCatalogUnit(slug, unit);
 }
 
 /*
