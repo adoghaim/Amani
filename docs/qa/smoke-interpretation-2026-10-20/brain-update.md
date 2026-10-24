@@ -13,7 +13,7 @@ its working tree contains owner/session edits, so its operational claims remain 
 - **[Confirmed 2026-10-20]** This branch adds fixed fallback/refusal diagnostics and smoke
   reporting; it does not change tier policy, claim limits or draw identity. The actual
   handler calls `gpt-4o-mini`; `CLAUDE.md`'s older model description is stale.
-- **[Confirmed 2026-10-20]** The synthetic smoke panel now leads with Vitamin D/LDL lab
+- **[Confirmed 2026-10-20]** The synthetic smoke panel's headline now names the Vitamin D/LDL lab
   findings, explicitly shows ferritin/TSH within their supplied lab ranges, and names Vitamin D
   throughout the primary/story/first-upload model request. Neutral lab-only findings survive
   Amani withholding. Sources: `smokePanel.test.ts`, upload regression, and committed Playwright
@@ -27,10 +27,11 @@ its working tree contains owner/session edits, so its operational claims remain 
 
 ## Implementation decisions (within the existing owner ruling)
 
-- Apply Owner Ruling 7 to client finding/focus ranking: lab flags precede band-only results;
-  lab-only findings may be primary, including when inside an Amani band. Preserve the
-  previous primary within the lab-flagged set, otherwise use existing severity. No concern
-  score, endpoint, claim-policy version or clinical authority was changed.
+- Apply Owner Ruling 7 to client finding/focus ranking as a true floor (owner ruling
+  2026-10-23, A1's first option): lab-only findings stay visible as neutral lab facts but rank
+  after every Amani-flagged result, and take the Primary finding slot only when nothing on the
+  report is Amani-flagged. Ties order by catalog position, then slug. No concern score,
+  endpoint, claim-policy version or clinical authority was changed.
 - Keep shipped status/error fields compatible and add `fallback_reason`/`reason` plus
   `model_failure`; do not claim that a deterministic fallback proves the AI deployment.
 

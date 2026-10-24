@@ -66,6 +66,12 @@ function pickDominant(
   return focusAreas[0] ?? null;
 }
 
+// Category and rule titles read as prose ("thyroid function"); a lab-only area
+// titled by its marker keeps the display name as printed ("HDL", not "hdl").
+function titleInSentence(area: FocusArea): string {
+  return area.relatedMarkers.some(m => m.displayName === area.title) ? area.title : area.title.toLowerCase();
+}
+
 function formatList(items: string[]): string {
   if (items.length === 0) return '';
   if (items.length === 1) return items[0] ?? '';
@@ -85,7 +91,7 @@ function buildThemeSentence(
   };
   const dominant = pickDominant(focusAreas, primaryCategory);
   if (!dominant) return null;
-  const dominantTitle = dominant.title.toLowerCase();
+  const dominantTitle = titleInSentence(dominant);
   const verb = trajectoryVerb(null);
   return {
     kind: 'theme',
@@ -107,7 +113,7 @@ function buildOthersSentence(
     const lowered = area.title.toLowerCase();
     if (seen.has(lowered)) continue;
     seen.add(lowered);
-    others.push(lowered);
+    others.push(titleInSentence(area));
   }
   if (others.length === 0) return null;
   return {

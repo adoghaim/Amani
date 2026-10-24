@@ -13,7 +13,7 @@ const panel = [
 ];
 
 describe('synthetic October smoke panel: one primary, two distinct comparisons', () => {
-  it.each([24, 25])('prioritizes lab findings and names Vitamin D at %s throughout the deterministic story', vitaminD => {
+  it.each([24, 25])('shows both lab findings and names Vitamin D at %s throughout the deterministic story', vitaminD => {
     const values = panel.map(b => b.key === 'vitamin_d_25_oh' ? { ...b, value: vitaminD } : b);
     const summary = buildInsightSummary(values, null);
     expect(summary.labFindings?.map(f => f.key)).toEqual(['vitamin_d_25_oh', 'ldl_cholesterol']);
@@ -46,17 +46,22 @@ describe('synthetic October smoke panel: one primary, two distinct comparisons',
     expect(buildFocusAreas(summary, [], [scored])).toHaveLength(1);
   });
 
-  it('puts a laboratory flag above an unflagged Amani finding even when the lab-flagged value is inside its Amani band', () => {
+  // Owner ruling 2026-10-23: Ruling 7 is a true floor. The lab-only TSH stays
+  // visible as a neutral lab fact but ranks after the Amani-flagged ferritin.
+  it('keeps a lab-only flag inside its Amani band visible, ranked after an Amani-flagged finding', () => {
     const values = [panel[0]!, { key: 'tsh' as const, value: 2, unit: 'uIU/mL', labRefMin: 0.4, labRefMax: 1.9 }];
     const scored = values.map(b => scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax));
     expect(scored.find(s => s.key === 'tsh')!.concern).toBe(0);
     expect(scored.find(s => s.key === 'ferritin')!.concern).toBeGreaterThan(0);
     const summary = buildInsightSummary(values, null);
-    expect(summary.primaryFinding?.key).toBe('tsh');
-    expect(summary.primaryFinding?.labLanguage?.authority.kind).toBe('patient_lab_interval');
-    const areas = buildFocusAreas(summary, [], scored, null, 'thyroid');
-    expect(areas[0]!.relatedMarkers[0]!.slug).toBe('tsh');
-    expect(areas[0]!.whyItMatters).toBe("TSH is above your lab's reference range at 2 uIU/mL.");
-    expect(areas[0]!.whyItMatters).not.toMatch(/outside.*Amani|elevated|optimal/i);
+    expect(summary.primaryFinding?.key).toBe('ferritin');
+    const tsh = summary.topFindings.find(f => f.key === 'tsh')!;
+    expect(tsh.labLanguage?.authority.kind).toBe('patient_lab_interval');
+    const areas = buildFocusAreas(summary, [], scored, null, 'nutrients');
+    expect(areas[0]!.relatedMarkers[0]!.slug).toBe('ferritin');
+    const tshArea = areas[areas.length - 1]!;
+    expect(tshArea.relatedMarkers[0]!.slug).toBe('tsh');
+    expect(tshArea.whyItMatters).toBe("TSH is above your lab's reference range at 2 uIU/mL.");
+    expect(tshArea.whyItMatters).not.toMatch(/outside.*Amani|elevated|optimal/i);
   });
 });

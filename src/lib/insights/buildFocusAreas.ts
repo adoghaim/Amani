@@ -279,8 +279,9 @@ export function buildFocusAreas(
   const labFindings = insightSummary.labFindings ?? [];
   const labCategories = new Set(labFindings.map(f => getCategory(f.key)));
   const primaryKey = insightSummary.primaryFinding?.key;
-  buckets.sort((a, b) => Number(labCategories.has(b.category)) - Number(labCategories.has(a.category)));
-  // Keep every lab-flagged category plus the usual three focus areas.
+  // Ruling 7 is a true floor (owner, 2026-10-23): Amani's own area order
+  // stands. Keep every lab-flagged category plus the usual three focus areas;
+  // lab-only findings get their own area, appended after every Amani area.
   const top = buckets.filter((b, i) => i < 3 || labCategories.has(b.category) || b.category === primaryCategory);
   const focusAreas = top.map(b => buildOneArea(b, watchSignals, insightSummary));
   for (const finding of labFindings) {
@@ -294,10 +295,6 @@ export function buildFocusAreas(
       isPrimaryAligned: false,
     });
   }
-  const labKeys = new Set(labFindings.map(f => f.key));
-  const rank = (area: FocusArea) => area.relatedMarkers.some(m => m.slug === primaryKey) ? 2
-    : area.relatedMarkers.some(m => labKeys.has(m.slug as BiomarkerName)) ? 1 : 0;
-  focusAreas.sort((a, b) => rank(b) - rank(a));
 
   const annotated = focusAreas.map(fa => ({
     ...fa,

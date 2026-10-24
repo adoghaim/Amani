@@ -206,3 +206,11 @@ export const smokePanelReport = report(1, 'unknown', [
   ['vitamin_d_25_oh', 24, '24 L', 'ng/mL', 30, 100],
   ['ldl_cholesterol', 112, '112 H', 'mg/dL', null, 100],
 ]);
+
+// Owner ruling 2026-10-23: Ruling 7 is a true floor. Synthetic: ferritin 17 is
+// inside its lab's 15-150 but below the Amani band (Amani-flagged); HDL 61 is
+// above its lab's 40-60 but inside its Amani band, a lab-only flag.
+export const labFloorReport = report(1, 'unknown', [
+  ['ferritin', 17, '17', 'ng/mL', 15, 150],
+  ['hdl_cholesterol', 61, '61', 'mg/dL', 40, 60],
+]);

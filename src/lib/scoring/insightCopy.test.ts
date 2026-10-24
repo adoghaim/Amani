@@ -47,13 +47,14 @@ describe('withoutOptimalClaims', () => {
 
 describe('retained Amani finding — the luteal progesterone of 2', () => {
   const summary = buildInsightSummary(panel, null, 'luteal');
-  const pf = summary.topFindings.find(f => f.key === 'progesterone')!;
+  const pf = summary.primaryFinding!;
 
   // V2-03b Stage 2 replaces "the builder still emits the optimality claim": the
   // builder's fact is now the policy's own sentence, so nothing is left to qualify.
   it('the builder no longer emits the optimality claim; its fact is the policy sentence', () => {
-    expect(summary.primaryFinding?.key).toBe('lh');
-    expect(summary.primaryFinding?.fact).toBe("LH is above your lab's reference range at 30 mIU/mL.");
+    // Ruling 7 is a true floor (owner, 2026-10-23): the lab-flagged LH keeps its
+    // lab wording but never takes the Primary slot from Amani's own pick.
+    expect(summary.topFindings.find(f => f.key === 'lh')?.fact).toBe("LH is above your lab's reference range at 30 mIU/mL.");
     expect(pf.key).toBe('progesterone');
     expect(pf.fact).toBe("Progesterone is below the Amani band at 2 ng/mL. Amani's context bands are still under review.");
   });

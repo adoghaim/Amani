@@ -1,5 +1,5 @@
 import type { BiomarkerName, CyclePhase } from '../../types';
-import { getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
+import { getAllEntries, getDisplayName, getCategory, getImportance } from '../biomarkers/dictionary';
 import { scoreBiomarker, type ScoredBiomarker } from '../scoring/scoreBiomarker';
 import { groupBySystem, type SystemGroup } from '../scoring/groupBySystem';
 import { compareReports, getBiggestChanges, type BiomarkerDelta, type TrajectoryStatus } from '../scoring/compareReports';
@@ -99,6 +99,9 @@ interface BiomarkerInput {
   sourceFormat?: 'text' | 'ocr' | 'manual' | 'unknown' | null;
   reportDate?: string;
 }
+
+const CATALOG_POSITION = new Map(getAllEntries().map((e, i) => [e.key, i]));
+const catalogPosition = (key: BiomarkerName) => CATALOG_POSITION.get(key) ?? Number.MAX_SAFE_INTEGER;
 
 function toTopFinding(
   s: ScoredBiomarker,
@@ -529,8 +532,13 @@ export function buildInsightSummary(
     biggestChanges = buildBiggestChanges(deltas, immediatePriorReportDate ?? null);
   }
 
-  // Owner Ruling 7: preserve the observable lab flag even when Amani
-  // withholds interpretation. Printed bounds only; do not alter concern scores.
+  // Owner Ruling 7, a true floor (owner, 2026-10-23): preserve the observable
+  // lab flag even when Amani withholds interpretation, but rank a lab-only
+  // result (concern 0) after every Amani-flagged one. A lab flag on an
+  // Amani-flagged result changes its wording, never its rank. Printed bounds
+  // only; concern scores are untouched. Ties are ordered by catalog position,
+  // then slug, so the upload-time pin and the page agree whatever the row order.
+  const concernOf = new Map(scored.map(s => [s.key, s.concern]));
   const labFindings = current.flatMap(b => {
     const placement = labIntervalPlacement(b.value, b.labRefMin, b.labRefMax);
     if (placement !== 'below' && placement !== 'above') return [];
@@ -539,9 +547,11 @@ export function buildInsightSummary(
     const fact = labFindingSentence(finding.displayName, placement, b.value, b.unit);
     const observation = labIntervalObservation(finding.displayName, b.value, b.labRefMin, b.labRefMax)!;
     return [{ ...finding, labPlacement: placement, fact, labLanguage: { ...observation, text: fact } }];
-  }).sort((a, b) => b.severity - a.severity);
-  const topFindings = [...labFindings, ...buildTopFindings(scored, deltaMap)
-    .filter(f => !labFindings.some(l => l.key === f.key))];
+  }).sort((a, b) => b.severity - a.severity
+    || catalogPosition(a.key) - catalogPosition(b.key) || a.key.localeCompare(b.key));
+  const labByKey = new Map(labFindings.map(f => [f.key, f]));
+  const amaniTop = buildTopFindings(scored, deltaMap).map(f => labByKey.get(f.key) ?? f);
+  const topFindings = [...amaniTop, ...labFindings.filter(l => !amaniTop.some(f => f.key === l.key))];
 
   const primaryKey = topFindings[0]?.status === 'out_of_range'
     ? topFindings[0].key
@@ -688,10 +698,15 @@ export function buildInsightSummary(
     }
   }
 
-  // All lab flags remain visible, including withheld markers. Among them keep
-  // the established primary when possible; otherwise use existing severity.
-  if (labFindings.length > 0) {
-    primaryFinding = labFindings.find(f => f.key === primaryFinding?.key) ?? labFindings[0]!;
+  // The floor for the Primary slot: Amani's primary keeps it (in its lab
+  // wording when the lab flagged it too). Without one, a lab-flagged result
+  // Amani also flags may take it; a lab-only result only when nothing on the
+  // report is Amani-flagged. All lab flags stay visible in topFindings.
+  if (primaryFinding) {
+    primaryFinding = labByKey.get(primaryFinding.key) ?? primaryFinding;
+  } else {
+    primaryFinding = labFindings.find(f => (concernOf.get(f.key) ?? 0) > 0)
+      ?? (abnormalScored.length === 0 ? labFindings[0] ?? null : null);
   }
 
   const secondaryFindings = primaryFinding
