@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // The edge functions import zod through Deno's npm: specifier; Vitest gets the
-// same package (3.25.76, the version the function pins) from node_modules.
-vi.mock('npm:zod@3.25.76', async () => await import('zod'));
+// same package (4.6.7, the version the function pins) from node_modules.
+vi.mock('npm:zod@4.6.7', async () => await import('zod'));
 
 import { LabReportContextSchema } from './context';
 import { NEW_REPORT_CONTEXTS } from '../../../../src/pages/NewReport.context.testkit';

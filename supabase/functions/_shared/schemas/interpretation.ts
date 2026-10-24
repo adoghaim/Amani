@@ -1,4 +1,4 @@
-import { z } from "npm:zod@3.25.76";
+import { z } from "npm:zod@4.6.7";
 
 // Mirrors the JSON schema embedded in the system prompt of
 // `generate-interpretation/index.ts` (see "Required schema:" block).
@@ -34,7 +34,9 @@ export const InterpretationSchema = z.object({
   what_to_do_next: z.array(z.string()),
   overall_interpretation: z.string(),
   questions_for_doctor: z.array(z.string()),
-  cycle_context: z.unknown(),
+  // zod 4 requires the key of a bare z.unknown(); zod 3 did not. The model may
+  // leave it out, and the handler fills cycle_context either way.
+  cycle_context: z.unknown().optional(),
   disclaimer: z.string(),
 });
 
