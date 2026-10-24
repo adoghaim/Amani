@@ -10,9 +10,10 @@
   failure the sorted set of issue paths. Messages, codes and issue counts are
   not compared: zod 4 words them differently. Inputs whose result changes on
   purpose (an oversized bounded array that also holds invalid elements, a
-  non-finite number, a string whose UTF-16 length and code-point length fall
-  on different sides of a bound) are kept out of the corpus;
-  zod-bounds.test.ts pins them.
+  non-finite number) are kept out of the corpus; zod-bounds.test.ts pins
+  them. UTF16_CORPUS, at the end, holds strings whose UTF-16 length and
+  code-point length fall on different sides of a bound; its zod 3.25.76
+  results are in zod-equivalence.utf16.golden.json.
 */
 
 export type SchemaName =
@@ -422,6 +423,51 @@ for (const [name, input] of NON_OBJECTS) add(ORDER, `non-object: ${name}`, input
 
 export const CORPUS: readonly CorpusCase[] = corpus;
 
+// ── String bounds counted in UTF-16 units ────────────────────────────────────
+// zod 3 measured a string's .max() in UTF-16 units (String#length); zod 4.6
+// measures code points, so an astral character (an emoji: two units) counts
+// once. Each input below is longer than its bound in units but not in code
+// points, or sits exactly at the bound as a control. Its golden,
+// zod-equivalence.utf16.golden.json, holds zod 3.25.76's results; it is a
+// file of its own so that the commit-1 golden stays as it was.
+const utf16: CorpusCase[] = [];
+const addUtf16 = (name: string, input: unknown): void => {
+  utf16.push({ schema: PROFILE, name, input });
+};
+for (const [key, limit] of [["full_name", 80], ["age_range", 40], ["sex_at_birth", 40], ["pregnancy_status", 40]] as const) {
+  for (const [name, value] of [
+    [`${limit / 2 + 1} astral characters (${limit + 2} units)`, FLOWER.repeat(limit / 2 + 1)],
+    [`${limit} astral characters (${2 * limit} units)`, FLOWER.repeat(limit)],
+    [`${limit - 1} letters and an astral character (${limit + 1} units)`, "a".repeat(limit - 1) + FLOWER],
+    [`${limit - 2} letters and an astral character (${limit} units)`, "a".repeat(limit - 2) + FLOWER],
+    [`padded ${limit / 2 + 1} astral characters`, pad(FLOWER.repeat(limit / 2 + 1))],
+    [`padded ${limit / 2} astral characters`, pad(FLOWER.repeat(limit / 2))],
+  ] as const) {
+    addUtf16(`${key}: ${name}`, { [key]: value });
+  }
+}
+for (const [key, limit] of [["health_goals", 80], ["symptoms", 120]] as const) {
+  for (const [name, value] of [
+    [`one element of ${limit / 2 + 1} astral characters`, [FLOWER.repeat(limit / 2 + 1)]],
+    [`one element of ${limit} astral characters`, [FLOWER.repeat(limit)]],
+    [`one element of ${limit - 1} letters and an astral character`, ["e".repeat(limit - 1) + FLOWER]],
+    [`one element of ${limit - 2} letters and an astral character`, ["e".repeat(limit - 2) + FLOWER]],
+    [`one padded element of ${limit / 2 + 1} astral characters`, [pad(FLOWER.repeat(limit / 2 + 1))]],
+    [`one padded element of ${limit / 2} astral characters`, [pad(FLOWER.repeat(limit / 2))]],
+    [`a valid element, then one of ${limit} astral characters`, ["energy", FLOWER.repeat(limit)]],
+    [`10 elements of ${limit / 2 + 1} astral characters`, Array.from({ length: 10 }, () => FLOWER.repeat(limit / 2 + 1))],
+  ] as const) {
+    addUtf16(`${key}: ${name}`, { [key]: value });
+  }
+}
+addUtf16("complete row with a full_name of 41 astral characters", { ...PROFILE_ROW, full_name: FLOWER.repeat(41) });
+addUtf16("every bounded field at its bound in astral characters", {
+  full_name: FLOWER.repeat(80), age_range: FLOWER.repeat(40), sex_at_birth: FLOWER.repeat(40),
+  pregnancy_status: FLOWER.repeat(40), health_goals: [FLOWER.repeat(80)], symptoms: [FLOWER.repeat(120)],
+});
+
+export const UTF16_CORPUS: readonly CorpusCase[] = utf16;
+
 // ── Canonical encoding ───────────────────────────────────────────────────────
 // JSON cannot say "absent" versus "present with undefined", -0, NaN or
 // Infinity, and an object's key order should be explicit, so values are
@@ -473,12 +519,16 @@ export function outcomeLine(entry: CorpusCase, result: ParseResult): string {
 }
 
 /**
- * The golden text for these schemas: every corpus case parsed once, on the
- * default path or with `{ jitless: true }` (zod 4 then skips its compiled
- * object parser; zod 3 ignores the option).
+ * The golden text for these schemas: every case of `cases` (by default the
+ * corpus) parsed once, on the default path or with `{ jitless: true }` (zod 4
+ * then skips its compiled object parser; zod 3 ignores the option).
  */
-export function corpusText(schemas: Schemas, options: { readonly jitless?: true } = {}): string {
-  const lines = CORPUS.map((entry) => {
+export function corpusText(
+  schemas: Schemas,
+  options: { readonly jitless?: true } = {},
+  cases: readonly CorpusCase[] = CORPUS,
+): string {
+  const lines = cases.map((entry) => {
     const parser = schemas[entry.schema];
     const result = options.jitless ? parser.safeParse(entry.input, { jitless: true }) : parser.safeParse(entry.input);
     return outcomeLine(entry, result);
