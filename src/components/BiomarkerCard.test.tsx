@@ -120,3 +120,52 @@ describe('BiomarkerCard — withheld context (invariants 3, 4, 5)', () => {
     expect(host.textContent).toContain('Within your lab\'s range');
   });
 });
+
+/*
+  Review F021. A result printed as a limit is stored with a placeholder number
+  (eGFR '> OR = 60' as 60, vitamin D '<8' as 4). The card placed, plotted and
+  classified that number: "Outside Amani band" and a dot at 60 for a result that
+  may sit anywhere from 60 up. Synthetic values only.
+*/
+describe('BiomarkerCard — a censored result is never placed or plotted by its placeholder (F021)', () => {
+  const dot = () => host.querySelector('[data-testid="measurement-dot"]');
+  const expand = () => act(() => host.querySelector('button')!.click());
+
+  it('eGFR "> OR = 60": no placement, no plotted value, and the note states the printed result', () => {
+    const text = render({ name: 'egfr', value: 60, rawValueText: '> OR = 60', unit: 'mL/min/1.73m2', labRefMin: null, labRefMax: null, cyclePhase: null });
+    expect(text).toContain('> OR = 60');
+    expect(text).toContain('Context needed');
+    expect(text).not.toMatch(/Within Amani band|Outside Amani band/);
+    expect(dot()).toBeNull();
+    const note = host.querySelector('[role="note"]')?.textContent ?? '';
+    expect(note).toContain('Amani context score unavailable');
+    expect(note).toContain('> OR = 60');
+    expect(note).not.toMatch(/band|below|above|within|outside|cycle/i);
+  });
+
+  it('vitamin D "<8" below a band starting at 50: placed outside, but no dot at the placeholder', () => {
+    const text = render({ name: 'vitamin_d_25_oh', value: 4, rawValueText: '<8', unit: 'ng/mL', labRefMin: 30, labRefMax: 100, cyclePhase: null });
+    expect(text).toContain('Outside Amani band');
+    expect(amaniRow()?.nextElementSibling?.textContent).toContain('50–80 ng/mL');
+    expect(dot()).toBeNull();
+    expect(text).not.toMatch(/\b3\.6\b/);
+    expand();
+    // '<8' is below her lab's 30–100 wherever it lies.
+    expect(host.textContent).toContain("Below your lab's range");
+  });
+
+  it('"<8" against a lab interval of 5–20 is not placed against that interval', () => {
+    render({ name: 'vitamin_d_25_oh', value: 4, rawValueText: '<8', unit: 'ng/mL', labRefMin: 5, labRefMax: 20, cyclePhase: null });
+    expand();
+    expect(host.textContent).not.toMatch(/Below your lab's range|Within your lab's range|Above your lab's range/);
+    expect(host.textContent).toContain('Reported as a limit');
+  });
+
+  it('a measured value keeps its dot and its lab placement (control)', () => {
+    const text = render({ name: 'vitamin_d_25_oh', value: 4, rawValueText: '4', unit: 'ng/mL', labRefMin: 5, labRefMax: 20, cyclePhase: null });
+    expect(text).toContain('Outside Amani band');
+    expect(dot()).not.toBeNull();
+    expand();
+    expect(host.textContent).toContain("Below your lab's range");
+  });
+});

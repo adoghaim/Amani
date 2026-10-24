@@ -208,3 +208,164 @@ describe('Review F021 — Basic changes on the report page never state a censore
     expect(text).toMatch(/\b4 → 20 ng\/mL|\b4 to 20 ng\/mL/);
   }, 30_000);
 });
+
+/* ── Wave 3: placement, panel rows and changes through report_analytes ── */
+
+type Row = Record<string, unknown>;
+const PRIOR = id(1);
+const biomarker = (name: string, value: number, text: string, unit: string, min: number | null = null, max: number | null = null): Row => ({
+  name, value, raw_value_text: text, unit, reference_min: min, reference_max: max, flagged: 'out_of_range',
+  created_at: '2026-01-01T00:00:00.000Z',
+});
+const analyte = (raw_name: string, slug: string | null, value: number, text: string, unit: string, min: number | null = null, max: number | null = null): Row => ({
+  raw_name, display_name: raw_name, canonical_slug: slug, value_numeric: value, raw_value_text: text, unit,
+  raw_reference_range: min !== null && max !== null ? `${min}-${max}` : null, normalized_min: min, normalized_max: max,
+  normalized_operator: null, normalized_operator_value: null, source_snippet: `${raw_name} ${text} ${unit}`,
+  parse_status: slug ? 'partial' : 'unmapped', normalization_status: slug ? 'partial' : 'unmapped',
+  is_core: false, confidence_score: 'high',
+});
+/** The report on screen, and optionally one prior report, with these rows. */
+function seedPanel(current: { biomarkers?: Row[]; analytes?: Row[] }, prior?: { biomarkers?: Row[]; analytes?: Row[] }) {
+  const reports = [...(prior ? [[PRIOR, '2026-03-01'] as const] : []), [CURRENT, '2026-06-01'] as const];
+  const rows = (key: 'biomarkers' | 'analytes') => reports.flatMap(([reportId]) =>
+    ((reportId === CURRENT ? current : prior)?.[key] ?? []).map((r, i) => ({ ...r, id: `${reportId}-${key}-${i}`, lab_report_id: reportId })));
+  fixture.tables = {
+    lab_reports: reports.map(([reportId, date]) => ({
+      id: reportId, user_id: USER, report_date: date, status: 'ready', estimated_cycle_phase: 'luteal',
+      regeneration_count: 0, lab_name: 'Synthetic Lab',
+    })),
+    biomarkers: rows('biomarkers'),
+    report_analytes: rows('analytes'),
+  };
+  fixture.interpretation = null;
+  fixture.profile.pregnancy_status = null;
+  fixture.access = null;
+}
+const EGFR_UNIT = 'mL/min/1.73m2';
+
+/*
+  The wave-3 BLOCKER, observed on this page: eGFR printed '> OR = 60' is
+  stored as 60, and the page said "eGFR is below the Amani band at > OR = 60
+  mL/min/1.73m2", with an "Outside Amani band" pill, a focus area and a count.
+  '> OR = 60' allows anything from 60 up, below the band (90–200) or within it.
+*/
+describe('Review F021 — a censored result is never placed, flagged or computed from its placeholder', () => {
+  it('eGFR "> OR = 60" (stored 60): no placement, flag or plotted value anywhere on the page', async () => {
+    seedPanel({ biomarkers: [biomarker('egfr', 60, '> OR = 60', EGFR_UNIT)] });
+    const text = await renderAndOpenAll();
+    // A sentence placing eGFR, a band pill, an outside count or a focus area. (The empty
+    // state, "No scored marker on this report is outside Amani's comparison bands.", is true here.)
+    const placed = /.{0,60}(?:eGFR[^.]{0,40}\b(?:below|above|outside|within)\b|(?:Outside|Within) Amani band|\d+ outside Amani band|outside its Amani band).{0,40}/i;
+    expect(placed.exec(text)?.[0]).toBeUndefined();
+    expect(text).toContain('Amani did not score any marker on this report');
+    // Nor is it a flagged marker: a flag would rank its kidney neighbour (BUN) into the related markers.
+    expect(text).not.toContain('Adds kidney function context');
+    expect(card()).toContain('> OR = 60');
+    expect(card()).toContain('Context needed');
+    expect(app.querySelector('article [role="note"]')?.textContent).toContain('> OR = 60');
+    expect(app.querySelector('[data-testid="measurement-dot"]')).toBeNull();
+  }, 30_000);
+
+  it('beside a measured result outside its band, only the measured one is placed', async () => {
+    seedPanel({ biomarkers: [
+      biomarker('egfr', 60, '> OR = 60', EGFR_UNIT),
+      biomarker('ferritin', 8, '8', 'ng/mL', 13, 150),
+    ] });
+    const text = await renderAndOpenAll();
+    expect(text).toContain("Ferritin is outside Amani's current comparison band.");
+    expect(/.{0,60}eGFR[^.]{0,40}\b(?:below|above|outside|within)\b.{0,40}/i.exec(text)?.[0]).toBeUndefined();
+  }, 30_000);
+
+  it('a measured eGFR of 60 is still placed, flagged and plotted (control)', async () => {
+    seedPanel({ biomarkers: [biomarker('egfr', 60, '60', EGFR_UNIT)] });
+    const text = await renderAndOpenAll();
+    expect(text).toContain('eGFR is below the Amani band at 60 mL/min/1.73m2');
+    expect(card()).toContain('Outside Amani band');
+    expect(text).toContain('Adds kidney function context');
+    expect(app.querySelector('[data-testid="measurement-dot"]')).not.toBeNull();
+  }, 30_000);
+
+  it('a censored result its limit does place is still stated as printed (control)', async () => {
+    seedPanel({ biomarkers: [biomarker('vitamin_d_25_oh', 4, '<8', 'ng/mL', 30, 100)] });
+    const text = await renderAndOpenAll();
+    expect(text).toContain('Vitamin D is below the Amani band at <8 ng/mL');
+    expect(card()).toContain('Outside Amani band');
+  }, 30_000);
+
+  it('no derived metric is calculated from a censored input', async () => {
+    seedPanel({ biomarkers: [biomarker('fasting_glucose', 90, '90', 'mg/dL'), biomarker('fasting_insulin', 1, '<2', 'uIU/mL')] });
+    expect(await renderAndOpenAll()).not.toMatch(/HOMA-IR/);
+  }, 30_000);
+
+  it('a derived metric from measured inputs is still shown (control)', async () => {
+    seedPanel({ biomarkers: [biomarker('fasting_glucose', 90, '90', 'mg/dL'), biomarker('fasting_insulin', 9, '9', 'uIU/mL')] });
+    expect(await renderAndOpenAll()).toMatch(/HOMA-IR/);
+  }, 30_000);
+
+  it('no pattern card states a censored placeholder as measured', async () => {
+    seedPanel({ biomarkers: [biomarker('vitamin_d_25_oh', 4, '<8', 'ng/mL', 30, 100)] });
+    const text = await renderAndOpenAll();
+    expect(text).not.toMatch(/pattern-rule match|Measured: Vitamin D 4\b/);
+  }, 30_000);
+
+  it('the full lab panel places a printed limit against her lab range only where the limit decides it', async () => {
+    seedPanel({ analytes: [
+      analyte('Vitamin B1', null, 4, '<8', 'nmol/L', 5, 20),
+      analyte('Vitamin B6', null, 4, '<8', 'nmol/L', 30, 100),
+    ] });
+    await renderAndOpenAll();
+    const status = (label: string) => Array.from(app.querySelectorAll('[data-testid="result-row"]'))
+      .find(r => r.textContent?.startsWith(label))?.querySelector('[data-testid="result-status"]')?.textContent ?? '';
+    // '<8' against 5–20: below the range or inside it.
+    expect(status('Vitamin B1')).not.toMatch(/Below|Within|Above|No lab range/);
+    expect(status('Vitamin B1')).toContain('Reported as a limit');
+    expect(status('Vitamin B6')).toContain("Below your lab's range");
+  }, 30_000);
+});
+
+/*
+  Finding 3. Generation pairs each report's report_analytes rows by
+  canonical_slug, or by raw_name for an unmapped one, so a stored Basic line can
+  run through a censored result that the biomarkers table never held: a
+  non-core, unit-mismatch or unmapped analyte.
+*/
+describe('Review F021 — Basic changes through a censored report_analytes result never render', () => {
+  const basic = (slug: string, marker: string, previous: number, current: number, unit: string) => ({
+    access: 'basic',
+    interpretation: { headline: 'Your panel', flagged_trends: [{
+      biomarker_slug: slug, marker, previous_value: previous, current_value: current, unit,
+      previous_date: '2026-03-01', direction: current > previous ? 'increased' : 'decreased', status: 'attention', summary: '',
+    }] },
+    preview: null, locked: { patterns: 0, cross_report: 0, lifestyle: 0 },
+    plan: 'free', complimentary: null, stored_depth: 'standard',
+  });
+  async function renderBasic(access: ReturnType<typeof basic>) {
+    fixture.access = access;
+    vi.stubEnv('VITE_FREEMIUM_ACTIVE', 'true');
+    return renderAndOpenAll();
+  }
+
+  it('a prior unmapped analyte printed "<10" (stored 5): the stored "5 → 30" line does not render', async () => {
+    seedPanel({ analytes: [analyte('Lipoprotein (a)', null, 30, '30', 'nmol/L')] },
+      { analytes: [analyte('Lipoprotein (a)', null, 5, '<10', 'nmol/L')] });
+    expect(await renderBasic(basic('lipoprotein_(a)', 'Lipoprotein (a)', 5, 30, 'nmol/L'))).not.toMatch(/\b5 → 30\b/);
+  }, 30_000);
+
+  it('a prior vitamin D in another unit, held only in report_analytes: the line does not render', async () => {
+    seedPanel({ analytes: [analyte('Vitamin D', 'vitamin_d_25_oh', 50, '50', 'nmol/L')] },
+      { analytes: [analyte('Vitamin D', 'vitamin_d_25_oh', 10, '<20', 'nmol/L')] });
+    expect(await renderBasic(basic('vitamin_d_25_oh', 'Vitamin D', 10, 50, 'nmol/L'))).not.toMatch(/\b10 → 50\b/);
+  }, 30_000);
+
+  it('a current unmapped analyte printed "<10" (stored 5): the stored "30 → 5" line does not render', async () => {
+    seedPanel({ analytes: [analyte('Lipoprotein (a)', null, 5, '<10', 'nmol/L')] },
+      { analytes: [analyte('Lipoprotein (a)', null, 30, '30', 'nmol/L')] });
+    expect(await renderBasic(basic('lipoprotein_(a)', 'Lipoprotein (a)', 30, 5, 'nmol/L'))).not.toMatch(/\b30 → 5\b/);
+  }, 30_000);
+
+  it('measured on both reports: the line renders (control)', async () => {
+    seedPanel({ analytes: [analyte('Lipoprotein (a)', null, 30, '30', 'nmol/L')] },
+      { analytes: [analyte('Lipoprotein (a)', null, 5, '5', 'nmol/L')] });
+    expect(await renderBasic(basic('lipoprotein_(a)', 'Lipoprotein (a)', 5, 30, 'nmol/L'))).toMatch(/Lipoprotein \(a\): 5 → 30 nmol\/L/);
+  }, 30_000);
+});

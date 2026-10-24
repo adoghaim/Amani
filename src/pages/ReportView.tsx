@@ -427,6 +427,8 @@ export function ReportView() {
   const [historicalBiomarkers, setHistoricalBiomarkers] = useState<Map<string, { reportDate: string; value: number; unit: string; valueText: string | null }[]>>(new Map());
   const [previousBiomarkerOccurrences, setPreviousBiomarkerOccurrences] = useState<Map<string, { value: number; unit: string; reference_min: number | null; reference_max: number | null; reportDate: string; valueText: string | null }>>(new Map());
   const [immediatePriorReportDate, setImmediatePriorReportDate] = useState<string | null>(null);
+  // F021: the prior report's analytes, which generation pairs with this report's for Basic changes.
+  const [previousAnalytes, setPreviousAnalytes] = useState<ReportAnalyte[]>([]);
   const [historicalReportCount, setHistoricalReportCount] = useState(0);
   const [interpGaveUp, setInterpGaveUp] = useState(false);
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
@@ -709,6 +711,8 @@ export function ReportView() {
           .select('*')
           .eq('lab_report_id', prevReportData.id);
         if (prevBioData) setPreviousBiomarkers(prevBioData as Biomarker[]);
+        const { data: prevAnalyteData } = await supabase.from('report_analytes').select('*').eq('lab_report_id', prevReportData.id);
+        if (prevAnalyteData) setPreviousAnalytes(prevAnalyteData as ReportAnalyte[]);
       }
       if (prevReportData?.report_date) {
         setImmediatePriorReportDate(prevReportData.report_date);
@@ -762,7 +766,8 @@ export function ReportView() {
     }
   };
 
-  const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers), [biomarkers]);
+  // F021: a calculation from a censored result ('<2' stored as 1) would compute from its placeholder.
+  const derivedMetrics = useMemo(() => computeDerivedMetrics(biomarkers.filter(b => !isCensoredValue(b.raw_value_text))), [biomarkers]);
   // V2-03: no pattern card may be built from an input Amani withholds for
   // this report's context (e.g. a PCOS pattern from an unphased LH:FSH ratio).
   // Amendment 4 (R2): a card that survives says only what its bands authorize.
@@ -915,15 +920,20 @@ export function ReportView() {
   }, [biomarkers, previousBiomarkerOccurrences, immediatePriorReportDate, report, analyteTelemetryMap, declaredState]);
 
   // F021: a Basic changes line through a result printed as a limit ('<8') states its placeholder.
+  // Generation keys each report's analytes by canonical slug, else by raw name.
   const censoredTrend = useMemo(() => {
+    const keyOf = (a: ReportAnalyte) => a.canonical_slug ?? a.raw_name.toLowerCase().replace(/\s+/g, '_');
     const current = new Set([
       ...biomarkers.filter(b => isCensoredValue(b.raw_value_text)).map(b => b.name),
-      ...reportAnalytes.filter(a => a.canonical_slug && isCensoredValue(a.raw_value_text)).map(a => a.canonical_slug as string),
+      ...reportAnalytes.filter(a => isCensoredValue(a.raw_value_text)).map(keyOf),
     ]);
+    const prior = new Set(previousAnalytes.filter(a => isCensoredValue(a.raw_value_text)).map(keyOf));
+    const priorDate = immediatePriorReportDate?.slice(0, 10) ?? null;
     return (slug: string, previousDate: string | null) => current.has(slug)
+      || (prior.has(slug) && (previousDate === null || previousDate === priorDate))
       || (historicalBiomarkers.get(slug) ?? []).some(h => isCensoredValue(h.valueText)
         && (previousDate === null || h.reportDate.slice(0, 10) === previousDate));
-  }, [biomarkers, reportAnalytes, historicalBiomarkers]);
+  }, [biomarkers, reportAnalytes, previousAnalytes, immediatePriorReportDate, historicalBiomarkers]);
 
   // Score biomarkers for FocusAreas (deterministic, no AI). Same scoring path
   // buildInsightSummary uses internally — exposed here so FocusAreas can rank.
@@ -936,6 +946,7 @@ export function ReportView() {
       b.reference_max,
       report?.estimated_cycle_phase as Parameters<typeof scoreBiomarker>[5],
       declaredState,
+      b.raw_value_text,
     ));
   }, [biomarkers, report, declaredState]);
 
@@ -950,7 +961,7 @@ export function ReportView() {
     const context = contextFromReport(report?.estimated_cycle_phase, declaredState);
     const map = new Map<string, AuthorizedLanguage>();
     for (const b of biomarkers) {
-      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context, b.unit);
+      const assessment = assessAmaniContext(b.name as BiomarkerName, b.value, context, b.unit, b.raw_value_text);
       if (assessment.kind === 'scored') map.set(b.name, authorizedLanguage(assessment.band));
     }
     return map;
@@ -1003,7 +1014,7 @@ export function ReportView() {
   }, [insightSummary]);
 
   const flaggedSlugs = useMemo<BiomarkerName[]>(
-    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit, declaredState) === 'outside').map(s => s.key),
+    () => scoredBiomarkers.filter(s => markerBandPlacement(s.key, s.value, report?.estimated_cycle_phase, s.unit, declaredState, s.valueText) === 'outside').map(s => s.key),
     [scoredBiomarkers, report?.estimated_cycle_phase, declaredState],
   );
 
@@ -1658,7 +1669,7 @@ export function ReportView() {
                       // generated it" is inadmissible), and it could read "all within
                       // range" while a card says otherwise (Phase 8B, kept).
                       const outside = scoredBiomarkers
-                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState) === 'outside')
+                        .filter(s => markerBandPlacement(s.key, s.value, cyclePhase, s.unit, declaredState, s.valueText) === 'outside')
                         .map(s => ({ name: getDisplayName(s.key), language: markerBandLanguage.get(s.key) ?? authorizedLanguage(null) }));
                       const headline = reportHeadline(markerBandLanguage.size, outside, combineLanguage([...markerBandLanguage.values()]));
                       return <ClinicalObservation language={headline} />;
@@ -1972,7 +1983,7 @@ export function ReportView() {
                 {filteredCategories.map(({ category, items }) => {
                   // Counted live, not from the persisted upload-time flag: a flag stored
                   // before V2-03 may have come from a fallback band Amani now withholds.
-                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase, b.unit, declaredState) === 'outside').length;
+                  const flaggedCount = items.filter(b => markerBandPlacement(b.name as BiomarkerName, b.value, cyclePhase, b.unit, declaredState, b.raw_value_text) === 'outside').length;
                   const isCollapsed = collapsedCategories.has(category);
                   const toggleCollapsed = () => {
                     setCollapsedCategories(prev => {

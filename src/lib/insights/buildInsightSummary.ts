@@ -514,7 +514,7 @@ export function buildInsightSummary(
   state: NonCyclingState | null = null,
 ): InsightSummary {
   const scored: ScoredInput[] = current.map(b => ({
-    ...scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase, state),
+    ...scoreBiomarker(b.key, b.value, b.unit, b.labRefMin, b.labRefMax, cyclePhase, state, b.valueText),
     valueText: b.valueText,
   }));
 

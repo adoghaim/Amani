@@ -5,6 +5,7 @@ import {
   canDescribeAsOptimal, NO_CLAIM_EVIDENCE, type ClaimEvidence, type RangeProvenance,
 } from '../biomarkers/provenance';
 import { ANALYTE_CONTEXT, type AnalyteContext, type ContextModifier } from '../biomarkers/rangeContext.generated';
+import { censoredResult, type CensoredResult } from '../../../supabase/functions/_shared/censored-value';
 
 /*
   V2-03: Amani withholds rather than guesses.
@@ -123,7 +124,7 @@ export function bandClaims(_key: BiomarkerName, _phase: MenstrualPhase | null): 
   return NO_CLAIM_EVIDENCE;
 }
 
-export type WithheldReason = 'cycle_phase_missing' | 'cycle_phase_unsupported' | 'non_cycling_state';
+export type WithheldReason = 'cycle_phase_missing' | 'cycle_phase_unsupported' | 'non_cycling_state' | 'censored_result';
 
 export interface AmaniBand {
   /** Placement follows the existing scoring direction; this is not claim authority. */
@@ -139,9 +140,26 @@ export interface AmaniBand {
 }
 
 export type AmaniAssessment =
-  | { kind: 'scored'; status: AmaniStatus; band: AmaniBand }
-  | { kind: 'withheld'; reason: WithheldReason; state: NonCyclingState | null; phase: MenstrualPhase | null }
+  /** `censored`: the printed limit this status was decided on (F021). */
+  | { kind: 'scored'; status: AmaniStatus; band: AmaniBand; censored?: CensoredResult }
+  | { kind: 'withheld'; reason: Exclude<WithheldReason, 'censored_result'>; state: NonCyclingState | null; phase: MenstrualPhase | null }
+  /** F021: a printed limit ('> OR = 60') its band cannot place. `printed` is the result as printed. */
+  | { kind: 'withheld'; reason: 'censored_result'; state: null; phase: MenstrualPhase | null; printed: string }
   | { kind: 'unavailable' };
+
+/**
+ * Review F021. A censored result allows every value from its printed limit to
+ * the open end (0 below a '<' limit, unbounded above a '>' one). Each
+ * classifier this is given orders its classes along the value axis, so all of
+ * those values share one class exactly when the limit and the open end do:
+ * that class, else null (withheld). It reads only the printed comparator and
+ * limit and adds no threshold. A strict limit that sits exactly on a boundary
+ * can be withheld when it need not be; it is never placed when it should not be.
+ */
+export function censoredClassification<T>(censored: CensoredResult, classify: (value: number) => T): T | null {
+  const atLimit = classify(censored.threshold);
+  return atLimit === classify(censored.comparator.startsWith('<') ? 0 : Number.MAX_VALUE) ? atLimit : null;
+}
 
 /** Classification against one Amani band. Unchanged from the pre-V2-03 rule. */
 export function classifyAgainstBand(
@@ -179,13 +197,15 @@ export function classifyAgainstBand(
  * `unit` is the value's own unit. Bands are written in the catalog unit and the
  * catalog approves no unit conversions, so a value in any other unit, or with
  * none, has no band (review F011). Omit `unit` only for a value already in the
- * catalog unit.
+ * catalog unit. `valueText` is the result as printed: a censored one ('<8') is
+ * placed by its printed limit, never by its stored placeholder (F021).
  */
 export function assessAmaniContext(
   key: BiomarkerName,
   value: number,
   context: PhysiologicalContext,
   unit?: string | null,
+  valueText?: string | null,
 ): AmaniAssessment {
   const entry = getEntry(key);
   const analyte = CONTEXT_BY_KEY.get(key);
@@ -213,11 +233,16 @@ export function assessAmaniContext(
   if ([values.optimal.min, values.optimal.max, values.clinical.min, values.clinical.max].every(b => b === null)) {
     return { kind: 'unavailable' };
   }
+  const classify = (v: number) => classifyAgainstBand(v, values.optimal, values.clinical, entry.higherIsBetter);
+  const censored = censoredResult(valueText);
+  const status = censored ? censoredClassification(censored, classify) : classify(value);
+  if (status === null) return { kind: 'withheld', reason: 'censored_result', state: null, phase, printed: String(valueText).trim() };
   const provenance = bandProvenance(key, phase);
   const claims = bandClaims(key, phase);
   return {
     kind: 'scored',
-    status: classifyAgainstBand(value, values.optimal, values.clinical, entry.higherIsBetter),
+    status,
+    ...(censored ? { censored } : {}),
     band: {
       higherIsBetter: entry.higherIsBetter,
       min: values.optimal.min,

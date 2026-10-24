@@ -98,3 +98,37 @@ describe('the primary-finding sentence states a censored result as printed (F021
     expect(primaryFindingSentence({ ...finding, value: 12 })).toContain('at 12 ng/mL');
   });
 });
+
+/*
+  Review F021, wave 3 BLOCKER. eGFR printed '> OR = 60' is stored as 60, and
+  the report page said "eGFR is below the Amani band at > OR = 60
+  mL/min/1.73m2": the 60 was classified. '> OR = 60' allows anything from 60
+  up, below the band (90–200) or within it, so it is never ranked, flagged or
+  chosen as the primary finding.
+*/
+describe('buildInsightSummary never ranks a censored result its printed limit cannot place (F021)', () => {
+  const EGFR = { key: 'egfr' as BiomarkerName, value: 60, valueText: '> OR = 60', unit: 'mL/min/1.73m2', labRefMin: null, labRefMax: null };
+
+  it('eGFR "> OR = 60" alone: no primary finding, no top finding, nothing outside its band', () => {
+    const summary = buildInsightSummary([EGFR], null, null, null);
+    expect(summary.primaryFinding).toBeNull();
+    expect(summary.topFindings.map(f => f.key)).not.toContain('egfr');
+    const kidney = summary.systemSummaries.find(s => s.category === 'kidney');
+    expect(kidney).toMatchObject({ flaggedCount: 0, scoredCount: 0, systemLabel: 'not_scored' });
+  });
+
+  it('beside a measured result outside its band, the measured one is the primary finding', () => {
+    const ferritin = { key: FERRITIN, value: 8, valueText: '8', unit: 'ng/mL', labRefMin: 13, labRefMax: 150 };
+    const summary = buildInsightSummary([EGFR, ferritin], null, null, null);
+    expect(summary.primaryFinding?.key).toBe(FERRITIN);
+    expect([summary.primaryFinding, ...summary.topFindings].map(f => f?.key)).not.toContain('egfr');
+  });
+
+  it('a censored result its limit does place is still ranked and stated as printed (control)', () => {
+    const summary = buildInsightSummary(
+      [{ key: VIT_D, value: 4, valueText: '<8', unit: 'ng/mL', labRefMin: 30, labRefMax: 100 }], null, null, null,
+    );
+    expect(summary.primaryFinding).toMatchObject({ key: VIT_D, direction: 'low', status: 'out_of_range' });
+    expect(primaryFindingSentence(summary.primaryFinding!)).toContain('below the Amani band at <8 ng/mL');
+  });
+});

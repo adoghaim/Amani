@@ -654,7 +654,7 @@ export function NewReport() {
           const declaredState = stateFromPregnancyStatus(userProfile?.pregnancy_status);
           const biomarkerInserts = coreItems.map(item => {
             const slug = item.canonical_slug! as BiomarkerName;
-            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, declaredState, item._normalized_unit ?? item.unit ?? '');
+            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, declaredState, item._normalized_unit ?? item.unit ?? '', item.value_text);
             let flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown' = 'in_range';
             if (status === 'borderline_low' || status === 'borderline_high') flagged = 'borderline';
             else if (status === 'out_of_range_low' || status === 'out_of_range_high') flagged = 'out_of_range';
