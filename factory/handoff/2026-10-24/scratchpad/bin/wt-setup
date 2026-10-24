@@ -1,0 +1,22 @@
+#!/bin/bash
+# wt-setup — run inside YOUR worktree. Clones the main checkout's node_modules (APFS copy-on-write) when
+# package-lock.json matches main@22027b2; otherwise runs npm ci. Refuses to run in the user's main checkout.
+set -euo pipefail
+source /private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad/bin/env.sh
+ROOT=$(git rev-parse --show-toplevel)
+if [ "$ROOT" = "$AMANI_MAIN" ]; then echo "wt-setup: refusing — $ROOT is the user's main checkout, not your worktree" >&2; exit 2; fi
+cd "$ROOT"
+same_lock() { git diff --quiet 22027b2 -- package-lock.json; }
+if [ -d node_modules/.bin ]; then
+  if same_lock && [ ! -f node_modules/.amani-npm-ci ]; then echo "wt-setup: node_modules present (main clone)"; exit 0; fi
+  if ! same_lock && [ -f node_modules/.amani-npm-ci ] && [ node_modules/.amani-npm-ci -nt package-lock.json ]; then echo "wt-setup: node_modules present (npm ci for this lockfile)"; exit 0; fi
+fi
+rm -rf node_modules
+if same_lock; then
+  cp -cR "$AMANI_MAIN/node_modules" ./node_modules
+  echo "wt-setup: cloned node_modules from main checkout (copy-on-write)"
+else
+  npm ci --no-audit --no-fund
+  touch node_modules/.amani-npm-ci
+  echo "wt-setup: ran npm ci because package-lock.json differs from main"
+fi

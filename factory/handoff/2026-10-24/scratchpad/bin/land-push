@@ -1,0 +1,47 @@
+#!/bin/bash
+# land-push <label> <branch> <base> [packet-id...] — open the PR for a verified, gated track:
+#  1. gates-text must pass (every gate green; e2e green apart from the known main-side interp spec);
+#  2. the body's <!-- GATES --> line is replaced by the real G0/G1 lines, and $S/pr/<label>.overlaps.md (if any)
+#     is inserted before "## Deploy notes";
+#  3. push the branch, gh pr create, then commit the factory ledger entries with the PR number and push again.
+# Worktree $S/wt-pr-<label> must be on <branch> and clean. With no packet ids, no ledger commit (stacked PRs).
+set -euo pipefail
+S=/private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad
+source "$S/bin/env.sh"
+LABEL="$1"; BR="$2"; BASE="$3"; shift 3
+WT="$S/wt-pr-$LABEL"; P="$S/pr/$LABEL"
+GATES=$("$S/bin/gates-text" "$LABEL") || { echo "land-push $LABEL: $GATES" >&2; exit 3; }
+python3 - "$P.md" "$P.overlaps.md" "$P.final.md" "$GATES" <<'EOF'
+import sys, pathlib
+body = pathlib.Path(sys.argv[1]).read_text()
+assert body.count('<!-- GATES -->') == 1, 'body must hold exactly one <!-- GATES --> line'
+body = body.replace('<!-- GATES -->', sys.argv[4])
+ov = pathlib.Path(sys.argv[2])
+if ov.exists():
+    block = ov.read_text().rstrip('\n') + '\n\n'
+    body = body.replace('## Deploy notes', block + '## Deploy notes', 1) if '## Deploy notes' in body else body.rstrip('\n') + '\n\n' + block
+pathlib.Path(sys.argv[3]).write_text(body)
+EOF
+TITLE=$(head -1 "$P.title")
+if [ "$#" -eq 0 ]; then
+  # Stacked PR: push the branch as it is (the tested merge with main stays local).
+  git -C "$AMANI_MAIN" push -u origin "$BR"
+  gh pr create --repo adoghaim/Amani --base "$BASE" --head "$BR" --title "$TITLE" --body-file "$P.final.md"
+  exit 0
+fi
+cd "$WT"
+[ "$(git rev-parse --show-toplevel)" = "$WT" ] && [ "$(git rev-parse --abbrev-ref HEAD)" = "$BR" ] || { echo "land-push $LABEL: worktree not on $BR" >&2; exit 2; }
+[ -z "$(git status --porcelain)" ] || { echo "land-push $LABEL: worktree not clean" >&2; exit 2; }
+TESTED=$(git rev-parse --short HEAD)
+git push -u origin "$BR"
+URL=$(gh pr create --repo adoghaim/Amani --base "$BASE" --head "$BR" --title "$TITLE" --body-file "$P.final.md")
+NUM=${URL##*/}
+GL=$(cat "$P.gates-line.txt")
+for pid in "$@"; do
+  EV=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps([d[sys.argv[2]], sys.argv[3]]))' "$P.ledger.json" "$pid" "$GL")
+  python3 "$S/ledger-entry.py" "$pid" "$NUM" "$TESTED" review "$EV"
+done
+git add factory/status.json factory/STATUS.md
+git commit -q -m "chore(factory): $* ledger entry — PR #$NUM, gates passed"
+git push -q
+echo "$LABEL -> $URL (tested $TESTED, ledger $(git rev-parse --short HEAD))"

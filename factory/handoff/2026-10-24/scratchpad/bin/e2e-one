@@ -1,0 +1,18 @@
+#!/bin/bash
+# e2e-one <worktree> <slot a|b> <gates-step> [playwright args...] — one targeted e2e run in a worktree on either
+# local slot (slot b rewrites the harness port 4173 -> 4273 for the run only and restores it on exit).
+# Prints the gates log tail. Used to re-run a single failing spec, e.g. to tell a load timeout from a regression.
+set -u
+S=/private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad
+WT="$1"; SLOT="$2"; shift 2
+cd "$WT" || exit 2
+if [ "$SLOT" = b ]; then
+  export E2E_LOCK=e2e-b
+  PFILES=$(git grep -l 4173 -- playwright.config.ts e2e ':!*.md')
+  git diff --quiet -- $PFILES || { echo "slot b refused: port files have local edits"; exit 3; }
+  trap 'git checkout -q -- $PFILES' EXIT INT TERM HUP
+  sed -i '' 's/4173/4273/g' $PFILES
+fi
+rc=99; tries=0
+while [ $rc -eq 99 ] && [ $tries -lt 30 ]; do "$S/bin/gates" "$@"; rc=$?; tries=$((tries+1)); done
+exit $rc

@@ -1,0 +1,22 @@
+#!/bin/bash
+# with-lock NAME SLOTS CMD... — run CMD while holding one of SLOTS cross-agent mkdir locks named NAME.
+# Stale locks (dead pid) are reclaimed. Gives up after LOCK_MAX_WAIT seconds (default 480) with exit 99.
+set -u
+NAME="$1"; SLOTS="$2"; shift 2
+LOCKROOT=/private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad/locks
+mkdir -p "$LOCKROOT"
+got=""; waited=0
+while [ -z "$got" ]; do
+  for i in $(seq 1 "$SLOTS"); do
+    d="$LOCKROOT/$NAME.$i"
+    if mkdir "$d" 2>/dev/null; then echo $$ > "$d/pid"; got="$d"; break; fi
+    if [ -f "$d/pid" ] && ! kill -0 "$(cat "$d/pid" 2>/dev/null)" 2>/dev/null; then rm -rf "$d"; fi
+  done
+  if [ -z "$got" ]; then
+    if [ "$waited" -ge "${LOCK_MAX_WAIT:-480}" ]; then echo "with-lock: gave up waiting ${waited}s for '$NAME' (busy: another agent holds it). Retry the same command." >&2; exit 99; fi
+    python3 -c 'import time; time.sleep(10)'; waited=$((waited+10))
+  fi
+done
+trap 'rm -rf "$got"' EXIT INT TERM HUP
+echo "with-lock: holding $got after ${waited}s" >&2
+"$@"

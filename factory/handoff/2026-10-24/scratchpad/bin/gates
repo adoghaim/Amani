@@ -1,0 +1,54 @@
+#!/bin/bash
+# gates STEP [args] — run one CI-equivalent gate in YOUR worktree (Node 22). Log: $S/gate-logs/<worktree>/<STEP>.log
+# Light:  contrast clinical release pinned flags migorder audit devicelock
+# Heavy (3 shared slots across all agents): lint typecheck test [vitest args] build functions capsync
+# Single-slot cross-agent locks: harness | e2e [playwright args] | e2e-isolation | freemium [args] | interp [args]
+#                                journey [args] | xcode-resolve | xcode-build
+# cleanup — delete dist/ test-results/ playwright-report/ coverage/ node_modules/ and your Xcode derived data (do this last)
+source /private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad/bin/env.sh
+set -o pipefail
+ROOT=$(git rev-parse --show-toplevel) || exit 2
+if [ "$ROOT" = "$AMANI_MAIN" ]; then echo "gates: refusing to run in the user's main checkout ($ROOT)" >&2; exit 2; fi
+cd "$ROOT"
+STEP="${1:?usage: gates STEP [args]}"; shift || true
+TAG=$(basename "$ROOT"); LOGDIR="$S/gate-logs/$TAG"; mkdir -p "$LOGDIR"; LOG="$LOGDIR/$STEP.log"
+if [ "$STEP" = cleanup ]; then rm -rf dist test-results playwright-report coverage node_modules "$S/dd/$TAG"; echo "gates cleanup: done"; exit 0; fi
+[ -d node_modules/.bin ] || { echo "gates: run 'bash $S/bin/wt-setup' first" >&2; exit 2; }
+L="$S/bin/with-lock"
+heavy() { LOCK_MAX_WAIT=${LOCK_MAX_WAIT:-240} "$L" heavy 3 "$@"; }
+single() { local n=$1; shift; LOCK_MAX_WAIT=${LOCK_MAX_WAIT:-300} "$L" "$n" 1 "$@"; }
+run() {
+  local start; start=$(date +%s)
+  echo "### gates $STEP $* @ $(git rev-parse --short HEAD) $(date '+%F %T')" > "$LOG"
+  "$@" >> "$LOG" 2>&1; local rc=$?
+  local dur=$(( $(date +%s) - start ))
+  tail -n 40 "$LOG"
+  echo "== gates $STEP: $([ $rc -eq 0 ] && echo PASS || echo "FAIL (exit $rc)") in ${dur}s @ $(git rev-parse --short HEAD) | log: $LOG"
+  echo "$(date '+%F %T') $STEP rc=$rc ${dur}s $(git rev-parse --short HEAD) $*" >> "$LOGDIR/summary.txt"
+  return $rc
+}
+case "$STEP" in
+  lint) run heavy npm run lint ;;
+  typecheck) run heavy npm run typecheck ;;
+  test) run heavy npx vitest run --minWorkers=1 --maxWorkers=3 "$@" ;;
+  build) run heavy npm run build ;;
+  functions) run heavy npm run check:functions ;;
+  capsync) run heavy npm run cap:sync ;;
+  contrast) run npm run validate:contrast ;;
+  clinical) run bash -c 'npm run clinical:test:ci && npm run clinical:check' ;;
+  release) run bash tools/release/check.sh ;;
+  pinned) run bash -c 'node --test tools/supply-chain/pinned-imports.test.mjs && node tools/supply-chain/check-pinned-imports.mjs' ;;
+  flags) run bash -c 'node --test tools/ci/feature-flags-lint.test.mjs && node tools/ci/feature-flags-lint.mjs' ;;
+  migorder) run bash -c 'node --test tools/ci/migration-order.test.mjs tools/ci/integration-preview.test.mjs && node tools/ci/migration-order.mjs --base origin/main --head HEAD' ;;
+  audit) run npm audit --omit=dev ;;
+  devicelock) run node --test tools/device-lock/native-boundary.test.mjs ;;
+  harness) run single harness ./supabase/migrations/__verification__/run.sh "$@" ;;
+  e2e) run single "${E2E_LOCK:-e2e}" npx --no-install playwright test "$@" ;;
+  e2e-isolation) run single "${E2E_LOCK:-e2e}" npm run test:e2e:isolation ;;
+  freemium) run single "${E2E_LOCK:-e2e}" npx --no-install playwright test --config e2e/freemium/playwright.config.ts "$@" ;;
+  interp) run single "${E2E_LOCK:-e2e}" npx --no-install playwright test --config e2e/interpretation/playwright.config.ts "$@" ;;
+  journey) run single "${E2E_LOCK:-e2e}" bash -c 'npm run test:e2e:journey:guard && npx --no-install playwright test -c e2e/journey/playwright.config.ts "$@"' _ "$@" ;;
+  xcode-resolve) run single xcode xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App -disableAutomaticPackageResolution -derivedDataPath "$S/dd/$TAG" ;;
+  xcode-build) run single xcode xcodebuild -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath "$S/dd/$TAG" CODE_SIGNING_ALLOWED=NO build ;;
+  *) echo "gates: unknown step '$STEP'"; exit 2 ;;
+esac

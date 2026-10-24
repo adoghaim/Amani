@@ -1,0 +1,2 @@
+- [Ruling 7 true floor for PR #152](ruling-7-true-floor-pr152.md) — owner chose a true lab-flag floor (not #152's ceiling); fix on a branch stacked on #152 before landing
+- [Review-fix wave 1 status](amani-review-fix-wave-plan.md) — RV phase: 20 PRs open (#157–#176), all gated; DB1–DB3 blocked on Docker; merge order and how to resume

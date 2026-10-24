@@ -1,0 +1,31 @@
+#!/bin/bash
+# land-prep <branch> <label> <merge|detached-merge> — worktree $S/wt-pr-<label>, merge origin/main (D4 merge
+# commit; detached-merge leaves the branch untouched), wt-setup, then every CI gate. Writes $S/land/<label>.txt
+# and touches $S/land/<label>.gates-ok when all gates pass. Never pushes. Merge conflict -> exit 3, no edits.
+set -u
+S=/private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad
+source "$S/bin/env.sh"
+BR="$1"; LABEL="$2"; MODE="${3:-merge}"
+WT="$S/wt-pr-$LABEL"; mkdir -p "$S/land"; OUT="$S/land/$LABEL.txt"; : > "$OUT"; rm -f "$S/land/$LABEL.gates-ok"
+log() { echo "$(date '+%T') $*" >> "$OUT"; }
+cd "$AMANI_MAIN" || exit 2
+if [ ! -d "$WT" ]; then
+  if [ "$MODE" = detached-merge ]; then git worktree add -q --detach "$WT" "$BR"; else git worktree add -q "$WT" "$BR"; fi \
+    || { log "FAIL worktree add"; exit 2; }
+fi
+cd "$WT" || exit 2
+[ "$(git rev-parse --show-toplevel)" = "$WT" ] || { log "FAIL not in worktree"; exit 2; }
+if git merge-base --is-ancestor origin/main HEAD; then log "main already in $(git rev-parse --short HEAD)"; else
+  if git merge --no-ff origin/main -m "Merge main into $BR" > /dev/null 2>&1; then log "merged main -> $(git rev-parse --short HEAD)"
+  else git merge --abort; log "FAIL merge conflict with main"; exit 3; fi
+fi
+bash "$S/bin/wt-setup" > /dev/null 2>&1 || { log "FAIL wt-setup"; exit 4; }
+fail=0
+for s in lint typecheck test build clinical contrast release pinned functions flags migorder devicelock; do
+  r=1; for i in $(seq 1 30); do "$S/bin/gates" $s > /dev/null 2>&1; r=$?; [ $r -ne 99 ] && break; done
+  log "gate $s rc=$r"; [ $r -eq 0 ] || fail=1
+done
+grep -hE '^\s+Tests ' "$S/gate-logs/wt-pr-$LABEL/test.log" | head -1 >> "$OUT"
+[ $fail -eq 0 ] && touch "$S/land/$LABEL.gates-ok"
+log "gates $([ $fail -eq 0 ] && echo PASS || echo FAIL) @ $(git rev-parse --short HEAD)"
+exit $fail

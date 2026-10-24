@@ -1,0 +1,31 @@
+#!/bin/bash
+# e2e-matrix <worktree> [label] — run CI's e2e matrix (e2e.yml) in a worktree, one suite per gates call so the
+# shared port-4173 lock is released between suites. Retries a suite when the lock is busy (gates exit 99).
+# Writes one line per suite to $S/e2e-matrix/<label>.txt and keeps each suite's log next to it.
+set -u
+S=/private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad
+WT="${1:?usage: e2e-matrix <worktree> [label]}"; LABEL="${2:-$(basename "$WT")}"
+OUT="$S/e2e-matrix/$LABEL"; mkdir -p "$OUT"; SUM="$S/e2e-matrix/$LABEL.txt"; : > "$SUM"
+cd "$WT" || exit 2
+LOGDIR="$S/gate-logs/$(basename "$WT")"
+step() {  # step <name> <gates-step> [args...]
+  local name=$1; shift; local gstep=$1; local rc tries=0
+  while :; do
+    "$S/bin/gates" "$@" > /dev/null 2>&1; rc=$?
+    [ $rc -ne 99 ] && break
+    tries=$((tries+1)); [ $tries -ge 12 ] && break
+  done
+  local log="$LOGDIR/$gstep.log"; cp "$log" "$OUT/$name.log" 2>/dev/null
+  local counts; counts=$(grep -E '^\s+[0-9]+ (passed|failed|flaky|skipped|did not run)' "$OUT/$name.log" 2>/dev/null | tr -s ' ' | tr '\n' ' ')
+  [ "$gstep" = e2e-isolation ] && counts=$(grep -E '^# (pass|fail)' "$OUT/$name.log" 2>/dev/null | tr '\n' ' ')
+  printf '%-22s %s  %s\n' "$name" "$([ $rc -eq 0 ] && echo PASS || echo "FAIL(rc=$rc)")" "$counts" >> "$SUM"
+}
+step isolation e2e-isolation e2e-isolation
+# CI runs Playwright with 2 workers; pin that (but keep retries at 0) so local CPU load cannot fake a failure.
+for b in chromium webkit firefox; do step "e2e-$b" e2e e2e --project=$b --workers=2 --retries=0; done
+for b in chromium webkit firefox; do step "freemium-$b" freemium freemium --project=$b --workers=2 --retries=0; done
+# CI3 adds the isolated interpretation suite to every Browser smoke shard.
+for b in chromium webkit firefox; do step "interp-$b" interp interp --project=$b --workers=2 --retries=0; done
+for b in chromium webkit firefox; do step "journey-$b" journey journey --project=$b --workers=2 --retries=0; done
+echo "== e2e-matrix $LABEL @ $(git rev-parse --short HEAD) done" >> "$SUM"
+cat "$SUM"

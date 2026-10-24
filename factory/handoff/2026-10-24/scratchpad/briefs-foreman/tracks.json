@@ -1,0 +1,549 @@
+[
+ {
+  "id": "db-security",
+  "branch": "factory/rv-db-security",
+  "range": "20261023100000-20261023109999",
+  "harness": true,
+  "wps": [
+   {
+    "id": "DB1",
+    "title": "Harness: Postgres 17, assertive case 010, full-chain replay and a grant audit",
+    "lenses": [
+     "correctness",
+     "security"
+    ],
+    "findings": [
+     "F127",
+     "F100",
+     "F125",
+     "F095",
+     "F035",
+     "F124"
+    ]
+   },
+   {
+    "id": "DB2",
+    "title": "RLS on the three public tables; revoke client writes on billing tables and anon access to user data",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F027",
+     "F034",
+     "F046"
+    ]
+   },
+   {
+    "id": "DB3",
+    "title": "has_consented means consent; interpreted reports stay immutable; lab file ownership",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F025",
+     "F042",
+     "F032"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "clinical-scoring",
+  "branch": "factory/rv-clinical-scoring",
+  "range": "20261023110000-20261023119999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "CS1",
+    "title": "Unit sanity: withhold Amani bands across unit mismatches",
+    "lenses": [
+     "correctness",
+     "clinical"
+    ],
+    "findings": [
+     "F011",
+     "F013"
+    ]
+   },
+   {
+    "id": "CS2",
+    "title": "Declared pregnancy withholds cycle context; scoring fails closed on bad inputs",
+    "lenses": [
+     "correctness",
+     "clinical"
+    ],
+    "findings": [
+     "F012",
+     "F097"
+    ]
+   },
+   {
+    "id": "CS3",
+    "title": "Censored results never become numbers",
+    "lenses": [
+     "correctness",
+     "clinical"
+    ],
+    "findings": [
+     "F021"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "ingest-cycle-parser",
+  "branch": "factory/rv-ingest-cycle-parser",
+  "range": "20261023120000-20261023124999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "IA1",
+    "title": "Cycle phase and day only from explicit patient lines",
+    "lenses": [
+     "correctness",
+     "clinical"
+    ],
+    "findings": [
+     "F010"
+    ]
+   },
+   {
+    "id": "IA2",
+    "title": "Parser B12 boundaries; parse-error rows need her confirmation",
+    "lenses": [
+     "correctness",
+     "clinical"
+    ],
+    "findings": [
+     "F098",
+     "F022"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "ingest-ocr-a11y",
+  "branch": "factory/rv-ingest-ocr-a11y",
+  "range": "20261023125000-20261023129999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "IB1",
+    "title": "One extraction contract for OCR and AI refinement",
+    "lenses": [
+     "correctness",
+     "security"
+    ],
+    "findings": [
+     "F093",
+     "F114",
+     "F026"
+    ]
+   },
+   {
+    "id": "IB2",
+    "title": "Keyboard- and screen-reader-usable upload flow",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F064"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "nutrient-policy",
+  "branch": "factory/rv-nutrient-policy",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "NP1",
+    "title": "Harden the nutrient validator with an adversarial corpus",
+    "lenses": [
+     "clinical",
+     "correctness"
+    ],
+    "findings": [
+     "F015",
+     "F096"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "ai-calls",
+  "branch": "factory/rv-ai-calls",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "AI1",
+    "title": "Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors",
+    "lenses": [
+     "correctness",
+     "clinical"
+    ],
+    "findings": [
+     "F017",
+     "F131",
+     "F128",
+     "F033"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "report-safety",
+  "branch": "factory/rv-report-safety",
+  "range": "20261023130000-20261023134999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "RS1",
+    "title": "Dark critical-flag notice from the lab's own flags; report context keeps her symptoms",
+    "lenses": [
+     "clinical",
+     "correctness"
+    ],
+    "findings": [
+     "F014",
+     "F018"
+    ]
+   },
+   {
+    "id": "RS2",
+    "title": "Disclaimer whenever clinical content shows; no outside-band counts",
+    "lenses": [
+     "clinical",
+     "correctness"
+    ],
+    "findings": [
+     "F024",
+     "F069"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "billing-stripe",
+  "branch": "factory/rv-billing-stripe",
+  "range": "20261023140000-20261023144999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "BS1",
+    "title": "Stripe portal uses the real customer; deletion removes every customer and every file",
+    "lenses": [
+     "correctness",
+     "security"
+    ],
+    "findings": [
+     "F038",
+     "F029",
+     "F094",
+     "F036"
+    ]
+   },
+   {
+    "id": "BS2",
+    "title": "Checkout: server price allow-list, server-built redirects, one subscription, tested webhook",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F030",
+     "F031",
+     "F044",
+     "F099",
+     "F040",
+     "F090",
+     "F033"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "billing-iap",
+  "branch": "factory/rv-billing-iap",
+  "range": "20261023145000-20261023149999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "BI1",
+    "title": "Play pause keeps access until expiry; App Store records keyed consistently",
+    "lenses": [
+     "correctness",
+     "security"
+    ],
+    "findings": [
+     "F039",
+     "F041"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "billing-ui",
+  "branch": "factory/rv-billing-ui",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "BU1",
+    "title": "Billing labels from the real entitlement; an honest deletion warning",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F047",
+     "F045"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "web-platform",
+  "branch": "factory/rv-web-platform",
+  "range": "20261023150000-20261023154999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "WP1",
+    "title": "Private source maps, production-only routes, security headers",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F068",
+     "F109",
+     "F028",
+     "F113"
+    ]
+   },
+   {
+    "id": "WP2",
+    "title": "Offline is not empty; error boundaries reset",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F065",
+     "F072"
+    ]
+   },
+   {
+    "id": "WP3",
+    "title": "Accessible overlays, safe areas, Android back closes sheets first",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F066",
+     "F071",
+     "F067"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "honest-copy",
+  "branch": "factory/rv-honest-copy",
+  "range": "20261023155000-20261023159999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "HC1",
+    "title": "Reminders hidden until they work; cycle copy matches ruling D7.9",
+    "lenses": [
+     "correctness",
+     "clinical"
+    ],
+    "findings": [
+     "F137",
+     "F136"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "device-lock",
+  "branch": "factory/rv-device-lock",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "DL1",
+    "title": "Device lock hardening",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F000",
+     "F001",
+     "F002",
+     "F005",
+     "F006",
+     "F007",
+     "F009",
+     "F138"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "ios-spm",
+  "branch": "factory/rv-ios-spm",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "SP1",
+    "title": "Committed Package.resolved matches Package.swift",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F003",
+     "F049",
+     "F121"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "auth-flows",
+  "branch": "factory/rv-auth-flows",
+  "range": "20261023160000-20261023164999",
+  "harness": false,
+  "wps": [
+   {
+    "id": "AU1",
+    "title": "Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F063",
+     "F133",
+     "F132",
+     "F075",
+     "F076"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "deps-toolchain",
+  "branch": "factory/rv-deps-toolchain",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "DP1",
+    "title": "pdf.js 6.4.299 on the legacy build",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F053",
+     "F107",
+     "F062",
+     "F108"
+    ]
+   },
+   {
+    "id": "DP2",
+    "title": "Declared dependencies, an aligned test toolchain and a Node 22 pin",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F091",
+     "F092",
+     "F106",
+     "F055",
+     "F086",
+     "F110"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "ci-workflows",
+  "branch": "factory/rv-ci-workflows",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "CI1",
+    "title": "Native CI that can fail; the device-lock boundary test runs",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F122",
+     "F123",
+     "F104",
+     "F085"
+    ]
+   },
+   {
+    "id": "CI2",
+    "title": "Workflow hardening and Node 22 everywhere",
+    "lenses": [
+     "security",
+     "correctness"
+    ],
+    "findings": [
+     "F060",
+     "F061",
+     "F056",
+     "F118"
+    ]
+   },
+   {
+    "id": "CI3",
+    "title": "E2E configs tell the truth",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F008",
+     "F102",
+     "F117",
+     "F101",
+     "F116"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "hygiene",
+  "branch": "factory/rv-hygiene",
+  "range": "",
+  "harness": false,
+  "wps": [
+   {
+    "id": "HY1",
+    "title": "Untrack leftovers; ignore local state",
+    "lenses": [
+     "correctness"
+    ],
+    "findings": [
+     "F080",
+     "F081",
+     "F090"
+    ]
+   }
+  ]
+ }
+]

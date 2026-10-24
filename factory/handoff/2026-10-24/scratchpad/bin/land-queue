@@ -1,0 +1,23 @@
+#!/bin/bash
+# land-queue <slot a|b> <branch:label:mode>... — prep every track in parallel (gates share the heavy lock),
+# then run each track's e2e matrix in order on this slot. Summary per track in $S/land/<label>.txt.
+set -u
+S=/private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad
+SLOT="$1"; shift
+pids=()
+for spec in "$@"; do
+  IFS=: read -r br label mode <<< "$spec"
+  "$S/bin/land-prep" "$br" "$label" "$mode" & pids+=("$!")
+done
+i=0
+for spec in "$@"; do
+  IFS=: read -r br label mode <<< "$spec"
+  wait "${pids[$i]}"; i=$((i+1))
+  if [ -f "$S/land/$label.gates-ok" ]; then
+    E2E_SLOT="$SLOT" "$S/bin/e2e-matrix" "$S/wt-pr-$label" "pr-$label" > /dev/null 2>&1
+    { echo "-- e2e (slot $SLOT)"; cat "$S/e2e-matrix/pr-$label.txt"; } >> "$S/land/$label.txt"
+  else
+    echo "-- e2e skipped: gates did not pass" >> "$S/land/$label.txt"
+  fi
+  echo "$(date '+%T') $label finished" >> "$S/land/queue-$SLOT.log"
+done

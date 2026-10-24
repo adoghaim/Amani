@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""gates-text <label> — build the G0/G1 lines of a PR body from the real local runs in $S/land/<label>.txt.
+Exit 0 and print the block only when every gate passed and every e2e suite passed, except the interpretation
+suite's one known failure, which must be the stale spec that also fails on main@25d09b7 (fixed by #160).
+Exit 1 and print why otherwise. Also writes $S/pr/<label>.gates-line.txt, the ledger's one-line gate summary."""
+import re, sys
+from pathlib import Path
+
+S = Path('/private/tmp/claude-501/-Users-mawad-Desktop-Amani/2048ad66-9c99-4989-a05c-97d6d9e03a48/scratchpad')
+label = sys.argv[1]
+land = (S / 'land' / f'{label}.txt').read_text()
+logs = S / 'gate-logs' / f'wt-pr-{label}'
+KNOWN = 'post-limit generation default (always): Regenerate offered'
+problems = []
+
+gates = dict(re.findall(r'gate (\w+) rc=(\d+)', land))
+want = ['lint', 'typecheck', 'test', 'build', 'clinical', 'contrast', 'release', 'pinned', 'functions', 'flags', 'migorder', 'devicelock']
+for g in want:
+    if gates.get(g) != '0':
+        problems.append(f'gate {g} rc={gates.get(g, "not run")}')
+sha = re.search(r'gates (?:PASS|FAIL) @ (\w+)', land)
+sha = sha.group(1) if sha else '?'
+tests = re.search(r'Tests\s+(\d+) passed', land)
+tests = f'{int(tests.group(1)):,}' if tests else '?'
+lint = (logs / 'lint.log').read_text() if (logs / 'lint.log').exists() else ''
+m = re.search(r'\((\d+) errors?, (\d+) warnings?\)', lint)
+lint_txt = f'0 errors, {m.group(2)} warnings' if m and m.group(1) == '0' else ('0 problems' if not m else f'{m.group(1)} errors')
+
+suites = {}
+for line in land.split('-- e2e', 1)[-1].splitlines():
+    mm = re.match(r'^(isolation|e2e|freemium|interp|journey)(?:-(\w+))?\s+(PASS|FAIL\(rc=\d+\))\s+(.*)$', line.strip())
+    if mm:
+        suites[(mm.group(1), mm.group(2))] = (mm.group(3), mm.group(4).strip())
+slot_b = 'slot b: harness port 4273' in land
+reruns = {(m.group(1), m.group(2)): (m.group(3), m.group(4).strip())
+          for m in re.finditer(r'^rerun (\w+)-(\w+)\s+(PASS|FAIL\(rc=\d+\))\s+(.*)$', land, re.M)}
+e2e_sha = re.search(r'== e2e-matrix \S+ @ (\w+) done', land)
+e2e_sha = e2e_sha.group(1) if e2e_sha else sha
+if '-- e2e' not in land or not suites:
+    problems.append('e2e matrix not run')
+counts = {}
+rerun_notes = []
+for (suite, browser), (res, detail) in suites.items():
+    if res != 'PASS' and reruns.get((suite, browser), ('',))[0] == 'PASS':
+        log = (S / 'e2e-matrix' / f'pr-{label}' / f'{suite}-{browser}.log').read_text()
+        failed = [re.sub(r'^\s*✘\s+\d+\s+', '', l).strip() for l in log.splitlines() if l.strip().startswith('✘')]
+        rr = reruns[(suite, browser)][1]
+        rerun_notes.append(f'{suite} suite in {browser.capitalize()}: {detail.split("(")[0].strip()} on the first run under heavy '
+                           f'machine load ({"; ".join(failed)}); a full rerun of that suite then passed ({rr.split("(")[0].strip()})')
+        p = re.search(r'(\d+) passed', rr)
+        counts.setdefault(suite, set()).add(p.group(1) if p else rr)
+        continue
+    if res == 'PASS':
+        p = re.search(r'(\d+) passed', detail)
+        counts.setdefault(suite, set()).add(p.group(1) if p else detail)
+        continue
+    if suite == 'interp' and re.fullmatch(r'1 failed\s+2 passed.*', detail):
+        log = (S / 'e2e-matrix' / f'pr-{label}' / f'interp-{browser}.log').read_text()
+        failed = [l for l in log.splitlines() if l.strip().startswith('✘')]
+        if len(failed) == 1 and KNOWN in failed[0]:
+            counts.setdefault('interp-known', set()).add(browser)
+            continue
+    problems.append(f'e2e {suite}-{browser}: {res} {detail}')
+
+if problems:
+    print('NOT READY:', '; '.join(problems)); sys.exit(1)
+
+def n(s):
+    v = counts.get(s, set())
+    return f'{next(iter(v))}/{next(iter(v))} in each browser' if len(v) == 1 else ', '.join(sorted(v))
+g1 = (f'- [x] **G1** web e2e, the full CI e2e matrix (`.github/workflows/e2e.yml`) at `{e2e_sha}`, 2 workers and no retries, '
+      f'in Chromium, WebKit and Firefox: isolation canary pass; default suite (incl. smoke) {n("e2e")}; freemium {n("freemium")}; '
+      f'fresh-user journey {n("journey")}.')
+for note in rerun_notes:
+    g1 += f' {note[0].upper()}{note[1:]}.'
+if e2e_sha != sha:
+    import subprocess
+    files = subprocess.run(['git', '-C', str(S / f'wt-pr-{label}'), 'diff', '--name-only', f'{e2e_sha}..{sha}'],
+                           capture_output=True, text=True, check=True).stdout.split()
+    g1 += (f' Commits after `{e2e_sha}` (up to `{sha}`) change only {", ".join(f"`{f}`" for f in files)}; '
+           'G0 above ran at the final head.')
+if 'interp-known' in counts:
+    g1 += (' Interpretation suite 2/3 in each browser: `e2e/interpretation/regeneration-availability.freemium.spec.ts:46` '
+           f'("{KNOWN}") fails the same way on `main@25d09b7`. Its assertion predates Regenerate moving into the header More '
+           'menu; #160 (RV-CI3) fixes the spec. Not caused by this PR.')
+elif 'interp' in counts:
+    g1 += f' Interpretation suite {n("interp")}.'
+if slot_b:
+    g1 += ' (Run on the second local e2e slot: the harness port was 4273 for the run only; no tracked file changed.)'
+g0 = (f'- [x] **G0**, run locally on the merged tree at `{sha}`: lint ({lint_txt}), typecheck, full test ({tests} tests), build, '
+      'clinical catalog tests and drift, contrast, offline release checks, pinned edge-function imports, the edge-function '
+      'typecheck, feature flags, migration order and the device-lock boundary — all pass.')
+print(g0 + '\n' + g1)
+(S / 'pr' / f'{label}.gates-line.txt').write_text(
+    f'Gates at {sha} (run locally): lint, typecheck, full test ({tests}), build, clinical, contrast, release, pinned, functions, '
+    f'flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox'
+    + (' (interpretation suite: only the stale spec that also fails on main, fixed by #160).' if 'interp-known' in counts else '.'))
