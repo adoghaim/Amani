@@ -32,6 +32,7 @@ import {
 } from '../lib/drawCycleContext';
 import { normalizeReportItems, reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
 import { isUnconfirmedBiomarker, unconfirmedReadingKeys } from '../lib/biomarkers/confirmation';
+import { labBoundsFor } from '../lib/biomarkers/printedComparator';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
 import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { detectLabSource } from '../utils/detectLabSource';
@@ -775,11 +776,28 @@ export function NewReport() {
             reviewed_by_user: item.reviewed_by_user ?? false,
             review_status: item.review_status ?? 'pending',
           })));
-          // F012, F021: the page reads each value with her declared state and its printed text.
-          primaryCanonicalSlug = buildInsightSummary(biomarkerInserts.filter(b => !isUnconfirmedBiomarker(b, unconfirmed)).map(b => ({
-            key: b.name, value: b.value!, unit: b.unit, valueText: b.raw_value_text,
-            labRefMin: b.reference_min, labRefMax: b.reference_max,
-          })), null, cyclePhase, null, declaredState).primaryFinding?.key ?? null;
+          // RV-LF2: the report_analytes rows written below, with analyteInserts' fields, which
+          // keep a range her lab printed on one side ("<100") that biomarkers cannot.
+          const savedAnalytes = allItemsToSave.map(item => ({
+            lab_report_id: createdReportId!,
+            canonical_slug: item.canonical_slug ?? null,
+            value_numeric: item.value_numeric,
+            raw_value_text: item.value_text ?? null,
+            raw_reference_range: item.raw_reference_range ?? null,
+            normalized_min: item.normalized_reference_min ?? null,
+            normalized_max: item.normalized_reference_max ?? null,
+            normalized_operator: item.reference_operator ?? null,
+            normalized_operator_value: item.reference_operator_value ?? null,
+          }));
+          // F012, F021: the page reads each value with her declared state and its printed text;
+          // RV-LF2: and with her lab's bounds as labBoundsFor reads them from those rows.
+          primaryCanonicalSlug = buildInsightSummary(biomarkerInserts
+            .map(b => ({ b, bounds: labBoundsFor(b, savedAnalytes) }))
+            .filter(({ b }) => !isUnconfirmedBiomarker(b, unconfirmed))
+            .map(({ b, bounds }) => ({
+              key: b.name, value: b.value!, unit: b.unit, valueText: b.raw_value_text,
+              labRefMin: bounds.min, labRefMax: bounds.max,
+            })), null, cyclePhase, null, declaredState).primaryFinding?.key ?? null;
 
           const { error: biomarkerError } = await supabase
             .from('biomarkers')

@@ -264,6 +264,42 @@ it('eGFR printed "> OR = 60" beside a ferritin inside its band: no pin, as no pr
 });
 
 /*
+  RV-LF2 (Ruling 7): a range her lab printed on one side binds no bounds, so
+  only the report_analytes row keeps it; the page reads it from there, and so
+  does the pin. Synthetic: "<90" is an invented printed range, so LDL 95 is
+  outside it but inside its Amani band, and TSH 2.0 sits inside both.
+*/
+const oneSidedRows = () => [
+  ocrRow('tsh', 'TSH', 2, '2.0', 'mIU/L', 0.45, 4.5, 'thyroid'),
+  { ...ocrRow('ldl_cholesterol', 'LDL Cholesterol', 95, '95', 'mg/dL', null, null, 'lipids'),
+    raw_reference_range: '<90', normalized_operator: '<', normalized_operator_value: 90 },
+];
+
+it('a lab-only flag against a one-sided printed range is the pin, as it is the primary on the page (RV-LF2 AC6)', async () => {
+  fixture.ocrItems = oneSidedRows();
+  await openCycleStep();
+  await save();
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: 'ldl_cholesterol' }]);
+});
+
+it('the one-sided range stays on report_analytes: the biomarkers rows keep their columns and LDL its null bounds (RV-LF2 AC7)', async () => {
+  fixture.ocrItems = oneSidedRows();
+  await openCycleStep();
+  await save();
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => Object.keys(b))).toEqual(Array(2).fill([
+    'lab_report_id', 'name', 'value', 'raw_value_text', 'unit', 'reference_min', 'reference_max', 'flagged',
+  ]));
+  expect(saved?.map(b => [b['name'], b['reference_min'], b['reference_max']])).toEqual([
+    ['tsh', 0.45, 4.5], ['ldl_cholesterol', null, null],
+  ]);
+  const analytes = fixture.inserts.find(i => i.table === 'report_analytes')?.values as Record<string, unknown>[] | undefined;
+  expect(analytes?.find(a => a['canonical_slug'] === 'ldl_cholesterol')).toMatchObject({
+    raw_reference_range: '<90', normalized_min: null, normalized_max: null, normalized_operator: '<', normalized_operator_value: 90,
+  });
+});
+
+/*
   Acceptance table (owner decision D13): days 1-40 x typical cycle lengths
   {unknown, 28, 24, 35}, through the real page.
 
