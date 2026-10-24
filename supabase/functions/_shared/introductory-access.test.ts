@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  claimCoverage,
   commitDeepAccess,
   commitGeneratedInterpretation,
   decideIntroductoryAccess,
@@ -10,6 +11,7 @@ import {
   type IntroductoryAccessActions,
 } from './introductory-access';
 import { shapeInterpretation, shouldGenerateDeepInterpretation } from './response-shaping';
+import { decideDeepGeneration } from './regeneration-availability';
 
 /**
  * The ledger exists to make the wrong outcomes impossible rather than unlikely:
@@ -408,5 +410,104 @@ describe('post-limit generation and persistence', () => {
     expect(outcome).toEqual({ committed: false, tier: 'free' });
     expect(commit).not.toHaveBeenCalled();
     expect(shaped.payload).toBe(postLimitGeneration === 'always' ? ai : fallback);
+  });
+});
+
+/*
+  RV-GI2 (F042): draw keys are bound to the report's analytes, so a claim found
+  through the report alone covers only under that report's pre-binding key. A
+  report whose values changed after its claim is a mismatch: no deep access, no
+  post-limit deep generation, nothing claimed.
+*/
+describe('RV-GI2 claim coverage', () => {
+  const BOUND = '0b'.repeat(32);
+  const LEGACY = '1c'.repeat(32);
+  const ELSEWHERE = '2d'.repeat(32);
+  const request = { bloodDrawId: BOUND, reportId: 'report-9', legacyBloodDrawId: LEGACY };
+  const row = (blood_draw_id: string, report_id: string | null) => ({ blood_draw_id, report_id });
+
+  it.each([
+    ['the draw\'s own claim, made from this report', 'covered', row(BOUND, 'report-9')],
+    ['the draw\'s own claim, made from another report', 'covered', row(BOUND, 'report-1')],
+    ['the draw\'s own claim, its report since deleted', 'covered', row(BOUND, null)],
+    ['this report\'s claim under its legacy key', 'covered', row(LEGACY, 'report-9')],
+    ['this report\'s claim for another draw', 'mismatch', row(ELSEWHERE, 'report-9')],
+    ['the legacy key, claimed from another report', 'none', row(LEGACY, 'report-1')],
+    ['a claim for neither this draw nor this report', 'none', row(ELSEWHERE, 'report-1')],
+    ['no claim', 'none', null],
+  ] as const)('%s: %s', (_label, expected, claimRow) => {
+    expect(claimCoverage(claimRow, request)).toBe(expected);
+  });
+
+  /** The handler's lookup: the draw's own claim first, else this report's. */
+  function boundActions(seed: ClaimRecord[], reportId: string) {
+    const fake = fakeActions(seed);
+    const actions: IntroductoryAccessActions = {
+      ...fake.actions,
+      async findClaim(userId, bloodDrawId) {
+        const mine = fake.rows.filter((r) => r.user_id === userId);
+        return mine.find((r) => r.blood_draw_id === bloodDrawId) ?? mine.find((r) => r.report_id === reportId) ?? null;
+      },
+    };
+    return { ...fake, actions };
+  }
+  const onReport = (bloodDrawId: string, reportId: string): ClaimRecord => ({ ...claim(bloodDrawId), report_id: reportId });
+  const decide = (actions: IntroductoryAccessActions) => decideIntroductoryAccess(actions, {
+    tier: 'free', userId: USER, bloodDrawId: BOUND, reportId: 'report-9', legacyBloodDrawId: LEGACY,
+  });
+
+  it('serves the draw\'s own claim free, and prefers it to a mismatched report claim', async () => {
+    for (const seed of [[onReport(BOUND, 'report-1')], [onReport(ELSEWHERE, 'report-9'), onReport(BOUND, 'report-1')]]) {
+      const d = await decide(boundActions(seed, 'report-9').actions);
+      expect(d).toMatchObject({ granted: true, reason: 'existing_claim', consumesCredit: false });
+    }
+  });
+
+  it('serves this report\'s pre-binding claim free (claims made before the binding)', async () => {
+    const d = await decide(boundActions([onReport(LEGACY, 'report-9')], 'report-9').actions);
+    expect(d).toMatchObject({ granted: true, reason: 'existing_claim', claimsUsed: 1, consumesCredit: false });
+  });
+
+  it('refuses this report\'s claim for another draw, whatever credits are left', async () => {
+    const one = await decide(boundActions([onReport(ELSEWHERE, 'report-9')], 'report-9').actions);
+    expect(one).toEqual({ granted: false, reason: 'claim_mismatch', claimsUsed: 1, claimsRemaining: 2, consumesCredit: false });
+    const spent = await decide(boundActions([onReport(ELSEWHERE, 'report-9'), claim('x'.repeat(64)), claim('y'.repeat(64))],
+      'report-9').actions);
+    expect(spent).toEqual({ granted: false, reason: 'claim_mismatch', claimsUsed: 3, claimsRemaining: 0, consumesCredit: false });
+  });
+
+  it('counts a pre-binding claim from another report as a new draw', async () => {
+    const fresh = await decide(boundActions([onReport(LEGACY, 'report-1')], 'report-9').actions);
+    expect(fresh).toMatchObject({ granted: true, reason: 'credit_available', consumesCredit: true });
+    const spent = await decide(boundActions([onReport(LEGACY, 'report-1'), claim('x'.repeat(64)), claim('y'.repeat(64))],
+      'report-9').actions);
+    expect(spent).toMatchObject({ granted: false, reason: 'introductory_access_exhausted' });
+  });
+
+  it('without the new inputs any claim found counts, exactly as before', async () => {
+    const { actions } = boundActions([onReport(ELSEWHERE, 'report-9')], 'report-9');
+    const d = await decideIntroductoryAccess(actions, { tier: 'free', userId: USER, bloodDrawId: BOUND });
+    expect(d).toMatchObject({ granted: true, reason: 'existing_claim', consumesCredit: false });
+  });
+
+  it.each([undefined, 'always', 'on_demand'])('a mismatch never generates deeply (post-limit %s); exhaustion still follows it', async postLimitGeneration => {
+    const mismatch = await decide(boundActions([onReport(ELSEWHERE, 'report-9')], 'report-9').actions);
+    expect(decideDeepGeneration({ freemiumActive: true, tier: 'free', decision: mismatch, postLimitGeneration })).toBe(false);
+    const exhausted = await decide(boundActions([claim('x'.repeat(64)), claim('y'.repeat(64)), claim('z'.repeat(64))],
+      'report-9').actions);
+    expect(exhausted.reason).toBe('introductory_access_exhausted');
+    expect(decideDeepGeneration({ freemiumActive: true, tier: 'free', decision: exhausted, postLimitGeneration }))
+      .toBe(postLimitGeneration !== 'on_demand');
+  });
+
+  it('a mismatch commits nothing and is persisted as Free', async () => {
+    const { actions, rows, calls } = boundActions([onReport(ELSEWHERE, 'report-9')], 'report-9');
+    const decision = await decide(actions);
+    expect(await commitDeepAccess(actions, decision, GENERATED, REQUEST))
+      .toEqual({ committed: false, reason: 'introductory_access_exhausted' });
+    expect(await commitGeneratedInterpretation(actions, { freemiumActive: true, tier: 'free', decision,
+      completion: GENERATED, request: REQUEST })).toEqual({ committed: false, tier: 'free' });
+    expect(calls.commit).toBe(0);
+    expect(rows).toHaveLength(1);
   });
 });

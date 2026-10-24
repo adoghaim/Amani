@@ -98,7 +98,8 @@ export interface CommitDeepAccessInput {
 
 /** Every database touch this module needs, injected so it stays testable. */
 export interface IntroductoryAccessActions {
-  /** The claim for this draw, if the user already holds one. */
+  /** The claim for this draw, if the user already holds one. generate-interpretation
+   *  also matches the report it generates, returning the draw's own claim first. */
   findClaim(userId: string, bloodDrawId: string): Promise<ClaimRecord | null>;
   /** How many claims the user has spent, lifetime. */
   countClaims(userId: string): Promise<number>;
@@ -144,6 +145,18 @@ export type DeepAccessDecision =
     claimsUsed: number;
     claimsRemaining: 0;
     consumesCredit: false;
+  }
+  | {
+    granted: false;
+    /**
+     * RV-GI2: this report holds a claim made for other analytes. Not exhausted,
+     * so no post-limit deep generation either: no model call, no claim, nothing
+     * persisted as Plus.
+     */
+    reason: "claim_mismatch";
+    claimsUsed: number;
+    claimsRemaining: number;
+    consumesCredit: false;
   };
 
 export interface DeepAccessInput {
@@ -151,6 +164,36 @@ export interface DeepAccessInput {
   userId: string;
   /** Hashed draw key. */
   bloodDrawId: string;
+  /**
+   * RV-GI2: the report being generated, and the hashed key it was claimed under
+   * before draw keys were bound to the analytes. Given both, a found claim
+   * counts only where `claimCoverage` says it covers this request; without
+   * them, any claim found counts, as before.
+   */
+  reportId?: string;
+  legacyBloodDrawId?: string;
+}
+
+/**
+ * Whether the claim `findClaim` returned covers this request (RV-GI2, F042).
+ * Pure.
+ *
+ *   covered   it is this draw's claim, or this report's claim under its
+ *             pre-binding key (claims made before the binding carry that key)
+ *   mismatch  it is this report's claim, for another draw: values edited after
+ *             the claim
+ *   none      no claim, or a claim for neither this draw nor this report
+ */
+export type ClaimCoverage = "covered" | "mismatch" | "none";
+
+export function claimCoverage(
+  claim: Pick<ClaimRecord, "blood_draw_id" | "report_id"> | null,
+  request: { bloodDrawId: string; reportId: string; legacyBloodDrawId: string },
+): ClaimCoverage {
+  if (!claim) return "none";
+  if (claim.blood_draw_id === request.bloodDrawId) return "covered";
+  if (claim.report_id !== request.reportId) return "none";
+  return claim.blood_draw_id === request.legacyBloodDrawId ? "covered" : "mismatch";
 }
 
 /**
@@ -165,19 +208,35 @@ export interface DeepAccessInput {
  * draw (two real draws colliding on one key, which the date-only evidence tier
  * can produce) resolves in the user's favour: the second draw is served free
  * rather than charged.
+ *
+ * With `reportId` and `legacyBloodDrawId` (RV-GI2), "already claimed" is
+ * `claimCoverage`'s answer, and a mismatch is decided here, not exhausted.
  */
 export async function decideIntroductoryAccess(
   actions: IntroductoryAccessActions,
   input: DeepAccessInput,
 ): Promise<DeepAccessDecision> {
-  const { tier, userId, bloodDrawId } = input;
+  const { tier, userId, bloodDrawId, reportId, legacyBloodDrawId } = input;
 
   if (tier === "plus") return introductoryAccessDecision({ tier, existingClaim: false, claimsUsed: 0 });
 
   const existing = await actions.findClaim(userId, bloodDrawId);
   const claimsUsed = await actions.countClaims(userId);
 
-  return introductoryAccessDecision({ tier, existingClaim: !!existing, claimsUsed });
+  if (reportId === undefined || legacyBloodDrawId === undefined) {
+    return introductoryAccessDecision({ tier, existingClaim: !!existing, claimsUsed });
+  }
+  const coverage = claimCoverage(existing, { bloodDrawId, reportId, legacyBloodDrawId });
+  if (coverage === "mismatch") {
+    return {
+      granted: false,
+      reason: "claim_mismatch",
+      claimsUsed,
+      claimsRemaining: remaining(claimsUsed),
+      consumesCredit: false,
+    };
+  }
+  return introductoryAccessDecision({ tier, existingClaim: coverage === "covered", claimsUsed });
 }
 
 /**
