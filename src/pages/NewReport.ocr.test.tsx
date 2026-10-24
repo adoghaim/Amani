@@ -270,6 +270,47 @@ describe('NewReport: her confirm-step corrections to an OCR row reach the report
     });
   });
 
+  /*
+    IB1 review fix wave 1 (BLOCKER): a range she edits is read the way the
+    parser binds one (PK-FIX-05). The printed estradiol text below is the
+    parser's own ambiguous row (parser.test.ts.snap, "estradiol"): several
+    cycle-phase intervals, nothing bound. Correcting one number in it must not
+    bind the first (follicular) interval; neither may one interval tied to a
+    phase. Synthetic values; nothing here is a clinical reference.
+  */
+  const PHASES = 'Follicular phase 21.1 – 121.1; Ovulation phase 61.1 – 361.1; Luteal phase 51.1 – 251.1; Postmenopausal <31.1';
+  const ESTRADIOL: ExtractedAnalyte = {
+    raw_name: 'Estradiol', raw_value_text: '145', value_numeric: 145, unit: 'pg/mL',
+    raw_reference_range: PHASES, normalized_min: null, normalized_max: null,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: `Estradiol 145 pg/mL ${PHASES}`,
+    confidence_score: 'low', canonical_analyte_id: null, canonical_slug: 'estradiol', parse_status: 'partial',
+    needs_review: true, is_core: true, category: 'hormones',
+  };
+
+  it.each([
+    ['one number of the ovulation interval corrected', PHASES.replace('361.1', '361')],
+    ['one interval tied to a cycle phase', 'Follicular phase 21.1 – 121.1'],
+  ])('an edited range that prints no single interval for her binds none (%s)', async (_case, typed) => {
+    fixture.ocrItems = [ESTRADIOL];
+    await uploadPhoto();
+    await type(rangeInput(), typed);
+    const { analytes, biomarkers } = await save();
+    expect(analytes['Estradiol']).toMatchObject({
+      raw_reference_range: typed, normalized_min: null, normalized_max: null,
+      normalized_operator: null, normalized_operator_value: null,
+    });
+    expect(biomarkers['estradiol']).toMatchObject({ reference_min: null, reference_max: null });
+    expect((await renderResult(analytes['Estradiol'])).status).not.toBe("Above your lab's range");
+  });
+
+  it('an edited range that prints one interval with a non-phase label still binds it', async () => {
+    fixture.ocrItems = [MISREAD];
+    await uploadPhoto();
+    await type(rangeInput(), 'Adult 0.45-4.5; fasting');
+    const { analytes } = await save();
+    expect(analytes['TSH']).toMatchObject({ normalized_min: 0.45, normalized_max: 4.5, normalized_operator: null });
+  });
+
   it('a row whose value text the model sent as a JSON number still saves', async () => {
     // Model output is untrusted: the deployed function passes value_text through as the model typed it.
     fixture.ocrItems = [{ ...TSH, raw_value_text: 5.2 as unknown as string, value_numeric: 5.2 }];

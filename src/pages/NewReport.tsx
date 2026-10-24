@@ -22,7 +22,7 @@ import { toExtractedItem, type ExtractedAnalyte, type ExtractedItem } from '../.
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
-import { detectReferenceRange } from '../utils/parser/rangeDetection';
+import { bindReferenceRange } from '../utils/parser/rangeDetection';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import {
   cycleContextAtDraw, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
@@ -61,12 +61,18 @@ type GuidedStep = 'choose' | 'instructions' | 'upload';
   value against an interval she had corrected. A corrected value drops the
   printed text; a corrected range is read again from what she typed, and
   leaves no interval when it does not parse.
+
+  Her text is read the way the parser binds a marker's interval (PK-FIX-05),
+  one printed line per "; " or line break, as the parser joins them: an
+  interval is bound only when exactly one applies. Several intervals, or one
+  tied to a cycle phase, menopause or pregnancy, bind none (IB1 review: the
+  first-interval read placed her against the follicular interval).
 */
 function applyReviewEdit(item: ReportItem, field: keyof ReportItem, value: string | number | null | boolean): ReportItem {
   const updated = { ...item, [field]: value } as ReportItem;
   if (field === 'value_numeric') updated.value_text = null;
   if (field === 'raw_reference_range') {
-    const range = typeof value === 'string' ? detectReferenceRange(value) : null;
+    const range = typeof value === 'string' ? bindReferenceRange(value.split(/;\s+|\n/)).range : undefined;
     updated.normalized_reference_min = range?.min ?? null;
     updated.normalized_reference_max = range?.max ?? null;
     updated.reference_operator = range?.comparator?.operator ?? null;
