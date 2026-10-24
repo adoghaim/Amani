@@ -775,10 +775,11 @@ export function NewReport() {
             reviewed_by_user: item.reviewed_by_user ?? false,
             review_status: item.review_status ?? 'pending',
           })));
+          // F012, F021: the page reads each value with her declared state and its printed text.
           primaryCanonicalSlug = buildInsightSummary(biomarkerInserts.filter(b => !isUnconfirmedBiomarker(b, unconfirmed)).map(b => ({
-            key: b.name, value: b.value!, unit: b.unit,
+            key: b.name, value: b.value!, unit: b.unit, valueText: b.raw_value_text,
             labRefMin: b.reference_min, labRefMax: b.reference_max,
-          })), null, cyclePhase).primaryFinding?.key ?? null;
+          })), null, cyclePhase, null, declaredState).primaryFinding?.key ?? null;
 
           const { error: biomarkerError } = await supabase
             .from('biomarkers')
