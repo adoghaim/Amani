@@ -349,3 +349,33 @@ describe('a time of day tied to a substance is dosing language (#159 note 2)', (
     expect(findTextViolations(text)).toEqual([]);
   });
 });
+
+// ─── RV-R2 round 1: the dosing verb after the substance ──────────────────────
+
+describe('a time of day with the dosing verb after the substance is dosing language (RV-R2)', () => {
+  it.each([
+    ['Iron supplements are usually best taken at night.', 'at night'],
+    ['Magnesium is usually best taken at night.', 'at night'],
+    ['Vitamin D is typically best taken in the morning.', 'in the morning'],
+    ['Iron should ideally be taken at night.', 'at night'],
+    ['Magnesium glycinate is usually taken at night.', 'at night'],
+    ["Magnesium's best taken at night.", 'at night'],
+    ['Iron tablets are generally best used in the morning.', 'in the morning'],
+    ['Iron is usually best when taken in the morning.', 'in the morning'],
+    ['Vitamin D is easiest to take in the morning.', 'in the morning'],
+    ['Iron is best to take in the morning.', 'in the morning'],
+    ['Magnesium is something to take at night.', 'at night'],
+    ['Iron is low and best taken at night.', 'at night'],
+    ['Magnesium may also be used at night.', 'at night'],
+  ])('flags %s', (text, phrase) => {
+    expect(findTextViolations(text)).toContain(`dosing_frequency:${phrase}`);
+  });
+
+  it.each([
+    'Your iron was low and you had trouble sleeping at night.',
+    'Iron was low and had dropped further in the evening.',
+    'Iron is used to make hemoglobin, so low iron can leave you tired in the afternoon.',
+  ])('passes %s, where the verb is not a dose of it', (text) => {
+    expect(findTextViolations(text)).toEqual([]);
+  });
+});

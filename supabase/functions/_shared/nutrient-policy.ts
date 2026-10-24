@@ -285,12 +285,13 @@ const FREQUENCY_REGEX =
 // morning", "Iron supplements are best taken at night". Ordinary text uses the
 // same words ("Do you wake up at night?", "Low iron can cause restless legs at
 // night"), so the phrase counts only within three words after a substance
-// term, or in a sentence with a dosing verb aimed at one ("Take your vitamin D
-// with a glass of water in the morning"). A substance named as a lab
-// measurement does not count: "Serum iron peaks in the morning", "Low
-// magnesium can cause cramps at night", "Have your iron checked in the
-// morning". Nor does "drops", as often a verb as a dosage form ("cortisol
-// drops in the evening").
+// term, or in a sentence with a dosing verb aimed at one, before it ("Take
+// your vitamin D with a glass of water in the morning") or after it ("Iron
+// supplements are usually best taken at night", "Vitamin D is easiest to take
+// in the morning"). A substance named as a lab measurement does not count:
+// "Serum iron peaks in the morning", "Low magnesium can cause cramps at
+// night", "Have your iron checked in the morning". Nor does "drops", as often
+// a verb as a dosage form ("cortisol drops in the evening").
 const TIME_OF_DAY = "at night|in the (?:morning|afternoon|evening)s?";
 const TIME_OF_DAY_REGEX = new RegExp(`\\b(?:${TIME_OF_DAY})\\b`, "i");
 const TIMED_SUBSTANCE_REGEX = new RegExp(
@@ -299,6 +300,18 @@ const TIMED_SUBSTANCE_REGEX = new RegExp(
 );
 const DOSED_SUBSTANCE_REGEX = new RegExp(
   `\\b(?:take|takes|taking|taken|took|have|has|having|had|use|uses|using|used)\\s+(?:(?:${FILLER})\\s+){0,3}(?<sub>${SUBSTANCE_TERM})\\b`,
+  "gi",
+);
+// The substance (and maybe one more word: "magnesium glycinate"), a form of
+// "be", up to three words with no new subject ("you had" is not a dose), then
+// taken, used, had or to take/use/have: "Iron supplements are usually best
+// taken", "Iron should ideally be taken", "Magnesium's best taken", "Vitamin
+// D is easiest to take".
+const DOSED_AFTER_REGEX = new RegExp(
+  `\\b(?<sub>${SUBSTANCE_TERM})\\b(?:\\s+[a-z][\\w-]*)?` +
+    `(?:'s|'re|\\s+(?:(?:can|could|may|might|should|must|will|would|had\\s+better|tends?\\s+to|needs?\\s+to)\\s+(?:[a-z]+\\s+)?)?(?:is|are|was|were|be|been|being|gets?|got))` +
+    `(?:\\s+(?!(?:you|she|he|they|we|i|it|your|her|his|their|our|my)\\b)[^\\s,.!?;:]+){0,3}?` +
+    `(?:\\s+(?:when|if|once))?\\s+(?:taken|used(?!\\s+to\\b)|had(?!\\s+(?:been|\\w+ed)\\b)|to\\s+(?:take|use|have))\\b`,
   "gi",
 );
 const LAB_WORD_BEFORE = /\b(?:low|lower|high|higher|elevated|reduced|serum|plasma|blood|urine|urinary)\s+$/i;
@@ -329,6 +342,11 @@ function findSubstanceTiming(text: string): string | null {
       const start = end - (m.groups?.sub ?? "").length;
       const nextWord = sentence.slice(end).match(/^\s+\S+/)?.[0] ?? "";
       if (!isLabMention(sentence, start, end, nextWord)) return time;
+    }
+    for (const m of sentence.matchAll(DOSED_AFTER_REGEX)) {
+      const start = m.index ?? 0;
+      const end = start + (m.groups?.sub ?? "").length;
+      if (!isLabMention(sentence, start, end, m[0].slice(end - start))) return time;
     }
   }
   return null;
