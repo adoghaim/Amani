@@ -903,6 +903,12 @@ describe('RV-NZ1: a change from a near-zero prior is stated by value, never as "
       expect(el!.textContent, name).not.toMatch(/unchanged|\bstable\b/i);
     }
     expect(surfaces.primary?.textContent).toContain('TSH');
+    // TSH is the primary. The page has no movement sentence for a changed_* status (existing
+    // design), so the headline and the primary block state her lab placement instead.
+    expect(app.querySelector('[data-testid="primary-movement-observation"]')).toBeNull();
+    expect(app.querySelector('[data-testid="primary-finding"]')?.textContent).toContain("TSH is above your lab's reference range at 9 mIU/L.");
+    expect(app.querySelector('h2 [data-language-claim="measured_movement"]')).toBeNull();
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent).toContain("TSH is above your lab's reference range at 9 mIU/L.");
     expect(surfaces.trajectory?.textContent).toContain('TSH changed from 0.2 to 9 mIU/L.');
     expect(surfaces.focus?.textContent).toContain('TSH has changed since your prior report.');
     // Her measured changes first, largest assessed one first; the near-zero change replaces TSH's lab-interval question.
