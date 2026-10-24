@@ -65,7 +65,9 @@ beforeEach(() => {
   env.session = null;
   env.sessionThrows = false;
   env.authListener = null;
+  // The app's real host (index.html), which Modal makes inert while a dialog is open.
   app = document.createElement('div');
+  app.id = 'root';
   document.body.append(app);
   root = createRoot(app);
 });
@@ -83,8 +85,9 @@ async function mount(settings: Record<string, unknown> | null, child: ReactNode 
   await act(async () => {});
   return lockModule.deviceLock;
 }
-const text = () => app.textContent ?? '';
-const button = (label: string) => Array.from(app.querySelectorAll('button')).find(b => b.textContent?.trim() === label);
+// The whole document: a re-lock draws the lock screen outside #root (review F001).
+const text = () => document.body.textContent ?? '';
+const button = (label: string) => Array.from(document.querySelectorAll('button')).find(b => b.textContent?.trim() === label);
 
 describe('DeviceLockGate', () => {
   it('lock off: the app shows, and nothing asks for Face ID', async () => {
@@ -96,7 +99,7 @@ describe('DeviceLockGate', () => {
   it('cold start with the lock on: the lock screen replaces the app and asks straight away', async () => {
     env.results = [{ ok: false, reason: 'cancelled' }];
     await mount({ enabled: true, relockAfter: '15m' });
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     expect(env.authCalls).toBe(1);
     // The page underneath is not in the document at all.
     expect(text()).not.toContain('Ferritin');
@@ -111,7 +114,7 @@ describe('DeviceLockGate', () => {
   it('a successful scan opens the app', async () => {
     await mount({ enabled: true });
     expect(text()).toContain('Ferritin');
-    expect(app.querySelector('h1')).toBeNull();
+    expect(document.querySelector('h1')).toBeNull();
   });
 
   it('a failed scan stays locked with a calm notice; Unlock tries again', async () => {
@@ -170,7 +173,7 @@ describe('DeviceLockGate', () => {
   it('nobody signed in: no lock screen, and a later sign-in is not locked', async () => {
     env.auth = { user: null, loading: false };
     const lock = await mount({ enabled: true });
-    expect(app.querySelector('h1')).toBeNull();
+    expect(document.querySelector('h1')).toBeNull();
     expect(lock.getState().locked).toBe(false);
     expect(env.authCalls).toBe(0);
   });
@@ -187,7 +190,7 @@ describe('DeviceLockGate', () => {
     await act(async () => env.lifecycle!.onPause());
     now.mockReturnValue(1_000_000 + 30_000 + 60_000);
     await act(async () => env.lifecycle!.onResume());
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     now.mockRestore();
   });
 
@@ -201,7 +204,7 @@ describe('DeviceLockGate', () => {
   it('focus moves to the heading, and the lock screen passes axe (D23)', async () => {
     env.results = [{ ok: false, reason: 'failed' }];
     await mount({ enabled: true });
-    expect(document.activeElement).toBe(app.querySelector('h1'));
+    expect(document.activeElement).toBe(document.querySelector('h1'));
     expect(await axeViolations(app)).toEqual([]);
   });
 });
@@ -210,7 +213,7 @@ it('pre-1.0.7 native ignores a stored lock without registering lifecycle callbac
   vi.stubGlobal('__APP_RELEASE__', 'amani@1.0.6+abcdef0');
   env.lifecycle = null;
   const lock = await mount({ enabled: true, relockAfter: 'immediately' });
-  expect(app.textContent).not.toContain('Amani is locked');
+  expect(document.body.textContent).not.toContain('Amani is locked');
   expect(env.lifecycle).toBeNull();
   expect(env.authCalls).toBe(0);
   expect(lock).toBeDefined();
@@ -229,7 +232,7 @@ function Draft() {
 }
 
 const appLayer = () => app.querySelector<HTMLElement>('[data-device-lock-app]');
-const cover = () => app.querySelector<HTMLElement>('[data-device-lock-cover]');
+const cover = () => document.querySelector<HTMLElement>('[data-device-lock-cover]');
 
 async function goAway(now: { mockReturnValue: (value: number) => unknown }, from: number, away: number) {
   await act(async () => env.lifecycle!.onPause());
@@ -242,14 +245,14 @@ describe('review F000: the cold-start lock is dropped only on a definite sign-ou
     env.auth = { user: null, loading: false };
     env.session = { data: { session: null }, error: Object.assign(new Error('synthetic fetch failure'), { name: 'AuthRetryableFetchError' }) };
     const lock = await mount({ enabled: true, relockAfter: '1m' });
-    expect(app.querySelector('h1')).toBeNull();
+    expect(document.querySelector('h1')).toBeNull();
     // TOKEN_REFRESHED / SIGNED_IN for the same user once the network is back.
     env.results = [{ ok: false, reason: 'cancelled' }];
     env.auth = { user: { id: 'user-1' }, loading: false };
     env.session = null;
     await mount(null);
     expect(lock.getState().locked).toBe(true);
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     expect(text()).not.toContain('Ferritin');
   });
 
@@ -262,7 +265,7 @@ describe('review F000: the cold-start lock is dropped only on a definite sign-ou
     env.sessionThrows = false;
     await mount(null);
     expect(lock.getState().locked).toBe(true);
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
   });
 
   it('SIGNED_OUT drops the lock, so the next sign-in with her email and password is not locked', async () => {
@@ -298,9 +301,9 @@ describe('review F001: a re-lock keeps what she was doing', () => {
     expect(text()).toContain('Draft: lab-photo.jpg');
     env.results = [{ ok: false, reason: 'cancelled' }];
     await goAway(now, 1_000_000, 60_000);
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     await act(async () => button('Unlock')!.click());
-    expect(app.querySelector('h1')).toBeNull();
+    expect(document.querySelector('h1')).toBeNull();
     expect(text()).toContain('Draft: lab-photo.jpg');
     now.mockRestore();
   });
@@ -313,7 +316,7 @@ describe('review F001: a re-lock keeps what she was doing', () => {
     now.mockReturnValue(1_000_000 + 5_000);
     await act(async () => env.lifecycle!.onResume());
     await act(async () => {});
-    expect(app.querySelector('h1')).toBeNull();
+    expect(document.querySelector('h1')).toBeNull();
     expect(text()).toContain('Draft: lab-photo.jpg');
     now.mockRestore();
   });
@@ -326,7 +329,7 @@ describe('review F001: a re-lock keeps what she was doing', () => {
     document.body.append(dialog);
     env.results = [{ ok: false, reason: 'cancelled' }];
     await goAway(now, 1_000_000, 60_000);
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     expect(appLayer()!.style.visibility).toBe('hidden');
     expect(appLayer()!.hasAttribute('inert')).toBe(true);
     expect(appLayer()!.getAttribute('aria-hidden')).toBe('true');
@@ -335,7 +338,7 @@ describe('review F001: a re-lock keeps what she was doing', () => {
     expect(cover()!.className).toContain('bg-theme-background');
     expect(cover()!.className).toContain('fixed inset-0');
     // The lock screen itself is not hidden.
-    expect(app.querySelector('h1')!.closest('[inert]')).toBeNull();
+    expect(document.querySelector('h1')!.closest('[inert]')).toBeNull();
     expect(await axeViolations(cover()!)).toEqual([]);
     env.results = [{ ok: true }];
     await act(async () => button('Unlock')!.click());
@@ -373,6 +376,52 @@ describe('review F001: a re-lock keeps what she was doing', () => {
     }
     now.mockRestore();
   });
+
+  it('a sheet open when the app re-locks (the paywall, the symptom log) leaves the lock screen usable', async () => {
+    const { Modal } = await import('../../components/Modal');
+    function Sheet() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <p>Ferritin 12 ng/mL</p>
+          <Modal open={open} onClose={() => setOpen(false)} title="Log symptoms"><p>Sheet body</p></Modal>
+        </>
+      );
+    }
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    await mount({ enabled: true, relockAfter: 'immediately' }, <Sheet />);
+    // The real Modal makes #root inert while it is open.
+    expect(app.hasAttribute('inert')).toBe(true);
+    const sheet = document.querySelector('[role="dialog"]')!.parentElement!;
+    env.results = [{ ok: false, reason: 'cancelled' }];
+    await act(async () => env.lifecycle!.onPause());
+    now.mockReturnValue(1_000_000 + 5_000);
+    await act(async () => env.lifecycle!.onResume());
+    await act(async () => {});
+    // The automatic prompt was cancelled: she must be able to press Unlock or Sign out.
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
+    for (const element of [document.querySelector('h1')!, button('Unlock')!, button('Sign out')!]) {
+      expect(element.closest('[inert]')).toBeNull();
+      expect(element.closest('[aria-hidden="true"]')).toBeNull();
+    }
+    expect(app.getAttribute('aria-hidden')).toBe('true');
+    expect(app.style.visibility).toBe('hidden');
+    expect(sheet.hasAttribute('inert')).toBe(true);
+    expect(sheet.style.visibility).toBe('hidden');
+    env.results = [{ ok: true }];
+    await act(async () => button('Unlock')!.click());
+    expect(document.querySelector('h1')).toBeNull();
+    expect(cover()).toBeNull();
+    // The sheet is still open, so #root stays inert; the sheet itself is usable again.
+    expect(app.hasAttribute('inert')).toBe(true);
+    expect(app.hasAttribute('aria-hidden')).toBe(false);
+    expect(app.style.visibility).toBe('');
+    expect(sheet.hasAttribute('inert')).toBe(false);
+    expect(sheet.style.visibility).toBe('');
+    expect(document.querySelector('[role="dialog"]')!.closest('[inert]')).toBeNull();
+    expect(text()).toContain('Sheet body');
+    now.mockRestore();
+  });
 });
 
 describe('review F002: covered as soon as she leaves', () => {
@@ -396,13 +445,13 @@ describe('review F002: covered as soon as she leaves', () => {
     await mount({ enabled: true, relockAfter: 'immediately' });
     const asked = env.authCalls;
     await act(async () => env.lifecycle!.onPause());
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     expect(env.authCalls).toBe(asked);
     env.results = [{ ok: false, reason: 'cancelled' }];
     await act(async () => env.lifecycle!.onResume());
     await act(async () => {});
     expect(env.authCalls).toBe(asked + 1);
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     now.mockRestore();
   });
 
@@ -443,7 +492,7 @@ describe('review F009: no stale sign-out message', () => {
     expect(text()).toContain('Ferritin');
     env.results = [{ ok: false, reason: 'cancelled' }];
     await goAway(now, 1_000_000, 61_000);
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     expect(text()).not.toContain("couldn't sign out");
     now.mockRestore();
   });
@@ -464,7 +513,7 @@ describe('review F009: no stale sign-out message', () => {
     env.results = [{ ok: false, reason: 'cancelled' }];
     const now = vi.spyOn(Date, 'now').mockReturnValue(5_000_000);
     await goAway(now, 5_000_000, 60_000);
-    expect(app.querySelector('h1')!.textContent).toBe('Amani is locked');
+    expect(document.querySelector('h1')!.textContent).toBe('Amani is locked');
     expect(text()).not.toContain("couldn't sign out");
     now.mockRestore();
   });

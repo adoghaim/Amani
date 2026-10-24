@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { deviceLock, useDeviceLock } from '../../lib/deviceLock';
 import { exposePrivacyCoverReady } from '../../lib/deviceLock/privacyCover';
@@ -16,7 +17,9 @@ import { LockScreen } from './LockScreen';
  * is in the document. Once she has opened the app, a re-lock (or the cover
  * drawn as soon as she leaves, review F002) goes over the still-mounted app,
  * which is made invisible and inert, so a photo or file she was adding is not
- * thrown away (review F001).
+ * thrown away (review F001). That cover is drawn on document.body, outside
+ * #root: an open Modal makes #root inert, and the lock screen's buttons must
+ * still work under it.
  *
  * The web never locks: the controller is native-only, and the lifecycle
  * subscription is a no-op there.
@@ -87,9 +90,10 @@ export function DeviceLockGate({ children }: { children: ReactNode }) {
     if (!user) setSignOutFailed(false);
   }, [user]);
 
-  // Portals (dialogs) live outside this tree: keep them invisible, inert and
-  // out of the accessibility tree too while the app is hidden, including one
-  // that opens under the lock (an upload finishing, say).
+  // Everything on the page but the cover goes invisible, inert and out of the
+  // accessibility tree while the app is hidden: #root and the portals
+  // (dialogs) beside it, including one that opens under the lock (an upload
+  // finishing, say).
   useLayoutEffect(() => {
     if (!hidden) return;
     const restore: Array<() => void> = [];
@@ -131,10 +135,11 @@ export function DeviceLockGate({ children }: { children: ReactNode }) {
       <div ref={appRef} data-device-lock-app="" style={hidden ? { display: 'contents', visibility: 'hidden' } : { display: 'contents' }}>
         {children}
       </div>
-      {hidden && (
+      {hidden && createPortal(
         <div ref={overlayRef} data-device-lock-cover="" className="fixed inset-0 z-[70] overflow-y-auto bg-theme-background">
           {lock.locked ? lockScreen : null}
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
