@@ -2915,9 +2915,12 @@
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ci-workflows",
-      "pr": null,
+      "pr": "#160",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2928,7 +2931,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ci-workflows; findings F122, F123, F104, F085. Head 4bd6043. Built (F104, F055, F138 partial). Correctness review: recommend merge."
+        "Track ci-workflows; findings F122, F123, F104, F085, F055, F138. Fix 4bd6043; correctness review: recommend merge (merge with or after DP2 and SP1).",
+        "Track merged with main at fc21c1d; gates (lint, typecheck, full test 3,428, build, release, functions, flags, migorder, pinned, devicelock) and the CI e2e matrix incl. interpretation green in Chromium, WebKit and Firefox.",
+        "Draft until the deps-toolchain (.nvmrc) and ios-spm (Package.resolved) PRs exist; merge after or with them."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2947,15 +2952,18 @@
       "depends_on": [
         "RV-CI1"
       ],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ci-workflows",
-      "pr": null,
+      "pr": "#160",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2966,7 +2974,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ci-workflows; findings F060, F061, F056, F118. Head 74bdf7e. Built on top of CI1. Reviews were cut off by the stop: needs verification."
+        "Track ci-workflows; findings F060, F061, F056, F118 (+ workflow parts of F055, F086, F110). Fix 74bdf7e; blind verifier PASS_WITH_NOTES.",
+        "Track merged with main at fc21c1d; gates (lint, typecheck, full test 3,428, build, release, functions, flags, migorder, pinned, devicelock) and the CI e2e matrix incl. interpretation green in Chromium, WebKit and Firefox.",
+        "Draft until the deps-toolchain (.nvmrc) and ios-spm (Package.resolved) PRs exist; merge after or with them."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2986,15 +2996,18 @@
       "depends_on": [
         "RV-CI2"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ci-workflows",
-      "pr": null,
+      "pr": "#160",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -3005,7 +3018,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ci-workflows; findings F008, F102, F117, F101, F116. Not started."
+        "Track ci-workflows; findings F008, F102, F117, F101, F116. Fix f6a4495; blind verifier PASS_WITH_NOTES.",
+        "Track merged with main at fc21c1d; gates (lint, typecheck, full test 3,428, build, release, functions, flags, migorder, pinned, devicelock) and the CI e2e matrix incl. interpretation green in Chromium, WebKit and Firefox.",
+        "Draft until the deps-toolchain (.nvmrc) and ios-spm (Package.resolved) PRs exist; merge after or with them."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
