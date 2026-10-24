@@ -2686,16 +2686,19 @@
         "F136"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-honest-copy",
-      "pr": null,
+      "pr": "#170",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2706,7 +2709,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track honest-copy; findings F137, F136. Not started."
+        "The Settings Reminders section is hidden behind features.local_reminders and shows Saved only after supabase-js returns no error (F137), and the index.html descriptions plus the Landing h1 and bullet no longer claim cycle-phase scoring (F136, D7.9); blind verifier PASS_WITH_NOTES on 2026-10-23, red-at-base mutations on all four changed source files, store listings and Terms/Privacy copy left to the owner.",
+        "Gates at 519b739 (run locally): lint, typecheck, full test (3,359), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
