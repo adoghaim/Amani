@@ -217,7 +217,8 @@ export function BiomarkerCard({
 
   const labMin = labRefMin ?? null;
   const labMax = labRefMax ?? null;
-  const labObservation = labIntervalObservation(name, value, labMin, labMax);
+  // F021: a censored result is placed against her lab's range only where its printed limit decides it.
+  const labObservation = labIntervalObservation(name, value, labMin, labMax, null, null, rawValueText);
   const labText = formatInterval(labMin, labMax);
 
   const displayName = getDisplayName(name);
