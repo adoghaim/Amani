@@ -339,8 +339,8 @@ export class ServerModel {
           return { platform, product_id, store_subscription_id, status, expires_at, environment };
         }),
         cancelPlaySubscriptions: async () => { this.deletionSteps.push('cancelPlaySubscriptions'); },
-        getStripeCustomerId: async userId => db.tables.stripe_customers.find(r => r.user_id === userId)?.customer_id
-          ?? db.tables.users.find(r => r.id === userId)?.stripe_customer_id ?? null,
+        getStripeCustomerIds: async userId => [db.tables.stripe_customers.find(r => r.user_id === userId)?.customer_id,
+          db.tables.users.find(r => r.id === userId)?.stripe_customer_id].filter((id): id is string => typeof id === 'string'),
         cancelStripeSubscriptions: async () => { this.deletionSteps.push('cancelStripeSubscriptions'); },
         deleteStripeCustomer: async () => { this.deletionSteps.push('deleteStripeCustomer'); },
         deleteLocalStripeRecords: async (userId, customerId) => {

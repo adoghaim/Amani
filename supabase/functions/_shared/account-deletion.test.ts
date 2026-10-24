@@ -52,9 +52,9 @@ function makeActions(overrides: Partial<AccountDeletionActions> = {}): {
       return [] as StoreSubscriptionRecord[];
     }),
     cancelPlaySubscriptions: vi.fn(track('cancelPlaySubscriptions')),
-    getStripeCustomerId: vi.fn(async (_userId: string) => {
-      calls.push('getStripeCustomerId');
-      return 'cus_test_123';
+    getStripeCustomerIds: vi.fn(async (_userId: string) => {
+      calls.push('getStripeCustomerIds');
+      return ['cus_test_123'];
     }),
     cancelStripeSubscriptions: vi.fn(track('cancelStripeSubscriptions')),
     deleteStripeCustomer: vi.fn(track('deleteStripeCustomer')),
@@ -78,7 +78,7 @@ describe('deleteUserAccount', () => {
     expect(calls).toEqual([
       'checkDataTablesReady',
       'listStoreSubscriptions',
-      'getStripeCustomerId',
+      'getStripeCustomerIds',
       'cancelStripeSubscriptions',
       'deleteStripeCustomer',
       'deleteLocalStripeRecords',
@@ -91,9 +91,9 @@ describe('deleteUserAccount', () => {
 
   it('skips Stripe steps when the user has no Stripe customer_id', async () => {
     const { actions, calls } = makeActions({
-      getStripeCustomerId: vi.fn(async () => {
-        calls.push('getStripeCustomerId');
-        return null;
+      getStripeCustomerIds: vi.fn(async () => {
+        calls.push('getStripeCustomerIds');
+        return [];
       }),
     });
 
@@ -102,7 +102,7 @@ describe('deleteUserAccount', () => {
     expect(calls).toEqual([
       'checkDataTablesReady',
       'listStoreSubscriptions',
-      'getStripeCustomerId',
+      'getStripeCustomerIds',
       'deleteStorageFiles',
       'deleteDataTables',
       'deleteRevenueCatSubscriber',
@@ -111,6 +111,46 @@ describe('deleteUserAccount', () => {
     expect(actions.cancelStripeSubscriptions).not.toHaveBeenCalled();
     expect(actions.deleteStripeCustomer).not.toHaveBeenCalled();
     expect(actions.deleteLocalStripeRecords).not.toHaveBeenCalled();
+  });
+
+  it('BS1 (F029): cancels and deletes every distinct customer, current and legacy, before removing any local pointer', async () => {
+    const stripeCalls: string[] = [];
+    const record = (name: string) => vi.fn(async (...args: unknown[]) => {
+      stripeCalls.push(`${name}:${args.at(-1)}`);
+    });
+    const { actions } = makeActions({
+      getStripeCustomerIds: vi.fn(async () => ['cus_current', 'cus_legacy', 'cus_current', '']),
+      cancelStripeSubscriptions: record('cancel'),
+      deleteStripeCustomer: record('delete'),
+      deleteLocalStripeRecords: record('local'),
+    });
+
+    await deleteUserAccount(actions, 'user-1b');
+
+    expect(stripeCalls).toEqual([
+      'cancel:cus_current',
+      'delete:cus_current',
+      'cancel:cus_legacy',
+      'delete:cus_legacy',
+      'local:cus_current',
+      'local:cus_legacy',
+    ]);
+    expect(actions.deleteLocalStripeRecords).toHaveBeenCalledWith('user-1b', 'cus_legacy');
+    expect(actions.deleteAuthUser).toHaveBeenCalledOnce();
+  });
+
+  it('BS1 (F029): a failure deleting the second customer keeps every local pointer, so a retry finds it', async () => {
+    const { actions } = makeActions({
+      getStripeCustomerIds: vi.fn(async () => ['cus_current', 'cus_legacy']),
+      deleteStripeCustomer: vi.fn(async (customerId: string) => {
+        if (customerId === 'cus_legacy') throw new Error('stripe 500');
+      }),
+    });
+
+    await expect(deleteUserAccount(actions, 'user-1c')).rejects.toThrow('stripe 500');
+    expect(actions.deleteLocalStripeRecords).not.toHaveBeenCalled();
+    expect(actions.deleteStorageFiles).not.toHaveBeenCalled();
+    expect(actions.deleteAuthUser).not.toHaveBeenCalled();
   });
 
   it('aborts and does NOT delete auth if Stripe cancellation fails', async () => {
@@ -156,9 +196,9 @@ describe('deleteUserAccount', () => {
     // customer_id is now null (local Stripe records already deleted), storage +
     // tables have no rows (deletes no-op), auth finally succeeds this time.
     const { actions, calls } = makeActions({
-      getStripeCustomerId: vi.fn(async () => {
-        calls.push('getStripeCustomerId');
-        return null;
+      getStripeCustomerIds: vi.fn(async () => {
+        calls.push('getStripeCustomerIds');
+        return [];
       }),
     });
 
@@ -167,7 +207,7 @@ describe('deleteUserAccount', () => {
     expect(calls).toEqual([
       'checkDataTablesReady',
       'listStoreSubscriptions',
-      'getStripeCustomerId',
+      'getStripeCustomerIds',
       'deleteStorageFiles',
       'deleteDataTables',
       'deleteRevenueCatSubscriber',
@@ -197,7 +237,7 @@ describe('deleteUserAccount — store teardown (PK-STORE-01)', () => {
       'checkDataTablesReady',
       'listStoreSubscriptions',
       'cancelPlaySubscriptions',
-      'getStripeCustomerId',
+      'getStripeCustomerIds',
       'cancelStripeSubscriptions',
       'deleteStripeCustomer',
       'deleteLocalStripeRecords',
@@ -235,7 +275,7 @@ describe('deleteUserAccount — store teardown (PK-STORE-01)', () => {
       deleteUserAccount(actions, 'user-22', { acknowledgedStoreSubscriptions: true }),
     ).rejects.toThrow('Google Play cancellation failed (HTTP 503).');
 
-    expect(actions.getStripeCustomerId).not.toHaveBeenCalled();
+    expect(actions.getStripeCustomerIds).not.toHaveBeenCalled();
     expect(actions.deleteStorageFiles).not.toHaveBeenCalled();
     expect(actions.deleteDataTables).not.toHaveBeenCalled();
     expect(actions.deleteRevenueCatSubscriber).not.toHaveBeenCalled();
@@ -283,9 +323,9 @@ describe('deleteUserAccount — store teardown (PK-STORE-01)', () => {
     // Everything but auth already ran once: Stripe is gone, the Play row is still
     // there (it rides the auth cascade), and the user re-acknowledges.
     const { actions, calls } = withStoreSubs([playRecord()], {
-      getStripeCustomerId: vi.fn(async () => {
-        calls.push('getStripeCustomerId');
-        return null;
+      getStripeCustomerIds: vi.fn(async () => {
+        calls.push('getStripeCustomerIds');
+        return [];
       }),
     });
 
@@ -296,7 +336,7 @@ describe('deleteUserAccount — store teardown (PK-STORE-01)', () => {
       'checkDataTablesReady',
       'listStoreSubscriptions',
       'cancelPlaySubscriptions',
-      'getStripeCustomerId',
+      'getStripeCustomerIds',
       'deleteStorageFiles',
       'deleteDataTables',
       'deleteRevenueCatSubscriber',
@@ -328,7 +368,7 @@ describe('deleteUserAccount — live store subscriptions', () => {
       StoreSubscriptionAcknowledgementRequiredError,
     );
 
-    expect(actions.getStripeCustomerId).not.toHaveBeenCalled();
+    expect(actions.getStripeCustomerIds).not.toHaveBeenCalled();
     expect(actions.cancelStripeSubscriptions).not.toHaveBeenCalled();
     expect(actions.deleteStorageFiles).not.toHaveBeenCalled();
     expect(actions.deleteDataTables).not.toHaveBeenCalled();
@@ -663,7 +703,7 @@ describe('deploy order: a table delete-user-data deletes from is missing (PK-HAR
     await expect(deleteUserAccount(actions, 'user-15')).rejects.toBeInstanceOf(AccountDeletionNotReadyError);
     expect(calls).toEqual(['checkDataTablesReady']);
     expect(actions.listStoreSubscriptions).not.toHaveBeenCalled();
-    expect(actions.getStripeCustomerId).not.toHaveBeenCalled();
+    expect(actions.getStripeCustomerIds).not.toHaveBeenCalled();
     expect(actions.cancelStripeSubscriptions).not.toHaveBeenCalled();
     expect(actions.deleteStorageFiles).not.toHaveBeenCalled();
     expect(actions.deleteDataTables).not.toHaveBeenCalled();

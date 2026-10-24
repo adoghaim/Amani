@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '../Button'
+import { CalmNotice } from '../CalmNotice'
 import { IapPricingCard } from './IapPricingCard'
 import { useAuth } from '../../contexts/AuthContext'
+import { useSubscription } from '../../hooks/useSubscription'
+import { sourceHasManageablePurchase } from '../../lib/subscriptionSource'
 import { clientFreemiumActive } from '../../lib/tier'
 import {
   getIapOfferings,
@@ -24,6 +27,40 @@ type LoadState =
   | { phase: 'ready'; products: IapStoreProduct[] }
   | { phase: 'unavailable' }
   | { phase: 'error'; message: string }
+
+/**
+ * One paid plan per person (review F040). When a Stripe subscription or a
+ * store purchase already entitles her, the purchase buttons give way to a calm
+ * notice that sends her to Billing, so nobody pays twice for one Premium.
+ * stripe-checkout refuses a second Stripe subscription on the server as well;
+ * a store purchase can only be stopped here.
+ *
+ * Complimentary access and the trial still see the plans: neither is a
+ * purchase, and a store reviewer on a complimentary grant must be able to buy.
+ * Used by PricingPage and PremiumPaywall around the Stripe cards, and below
+ * around the store cards.
+ */
+export function PaidPlanGate({ children, onManage }: { children: ReactNode; onManage?: () => void }) {
+  const { source } = useSubscription()
+  const navigate = useNavigate()
+
+  if (!sourceHasManageablePurchase(source)) return <>{children}</>
+
+  return (
+    <CalmNotice
+      className="max-w-3xl mx-auto"
+      title="You already have an active plan."
+      safe="There is nothing more to buy. Your current plan stays as it is."
+      action={{
+        label: 'Manage your plan',
+        onClick: () => {
+          onManage?.()
+          navigate('/app/billing')
+        },
+      }}
+    />
+  )
+}
 
 /**
  * The native paywall. Rendered instead of the Stripe cards on iOS and Android,
@@ -163,16 +200,18 @@ export function IapPaywall({ onEntitled }: IapPaywallProps) {
       )}
 
       {state.phase === 'ready' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
-          {state.products.map((product, index) => (
-            <IapPricingCard
-              key={product.productId}
-              product={product}
-              isPopular={index === 0}
-              onPurchased={onEntitled}
-            />
-          ))}
-        </div>
+        <PaidPlanGate>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
+            {state.products.map((product, index) => (
+              <IapPricingCard
+                key={product.productId}
+                product={product}
+                isPopular={index === 0}
+                onPurchased={onEntitled}
+              />
+            ))}
+          </div>
+        </PaidPlanGate>
       )}
 
       {/*
