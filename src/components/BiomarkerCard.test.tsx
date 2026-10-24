@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+import axe from 'axe-core';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getEntry } from '../lib/biomarkers/dictionary';
+import { LAB_FLAG_PREFIX } from '../lib/scoring/insightCopy';
 import { BiomarkerCard } from './BiomarkerCard';
 
 // Synthetic values only; no patient data.
@@ -178,5 +180,50 @@ describe('BiomarkerCard — a censored result is never placed or plotted by its 
     expect(dot()).not.toBeNull();
     expand();
     expect(host.textContent).toContain("Below your lab's range");
+  });
+});
+
+/*
+  RV-CR1. Core results render as this card, not as a result row, so the card
+  takes the same token: the marker her lab printed beside the value (a
+  labCriticalFlags finding's `printed`), which the report page passes only
+  while features.lab_critical_flag_notice is on. Synthetic values; the
+  interval is a placeholder, not a clinical range.
+*/
+describe('BiomarkerCard — the lab\'s printed critical marker beside the value (RV-CR1)', () => {
+  const BADGE_CLASSES = 'inline-flex items-center px-1 font-mono text-xs font-medium text-theme-text border border-theme-text rounded-[3px]';
+  const glucose = { name: 'fasting_glucose', value: 450, rawValueText: '450', unit: 'mg/dL', labRefMin: 65, labRefMax: 99, cyclePhase: null } as const;
+  const flags = () => [...host.querySelectorAll('[data-testid="lab-flag"]')] as HTMLElement[];
+
+  it('one badge after the value and unit: the prefix for screen readers, then the token as printed', async () => {
+    render({ ...glucose, labCriticalFlag: 'PANIC' });
+    expect(flags()).toHaveLength(1);
+    const flag = flags()[0]!;
+    expect(flag.textContent).toBe(`${LAB_FLAG_PREFIX}PANIC`);
+    expect(flag.lastChild?.textContent).toBe('PANIC');
+    expect(flag.querySelector('.sr-only')?.textContent).toBe(LAB_FLAG_PREFIX);
+    // Straight after the unit, which is straight after the value, in the card's value line.
+    expect(flag.previousElementSibling?.textContent).toBe('mg/dL');
+    expect(flag.previousElementSibling?.previousElementSibling?.textContent).toBe('450');
+    // The row's badge, unchanged: ink text and border, 3px corners, the data face. No tint, role, live region or policy attributes.
+    expect(flag.className).toBe(BADGE_CLASSES);
+    expect(flag.getAttributeNames().sort()).toEqual(['class', 'data-testid']);
+    expect(flag.querySelector('.sr-only')!.getAttributeNames()).toEqual(['class']);
+    const result = await axe.run(host, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      // jsdom does not lay out or paint; contrast is gated by npm run validate:contrast and the browser test.
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(result.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  });
+
+  it('no token, no badge: the card is exactly today\'s', () => {
+    render(glucose);
+    const today = host.innerHTML;
+    expect(flags()).toHaveLength(0);
+    for (const none of [undefined, null]) {
+      render({ ...glucose, labCriticalFlag: none });
+      expect(host.innerHTML).toBe(today);
+    }
   });
 });

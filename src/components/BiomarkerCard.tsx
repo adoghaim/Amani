@@ -16,6 +16,7 @@ import {
   type AuthorizedModelProse, type ComparisonBandLanguage, type FactualLanguage,
 } from '../lib/scoring/insightCopy';
 import { ModelProseText } from './ClinicalObservation';
+import { LabFlagBadge } from './LabFlagBadge';
 import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 
 interface BiomarkerCardProps {
@@ -43,6 +44,13 @@ interface BiomarkerCardProps {
   baselineStaleness?: BaselineStaleness;
   trendDirection?: TrendDirection;
   trendStrength?: TrendStrength;
+  /**
+   * RV-CR1: the critical marker her lab printed beside this value, exactly as
+   * printed (a labCriticalFlags finding's `printed`), in the result row's own
+   * lab-flag badge. The report page passes it only while
+   * features.lab_critical_flag_notice is on.
+   */
+  labCriticalFlag?: string | null;
 }
 
 function baselineCopy(
@@ -205,6 +213,7 @@ export function BiomarkerCard({
   baselineStaleness,
   trendDirection,
   trendStrength,
+  labCriticalFlag,
 }: BiomarkerCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -279,6 +288,7 @@ export function BiomarkerCard({
           <div className="flex items-baseline gap-1.5 text-theme-muted-text-2">
             <span className="font-mono text-xl text-theme-text tabular-nums">{formattedValue}</span>
             <span className="font-mono text-xs">{unit}</span>
+            {labCriticalFlag && <LabFlagBadge flag={labCriticalFlag} />}
           </div>
         </div>
         <div className="shrink-0 pt-0.5 text-theme-muted-text-3">
