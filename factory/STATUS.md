@@ -79,7 +79,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | todo | - | - |
 | RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | todo | RV-BS1 | - |
 | RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | todo | - | - |
-| RV-BU1 Billing labels from the real entitlement; an honest deletion warning | RV | 1 | in-progress | - | - |
+| RV-BU1 Billing labels from the real entitlement; an honest deletion warning | RV | 1 | review | - | [#157](https://github.com/adoghaim/Amani/pull/157) |
 | RV-WP1 Private source maps, production-only routes, security headers | RV | 1 | review | - | - |
 | RV-WP2 Offline is not empty; error boundaries reset | RV | 1 | in-progress | RV-WP1 | - |
 | RV-WP3 Accessible overlays, safe areas, Android back closes sheets first | RV | 1 | todo | RV-WP2 | - |
@@ -113,7 +113,7 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-IB1 | ingest-ocr-a11y | in-progress | `factory/rv-ingest-ocr-a11y` @ `4219016` | Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet. |
 | RV-NP1 | nutrient-policy | review | `factory/rv-nutrient-policy` @ `98eb8a0` | PR #159: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 | RV-RS1 | report-safety | in-progress | `factory/rv-wip-rs1` @ `7ed7625` | Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification. |
-| RV-BU1 | billing-ui | in-progress | `factory/rv-billing-ui` @ `e321bd3` | Built, DONE_WITH_CONCERNS (F045 partial). Verifier was cut off: needs verification. |
+| RV-BU1 | billing-ui | review | `factory/rv-billing-ui` @ `c62caf4` | PR #157: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 | RV-WP1 | web-platform | review | `factory/rv-web-platform` @ `dec8bfe` | Built. Security and correctness reviews: recommend merge. |
 | RV-WP2 | web-platform | in-progress | `factory/rv-wip-wp2` @ `979728b` | Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d). |
 | RV-DL1 | device-lock | in-progress | `factory/rv-wip-dl1` @ `e2d2c2e` | Interrupted mid-build: one WIP commit; needs completion, gates and verification. |
