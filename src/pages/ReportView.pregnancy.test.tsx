@@ -53,7 +53,8 @@ import { ReportView } from './ReportView';
 const USER = '00000000-0000-4000-8000-000000000f12';
 const CURRENT = '00000000-0000-4000-a000-000000000f12';
 
-function seed() {
+/** `labRanges: false` drops her lab's printed ranges, so no value is lab-flagged. */
+function seed({ labRanges = true } = {}) {
   fixture.tables = {
     lab_reports: [
       { id: CURRENT, user_id: USER, report_date: '2026-01-02', status: 'ready', estimated_cycle_phase: 'luteal', regeneration_count: 0, lab_name: 'Synthetic Lab' },
@@ -64,7 +65,8 @@ function seed() {
       ['hdl_cholesterol', 70, 'mg/dL', 40, null],
     ].map(([name, value, unit, min, max], i) => ({
       id: `${CURRENT}-${i}`, lab_report_id: CURRENT, name, value, raw_value_text: String(value), unit,
-      reference_min: min, reference_max: max, flagged: 'out_of_range', created_at: '2026-01-01T00:00:00.000Z',
+      reference_min: labRanges ? min : null, reference_max: labRanges ? max : null, flagged: 'out_of_range',
+      created_at: '2026-01-01T00:00:00.000Z',
     })),
     report_analytes: [],
   };
@@ -138,8 +140,11 @@ describe('Review F012 — a declared pregnancy withholds Amani bands on the repo
     const text = app.textContent ?? '';
     expect(text).not.toMatch(/Outside Amani band|outside Amani band/);
     expect(text).not.toContain("outside Amani's current comparison band");
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toContain("All scored values are within Amani's context bands");
+    // Owner Ruling 7 (#152): her lab flagged TSH, ferritin and progesterone, so the
+    // headline states her lab's own range and places nothing against a band.
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("your lab's reference range");
+    expect(app.querySelector('h2 [data-language-category="comparison_band"]')).toBeNull();
   }, 30_000);
 
   it.each([null, 'None', 'Prefer not to say'])('%j: the same report is placed against its bands (control)', async status => {
@@ -148,7 +153,25 @@ describe('Review F012 — a declared pregnancy withholds Amani bands on the repo
     await renderAndOpenAll();
     expect(cards()).toHaveLength(4);
     expect(app.textContent).toContain('Outside Amani band');
-    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent)
-      .toContain("outside Amani's current comparison band");
+    // Owner Ruling 7 (#152): the same lab flags lead the headline in her lab's terms.
+    expect(app.querySelector('h2 [data-language-source="patient_lab_interval"]')?.textContent)
+      .toContain("your lab's reference range");
+  }, 30_000);
+
+  // Without her lab's ranges no value is lab-flagged, so the headline is the band
+  // headline, and a declared status withholds the bands it names.
+  it.each([
+    ['Pregnant', "All scored values are within Amani's context bands"],
+    ['Postpartum', "All scored values are within Amani's context bands"],
+    ['Breastfeeding', "All scored values are within Amani's context bands"],
+    [null, "outside Amani's current comparison band"],
+    ['None', "outside Amani's current comparison band"],
+    ['Prefer not to say', "outside Amani's current comparison band"],
+  ])('no printed lab ranges, %j declared: the band headline reads "%s"', async (status, headline) => {
+    seed({ labRanges: false });
+    fixture.profile.pregnancy_status = status;
+    await renderAndOpenAll();
+    expect(cards()).toHaveLength(4);
+    expect(app.querySelector('h2 [data-language-category="comparison_band"]')?.textContent).toContain(headline);
   }, 30_000);
 });
