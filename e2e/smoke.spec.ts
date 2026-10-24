@@ -24,14 +24,12 @@ test('protected route redirects an unauthenticated visitor', async ({ page }) =>
 test.describe('synthetic authenticated session', () => {
   test.use({ authenticated: true });
 
-  test('restores the fixture session and retains it across reload @quarantine', async ({ page }) => {
-    // Quarantined by default: a flaky application redirect race affects all browsers.
-    // Tracked as E2E-REDIRECT-RACE in factory/BACKLOG.md (owner: Mohammed). Both hypotheses remain unproven:
-    // App.tsx:64 reads window.location.search outside React Router awareness,
-    // or OnboardingFlow.tsx:57 navigate('/app') wins a race.
-    // Opt in: E2E_QUARANTINE=1 npm run test:e2e
-    // Re-entry requires replacing the window.location.search read with a
-    // router-aware source AND at least 10 green runs per browser; one is insufficient.
+  test('restores the fixture session and retains it across reload', async ({ page }) => {
+    // Back in the gate after E2E-REDIRECT-RACE (review F117). App.tsx read ?redirect= from
+    // window.location, which BrowserRouter moves before it commits a navigation, so an auth
+    // update while /app/reports was loading sent her to /app (it failed in all three browsers).
+    // AppRoutes and ProtectedRoute now read useLocation(); proven by src/App.redirect.test.tsx
+    // and 20 consecutive green runs per browser with 0 retries. OnboardingFlow was not involved.
     await page.goto('/login?redirect=%2Fapp%2Freports');
     await expect(page).toHaveURL(/\/app\/reports$/);
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
