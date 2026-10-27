@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "opus",
+  "env": {
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
+    "ANTHROPIC_MODEL": "claude-opus-5-5[1m]",
+    "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_FLOW_HOOKS_ENABLED": "true",
+    "CLAUDE_FLOW_V3_ENABLED": "true",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5[1m]",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npx @claude-flow*)",
+      "Bash(npx claude-flow*)",
+      "Bash(node .claude/*)",
+      "mcp__ruflo__:*"
+    ],
+    "defaultMode": "bypassPermissions"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node ~/.claude/statusline/statusline-extras.cjs",
+    "padding": 0
+  },
+  "theme": "dark",
+  "tui": "fullscreen",
+  "ultracode": true,
+  "enableWorkflows": true,
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "pluginConfigs": {
+    "ecc@ecc": {
+      "options": {
+        "hook_profile": "standard",
+        "hooks_enabled": true
+      }
+    }
+  },
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-skills": {
+      "source": {
+        "source": "github",
+        "repo": "alirezarezvani/claude-skills"
+      }
+    },
+    "ecc": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/affaan-m/ECC.git"
+      }
+    },
+    "fable-foreman": {
+      "source": {
+        "source": "github",
+        "repo": "olsenbrands/fable-foreman"
+      }
+    },
+    "ruflo": {
+      "source": {
+        "source": "github",
+        "repo": "ruvnet/ruflo"
+      }
+    },
+    "ui-ux-pro-max-skill": {
+      "source": {
+        "source": "github",
+        "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
+      }
+    },
+    "salesskills": {
+      "source": {
+        "source": "github",
+        "repo": "louisblythe/Sales-Skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ecc@ecc": true,
+    "engineering-advanced-skills@claude-code-skills": true,
+    "engineering-skills@claude-code-skills": true,
+    "fable-foreman@fable-foreman": true,
+    "ruflo-autopilot@ruflo": true,
+    "ruflo-core@ruflo": true,
+    "ruflo-federation@ruflo": true,
+    "ruflo-swarm@ruflo": true,
+    "ruflo-workflows@ruflo": true,
+    "self-improving-agent@claude-code-skills": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "sales-skills@salesskills": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/check-agent-models.mjs --quiet --fix"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/ruflo-session-start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
