@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { decideAiRefinement } from './aiRefinementGate';
+import { parseAllReportItemsWithDebug } from './pipeline';
+import { questSmokeFixture } from './__fixtures__/questSmoke';
 import type { LabSource, ReportItem } from './types';
 
-type GateItem = Pick<ReportItem, 'canonical_slug' | 'confidence_score' | 'needs_review' | 'parse_error'>;
+type GateItem = Pick<ReportItem, 'canonical_slug' | 'confidence_score' | 'needs_review' | 'parse_error'>
+  & Partial<Pick<ReportItem, 'parse_status' | 'value_text'>>;
 
 /** A clean, mapped, confident item — the case we want to be able to skip on. */
 const good = (over: Partial<GateItem> = {}): GateItem => ({
@@ -113,6 +116,29 @@ describe('decideAiRefinement', () => {
 
     it('no items at all', () => {
       expect(decideAiRefinement(input([])).refine).toBe(true);
+    });
+  });
+
+  /*
+    F098 flags a result printed below a limit ("<10") for her review. That is
+    her confirmation, not a parse problem, so it buys no model call; any other
+    flag on the same row still does.
+  */
+  describe('a result printed below a limit, through the real parser', () => {
+    const panel = (text: string) => {
+      const { items, debug, heuristics } = parseAllReportItemsWithDebug(text);
+      return { items, decision: decideAiRefinement({ items, heuristics, detectedSource: debug.detectedSource }) };
+    };
+
+    it('on an otherwise clean Quest panel is flagged for her review and still skips the model', () => {
+      const { items, decision } = panel(questSmokeFixture.replace('Ferritin 18 L 16-154 ng/mL', 'Ferritin <10 L 16-154 ng/mL'));
+      expect(items.find(i => i.canonical_slug === 'ferritin')).toMatchObject({ value_text: '<10', needs_review: true, parse_status: 'mapped' });
+      expect(decision.refine).toBe(false);
+    });
+
+    it('refines when that row is flagged for another reason as well', () => {
+      const flagged = good({ needs_review: true, parse_status: 'needs_review', value_text: '<10' });
+      expect(decideAiRefinement(input([...Array.from({ length: 11 }, () => good()), flagged])).refine).toBe(true);
     });
   });
 

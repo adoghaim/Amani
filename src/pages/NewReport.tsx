@@ -10,6 +10,8 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../contexts/AuthContext';
+import { stateFromPregnancyStatus } from '../lib/scoring/amaniContext';
+import { isCensoredValue } from '../../supabase/functions/_shared/censored-value';
 import { checkSubscriptionLive, handle402 } from '../utils/subscription';
 import { clientFreemiumActive } from '../lib/tier';
 import { uploadRequiresSubscription } from '../lib/freemium/gates';
@@ -18,15 +20,20 @@ import { isAiPausedResponse, noteAiPaused } from '../lib/aiPause';
 import { OcrPausedNotice } from '../components/OcrPausedNotice';
 import type { Symptom, LabReportContext, BiomarkerName, LabSource, ImportMethod } from '../types';
 import type { ReportItem, ParserDebugOutput } from '../utils/biomarkerParser';
+import { toExtractedItem, type ExtractedAnalyte, type ExtractedItem } from '../../supabase/functions/_shared/lab-extraction';
 import { extractTextFromPDF, convertPDFToImages } from '../utils/pdfExtractor';
 import { parseAllReportItemsWithDebug } from '../utils/biomarkerParser';
 import { decideAiRefinement } from '../utils/parser/aiRefinementGate';
+import { bindReferenceRange } from '../utils/parser/rangeDetection';
+import { awaitsHerCheck, awaitsHerConfirmation, withReviewFlags } from '../utils/parser/reviewFlags';
 import { extractCycleContextFromText, type ExtractedCycleContext } from '../utils/parser/cycleContext';
 import {
   cycleContextAtDraw, cycleContextToStore, knownCycleLength, parseCycleLengthDays, CYCLE_LENGTH_INPUT_ERROR, CYCLE_LENGTH_INPUT_HINT,
 } from '../lib/drawCycleContext';
 import { normalizeReportItems, reportItemDisplayName } from '../lib/biomarkers/normalizeReportItems';
+import { isUnconfirmedBiomarker, unconfirmedReadingKeys } from '../lib/biomarkers/confirmation';
 import { computeAmaniStatus } from '../lib/scoring/scoreBiomarker';
+import { buildInsightSummary } from '../lib/insights/buildInsightSummary';
 import { detectLabSource } from '../utils/detectLabSource';
 import { extractDateFromText } from '../utils/extractDateFromText';
 import { isNative, captureLabPhoto, getNetworkStatus, onNetworkChange } from '../lib/native';
@@ -51,6 +58,59 @@ const SYMPTOMS: { value: Symptom; label: string }[] = [
 ];
 
 type GuidedStep = 'choose' | 'instructions' | 'upload';
+
+/** A printed range read one line per "; " or line break, as the parser joins them (PK-FIX-05). */
+const bindPrintedRange = (text: string) => bindReferenceRange(text.split(/;\s+|\n/));
+
+/*
+  Her confirm-step edit replaces what was read off the page (IB1 review). The
+  printed value text and the interval read with the range would otherwise
+  outlive her correction: the report showed the misread value, and placed her
+  value against an interval she had corrected. A corrected value drops the
+  printed text; a corrected range is read again from what she typed, and
+  leaves no interval when it does not parse.
+
+  Her text is read the way the parser binds a marker's interval (PK-FIX-05),
+  one printed line per "; " or line break, as the parser joins them: an
+  interval is bound only when exactly one applies. Several intervals, or one
+  tied to a cycle phase, menopause or pregnancy, bind none (IB1 review: the
+  first-interval read placed her against the follicular interval).
+*/
+function applyReviewEdit(item: ReportItem, field: keyof ReportItem, value: string | number | null | boolean): ReportItem {
+  const updated = { ...item, [field]: value } as ReportItem;
+  if (field === 'value_numeric') updated.value_text = null;
+  if (field === 'raw_reference_range') {
+    const range = typeof value === 'string' ? bindPrintedRange(value).range : undefined;
+    updated.normalized_reference_min = range?.min ?? null;
+    updated.normalized_reference_max = range?.max ?? null;
+    updated.reference_operator = range?.comparator?.operator ?? null;
+    updated.reference_operator_value = range?.comparator?.value ?? null;
+  }
+  return updated;
+}
+
+/*
+  The model's interval is held to the same binding before review (IB1 review,
+  fix wave 2). OCR and AI-refinement rows carry normalized_reference_* as the
+  model filled them. When her lab printed several intervals, or one tied to a
+  cycle phase, menopause or pregnancy, the model's pick placed her value
+  against an interval that may not apply and the row did not open for review.
+  Such a row keeps the printed text, binds no interval and goes to review, as
+  the parser's own rows do. A printed range that binds one interval, or none
+  the parser can read, keeps the model's values.
+*/
+function withBoundModelRange(item: ExtractedItem): ExtractedItem {
+  const printed = item.raw_reference_range;
+  if (typeof printed !== 'string' || !bindPrintedRange(printed).ambiguous) return item;
+  return {
+    ...item,
+    normalized_reference_min: null,
+    normalized_reference_max: null,
+    reference_operator: null,
+    reference_operator_value: null,
+    needs_review: true,
+  };
+}
 
 /*
   Mark a report as terminally failed.
@@ -124,7 +184,7 @@ function noteInterpRateLimit(reportId: string, message: string): void {
 }
 
 export function NewReport() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const navigate = useNavigate();
   const submittingRef = useRef(false);
   const [step, setStep] = useState(1);
@@ -177,7 +237,13 @@ export function NewReport() {
   const [chosenLab, setChosenLab] = useState<'quest' | 'labcorp' | null>(null);
   const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
 
+  // The hidden file inputs are opened by real buttons (F064), so each needs a ref.
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const genericFileInputRef = useRef<HTMLInputElement>(null);
+  // A failed save sets the error at the top while the button she pressed is at
+  // the bottom; bumping the tick moves focus to the error so it is read out and seen.
+  const errorRef = useRef<HTMLDivElement>(null);
+  const [errorFocusTick, setErrorFocusTick] = useState(0);
   const userEditedReportItemsRef = useRef(false);
   const userEditedPeriodRef = useRef(false);
   const userEditedCycleLengthRef = useRef(false);
@@ -220,12 +286,14 @@ export function NewReport() {
   const applyExtractedItems = (items: ReportItem[], runId: number) => {
     if (runId !== extractionRunRef.current || !items || items.length === 0 || userEditedReportItemsRef.current) return;
 
-    setReportItems(items);
+    // F022: the parser's review rules hold for model and OCR rows too.
+    const flagged = items.map(withReviewFlags);
+    setReportItems(flagged);
     setCoverage({
-      total_detected: items.length,
-      total_core: items.filter(i => i.is_core_biomarker).length,
-      total_extended: items.filter(i => !i.is_core_biomarker).length,
-      needs_review: items.filter(i => i.needs_review).length,
+      total_detected: flagged.length,
+      total_core: flagged.filter(i => i.is_core_biomarker).length,
+      total_extended: flagged.filter(i => !i.is_core_biomarker).length,
+      needs_review: flagged.filter(i => i.needs_review).length,
     });
   };
 
@@ -453,7 +521,9 @@ export function NewReport() {
         return;
       }
 
-      if (data.items && data.items.length > 0) applyExtractedItems(data.items, runId);
+      // OCR rows are named like report_analytes; the save reads ReportItem names (F093, F114).
+      const items: ExtractedAnalyte[] = data.items ?? [];
+      if (items.length > 0) applyExtractedItems(items.map(a => withBoundModelRange(toExtractedItem(a))), runId);
 
       // Capture cycle metadata from OCR if the text-path didn't already find any.
       // OCR returns metadata.cycle_day / metadata.cycle_phase per the edge function contract.
@@ -500,8 +570,10 @@ export function NewReport() {
         console.warn('[NewReport] AI extraction background warning:', invokeError.message);
         return;
       }
-      if (runId === extractionRunRef.current && data?.items && data.items.length > 0) {
-        applyExtractedItems(data.items, runId);
+      // extract-biomarkers maps its rows with the same toExtractedItem before answering.
+      const items: ExtractedItem[] = data?.items ?? [];
+      if (runId === extractionRunRef.current && items.length > 0) {
+        applyExtractedItems(items.map(withBoundModelRange), runId);
       }
     }).catch(err => {
       console.error('[NewReport] AI extraction background network error:', err);
@@ -509,6 +581,10 @@ export function NewReport() {
       if (runId === extractionRunRef.current) setAiRefining(false);
     });
   };
+
+  useEffect(() => {
+    if (errorFocusTick > 0) errorRef.current?.focus();
+  }, [errorFocusTick]);
 
   const toggleSymptom = (symptom: Symptom) => {
     if (symptoms.includes(symptom)) {
@@ -525,9 +601,18 @@ export function NewReport() {
 
   // A typed length that is not a whole number of days within the bounds.
   const cycleLengthInvalid = cycleLengthInput.trim() !== '' && parseCycleLengthDays(cycleLengthInput) === null;
+  // F022: probably misread values she has not yet marked correct, corrected or removed.
+  const awaitingConfirmation = reportItems.filter(awaitsHerConfirmation).length;
+  // IA2 review wave 2: values in another unit Amani cannot check; Save stays open.
+  const awaitingCheck = reportItems.filter(awaitsHerCheck).length;
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
+    // F065: offline nothing can be saved, so send nothing and say so.
+    if (isOffline) {
+      setError("You're offline, so your report hasn't been saved yet. Connect to the internet, then try again.");
+      return;
+    }
     submittingRef.current = true;
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -582,7 +667,7 @@ export function NewReport() {
         submission_mode: 'standard',
       };
 
-      const { data: reportData, error: reportError } = await supabase
+      const { data: reportData, error: reportError, status: reportStatus } = await supabase
         .from('lab_reports')
         .insert({
           user_id: user.id,
@@ -602,6 +687,12 @@ export function NewReport() {
         .single();
 
       if (reportError) {
+        // F065: a 4xx means the server refused the row, so nothing will ever
+        // point at the file just stored: remove it. With no answer, or a 5xx
+        // from a gateway, the row may exist after all, so the file stays.
+        if (fileUrl && reportStatus >= 400 && reportStatus < 500) {
+          void supabase.storage.from('lab-files').remove([fileUrl]);
+        }
         throw new Error(`Failed to create report record: ${reportError.message}`);
       }
       createdReportId = reportData.id;
@@ -643,13 +734,16 @@ export function NewReport() {
       const scorableItemsToSave = allItemsToSave.filter(
         i => i.value_numeric != null && i.value_numeric >= 0 && i.value_numeric <= 100000
       );
+      let primaryCanonicalSlug: BiomarkerName | null = null;
 
       if (allItemsToSave.length > 0) {
         const coreItems = scorableItemsToSave.filter(i => i.is_core_biomarker && i.canonical_slug);
         if (coreItems.length > 0) {
+          // Review F012: her declared pregnancy withholds the stored flag too.
+          const declaredState = stateFromPregnancyStatus(userProfile?.pregnancy_status);
           const biomarkerInserts = coreItems.map(item => {
             const slug = item.canonical_slug! as BiomarkerName;
-            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase);
+            const status = computeAmaniStatus(slug, item.value_numeric!, cyclePhase, declaredState, item._normalized_unit ?? item.unit ?? '', item.value_text);
             let flagged: 'in_range' | 'borderline' | 'out_of_range' | 'unknown' = 'in_range';
             if (status === 'borderline_low' || status === 'borderline_high') flagged = 'borderline';
             else if (status === 'out_of_range_low' || status === 'out_of_range_high') flagged = 'out_of_range';
@@ -665,6 +759,27 @@ export function NewReport() {
               flagged,
             };
           });
+          // Use the report page's primary selection on the first generation,
+          // too. Previously only manual regenerations sent this pin, so the
+          // model could lead with a different marker before the page opened.
+          // F022: the page picks its primary from her confirmed values only,
+          // judged by the review columns each report_analytes row gets below,
+          // so a value she has not confirmed is no pin either.
+          const unconfirmed = unconfirmedReadingKeys(coreItems.map(item => ({
+            lab_report_id: createdReportId!,
+            canonical_slug: item.canonical_slug,
+            value_numeric: item.value_numeric,
+            raw_value_text: item.value_text ?? null,
+            confidence_score: item.confidence_score ?? 'low',
+            needs_review: (item.needs_review ?? false) && item.reviewed_by_user !== true,
+            reviewed_by_user: item.reviewed_by_user ?? false,
+            review_status: item.review_status ?? 'pending',
+          })));
+          // F012, F021: the page reads each value with her declared state and its printed text.
+          primaryCanonicalSlug = buildInsightSummary(biomarkerInserts.filter(b => !isUnconfirmedBiomarker(b, unconfirmed)).map(b => ({
+            key: b.name, value: b.value!, unit: b.unit, valueText: b.raw_value_text,
+            labRefMin: b.reference_min, labRefMax: b.reference_max,
+          })), null, cyclePhase, null, declaredState).primaryFinding?.key ?? null;
 
           const { error: biomarkerError } = await supabase
             .from('biomarkers')
@@ -706,8 +821,10 @@ export function NewReport() {
             confidence_score: item.confidence_score ?? 'low',
             canonical_analyte_id: canonicalAnalyteId,
             canonical_slug: slug,
-            parse_status: isMapped ? (canonicalAnalyteId ? 'mapped' : 'partial') : 'unmapped',
-            needs_review: item.needs_review ?? false,
+            // A unit-mismatch item is partial, not unmapped: its name resolved (F011).
+            parse_status: isMapped ? (canonicalAnalyteId ? 'mapped' : 'partial') : (item.normalization_status === 'partial' ? 'partial' : 'unmapped'),
+            // F022: still flagged and not confirmed by her (marked correct or corrected).
+            needs_review: (item.needs_review ?? false) && item.reviewed_by_user !== true,
             is_core: item.is_core_biomarker ?? false,
             display_name: item._display_name ?? null,
             system_category: item._system_category ?? null,
@@ -769,7 +886,7 @@ export function NewReport() {
       setSubmitStep('interpreting');
       void firstPartyEvents.track('report_parsed');
       supabase.functions.invoke('generate-interpretation', {
-        body: { reportId: createdReportId },
+        body: { reportId: createdReportId, primary_canonical_slug: primaryCanonicalSlug },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -809,9 +926,11 @@ export function NewReport() {
       }
       setPendingNavigation(`/app/reports/${createdReportId}`);
 
-    } catch (err) {
-      const msg = errorMessage(err, 'An error occurred');
-      setError(msg);
+    } catch {
+      // F065: plain words. The raw message ("File upload failed: Failed to
+      // fetch") tells her nothing she can act on.
+      setError("We couldn't save your report. Check your connection, then try again.");
+      setErrorFocusTick(tick => tick + 1);
       setLoading(false);
       setStep(3);
       setSubmitStep(null);
@@ -893,7 +1012,12 @@ export function NewReport() {
         </div>
 
         {error && (
-          <div className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg mb-6">
+          <div
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+            className="bg-theme-flag-low-bg border border-theme-flag-low-border text-theme-flag-low px-4 py-3 rounded-lg mb-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+          >
             {error}
           </div>
         )}
@@ -958,16 +1082,21 @@ export function NewReport() {
 
               {/* Generic file upload */}
               <div>
+                {/* The input stays display:none; this button is the focusable control that opens it (F064). */}
                 <input
+                  ref={genericFileInputRef}
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={handleFileChange}
                   className="hidden"
                   id="file-upload"
+                  tabIndex={-1}
+                  aria-hidden="true"
                 />
-                <label
-                  htmlFor="file-upload"
-                  className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none
+                <button
+                  type="button"
+                  onClick={() => genericFileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-3 w-full min-h-[140px] rounded-xl border-2 border-dashed cursor-pointer transition-all active:scale-[0.98] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background
                     ${file
                       ? 'border-theme-flag-ok-border bg-theme-flag-ok-bg/60'
                       : 'border-theme-neutral-300 hover:border-theme-primary hover:bg-theme-background/60'
@@ -982,16 +1111,16 @@ export function NewReport() {
                   ) : (
                     <>
                       <Upload className="w-9 h-9 text-theme-neutral-400" />
-                      <div className="text-center px-4">
-                        <p className="text-sm font-medium text-theme-neutral-700">
+                      <span className="block text-center px-4">
+                        <span className="block text-sm font-medium text-theme-neutral-700">
                           <span className="text-theme-primary">Choose a file</span>
                           <span className="hidden sm:inline"> or drag and drop</span>
-                        </p>
-                        <p className="text-xs text-theme-neutral-400 mt-1">PDF, JPG, or PNG</p>
-                      </div>
+                        </span>
+                        <span className="block text-xs text-theme-neutral-400 mt-1">PDF, JPG, or PNG</span>
+                      </span>
                     </>
                   )}
-                </label>
+                </button>
 
                 {/* Camera capture — native only */}
                 {isNative() && (
@@ -1108,17 +1237,23 @@ export function NewReport() {
                     Open MyQuest <ExternalLink className="w-4 h-4" />
                   </a>
 
-                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Quest PDF
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={handleGuidedUploadFile}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleGuidedUploadFile}
+                    className="hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
               </>
             ) : (
@@ -1157,16 +1292,23 @@ export function NewReport() {
                     Open Labcorp <ExternalLink className="w-4 h-4" />
                   </a>
 
-                  <label className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl bg-theme-primary text-white text-sm font-semibold hover:bg-theme-primary-dark transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background"
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Labcorp PDF
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={handleGuidedUploadFile}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleGuidedUploadFile}
+                    className="hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
               </>
             )}
@@ -1273,7 +1415,8 @@ export function NewReport() {
                 <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mb-5">
                   <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-theme-flag-watch">
-                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''} — you can still continue, Amani will use what it understood
+                    {/* IA2 review: only what the web app holds today; the server's AI reads are handoffs. */}
+                    We couldn't fully read {coverage.needs_review} item{coverage.needs_review !== 1 ? 's' : ''}. Check them on the next step. Until you confirm a value we may have misread, it is left out of your report's main finding, focus areas and changes, and out of your Tracker charts. AI summaries and insights may still include it.
                   </p>
                 </div>
               )}
@@ -1297,7 +1440,9 @@ export function NewReport() {
                         <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-theme-neutral-50">
                           <span className="text-sm text-theme-neutral-800 font-medium truncate max-w-[60%]">{reportItemDisplayName(item)}</span>
                           <span className="text-sm text-theme-neutral-500 ml-2 flex-shrink-0">
-                            {item.value_text && (item.value_numeric == null || item.value_numeric === 0)
+                            {isCensoredValue(item.value_text)
+                              ? `${item.value_text}${item.unit ? ' ' + item.unit : ''}`
+                              : item.value_text && (item.value_numeric == null || item.value_numeric === 0)
                               ? item.value_text
                               : item.value_numeric != null
                                 ? `${item.value_numeric}${item.unit ? ' ' + item.unit : ''}`
@@ -1333,7 +1478,7 @@ export function NewReport() {
                     <p className="text-xs text-theme-neutral-500">Amani counts the cycle day of your test from the day your last period started.</p>
                   </div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-sm font-medium text-theme-neutral-700">Last period start</label>
+                    <label htmlFor="last-period-start" className="text-sm font-medium text-theme-neutral-700">Last period start</label>
                     {fetchingPeriod && (
                       <span className="flex items-center gap-1 text-xs text-theme-neutral-400">
                         <Loader2 className="w-3 h-3 animate-spin" /> Looking up tracker...
@@ -1346,6 +1491,7 @@ export function NewReport() {
                     )}
                   </div>
                   <input
+                    id="last-period-start"
                     type="date"
                     value={lastPeriodDate}
                     onChange={e => {
@@ -1401,8 +1547,10 @@ export function NewReport() {
                     {SYMPTOMS.map(symptom => (
                       <button
                         key={symptom.value}
+                        type="button"
+                        aria-pressed={symptoms.includes(symptom.value)}
                         onClick={() => toggleSymptom(symptom.value)}
-                        className={`px-3.5 py-1.5 rounded-full border-2 text-sm transition-all ${
+                        className={`px-3.5 py-1.5 min-h-[44px] rounded-full border-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background ${
                           symptoms.includes(symptom.value)
                             ? 'border-theme-primary bg-theme-primary/10 text-theme-primary font-medium'
                             : 'border-theme-neutral-200 text-theme-neutral-600 hover:border-theme-neutral-300'
@@ -1492,7 +1640,9 @@ export function NewReport() {
                   userEditedReportItemsRef.current = true;
                   setReportItems(prev => {
                     const updated = [...prev];
-                    updated[index] = { ...updated[index], [field]: value } as ReportItem;
+                    const current = updated[index];
+                    // Her edited value replaces the printed text, so a printed '<8' cannot outlive it (F021, IB1).
+                    if (current) updated[index] = applyReviewEdit(current, field, value);
                     return updated;
                   });
                 }}
@@ -1525,11 +1675,29 @@ export function NewReport() {
               />
             )}
 
+            {awaitingConfirmation > 0 && (
+              <div role="status" data-testid="confirm-misread" className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mt-6">
+                <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-theme-flag-watch">
+                  Amani may have misread {awaitingConfirmation} value{awaitingConfirmation !== 1 ? 's' : ''}. Mark {awaitingConfirmation !== 1 ? 'each' : 'it'} as correct, fix it, or remove it to save.
+                </p>
+              </div>
+            )}
+
+            {awaitingCheck > 0 && (
+              <div role="status" data-testid="check-unit" className="flex items-start gap-2.5 px-4 py-3 rounded-xl border border-theme-flag-watch-border bg-theme-flag-watch-bg mt-6">
+                <AlertTriangle className="w-4 h-4 text-theme-flag-watch flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-theme-flag-watch">
+                  Amani can't check {awaitingCheck} value{awaitingCheck !== 1 ? 's' : ''} in the unit{awaitingCheck !== 1 ? 's' : ''} printed. Check {awaitingCheck !== 1 ? 'them' : 'it'} against your report, then mark {awaitingCheck !== 1 ? 'each' : 'it'} as correct or fix it.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-between pt-6">
               <Button variant="secondary" onClick={() => setStep(2)}>
                 <ArrowLeft className="w-5 h-5 mr-2" />Back
               </Button>
-              <Button onClick={handleSubmit} disabled={loading || extracting}>
+              <Button onClick={handleSubmit} disabled={loading || extracting || awaitingConfirmation > 0}>
                 {loading ? 'Processing...' : extracting ? 'Reading report...' : 'Save and analyze'}
               </Button>
             </div>

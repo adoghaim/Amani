@@ -4,15 +4,23 @@ import { z } from "npm:zod@3.25.76";
 // so anything that flows from here into the OpenAI prompt is a prompt-
 // injection surface. Accept only the four expected fields, bound symptom
 // strings, and reject anything else. Unknown values become undefined.
+//
+// Each field is checked on its own (review F018): an invalid one becomes
+// undefined instead of failing the whole object, which used to discard her
+// symptoms with it. So "unsure", which the upload screen writes for the
+// questions it does not ask, reads as absent, as does any other value.
+const yesNo = z.enum(["yes", "no"]).optional().catch(undefined);
+
 export const LabReportContextSchema = z
   .object({
-    birth_control: z.enum(["yes", "no"]).optional(),
-    pregnant: z.enum(["yes", "no"]).optional(),
-    postpartum: z.enum(["yes", "no"]).optional(),
+    birth_control: yesNo,
+    pregnant: yesNo,
+    postpartum: yesNo,
     top_symptoms: z
       .array(z.string())
       .transform((arr) => arr.map((s) => s.slice(0, 80)).slice(0, 10))
-      .optional(),
+      .optional()
+      .catch(undefined),
   })
   .strip();
 

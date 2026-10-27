@@ -48,6 +48,7 @@ export function ResultRow({ analyte, cyclePhase }: ResultRowProps) {
     analyte.normalized_max,
     analyte.normalized_operator,
     analyte.normalized_operator_value,
+    analyte.raw_value_text,
   );
   const ranges = printedRanges(analyte.raw_reference_range, analyte.reference_candidates);
   const applies = applicableRangeIndex(ranges, cyclePhase);

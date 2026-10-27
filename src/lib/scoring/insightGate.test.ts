@@ -130,9 +130,9 @@ describe('B1 — no pattern is asserted from an input Amani withholds', () => {
   it('ReportView renders only gated, authorized insight flags', () => {
     const source = readFileSync('src/pages/ReportView.tsx', 'utf8');
     expect(source.match(/evaluateInsightRules\(/g)).toHaveLength(1);
-    expect(source).toMatch(/gateInsightMatches\(\s*evaluateInsightRules\(biomarkers, report\?\.estimated_cycle_phase\),\s*biomarkers,\s*contextFromReport\(report\?\.estimated_cycle_phase\),?\s*\)/);
+    expect(source).toMatch(/gateInsightMatches\(\s*evaluateInsightRules\(biomarkers, report\?\.estimated_cycle_phase\),\s*biomarkers,\s*contextFromReport\(report\?\.estimated_cycle_phase, declaredState\),?\s*\)/);
     // Amendment 4 R2: the gated matches are then rendered through the authorized-language function.
-    expect(source).toMatch(/authorizeInsightMatches\(\s*gateInsightMatches\(\s*evaluateInsightRules\([^)]*\),[^)]*\),\s*\),\s*biomarkers,\s*contextFromReport\(report\?\.estimated_cycle_phase\),?\s*\)/);
+    expect(source).toMatch(/authorizeInsightMatches\(\s*gateInsightMatches\(\s*evaluateInsightRules\([^)]*\),[^)]*\),\s*\),\s*biomarkers,\s*contextFromReport\(report\?\.estimated_cycle_phase, declaredState\),?\s*\)/);
     expect(source).toMatch(/<InsightFlagsPanel flags=\{insightFlags\} \/>/);
   });
 });

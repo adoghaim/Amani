@@ -6,7 +6,8 @@ export default defineConfig({
     ? '**/artifact-probe.spec.ts'
     : ['**/smoke.spec.ts', '**/network-guard.spec.ts', '**/reports/context-suppression.spec.ts',
       '**/reports/clinical-language-policy.spec.ts', '**/interpretation/version-regeneration.spec.ts',
-      '**/interpretation/regeneration-failure.spec.ts', '**/reports/report-header.spec.ts', '**/runtime-config.spec.ts', '**/update-gate.spec.ts', '**/device-lock.spec.ts', '**/billing/checkout-promo-code.spec.ts', '**/consent/consent-gate.spec.ts', '**/signup/first-party-events.spec.ts', '**/reports/report-problem.spec.ts', '**/extraction/confirm-markers.spec.ts'],
+      '**/reports/lab-critical-flag.spec.ts',
+      '**/interpretation/regeneration-failure.spec.ts', '**/reports/report-header.spec.ts', '**/runtime-config.spec.ts', '**/update-gate.spec.ts', '**/device-lock.spec.ts', '**/billing/checkout-promo-code.spec.ts', '**/billing/manage-portal.spec.ts', '**/billing/existing-plan.spec.ts','**/consent/consent-gate.spec.ts', '**/signup/first-party-events.spec.ts', '**/reports/report-problem.spec.ts', '**/extraction/confirm-markers.spec.ts', '**/offline.spec.ts', '**/upload-keyboard.spec.ts', '**/extraction/confirm-misread.spec.ts'],
   // The redirect race is an explicit diagnostic opt-in, excluded from the CI gate.
   ...(process.env.E2E_QUARANTINE === '1'
     ? { grep: /@quarantine/ }
@@ -14,6 +15,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // The retry only keeps a trace of the first failure. A test that fails once and
+  // passes on retry still fails the CI run (review F102).
+  failOnFlakyTests: !!process.env.CI,
   workers: process.env.CI ? 2 : undefined,
   timeout: 30_000,
   expect: { timeout: 10_000 },

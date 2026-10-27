@@ -12,7 +12,7 @@ Existing workflow `.github/workflows/ci.yml` (seen in the source snapshot; verif
 | `Edge function typecheck` | `bash docs/check-functions.sh deno` (local: `npm run check:functions`). Baseline exclusions may only shrink. |
 | `Migration behaviour (Postgres)` | `./supabase/migrations/__verification__/run.sh` (Docker). It runs every case in `__verification__/cases/` in lexical order; how to add one is in the header of `run.sh`. |
 | `Migration order (D6)` | `.github/workflows/migration-order.yml`, on PRs into `main`: `node tools/ci/migration-order.mjs`. See "Migration order (D6)" below. |
-| `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. |
+| `Browser smoke` (`.github/workflows/e2e.yml`) | `npm run test:e2e:isolation`, then `npm run test:e2e` in Chromium, WebKit and Firefox against the synthetic, network-guarded fixture. Runs on every PR into `main` and every push to `main`. Each browser runs in its own job, `Browser smoke (chromium)`, `(webkit)` and `(firefox)`; the `Browser smoke` job passes only when all three pass, and it is the check to require. |
 
 | `Fresh-user journey` (`.github/workflows/e2e.yml`) | `npm run test:e2e:journey:guard`, then `npm run test:e2e:journey` against the production build in Chromium, WebKit and Firefox. |
 
@@ -61,7 +61,7 @@ Foundation PRs carry the extension points other packets build on (PK-INT-01, PK-
 
 - `npm run cap:sync` (runs `BUILD_TARGET=native vite build && npx cap sync`).
 - **Android:** `cd android && ./gradlew assembleDebug` succeeds (JDK 21, SDK 36, as in `native-grade.md`); CI runs it on every PR (workflow `native-build.yml`). Optional: emulator smoke (app launches, login screen renders, packet screen reachable) via the `android-emulator` job.
-- **iOS:** `xcodebuild` simulator build with signing disabled succeeds (macOS runner; opt-in because of cost). Signed archives and store uploads are **owner-only** and outside the factory.
+- **iOS:** Swift packages resolve from the committed `Package.resolved` with automatic resolution disabled, and the `xcodebuild` simulator build with signing disabled succeeds (macOS runner; CI runs it on PRs that change `ios/**`, `package.json`, `package-lock.json` or `capacitor.config.ts`, or with the `factory:ios` label). Signed archives and store uploads are **owner-only** and outside the factory.
 - Device-only checks (edge-to-edge on Android 15+, purchases, App Links) stay on the release QA checklist; the factory reports them as pending.
 
 ## G3 — Database: migrations, RLS, grants, triggers
@@ -82,6 +82,8 @@ For any packet that adds or changes `supabase/migrations/`:
 - [ ] Ledger `deployed.supabase` updated with date and who ran it.
 
 **V2 post-deploy smoke (PR #93 runbook step 8).** After steps 1-7, the owner runs `node scripts/smoke/v2-post-deploy.mjs --i-understand-this-hits-production` with `SMOKE_SUPABASE_URL`, `SMOKE_SUPABASE_ANON_KEY`, `SMOKE_TEST_EMAIL` and `SMOKE_TEST_PASSWORD` set (names only here; the email must contain `smoke`). Prepare the disposable account first: one synthetic report with no interpretation, entitled to a deep AI generation. It checks first generation, regeneration, returned version identity, old interpretation not overwritten, and account deletion, then deletes the account and prints a pass/fail table (exit 0 only if every row is PASS). Agents never run it against production.
+
+Premium (internal `plus`) is the simplest AI/versioning probe. Free is also valid with Freemium and database visibility enabled and an unused complimentary analysis (one of three used is valid), or existing draw coverage; post-limit generation depends on `FREEMIUM_POST_LIMIT_GENERATION`. The target must have parsed analytes and not be processing. A fallback is not an AI PASS: the script reports its reason, distinguishes BLOCKED preconditions from FAIL, and exits nonzero. See [account setup, reason codes and owner configuration](../docs/qa/smoke-interpretation-2026-10-20/README.md). The draw claim is not keyed by client-editable `report_date`.
 
 **Prepared, not applied (PR #93 "Later").** These live outside `supabase/migrations` so no `db push` can apply them early. Each header holds its own runbook, and `supabase/migrations/__verification__/factory-prepared.run.sh` rehearses both on a disposable clone of the fully migrated harness database.
 - `factory/sql/post-deploy/retire-delete-interpretations.sql`: makes `delete_interpretations` raise. Move it into `supabase/migrations` with a fresh timestamp **only after** the V2 `delete-user-data` is confirmed live (runbook step 5 plus a passing step-8 deletion). Applying it earlier breaks account deletion for everyone, because the deployed function still calls the old name.

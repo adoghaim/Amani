@@ -6,10 +6,16 @@ Swift packages. The SPM manifest references plugins in `node_modules`, which
 are absent from a fresh clone.
 
 The script prints the repository, project, and workflow context, checks required
-build variables, installs Node 24 with Homebrew (the version the GitHub native
-build uses), and prints Node/npm versions. If that formula cannot be installed,
-it installs Homebrew's default Node; Node must still be **22 or newer** for
-Capacitor. It installs locked dependencies with Husky disabled, builds with
+build variables, and reads the Node major from `.nvmrc`, the repository's Node
+pin. It stops if `.nvmrc` is missing, does not start with a numeric major, or
+pins a major below **22** (Capacitor's minimum). It installs that major with
+Homebrew (`node@<major>`) and prints the Node/npm versions. There is no fallback:
+if the formula cannot be installed, or a different major is first on `PATH`, the
+build stops. Homebrew deprecates `node@22` on 2026-10-30 and disables it on
+2027-10-30, so move `.nvmrc` to the next LTS before then. It then checks that
+`package.json`'s version equals every iOS `MARKETING_VERSION` in
+`project.pbxproj`: the device-lock JS gate reads the first and the native privacy
+cover the second. It installs locked dependencies with Husky disabled, builds with
 `BUILD_TARGET=native` (naming the Sentry release after `CI_COMMIT`), runs
 `npx cap sync ios`, and lists the generated web entry point and Capacitor App
 package manifest. Any failed step stops the build.
@@ -45,8 +51,9 @@ Optional or behavioral; follow `.env.example` and the intended release settings:
 
 Open **App Store Connect → Xcode Cloud → Amani Biometrics → Default → Archive - iOS**.
 Configure the workflow variables and select the branch containing this script
-for a build. In the post-clone logs, confirm Node is at least 22, npm installation,
-the native web build, and iOS sync succeed, and both final file paths are listed.
+for a build. In the post-clone logs, confirm Node is the `.nvmrc` major, that the
+version check, npm installation, the native web build, and iOS sync succeed, and
+that both final file paths are listed.
 Then confirm package resolution and the archive succeed.
 
 Before setting the variables, check the workflow's start conditions and post-
@@ -61,6 +68,7 @@ stamped number in the first archive's log. **OWNER DECISION:** use Xcode Cloud
 numbering for releases, or keep distribution manual. This bootstrap does not
 change project versions.
 
-Offline checks cover shell syntax and executable permissions (plus ShellCheck
-when installed). A script-body dry-run is not possible without network access;
-the Homebrew/npm bootstrap and archive need verification in Xcode Cloud.
+`scripts/ci/xcode-cloud-post-clone.test.ts` (part of `npm test`) runs the script
+body against stand-ins for Homebrew, Node, npm and npx: the `.nvmrc` pin, the
+version check and the order of the steps. The real Homebrew/npm bootstrap and
+the archive still need verification in Xcode Cloud.

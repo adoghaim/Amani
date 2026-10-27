@@ -1,7 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
-import { errorMessage } from './errors.ts';
 import { fetchWithBackoff as realFetchWithBackoff } from './fetchWithBackoff.ts';
 import {
   AccountDeletionNotReadyError,
@@ -13,6 +12,8 @@ import {
   StoreSubscriptionAcknowledgementRequiredError,
 } from './account-deletion.ts';
 import { createAppEventSink, logServerEvent } from './app-events.ts';
+import { deleteAllStorageObjects } from './account-deletion-storage.ts';
+import { errorType, scrubbedErrorMessage } from './phi-scrub.ts';
 import {
   ANDROID_PUBLISHER_API,
   GOOGLE_TOKEN_URL,
@@ -20,6 +21,7 @@ import {
   REVENUECAT_SECRET_ENV,
   REVENUECAT_SUBSCRIBERS_API,
   createStoreTeardownActions,
+  StoreTeardownError,
 } from './store-teardown.ts';
 
 /**
@@ -240,16 +242,19 @@ function runHandler(world: {
   expect(start).toBeGreaterThan(0);
   const { code } = transformSync(source.slice(start), { loader: 'ts', target: 'es2022' });
   new Function(
-    'Deno', 'createClient', 'Stripe', 'errorMessage', 'fetchWithBackoff',
+    'Deno', 'createClient', 'Stripe', 'fetchWithBackoff',
     'AccountDeletionNotReadyError', 'checkUserDataTablesReady', 'deleteUserAccount', 'deleteUserDataTables',
     'isMissingTableError', 'MissingTableError', 'StoreSubscriptionAcknowledgementRequiredError',
     'createStoreTeardownActions', 'createAppEventSink', 'logServerEvent',
+    // BS1: the handler's storage step and its failure body and scrubbed log.
+    'StoreTeardownError', 'deleteAllStorageObjects', 'errorType', 'scrubbedErrorMessage',
     code,
   )(
-    Deno, createClient, Stripe, errorMessage, fetchWithBackoff,
+    Deno, createClient, Stripe, fetchWithBackoff,
     AccountDeletionNotReadyError, checkUserDataTablesReady, deleteUserAccount, deleteUserDataTables,
     isMissingTableError, MissingTableError, StoreSubscriptionAcknowledgementRequiredError,
     createStoreTeardownActions, createAppEventSink, logServerEvent,
+    StoreTeardownError, deleteAllStorageObjects, errorType, scrubbedErrorMessage,
   );
   expect(handler).toBeTypeOf('function');
 

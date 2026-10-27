@@ -38,7 +38,7 @@ fi
 printf 'Discovered %s files; checking %s; baseline exclusions %s.\n' \
   "$discovered" "${#files[@]}" "$excluded"
 
-# CI supplies deno; npm supplies npx --yes deno@2 without adding a dependency.
+# CI supplies deno; npm supplies npx --yes deno@2.1.4 without adding a dependency.
 if (( $# == 0 )); then
   set -- deno
 fi

@@ -104,3 +104,14 @@ describe('Tracker labs views: direction in neutral ink, never amber up and green
     expect(up[0]!.className).not.toBe(down[0]!.className);
   });
 });
+
+// Review F013: values in two units are not comparable, so no change is stated.
+describe('Tracker labs views: no change across two units', () => {
+  it('Labs timeline: vitamin D 30 ng/mL then 75 nmol/L has no delta and no highlight', () => {
+    const byReport = { r1: [marker('r1', 'Vitamin D', 30, 'ng/mL')], r2: [marker('r2', 'Vitamin D', 75, 'nmol/L')] };
+    host.innerHTML = renderToStaticMarkup(<LabsTimeline reports={REPORTS} biomarkersByReport={byReport} />);
+    expect(host.textContent).toContain('75 nmol/L');
+    expect(host.textContent).not.toMatch(/\+45|150%|What stood out/);
+    expect(host.querySelector('svg.lucide-arrow-up')).toBeNull();
+  });
+});

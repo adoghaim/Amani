@@ -155,6 +155,11 @@
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."
   },
   {
+    "directory": "src/lib/safety",
+    "mode": "scanned",
+    "reason": "Review F014 interim: the recognizer of the lab's own printed critical flags. Production literals are scanned like every other directory; the notice's words live in insightCopy.ts, the policy author. Tests are excluded."
+  },
+  {
     "directory": "src/lib/scoring",
     "mode": "scanned",
     "reason": "Production literal inventory includes this directory; legacy matches are pinned, not clinically approved. Tests are excluded."

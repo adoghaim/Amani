@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRIVACY_COVER_READY } from './privacyCover';
 
 /*
   PK-DEVICE-01, R15: the native halves of the app-switcher cover. These pin native wiring; tools/device-lock/native-boundary.test.mjs executes
@@ -74,7 +75,34 @@ describe('iOS (D16, D24, R15)', () => {
     expect(body(appDelegate, 'private func showPrivacyCover()')).toContain('UIStoryboard(name: "LaunchScreen", bundle: nil)');
   });
 
+  it('review F002: after a return from the background the cover stays until the page is ready, with a fallback', () => {
+    const active = body(appDelegate, 'func applicationDidBecomeActive');
+    expect(active).toMatch(/guard returningFromBackground, privacyCover != nil else \{\s*hidePrivacyCover\(\)\s*return\s*\}\s*hidePrivacyCoverWhenPageReady\(\)/);
+    expect(body(appDelegate, 'func applicationDidEnterBackground')).toContain('enteredBackground = true');
+    expect(body(appDelegate, 'func applicationWillResignActive')).toContain('coverGeneration += 1');
+    expect(active).toContain('coverGeneration += 1');
+    const deferred = body(appDelegate, 'private func hidePrivacyCoverWhenPageReady()');
+    expect(deferred).toContain('self.coverGeneration == generation');
+    expect(deferred).toContain('DispatchQueue.main.asyncAfter(deadline: .now() + AppDelegate.coverFallbackSeconds, execute: hide)');
+    expect(deferred).toContain('webView.callAsyncJavaScript(AppDelegate.coverReadyScript');
+    expect(appDelegate).toMatch(/coverFallbackSeconds: TimeInterval = 1\.5\b/);
+    // The page-side function AppDelegate awaits is the one the gate defines.
+    expect(appDelegate).toContain(`await window.${PRIVACY_COVER_READY}()`);
+  });
+
   it('declares why it uses Face ID (required, or iOS refuses Face ID)', () => {
     expect(infoPlist).toMatch(/<key>NSFaceIDUsageDescription<\/key>\s*<string>[^<]+<\/string>/);
+  });
+});
+
+describe('review F138: the JS release gate and the native guards read the same version', () => {
+  const pkg = JSON.parse(read('package.json')) as { version: string };
+  const marketing = [...read('ios/App/App.xcodeproj/project.pbxproj').matchAll(/MARKETING_VERSION = ([^;]+);/g)].map(match => match[1]);
+  const versionName = [...read('android/app/build.gradle').matchAll(/versionName\s+"([^"]+)"/g)].map(match => match[1]);
+
+  it('package.json (__APP_RELEASE__) equals both iOS MARKETING_VERSION entries and Android versionName', () => {
+    expect(marketing).toHaveLength(2);
+    expect(versionName).toHaveLength(1);
+    expect({ ios: marketing, android: versionName }).toEqual({ ios: [pkg.version, pkg.version], android: [pkg.version] });
   });
 });

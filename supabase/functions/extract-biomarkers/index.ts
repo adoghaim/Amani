@@ -1,10 +1,12 @@
 import "jsr:@supabase/functions-js@2.105.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { fetchWithBackoff } from "../_shared/fetchWithBackoff.ts";
-import { errorMessage } from "../_shared/errors.ts";
+import { errorType, scrubbedErrorMessage, scrubServerText } from "../_shared/phi-scrub.ts";
+import { chatCompletionParams, resolveOpenAiModel } from "../_shared/openai-models.ts";
 import { redactLabText } from "../_shared/lab-text-redaction.ts";
 import { consentRefusal } from "../_shared/consent.ts";
 import { consentGateFor } from "../_shared/consent-gate-supabase.ts";
+import { toExtractedItem, type ExtractedAnalyte as ReportAnalyte } from "../_shared/lab-extraction.ts";
 import { ExtractBiomarkersRequestSchema } from "../_shared/schemas/requests.ts";
 import { entitlementUnavailable } from "../_shared/entitlement-response.ts";
 import { checkUserSubscription } from "../_shared/subscription-guard.ts";
@@ -12,6 +14,7 @@ import { enforceRateLimit, isRateLimitExceeded } from "../_shared/rate-limit.ts"
 import { createRateLimitStore } from "../_shared/rate-limit-store.ts";
 import { aiPausedBody } from "../_shared/ai-pause.ts";
 import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+import { censoredPlaceholder } from "../_shared/censored-value.ts";
 
 // PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
 // AI cost ledger, and the kill switch. Once per isolate.
@@ -35,26 +38,6 @@ interface CanonicalAnalyte {
   is_ratio: boolean;
   affects_scoring: boolean;
   affects_recommendations: boolean;
-}
-
-interface ReportAnalyte {
-  raw_name: string;
-  raw_value_text: string | null;
-  value_numeric: number;
-  unit: string | null;
-  raw_reference_range: string | null;
-  normalized_min: number | null;
-  normalized_max: number | null;
-  normalized_operator: string | null;
-  normalized_operator_value: number | null;
-  source_snippet: string | null;
-  confidence_score: "high" | "medium" | "low";
-  canonical_analyte_id: string | null;
-  canonical_slug: string | null;
-  parse_status: "mapped" | "partial" | "unmapped";
-  needs_review: boolean;
-  is_core: boolean;
-  category: string | null;
 }
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -342,6 +325,7 @@ CRITICAL RULES:
 11. Extract units exactly as shown; use null if not present
 12. Preserve reference ranges exactly as shown in raw_reference_range
 13. raw_name must be the EXACT label as printed on the report — do not normalize or abbreviate
+14. value_text must be the result EXACTLY as printed, keeping any comparator ("<", ">", "≤", "≥", "OR ="); for a comparator result value_numeric is only a storage placeholder
 
 CANONICAL SLUG MAPPING (use these slugs when the test EXACTLY matches, null otherwise):
 Hormones: estradiol, progesterone, lh, fsh, amh, total_testosterone, free_testosterone, dheas, prolactin, fasting_insulin, shbg
@@ -432,6 +416,7 @@ CONFIDENCE:
 
     const userPrompt = `Extract ALL lab test results from this report. Include every item with a numeric result.\n\n${labText}\n\nReturn JSON: { "items": [...] }`;
 
+    const model = resolveOpenAiModel("extraction", (name) => Deno.env.get(name));
     const openaiResponse = await fetchWithBackoff(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -441,13 +426,12 @@ CONFIDENCE:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          max_tokens: 4000,
-          temperature: 0.1,
+          ...chatCompletionParams(model, { maxOutputTokens: 4000, temperature: 0.1 }),
           response_format: { type: "json_object" }
         }),
       },
@@ -456,15 +440,17 @@ CONFIDENCE:
 
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.text();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData}`);
+      // F033: the body can echo report content, so it is scrubbed in the log and
+      // kept out of the thrown message (which reaches the client).
+      console.error("OpenAI API error:", openaiResponse.status, scrubServerText(errorData));
+      throw new Error(`OpenAI API error: status ${openaiResponse.status}`);
     }
 
     const openaiData = await openaiResponse.json();
     inBackground(costLedger.record({
       functionName: "extract-biomarkers",
       userId: user.id,
-      model: typeof openaiData?.model === "string" ? openaiData.model : "gpt-4o-mini",
+      model: typeof openaiData?.model === "string" ? openaiData.model : model,
       usage: openaiData?.usage,
     }));
     const content = openaiData.choices[0].message.content;
@@ -495,19 +481,12 @@ CONFIDENCE:
       rawItems = [];
     }
 
+    // F021: a comparator result's number is derived from its printed text, never
+    // from the model, in every comparator form the rules above name ("> OR = 60",
+    // "≤", "≥"). raw_value_text keeps the text, which readers treat as authority.
     for (const item of rawItems) {
-      if ((item.value_numeric === 0 || item.value_numeric == null) && item.value_text) {
-        const comparatorMatch = String(item.value_text).match(/^([<>]=?)\s*(\d+(?:\.\d+)?)/);
-        if (comparatorMatch) {
-          const threshold = parseFloat(comparatorMatch[2]);
-          const op = comparatorMatch[1];
-          if (op.startsWith('<')) {
-            item.value_numeric = threshold / 2;
-          } else {
-            item.value_numeric = threshold;
-          }
-        }
-      }
+      const placeholder = censoredPlaceholder(item.value_text);
+      if (placeholder !== null) item.value_numeric = placeholder;
     }
 
     const reportAnalytes: ReportAnalyte[] = rawItems
@@ -584,30 +563,14 @@ CONFIDENCE:
       metadata: { ...coverage },
     }).then(() => {});
 
-    const legacyItems = validatedAnalytes.map(a => ({
-      raw_name: a.raw_name,
-      canonical_slug: a.canonical_slug,
-      category: a.category,
-      value_numeric: a.value_numeric,
-      value_text: a.raw_value_text,
-      unit: a.unit,
-      raw_reference_range: a.raw_reference_range,
-      normalized_reference_min: a.normalized_min,
-      normalized_reference_max: a.normalized_max,
-      reference_operator: a.normalized_operator,
-      reference_operator_value: a.normalized_operator_value,
-      confidence_score: a.confidence_score,
-      needs_review: a.needs_review,
-      is_core_biomarker: a.is_core,
-      source_snippet: a.source_snippet,
-    }));
+    const legacyItems = validatedAnalytes.map(toExtractedItem);
 
     return new Response(
       JSON.stringify({ items: legacyItems, analytes: validatedAnalytes, coverage }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error extracting biomarkers:", error);
+    console.error("Error extracting biomarkers:", errorType(error), scrubbedErrorMessage(error));
 
     if (isRateLimitExceeded(error)) {
       return new Response(
@@ -618,7 +581,7 @@ CONFIDENCE:
 
     inBackground(reporter.captureException(error, { stage: "extract" }));
     return new Response(
-      JSON.stringify({ error: errorMessage(error) }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

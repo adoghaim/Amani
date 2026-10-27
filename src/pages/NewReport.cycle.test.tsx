@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cycleContextCard } from '../lib/cycleContextCard';
 import { assessAmaniContext, contextFromReport } from '../lib/scoring/amaniContext';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   PK-FIX-06 on the real upload page. NewReport is rendered in jsdom against a
@@ -19,6 +20,10 @@ const fixture = vi.hoisted(() => ({
   inserts: [] as { table: string; values: unknown }[],
   // Cycle facts printed on the lab report, as the OCR function returns them.
   ocrMetadata: undefined as { cycle_day?: number | null; cycle_phase?: string | null } | undefined,
+  ocrItems: null as ExtractedAnalyte[] | null,
+  generationBodies: [] as Record<string, unknown>[],
+  // Her declared reproductive status (review F012); none unless a case sets one.
+  profile: null as { pregnancy_status: string | null } | null,
 }));
 
 vi.mock('../lib/supabase', () => {
@@ -42,21 +47,26 @@ vi.mock('../lib/supabase', () => {
     return builder;
   };
   // An estradiol result, so the biomarkers insert shows whether V2 withholds it.
-  const ocrItems = [{
-    raw_name: 'Estradiol', canonical_slug: 'estradiol', category: 'hormones', value_numeric: 150, value_text: '150',
-    unit: 'pg/mL', raw_reference_range: null, normalized_reference_min: null, normalized_reference_max: null,
-    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-    needs_review: false, source_snippet: 'Estradiol 150 pg/mL', source_format: 'ocr', review_status: 'pending',
+  // parse-lab-report-ocr's own row shape (review F093), not the app's ReportItem.
+  const ocrItems: ExtractedAnalyte[] = [{
+    raw_name: 'Estradiol', raw_value_text: '150', value_numeric: 150, unit: 'pg/mL',
+    raw_reference_range: null, normalized_min: null, normalized_max: null,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: 'Estradiol 150 pg/mL',
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug: 'estradiol', parse_status: 'mapped',
+    needs_review: false, is_core: true, category: 'hormones',
   }];
   return { supabase: {
     from: query,
     auth: { getSession: async () => ({ data: { session: { access_token: 'synthetic-token' } } }) },
     storage: { from: () => ({ upload: async () => ({ error: null }) }) },
-    functions: { invoke: async (name: string) => (name === 'parse-lab-report-ocr'
-      ? { data: { items: ocrItems, metadata: fixture.ocrMetadata }, error: null } : { data: null, error: null }) },
+    functions: { invoke: async (name: string, options: { body: Record<string, unknown> }) => {
+      if (name === 'parse-lab-report-ocr') return { data: { items: fixture.ocrItems ?? ocrItems, metadata: fixture.ocrMetadata }, error: null };
+      if (name === 'generate-interpretation') fixture.generationBodies.push(options.body);
+      return { data: null, error: null };
+    } },
   } };
 });
-vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: fixture.user, userProfile: fixture.profile }) }));
 vi.mock('../lib/native', () => ({
   isNative: () => false,
   captureLabPhoto: vi.fn(),
@@ -95,6 +105,9 @@ beforeEach(() => {
   fixture.periodLogs = [];
   fixture.inserts = [];
   fixture.ocrMetadata = undefined;
+  fixture.ocrItems = null;
+  fixture.generationBodies = [];
+  fixture.profile = null;
   mount();
 });
 afterEach(async () => {
@@ -167,6 +180,88 @@ async function save() {
     estradiolFlag: biomarkers?.find(b => b['name'] === 'estradiol')?.['flagged'],
   };
 }
+
+it('October smoke: first generation pins the same Vitamin D primary as the report page', async () => {
+  // parse-lab-report-ocr's own row shape (review F093), like the estradiol row above.
+  const panel: [slug: string, name: string, value: number, unit: string, min: number, max: number, category: string][] = [
+    ['ferritin', 'Ferritin', 18, 'ng/mL', 16, 154, 'nutrients'],
+    ['tsh', 'TSH', 2.85, 'uIU/mL', 0.4, 4.5, 'thyroid'],
+    ['vitamin_d_25_oh', 'Vitamin D', 24, 'ng/mL', 30, 100, 'nutrients'],
+  ];
+  fixture.ocrItems = panel.map(([slug, name, value, unit, min, max, category]) => ({
+    raw_name: name, raw_value_text: String(value), value_numeric: value, unit,
+    raw_reference_range: `${min}-${max}`, normalized_min: min, normalized_max: max,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: `${name} ${value}`,
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped',
+    needs_review: false, is_core: true, category,
+  }));
+  await openCycleStep();
+  await save();
+  // The pin is computed from the rows the report page reads back, each with
+  // her lab's printed value text and interval.
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => [b['name'], b['raw_value_text'], b['reference_min'], b['reference_max']])).toEqual([
+    ['ferritin', '18', 16, 154], ['tsh', '2.85', 0.4, 4.5], ['vitamin_d_25_oh', '24', 30, 100],
+  ]);
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: 'vitamin_d_25_oh' }]);
+});
+
+/*
+  The report page builds its primary with her declared reproductive status
+  (review F012) and each value's printed text (F021), so the pin is built the
+  same way. Rows as parse-lab-report-ocr returns them; synthetic values.
+*/
+const ocrRow = (
+  slug: string, name: string, value: number, text: string, unit: string,
+  min: number | null, max: number | null, category: string,
+): ExtractedAnalyte => ({
+  raw_name: name, raw_value_text: text, value_numeric: value, unit,
+  raw_reference_range: min !== null && max !== null ? `${min}-${max}` : null, normalized_min: min, normalized_max: max,
+  normalized_operator: null, normalized_operator_value: null, source_snippet: `${name} ${text}`,
+  confidence_score: 'high', canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped',
+  needs_review: false, is_core: true, category,
+});
+/** The October smoke values, with or without the ranges her lab printed. */
+const octoberRows = (printedRanges = true) => [
+  ocrRow('ferritin', 'Ferritin', 18, '18', 'ng/mL', printedRanges ? 16 : null, printedRanges ? 154 : null, 'nutrients'),
+  ocrRow('tsh', 'TSH', 2.85, '2.85', 'uIU/mL', printedRanges ? 0.4 : null, printedRanges ? 4.5 : null, 'thyroid'),
+  ocrRow('vitamin_d_25_oh', 'Vitamin D', 24, '24', 'ng/mL', printedRanges ? 30 : null, printedRanges ? 100 : null, 'nutrients'),
+];
+
+it('October smoke, Pregnant declared: every band is withheld and her lab-flagged Vitamin D is the pin (Ruling 7)', async () => {
+  fixture.profile = { pregnancy_status: 'Pregnant' };
+  fixture.ocrItems = octoberRows();
+  await openCycleStep();
+  await save();
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => [b['name'], b['flagged']])).toEqual([
+    ['ferritin', 'unknown'], ['tsh', 'unknown'], ['vitamin_d_25_oh', 'unknown'],
+  ]);
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: 'vitamin_d_25_oh' }]);
+});
+
+it.each([
+  [null, 'vitamin_d_25_oh'],
+  ['Pregnant', null],
+])('October smoke values without printed ranges, %j declared: the pin is %j', async (status, pin) => {
+  fixture.profile = { pregnancy_status: status };
+  fixture.ocrItems = octoberRows(false);
+  await openCycleStep();
+  await save();
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: pin }]);
+});
+
+it('eGFR printed "> OR = 60" beside a ferritin inside its band: no pin, as no primary on the page', async () => {
+  fixture.ocrItems = [
+    ocrRow('egfr', 'eGFR', 60, '> OR = 60', 'mL/min/1.73m2', 60, 200, 'kidney'),
+    ocrRow('ferritin', 'Ferritin', 40, '40', 'ng/mL', 13, 150, 'nutrients'),
+  ];
+  await openCycleStep();
+  await save();
+  const saved = fixture.inserts.find(i => i.table === 'biomarkers')?.values as Record<string, unknown>[] | undefined;
+  expect(saved?.map(b => [b['name'], b['raw_value_text']])).toEqual([['egfr', '> OR = 60'], ['ferritin', '40']]);
+  expect(fixture.generationBodies).toEqual([{ reportId: 'report-fix06', primary_canonical_slug: null }]);
+});
 
 /*
   Acceptance table (owner decision D13): days 1-40 x typical cycle lengths

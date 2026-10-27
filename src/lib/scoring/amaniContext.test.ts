@@ -33,6 +33,9 @@ const valuesFor = (key: BiomarkerName) => {
 const statusOf = (key: BiomarkerName, phase: string | null) =>
   ANALYTE_CONTEXT.find(a => a.key === key)!.bands.find(b => b.kind === 'amani_context' && b.phase === phase)!.provenance.review_status;
 
+const hasAnyBound = (e: { optimal: { min: number | null; max: number | null }; clinical: { min: number | null; max: number | null } }) =>
+  [e.optimal.min, e.optimal.max, e.clinical.min, e.clinical.max].some(b => b !== null);
+
 describe('invariant 4 — missing physiological context withholds the Amani score', () => {
   it('derives cycle dependence from catalog data, not a fixed list', () => {
     expect(cycleKeys.length).toBeGreaterThan(0);
@@ -128,6 +131,8 @@ describe('invariant 2 — the Amani band carries its review status', () => {
       const phases = requiresCycleContext(e.key) ? MENSTRUAL_PHASES.filter(p => e.phaseRanges?.[p]) : [null];
       for (const phase of phases) {
         const a = assessAmaniContext(e.key, 1, contextFromReport(phase));
+        // Review F097: a band with no bound at all (ana_screen) is no band.
+        if (!hasAnyBound(e)) { expect(a.kind, e.key).toBe('unavailable'); continue; }
         expect(a.kind).toBe('scored');
         if (a.kind !== 'scored') continue;
         expect(a.band.provenance.review_status).toBe(statusOf(e.key, phase));
@@ -223,6 +228,7 @@ describe('invariant 1 — the Amani band is never the lab_reference row', () => 
     for (const e of getAllEntries()) {
       if (requiresCycleContext(e.key)) continue;
       const a = assessAmaniContext(e.key, 1, contextFromReport(null));
+      if (!hasAnyBound(e)) { expect(a.kind, e.key).toBe('unavailable'); continue; }
       expect(a.kind).toBe('scored');
       if (a.kind === 'scored') expect({ min: a.band.min, max: a.band.max }).toEqual(e.optimal);
     }

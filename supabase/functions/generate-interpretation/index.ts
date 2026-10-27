@@ -57,6 +57,16 @@ import {
 } from "../_shared/schemas/context.ts";
 import { callModelUnlessPaused } from "../_shared/ai-pause.ts";
 import { aiPausedNow, edgeAiCostLedger, edgeErrorReporter, inBackground } from "../_shared/edge-ai-guards.ts";
+import {
+  fallbackDiagnostics,
+  fallbackReasonOf,
+  httpModelFailure,
+  refusalDiagnostics,
+  regenerationRefusalReason,
+  thrownModelFailure,
+  type ModelFailure,
+} from "../_shared/generation-outcome.ts";
+import { labPlacement, labPlacementPhrase, type LabPlacement } from "../_shared/lab-placement.ts";
 
 // PK-FIX-01b: error capture (PHI-scrubbed, never blocking), the cross-function
 // AI cost ledger, and the kill switch. Once per isolate.
@@ -115,10 +125,12 @@ interface PrimaryContext {
   previous_value: number | null;
   unit: string | null;
   current_status: "elevated" | "low" | "in_range" | "borderline" | "out_of_range";
+  /** Against her lab's printed interval, exactly as printed: the only position narrative text states. */
+  lab_placement: LabPlacement | null;
   trajectory: "improving" | "worsening" | "unchanged" | "no_prior_data";
   percent_change: number | null;
   prior_report_date: string | null;
-  supporting_biomarker: { name: string; value: string; direction: string } | null;
+  supporting_biomarker: { name: string; value: string; direction: string; lab_placement: LabPlacement | null } | null;
 }
 
 interface PatternCandidate {
@@ -219,6 +231,31 @@ function slug(a: AnalyteData): string {
 
 function displayVal(a: AnalyteData): string {
   return `${a.raw_value_text ?? String(a.value_numeric)}${a.unit ? " " + a.unit : ""}`;
+}
+
+/** Use the name printed on the report; do not invent a clinical label. */
+function label(a: AnalyteData): string {
+  return a.raw_name;
+}
+
+/*
+  Where the value sits against her lab's printed interval, exactly as printed
+  (_shared/lab-placement.ts, the page's own rule). Narrative words use this, so
+  the stored text says "below the lab's reference range" where the page says
+  "Below your lab's range". classifyAnalyte's 8% margin keeps deciding claim
+  statuses, ranking and which markers the prompt lists; it never words a
+  position, because a value just past the printed bound is outside it.
+*/
+function placementOf(a: AnalyteData): LabPlacement | null {
+  const num = (v: number | null) => (v === null || v === undefined ? null : Number(v));
+  return labPlacement(num(a.value_numeric), num(a.normalized_min), num(a.normalized_max),
+    a.normalized_operator, num(a.normalized_operator_value));
+}
+
+/** "below the lab's reference range", or null when the report printed no usable interval. */
+function placementPhrase(a: AnalyteData): string | null {
+  const placement = placementOf(a);
+  return placement ? labPlacementPhrase(placement) : null;
 }
 
 function getBySlug(analytes: AnalyteData[], s: string): AnalyteData | undefined {
@@ -533,7 +570,7 @@ function buildPrimaryContext(
 
   // Pin override: when the frontend supplies a canonical primary slug, use it
   // even when no marker is abnormal per backend's lab-ref classifier. The
-  // frontend often flags markers as primary using stricter Amani-optimal ranges
+  // frontend can also select a marker against Amani comparison bands
   // that this function's classifyAnalyte doesn't see.
   let primary: AnalyteData | null = null;
   if (pinnedSlug) {
@@ -564,19 +601,21 @@ function buildPrimaryContext(
   const supporting = abnormal.find(entry => entry.a !== primary)?.a ?? null;
   const supportingBlock = supporting
     ? {
-        name: supporting.raw_name,
+        name: label(supporting),
         value: displayVal(supporting),
         direction: directionLabel(supporting, classifyAnalyte(supporting)),
+        lab_placement: placementOf(supporting),
       }
     : null;
 
   return {
-    primary_biomarker: primary.raw_name,
+    primary_biomarker: label(primary),
     canonical_slug: primary.canonical_slug,
     current_value: Number(primary.value_numeric),
     previous_value: previousValue,
     unit: primary.unit,
     current_status: direction,
+    lab_placement: placementOf(primary),
     trajectory,
     percent_change: percent,
     prior_report_date: priorReportDate,
@@ -584,31 +623,31 @@ function buildPrimaryContext(
   };
 }
 
+/*
+  The deterministic sentence for the primary marker. Her lab's printed interval
+  words its position, with no margin ("sits near the edge of the reference
+  range" was the 8% margin talking, for a value outside the printed range), and
+  a change is stated by its numbers, never judged ("has improved" claimed a
+  direction no reviewed rule supports; owner R1). "Remains" needs a prior value.
+*/
 function formatPrimarySummary(ctx: PrimaryContext): string {
   const unit = ctx.unit ? ` ${ctx.unit}` : "";
-  const statusWord =
-    ctx.current_status === "elevated" ? "remains elevated" :
-    ctx.current_status === "low" ? "remains low" :
-    ctx.current_status === "borderline" ? "sits near the edge of the reference range" :
-    ctx.current_status === "out_of_range" ? "remains outside the reference range" :
-    "is within range";
+  const where = ctx.lab_placement ? `is ${labPlacementPhrase(ctx.lab_placement)}` : "was measured";
+  const current = `${ctx.current_value}${unit}`;
 
   let sentence1: string;
-  if (ctx.trajectory === "improving" && ctx.previous_value !== null) {
-    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit} but has improved from ${ctx.previous_value}${unit} since your last report.`;
-  } else if (ctx.trajectory === "worsening" && ctx.previous_value !== null) {
-    const verb = ctx.current_status === "elevated" ? "increased" : ctx.current_status === "low" ? "decreased" : "changed";
-    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit} and has ${verb} from ${ctx.previous_value}${unit} since your last report.`;
-  } else if (ctx.trajectory === "unchanged" && ctx.previous_value !== null) {
-    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit} and has not changed significantly from your previous result of ${ctx.previous_value}${unit}.`;
+  if (ctx.previous_value !== null) {
+    const verb = ctx.current_value > ctx.previous_value ? "increased" : ctx.current_value < ctx.previous_value ? "decreased" : null;
+    sentence1 = verb
+      ? `${ctx.primary_biomarker} ${where} at ${current} and has ${verb} from ${ctx.previous_value}${unit} since your last report.`
+      : `${ctx.primary_biomarker} ${where} at ${current}, the same as your previous result.`;
   } else {
-    sentence1 = `${ctx.primary_biomarker} ${statusWord} at ${ctx.current_value}${unit}.`;
+    sentence1 = `${ctx.primary_biomarker} ${where} at ${current}.`;
   }
 
-  if (ctx.supporting_biomarker) {
-    const s = ctx.supporting_biomarker;
-    const sDir = s.direction === "elevated" ? "elevated" : s.direction === "low" ? "low" : "outside range";
-    return `${sentence1} ${s.name} is also ${sDir} at ${s.value}, another area to monitor.`;
+  const s = ctx.supporting_biomarker;
+  if (s?.lab_placement && s.lab_placement !== "within") {
+    return `${sentence1} ${s.name} is also ${labPlacementPhrase(s.lab_placement)} at ${s.value}.`;
   }
   return sentence1;
 }
@@ -701,30 +740,46 @@ function generateFallbackInterpretation(
 ) {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, matched_patterns } = facts;
-  const totalFlagged = top_out_of_range.length + top_borderline.length;
   const phase = report.estimated_cycle_phase ?? "unknown";
   const day = report.estimated_cycle_day;
 
+  /*
+    Positions are her lab's printed interval, exactly as printed (placementOf):
+    a value 8% past a bound is outside it, never "borderline" or "near the
+    edge", and the count says how many values sit outside, not which ones a
+    margin promoted. classifyAnalyte only chooses and orders the markers named.
+    The marker named first is the report's primary finding (the client pins it
+    as primary_canonical_slug) when it is outside the lab's range.
+  */
+  const below = analytes.filter(a => placementOf(a) === "below").length;
+  const above = analytes.filter(a => placementOf(a) === "above").length;
+  const outside = below + above;
+  const flagged = [...top_out_of_range, ...top_borderline];
+  const lead = primaryContext?.lab_placement && primaryContext.lab_placement !== "within"
+    ? primaryContext.primary_biomarker
+    : flagged[0] ? label(flagged[0]) : null;
+
+  // An empty panel is not "within reference ranges": nothing was read to compare.
   let headline: string;
-  if (totalFlagged === 0) {
-    headline = `Your ${analytes.length}-marker panel is within reference ranges — a solid baseline to build from.`;
-  } else if (top_out_of_range.length > 0) {
-    const firstName = top_out_of_range[0].raw_name;
-    headline = `${top_out_of_range.length} value${top_out_of_range.length > 1 ? "s" : ""} outside reference range — ${firstName} is the most notable finding.`;
+  if (analytes.length === 0) {
+    headline = "No lab values could be read from this report.";
+  } else if (outside === 0) {
+    headline = "No value on this panel is outside the lab's printed reference ranges.";
   } else {
-    const firstName = top_borderline[0].raw_name;
-    headline = `${top_borderline.length} borderline result${top_borderline.length > 1 ? "s" : ""} — including ${firstName} — worth keeping an eye on.`;
+    headline = `${outside} value${outside > 1 ? "s" : ""} outside the lab's printed reference range${lead ? `, including ${lead}` : ""}.`;
   }
 
   const summaryBullets: string[] = [];
 
-  if (totalFlagged === 0) {
-    summaryBullets.push(`All ${analytes.length} markers reviewed are within their reference ranges.`);
+  if (analytes.length === 0) {
+    summaryBullets.push("No lab values were read from this report, so there is nothing to compare with a reference range yet.");
+  } else if (outside === 0) {
+    summaryBullets.push(`Of ${analytes.length} analytes reviewed, none is outside the lab's printed reference range.`);
   } else {
     const parts: string[] = [];
-    if (top_out_of_range.length > 0) parts.push(`${top_out_of_range.length} out of range`);
-    if (top_borderline.length > 0) parts.push(`${top_borderline.length} borderline`);
-    summaryBullets.push(`Of ${analytes.length} analytes reviewed: ${parts.join(", ")}.`);
+    if (below > 0) parts.push(`${below} below`);
+    if (above > 0) parts.push(`${above} above`);
+    summaryBullets.push(`Of ${analytes.length} analytes reviewed, ${parts.join(" and ")} the lab's printed reference range.`);
   }
 
   if (day && phase !== "unknown") {
@@ -745,30 +800,24 @@ function generateFallbackInterpretation(
     );
   }
 
-  const topFlagged = [...top_out_of_range, ...top_borderline].slice(0, 5);
+  const topFlagged = flagged.slice(0, 5);
   const top_findings = topFlagged.map(a => {
     const status = classifyAnalyte(a);
-    const val = displayVal(a);
-    let explanation = `Your ${a.raw_name} result was ${val}.`;
-    if (status === "out_of_range") {
-      explanation += " This falls outside the reference range. The clinical significance depends on your full history, symptoms, and cycle context.";
-    } else {
-      explanation += " This sits near the edge of the reference range — worth noting and potentially retesting to assess the trend.";
-    }
+    const where = placementPhrase(a);
     return {
       biomarker_slug: slug(a),
-      title: a.raw_name,
+      title: label(a),
       status: status === "out_of_range" ? "discuss" as const : "monitor" as const,
-      explanation,
+      explanation: `Your ${label(a)} result was ${displayVal(a)}${where ? `, ${where}` : ""}. What it means depends on your full history, symptoms, and cycle context.`,
     };
   });
 
   const questions: string[] = [];
 
-  if (top_out_of_range.length > 0) {
-    questions.push(`My ${top_out_of_range[0].raw_name} came back ${displayVal(top_out_of_range[0])} — can you help me understand what that means in the context of my full history?`);
-  } else if (top_borderline.length > 0) {
-    questions.push(`My ${top_borderline[0].raw_name} is near the edge of the reference range at ${displayVal(top_borderline[0])} — is that something to monitor or retest?`);
+  const first = flagged[0];
+  if (first) {
+    const where = placementPhrase(first);
+    questions.push(`My ${label(first)} came back ${displayVal(first)}${where ? `, ${where}` : ""}. Can you help me understand what that means in the context of my full history?`);
   } else {
     questions.push("Are there any values on this panel that you'd want to track over time, even if they're currently in range?");
   }
@@ -791,11 +840,7 @@ function generateFallbackInterpretation(
     ? `Labs drawn on cycle day ${day} during the ${phase} phase. Hormone values on this panel should be read with that timing in mind.`
     : "Cycle timing was not available for this report. Providing your last period date with future reports will enable more precise hormone interpretation.";
 
-  const overallInterpretation = primaryContext
-    ? formatPrimarySummary(primaryContext)
-    : (totalFlagged === 0
-        ? `All ${analytes.length} markers reviewed are within their reference ranges. This panel is a solid baseline to continue tracking.`
-        : headline);
+  const overallInterpretation = primaryContext ? formatPrimarySummary(primaryContext) : headline;
 
   return {
     headline,
@@ -821,6 +866,8 @@ async function tryOpenAI(
   isOptimizationOnly: boolean,
   recordCost?: (sample: GenerationSample) => void,
   trendEvidence: readonly TrendEvidence[] = [],
+  /** Told how the model failed, when it did (generation-outcome.ts `model_failure`). */
+  onModelFailure?: (failure: ModelFailure) => void,
 ): Promise<AIInterpretationOutput | null> {
   const facts = computeReportFacts(analytes, report);
   const { top_out_of_range, top_borderline, reassuring_in_range, matched_patterns, missing_followup_labs, cycle_notes, context_notes } = facts;
@@ -848,16 +895,24 @@ async function tryOpenAI(
     ...remainingHighValue,
   ].filter((a, i, arr) => arr.indexOf(a) === i).slice(0, 16);
 
+  // Each marker's position against her lab's printed range, exactly as printed:
+  // the same words the report page uses, never a margin's "borderline".
   const labLines = selected.map(a => {
     const val = displayVal(a);
     const s = a.canonical_slug ? ` [${a.canonical_slug}]` : "";
-    let line = `${a.raw_name}${s}: ${val}`;
+    let line = `${label(a)}${s}: ${val}`;
     if (a.raw_reference_range) line += ` (ref: ${a.raw_reference_range})`;
-    const st = classifyAnalyte(a);
-    if (st === "out_of_range") line += " ← OUT OF RANGE";
-    else if (st === "borderline") line += " ← BORDERLINE";
+    const placement = placementOf(a);
+    if (placement === "below") line += " ← BELOW LAB RANGE";
+    else if (placement === "above") line += " ← ABOVE LAB RANGE";
+    else if (placement === "within") line += " (within lab range)";
     return line;
   }).join("\n");
+  const outsideLines = (placement: LabPlacement) => {
+    const names = selected.filter(a => placementOf(a) === placement).map(a => `${label(a)} (${displayVal(a)})`);
+    return names.length > 0 ? names.join(", ") : "none";
+  };
+  const withinNotable = reassuring_in_range.filter(a => placementOf(a) === "within");
 
   const patternBlock = matched_patterns.length > 0
     ? `\nDETERMINISTIC PATTERN CANDIDATES (pre-analyzed — use as starting evidence, not final conclusions):\n` +
@@ -893,12 +948,20 @@ CORE TONE RULES (non-negotiable)
   - "you may want to consider"
   - "it appears that"
 - Instead, use direct statements:
-  - "Vitamin D remains low" not "Vitamin D may indicate a deficiency"
-  - "TSH has improved" not "TSH suggests improvement"
-  - "Ferritin is below optimal at 12 ng/mL" not "Ferritin indicates possible low iron"
+  - "Vitamin D is below the lab's reference range at 21 ng/mL" not "Vitamin D may indicate a deficiency"
+  - "TSH has decreased from 5.2 to 3.9 mIU/L" not "TSH suggests improvement"
+  - "Ferritin is below the lab's reference range at 9 ng/mL" not "Ferritin indicates possible low iron"
 - Be specific to the actual values, not just the flags
 - Do NOT repeat the same point across sections
 - Keep every explanation to 1–2 sentences max
+
+LAB RANGE vs AMANI BANDS (non-negotiable)
+
+- A marker's position is always stated against the lab's printed reference range shown in LAB PANEL (ref: ...): below it, within it, or above it. LAB PANEL marks each one.
+- A value inside its printed reference range is within the lab's range. Never call it low, high, elevated, deficient, abnormal or out of range, whatever its value.
+- A value outside its printed reference range is below or above it, however close. Never call it borderline, near the edge, or almost in range.
+- The app shows Amani's own comparison bands separately, and they are still under review. Never mention Amani bands, optimal ranges or optimal targets, and never describe a marker against them.
+- State a change between reports by its numbers ("has increased from 18 to 25 ng/mL"). Never call a change an improvement, better, worse, or a move in the right or wrong direction.
 
 -----------------------------------
 
@@ -910,21 +973,22 @@ Rules:
 - Name the ACTUAL systems or markers that stand out — never count them
 - Be specific, warm, and direct
 - One sentence only
-- Amani distinguishes two ranges: the lab's *clinical reference range* and Amani's tighter *optimal range*. A marker can sit inside the clinical range while still being outside Amani's optimal range. The UI labels that state "Outside Optimal" (not "Out of Range").
-- NEVER write "all within range" or "all values look good" when ANY marker is flagged as outside optimal. The downstream UI will show that flag and the user will see the contradiction. Instead, use phrasing like "all within standard lab ranges, with X as the main area to optimize" when clinical labs are clean but something is outside optimal.${isOptimizationOnly ? `
-- OPTIMIZATION-ONLY MODE IS ACTIVE: the deterministic primary marker (${primaryContext?.primary_biomarker}) is within the lab's clinical reference range but outside Amani's optimal range. The headline MUST acknowledge both truths. Do NOT say everything is within range. Use a phrase like "Your standard lab ranges look stable overall, with ${primaryContext?.primary_biomarker} as the main area to optimize."` : ""}
+- When PRIMARY CONTEXT names a primary_biomarker, name it first. It is the primary finding the app shows above your text, so a headline that leads with another marker contradicts the page.
+- Positions are against the lab's printed reference range only (see LAB RANGE vs AMANI BANDS). NEVER write "all within range" or "all values look good" when any marker is below or above its printed range.${isOptimizationOnly ? `
+- PRIMARY WITHIN THE LAB'S RANGE: the primary marker (${primaryContext?.primary_biomarker}) is within the lab's printed reference range. The app shows it as the primary finding because Amani's comparison band, which is still under review, places it differently. Say it is within the lab's reference range. Do NOT call it low, high, elevated or a problem, and do NOT describe what changing it would do.` : ""}
 
 GOOD:
-- "Your thyroid markers stand out, and your glucose is trending slightly higher than ideal."
-- "Iron storage is low, and your vitamin D is worth addressing soon."
-- "Most of your panel looks solid — your lipids are the one area to keep an eye on."
-- "Your standard lab ranges look stable overall, with vitamin D as the main area to optimize." (optimization-only example)
+- "Your TSH is above the lab's reference range, and your free T4 is within it."
+- "Your hemoglobin is below the lab's reference range, while ferritin is within it."
+- "Your HbA1c is above the lab's reference range, and the rest of your metabolic markers are within theirs."
 
 BAD (never write these):
 - "3 values outside range"
 - "Your results show some abnormalities"
 - "Several biomarkers require attention"
-- "All your lab results are within range" (when something is flagged outside optimal — contradicts the UI)
+- "All your lab results are within range" (when a marker is below or above its printed range)
+- "Your ferritin is low" (when ferritin is within its printed reference range)
+- "Your iron markers are the main story" (when PRIMARY CONTEXT names a different marker)
 
 -----------------------------------
 
@@ -941,19 +1005,18 @@ Rules for primary_concern.why_it_matters:
 - Explain the real-world consequence: energy, hormones, metabolism, mood — whatever applies
 - Do NOT say "clinical significance depends" — say what it actually tends to affect
 
-${isOptimizationOnly ? `OPTIMIZATION-ONLY MODE OVERRIDE (active for this report):
-- The primary marker is within the lab's clinical reference range. Do NOT use words like "deficient", "abnormal", "concerning", "elevated", or "low" as if it were a clinical finding.
-- Frame the marker as "below the optimal target" or "above the optimal target" rather than "out of range".
-- primary_concern.summary should say the marker is within the lab's reference range but sits below/above Amani's optimal range, and what moving toward optimal typically supports.
-- primary_concern.why_it_matters should describe the benefits of moving toward the optimal target, not the dangers of staying where they are. Tone is educational, not alarming.
+${isOptimizationOnly ? `PRIMARY WITHIN THE LAB'S RANGE (active for this report):
+- The primary marker is within the lab's printed reference range. Do NOT use words like "deficient", "abnormal", "concerning", "elevated", or "low" about it.
+- primary_concern.summary says the value and that it is within the lab's reference range. Do NOT mention optimal ranges, optimal targets or Amani bands.
+- primary_concern.why_it_matters says what the marker measures, in general terms. Do NOT describe the benefits of moving it, or the dangers of leaving it where it is.
 
-Optimization-only example:
-summary: "Your Vitamin D came back at 42 ng/mL — within the lab's standard reference range, but below the level Amani considers optimal."
-why_it_matters: "Moving Vitamin D into the optimal range is often linked with steadier energy, better mood, and stronger immune resilience."
+Example (primary within the lab's range):
+summary: "Your vitamin D came back at 42 ng/mL, within the lab's reference range."
+why_it_matters: "Vitamin D is measured in the blood as 25-OH vitamin D, which is how labs estimate your vitamin D status."
 
-` : ""}Example (clinical concern):
-summary: "Your TSH came back elevated, which means your thyroid is working harder than it should to keep up."
-why_it_matters: "When the thyroid is sluggish, it often shows up as fatigue, brain fog, weight changes, or feeling cold — even when other things look fine."
+` : ""}Example (printed lab-range finding):
+summary: "Your TSH came back above the lab's reference range."
+why_it_matters: "Read this measurement alongside the other thyroid results on your report."
 
 -----------------------------------
 
@@ -968,10 +1031,11 @@ Rules:
 - DO NOT use clinical filler phrases
 
 GOOD:
-"Your ferritin came back at 9 ng/mL — below the threshold for solid iron stores. At this level, energy and focus are usually the first things to take a hit."
+"Your ferritin came back at 9 ng/mL, below the lab's reference range of 16–154 ng/mL. Ferritin is the marker labs use to estimate stored iron."
 
 BAD:
 "Ferritin is low. Clinical significance depends on symptoms. Further evaluation may be necessary."
+"Your ferritin is low at 18 ng/mL." (when 18 is inside the lab's printed range, it is within the lab's range)
 
 -----------------------------------
 
@@ -1057,35 +1121,27 @@ Do NOT write: "Increase your intake of..." — that belongs in what_you_can_do_n
 
 SECTION 6 — OVERALL INTERPRETATION (phrase the pre-computed truth, do NOT recalculate)
 
-The primary biomarker, current value, previous value, and trajectory have ALREADY been determined deterministically (see PRIMARY CONTEXT below). Your job is to phrase that truth in clean, warm language. You must NOT pick a different primary marker. You must NOT contradict the trajectory provided.
+The primary biomarker, its position against the lab's printed range, current value, previous value, and change have ALREADY been determined deterministically (see PRIMARY CONTEXT below). Your job is to phrase that truth in clean, warm language. You must NOT pick a different primary marker. You must NOT contradict the change provided.
 
 Hard rules:
 - 2–3 sentences max
 - Maximum 220 characters per sentence
-- Sentence 1 (REQUIRED): State the current status of the primary biomarker exactly as given. If trajectory is "improving", "worsening", or "unchanged" and a previous_value is provided, you MUST include direction of change using the numbers given.
+- Sentence 1 (REQUIRED): State the primary biomarker's value and its lab_placement exactly as given (below, within or above the lab's reference range). If a previous_value is provided, you MUST include the change using both numbers.
 - Sentence 2 (OPTIONAL): Mention the supporting biomarker (if provided) or add one factual context note. Do NOT introduce new markers not in the lab panel.
 - Sentence 3 (OPTIONAL): One forward-looking line about monitoring or trend. Keep it specific.
 - Do NOT use em dashes
 - Do NOT use filler phrases: "overall", "in general", "it is important to", "be sure to", "this suggests", "may want to consider", "may indicate", "warrants monitoring", "clinical significance depends", "further evaluation may be necessary", "keep an eye on things"
 - Do NOT say "everything looks good"
 - Do NOT give medical advice
-- When trajectory is "no_prior_data": describe current status only. Do NOT fabricate direction of change.
+- When change is "no_prior_data": describe the current value and position only. Do NOT fabricate a change or a previous value.
 - \`primary_concern.title\` MUST name the same biomarker as \`PRIMARY CONTEXT.primary_biomarker\`. Do not pick a different marker as the title even if you think another finding is more "concerning" — the deterministic primary is the canonical primary.
 - \`primary_concern.summary\` and \`primary_concern.why_it_matters\` must center on the PRIMARY CONTEXT biomarker.
-- When the PRIMARY CONTEXT supplies a \`supporting_biomarker\` with \`direction: "borderline"\`, you MUST describe it as "borderline" (e.g., "TgAb is also borderline and worth tracking"). Do not upgrade "borderline" to "high"/"low"/"elevated". Use the direction field verbatim.
+- Describe a supporting biomarker only by its lab_placement; never translate the internal claim status into a clinical judgement.
 - When \`supporting_biomarker\` is null in PRIMARY CONTEXT, you MUST NOT mention any other marker by name in Sentence 2 or Sentence 3. Use a generic context note instead (e.g., "Continued monitoring will help clarify the trend." or "Tracking this over time will give a clearer picture."). NEVER write phrases like "Your TgAb is also high" or "Your X is also low" when no supporting biomarker was provided.
 
-Phrasing templates to follow:
-- Improving: "${"${primary} remains elevated at ${current} but has improved from ${previous} since your last report."}"
-- Worsening: "${"${primary} remains elevated at ${current} and has increased from ${previous} since your last report."}"
-- Unchanged: "${"${primary} remains elevated at ${current} and has not changed significantly from your previous result."}"
-- No prior: "${"${primary} is elevated at ${current}."}"
-
-GOOD examples:
-- "TPO antibodies remain elevated at 650 IU/mL but have improved from 900 IU/mL since your last report. HDL is also low at 45 mg/dL, another area to monitor."
-- "LDL cholesterol is elevated at 138 mg/dL and has increased from 115 mg/dL since your last report. Triglycerides are also slightly above optimal."
-- "Ferritin remains low at 18 ng/mL and has not changed significantly from your previous result. This continued low level may help explain ongoing fatigue."
-- "Vitamin D remains low at 25 ng/mL but has improved from 18 ng/mL since your last report. TgAb is also borderline and worth tracking alongside thyroid markers."
+Phrasing examples (use only the actual supplied values and lab_placement):
+- "Ferritin is within the lab's reference range at 18 ng/mL."
+- "Vitamin D is below the lab's reference range at 24 ng/mL and has increased from 18 ng/mL since your last report."
 
 BAD examples (never write these):
 - "Overall, your results show some areas of concern and some areas of improvement." (filler, no specifics)
@@ -1108,9 +1164,9 @@ ${patternBlock}
 ${missingBlock}${formatTrendEvidencePrompt(trendEvidence)}
 
 STRUCTURED FACTS (use these to ground your entire response):
-- Out-of-range markers: ${top_out_of_range.length > 0 ? top_out_of_range.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none"}
-- Borderline markers: ${top_borderline.length > 0 ? top_borderline.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none"}
-- Clinically important in-range markers: ${reassuring_in_range.length > 0 ? reassuring_in_range.map(a => `${a.raw_name} (${displayVal(a)})`).join(", ") : "none notable"}
+- Below the printed lab range: ${outsideLines("below")}
+- Above the printed lab range: ${outsideLines("above")}
+- Clinically important in-range markers: ${withinNotable.length > 0 ? withinNotable.map(a => `${label(a)} (${displayVal(a)})`).join(", ") : "none notable"}
 
 PRIMARY CONTEXT (deterministic — do NOT recompute, do NOT select a different primary marker):
 ${primaryContext ? JSON.stringify({
@@ -1118,13 +1174,13 @@ ${primaryContext ? JSON.stringify({
   current_value: primaryContext.current_value,
   previous_value: primaryContext.previous_value,
   unit: primaryContext.unit,
-  current_status: primaryContext.current_status,
-  trajectory: primaryContext.trajectory,
+  lab_placement: primaryContext.lab_placement,
+  change: primaryContext.previous_value === null ? "no_prior_data" : primaryContext.current_value === primaryContext.previous_value ? "unchanged" : "changed",
   percent_change: primaryContext.percent_change,
   supporting_biomarker: primaryContext.supporting_biomarker,
-}, null, 2) : "null (no abnormal markers — describe overall panel as within range)"}
+}, null, 2) : "null (no primary selected; describe only supplied measurements and lab placements)"}
 
-The overall_interpretation field MUST phrase the PRIMARY CONTEXT above. If trajectory is "improving", "worsening", or "unchanged" and previous_value is not null, direction of change is MANDATORY in sentence 1.
+The overall_interpretation field MUST phrase the PRIMARY CONTEXT above. If previous_value is not null, both values and their numeric change are MANDATORY in sentence 1. Never judge that change as better or worse.
 
 Prioritize the most clinically significant finding first across all sections, using PRIMARY CONTEXT as the anchor.
 
@@ -1172,7 +1228,7 @@ Required schema:
   "disclaimer": "string"
 }`;
 
-  const first = await callOpenAIOnce(apiKey, prompt, recordCost);
+  const first = await callOpenAIOnce(apiKey, prompt, recordCost, onModelFailure);
   if (!first) return null;
 
   const firstCheck = validateInterpretationOutput(first);
@@ -1189,7 +1245,7 @@ Required schema:
     firstCheck.violations.join(", ") +
     "). Regenerate without dosages, frequencies, prescriptive verbs, or banned supplements. Re-read the supplement rules above and comply strictly.";
 
-  const second = await callOpenAIOnce(apiKey, stricterPrompt, recordCost);
+  const second = await callOpenAIOnce(apiKey, stricterPrompt, recordCost, onModelFailure);
   if (!second) return null;
 
   const secondCheck = validateInterpretationOutput(second);
@@ -1207,6 +1263,7 @@ Required schema:
     that stops checking must fail to compile rather than persist unsafe content.
   */
   const sanitized = sanitizeViolations(second);
+  if (sanitized === null) onModelFailure?.("output_rejected");
   if (sanitized === null) {
     // Distinct from the OpenAI-failure logs above: OpenAI answered fine and the
     // policy discarded the answer. Without its own line this is indistinguishable
@@ -1225,8 +1282,10 @@ async function callOpenAIOnce(
   apiKey: string,
   prompt: string,
   recordCost?: (sample: GenerationSample) => void,
+  onModelFailure?: (failure: ModelFailure) => void,
 ): Promise<AIInterpretationOutput | null> {
   const started = recordCost ? performance.now() : 0;
+  let receivedResponse = false;
   let usage: unknown;
   let model = "gpt-4o-mini";
   try {
@@ -1253,9 +1312,10 @@ async function callOpenAIOnce(
       { attemptTimeoutMs: 18000 },
     );
 
+    receivedResponse = true;
     if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      console.warn("[generate-interpretation] OpenAI status:", res.status, errBody);
+      onModelFailure?.(httpModelFailure(res.status));
+      console.warn("[generate-interpretation] OpenAI status:", res.status);
       return null;
     }
 
@@ -1263,11 +1323,16 @@ async function callOpenAIOnce(
     usage = data.usage;
     if (typeof data.model === "string") model = data.model;
     const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
+    if (data.choices?.[0]?.finish_reason === "length") {
+      onModelFailure?.("truncated");
+      return null;
+    }
+    if (!content) { onModelFailure?.("output_rejected"); return null; }
 
     const parsed = JSON.parse(content);
     const result = InterpretationSchema.safeParse(parsed);
     if (!result.success) {
+      onModelFailure?.("output_rejected");
       console.warn(
         "[generate-interpretation] OpenAI response failed schema validation:",
         result.error.flatten(),
@@ -1276,7 +1341,9 @@ async function callOpenAIOnce(
     }
     return result.data as AIInterpretationOutput;
   } catch (e: unknown) {
-    console.warn("[generate-interpretation] OpenAI failed:", errorMessage(e));
+    const failure = receivedResponse ? "output_rejected" : thrownModelFailure(e);
+    onModelFailure?.(failure);
+    console.warn("[generate-interpretation] OpenAI failed:", failure);
     return null;
   } finally {
     recordCost?.(generationSample(model, usage, performance.now() - started));
@@ -1401,12 +1468,8 @@ async function loadGenerationContext(
     pinnedSlug,
   );
 
-  // Optimization-only signal: the client pinned a primary slug because its UI
-  // flags it as outside Amani's *optimal* range, yet the server's clinical
-  // classifier sees the marker as in-range against the lab's reference range.
-  // When true, the AI prompt switches tone from "clinical concern" to
-  // "main focus to optimize" so the headline never says "all within range"
-  // while the UI flags a marker as Outside Optimal.
+  // A pinned comparison-band finding may be within the printed lab interval.
+  // The prompt states that lab fact without inferring a clinical judgement.
   const isOptimizationOnly = !!(
     pinnedSlug &&
     primaryContext &&
@@ -1464,6 +1527,7 @@ async function produceInterpretation(input: {
 
 
   let aiInterpretation: AIInterpretationOutput | null = null;
+  let modelFailure: ModelFailure | null = null;
 
   // PK-FIX-01b (D12, DT9): while the kill switch is on the model is not called,
   // so aiInterpretation stays null, the deterministic interpretation below is
@@ -1476,7 +1540,7 @@ async function produceInterpretation(input: {
     call: () => {
       console.log("[generate-interpretation] Trying OpenAI...");
       return tryOpenAI(openaiApiKey!, report as LabReportData, analytes, primaryContext, userContextBlock, isOptimizationOnly,
-        input.recordCost, trendEvidence);
+        input.recordCost, trendEvidence, failure => { modelFailure = failure; });
     },
   });
 
@@ -1487,7 +1551,7 @@ async function produceInterpretation(input: {
       aiResult.cycle_context = { ...deterministicCycleFacts(report as LabReportData), explanation: modelCycleExplanation(aiResult.cycle_context) };
       // Guarantee overall_interpretation is grounded in deterministic primary_context
       if (primaryContext) {
-        aiResult.overall_interpretation = aiResult.overall_interpretation ?? formatPrimarySummary(primaryContext);
+        aiResult.overall_interpretation = formatPrimarySummary(primaryContext);
       }
       aiInterpretation = aiResult;
       console.log("[generate-interpretation] OpenAI succeeded");
@@ -1542,7 +1606,10 @@ async function produceInterpretation(input: {
 
   // The pause changed this answer only when the model would otherwise have been called.
   const pauseApplied = input.aiPaused && wantsModel;
-  return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied };
+  const fallbackReason = fallbackReasonOf({ deepGeneration: generateDeep, hasReport: !!report,
+    hasAnalytes: analytes.length > 0, hasApiKey: !!openaiApiKey, aiPaused: input.aiPaused,
+    modelProduced: aiInterpretation !== null });
+  return { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied, fallbackReason, modelFailure };
 }
 
 // ─── Version store (TASK-048) ────────────────────────────────────────────────
@@ -1929,7 +1996,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const killSwitchOn = await aiPausedNow();
-    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied } = await produceInterpretation({
+    const { shaped, aiInterpretation, interpretationJson, basicProjection, floorViolations, pauseApplied, fallbackReason, modelFailure } = await produceInterpretation({
       ctx, reportId, trendEvidence, tier: tierDecision.tier, generateDeep, policyActive, openaiApiKey, aiPaused: killSwitchOn,
       recordCost: sample => {
         aiCallSamples.push(sample);
@@ -1947,7 +2014,7 @@ Deno.serve(async (req: Request) => {
     // interpretation stands, never a fallback.
     if (appendsVersion && !isVersionable({ source, depth: shaped.depth, floorViolations })) {
       console.warn("[generate-interpretation] Regeneration not versioned:", JSON.stringify({ source, depth: shaped.depth }));
-      const refused = regenerationFailedResponse(generateDeep);
+      const refused = regenerationFailedResponse(generateDeep, refusalDiagnostics(regenerationRefusalReason(fallbackReason), modelFailure));
       return new Response(JSON.stringify({ ...refused.body, ...pausedFlag() }), {
         status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -1983,7 +2050,7 @@ Deno.serve(async (req: Request) => {
     // A retry is decided afresh (an exhausted decision, then post-limit rules).
     if (appendsVersion && ledgerLimitReached) {
       console.warn("[generate-interpretation] Regeneration not versioned: introductory limit reached at commit");
-      const refused = regenerationFailedResponse(true);
+      const refused = regenerationFailedResponse(true, refusalDiagnostics("introductory_limit_reached", null));
       return new Response(JSON.stringify(refused.body), {
         status: refused.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -2056,11 +2123,11 @@ Deno.serve(async (req: Request) => {
     const servedBasicProjection = appended ? appended.version.basic : basicProjection;
     const identity = appended ? { reused: !appended.created, ...versionIdentity(appended.version) } : {};
     return new Response(JSON.stringify(active ? {
-      success: true, source,
+      success: true, source, ...fallbackDiagnostics(fallbackReason, modelFailure),
       access: shaped.tier === "plus" ? "full" : "basic",
       interpretation: shaped.tier === "plus" ? servedFull : servedBasic(servedBasicProjection),
       ...visibleClaimProjection(servedBasicProjection), ...identity, ...pausedFlag(),
-    } : { success: true, source, ...identity, ...pausedFlag() }), {
+    } : { success: true, source, ...fallbackDiagnostics(fallbackReason, modelFailure), ...identity, ...pausedFlag() }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 

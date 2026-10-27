@@ -36,7 +36,7 @@ describe('V2-03b observation policy', () => {
   });
 
   it.each([[6, 9], [9, 6], [6, 6.1], [2, 6]])('real summary -> card %s -> %s: neutral visible and accessible semantics', (prev, curr) => {
-    const tsh = (value: number) => ({ key: 'tsh' as const, value, unit: 'uIU/mL', labRefMin: 0.45, labRefMax: 4.5 });
+    const tsh = (value: number) => ({ key: 'tsh' as const, value, unit: 'mIU/L', labRefMin: 0.45, labRefMax: 4.5 });
     const summary = buildInsightSummary([tsh(curr)], [tsh(prev)], null, '2025-12-01');
     expect(summary.biggestChanges).toHaveLength(1);
     const html = renderToStaticMarkup(<YourTrajectoryCard changes={summary.biggestChanges} primaryFinding={summary.primaryFinding}

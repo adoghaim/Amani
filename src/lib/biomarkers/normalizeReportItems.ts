@@ -1,5 +1,6 @@
 import type { ReportItem } from '../../utils/parser/types';
 import { resolveAlias, getEntry } from './dictionary';
+import { UNIT_EQUIVALENCES } from './rangeContext.generated';
 import type { BiomarkerName } from '../../types';
 
 const UNIT_ALIASES: Record<string, string> = {
@@ -35,6 +36,55 @@ function normalizeUnit(raw: string | null): string | null {
   if (!raw) return null;
   const lower = raw.toLowerCase().trim();
   return UNIT_ALIASES[lower] ?? raw.trim();
+}
+
+// Notations of one and the same unit, matched after the spelling rules above.
+const UNIT_NOTATIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  // A ratio is a bare number: "ratio" names no unit (Chol/HDL, A/G, BUN/Creatinine).
+  [/^ratio$/, ''],
+  // Thousands and millions per microlitre, however the power is written.
+  [/^(?:[x×*]?10(?:\^|e|\*{1,2})3|k|thou|thousand)\/ul$/, 'k/ul'],
+  [/^(?:[x×*]?10(?:\^|e|\*{1,2})6|m|mill|million)\/ul$/, 'm/ul'],
+  // Millimetres per hour.
+  [/^mm\/hr?$/, 'mm/h'],
+  // Per 1.73 m² of body surface, printed without its m².
+  [/^ml\/min\/1\.73(?:m2)?$/, 'ml/min/1.73m2'],
+];
+
+function unitSpelling(raw: string | null | undefined): string {
+  const spelled = (raw ?? '').toLowerCase().replace(/\s+/g, '').replace(/[µμ]/g, 'u').replace(/(^|\/)mc(?=[a-z])/g, '$1u')
+    .replace(/10³/g, '10^3').replace(/10⁶/g, '10^6').replace(/²/g, '2').replace(/³/g, '3');
+  const notation = UNIT_NOTATIONS.find(([pattern]) => pattern.test(spelled));
+  return notation ? notation[1] : spelled;
+}
+
+/**
+ * Whether two unit strings name the same unit. Only spelling is ignored: case,
+ * spacing, superscript digits (m², m2), how the micro prefix is written (µ, μ,
+ * mc, u), and the notations in UNIT_NOTATIONS ("ratio" for a bare number;
+ * x10E3/uL, 10^3/uL, thou/uL and K/uL; x10E6/uL and M/uL; mm/h and mm/hr).
+ * Different units never match, however they relate (mmol/L and mg/dL, uIU/mL
+ * and mIU/L, mmol/L and mEq/L, IU/L and U/L): the catalog approves no unit
+ * conversions (review F011, PK-05-B V2-05-03). The few 1:1 identities the
+ * catalog does record hold per analyte only: see isCatalogUnit.
+ */
+export function sameUnit(a: string | null | undefined, b: string | null | undefined): boolean {
+  return unitSpelling(a) === unitSpelling(b);
+}
+
+/**
+ * Whether `unit` is the catalog unit of the analyte `key`: the same unit
+ * (sameUnit), or a unit the catalog records as an owner-approved 1:1
+ * equivalent for exactly this analyte (catalog unit_equivalences, review-2:
+ * mmol/L for sodium, potassium, chloride and CO2; uIU/mL for TSH; IU/L for
+ * ALT, AST and alkaline phosphatase). A value in such a unit is used unchanged.
+ * Every other unit of every analyte fails closed.
+ */
+export function isCatalogUnit(key: string, unit: string | null | undefined): boolean {
+  const entry = getEntry(key as BiomarkerName);
+  if (!entry) return false;
+  return sameUnit(unit, entry.defaultUnit) || UNIT_EQUIVALENCES.some(e =>
+    e.key === entry.key && sameUnit(e.canonicalUnit, entry.defaultUnit) && sameUnit(e.unit, unit));
 }
 
 export interface NormalizedReportItem extends ReportItem {
@@ -86,6 +136,10 @@ export function normalizeReportItems(items: ReportItem[]): NormalizedReportItem[
       const unitMatches =
         unitNorm !== null &&
         unitNorm.toLowerCase() === entry.defaultUnit.toLowerCase();
+      // Amani's bands are in the catalog unit and no conversion is approved: an
+      // item in another unit keeps its lab interval but is not scored (F011).
+      // A catalog-recorded 1:1 equivalent of the catalog unit is that unit (review-2).
+      const catalogUnit = isCatalogUnit(entry.key, unitNorm);
 
       return {
         ...item,
@@ -93,8 +147,8 @@ export function normalizeReportItems(items: ReportItem[]): NormalizedReportItem[
         canonical_slug: entry.key,
         canonical_biomarker_name: entry.key,
         category: entry.category,
-        is_core_biomarker: true,
-        normalization_status: 'mapped' as const,
+        is_core_biomarker: catalogUnit,
+        normalization_status: catalogUnit ? 'mapped' as const : 'partial' as const,
         unit_original: item.unit,
         unit_normalized: unitMatches ? entry.defaultUnit : unitNorm,
         _normalized: true as const,

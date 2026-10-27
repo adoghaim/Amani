@@ -10,6 +10,7 @@
  * else persists nothing and leaves the selected interpretation as it was.
  */
 import { CLAIM_POLICY_VERSION } from "./claim-authority.ts";
+import type { ModelFailure, RegenerationFailureReason } from "./generation-outcome.ts";
 
 /** SQLSTATE the history guard raises when anything overwrites protected history. */
 export const HISTORY_PROTECTED_SQLSTATE = "55000";
@@ -73,7 +74,12 @@ export function regenerationProvenance(): Record<string, unknown> {
   return { pipeline: "generate-interpretation", mode: "regeneration", claim_policy_version: CLAIM_POLICY_VERSION };
 }
 
-/** Nothing was persisted; the previously selected interpretation stands. */
-export function regenerationFailedResponse(retryable: boolean): { status: number; body: Record<string, unknown> } {
-  return { status: 503, body: { error: REGENERATION_FAILED, retryable } };
+/** Nothing was persisted; the previously selected interpretation stands. `why`
+ * (generation-outcome.ts) says which cause it was. It is additive: a client that
+ * reads only `error` and `retryable` reads the answer exactly as before. */
+export function regenerationFailedResponse(
+  retryable: boolean,
+  why?: { reason: RegenerationFailureReason; model_failure?: ModelFailure },
+): { status: number; body: Record<string, unknown> } {
+  return { status: 503, body: { error: REGENERATION_FAILED, retryable, ...why } };
 }

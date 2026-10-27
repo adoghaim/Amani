@@ -5,12 +5,17 @@ import { errorMessage } from '../_shared/errors.ts';
 import { StripeCheckoutOrderSchema } from '../_shared/schemas/stripe.ts';
 import { type EventClaimStore, withStripeEventClaim } from '../_shared/stripe-idempotency.ts';
 import { createAppEventSink, logServerEvent, stripeFunnelEvent } from '../_shared/app-events.ts';
+import {
+  processStripeEvent,
+  SUBSCRIPTION_LIST_LIMIT,
+  type StripeSyncActions,
+} from '../_shared/stripe-subscription-sync.ts';
 
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
 const stripe = new Stripe(stripeSecret, {
   appInfo: {
-    name: 'Bolt Integration',
+    name: 'Amani',
     version: '1.0.0',
   },
   // Stripe SDK retries on network errors and 429/5xx with exponential backoff.
@@ -146,189 +151,69 @@ const eventClaimStore: EventClaimStore = {
   },
 };
 
-async function handleEvent(event: Stripe.Event) {
-  await withStripeEventClaim(eventClaimStore, { id: event.id, type: event.type }, () => processEvent(event));
-}
-
-async function processEvent(event: Stripe.Event) {
-  const stripeData = event?.data?.object ?? {};
-
-  if (!stripeData) {
-    return;
-  }
-
-  if (!('customer' in stripeData)) {
-    return;
-  }
-
-  // for one time payments, we only listen for the checkout.session.completed event
-  if (event.type === 'payment_intent.succeeded' && event.data.object.invoice === null) {
-    return;
-  }
-
-  const { customer: customerId } = stripeData;
-
-  if (!customerId || typeof customerId !== 'string') {
-    /*
-      Identify the event, do not dump it. A serialized Stripe event carries
-      `customer_details` — email, name, phone and billing address — plus the
-      payment metadata, and Supabase's function logs are retained and readable
-      in the dashboard. The id and type are what you need to pull the full
-      object from the Stripe dashboard when this fires.
-    */
-    console.error(`No customer received on event ${event.id} (${event.type})`);
-  } else {
-    let isSubscription = true;
-
-    if (event.type === 'checkout.session.completed') {
-      const { mode } = stripeData as Stripe.Checkout.Session;
-
-      isSubscription = mode === 'subscription';
-
-      console.info(`Processing ${isSubscription ? 'subscription' : 'one-time payment'} checkout session`);
-    }
-
-    const { mode, payment_status } = stripeData as Stripe.Checkout.Session;
-
-    if (isSubscription) {
-      console.info(`Starting subscription sync for customer: ${customerId}`);
-      await syncCustomerFromStripe(customerId);
-
-      // PK-EXP5 funnel step (trial_started / subscription_activated), after the
-      // sync succeeded. logServerEvent never throws and gives up after 3
-      // seconds, so a logging failure never fails the webhook.
-      const funnelEvent = stripeFunnelEvent(event);
-      if (funnelEvent) {
-        await logServerEvent(appEventSink, {
-          event: funnelEvent,
-          props: { platform: 'web' },
-          resolveUserId: async () => {
-            const { data, error } = await supabase
-              .from('stripe_customers')
-              .select('user_id')
-              .eq('customer_id', customerId)
-              .is('deleted_at', null)
-              .maybeSingle();
-            if (error) throw new Error(`stripe_customers read failed: ${error.message}`);
-            return (data?.user_id as string | undefined) ?? null;
-          },
-        });
-      }
-    } else if (mode === 'payment' && payment_status === 'paid') {
-      try {
-        // Defense-in-depth: signature was already verified by the SDK, but
-        // event.data.object is cast via `as Stripe.Checkout.Session`. Validate
-        // the exact fields we write into stripe_orders before the upsert.
-        const orderParse = StripeCheckoutOrderSchema.safeParse(stripeData);
-        if (!orderParse.success) {
-          console.error(
-            'Stripe checkout.session.completed payload failed validation:',
-            orderParse.error.flatten(),
-          );
-          throw new Error('Invalid checkout session payload');
-        }
-        const {
-          id: checkout_session_id,
-          payment_intent,
-          amount_subtotal,
-          amount_total,
-          currency,
-        } = orderParse.data;
-
-        // Upsert keyed on the unique checkout_session_id. Belt-and-suspenders
-        // alongside the processed_stripe_events ledger above — if the same
-        // session ever re-arrives, this is a no-op rather than a duplicate row.
-        const { error: orderError } = await supabase.from('stripe_orders').upsert(
-          {
-            checkout_session_id,
-            payment_intent_id: payment_intent,
-            customer_id: customerId,
-            amount_subtotal,
-            amount_total,
-            currency,
-            payment_status,
-            status: 'completed',
-          },
-          { onConflict: 'checkout_session_id' },
-        );
-
-        if (orderError) {
-          console.error('Error upserting order:', orderError);
-          throw new Error(`Order upsert failed: ${orderError.message}`);
-        }
-        console.info(`Successfully processed one-time payment for session: ${checkout_session_id}`);
-      } catch (error) {
-        console.error('Error processing one-time payment:', error);
-        throw error;
-      }
-    }
-  }
-}
-
-// based on the excellent https://github.com/t3dotgg/stripe-recommendations
-async function syncCustomerFromStripe(customerId: string) {
-  try {
-    // fetch latest subscription data from Stripe
+// The event and sync rules live in ../_shared/stripe-subscription-sync.ts
+// (review F099); these are the Stripe and PostgREST calls behind them.
+const syncActions: StripeSyncActions = {
+  async listSubscriptions(customerId) {
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
-      limit: 1,
+      limit: SUBSCRIPTION_LIST_LIMIT,
       status: 'all',
       expand: ['data.default_payment_method'],
     });
+    return subscriptions.data;
+  },
 
-    if (subscriptions.data.length === 0) {
-      console.info(`No active subscriptions found for customer: ${customerId}`);
-      // `status` is the real column on stripe_subscriptions; `subscription_status`
-      // only exists as an alias on the stripe_user_subscriptions view.
-      const { error: noSubError } = await supabase.from('stripe_subscriptions').upsert(
-        {
-          customer_id: customerId,
-          status: 'not_started',
-        },
-        {
-          onConflict: 'customer_id',
-        },
-      );
-
-      if (noSubError) {
-        console.error('Error updating subscription status:', noSubError);
-        throw new Error(`Failed to update subscription status in database: ${noSubError.message}`);
-      }
-      return;
-    }
-
-    // assumes that a customer can only have a single subscription
-    const subscription = subscriptions.data[0];
-
-    // store subscription state
-    const { error: subError } = await supabase.from('stripe_subscriptions').upsert(
-      {
-        customer_id: customerId,
-        subscription_id: subscription.id,
-        price_id: subscription.items.data[0].price.id,
-        current_period_start: subscription.current_period_start,
-        current_period_end: subscription.current_period_end,
-        cancel_at_period_end: subscription.cancel_at_period_end,
-        ...(subscription.default_payment_method && typeof subscription.default_payment_method !== 'string'
-          ? {
-              payment_method_brand: subscription.default_payment_method.card?.brand ?? null,
-              payment_method_last4: subscription.default_payment_method.card?.last4 ?? null,
-            }
-          : {}),
-        status: subscription.status,
-      },
-      {
-        onConflict: 'customer_id',
-      },
-    );
-
-    if (subError) {
-      console.error('Error syncing subscription:', subError);
+  async upsertSubscription(row) {
+    const { error } = await supabase.from('stripe_subscriptions').upsert(row, { onConflict: 'customer_id' });
+    if (error) {
+      console.error('Error syncing subscription:', error);
       throw new Error('Failed to sync subscription in database');
     }
-    console.info(`Successfully synced subscription for customer: ${customerId}`);
-  } catch (error) {
-    console.error(`Failed to sync subscription for customer ${customerId}:`, error);
-    throw error;
-  }
+  },
+
+  parseCheckoutOrder(object) {
+    const orderParse = StripeCheckoutOrderSchema.safeParse(object);
+    if (!orderParse.success) {
+      console.error('Stripe checkout.session.completed payload failed validation:', orderParse.error.flatten());
+      return null;
+    }
+    return orderParse.data;
+  },
+
+  async upsertOrder(row) {
+    const { error: orderError } = await supabase.from('stripe_orders').upsert(row, { onConflict: 'checkout_session_id' });
+    if (orderError) {
+      console.error('Error upserting order:', orderError);
+      throw new Error(`Order upsert failed: ${orderError.message}`);
+    }
+  },
+
+  async recordFunnelStep(event, customerId) {
+    // PK-EXP5 funnel step (trial_started / subscription_activated), after the
+    // sync succeeded. logServerEvent never throws and gives up after 3
+    // seconds, so a logging failure never fails the webhook.
+    const funnelEvent = stripeFunnelEvent(event);
+    if (!funnelEvent) return;
+    await logServerEvent(appEventSink, {
+      event: funnelEvent,
+      props: { platform: 'web' },
+      resolveUserId: async () => {
+        const { data, error } = await supabase
+          .from('stripe_customers')
+          .select('user_id')
+          .eq('customer_id', customerId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (error) throw new Error(`stripe_customers read failed: ${error.message}`);
+        return (data?.user_id as string | undefined) ?? null;
+      },
+    });
+  },
+};
+
+async function handleEvent(event: Stripe.Event) {
+  await withStripeEventClaim(eventClaimStore, { id: event.id, type: event.type }, async () => {
+    await processStripeEvent(syncActions, event);
+  });
 }

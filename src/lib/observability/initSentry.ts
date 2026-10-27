@@ -11,10 +11,11 @@ import { scrubBreadcrumb, scrubEvent } from './scrub';
   client exists. Call sites (ErrorBoundary, the unhandledrejection listener in
   main.tsx) therefore need no guard of their own.
 
-  `vite.config.ts` builds with `sourcemap: 'hidden'` — maps emitted but not
-  referenced from the bundle — so stack traces can be symbolicated by upload
-  without publishing sources. `release` below is what ties a trace to a build.
-  Do not change either without the other.
+  `vite.config.ts` emits no source maps: a 'hidden' map is still a public file
+  beside its chunk, on the web and in the native apps. Symbolicating traces
+  needs a build that uploads maps before removeSourceMaps deletes them there.
+  `release` below is what ties a trace to a build. Do not change either
+  without the other.
 */
 
 /** True when a DSN is configured, i.e. when `initErrorMonitoring` will init. */

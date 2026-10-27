@@ -1,9 +1,10 @@
 import { deflateSync } from 'node:zlib';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   Synthetic lab uploads for the PK-03e-I journey. Never real patient files.
   Values, units and printed intervals mirror the claim-authority testkit
-  (supabase/functions/_shared/claim-authority.testkit.ts: TSH 6 -> 9 uIU/mL,
+  (supabase/functions/_shared/claim-authority.testkit.ts: TSH 6 -> 9 mIU/L,
   ferritin 25 -> 30 ng/mL, synthetic 0-100 printed intervals), whose trend and
   claim behaviour is already proven by Vitest; nothing clinical is authored here.
 */
@@ -61,9 +62,9 @@ export const UPLOADS = [
   upload(5, 'synthetic-lab-e', '2026-10-05', 6, 25),
 ] as const;
 
-/** parse-lab-report-ocr's `items` (ReportAnalyte) for one upload, field for field. */
-export function ocrItems(u: SyntheticUpload) {
-  const row = (rawName: string, slug: string, value: number, unit: string) => ({
+/** parse-lab-report-ocr's `items` (ExtractedAnalyte) for one upload, field for field. */
+export function ocrItems(u: SyntheticUpload): ExtractedAnalyte[] {
+  const row = (rawName: string, slug: string, value: number, unit: string): ExtractedAnalyte => ({
     raw_name: rawName, raw_value_text: String(value), value_numeric: value, unit,
     raw_reference_range: '0-100', normalized_min: 0, normalized_max: 100,
     normalized_operator: null, normalized_operator_value: null,
@@ -71,5 +72,5 @@ export function ocrItems(u: SyntheticUpload) {
     canonical_analyte_id: null, canonical_slug: slug, parse_status: 'mapped', needs_review: false,
     is_core: true, category: null,
   });
-  return [row('TSH', 'tsh', u.tsh, 'uIU/mL'), row('Ferritin', 'ferritin', u.ferritin, 'ng/mL')];
+  return [row('TSH', 'tsh', u.tsh, 'mIU/L'), row('Ferritin', 'ferritin', u.ferritin, 'ng/mL')];
 }

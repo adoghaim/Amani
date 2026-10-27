@@ -30,8 +30,10 @@
  *      every Play subscription still billing. Billing teardown, so it runs
  *      first, like Stripe's, before any data is touched. A no-op unless Play
  *      Developer API credentials are configured (see store-teardown.ts).
- *   2. `getStripeCustomerId` — check both `stripe_customers` (new) and
- *      `users.stripe_customer_id` (legacy). Either can be present.
+ *   2. `getStripeCustomerIds` — read both `stripe_customers` (new) and
+ *      `users.stripe_customer_id` (legacy). Both can be present and differ
+ *      (the old billing portal created its own customer, review F029), so
+ *      every distinct id is torn down, not just the first one found.
  *   3. `cancelStripeSubscriptions` — cancel any active/trialing/past_due
  *      subscription so the user isn't billed after they leave. Runs before
  *      the customer delete so cancellation events fire while the customer
@@ -40,8 +42,11 @@
  *      Also stops future card charges via out-of-band automations.
  *   5. `deleteLocalStripeRecords` — remove `stripe_customers`,
  *      `stripe_subscriptions`, `stripe_orders` rows for this customer +
- *      user. Idempotent (rows may already be gone on retry).
- *   6. `deleteStorageFiles` — remove uploaded lab PDFs/images.
+ *      user. Idempotent (rows may already be gone on retry). Runs only once
+ *      every customer is gone at Stripe: these rows are the only pointers a
+ *      retry has to a customer a failed step left behind.
+ *   6. `deleteStorageFiles` — remove uploaded lab PDFs/images: every object
+ *      under the prefix, verified empty (account-deletion-storage.ts).
  *   7. `deleteDataTables` — remove all app data rows keyed on user_id:
  *      `deleteUserDataTables` below, driven by user-data-registry.ts.
  *   8. `deleteRevenueCatSubscriber` — delete the RevenueCat customer record.
@@ -281,15 +286,23 @@ export interface AccountDeletionActions {
     userId: string,
     subscriptions: readonly PlaySubscriptionToCancel[],
   ): Promise<void>;
-  /** Look up the Stripe customer_id from both new and legacy locations. */
-  getStripeCustomerId(userId: string): Promise<string | null>;
+  /**
+   * Every Stripe customer id recorded for the user, from both the new
+   * (`stripe_customers`) and legacy (`users.stripe_customer_id`) locations.
+   * Duplicates and blanks are fine; the policy dedupes. MUST throw on a read
+   * error: an unread pointer is a customer that would outlive the account.
+   */
+  getStripeCustomerIds(userId: string): Promise<readonly string[]>;
   /** Cancel any subscription in an active/trialing/past_due state. */
   cancelStripeSubscriptions(customerId: string): Promise<void>;
   /** Delete the customer from Stripe. Idempotent on already-gone. */
   deleteStripeCustomer(customerId: string): Promise<void>;
   /** Remove local rows in stripe_customers, stripe_subscriptions, stripe_orders. */
   deleteLocalStripeRecords(userId: string, customerId: string): Promise<void>;
-  /** Remove all files under the user's storage prefix. */
+  /**
+   * Remove all files under the user's storage prefix. MUST throw while any
+   * object remains, so the auth identity is never deleted ahead of them.
+   */
   deleteStorageFiles(userId: string): Promise<void>;
   /** Delete rows from every user-keyed data table. */
   deleteDataTables(userId: string): Promise<void>;
@@ -380,6 +393,11 @@ export async function deleteUserDataTables(
   }
 }
 
+/** Non-blank ids, each once, in the order the port returned them. */
+function distinctCustomerIds(ids: readonly string[]): string[] {
+  return [...new Set(ids.filter((id) => typeof id === "string" && id.trim() !== ""))];
+}
+
 export async function deleteUserAccount(
   actions: AccountDeletionActions,
   userId: string,
@@ -424,11 +442,15 @@ export async function deleteUserAccount(
     await actions.cancelPlaySubscriptions(userId, playSubscriptions);
   }
 
-  const customerId = await actions.getStripeCustomerId(userId);
-
-  if (customerId) {
+  // Every distinct customer, current and legacy (review F029). Each is
+  // cancelled and deleted at Stripe before any local pointer is removed, so a
+  // failure on the second leaves both pointers for the retry to find.
+  const customerIds = distinctCustomerIds(await actions.getStripeCustomerIds(userId));
+  for (const customerId of customerIds) {
     await actions.cancelStripeSubscriptions(customerId);
     await actions.deleteStripeCustomer(customerId);
+  }
+  for (const customerId of customerIds) {
     await actions.deleteLocalStripeRecords(userId, customerId);
   }
 

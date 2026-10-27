@@ -49,6 +49,22 @@ export function isPartOfWord(text: string, start: number, end: number): boolean 
   return text[after] === '-' && LETTER_RE.test(text[after + 1] ?? '');
 }
 
+const WORD_CHAR_RE = /[a-z0-9]/i;
+
+/**
+ * Index of the first `word` in `text` at or after `from` that is not part of a
+ * longer word (no letter or digit touches either end), or -1. Callers pass
+ * both in the same case.
+ */
+export function indexOfWord(text: string, word: string, from = 0): number {
+  for (let at = text.indexOf(word, from); at !== -1; at = text.indexOf(word, at + 1)) {
+    const before = text[at - 1] ?? '';
+    const after = text[at + word.length] ?? '';
+    if (!WORD_CHAR_RE.test(before) && !WORD_CHAR_RE.test(after)) return at;
+  }
+  return -1;
+}
+
 export function splitIntoLines(text: string, adapter?: SourceAdapter): string[] {
   return text.split(/\r?\n/)
     .map(l => l.trim())

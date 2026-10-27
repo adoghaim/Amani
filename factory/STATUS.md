@@ -65,34 +65,34 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | RV-DB1 Harness: Postgres 17, assertive case 010, full-chain replay and a grant audit | RV | 1 | in-progress | - | - |
 | RV-DB2 RLS on the three public tables; revoke client writes on billing tables and anon access to user data | RV | 1 | todo | RV-DB1 | - |
 | RV-DB3 has_consented means consent; interpreted reports stay immutable; lab file ownership | RV | 1 | todo | RV-DB2 | - |
-| RV-CS1 Unit sanity: withhold Amani bands across unit mismatches | RV | 1 | in-progress | - | - |
-| RV-CS2 Declared pregnancy withholds cycle context; scoring fails closed on bad inputs | RV | 1 | todo | RV-CS1 | - |
-| RV-CS3 Censored results never become numbers | RV | 1 | todo | RV-CS2 | - |
+| RV-CS1 Unit sanity: withhold Amani bands across unit mismatches | RV | 1 | review | - | [#174](https://github.com/adoghaim/Amani/pull/174) |
+| RV-CS2 Declared pregnancy withholds cycle context; scoring fails closed on bad inputs | RV | 1 | review | RV-CS1 | [#174](https://github.com/adoghaim/Amani/pull/174) |
+| RV-CS3 Censored results never become numbers | RV | 1 | review | RV-CS2 | [#175](https://github.com/adoghaim/Amani/pull/175) |
 | RV-IA1 Cycle phase and day only from explicit patient lines | RV | 1 | review | - | [#156](https://github.com/adoghaim/Amani/pull/156) |
-| RV-IA2 Parser B12 boundaries; parse-error rows need her confirmation | RV | 1 | in-progress | RV-IA1 | - |
-| RV-IB1 One extraction contract for OCR and AI refinement | RV | 1 | in-progress | - | - |
-| RV-IB2 Keyboard- and screen-reader-usable upload flow | RV | 1 | todo | RV-IB1 | - |
-| RV-NP1 Harden the nutrient validator with an adversarial corpus | RV | 1 | in-progress | - | - |
-| RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | todo | - | - |
-| RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | in-progress | - | - |
-| RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | todo | RV-RS1 | - |
-| RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | todo | - | - |
-| RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | todo | RV-BS1 | - |
-| RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | todo | - | - |
-| RV-BU1 Billing labels from the real entitlement; an honest deletion warning | RV | 1 | in-progress | - | - |
-| RV-WP1 Private source maps, production-only routes, security headers | RV | 1 | review | - | - |
-| RV-WP2 Offline is not empty; error boundaries reset | RV | 1 | in-progress | RV-WP1 | - |
-| RV-WP3 Accessible overlays, safe areas, Android back closes sheets first | RV | 1 | todo | RV-WP2 | - |
-| RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | todo | - | - |
-| RV-DL1 Device lock hardening | RV | 1 | in-progress | - | - |
-| RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | todo | - | - |
-| RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | todo | - | - |
-| RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | todo | - | - |
-| RV-DP2 Declared dependencies, an aligned test toolchain and a Node 22 pin | RV | 1 | todo | RV-DP1 | - |
-| RV-CI1 Native CI that can fail; the device-lock boundary test runs | RV | 1 | review | - | - |
-| RV-CI2 Workflow hardening and Node 22 everywhere | RV | 1 | in-progress | RV-CI1 | - |
-| RV-CI3 E2E configs tell the truth | RV | 1 | todo | RV-CI2 | - |
-| RV-HY1 Untrack leftovers; ignore local state | RV | 1 | review | - | - |
+| RV-IA2 Parser B12 boundaries; parse-error rows need her confirmation | RV | 1 | review | RV-IA1 | [#172](https://github.com/adoghaim/Amani/pull/172) |
+| RV-IB1 One extraction contract for OCR and AI refinement | RV | 1 | review | - | [#165](https://github.com/adoghaim/Amani/pull/165) |
+| RV-IB2 Keyboard- and screen-reader-usable upload flow | RV | 1 | review | RV-IB1 | [#165](https://github.com/adoghaim/Amani/pull/165) |
+| RV-NP1 Harden the nutrient validator with an adversarial corpus | RV | 1 | review | - | [#159](https://github.com/adoghaim/Amani/pull/159) |
+| RV-AI1 Validate lab-insights output, reasoning-model parameters, one model config, fixed client errors | RV | 1 | review | - | [#167](https://github.com/adoghaim/Amani/pull/167) |
+| RV-RS1 Dark critical-flag notice from the lab's own flags; report context keeps her symptoms | RV | 1 | review | - | [#161](https://github.com/adoghaim/Amani/pull/161) |
+| RV-RS2 Disclaimer whenever clinical content shows; no outside-band counts | RV | 1 | review | RV-RS1 | [#161](https://github.com/adoghaim/Amani/pull/161) |
+| RV-BS1 Stripe portal uses the real customer; deletion removes every customer and every file | RV | 1 | review | - | [#168](https://github.com/adoghaim/Amani/pull/168) |
+| RV-BS2 Checkout: server price allow-list, server-built redirects, one subscription, tested webhook | RV | 1 | review | RV-BS1 | [#168](https://github.com/adoghaim/Amani/pull/168) |
+| RV-BI1 Play pause keeps access until expiry; App Store records keyed consistently | RV | 1 | review | - | [#164](https://github.com/adoghaim/Amani/pull/164) |
+| RV-BU1 Billing labels from the real entitlement; an honest deletion warning | RV | 1 | review | - | [#157](https://github.com/adoghaim/Amani/pull/157) |
+| RV-WP1 Private source maps, production-only routes, security headers | RV | 1 | review | - | [#169](https://github.com/adoghaim/Amani/pull/169) |
+| RV-WP2 Offline is not empty; error boundaries reset | RV | 1 | review | RV-WP1 | [#169](https://github.com/adoghaim/Amani/pull/169) |
+| RV-WP3 Accessible overlays, safe areas, Android back closes sheets first | RV | 1 | review | RV-WP2 | [#169](https://github.com/adoghaim/Amani/pull/169) |
+| RV-HC1 Reminders hidden until they work; cycle copy matches ruling D7.9 | RV | 1 | review | - | [#170](https://github.com/adoghaim/Amani/pull/170) |
+| RV-DL1 Device lock hardening | RV | 1 | review | - | [#163](https://github.com/adoghaim/Amani/pull/163) |
+| RV-SP1 Committed Package.resolved matches Package.swift | RV | 1 | review | - | [#171](https://github.com/adoghaim/Amani/pull/171) |
+| RV-AU1 Recovery links work in the app; OAuth-only accounts get a path; signup hardening; App Links | RV | 1 | review | - | [#166](https://github.com/adoghaim/Amani/pull/166) |
+| RV-DP1 pdf.js 6.4.299 on the legacy build | RV | 1 | review | - | [#173](https://github.com/adoghaim/Amani/pull/173) |
+| RV-DP2 Declared dependencies, an aligned test toolchain and a Node 22 pin | RV | 1 | review | RV-DP1 | [#173](https://github.com/adoghaim/Amani/pull/173) |
+| RV-CI1 Native CI that can fail; the device-lock boundary test runs | RV | 1 | review | - | [#160](https://github.com/adoghaim/Amani/pull/160) |
+| RV-CI2 Workflow hardening and Node 22 everywhere | RV | 1 | review | RV-CI1 | [#160](https://github.com/adoghaim/Amani/pull/160) |
+| RV-CI3 E2E configs tell the truth | RV | 1 | review | RV-CI2 | [#160](https://github.com/adoghaim/Amani/pull/160) |
+| RV-HY1 Untrack leftovers; ignore local state | RV | 1 | review | - | [#158](https://github.com/adoghaim/Amani/pull/158) |
 
 **Superseded by owner rulings:** PK-03e-A, PK-03e-B, PK-03e-C, PK-03e-D, PK-03e-E (V2-03e turn 10 removed the remediation flow; V2 `erase_reports` replaced PK-03e-E, PR #92 closed).
 
@@ -107,19 +107,19 @@ Human-readable view of `status.json` (regenerate from it; the JSON is the record
 | Packet | Track | Status | Branch @ commit | State |
 |---|---|---|---|---|
 | RV-DB1 | db-security | in-progress | `factory/rv-db-security` @ `b03f619` | Built (F035, F124 partial). Reviews: 3 blocking findings open (1 security, 2 correctness); no fix applied yet. |
-| RV-CS1 | clinical-scoring | in-progress | `factory/rv-clinical-scoring` @ `db14fb2` | Built (F013 partial: its server half is a generate-interpretation handoff). Reviews were cut off: needs verification. |
+| RV-CS1 | clinical-scoring | review | `factory/rv-clinical-scoring` @ `b542a1b` | PR #174: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
 | RV-IA1 | ingest-cycle-parser | review | `factory/rv-ingest-cycle-parser` @ `5cf7d10` | PR #156: reviewed (correctness + clinical, G4 pass), gates green on current main; awaiting owner confirmation of PK-FIX-06 Q9. |
-| RV-IA2 | ingest-cycle-parser | in-progress | `factory/rv-wip-ia2` @ `073a207` | Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch. |
-| RV-IB1 | ingest-ocr-a11y | in-progress | `factory/rv-ingest-ocr-a11y` @ `4219016` | Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet. |
-| RV-NP1 | nutrient-policy | in-progress | `factory/rv-nutrient-policy` @ `fefd1f6` | Built, DONE_WITH_CONCERNS (F015, F096 partial). Verifier was cut off: needs verification. |
-| RV-RS1 | report-safety | in-progress | `factory/rv-wip-rs1` @ `7ed7625` | Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification. |
-| RV-BU1 | billing-ui | in-progress | `factory/rv-billing-ui` @ `e321bd3` | Built, DONE_WITH_CONCERNS (F045 partial). Verifier was cut off: needs verification. |
-| RV-WP1 | web-platform | review | `factory/rv-web-platform` @ `dec8bfe` | Built. Security and correctness reviews: recommend merge. |
-| RV-WP2 | web-platform | in-progress | `factory/rv-wip-wp2` @ `979728b` | Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d). |
-| RV-DL1 | device-lock | in-progress | `factory/rv-wip-dl1` @ `e2d2c2e` | Interrupted mid-build: one WIP commit; needs completion, gates and verification. |
-| RV-CI1 | ci-workflows | review | `factory/rv-ci-workflows` @ `4bd6043` | Built (F104, F055, F138 partial). Correctness review: recommend merge. |
-| RV-CI2 | ci-workflows | in-progress | `factory/rv-ci-workflows` @ `74bdf7e` | Built on top of CI1. Reviews were cut off by the stop: needs verification. |
-| RV-HY1 | hygiene | review | `factory/rv-hygiene` @ `a44186c` | Built (F090 partial). Blind verifier: PASS_WITH_NOTES. |
+| RV-IA2 | ingest-cycle-parser | review | `factory/rv-wip-ia2` @ `fa3b851` | PR #172: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
+| RV-IB1 | ingest-ocr-a11y | review | `factory/rv-ingest-ocr-a11y` @ `909f307` | PR #165: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
+| RV-NP1 | nutrient-policy | review | `factory/rv-nutrient-policy` @ `98eb8a0` | PR #159: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
+| RV-RS1 | report-safety | review | `factory/rv-wip-rs1` @ `382f3c7` | PR #161: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
+| RV-BU1 | billing-ui | review | `factory/rv-billing-ui` @ `c62caf4` | PR #157: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
+| RV-WP1 | web-platform | review | `factory/rv-web-platform` @ `18eb692` | PR #169: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
+| RV-WP2 | web-platform | review | `factory/rv-wip-wp2` @ `18eb692` | PR #169: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
+| RV-DL1 | device-lock | review | `factory/rv-wip-dl1` @ `8a3ad77` | PR #163: blind verifier PASS_WITH_NOTES; every CI gate and the CI e2e matrix run on current main (results in the PR). |
+| RV-CI1 | ci-workflows | review | `factory/rv-ci-workflows` @ `fc21c1d` | PR #160: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
+| RV-CI2 | ci-workflows | review | `factory/rv-ci-workflows` @ `fc21c1d` | PR #160: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
+| RV-HY1 | hygiene | review | `factory/rv-hygiene` @ `2c1d777` | PR #158: blind verifier PASS_WITH_NOTES; gates and the full CI e2e matrix green on current main. |
 
 Not started (17): RV-DB2, RV-DB3, RV-CS2, RV-CS3, RV-IB2, RV-AI1, RV-RS2, RV-BS1, RV-BS2, RV-BI1, RV-WP3, RV-HC1, RV-SP1, RV-AU1, RV-DP1, RV-DP2, RV-CI3. Their track branches sit at 22027b2 or at the last built packet.
 

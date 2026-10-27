@@ -26,7 +26,7 @@ Use TypeScript for app code and React function components for UI. Follow existin
 
 ## Testing Guidelines
 
-Vitest is configured (`vitest.config.ts`); `npm test` runs the suites under `src/` and `supabase/functions/_shared/` and executes in CI between typecheck and build (run it for the current count rather than trusting a number here). Before opening a PR, run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. For parser, scoring, Supabase, or health-interpretation changes, add focused tests and document manual validation steps in the PR. For server logic, follow the existing pattern: put ordering and policy in a pure `supabase/functions/_shared/*.ts` module behind an injected actions port so it can be tested with fakes, and keep the Deno handler a thin wiring layer.
+Vitest is configured (`vitest.config.ts`); `npm test` runs the suites its `include` list matches (under `src/`, `supabase/functions/`, `scripts/`, `jarvis/` and `tools/mcp-amani/`) and executes in CI between typecheck and build (run it for the current count rather than trusting a number here). `npm run test:device-lock` is separate: it compiles and runs the native Java and Swift device-lock release helpers, needs `javac` and `swiftc`, and runs in both `native-build.yml` jobs. Before opening a PR, run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. For parser, scoring, Supabase, or health-interpretation changes, add focused tests and document manual validation steps in the PR. For server logic, follow the existing pattern: put ordering and policy in a pure `supabase/functions/_shared/*.ts` module behind an injected actions port so it can be tested with fakes, and keep the Deno handler a thin wiring layer.
 
 ## Commit & Pull Request Guidelines
 

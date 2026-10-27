@@ -59,6 +59,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   },
 } }));
 vi.mock('../hooks/useSubscription', () => ({ useSubscription: () => ({ ...fixture.subscription, refetch: vi.fn() }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ userProfile: null }) }));
 vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('../components/freemium/PremiumPaywall', () => ({
   PremiumPaywall: ({ open }: { open: boolean }) => open ? <div role="dialog">Premium paywall</div> : null,

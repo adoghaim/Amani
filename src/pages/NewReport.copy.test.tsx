@@ -3,6 +3,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ExtractedAnalyte } from '../../supabase/functions/_shared/lab-extraction';
 
 /*
   PK-FIX-02 on the real upload page: the campaign's copy fixes d, f and h.
@@ -22,11 +23,13 @@ vi.mock('../lib/supabase', () => {
     };
     return builder;
   };
-  const ocrItems = [{
-    raw_name: 'TSH', canonical_slug: 'tsh', category: 'thyroid', value_numeric: 2.1, value_text: '2.1',
-    unit: 'uIU/mL', raw_reference_range: '0.45-4.5', normalized_reference_min: 0.45, normalized_reference_max: 4.5,
-    reference_operator: null, reference_operator_value: null, confidence_score: 'high', is_core_biomarker: true,
-    needs_review: false, source_snippet: 'TSH 2.1 uIU/mL', source_format: 'ocr', review_status: 'pending',
+  // parse-lab-report-ocr's own row shape (review F093), not the app's ReportItem.
+  const ocrItems: ExtractedAnalyte[] = [{
+    raw_name: 'TSH', raw_value_text: '2.1', value_numeric: 2.1, unit: 'uIU/mL',
+    raw_reference_range: '0.45-4.5', normalized_min: 0.45, normalized_max: 4.5,
+    normalized_operator: null, normalized_operator_value: null, source_snippet: 'TSH 2.1 uIU/mL',
+    confidence_score: 'high', canonical_analyte_id: null, canonical_slug: 'tsh', parse_status: 'mapped',
+    needs_review: false, is_core: true, category: 'thyroid',
   }];
   return { supabase: {
     from: query,

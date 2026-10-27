@@ -1,9 +1,20 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
+import { FullScreenGate, type GateSecondaryLink } from './FullScreenGate'
+import { CalmNotice } from './CalmNotice'
+import { isChunkLoadError, pageReload } from '../lib/lazyWithRetry'
+
+export interface ErrorFallbackProps {
+  error: Error
+  /** Clears the error, so the children render again. */
+  reset: () => void
+}
 
 interface Props {
   children: ReactNode
-  fallback?: ReactNode
+  /** Shown instead of the children. As a function it also gets the error and `reset`. */
+  fallback?: ReactNode | ((props: ErrorFallbackProps) => ReactNode)
 }
 
 interface State {
@@ -28,26 +39,59 @@ export class ErrorBoundary extends Component<Props, State> {
     })
   }
 
-  render(): ReactNode {
-    if (!this.state.error) return this.props.children
-    if (this.props.fallback) return this.props.fallback
-
-    return (
-      <div className="flex flex-col items-center justify-center min-h-dvh px-6 text-center safe-top safe-bottom">
-        <h1 className="text-xl text-theme-neutral-900 mb-2">
-          Something went wrong
-        </h1>
-        <p className="text-sm text-theme-neutral-600 mb-6 max-w-sm">
-          We hit an unexpected error. Reloading usually fixes it. If it keeps
-          happening, please reach out.
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 rounded-md bg-theme-primary text-white text-sm font-medium hover:opacity-90"
-        >
-          Reload
-        </button>
-      </div>
-    )
+  reset = (): void => {
+    this.setState({ error: null })
   }
+
+  render(): ReactNode {
+    const { error } = this.state
+    if (!error) return this.props.children
+    const { fallback } = this.props
+    if (typeof fallback === 'function') return fallback({ error, reset: this.reset })
+    if (fallback) return fallback
+
+    // Outside any screen there may be no router: the link loads the dashboard afresh.
+    return <ErrorScreen error={error} onRetry={this.reset} home={{ label: 'Go to dashboard', href: '/app' }} />
+  }
+}
+
+/**
+ * Where a screen that failed to render leaves her (F072; DESIGN.md
+ * full-screen-gate and calm-notice): Try again, or the dashboard. When the
+ * screen's code failed to load, React keeps that error, so Try again reloads.
+ */
+function ErrorScreen({ error, onRetry, home }: { error: Error; onRetry: () => void; home: GateSecondaryLink }) {
+  return (
+    <FullScreenGate
+      heading="We couldn't show this screen"
+      sentence="Try again, or go to your dashboard."
+      notice={<CalmNotice title="Something went wrong while opening it." />}
+      primary={{ label: 'Try again', onClick: () => (isChunkLoadError(error) ? pageReload.reload() : onRetry()) }}
+      secondary={home}
+    />
+  )
+}
+
+/**
+ * One boundary per screen (F072). Keyed by the path, so leaving the screen
+ * (a link, or Android back) clears its error.
+ */
+export function RouteErrorBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  return (
+    <ErrorBoundary
+      key={pathname}
+      fallback={({ error, reset }) => (
+        <ErrorScreen
+          error={error}
+          onRetry={reset}
+          // On the dashboard itself the path does not change, so reset as well.
+          home={{ label: 'Go to dashboard', onClick: () => { navigate('/app'); reset() } }}
+        />
+      )}
+    >
+      {children}
+    </ErrorBoundary>
+  )
 }

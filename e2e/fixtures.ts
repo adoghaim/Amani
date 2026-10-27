@@ -166,13 +166,28 @@ export const test = base.extend<{ authenticated: boolean; syntheticReports: Synt
           if (match) { await route.fulfill({ json: byReport[url.pathname](match) }); return; }
         }
         // ReportView's historical read: one projection, an in-list of fixture ids only.
-        const historyColumns = ['name', 'value', 'unit', 'reference_min', 'reference_max', 'lab_report_id'] as const;
+        const historyColumns = ['name', 'value', 'unit', 'reference_min', 'reference_max', 'lab_report_id', 'raw_value_text'] as const;
         if (url.pathname === '/rest/v1/biomarkers' && select === historyColumns.join(',')) {
           const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];
           const matches = ids.map(id => syntheticReports.find(r => r.report.id === id));
           if (ids.length > 0 && matches.every(m => m !== undefined)) {
             await route.fulfill({ json: matches.flatMap(m => m!.biomarkers.map(b =>
               Object.fromEntries(historyColumns.map(c => [c, b[c]])))) });
+            return;
+          }
+        }
+        // F022: with it, the flagged rows of the same reports (READING_REVIEW_COLUMNS), so
+        // ReportView leaves a value she never confirmed out of her trends.
+        const reviewColumns = ['id', 'lab_report_id', 'canonical_slug', 'value_numeric', 'raw_value_text',
+          'confidence_score', 'needs_review', 'reviewed_by_user', 'review_status'] as const;
+        if (url.pathname === '/rest/v1/report_analytes' && select === reviewColumns.join(',')
+          && url.searchParams.get('needs_review') === 'eq.true') {
+          const ids = /^in\.\(([^()]*)\)$/.exec(url.searchParams.get('lab_report_id') ?? '')?.[1]?.split(',') ?? [];
+          const matches = ids.map(id => syntheticReports.find(r => r.report.id === id));
+          if (ids.length > 0 && matches.every(m => m !== undefined)) {
+            await route.fulfill({ json: matches.flatMap(m => (m!.analytes ?? [])
+              .filter(a => a['needs_review'] === true)
+              .map(a => Object.fromEntries(reviewColumns.map(c => [c, a[c] ?? null])))) });
             return;
           }
         }

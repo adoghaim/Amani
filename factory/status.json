@@ -2037,16 +2037,19 @@
         "F013"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-clinical-scoring",
-      "pr": null,
+      "pr": "#174",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2057,10 +2060,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track clinical-scoring; findings F011, F013. Head db14fb2. Built (F013 partial: its server half is a generate-interpretation handoff). Reviews were cut off: needs verification."
+        "Amani bands are withheld when a result's unit is not the catalog unit (LDL 4.9 mmol/L, glucose 5.2 mmol/L, creatinine 80 umol/L get no band) and cross-unit pairs make no trend, with 8 owner-approved 1:1 equivalences (Na/K/Cl/CO2, TSH, ALT/AST/ALP) scored as before; F011 and the client half of F013, blind verifier PASS_WITH_NOTES on cedc073 and on the units commit dd3b179 on 2026-10-23 after two FAILs.",
+        "Gates at b542a1b (run locally): lint, typecheck, full test (3,539), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-CS2",
@@ -2074,16 +2078,19 @@
       "depends_on": [
         "RV-CS1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-clinical-scoring",
-      "pr": null,
+      "pr": "#174",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2094,10 +2101,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track clinical-scoring; findings F012, F097. Not started."
+        "A declared Pregnant, Postpartum or Breastfeeding status now reaches every client assessment call and withholds the 56 requires_context analytes, and scoring fails closed on NaN, infinite, negative, inverted and equal-bound inputs (F012, F097 non-decision parts, ana_screen fixed); blind verifier PASS_WITH_NOTES on 13eae31 on 2026-10-23, server half handed off.",
+        "Gates at b542a1b (run locally): lint, typecheck, full test (3,539), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-CS3",
@@ -2110,16 +2118,19 @@
       "depends_on": [
         "RV-CS2"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-clinical-scoring",
-      "pr": null,
+      "pr": "#175",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2130,10 +2141,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track clinical-scoring; findings F021. Not started."
+        "A censored result ('<8', '> OR = 60') is no longer compared, trended, percent-changed, classified, displayed or sent to lab-insights as its stored placeholder number on the client and in shared server logic; F021 is partial pending PX1 (inclusive comparators in the local PDF parser) and the post-#152 generate-interpretation packet; blind verifier verdict PASS_WITH_NOTES at 3c25fef on 2026-10-24 after seven rounds and two back-outs.",
+        "Gates at ed08e99 (run locally): lint, typecheck, full test (3,657), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-IA1",
@@ -2188,16 +2200,19 @@
       "depends_on": [
         "RV-IA1"
       ],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-ia2",
-      "pr": null,
+      "pr": "#172",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2208,7 +2223,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ingest-cycle-parser; findings F098, F022. Head 073a207. Interrupted mid-build. B12 whole-word matching committed (35a4521); the unfinished F022 confirmation work is saved as wip/IA2-uncommitted.patch."
+        "Fixed F098 (B12 aliases match whole words, so '*cobalamin' analytes stay unmapped, and '<X' results need review) and the client part of F022 (parse-error rows keep Save closed until she confirms, and unconfirmed values stay out of the primary finding, focus areas, trends and headline); final independent verdict PASS_WITH_NOTES at fd21f11 on 2026-10-23 after an earlier FAIL at 72a02f1 was fixed; the generate-interpretation and lab-insights exclusion, the remap-only save path and in-bounds SI values stay open.",
+        "Gates at fa3b851 (run locally): lint, typecheck, full test (3,446), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2224,15 +2240,18 @@
         "F026"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ingest-ocr-a11y",
-      "pr": null,
+      "pr": "#165",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2243,7 +2262,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ingest-ocr-a11y; findings F093, F114, F026. Head 4219016. Built (F026 partial). Security review: recommend merge. Correctness review: 1 blocking finding open; no fix applied yet."
+        "OCR and AI-refined rows now keep the lab's printed value text and interval on save, ambiguous printed ranges bind none and open for review, and parse-lab-report-ocr accepts only PNG/JPEG base64 data URLs (F093, F114, F026 code minimum); two earlier verifier rounds returned FAIL and led to three fix waves, then the final blind verifier returned PASS_WITH_NOTES on 2026-10-23, with OpenAI ZDR and the photo-report backfill still owner decisions.",
+        "Gates at 909f307 (run locally): lint, typecheck, full test (3,412), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2259,15 +2279,18 @@
       "depends_on": [
         "RV-IB1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ingest-ocr-a11y",
-      "pr": null,
+      "pr": "#165",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2278,7 +2301,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ingest-ocr-a11y; findings F064. Not started."
+        "The upload drop zone, review rows, remove controls, labels, symptom chips and error alerts are keyboard- and screen-reader-usable, proven by axe and jsdom tests (19 of 20 red on base) and a keyboard Playwright spec in three browsers (F064); blind verifier PASS_WITH_NOTES on 2026-10-23, with no device or screen-reader run.",
+        "Gates at 909f307 (run locally): lint, typecheck, full test (3,412), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2293,15 +2317,18 @@
         "F096"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-nutrient-policy",
-      "pr": null,
+      "pr": "#159",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2312,7 +2339,10 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track nutrient-policy; findings F015, F096. Head fefd1f6. Built, DONE_WITH_CONCERNS (F015, F096 partial). Verifier was cut off: needs verification."
+        "Track nutrient-policy; findings F015, F096. Fix fefd1f6; merged with main 25d09b7 at 98eb8a0.",
+        "Blind verifier (opus) at fefd1f6: PASS_WITH_NOTES, G4 clinical authority: pass (guardrail only stricter).",
+        "Gates at 98eb8a0 (run locally): lint, typecheck, full test (3,504), build, clinical, functions; CI e2e matrix green in Chromium, WebKit and Firefox.",
+        "Owner/clinical: review deny-list additions (valerian, kava, shatavari); medication and brand lists; deploy generate-interpretation after merge."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2329,15 +2359,18 @@
         "F033"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ai-calls",
-      "pr": null,
+      "pr": "#167",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2348,7 +2381,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ai-calls; findings F017, F131, F128, F033. Not started."
+        "lab-insights now drops nutrient-policy violations and no longer sends temperature to gpt-5-mini, every OpenAI model id lives in one shared module with documented shutdown dates, and three non-billing AI functions return fixed client errors (F017, F131, F128, F033); blind verifier PASS_WITH_NOTES on 2026-10-23, nothing run against the live API.",
+        "Gates at 42408ee (run locally): lint, typecheck, full test (3,416), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2363,16 +2397,19 @@
         "F018"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-rs1",
-      "pr": null,
+      "pr": "#161",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2383,7 +2420,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track report-safety; findings F014, F018. Head 7ed7625. Interrupted before gating: both fixes committed (e3375cd F018, 7ed7625 F014); track branch not advanced; needs gates and verification."
+        "Fixed F018 (the server context schema validates each field alone and accepts 'unsure', so her symptoms are kept) and the F014 interim (a deterministic notice for the lab's own printed critical flags, dark behind features.lab_critical_flag_notice); blind verdict PASS_WITH_NOTES on 2026-10-23 at 7ed7625; clinical GO on the copy and marker table, and the generate-interpretation deploy, are still pending.",
+        "Gates at 382f3c7 (run locally): lint, typecheck, full test (3,479), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2400,16 +2438,19 @@
       "depends_on": [
         "RV-RS1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-report-safety",
-      "pr": null,
+      "pr": "#161",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2420,7 +2461,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track report-safety; findings F024, F069. Not started."
+        "Fixed F024 (the report disclaimer shows whenever a summary or interpretation shows, including a failed generation) and part of F069 (header outside-band counts and the lab-brand chip tint removed); the Health systems grid count and the other status-tinted chips are still open; blind verdict PASS_WITH_NOTES on 2026-10-23 at 1492aea.",
+        "Gates at 382f3c7 (run locally): lint, typecheck, full test (3,479), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2437,14 +2479,17 @@
         "F036"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-stripe",
-      "pr": null,
+      "pr": "#168",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2455,7 +2500,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-stripe; findings F038, F029, F094, F036. Not started."
+        "The billing portal now opens the stripe_customers customer and never creates one, account deletion cancels and deletes every distinct Stripe customer and pages storage until empty (F038, F029, F094, F036); blind verifier PASS_WITH_NOTES on 2026-10-23, nothing run against live Stripe or Supabase Storage.",
+        "Gates at 94221c2 (run locally): lint, typecheck, full test (3,541), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2477,14 +2523,17 @@
       "depends_on": [
         "RV-BS1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-stripe",
-      "pr": null,
+      "pr": "#168",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2495,7 +2544,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-stripe; findings F030, F031, F044, F099, F040, F090, F033. Not started."
+        "stripe-checkout sells only the two allow-listed prices as subscriptions on server-built APP_URL redirects and answers 409 for a second plan, and the webhook sync and checkout validation are tested and stored newest-entitling-first (F030, F031, F044, F099, F040 partial, F090 and F033 Stripe sites); blind verifier PASS_WITH_NOTES on 2026-10-23, with the webhook-lag double-pay path still open until an owner Stripe setting is applied and Android googleProductChangeInfo handed off.",
+        "Gates at 94221c2 (run locally): lint, typecheck, full test (3,541), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2510,14 +2560,17 @@
         "F041"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-iap",
-      "pr": null,
+      "pr": "#164",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2528,7 +2581,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-iap; findings F039, F041. Not started."
+        "F039 fixed (a scheduled Play pause keeps access until expiry, a started pause maps to 'paused' so account deletion warns and cancels, REFUND_REVERSED activates), F041 partly fixed (numeric ids accepted, Play rows keyed on the original order id on both paths, cross-account refusal added; App Store rows still key on the latest transaction id until RevenueCat API v2), F033 verify-iap-purchase site fixed (fixed client error body, scrubbed log); blind verifier PASS_WITH_NOTES 2026-10-23 at 9fc7fc3, 20 tests red on base, mutations m1-m10 reproduced, m11 survived.",
+        "Gates at 8fc2370 (run locally): lint, typecheck, full test (3,375), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2543,15 +2597,18 @@
         "F045"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-billing-ui",
-      "pr": null,
+      "pr": "#157",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2562,7 +2619,10 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track billing-ui; findings F047, F045. Head e321bd3. Built, DONE_WITH_CONCERNS (F045 partial). Verifier was cut off: needs verification."
+        "Track billing-ui; findings F047, F045. Fix e321bd3; merged with main 25d09b7 at c62caf4.",
+        "Blind verifier (opus) at e321bd3: PASS_WITH_NOTES (four minor notes in PR #157).",
+        "Gates at c62caf4 (run locally; GitHub Actions jobs do not start): lint, typecheck, full test (3,371), build, contrast; CI e2e matrix (isolation, default 65/65, freemium 8/8, journey 2/2) in Chromium, WebKit and Firefox.",
+        "Owner action: approve Terms/Privacy wording for immediate Stripe cancellation on deletion."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2585,9 +2645,12 @@
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-web-platform",
-      "pr": null,
+      "pr": "#169",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2598,7 +2661,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track web-platform; findings F068, F109, F028, F113. Head dec8bfe. Built. Security and correctness reviews: recommend merge."
+        "Source maps are deleted at build, dev pages no longer ship, and a host-free CSP plus frame, nosniff, referrer and permissions headers are served (F068, F109, F028, F113); two independent reviewers (correctness, security) recommended merge at dec8bfe on 2026-10-23, with 87/87 and 69/69 browser runs in three browsers; the GA4 loader from main that the enforced CSP would have blocked was fixed in 18eb692, and an independent verifier gave that commit PASS_WITH_NOTES on 2026-10-23.",
+        "Gates at 18eb692 (run locally): lint, typecheck, full test (3,443), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2615,15 +2679,18 @@
       "depends_on": [
         "RV-WP1"
       ],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-wp2",
-      "pr": null,
+      "pr": "#169",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2634,7 +2701,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track web-platform; findings F065, F072. Head 979728b. Interrupted mid-build. Unfinished work saved as wip/WP2-uncommitted.patch on top of a temporary WIP commit (0ad8e0d)."
+        "A failed read on the Dashboard, a report or the profile is now a load failure with Try again, each screen has a resettable error boundary, and the lazy-route storage calls are guarded (F065, F072); the independent verifier gave PASS_WITH_NOTES at 6ffd199 on 2026-10-23, with 15 mutations red and the offline e2e spec 4/4 in three browsers.",
+        "Gates at 18eb692 (run locally): lint, typecheck, full test (3,443), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2652,15 +2720,18 @@
       "depends_on": [
         "RV-WP2"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-web-platform",
-      "pr": null,
+      "pr": "#169",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2671,7 +2742,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track web-platform; findings F066, F071, F067. Not started."
+        "Four overlays use the shared accessible Modal, the safe-area padding now wins the cascade, and Android back closes the top sheet first through a guarded onBackButton (F066, F071, F067); the independent verifier gave PASS_WITH_NOTES at 83e8773 on 2026-10-23, with Android device checks left as owner actions.",
+        "Gates at 18eb692 (run locally): lint, typecheck, full test (3,443), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2686,16 +2758,19 @@
         "F136"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G4",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-honest-copy",
-      "pr": null,
+      "pr": "#170",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2706,7 +2781,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track honest-copy; findings F137, F136. Not started."
+        "The Settings Reminders section is hidden behind features.local_reminders and shows Saved only after supabase-js returns no error (F137), and the index.html descriptions plus the Landing h1 and bullet no longer claim cycle-phase scoring (F136, D7.9); blind verifier PASS_WITH_NOTES on 2026-10-23, red-at-base mutations on all four changed source files, store listings and Terms/Privacy copy left to the owner.",
+        "Gates at 519b739 (run locally): lint, typecheck, full test (3,359), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2727,15 +2803,18 @@
         "F138"
       ],
       "depends_on": [],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-wip-dl1",
-      "pr": null,
+      "pr": "#163",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2746,7 +2825,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track device-lock; findings F000, F001, F002, F005, F006, F007, F009, F138. Head e2d2c2e. Interrupted mid-build: one WIP commit; needs completion, gates and verification."
+        "Fixed F000, F001, F002, F005, F006, F007, F009 and F138 (device lock hardening, native 1.0.7 and flag-gated); the first blind verdict on 2026-10-23 was FAIL (an open Modal made the lock screen inert), fixed in c39b9cf and re-verified PASS_WITH_NOTES on 2026-10-23; device QA, Android build and the F006 policy ruling are still pending.",
+        "Gates at 8a3ad77 (run locally): lint, typecheck, full test (3,393), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2762,15 +2842,18 @@
         "F121"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ios-spm",
-      "pr": null,
+      "pr": "#171",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2781,7 +2864,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ios-spm; findings F003, F049, F121. Not started."
+        "The committed iOS Package.resolved was regenerated and now resolves with -disableAutomaticPackageResolution (exit 0 from clean derived data; exit 74 at the base lockfile and with the keychain-swift pin removed), moving capacitor-swift-pm to 8.5.3, purchases-hybrid-common to 19.10.0 and purchases-ios-spm to 5.94.0 and adding keychain-swift 21.0.0 (F003, F049, F121); blind verifier PASS_WITH_NOTES on 2026-10-23, Xcode Cloud itself and device purchase/restore QA not run.",
+        "Gates at 95201ea (run locally): lint, typecheck, full test (3,350), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2799,15 +2883,18 @@
         "F076"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G1",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-auth-flows",
-      "pr": null,
+      "pr": "#166",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2818,7 +2905,8 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track auth-flows; findings F063, F133, F132, F075, F076. Not started."
+        "F063 fixed (ResetPassword turns a recovery hash, token_hash or PKCE code into a session in the app), F075 fixed (www removed from the Android filter, iOS entitlement and DEEP_LINK_HOSTS), F132 and F133 fixed in code only (check-your-inbox screen, 8-character client minimum, native login guidance; dashboard settings, CAPTCHA and native OAuth stay with the owner), F076 deferred (iTunes lookup returns 0 results for com.amani.health); blind verifier PASS_WITH_NOTES 2026-10-23 at 256189c, 12 tests red on base.",
+        "Gates at 29c0efa (run locally): lint, typecheck, full test (3,366), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2835,14 +2923,17 @@
         "F108"
       ],
       "depends_on": [],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-deps-toolchain",
-      "pr": null,
+      "pr": "#173",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2853,10 +2944,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track deps-toolchain; findings F053, F107, F062, F108. Not started."
+        "pdfjs-dist is now 6.4.299 (patched for GHSA-hq66-cqwq-w95j) on the legacy build, with a 45 s / 120 s extraction deadline, the legacy worker lowered to the build target with its ES export and import.meta kept, install-if-missing polyfills in both the page and the worker realm, and the dead isEvalSupported option removed (F053, F062, F108; F107 closed together with RV-DP2's zod removal); blind verifier PASS_WITH_NOTES at 41b8720 on 2026-10-24 after three FAIL rounds, built chunk and worker extract and render with 19 APIs deleted in Chromium, WebKit and Firefox, no real iOS or Android device run.",
+        "Gates at d5b2f32 (run locally): lint, typecheck, full test (3,394), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-DP2",
@@ -2874,14 +2966,17 @@
       "depends_on": [
         "RV-DP1"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-deps-toolchain",
-      "pr": null,
+      "pr": "#173",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2892,10 +2987,11 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track deps-toolchain; findings F091, F092, F106, F055, F086, F110. Not started."
+        "zod and @types/react-router-dom are removed, esbuild and js-yaml 4.3.2 are declared exact, axe-core is aligned to 4.13.0, playwright is pinned to 1.64.0, and .nvmrc 22.22.2 plus engines.node ^22.13.0 || ^24.0.0 are added, so npm audit --omit=dev reports 0 vulnerabilities (F091, F092, F106, F055, F086, F110); blind verifier PASS_WITH_NOTES at b4f1fdd on 2026-10-24, its three notes fixed in 1f7f5fb, fresh blind verifier PASS_WITH_NOTES at 1f7f5fb on 2026-10-24.",
+        "Gates at d5b2f32 (run locally): lint, typecheck, full test (3,394), build, clinical, contrast, release, pinned, functions, flags, migration order, device-lock; CI e2e matrix green in Chromium, WebKit and Firefox (interpretation suite: only the stale spec that also fails on main, fixed by #160)."
       ],
       "brain_recorded": false,
-      "updated": "2026-10-23"
+      "updated": "2026-10-24"
     },
     {
       "id": "RV-CI1",
@@ -2915,9 +3011,12 @@
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ci-workflows",
-      "pr": null,
+      "pr": "#160",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2928,7 +3027,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ci-workflows; findings F122, F123, F104, F085. Head 4bd6043. Built (F104, F055, F138 partial). Correctness review: recommend merge."
+        "Track ci-workflows; findings F122, F123, F104, F085, F055, F138. Fix 4bd6043; correctness review: recommend merge (merge with or after DP2 and SP1).",
+        "Track merged with main at fc21c1d; gates (lint, typecheck, full test 3,428, build, release, functions, flags, migorder, pinned, devicelock) and the CI e2e matrix incl. interpretation green in Chromium, WebKit and Firefox.",
+        "Draft until the deps-toolchain (.nvmrc) and ios-spm (Package.resolved) PRs exist; merge after or with them."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2947,15 +3048,18 @@
       "depends_on": [
         "RV-CI1"
       ],
-      "status": "in-progress",
+      "status": "review",
       "gates_required": [
         "G0",
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ci-workflows",
-      "pr": null,
+      "pr": "#160",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -2966,7 +3070,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ci-workflows; findings F060, F061, F056, F118. Head 74bdf7e. Built on top of CI1. Reviews were cut off by the stop: needs verification."
+        "Track ci-workflows; findings F060, F061, F056, F118 (+ workflow parts of F055, F086, F110). Fix 74bdf7e; blind verifier PASS_WITH_NOTES.",
+        "Track merged with main at fc21c1d; gates (lint, typecheck, full test 3,428, build, release, functions, flags, migorder, pinned, devicelock) and the CI e2e matrix incl. interpretation green in Chromium, WebKit and Firefox.",
+        "Draft until the deps-toolchain (.nvmrc) and ios-spm (Package.resolved) PRs exist; merge after or with them."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -2986,15 +3092,18 @@
       "depends_on": [
         "RV-CI2"
       ],
-      "status": "todo",
+      "status": "review",
       "gates_required": [
         "G0",
         "G2",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-ci-workflows",
-      "pr": null,
+      "pr": "#160",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -3005,7 +3114,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track ci-workflows; findings F008, F102, F117, F101, F116. Not started."
+        "Track ci-workflows; findings F008, F102, F117, F101, F116. Fix f6a4495; blind verifier PASS_WITH_NOTES.",
+        "Track merged with main at fc21c1d; gates (lint, typecheck, full test 3,428, build, release, functions, flags, migorder, pinned, devicelock) and the CI e2e matrix incl. interpretation green in Chromium, WebKit and Firefox.",
+        "Draft until the deps-toolchain (.nvmrc) and ios-spm (Package.resolved) PRs exist; merge after or with them."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"
@@ -3026,9 +3137,12 @@
         "G0",
         "G5"
       ],
-      "gates_passed": [],
+      "gates_passed": [
+        "G0",
+        "G1"
+      ],
       "branch": "factory/rv-hygiene",
-      "pr": null,
+      "pr": "#158",
       "agent": "claude (review-fix wave 1)",
       "owner_approval": null,
       "deployed": {
@@ -3039,7 +3153,9 @@
       },
       "blocked_reason": null,
       "evidence": [
-        "Track hygiene; findings F080, F081, F090. Head a44186c. Built (F090 partial). Blind verifier: PASS_WITH_NOTES."
+        "Track hygiene; findings F080, F081, F090. Fix a44186c; merged with main 25d09b7 at 6f666d7; integration edit 2c1d777 keeps the versioned graphify graph visible (#154).",
+        "Blind verifier (opus) at a44186c: PASS_WITH_NOTES (two minor notes in PR #158).",
+        "Gates at 2c1d777 (run locally): lint, typecheck, full test (3,368), build, release check; CI e2e matrix green in Chromium, WebKit and Firefox."
       ],
       "brain_recorded": false,
       "updated": "2026-10-23"

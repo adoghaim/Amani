@@ -112,7 +112,7 @@ export function SuccessPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-theme-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 safe-top safe-bottom">
+    <div className="min-h-dvh bg-theme-background flex items-center justify-center pt-[max(3rem,env(safe-area-inset-top))] pb-[max(3rem,env(safe-area-inset-bottom))] px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full text-center">
         <div className="bg-theme-surface rounded-lg shadow-lg p-8 border border-theme-border">
           {/*
